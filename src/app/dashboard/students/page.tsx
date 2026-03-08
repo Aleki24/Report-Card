@@ -10,7 +10,10 @@ export default async function StudentsPage() {
 
     return (
         <div className="w-full max-w-7xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-8">
+            <div
+                className="flex flex-col sm:flex-row sm:justify-between sm:items-start"
+                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}
+            >
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Students</h1>
                     <p className="text-sm text-[var(--color-text-muted)]">
@@ -21,7 +24,10 @@ export default async function StudentsPage() {
             </div>
 
             {/* Search & Filter */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div
+                className="flex flex-col sm:flex-row"
+                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}
+            >
                 <input
                     className="input-field sm:max-w-md w-full"
                     placeholder="Search by name or enrollment number..."

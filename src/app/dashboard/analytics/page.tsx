@@ -33,7 +33,10 @@ export default function AnalyticsPage() {
     return (
         <div>
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-[var(--space-8)]">
+            <div
+                className="flex flex-col md:flex-row md:justify-between md:items-start gap-4"
+                style={{ marginBottom: 'var(--space-8)' }}
+            >
                 <div>
                     <h1 style={{ fontSize: 28, marginBottom: 'var(--space-2)' }}>Analytics</h1>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
@@ -49,7 +52,10 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-[var(--space-6)] mb-[var(--space-8)]">
+            <div
+                className="grid grid-cols-1 lg:grid-cols-2"
+                style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}
+            >
                 <PerformanceTrendChart data={mockTrend} classAverage={72.4} />
                 <GradeDistributionChart data={mockGrades} />
             </div>

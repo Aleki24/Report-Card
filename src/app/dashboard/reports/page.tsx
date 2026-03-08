@@ -32,7 +32,7 @@ export default function ReportsPage() {
 
     return (
         <div className="w-full max-w-7xl mx-auto">
-            <div className="mb-8">
+            <div style={{ marginBottom: 'var(--space-8)' }}>
                 <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Reports</h1>
                 <p className="text-sm text-[var(--color-text-muted)]">
                     Generate and download professional PDF report cards
@@ -40,7 +40,10 @@ export default function ReportsPage() {
             </div>
 
             {/* Report Types */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}
+            >
                 {/* Individual Report */}
                 <div className="card text-center p-8 flex flex-col h-full">
                     <div className="text-4xl mb-4">📋</div>
