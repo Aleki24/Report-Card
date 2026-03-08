@@ -42,36 +42,38 @@ export function GradeDistributionChart({ data }: Props) {
     });
 
     return (
-        <div className="w-full h-[300px] p-4 bg-white rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Grade Distribution</h3>
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={formattedData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis
-                        dataKey="grade"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#64748B', fontWeight: 600 }}
-                        dy={10}
-                    />
-                    <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#64748B' }}
-                        allowDecimals={false} // Since these are student counts, integer only
-                        dx={-10}
-                    />
-                    <Tooltip
-                        cursor={{ fill: '#F1F5F9' }}
-                        contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                        {formattedData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.grade] || '#94A3B8'} />
-                        ))}
-                    </Bar>
-                </BarChart>
-            </ResponsiveContainer>
+        <div className="card w-full" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: 16, marginBottom: 'var(--space-6)', fontWeight: 600 }}>Grade Distribution</h3>
+            <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={formattedData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                        <XAxis
+                            dataKey="grade"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--color-text-muted)', fontWeight: 600 }}
+                            dy={10}
+                        />
+                        <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--color-text-muted)' }}
+                            allowDecimals={false}
+                            dx={-10}
+                        />
+                        <Tooltip
+                            cursor={{ fill: 'var(--color-border-subtle)' }}
+                            contentStyle={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+                        />
+                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                            {formattedData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[entry.grade] || 'var(--color-text-muted)'} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
         </div>
     );
 }
