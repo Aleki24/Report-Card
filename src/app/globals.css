@@ -52,6 +52,29 @@
   --radius-xl: 24px;
 }
 
+/* ============================== */
+/* LIGHT THEME OVERRIDES          */
+/* ============================== */
+:root[data-theme="light"] {
+  --color-bg: #F3F4F6;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F9FAFB;
+  --color-border: #E5E7EB;
+  --color-border-subtle: #F3F4F6;
+
+  --color-text-primary: #111827;
+  --color-text-secondary: #4B5563;
+  --color-text-muted: #9CA3AF;
+
+  --color-accent: #3B82F6;
+  --color-accent-light: #2563EB;
+  --color-accent-glow: rgba(59, 130, 246, 0.1);
+
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+}
+
 * {
   margin: 0;
   padding: 0;

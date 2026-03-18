@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { aggregateStudentPerformance, calculateClassRanks, generateFeedback } from '@/lib/analytics';
 
@@ -9,14 +9,20 @@ export async function GET(
 ) {
     try {
         const studentId = (await params).studentId;
+        const { searchParams } = new URL(request.url);
+        const termId = searchParams.get('term');
+        const yearId = searchParams.get('year');
+
+        const supabase = createSupabaseAdmin();
 
         // 1. Fetch Student Data
         const { data: student, error: studentErr } = await supabase
             .from('students')
             .select(`
-        *,
-        classes (name, academic_year)
-      `)
+                *,
+                users(first_name, last_name, school_id),
+                grade_streams(full_name)
+            `)
             .eq('id', studentId)
             .single();
 
@@ -24,96 +30,178 @@ export async function GET(
             return NextResponse.json({ error: 'Student not found' }, { status: 404 });
         }
 
-        // 2. Fetch Marks for exactly one exam (for simplicity, passing examId via query param or default to latest)
-        const { searchParams } = new URL(request.url);
-        const examId = searchParams.get('examId');
+        // Fetch school name dynamically
+        let schoolName = 'School';
+        if (student.users?.school_id) {
+            const { data: schoolData } = await supabase.from('schools').select('name').eq('id', student.users.school_id).single();
+            if (schoolData) {
+                schoolName = schoolData.name;
+            }
+        }
 
+        // 2. Fetch Marks for the specified term
         let marksQuery = supabase
-            .from('marks')
+            .from('exam_marks')
             .select(`
-        *,
-        subjects (name),
-        exams (title, academic_year, term)
-      `)
+                id, percentage, raw_score, grade_symbol, remarks,
+                exams!inner ( id, name, max_score, term_id, academic_year_id,
+                    terms ( name ),
+                    academic_years ( name ),
+                    subjects ( id, name )
+                )
+            `)
             .eq('student_id', studentId);
 
-        if (examId) {
-            marksQuery = marksQuery.eq('exam_id', examId);
+        if (termId) {
+            marksQuery = marksQuery.eq('exams.term_id', termId);
+        }
+        if (yearId) {
+            marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
         }
 
         const { data: marks, error: marksErr } = await marksQuery;
 
         if (marksErr || !marks || marks.length === 0) {
-            return NextResponse.json({ error: 'No marks found for student' }, { status: 404 });
+            return NextResponse.json({ error: 'No marks found for student in this term' }, { status: 404 });
         }
 
-        // Use the exam details from the first mark record
-        const examInfo = marks[0].exams;
+        const firstExam = marks[0].exams as any;
+        const termTitle = firstExam.terms?.name || 'Term Report';
+        const academicYear = firstExam.academic_years?.name || 'Academic Year';
 
-        // 3. For accurate Class Rank, we need all students' marks for this class & exam
-        const { data: classMarks } = await supabase
-            .from('marks')
-            .select('student_id, score, total_possible')
-            .eq('exam_id', examInfo.id)
-            .in('student_id', (
-                await supabase.from('students').select('id').eq('class_id', student.class_id)
-            ).data?.map(s => s.id) || []);
+        // 3. Map to analytics interface and calculate performance
+        const mappedMarks = marks.map((m: any) => ({
+            id: m.id,
+            student_id: studentId,
+            subject_id: m.exams.subjects?.id || '',
+            exam_id: m.exams.id || '',
+            score: Number(m.raw_score),
+            total_possible: Number(m.exams.max_score),
+            remarks: m.remarks
+        }));
 
-        // 4. Calculate Analytics
-        const studentPerf = aggregateStudentPerformance(marks);
+        const studentPerf = aggregateStudentPerformance(mappedMarks);
 
-        // Group all class marks by student to get ranks
-        const studentAggs = [];
-        // Assuming classMarks exists and grouping logic... (simplified here for brevity)
-        // We will just fetch count of students in class for the ratio
-        const { count: totalStudents } = await supabase
-            .from('students')
-            .select('*', { count: 'exact' })
-            .eq('class_id', student.class_id);
+        // 4. Calculate class ranking — fetch all classmates' marks for the same term
+        let classRank = 0;
+        let totalStudents = 0;
+        const gradeStreamId = student.current_grade_stream_id;
 
-        // Mock rank for now if we don't have full data aggregation
-        const classRank = 1;
+        if (gradeStreamId) {
+            const { data: classmates } = await supabase
+                .from('students')
+                .select('id')
+                .eq('current_grade_stream_id', gradeStreamId);
 
-        // 5. Structure data for Handlebars
+            if (classmates && classmates.length > 0) {
+                totalStudents = classmates.length;
+                const classmateIds = classmates.map(c => c.id);
+
+                // Fetch all marks for all classmates within the same exam scope
+                let rankQuery = supabase
+                    .from('exam_marks')
+                    .select('student_id, raw_score, exams!inner(max_score, term_id, academic_year_id)')
+                    .in('student_id', classmateIds);
+
+                if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
+                if (yearId) rankQuery = rankQuery.eq('exams.academic_year_id', yearId);
+
+                const { data: allMarks } = await rankQuery;
+
+                if (allMarks && allMarks.length > 0) {
+                    // Aggregate per student
+                    const studentAggs: Record<string, { totalScore: number; totalPossible: number }> = {};
+                    for (const m of allMarks as any[]) {
+                        const sid = m.student_id;
+                        if (!studentAggs[sid]) studentAggs[sid] = { totalScore: 0, totalPossible: 0 };
+                        studentAggs[sid].totalScore += Number(m.raw_score);
+                        studentAggs[sid].totalPossible += Number(m.exams.max_score);
+                    }
+
+                    const aggregates = Object.entries(studentAggs)
+                        .filter(([, v]) => v.totalPossible > 0)
+                        .map(([sid, v]) => ({
+                            studentId: sid,
+                            percentage: (v.totalScore / v.totalPossible) * 100,
+                        }));
+
+                    const ranks = calculateClassRanks(aggregates);
+                    classRank = ranks.get(studentId) || 0;
+                    totalStudents = aggregates.length;
+                }
+            }
+        }
+
+        // 5. Resolve overall grade from DB grading scales
+        let overallGradeSymbol = studentPerf.grade;
+        if (student.academic_level_id) {
+            const { data: gradingSystem } = await supabase
+                .from('grading_systems')
+                .select('id')
+                .eq('academic_level_id', student.academic_level_id)
+                .limit(1)
+                .single();
+
+            if (gradingSystem) {
+                const { data: matchedScale } = await supabase
+                    .from('grading_scales')
+                    .select('symbol')
+                    .eq('grading_system_id', gradingSystem.id)
+                    .lte('min_percentage', studentPerf.percentage)
+                    .gte('max_percentage', studentPerf.percentage)
+                    .order('min_percentage', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (matchedScale) {
+                    overallGradeSymbol = matchedScale.symbol;
+                }
+            }
+        }
+
+        // 6. Structure data for PDF Generator
         const reportData: ReportCardData = {
-            schoolName: 'Evergreen International Academy',
-            examTitle: examInfo.title,
-            academicYear: student.classes.academic_year,
-            studentName: `${student.first_name} ${student.last_name}`,
-            enrollmentNumber: student.enrollment_number,
-            className: student.classes.name,
+            schoolName,
+            examTitle: termTitle,
+            academicYear: academicYear,
+            studentName: `${student.users?.first_name} ${student.users?.last_name}`,
+            enrollmentNumber: student.admission_number || '',
+            className: student.grade_streams?.full_name || 'N/A',
             subjectMarks: marks.map((m: any) => {
-                const perf = aggregateStudentPerformance([m]);
+                const sname = m.exams.subjects?.name || 'Unknown Subject';
+                const gradeBase = (m.grade_symbol || 'F').replace(/[+-]/g, '');
+
                 return {
-                    subjectName: m.subjects.name,
-                    score: m.score,
-                    totalPossible: m.total_possible,
-                    percentage: perf.percentage,
-                    grade: perf.grade,
-                    gradeBase: perf.grade.replace('+', ''), // A+ -> A for colour class
-                    remarks: m.remarks || 'No remarks provided.'
+                    subjectName: sname,
+                    score: Number(m.raw_score),
+                    totalPossible: Number(m.exams.max_score),
+                    percentage: Number(m.percentage),
+                    grade: m.grade_symbol || '-',
+                    gradeBase: gradeBase,
+                    remarks: m.remarks || 'No remarks provided.',
                 };
             }),
             overallPercentage: studentPerf.percentage,
+            overallGrade: overallGradeSymbol,
             gpa: studentPerf.gpa,
-            classRank: classRank,
-            totalStudents: totalStudents || 1,
+            classRank,
+            totalStudents,
             actionableFeedback: generateFeedback(studentPerf.percentage, 'General Academics')
         };
 
-        // 6. Generate PDF Buffer
+        // 7. Generate PDF Buffer
         const pdfBuffer = await generateStudentReportCardPDF(reportData);
 
         return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="${student.first_name}_${student.last_name}_Report.pdf"`,
+                'Content-Disposition': `attachment; filename="${student.users?.first_name}_${student.users?.last_name}_${termTitle}.pdf"`,
             },
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('PDF Generation Error:', error);
-        return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
+        return NextResponse.json({ error: error.message || 'Failed to generate PDF' }, { status: 500 });
     }
 }

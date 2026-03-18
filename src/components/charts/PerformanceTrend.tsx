@@ -28,7 +28,7 @@ export function PerformanceTrendChart({ data, classAverage }: Props) {
         <div className="card w-full" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: 16, marginBottom: 'var(--space-6)', fontWeight: 600 }}>Performance Trend</h3>
             <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <LineChart data={data} margin={{ top: 5, right: 30, left: 10, bottom: 25 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                         <XAxis

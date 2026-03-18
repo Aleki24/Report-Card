@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import Papa from 'papaparse';
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 interface ParsedRow {
     [key: string]: string;
@@ -9,25 +10,29 @@ interface ParsedRow {
 
 interface ColumnMapping {
     studentName: string;
-    enrollmentNumber: string;
-    subject: string;
+    admissionNumber: string;
     score: string;
-    totalPossible: string;
 }
 
-export function BulkUpload() {
+interface Props {
+    examId: string;
+}
+
+export function BulkUpload({ examId }: Props) {
+    const supabase = createSupabaseBrowserClient();
+
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
     const [mapping, setMapping] = useState<ColumnMapping>({
         studentName: '',
-        enrollmentNumber: '',
-        subject: '',
+        admissionNumber: '',
         score: '',
-        totalPossible: '',
     });
     const [step, setStep] = useState<'upload' | 'map' | 'preview'>('upload');
     const [errors, setErrors] = useState<string[]>([]);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -48,10 +53,8 @@ export function BulkUpload() {
                 cols.forEach(col => {
                     const lower = col.toLowerCase();
                     if (lower.includes('name') || lower.includes('student')) autoMap.studentName = col;
-                    if (lower.includes('enrollment') || lower.includes('id') || lower.includes('number') || lower.includes('admission')) autoMap.enrollmentNumber = col;
-                    if (lower.includes('subject') || lower.includes('course')) autoMap.subject = col;
-                    if (lower.includes('score') || lower.includes('mark') || lower.includes('grade')) autoMap.score = col;
-                    if (lower.includes('total') || lower.includes('max') || lower.includes('possible') || lower.includes('out of')) autoMap.totalPossible = col;
+                    if (lower.includes('admission') || lower.includes('adm') || lower.includes('number') || lower.includes('id')) autoMap.admissionNumber = col;
+                    if (lower.includes('score') || lower.includes('mark') || lower.includes('raw')) autoMap.score = col;
                 });
 
                 setMapping(prev => ({ ...prev, ...autoMap }));
@@ -67,18 +70,86 @@ export function BulkUpload() {
         const errs: string[] = [];
         parsedData.forEach((row, idx) => {
             const score = parseFloat(row[mapping.score]);
-            const total = parseFloat(row[mapping.totalPossible] || '100');
             if (isNaN(score)) errs.push(`Row ${idx + 1}: Invalid score "${row[mapping.score]}"`);
-            if (score < 0 || score > total) errs.push(`Row ${idx + 1}: Score ${score} out of range (0-${total})`);
-            if (!row[mapping.enrollmentNumber]) errs.push(`Row ${idx + 1}: Missing enrollment number`);
+            if (score < 0) errs.push(`Row ${idx + 1}: Score ${score} cannot be negative`);
+            if (!row[mapping.admissionNumber]) errs.push(`Row ${idx + 1}: Missing admission number`);
         });
         setErrors(errs);
         if (errs.length === 0) setStep('preview');
     }, [parsedData, mapping]);
 
     const handleSubmit = async () => {
-        // TODO: Wire to Supabase insert
-        alert(`Submitting ${parsedData.length} records to database...`);
+        if (!examId) {
+            setSubmitMessage({ type: 'error', text: 'Please select an exam first.' });
+            return;
+        }
+
+        setSubmitting(true);
+        setSubmitMessage(null);
+
+        try {
+            // Resolve student IDs from admission numbers
+            const admissionNumbers = Array.from(new Set(parsedData.map(r => r[mapping.admissionNumber])));
+
+            const { data: studentsData, error: studentsError } = await supabase
+                .from('students')
+                .select('id, admission_number')
+                .in('admission_number', admissionNumbers);
+
+            if (studentsError) throw studentsError;
+
+            const studentMap = new Map(studentsData?.map(s => [s.admission_number, s.id]));
+
+            // Build rows for exam_marks insert
+            const rows: any[] = [];
+            const missingStudents: string[] = [];
+
+            parsedData.forEach(row => {
+                const admNo = row[mapping.admissionNumber];
+                const student_id = studentMap.get(admNo);
+                if (!student_id) {
+                    missingStudents.push(admNo);
+                    return;
+                }
+
+                rows.push({
+                    student_id,
+                    raw_score: parseFloat(row[mapping.score]),
+                    exam_id: examId,
+                    percentage: 0, // Trigger will calculate
+                });
+            });
+
+            if (rows.length === 0) {
+                setSubmitMessage({ type: 'error', text: `No valid students found. Missing: ${missingStudents.slice(0, 3).join(', ')}...` });
+                setSubmitting(false);
+                return;
+            }
+
+            const { error } = await supabase.from('exam_marks').insert(rows);
+
+            if (error) {
+                setSubmitMessage({ type: 'error', text: `Database error: ${error.message}` });
+            } else {
+                let text = `✅ Successfully saved ${rows.length} marks!`;
+                if (missingStudents.length > 0) {
+                    text += ` (Skipped ${missingStudents.length} unrecognised admission numbers)`;
+                }
+                setSubmitMessage({ type: 'success', text });
+                setTimeout(() => {
+                    setStep('upload');
+                    setParsedData([]);
+                    setHeaders([]);
+                    setFile(null);
+                    setSubmitMessage(null);
+                }, 4000);
+            }
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Unknown';
+            setSubmitMessage({ type: 'error', text: `Unexpected error: ${message}` });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -92,18 +163,19 @@ export function BulkUpload() {
                         </svg>
                         <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Upload Marks File</h3>
                         <p className="text-[var(--color-text-muted)] text-sm max-w-md mx-auto">
-                            Upload a CSV or Excel file. Columns will be auto-detected for student name, enrollment number, subject, and score.
+                            Upload a CSV file with columns for student name, admission number, and score. Columns will be auto-detected.
                         </p>
                     </div>
                     <label className="btn-primary cursor-pointer w-full sm:w-auto justify-center">
                         Choose File
                         <input
                             type="file"
-                            accept=".csv,.xlsx,.xls"
+                            accept=".csv"
                             onChange={handleFileChange}
                             className="hidden"
                         />
                     </label>
+                    {file && <p className="mt-3 text-sm text-[var(--color-text-muted)]">Selected: {file.name}</p>}
                 </div>
             )}
 
@@ -115,7 +187,7 @@ export function BulkUpload() {
                         We auto-detected your columns. Please verify or adjust the mapping below.
                     </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((field) => (
                             <div key={field}>
                                 <label className="block text-xs text-[var(--color-text-muted)] mb-1 capitalize">
@@ -167,10 +239,21 @@ export function BulkUpload() {
                             <p className="text-[var(--color-text-muted)] text-sm">Review the data before submitting</p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-3">
-                            <button className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setStep('map')}>Back</button>
-                            <button className="btn-primary w-full sm:w-auto justify-center" onClick={handleSubmit}>Submit All</button>
+                            <button className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setStep('map')} disabled={submitting}>Back</button>
+                            <button className="btn-primary w-full sm:w-auto justify-center disabled:opacity-50" onClick={handleSubmit} disabled={submitting}>
+                                {submitting ? '⏳ Submitting...' : 'Submit All'}
+                            </button>
                         </div>
                     </div>
+
+                    {submitMessage && (
+                        <div className={`mb-4 p-3 rounded-md text-sm ${submitMessage.type === 'success'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                            }`}>
+                            {submitMessage.text}
+                        </div>
+                    )}
 
                     <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
                         <table className="data-table whitespace-nowrap">
@@ -178,10 +261,8 @@ export function BulkUpload() {
                                 <tr>
                                     <th>#</th>
                                     <th>Student</th>
-                                    <th>Enrollment #</th>
-                                    <th>Subject</th>
+                                    <th>Admission #</th>
                                     <th>Score</th>
-                                    <th>Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -189,10 +270,8 @@ export function BulkUpload() {
                                     <tr key={i}>
                                         <td className="text-[var(--color-text-muted)]">{i + 1}</td>
                                         <td className="font-medium">{row[mapping.studentName]}</td>
-                                        <td>{row[mapping.enrollmentNumber]}</td>
-                                        <td>{row[mapping.subject]}</td>
+                                        <td>{row[mapping.admissionNumber]}</td>
                                         <td>{row[mapping.score]}</td>
-                                        <td>{row[mapping.totalPossible] || '100'}</td>
                                     </tr>
                                 ))}
                             </tbody>

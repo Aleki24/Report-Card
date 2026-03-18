@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <title>{{studentName}} - Report Card</title>
@@ -10,22 +11,26 @@
       margin: 0;
       padding: 40px;
     }
+
     .header {
       text-align: center;
       border-bottom: 2px solid #2563EB;
       padding-bottom: 20px;
       margin-bottom: 30px;
     }
+
     .header h1 {
       margin: 0;
       color: #1E3A8A;
       font-size: 28px;
     }
+
     .header p {
       margin: 5px 0 0;
       color: #64748B;
       font-size: 14px;
     }
+
     .student-info {
       display: flex;
       justify-content: space-between;
@@ -34,26 +39,31 @@
       padding: 15px;
       border-radius: 8px;
     }
+
     .info-group {
       display: flex;
       flex-direction: column;
     }
+
     .info-label {
       font-size: 12px;
       color: #64748B;
       text-transform: uppercase;
       font-weight: bold;
     }
+
     .info-value {
       font-size: 16px;
       font-weight: 600;
       color: #0F172A;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin-bottom: 30px;
     }
+
     th {
       background: #EFF6FF;
       color: #1E3A8A;
@@ -62,26 +72,49 @@
       padding: 12px;
       border-bottom: 2px solid #BFDBFE;
     }
+
     td {
       padding: 12px;
       border-bottom: 1px solid #E2E8F0;
     }
+
     .score-cell {
       text-align: right;
       font-weight: 500;
     }
-    .grade-A { color: #10B981; font-weight: bold; }
-    .grade-B { color: #3B82F6; font-weight: bold; }
-    .grade-C { color: #F59E0B; font-weight: bold; }
-    .grade-D { color: #EA580C; font-weight: bold; }
-    .grade-F { color: #EF4444; font-weight: bold; }
-    
+
+    .grade-A {
+      color: #10B981;
+      font-weight: bold;
+    }
+
+    .grade-B {
+      color: #3B82F6;
+      font-weight: bold;
+    }
+
+    .grade-C {
+      color: #F59E0B;
+      font-weight: bold;
+    }
+
+    .grade-D {
+      color: #EA580C;
+      font-weight: bold;
+    }
+
+    .grade-F {
+      color: #EF4444;
+      font-weight: bold;
+    }
+
     .summary-box {
       border: 1px solid #E2E8F0;
       border-radius: 8px;
       padding: 20px;
       page-break-inside: avoid;
     }
+
     .summary-title {
       font-size: 18px;
       color: #1E3A8A;
@@ -90,6 +123,7 @@
       border-bottom: 1px solid #E2E8F0;
       padding-bottom: 10px;
     }
+
     .footer {
       margin-top: 50px;
       text-align: center;
@@ -100,6 +134,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <div class="header">
@@ -155,6 +190,10 @@
         <div class="info-value" style="font-size: 24px;">{{overallPercentage}}%</div>
       </div>
       <div>
+        <div class="info-label">Overall Grade</div>
+        <div class="info-value" style="font-size: 24px;">{{overallGrade}}</div>
+      </div>
+      <div>
         <div class="info-label">GPA</div>
         <div class="info-value" style="font-size: 24px;">{{gpa}}</div>
       </div>
@@ -174,4 +213,5 @@
   </div>
 
 </body>
+
 </html>

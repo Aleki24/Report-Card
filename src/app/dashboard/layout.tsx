@@ -2,16 +2,15 @@
 
 import React, { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { AuthProvider, useAuth } from '@/components/AuthProvider';
 
-export default function DashboardLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
+    const { schoolName } = useAuth();
 
     const sidebarWidth = collapsed ? 72 : 260;
+    const displayName = schoolName || 'ResultsApp';
 
     return (
         <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -23,8 +22,8 @@ export default function DashboardLayout({
                         background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: '#fff',
-                    }}>RA</div>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>ResultsApp</span>
+                    }}>{displayName.substring(0, 2).toUpperCase()}</div>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{displayName}</span>
                 </div>
                 <button
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -52,5 +51,17 @@ export default function DashboardLayout({
                 {children}
             </main>
         </div>
+    );
+}
+
+export default function DashboardLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <AuthProvider>
+            <DashboardContent>{children}</DashboardContent>
+        </AuthProvider>
     );
 }

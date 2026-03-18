@@ -56,6 +56,9 @@ export function aggregateStudentPerformance(marks: Mark[]) {
 // Calculate ranks for a class of students
 // Input: Map or Array of student aggregates
 export function calculateClassRanks(studentAggregates: { studentId: string, percentage: number }[]) {
+    if (!studentAggregates || studentAggregates.length === 0) {
+        return new Map<string, number>();
+    }
     // Sort descending by percentage
     const sorted = [...studentAggregates].sort((a, b) => b.percentage - a.percentage);
 

@@ -1,12 +1,47 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
+import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+
+interface ExamOption {
+    id: string;
+    name: string;
+    exam_type: string;
+    max_score: number;
+    subjects: { name: string } | null;
+    grades: { name_display: string } | null;
+}
 
 export default function MarksPage() {
+    const supabase = createSupabaseBrowserClient();
+
     const [mode, setMode] = useState<'bulk' | 'manual'>('bulk');
-    const [selectedTerm, setSelectedTerm] = useState('mid_term');
+    const [exams, setExams] = useState<ExamOption[]>([]);
+    const [selectedExamId, setSelectedExamId] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchExams = async () => {
+            const { data, error } = await supabase
+                .from('exams')
+                .select('id, name, exam_type, max_score, subjects:subject_id(name), grades:grade_id(name_display)')
+                .order('exam_date', { ascending: false });
+
+            if (error) console.error('Error fetching exams:', error);
+
+            if (data && data.length > 0) {
+                setExams(data as unknown as ExamOption[]);
+                setSelectedExamId(data[0].id);
+            }
+            setLoading(false);
+        };
+        fetchExams();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const selectedExam = exams.find(e => e.id === selectedExamId);
 
     return (
         <div className="w-full max-w-7xl mx-auto">
@@ -14,7 +49,7 @@ export default function MarksPage() {
             <div className="mb-8">
                 <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Mark Entry</h1>
                 <p className="text-sm text-[var(--color-text-muted)]">
-                    Upload marks in bulk or enter them manually for each subject
+                    Upload marks in bulk or enter them manually for each exam
                 </p>
             </div>
 
@@ -47,24 +82,43 @@ export default function MarksPage() {
                     </button>
                 </div>
 
-                {/* Term Selector */}
+                {/* Exam Selector */}
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Term:</label>
+                    <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Exam:</label>
                     <select
-                        className="input-field flex-1 md:w-48"
-                        value={selectedTerm}
-                        onChange={(e) => setSelectedTerm(e.target.value)}
+                        className="input-field flex-1 md:w-64"
+                        value={selectedExamId}
+                        onChange={(e) => setSelectedExamId(e.target.value)}
+                        disabled={loading || exams.length === 0}
                     >
-                        <option value="mid_term">Mid-Term Exam</option>
-                        <option value="end_term">End-Term Exam</option>
-                        <option value="annual">Annual Exam</option>
+                        {loading ? (
+                            <option value="">Loading...</option>
+                        ) : exams.length === 0 ? (
+                            <option value="">No exams found</option>
+                        ) : (
+                            exams.map(exam => (
+                                <option key={exam.id} value={exam.id}>
+                                    {exam.name} — {exam.subjects?.name || 'N/A'} ({exam.grades?.name_display || 'N/A'})
+                                </option>
+                            ))
+                        )}
                     </select>
                 </div>
             </div>
 
+            {/* Selected Exam Info */}
+            {selectedExam && (
+                <div className="mb-6 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
+                    <strong>Selected:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subjects?.name || 'N/A'} · <strong>Grade:</strong> {selectedExam.grades?.name_display || 'N/A'} · <strong>Max Score:</strong> {selectedExam.max_score}
+                </div>
+            )}
+
             {/* Content */}
             <div className="w-full">
-                {mode === 'bulk' ? <BulkUpload /> : <ManualEntryGrid />}
+                {mode === 'bulk'
+                    ? <BulkUpload examId={selectedExamId} />
+                    : <ManualEntryGrid examId={selectedExamId} maxScore={selectedExam?.max_score || 100} />
+                }
             </div>
         </div>
     );
