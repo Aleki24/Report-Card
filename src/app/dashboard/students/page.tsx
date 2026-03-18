@@ -15,6 +15,7 @@ interface StudentRow {
 interface GradeStreamOption {
     id: string;
     full_name: string;
+    academic_level_id: string | null;
 }
 
 interface AcademicLevelOption {
@@ -62,10 +63,18 @@ export default function StudentsPage() {
         setLoading(false);
     };
 
-    /* ── Fetch grade streams for dropdown ─────────────── */
+    /* ── Fetch grade streams for dropdown (with academic level) ── */
     const fetchGradeStreams = async () => {
-        const { data } = await supabase.from('grade_streams').select('id, full_name').order('full_name');
-        setGradeStreams((data as GradeStreamOption[]) || []);
+        const { data } = await supabase
+            .from('grade_streams')
+            .select('id, full_name, grades!inner(academic_level_id)')
+            .order('full_name');
+        const mapped = (data || []).map((d: any) => ({
+            id: d.id,
+            full_name: d.full_name,
+            academic_level_id: d.grades?.academic_level_id || null,
+        }));
+        setGradeStreams(mapped);
     };
 
     /* ── Fetch academic levels for dropdown ───────────── */
@@ -112,12 +121,12 @@ export default function StudentsPage() {
 
     /* ── Add Student handler (via admin API) ──────────── */
     const handleAddStudent = async () => {
-        if (!newStudent.first_name.trim() || !newStudent.last_name.trim() || !newStudent.admission_number.trim()) {
-            setSaveMessage({ type: 'error', text: 'First name, last name, and admission number are required.' });
+        if (!newStudent.first_name.trim() || !newStudent.last_name.trim()) {
+            setSaveMessage({ type: 'error', text: 'First name and last name are required.' });
             return;
         }
-        if (!newStudent.grade_stream_id || !newStudent.academic_level_id) {
-            setSaveMessage({ type: 'error', text: 'Please select a grade stream and academic level.' });
+        if (!newStudent.academic_level_id) {
+            setSaveMessage({ type: 'error', text: 'Please select an academic level.' });
             return;
         }
         setSaving(true);
@@ -137,8 +146,8 @@ export default function StudentsPage() {
                 body: JSON.stringify({
                     first_name: newStudent.first_name.trim(),
                     last_name: newStudent.last_name.trim(),
-                    admission_number: newStudent.admission_number.trim(),
-                    grade_stream_id: newStudent.grade_stream_id,
+                    admission_number: newStudent.admission_number.trim() || null,
+                    grade_stream_id: newStudent.grade_stream_id || null,
                     academic_level_id: newStudent.academic_level_id,
                     school_id: schoolId,
                     admin_user_id: profile?.id,
@@ -304,7 +313,7 @@ export default function StudentsPage() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Admission Number *</label>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Admission Number</label>
                                 <input
                                     className="input-field w-full"
                                     placeholder="e.g. ADM-2026-001"
@@ -317,7 +326,7 @@ export default function StudentsPage() {
                                 <select
                                     className="input-field w-full"
                                     value={newStudent.academic_level_id}
-                                    onChange={e => setNewStudent(p => ({ ...p, academic_level_id: e.target.value }))}
+                                    onChange={e => setNewStudent(p => ({ ...p, academic_level_id: e.target.value, grade_stream_id: '' }))}
                                 >
                                     <option value="">-- Select Academic Level --</option>
                                     {academicLevels.map(al => (
@@ -326,16 +335,18 @@ export default function StudentsPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream *</label>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream</label>
                                 <select
                                     className="input-field w-full"
                                     value={newStudent.grade_stream_id}
                                     onChange={e => setNewStudent(p => ({ ...p, grade_stream_id: e.target.value }))}
                                 >
                                     <option value="">-- Select Grade Stream --</option>
-                                    {gradeStreams.map(gs => (
-                                        <option key={gs.id} value={gs.id}>{gs.full_name}</option>
-                                    ))}
+                                    {gradeStreams
+                                        .filter(gs => !newStudent.academic_level_id || gs.academic_level_id === newStudent.academic_level_id)
+                                        .map(gs => (
+                                            <option key={gs.id} value={gs.id}>{gs.full_name}</option>
+                                        ))}
                                 </select>
                             </div>
                         </div>
