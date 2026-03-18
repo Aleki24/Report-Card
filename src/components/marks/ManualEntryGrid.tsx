@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+
+interface GradeOption {
+    symbol: string;
+    label: string;
+    systemName: string;
+}
 
 interface MarkRow {
     studentName: string;
     admissionNumber: string;
     score: string;
+    grade: string;
     remarks: string;
     error: string;
 }
@@ -19,13 +26,33 @@ interface Props {
 export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     const supabase = createSupabaseBrowserClient();
 
+    const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
     const [rows, setRows] = useState<MarkRow[]>([
-        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
-        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
-        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
+        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
+        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
+        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
     ]);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Fetch all grading scales on mount for the grade dropdown
+    useEffect(() => {
+        const fetchGrades = async () => {
+            const { data } = await supabase
+                .from('grading_scales')
+                .select('symbol, label, grading_systems!inner(name)')
+                .order('order_index');
+            if (data) {
+                setGradeOptions(data.map((d: any) => ({
+                    symbol: d.symbol,
+                    label: d.label,
+                    systemName: d.grading_systems?.name || '',
+                })));
+            }
+        };
+        fetchGrades();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const updateRow = (index: number, field: keyof MarkRow, value: string) => {
         setRows(prev => {
@@ -53,7 +80,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     };
 
     const addRow = () => {
-        setRows(prev => [...prev, { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' }]);
+        setRows(prev => [...prev, { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' }]);
     };
 
     const removeRow = (index: number) => {
@@ -68,13 +95,13 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         }
 
         const hasErrors = rows.some(r => r.error !== '');
-        const hasEmpty = rows.some(r => !r.admissionNumber || !r.score);
+        const hasEmpty = rows.some(r => !r.admissionNumber || !r.score || !r.grade);
         if (hasErrors) {
             setSaveMessage({ type: 'error', text: 'Please fix all errors before submitting.' });
             return;
         }
         if (hasEmpty) {
-            setSaveMessage({ type: 'error', text: 'Please fill in admission number and score for all rows.' });
+            setSaveMessage({ type: 'error', text: 'Please fill in admission number, score, and grade for all rows.' });
             return;
         }
 
@@ -82,7 +109,15 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         setSaveMessage(null);
 
         try {
-            // Lookup student IDs from admission_number
+            // Fetch exam max_score
+            const { data: examData } = await supabase
+                .from('exams')
+                .select('max_score')
+                .eq('id', examId)
+                .single();
+            const examMaxScore = examData?.max_score || maxScore;
+
+            // Lookup student IDs
             const admissionNumbers = rows.map(r => r.admissionNumber);
             const { data: studentsData, error: studentsError } = await supabase
                 .from('students')
@@ -100,23 +135,27 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 const student_id = studentMap.get(r.admissionNumber);
                 if (!student_id) {
                     validationFailed = true;
-                    return { ...r, error: `Student not found with admission number: ${r.admissionNumber}` };
+                    return { ...r, error: `Student not found: ${r.admissionNumber}` };
                 }
+
+                const score = parseFloat(r.score);
+                const percentage = examMaxScore > 0 ? (score / examMaxScore) * 100 : 0;
 
                 insertRows.push({
                     student_id,
-                    raw_score: parseFloat(r.score),
+                    raw_score: score,
                     remarks: r.remarks || null,
                     exam_id: examId,
-                    percentage: 0, // Trigger will calculate
+                    percentage: Math.round(percentage * 100) / 100,
+                    grade_symbol: r.grade,
                 });
 
-                return r; // Return unmodified row if successful
+                return r;
             });
 
             if (validationFailed) {
                 setRows(validatedRows);
-                setSaveMessage({ type: 'error', text: 'Some students could not be found. Please check their admission numbers.' });
+                setSaveMessage({ type: 'error', text: 'Some students could not be found.' });
                 setSaving(false);
                 return;
             }
@@ -129,9 +168,9 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 setSaveMessage({ type: 'success', text: `✅ Successfully saved ${rows.length} marks!` });
                 setTimeout(() => {
                     setRows([
-                        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
-                        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
-                        { studentName: '', admissionNumber: '', score: '', remarks: '', error: '' },
+                        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
+                        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
+                        { studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '' },
                     ]);
                     setSaveMessage(null);
                 }, 2500);
@@ -143,6 +182,13 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             setSaving(false);
         }
     };
+
+    // Group grade options by system for the dropdown
+    const groupedOptions = gradeOptions.reduce<Record<string, GradeOption[]>>((acc, g) => {
+        if (!acc[g.systemName]) acc[g.systemName] = [];
+        acc[g.systemName].push(g);
+        return acc;
+    }, {});
 
     return (
         <div className="card overflow-hidden">
@@ -163,13 +209,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             )}
 
             <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                <table className="data-table whitespace-nowrap min-w-[700px]">
+                <table className="data-table whitespace-nowrap min-w-[800px]">
                     <thead>
                         <tr>
                             <th className="w-10">#</th>
                             <th>Student Name</th>
                             <th>Admission # *</th>
                             <th className="w-24">Score *</th>
+                            <th className="w-40">Grade *</th>
                             <th>Remarks</th>
                             <th className="w-10"></th>
                         </tr>
@@ -201,6 +248,24 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         value={row.score}
                                         onChange={e => updateRow(i, 'score', e.target.value)}
                                     />
+                                </td>
+                                <td>
+                                    <select
+                                        className="input-field text-sm"
+                                        value={row.grade}
+                                        onChange={e => updateRow(i, 'grade', e.target.value)}
+                                    >
+                                        <option value="">Select grade</option>
+                                        {Object.entries(groupedOptions).map(([systemName, opts]) => (
+                                            <optgroup key={systemName} label={systemName}>
+                                                {opts.map(o => (
+                                                    <option key={o.symbol} value={o.symbol}>
+                                                        {o.symbol} — {o.label}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </select>
                                 </td>
                                 <td>
                                     <input

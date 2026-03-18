@@ -12,6 +12,7 @@ interface ColumnMapping {
     studentName: string;
     admissionNumber: string;
     score: string;
+    grade: string;
 }
 
 interface Props {
@@ -28,6 +29,7 @@ export function BulkUpload({ examId }: Props) {
         studentName: '',
         admissionNumber: '',
         score: '',
+        grade: '',
     });
     const [step, setStep] = useState<'upload' | 'map' | 'preview'>('upload');
     const [errors, setErrors] = useState<string[]>([]);
@@ -55,6 +57,7 @@ export function BulkUpload({ examId }: Props) {
                     if (lower.includes('name') || lower.includes('student')) autoMap.studentName = col;
                     if (lower.includes('admission') || lower.includes('adm') || lower.includes('number') || lower.includes('id')) autoMap.admissionNumber = col;
                     if (lower.includes('score') || lower.includes('mark') || lower.includes('raw')) autoMap.score = col;
+                    if (lower.includes('grade') || lower.includes('level') || lower.includes('symbol')) autoMap.grade = col;
                 });
 
                 setMapping(prev => ({ ...prev, ...autoMap }));
@@ -88,7 +91,15 @@ export function BulkUpload({ examId }: Props) {
         setSubmitMessage(null);
 
         try {
-            // Resolve student IDs from admission numbers
+            // 1. Fetch exam max_score
+            const { data: examData } = await supabase
+                .from('exams')
+                .select('max_score')
+                .eq('id', examId)
+                .single();
+            const examMaxScore = examData?.max_score || 100;
+
+            // 2. Resolve student IDs from admission numbers
             const admissionNumbers = Array.from(new Set(parsedData.map(r => r[mapping.admissionNumber])));
 
             const { data: studentsData, error: studentsError } = await supabase
@@ -100,7 +111,7 @@ export function BulkUpload({ examId }: Props) {
 
             const studentMap = new Map(studentsData?.map(s => [s.admission_number, s.id]));
 
-            // Build rows for exam_marks insert
+            // 4. Build rows with auto-calculated percentage and grade
             const rows: any[] = [];
             const missingStudents: string[] = [];
 
@@ -112,11 +123,16 @@ export function BulkUpload({ examId }: Props) {
                     return;
                 }
 
+                const score = parseFloat(row[mapping.score]);
+                const percentage = examMaxScore > 0 ? (score / examMaxScore) * 100 : 0;
+                const gradeVal = mapping.grade ? row[mapping.grade] : '';
+
                 rows.push({
                     student_id,
-                    raw_score: parseFloat(row[mapping.score]),
+                    raw_score: score,
                     exam_id: examId,
-                    percentage: 0, // Trigger will calculate
+                    percentage: Math.round(percentage * 100) / 100,
+                    grade_symbol: gradeVal || null,
                 });
             });
 
@@ -263,6 +279,7 @@ export function BulkUpload({ examId }: Props) {
                                     <th>Student</th>
                                     <th>Admission #</th>
                                     <th>Score</th>
+                                    <th>Grade</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -272,6 +289,7 @@ export function BulkUpload({ examId }: Props) {
                                         <td className="font-medium">{row[mapping.studentName]}</td>
                                         <td>{row[mapping.admissionNumber]}</td>
                                         <td>{row[mapping.score]}</td>
+                                        <td>{mapping.grade ? row[mapping.grade] : '—'}</td>
                                     </tr>
                                 ))}
                             </tbody>
