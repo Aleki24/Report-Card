@@ -273,7 +273,7 @@ function StudentDashboard() {
             // Look up the student record from auth user.id
             const { data: studentRecord } = await supabase
                 .from('students')
-                .select('id')
+                .select('id, current_grade_stream_id')
                 .eq('user_id', user.id)
                 .limit(1)
                 .single();
@@ -292,7 +292,7 @@ function StudentDashboard() {
             // Get all marks for this student
             const { data: marks } = await supabase
                 .from('exam_marks')
-                .select('percentage, exams(subject_id, subjects(name))')
+                .select('percentage, raw_score, exams(subject_id, max_score, subjects(name))')
                 .eq('student_id', studentRecord.id);
 
             if (!marks || marks.length === 0) {
@@ -313,7 +313,7 @@ function StudentDashboard() {
             // Find best subject  
             const subjectAvgs: Record<string, { total: number; count: number; name: string }> = {};
             for (const m of marks) {
-                const exam = m.exams as { subject_id?: string; subjects?: { name?: string } | null } | null;
+                const exam = m.exams as { subject_id?: string; max_score?: number; subjects?: { name?: string } | null } | null;
                 const subName = exam?.subjects?.name || 'Unknown';
                 const subId = exam?.subject_id || 'unknown';
                 if (!subjectAvgs[subId]) subjectAvgs[subId] = { total: 0, count: 0, name: subName };
@@ -330,10 +330,53 @@ function StudentDashboard() {
                 }
             }
 
+            // Calculate stream position
+            let positionStr = '—';
+            let positionSub = 'N/A';
+            const gradeStreamId = studentRecord.current_grade_stream_id;
+            if (gradeStreamId) {
+                const { data: classmates } = await supabase
+                    .from('students')
+                    .select('id')
+                    .eq('current_grade_stream_id', gradeStreamId);
+
+                if (classmates && classmates.length > 0) {
+                    const classmateIds = classmates.map(c => c.id);
+                    const { data: allMarks } = await supabase
+                        .from('exam_marks')
+                        .select('student_id, raw_score, exams!inner(max_score)')
+                        .in('student_id', classmateIds);
+
+                    if (allMarks && allMarks.length > 0) {
+                        const aggs: Record<string, { score: number; possible: number }> = {};
+                        for (const m of allMarks as any[]) {
+                            const sid = m.student_id;
+                            if (!aggs[sid]) aggs[sid] = { score: 0, possible: 0 };
+                            aggs[sid].score += Number(m.raw_score);
+                            aggs[sid].possible += Number(m.exams.max_score);
+                        }
+                        const sorted = Object.entries(aggs)
+                            .filter(([, v]) => v.possible > 0)
+                            .map(([sid, v]) => ({ sid, pct: (v.score / v.possible) * 100 }))
+                            .sort((a, b) => b.pct - a.pct);
+
+                        let rank = 1;
+                        for (let i = 0; i < sorted.length; i++) {
+                            if (i > 0 && sorted[i].pct < sorted[i - 1].pct) rank = i + 1;
+                            if (sorted[i].sid === studentRecord.id) {
+                                positionStr = `${rank} / ${sorted.length}`;
+                                positionSub = rank <= 3 ? '🏆 Top performer!' : `Out of ${sorted.length} students`;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             setKpis([
                 { label: 'My Average', value: `${avg.toFixed(1)}%`, sub: `From ${marks.length} marks`, color: avg >= 50 ? 'var(--color-success)' : 'var(--color-warning)' },
                 { label: 'Best Subject', value: bestSubject, sub: `${bestAvg.toFixed(0)}% average`, color: 'var(--color-success)' },
-                { label: 'Stream Position', value: '—', sub: 'Coming soon' },
+                { label: 'Stream Position', value: positionStr, sub: positionSub },
                 { label: 'Exams Taken', value: marks.length.toString(), sub: 'Total entries' },
             ]);
             setLoading(false);
