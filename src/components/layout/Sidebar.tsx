@@ -64,6 +64,16 @@ const navItems: NavItem[] = [
         )
     },
     {
+        label: 'Exam Results',
+        href: '/dashboard/exam-results',
+        roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
+        icon: (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 14l2 2 4-4" />
+            </svg>
+        )
+    },
+    {
         label: 'Analytics',
         href: '/dashboard/analytics',
         roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
@@ -164,7 +174,7 @@ export function Sidebar({ mobileMenuOpen, setMobileMenuOpen, collapsed = false, 
 
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 z-50 flex flex-col min-h-screen bg-[var(--color-surface)] border-r border-[var(--color-border)] transition-transform duration-300 ease-in-out md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                className={`fixed top-0 left-0 z-50 flex flex-col h-screen bg-[var(--color-surface)] border-r border-[var(--color-border)] transition-transform duration-300 ease-in-out md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
                 style={{
                     width: collapsed ? '72px' : '260px',
                 }}
@@ -206,7 +216,7 @@ export function Sidebar({ mobileMenuOpen, setMobileMenuOpen, collapsed = false, 
                 </div>
 
                 {/* Navigation */}
-                <nav style={{ flex: 1, padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+                <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
                     {visibleNavItems.map((item) => {
                         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                         return (
@@ -394,7 +404,7 @@ export function Sidebar({ mobileMenuOpen, setMobileMenuOpen, collapsed = false, 
 
                 {/* Collapse Toggle */}
                 <button
-                    className="hidden md:flex items-center justify-center mt-auto cursor-pointer transition-colors"
+                    className="hidden md:flex items-center justify-center cursor-pointer transition-colors"
                     style={{
                         padding: 'var(--space-3) var(--space-4)',
                         marginBottom: 'var(--space-4)',
