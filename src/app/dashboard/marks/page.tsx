@@ -25,7 +25,7 @@ const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER'];
 
 export default function MarksPage() {
     const supabase = createSupabaseBrowserClient();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
 
     // Existing exam list state
     const [mode, setMode] = useState<'bulk' | 'manual'>('bulk');
@@ -57,6 +57,16 @@ export default function MarksPage() {
     const [allStreams, setAllStreams] = useState<StreamItem[]>([]);
     const [dropdownsLoading, setDropdownsLoading] = useState(false);
 
+    // Inline quick-add state
+    const [addingYear, setAddingYear] = useState(false);
+    const [addingTerm, setAddingTerm] = useState(false);
+    const [addingStream, setAddingStream] = useState(false);
+    const [quickSaving, setQuickSaving] = useState(false);
+    const [quickMsg, setQuickMsg] = useState('');
+    const [qYear, setQYear] = useState({ name: '', start_date: '', end_date: '' });
+    const [qTerm, setQTerm] = useState({ name: '', start_date: '', end_date: '' });
+    const [qStream, setQStream] = useState({ name: '' });
+
     // Fetch exams
     const fetchExams = useCallback(async () => {
         const { data, error } = await supabase
@@ -80,29 +90,33 @@ export default function MarksPage() {
 
     useEffect(() => { fetchExams(); }, [fetchExams]);
 
-    // Fetch dropdown data when modal opens
-    useEffect(() => {
-        if (!showCreateModal) return;
-        const fetchDropdowns = async () => {
-            setDropdownsLoading(true);
-            const [subjectsRes, yearsRes, termsRes, gradesRes, streamsRes] = await Promise.all([
-                supabase.from('subjects').select('id, name, code, academic_level_id').order('display_order'),
-                supabase.from('academic_years').select('id, name').order('start_date', { ascending: false }),
-                supabase.from('terms').select('id, name, academic_year_id').order('start_date'),
-                supabase.from('grades').select('id, name_display, code, academic_level_id').order('numeric_order'),
-                supabase.from('grade_streams').select('id, name, full_name, grade_id').order('name'),
-            ]);
-            if (subjectsRes.data) setSubjects(subjectsRes.data);
-            if (yearsRes.data) {
-                setAcademicYears(yearsRes.data);
-                if (yearsRes.data.length > 0 && !selectedAcademicYearId) setSelectedAcademicYearId(yearsRes.data[0].id);
+    // Fetch dropdown data when modal opens — via server API to bypass RLS
+    const fetchDropdowns = useCallback(async () => {
+        setDropdownsLoading(true);
+        try {
+            const res = await fetch('/api/admin/academic-structure');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to load form data');
+
+            if (data.subjects) setSubjects(data.subjects);
+            if (data.academic_years) {
+                setAcademicYears(data.academic_years);
+                if (data.academic_years.length > 0 && !selectedAcademicYearId) {
+                    setSelectedAcademicYearId(data.academic_years[0].id);
+                }
             }
-            if (termsRes.data) setAllTerms(termsRes.data);
-            if (gradesRes.data) setGrades(gradesRes.data);
-            if (streamsRes.data) setAllStreams(streamsRes.data);
-            setDropdownsLoading(false);
-        };
-        fetchDropdowns();
+            if (data.terms) setAllTerms(data.terms);
+            if (data.grades) setGrades(data.grades);
+            if (data.grade_streams) setAllStreams(data.grade_streams);
+        } catch (err) {
+            console.error('Error fetching dropdown data:', err);
+        }
+        setDropdownsLoading(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedAcademicYearId]);
+
+    useEffect(() => {
+        if (showCreateModal) fetchDropdowns();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showCreateModal]);
 
@@ -113,6 +127,65 @@ export default function MarksPage() {
     // Reset dependent fields on parent change
     useEffect(() => { setSelectedTermId(''); }, [selectedAcademicYearId]);
     useEffect(() => { setSelectedStreamId(''); }, [selectedGradeId]);
+
+    // Quick-add helper
+    const quickAdd = async (type: string, payload: Record<string, unknown>) => {
+        setQuickSaving(true);
+        setQuickMsg('');
+        try {
+            const res = await fetch('/api/admin/academic-structure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, user_id: profile?.id, ...payload }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed');
+            setQuickMsg(`✅ Added!`);
+            await fetchDropdowns(); // refresh dropdowns
+            setTimeout(() => setQuickMsg(''), 2000);
+            return data.data;
+        } catch (err) {
+            setQuickMsg(`❌ ${err instanceof Error ? err.message : 'Failed'}`);
+            return null;
+        } finally {
+            setQuickSaving(false);
+        }
+    };
+
+    const handleQuickAddYear = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!qYear.name.trim() || !qYear.start_date || !qYear.end_date) return;
+        const result = await quickAdd('academic_year', qYear);
+        if (result) {
+            setSelectedAcademicYearId(result.id);
+            setQYear({ name: '', start_date: '', end_date: '' });
+            setAddingYear(false);
+        }
+    };
+
+    const handleQuickAddTerm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedAcademicYearId || !qTerm.name.trim() || !qTerm.start_date || !qTerm.end_date) return;
+        const result = await quickAdd('term', { academic_year_id: selectedAcademicYearId, ...qTerm });
+        if (result) {
+            setSelectedTermId(result.id);
+            setQTerm({ name: '', start_date: '', end_date: '' });
+            setAddingTerm(false);
+        }
+    };
+
+    const handleQuickAddStream = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedGradeId || !qStream.name.trim()) return;
+        const grade = grades.find(g => g.id === selectedGradeId);
+        const fullName = `${grade?.name_display || ''} ${qStream.name.trim()}`.trim();
+        const result = await quickAdd('stream', { grade_id: selectedGradeId, name: qStream.name.trim(), full_name: fullName });
+        if (result) {
+            setSelectedStreamId(result.id);
+            setQStream({ name: '' });
+            setAddingStream(false);
+        }
+    };
 
     // Handle exam creation
     const handleCreateExam = async () => {
@@ -258,11 +331,18 @@ export default function MarksPage() {
                     onClick={() => { setShowCreateModal(false); setSaveMessage(null); }}
                 >
                     <div
-                        className="card w-full max-w-lg"
+                        className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
                         style={{ animation: 'fadeIn .2s ease' }}
                         onClick={e => e.stopPropagation()}
                     >
                         <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-6">Create New Exam</h2>
+
+                        {/* Quick-add feedback */}
+                        {quickMsg && (
+                            <div className={`mb-4 p-2 rounded text-xs ${quickMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {quickMsg}
+                            </div>
+                        )}
 
                         {dropdownsLoading ? (
                             <div className="text-sm text-[var(--color-text-muted)] py-8 text-center">Loading form data…</div>
@@ -308,31 +388,72 @@ export default function MarksPage() {
                                 {/* Row: Academic Year + Term */}
                                 <div className="flex gap-4">
                                     <div className="flex-1">
-                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year *</label>
-                                        {academicYears.length === 0 ? (
-                                            <p className="text-xs text-orange-400">No academic years found.</p>
-                                        ) : (
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-xs text-[var(--color-text-muted)]">Academic Year *</label>
+                                            <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingYear(!addingYear)}>
+                                                {addingYear ? '✕ Cancel' : '+ Add'}
+                                            </button>
+                                        </div>
+                                        {academicYears.length === 0 && !addingYear ? (
+                                            <p className="text-xs text-orange-400">No years found. Click <strong>+ Add</strong> above.</p>
+                                        ) : !addingYear ? (
                                             <select className="input-field w-full" value={selectedAcademicYearId} onChange={e => setSelectedAcademicYearId(e.target.value)}>
                                                 <option value="">-- Select Year --</option>
                                                 {academicYears.map(y => (
                                                     <option key={y.id} value={y.id}>{y.name}</option>
                                                 ))}
                                             </select>
+                                        ) : null}
+
+                                        {/* Inline Add Year Form */}
+                                        {addingYear && (
+                                            <form onSubmit={handleQuickAddYear} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2">
+                                                <input className="input-field w-full text-xs" placeholder="Year name, e.g. 2026" value={qYear.name} onChange={e => setQYear(p => ({ ...p, name: e.target.value }))} />
+                                                <div className="flex gap-2">
+                                                    <input type="date" className="input-field flex-1 text-xs" value={qYear.start_date} onChange={e => setQYear(p => ({ ...p, start_date: e.target.value }))} />
+                                                    <input type="date" className="input-field flex-1 text-xs" value={qYear.end_date} onChange={e => setQYear(p => ({ ...p, end_date: e.target.value }))} />
+                                                </div>
+                                                <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qYear.name.trim() || !qYear.start_date || !qYear.end_date}>
+                                                    {quickSaving ? '...' : '✓ Save Year'}
+                                                </button>
+                                            </form>
                                         )}
                                     </div>
+
                                     <div className="flex-1">
-                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term *</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-xs text-[var(--color-text-muted)]">Term *</label>
+                                            {selectedAcademicYearId && (
+                                                <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingTerm(!addingTerm)}>
+                                                    {addingTerm ? '✕ Cancel' : '+ Add'}
+                                                </button>
+                                            )}
+                                        </div>
                                         {!selectedAcademicYearId ? (
                                             <p className="text-xs text-[var(--color-text-muted)]">Select a year first.</p>
-                                        ) : filteredTerms.length === 0 ? (
-                                            <p className="text-xs text-orange-400">No terms for this year.</p>
-                                        ) : (
+                                        ) : filteredTerms.length === 0 && !addingTerm ? (
+                                            <p className="text-xs text-orange-400">No terms. Click <strong>+ Add</strong> above.</p>
+                                        ) : !addingTerm ? (
                                             <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)}>
                                                 <option value="">-- Select Term --</option>
                                                 {filteredTerms.map(t => (
                                                     <option key={t.id} value={t.id}>{t.name}</option>
                                                 ))}
                                             </select>
+                                        ) : null}
+
+                                        {/* Inline Add Term Form */}
+                                        {addingTerm && selectedAcademicYearId && (
+                                            <form onSubmit={handleQuickAddTerm} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2">
+                                                <input className="input-field w-full text-xs" placeholder="e.g. Term 1" value={qTerm.name} onChange={e => setQTerm(p => ({ ...p, name: e.target.value }))} />
+                                                <div className="flex gap-2">
+                                                    <input type="date" className="input-field flex-1 text-xs" value={qTerm.start_date} onChange={e => setQTerm(p => ({ ...p, start_date: e.target.value }))} />
+                                                    <input type="date" className="input-field flex-1 text-xs" value={qTerm.end_date} onChange={e => setQTerm(p => ({ ...p, end_date: e.target.value }))} />
+                                                </div>
+                                                <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qTerm.name.trim() || !qTerm.start_date || !qTerm.end_date}>
+                                                    {quickSaving ? '...' : '✓ Save Term'}
+                                                </button>
+                                            </form>
                                         )}
                                     </div>
                                 </div>
@@ -353,12 +474,19 @@ export default function MarksPage() {
                                         )}
                                     </div>
                                     <div className="flex-1">
-                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Stream (optional)</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-xs text-[var(--color-text-muted)]">Stream (optional)</label>
+                                            {selectedGradeId && (
+                                                <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingStream(!addingStream)}>
+                                                    {addingStream ? '✕ Cancel' : '+ Add'}
+                                                </button>
+                                            )}
+                                        </div>
                                         {!selectedGradeId ? (
                                             <p className="text-xs text-[var(--color-text-muted)]">Select a grade first.</p>
-                                        ) : filteredStreams.length === 0 ? (
+                                        ) : addingStream ? null : filteredStreams.length === 0 ? (
                                             <select className="input-field w-full" disabled>
-                                                <option>No streams for this grade</option>
+                                                <option>No streams — click + Add</option>
                                             </select>
                                         ) : (
                                             <select className="input-field w-full" value={selectedStreamId} onChange={e => setSelectedStreamId(e.target.value)}>
@@ -367,6 +495,16 @@ export default function MarksPage() {
                                                     <option key={s.id} value={s.id}>{s.full_name}</option>
                                                 ))}
                                             </select>
+                                        )}
+
+                                        {/* Inline Add Stream Form */}
+                                        {addingStream && selectedGradeId && (
+                                            <form onSubmit={handleQuickAddStream} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2 mt-1">
+                                                <input className="input-field w-full text-xs" placeholder="Stream name, e.g. A" value={qStream.name} onChange={e => setQStream({ name: e.target.value })} />
+                                                <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qStream.name.trim()}>
+                                                    {quickSaving ? '...' : '✓ Save Stream'}
+                                                </button>
+                                            </form>
                                         )}
                                     </div>
                                 </div>

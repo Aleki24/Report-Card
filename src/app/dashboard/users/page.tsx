@@ -198,7 +198,7 @@ export default function UsersPage() {
                         </h3>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="data-table w-full whitespace-nowrap">
+                        <table className="data-table w-full sm:whitespace-nowrap">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -210,9 +210,9 @@ export default function UsersPage() {
                             <tbody>
                                 {pendingInvites.map(inv => (
                                     <tr key={inv.id}>
-                                        <td className="font-medium">{inv.first_name} {inv.last_name}</td>
-                                        <td className="text-[var(--color-text-muted)] text-sm">{inv.phone}</td>
-                                        <td>
+                                        <td data-label="Name" className="font-medium">{inv.first_name} {inv.last_name}</td>
+                                        <td data-label="Phone" className="text-[var(--color-text-muted)] text-sm">{inv.phone}</td>
+                                        <td data-label="Role">
                                             <span
                                                 className="badge"
                                                 style={{
@@ -224,7 +224,7 @@ export default function UsersPage() {
                                                 {inv.role.replace('_', ' ')}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Invite Code">
                                             <span style={{
                                                 fontFamily: 'var(--font-mono, monospace)',
                                                 fontSize: 14,
@@ -260,7 +260,7 @@ export default function UsersPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table w-full whitespace-nowrap">
+                        <table className="data-table w-full sm:whitespace-nowrap">
                             <thead>
                                 <tr>
                                     <th>Name</th>
@@ -273,10 +273,10 @@ export default function UsersPage() {
                             <tbody>
                                 {users.map(u => (
                                     <tr key={u.id}>
-                                        <td className="font-medium">{u.first_name} {u.last_name}</td>
-                                        <td className="text-[var(--color-text-muted)] text-sm">{u.phone || '—'}</td>
-                                        <td className="text-[var(--color-text-muted)] text-sm">{u.email || '—'}</td>
-                                        <td>
+                                        <td data-label="Name" className="font-medium">{u.first_name} {u.last_name}</td>
+                                        <td data-label="Phone" className="text-[var(--color-text-muted)] text-sm">{u.phone || '—'}</td>
+                                        <td data-label="Email" className="text-[var(--color-text-muted)] text-sm">{u.email || '—'}</td>
+                                        <td data-label="Role">
                                             <span
                                                 className="badge"
                                                 style={{
@@ -288,7 +288,7 @@ export default function UsersPage() {
                                                 {u.role.replace('_', ' ')}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Status">
                                             <span className={`badge ${u.is_active ? 'badge-success' : ''}`} style={!u.is_active ? { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' } : {}}>
                                                 {u.is_active ? 'Active' : 'Inactive'}
                                             </span>

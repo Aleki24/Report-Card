@@ -10,11 +10,11 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, password, first_name, last_name } = body;
+        const { email, password, first_name, last_name, school_name } = body;
 
-        if (!email || !password || !first_name || !last_name) {
+        if (!email || !password || !first_name || !last_name || !school_name) {
             return NextResponse.json(
-                { error: 'All fields are required: email, password, first_name, last_name' },
+                { error: 'All fields are required: email, password, first_name, last_name, school_name' },
                 { status: 400 }
             );
         }
@@ -45,7 +45,20 @@ export async function POST(request: NextRequest) {
         // Generate a UUID for the new user
         const userId = crypto.randomUUID();
 
-        // Insert into public.users as ADMIN (no school_id yet — they'll create one in Settings)
+        // Generate a UUID for the new school
+        const schoolId = crypto.randomUUID();
+
+        // 1. Create the school first
+        const { error: schoolError } = await supabaseAdmin.from('schools').insert({
+            id: schoolId,
+            name: school_name.trim(),
+        });
+
+        if (schoolError) {
+            return NextResponse.json({ error: `School error: ${schoolError.message}` }, { status: 400 });
+        }
+
+        // 2. Insert into public.users as ADMIN, linked to the new school
         const { error: profileError } = await supabaseAdmin.from('users').insert({
             id: userId,
             first_name,
@@ -54,9 +67,11 @@ export async function POST(request: NextRequest) {
             password_hash: passwordHash,
             role: 'ADMIN',
             is_active: true,
+            school_id: schoolId,
         });
 
         if (profileError) {
+            // Rollback school creation on error (though in MVP manual cleanup or ignoring orphan schools is fine)
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
         }
 

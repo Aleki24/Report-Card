@@ -213,7 +213,7 @@ export default function StudentsPage() {
             {/* Student Table */}
             <div className="card p-0 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="data-table whitespace-nowrap w-full">
+                    <table className="data-table sm:whitespace-nowrap w-full">
                         <thead>
                             <tr>
                                 <th>Student</th>
@@ -233,17 +233,17 @@ export default function StudentsPage() {
                             ) : filtered.length > 0 ? (
                                 filtered.map((s) => (
                                     <tr key={s.id}>
-                                        <td className="font-medium text-[var(--color-text-primary)]">
+                                        <td data-label="Student" className="font-medium text-[var(--color-text-primary)]">
                                             {s.users?.first_name || '—'} {s.users?.last_name || ''}
                                         </td>
-                                        <td className="text-[var(--color-text-muted)] font-mono text-sm">{s.admission_number}</td>
-                                        <td>{s.grade_streams?.full_name || '—'}</td>
-                                        <td>
+                                        <td data-label="Admission #" className="text-[var(--color-text-muted)] font-mono text-sm">{s.admission_number}</td>
+                                        <td data-label="Grade Stream">{s.grade_streams?.full_name || '—'}</td>
+                                        <td data-label="Status">
                                             <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
                                                 {s.status}
                                             </span>
                                         </td>
-                                        <td>
+                                        <td data-label="Actions">
                                             <div className="flex gap-2">
                                                 <a
                                                     href={`/api/reports/student/${s.id}`}

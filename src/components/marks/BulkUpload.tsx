@@ -272,7 +272,7 @@ export function BulkUpload({ examId }: Props) {
                     )}
 
                     <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-                        <table className="data-table whitespace-nowrap">
+                        <table className="data-table sm:whitespace-nowrap">
                             <thead>
                                 <tr>
                                     <th>#</th>

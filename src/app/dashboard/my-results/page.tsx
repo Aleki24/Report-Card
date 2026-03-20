@@ -385,7 +385,7 @@ export default function MyResultsPage() {
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="data-table whitespace-nowrap w-full">
+                        <table className="data-table sm:whitespace-nowrap w-full">
                             <thead>
                                 <tr>
                                     <th>Subject</th>
@@ -417,7 +417,10 @@ export default function MyResultsPage() {
 
             {/* Performance Trend Chart */}
             {trendData.length > 1 && (
-                <PerformanceTrendChart data={trendData} />
+                <PerformanceTrendChart
+                    data={trendData.map(d => ({ examName: d.examName, 'My Average': d.percentage }))}
+                    subjects={['My Average']}
+                />
             )}
 
             {/* Single term — show a note instead of chart */}

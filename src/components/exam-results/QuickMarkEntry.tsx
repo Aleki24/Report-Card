@@ -71,28 +71,87 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
         setMessage(null);
 
         // Only submit rows that have a score entered
-        const entries = Object.entries(scores)
-            .filter(([, val]) => val !== '' && !isNaN(Number(val)))
-            .map(([studentId, val]) => ({
-                exam_id: examId,
-                student_id: studentId,
-                raw_score: Number(val),
-            }));
+        const rawEntries = Object.entries(scores)
+            .filter(([, val]) => val !== '' && !isNaN(Number(val)));
 
-        if (entries.length === 0) {
+        if (rawEntries.length === 0) {
             setMessage({ type: 'error', text: 'Enter at least one score before submitting.' });
             return;
         }
 
         setSaving(true);
 
-        const { error } = await supabase.from('exam_marks').insert(entries);
+        try {
+            // 1. Fetch exam max_score
+            const { data: examData } = await supabase
+                .from('exams')
+                .select('max_score, grade_id')
+                .eq('id', examId)
+                .single();
+            const examMaxScore = examData?.max_score || 100;
 
-        if (error) {
-            setMessage({ type: 'error', text: `Failed to save: ${error.message}` });
-        } else {
-            setMessage({ type: 'success', text: `${entries.length} mark(s) saved successfully!` });
-            onSaved();
+            // 2. Fetch grading scales (via the grade's academic level → grading system)
+            let gradingScales: { symbol: string; min_percentage: number; max_percentage: number }[] = [];
+            if (examData?.grade_id) {
+                const { data: gradeData } = await supabase
+                    .from('grades')
+                    .select('academic_level_id')
+                    .eq('id', examData.grade_id)
+                    .single();
+
+                if (gradeData?.academic_level_id) {
+                    const { data: gs } = await supabase
+                        .from('grading_systems')
+                        .select('id')
+                        .eq('academic_level_id', gradeData.academic_level_id)
+                        .limit(1)
+                        .single();
+
+                    if (gs) {
+                        const { data: scales } = await supabase
+                            .from('grading_scales')
+                            .select('symbol, min_percentage, max_percentage')
+                            .eq('grading_system_id', gs.id)
+                            .order('min_percentage', { ascending: false });
+                        gradingScales = scales || [];
+                    }
+                }
+            }
+
+            // 3. Build entries with percentage and auto-grade
+            const entries = rawEntries.map(([studentId, val]) => {
+                const rawScore = Number(val);
+                const percentage = examMaxScore > 0 ? Math.round((rawScore / examMaxScore) * 10000) / 100 : 0;
+
+                // Find matching grade from scales
+                let gradeSymbol: string | null = null;
+                for (const scale of gradingScales) {
+                    if (percentage >= scale.min_percentage && percentage <= scale.max_percentage) {
+                        gradeSymbol = scale.symbol;
+                        break;
+                    }
+                }
+
+                return {
+                    exam_id: examId,
+                    student_id: studentId,
+                    raw_score: rawScore,
+                    percentage,
+                    grade_symbol: gradeSymbol,
+                };
+            });
+
+            const { error } = await supabase.from('exam_marks').insert(entries);
+
+            if (error) {
+                setMessage({ type: 'error', text: `Failed to save: ${error.message}` });
+            } else {
+                setMessage({ type: 'success', text: `${entries.length} mark(s) saved successfully!` });
+                onSaved();
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            setMessage({ type: 'error', text: `Error: ${msg}` });
         }
 
         setSaving(false);

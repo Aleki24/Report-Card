@@ -6,13 +6,14 @@ import { useAuth } from '@/components/AuthProvider';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
+import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; }
 interface AcademicYear { id: string; name: string; }
 interface Term { id: string; name: string; academic_year_id: string; }
 
-type Tab = 'results' | 'analysis' | 'quickentry' | 'reports';
+type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
 
 export default function ExamResultsPage() {
     const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -27,7 +28,7 @@ export default function ExamResultsPage() {
     const [loadingExams, setLoadingExams] = useState(false);
 
     // ----- Tab + Data -----
-    const [activeTab, setActiveTab] = useState<Tab>('results');
+    const [activeTab, setActiveTab] = useState<Tab>('allsubjects');
     const [marks, setMarks] = useState<MarkRow[]>([]);
     const [loadingMarks, setLoadingMarks] = useState(false);
 
@@ -38,6 +39,7 @@ export default function ExamResultsPage() {
     const [selectedTermId, setSelectedTermId] = useState('');
     const [reportGenerating, setReportGenerating] = useState(false);
     const [reportMsg, setReportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [customReportTitle, setCustomReportTitle] = useState('');
 
     // ═══════════════════ Data fetching ═══════════════════
 
@@ -139,6 +141,7 @@ export default function ExamResultsPage() {
         const params = new URLSearchParams();
         if (selectedTermId) params.set('term', selectedTermId);
         if (selectedYearId) params.set('year', selectedYearId);
+        if (customReportTitle) params.set('customTitle', customReportTitle);
         window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
     };
 
@@ -226,11 +229,11 @@ export default function ExamResultsPage() {
                 </div>
             </div>
 
-            {/* Show content only when both filters are selected */}
-            {selectedStreamId && selectedExamId && (
+            {/* Show content when stream is selected */}
+            {selectedStreamId && (
                 <>
-                    {/* Selected Exam Info */}
-                    {selectedExam && (
+                    {/* Selected Exam Info (only if a specific exam is selected) */}
+                    {selectedExamId && selectedExam && (
                         <div className="mb-4 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
                             <strong>Exam:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name} · <strong>Max Score:</strong> {selectedExam.max_score}
                         </div>
@@ -238,12 +241,13 @@ export default function ExamResultsPage() {
 
                     {/* ── Tabs ── */}
                     <div
-                        className="flex bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md overflow-hidden"
+                        className="flex flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md overflow-hidden"
                         style={{ marginBottom: 'var(--space-6)' }}
                     >
                         {([
-                            { key: 'results', label: '📋 Student Results' },
-                            { key: 'analysis', label: '📊 Analysis' },
+                            { key: 'allsubjects', label: '📊 All Subjects' },
+                            { key: 'results', label: '📋 Single Exam' },
+                            { key: 'analysis', label: '📈 Analysis' },
                             { key: 'quickentry', label: '✏️ Quick Entry' },
                             { key: 'reports', label: '📄 Reports' },
                         ] as { key: Tab; label: string }[]).map(tab => (
@@ -268,7 +272,11 @@ export default function ExamResultsPage() {
                         </div>
                     ) : (
                         <>
-                            {activeTab === 'results' && (
+                            {activeTab === 'allsubjects' && (
+                                <AllSubjectsView gradeStreamId={selectedStreamId} />
+                            )}
+
+                            {activeTab === 'results' && selectedExamId && (
                                 <ExamResultsTable
                                     marks={marks}
                                     maxScore={selectedExam?.max_score || 100}
@@ -276,12 +284,17 @@ export default function ExamResultsPage() {
                                     onRefresh={fetchMarks}
                                 />
                             )}
+                            {activeTab === 'results' && !selectedExamId && (
+                                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
+                                    <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Select an exam above to view individual results.</p>
+                                </div>
+                            )}
 
-                            {activeTab === 'analysis' && (
+                            {activeTab === 'analysis' && selectedExamId && (
                                 <ExamAnalysisPanel marks={marks} />
                             )}
 
-                            {activeTab === 'quickentry' && (
+                            {activeTab === 'quickentry' && selectedExamId && (
                                 <QuickMarkEntry
                                     examId={selectedExamId}
                                     gradeStreamId={selectedStreamId}
@@ -309,6 +322,15 @@ export default function ExamResultsPage() {
                                                     {filteredTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                                 </select>
                                             </div>
+                                        </div>
+                                        <div className="mt-4">
+                                            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Custom Report Title (Optional)</label>
+                                            <input 
+                                                className="input-field w-full" 
+                                                placeholder="e.g. Mid Term 1 Report (Leave blank to use Term Name)"
+                                                value={customReportTitle}
+                                                onChange={e => setCustomReportTitle(e.target.value)}
+                                            />
                                         </div>
                                     </div>
 

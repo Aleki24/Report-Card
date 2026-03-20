@@ -13,17 +13,21 @@ import {
     ResponsiveContainer
 } from 'recharts';
 
-interface TrendData {
-    examName: string;
-    percentage: number;
-}
-
+// Each row has examName + one numeric key per subject
 interface Props {
-    data: TrendData[];
-    classAverage?: number; // Provides a reference frame
+    data: Record<string, any>[];
+    subjects?: string[];
+    classAverage?: number;
 }
 
-export function PerformanceTrendChart({ data, classAverage }: Props) {
+// A palette of distinct colours for up to 12 subjects
+const SUBJECT_COLORS = [
+    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+    '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
+    '#06B6D4', '#E11D48',
+];
+
+export function PerformanceTrendChart({ data, subjects = [], classAverage }: Props) {
     return (
         <div className="card w-full" style={{ height: '400px', display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: 16, marginBottom: 'var(--space-6)', fontWeight: 600 }}>Performance Trend</h3>
@@ -58,15 +62,20 @@ export function PerformanceTrendChart({ data, classAverage }: Props) {
                             <ReferenceLine y={classAverage} label={`Class Avg (${classAverage}%)`} stroke="#F59E0B" strokeDasharray="3 3" />
                         )}
 
-                        <Line
-                            type="monotone"
-                            dataKey="percentage"
-                            stroke="#3B82F6"
-                            strokeWidth={3}
-                            dot={{ r: 4, strokeWidth: 2 }}
-                            activeDot={{ r: 6 }}
-                            name="Score (%)"
-                        />
+                        {/* One line per subject */}
+                        {subjects.map((subj, idx) => (
+                            <Line
+                                key={subj}
+                                type="monotone"
+                                dataKey={subj}
+                                stroke={SUBJECT_COLORS[idx % SUBJECT_COLORS.length]}
+                                strokeWidth={2}
+                                dot={{ r: 3, strokeWidth: 2 }}
+                                activeDot={{ r: 5 }}
+                                name={subj}
+                                connectNulls
+                            />
+                        ))}
                     </LineChart>
                 </ResponsiveContainer>
             </div>

@@ -8,6 +8,7 @@ export default function SignupPage() {
 
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [schoolName, setSchoolName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -29,6 +30,7 @@ export default function SignupPage() {
                     password,
                     first_name: firstName.trim(),
                     last_name: lastName.trim(),
+                    school_name: schoolName.trim(),
                 }),
             });
 
@@ -112,6 +114,13 @@ export default function SignupPage() {
                                 </label>
                                 <input className="input-field" style={{ width: '100%' }} value={lastName} onChange={e => setLastName(e.target.value)} required />
                             </div>
+                        </div>
+
+                        <div style={{ marginBottom: 'var(--space-5)' }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
+                                School Name
+                            </label>
+                            <input className="input-field" style={{ width: '100%' }} placeholder="Springfield Elementary" value={schoolName} onChange={e => setSchoolName(e.target.value)} required />
                         </div>
 
                         <div style={{ marginBottom: 'var(--space-5)' }}>

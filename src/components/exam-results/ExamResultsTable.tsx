@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { EditMarkModal, type EditMarkData } from './EditMarkModal';
 
 export interface MarkRow {
     id: string;
@@ -30,12 +30,9 @@ const GRADE_COLORS: Record<string, string> = {
 type SortKey = 'student_name' | 'raw_score' | 'percentage' | 'grade_symbol';
 
 export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) {
-    const supabase = createSupabaseBrowserClient();
     const [sortKey, setSortKey] = useState<SortKey>('student_name');
     const [sortAsc, setSortAsc] = useState(true);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editValue, setEditValue] = useState('');
-    const [saving, setSaving] = useState(false);
+    const [editingMark, setEditingMark] = useState<EditMarkData | null>(null);
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {
@@ -55,35 +52,22 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
         return sortAsc ? cmp : -cmp;
     });
 
-    const startEdit = (mark: MarkRow) => {
-        setEditingId(mark.id);
-        setEditValue(String(mark.raw_score));
-    };
-
-    const saveEdit = async (markId: string) => {
-        const newScore = Number(editValue);
-        if (isNaN(newScore) || newScore < 0 || newScore > maxScore) {
-            setEditingId(null);
-            return;
-        }
-        setSaving(true);
-        const { error } = await supabase
-            .from('exam_marks')
-            .update({ raw_score: newScore })
-            .eq('id', markId);
-
-        setSaving(false);
-        setEditingId(null);
-
-        if (!error) {
-            onRefresh();
-        }
+    const openEdit = (mark: MarkRow) => {
+        setEditingMark({
+            id: mark.id,
+            student_name: mark.student_name,
+            admission_number: mark.admission_number,
+            raw_score: mark.raw_score,
+            percentage: mark.percentage,
+            grade_symbol: mark.grade_symbol,
+            remarks: mark.remarks,
+        });
     };
 
     const exportCSV = () => {
-        const header = 'Student Name,Admission No,Raw Score,Percentage,Grade';
+        const header = 'Student Name,Admission No,Raw Score,Percentage,Grade,Remarks';
         const rows = sorted.map(m =>
-            `"${m.student_name}","${m.admission_number}",${m.raw_score},${m.percentage.toFixed(1)},${m.grade_symbol}`
+            `"${m.student_name}","${m.admission_number}",${m.raw_score},${m.percentage.toFixed(1)},${m.grade_symbol},"${(m.remarks || '').replace(/"/g, '""')}"`
         );
         const csv = [header, ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
@@ -121,7 +105,7 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
             {/* Toolbar */}
             <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-4)' }}>
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {marks.length} student{marks.length !== 1 ? 's' : ''} · Click a score to edit
+                    {marks.length} student{marks.length !== 1 ? 's' : ''} · Click ✏️ to edit a result
                 </p>
                 <button
                     className="btn-secondary"
@@ -152,6 +136,8 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
                                 <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('grade_symbol')}>
                                     Grade <SortIcon active={sortKey === 'grade_symbol'} asc={sortAsc} />
                                 </th>
+                                <th style={thStyle}>Remarks</th>
+                                <th style={{ ...thStyle, textAlign: 'center', width: 60 }}>Edit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -166,30 +152,8 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{i + 1}</td>
                                     <td style={tdStyle}>{mark.student_name}</td>
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{mark.admission_number}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        {editingId === mark.id ? (
-                                            <input
-                                                type="number"
-                                                className="input-field"
-                                                style={{ width: 72, textAlign: 'center', padding: '4px 8px', fontSize: 13 }}
-                                                value={editValue}
-                                                onChange={e => setEditValue(e.target.value)}
-                                                onBlur={() => saveEdit(mark.id)}
-                                                onKeyDown={e => { if (e.key === 'Enter') saveEdit(mark.id); if (e.key === 'Escape') setEditingId(null); }}
-                                                autoFocus
-                                                min={0}
-                                                max={maxScore}
-                                                disabled={saving}
-                                            />
-                                        ) : (
-                                            <span
-                                                style={{ cursor: 'pointer', padding: '2px 8px', borderRadius: 'var(--radius-md)' }}
-                                                onClick={() => startEdit(mark)}
-                                                title="Click to edit"
-                                            >
-                                                {mark.raw_score} / {maxScore}
-                                            </span>
-                                        )}
+                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
+                                        {mark.raw_score} / {maxScore}
                                     </td>
                                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
                                         {mark.percentage.toFixed(1)}%
@@ -208,12 +172,43 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
                                             {mark.grade_symbol}
                                         </span>
                                     </td>
+                                    <td style={{ ...tdStyle, fontSize: 12, color: 'var(--color-text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {mark.remarks || '—'}
+                                    </td>
+                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                        <button
+                                            onClick={() => openEdit(mark)}
+                                            className="cursor-pointer hover:bg-[var(--color-surface-raised)] transition-colors"
+                                            style={{
+                                                padding: '4px 8px',
+                                                borderRadius: 'var(--radius-md)',
+                                                fontSize: 14,
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'var(--color-accent)',
+                                            }}
+                                            title={`Edit ${mark.student_name}'s result`}
+                                        >
+                                            ✏️
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            {/* Edit Modal */}
+            {editingMark && (
+                <EditMarkModal
+                    mark={editingMark}
+                    maxScore={maxScore}
+                    onClose={() => setEditingMark(null)}
+                    onSaved={() => { setEditingMark(null); onRefresh(); }}
+                    onDeleted={() => { setEditingMark(null); onRefresh(); }}
+                />
+            )}
         </div>
     );
 }

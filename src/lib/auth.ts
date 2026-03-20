@@ -2,6 +2,29 @@ import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import type { UserRole } from '@/types';
+
+interface DbUser {
+    id: string;
+    email: string;
+    password_hash: string | null;
+    role: UserRole;
+    school_id: string | null;
+    first_name: string;
+    last_name: string;
+    is_active: boolean;
+}
+
+interface SessionUser {
+    id: string;
+    email: string;
+    name: string;
+    role: UserRole;
+    schoolId: string | null;
+    schoolName: string | null;
+    firstName: string;
+    lastName: string;
+}
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -11,14 +34,13 @@ export const authOptions: NextAuthOptions = {
                 email: { label: 'Email', type: 'email' },
                 password: { label: 'Password', type: 'password' },
             },
-            async authorize(credentials) {
+            async authorize(credentials): Promise<SessionUser | null> {
                 if (!credentials?.email || !credentials?.password) {
                     throw new Error('Email and password are required');
                 }
 
                 const supabase = createSupabaseAdmin();
 
-                // Look up user by email
                 const { data: user, error } = await supabase
                     .from('users')
                     .select('id, email, password_hash, role, school_id, first_name, last_name, is_active')
@@ -29,74 +51,72 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Invalid email or password');
                 }
 
-                if (!user.is_active) {
+                const dbUser = user as DbUser;
+
+                if (!dbUser.is_active) {
                     throw new Error('Account is deactivated. Contact your administrator.');
                 }
 
-                if (!user.password_hash) {
+                if (!dbUser.password_hash) {
                     throw new Error('No password set for this account. Contact your administrator.');
                 }
 
-                // Verify password
-                const isValid = await bcrypt.compare(credentials.password, user.password_hash);
+                const isValid = await bcrypt.compare(credentials.password, dbUser.password_hash);
                 if (!isValid) {
                     throw new Error('Invalid email or password');
                 }
 
-                // Fetch school name if user has a school_id
                 let schoolName: string | null = null;
-                if (user.school_id) {
+                if (dbUser.school_id) {
                     const { data: schoolData } = await supabase
                         .from('schools')
                         .select('name')
-                        .eq('id', user.school_id)
+                        .eq('id', dbUser.school_id)
                         .single();
                     schoolName = schoolData?.name || null;
                 }
 
-                // Return user object — this gets encoded in the JWT
                 return {
-                    id: user.id,
-                    email: user.email,
-                    name: `${user.first_name} ${user.last_name}`,
-                    role: user.role,
-                    schoolId: user.school_id,
+                    id: dbUser.id,
+                    email: dbUser.email,
+                    name: `${dbUser.first_name} ${dbUser.last_name}`,
+                    role: dbUser.role,
+                    schoolId: dbUser.school_id,
                     schoolName,
-                    firstName: user.first_name,
-                    lastName: user.last_name,
+                    firstName: dbUser.first_name,
+                    lastName: dbUser.last_name,
                 };
             },
         }),
     ],
     session: {
         strategy: 'jwt',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
+        maxAge: 30 * 24 * 60 * 60,
     },
     pages: {
         signIn: '/login',
     },
     callbacks: {
         async jwt({ token, user }) {
-            // On initial sign-in, merge user data into the JWT
             if (user) {
-                token.userId = user.id;
-                token.role = (user as any).role;
-                token.schoolId = (user as any).schoolId;
-                token.schoolName = (user as any).schoolName;
-                token.firstName = (user as any).firstName;
-                token.lastName = (user as any).lastName;
+                const sessionUser = user as SessionUser;
+                token.userId = sessionUser.id;
+                token.role = sessionUser.role;
+                token.schoolId = sessionUser.schoolId;
+                token.schoolName = sessionUser.schoolName;
+                token.firstName = sessionUser.firstName;
+                token.lastName = sessionUser.lastName;
             }
             return token;
         },
         async session({ session, token }) {
-            // Expose custom fields on the session object
             if (session.user) {
-                (session.user as any).id = token.userId;
-                (session.user as any).role = token.role;
-                (session.user as any).schoolId = token.schoolId;
-                (session.user as any).schoolName = token.schoolName;
-                (session.user as any).firstName = token.firstName;
-                (session.user as any).lastName = token.lastName;
+                (session.user as SessionUser & { id: string }).id = token.userId as string;
+                (session.user as SessionUser & { role: UserRole }).role = token.role as UserRole;
+                (session.user as SessionUser & { schoolId: string | null }).schoolId = token.schoolId as string | null;
+                (session.user as SessionUser & { schoolName: string | null }).schoolName = token.schoolName as string | null;
+                (session.user as SessionUser & { firstName: string }).firstName = token.firstName as string;
+                (session.user as SessionUser & { lastName: string }).lastName = token.lastName as string;
             }
             return session;
         },

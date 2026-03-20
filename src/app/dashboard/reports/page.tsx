@@ -21,6 +21,7 @@ export default function ReportsPage() {
     const [selectedGradeStream, setSelectedGradeStream] = useState('');
     const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
     const [selectedTerm, setSelectedTerm] = useState('');
+    const [customReportTitle, setCustomReportTitle] = useState('');
     const [generating, setGenerating] = useState(false);
 
     // Dropdown data
@@ -102,6 +103,7 @@ export default function ReportsPage() {
         const params = new URLSearchParams();
         if (selectedAcademicYear) params.append('year', selectedAcademicYear);
         if (selectedTerm) params.append('term', selectedTerm);
+        if (customReportTitle) params.append('customTitle', customReportTitle);
         window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
     };
 
@@ -129,6 +131,19 @@ export default function ReportsPage() {
         } finally {
             setGenerating(false);
         }
+    };
+
+    /* ── Bulk download handler ─────────── */
+    const handleBulkDownload = () => {
+        if (!selectedGradeStream || !selectedAcademicYear || !selectedTerm) {
+            showToast('Please select Academic Year, Term, and Grade Stream.');
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('year', selectedAcademicYear);
+        params.append('term', selectedTerm);
+        if (customReportTitle) params.append('customTitle', customReportTitle);
+        window.open(`/api/reports/class/${selectedGradeStream}?${params.toString()}`, '_blank');
     };
 
     /* ── Toast helper ─────────────────────────────── */
@@ -171,14 +186,14 @@ export default function ReportsPage() {
                     <div className="text-4xl mb-4">📦</div>
                     <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Bulk Class Reports</h3>
                     <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">
-                        Generate report cards for all students in a grade stream using the database RPC.
+                        Download report cards for all students in a grade stream as a single PDF.
                     </p>
                     <button
                         className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={handleBulkGenerate}
-                        disabled={generating || !selectedGradeStream || !selectedAcademicYear || !selectedTerm}
+                        onClick={handleBulkDownload}
+                        disabled={!selectedGradeStream || !selectedAcademicYear || !selectedTerm}
                     >
-                        {generating ? 'Generating...' : 'Generate Reports →'}
+                        Download Class Reports →
                     </button>
                 </div>
 
@@ -198,10 +213,10 @@ export default function ReportsPage() {
                 </div>
             </div>
 
-            {/* Bulk Generation Controls */}
+            {/* Report Generation Controls */}
             <div className="card">
-                <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-4">Bulk Generation Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-4">Report Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
                     <div>
                         <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year</label>
                         <select className="input-field w-full" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
@@ -229,12 +244,26 @@ export default function ReportsPage() {
                             ))}
                         </select>
                     </div>
+                    <div>
+                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Custom Title (Optional)</label>
+                        <input className="input-field w-full" placeholder="e.g. Mid Term 1 Report (Leave blank to use Term)" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button
-                        className="btn-primary w-full justify-center h-[42px] mt-4 md:mt-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn-primary w-full justify-center h-[42px] disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={handleBulkGenerate}
                         disabled={generating || !selectedGradeStream || !selectedAcademicYear || !selectedTerm}
+                        style={{ border: '1px solid var(--color-border)' }}
                     >
-                        {generating ? '⏳ Generating...' : '📥 Generate All'}
+                        {generating ? '⏳ Generating Grades Data...' : '⚙️ 1. Generate & Calculate Grades Data'}
+                    </button>
+                    <button
+                        className="btn-secondary w-full justify-center h-[42px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={handleBulkDownload}
+                        disabled={generating || !selectedGradeStream || !selectedAcademicYear || !selectedTerm}
+                    >
+                        📥 2. Download All PDFs
                     </button>
                 </div>
             </div>

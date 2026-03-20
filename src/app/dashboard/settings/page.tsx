@@ -44,10 +44,33 @@ interface SchoolProfile {
     email: string;
 }
 
+interface AcademicYear {
+    id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+}
+
+interface Term {
+    id: string;
+    academic_year_id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    is_current: boolean;
+}
+
+interface Stream {
+    id: string;
+    grade_id: string;
+    name: string;
+    full_name: string;
+}
+
 export default function SettingsPage() {
     const supabase = useMemo(() => createSupabaseBrowserClient(), []);
     const { profile } = useAuth();
-    const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar'>('profile');
 
     // Academic data
     const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
@@ -56,39 +79,54 @@ export default function SettingsPage() {
     const [gradingScales, setGradingScales] = useState<GradingScale[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Calendar data
+    const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
+    const [terms, setTerms] = useState<Term[]>([]);
+    const [streams, setStreams] = useState<Stream[]>([]);
+    const [selectedCalYearId, setSelectedCalYearId] = useState('');
+    const [selectedCalGradeId, setSelectedCalGradeId] = useState('');
+
     // School profile form
     const [school, setSchool] = useState<SchoolProfile>({ name: '', address: '', phone: '', email: '' });
     const [schoolLoading, setSchoolLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
 
+    // Calendar add forms
+    const [calMsg, setCalMsg] = useState('');
+    const [calSaving, setCalSaving] = useState(false);
+    const [newYear, setNewYear] = useState({ name: '', start_date: '', end_date: '' });
+    const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '' });
+    const [newStream, setNewStream] = useState({ name: '', full_name: '' });
 
-
-    // ── Fetch all data in parallel to eliminate waterfall ──
+    // ── Fetch all data: academic structure via API, school via browser client ──
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         setSchoolLoading(true);
 
         try {
-            // Step 1: Fetch academic data + user's school_id in parallel
-            const [lvlRes, grRes, gsRes, gscRes, userRes] = await Promise.all([
-                supabase.from('academic_levels').select('*').order('code'),
-                supabase.from('grades').select('*').order('numeric_order'),
-                supabase.from('grading_systems').select('*').order('name'),
-                supabase.from('grading_scales').select('*').order('order_index'),
+            // Fetch academic structure via server API (bypasses RLS)
+            const [structureRes, userRes] = await Promise.all([
+                fetch('/api/admin/academic-structure').then(r => r.json()),
                 profile?.school_id
                     ? Promise.resolve({ data: { school_id: profile.school_id } })
                     : supabase.from('users').select('school_id').eq('id', profile?.id ?? '').single(),
             ]);
 
-            setAcademicLevels(lvlRes.data || []);
-            setGrades(grRes.data || []);
-            setGradingSystems((gsRes.data as GradingSystem[]) || []);
-            setGradingScales((gscRes.data as GradingScale[]) || []);
+            setAcademicLevels(structureRes.academic_levels || []);
+            setGrades(structureRes.grades || []);
+            setGradingSystems((structureRes.grading_systems as GradingSystem[]) || []);
+            setGradingScales((structureRes.grading_scales as GradingScale[]) || []);
+            setAcademicYears((structureRes.academic_years as AcademicYear[]) || []);
+            setTerms((structureRes.terms as Term[]) || []);
+            setStreams((structureRes.grade_streams as Stream[]) || []);
+
+            if (structureRes.academic_years?.length > 0 && !selectedCalYearId) {
+                setSelectedCalYearId(structureRes.academic_years[0].id);
+            }
 
             const schoolId = userRes.data?.school_id;
 
-            // Step 2: If we have a school_id, fetch the school profile
             if (schoolId) {
                 const { data: schoolData } = await supabase
                     .from('schools')
@@ -112,6 +150,7 @@ export default function SettingsPage() {
             setLoading(false);
             setSchoolLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [supabase, profile?.school_id, profile?.id]);
 
     useEffect(() => {
@@ -159,12 +198,81 @@ export default function SettingsPage() {
         }
     };
 
+    // ── Academic Calendar Helpers ──
+    const postStructure = async (type: string, payload: Record<string, unknown>) => {
+        setCalSaving(true);
+        setCalMsg('');
+        try {
+            const res = await fetch('/api/admin/academic-structure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, user_id: profile?.id, ...payload }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed');
+            setCalMsg(`✅ ${type.replace('_', ' ')} added successfully`);
+            await fetchAllData(); // refresh lists
+            return data.data;
+        } catch (err) {
+            setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
+            return null;
+        } finally {
+            setCalSaving(false);
+        }
+    };
 
+    const deleteStructure = async (type: string, id: string) => {
+        if (!confirm('Are you sure you want to delete this item?')) return;
+        setCalSaving(true);
+        setCalMsg('');
+        try {
+            const res = await fetch(`/api/admin/academic-structure?type=${type}&id=${id}&user_id=${profile?.id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed');
+            setCalMsg(`✅ Deleted successfully`);
+            await fetchAllData();
+        } catch (err) {
+            setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setCalSaving(false);
+        }
+    };
+
+    const handleAddYear = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newYear.name.trim() || !newYear.start_date || !newYear.end_date) return;
+        const result = await postStructure('academic_year', newYear);
+        if (result) {
+            setNewYear({ name: '', start_date: '', end_date: '' });
+            setSelectedCalYearId(result.id);
+        }
+    };
+
+    const handleAddTerm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedCalYearId || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date) return;
+        await postStructure('term', { academic_year_id: selectedCalYearId, ...newTerm });
+        if (!calMsg.startsWith('❌')) setNewTerm({ name: '', start_date: '', end_date: '' });
+    };
+
+    const handleAddStream = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedCalGradeId || !newStream.name.trim()) return;
+        const grade = grades.find(g => g.id === selectedCalGradeId);
+        const fullName = newStream.full_name.trim() || `${grade?.name_display || ''} ${newStream.name.trim()}`.trim();
+        await postStructure('stream', { grade_id: selectedCalGradeId, name: newStream.name.trim(), full_name: fullName });
+        if (!calMsg.startsWith('❌')) setNewStream({ name: '', full_name: '' });
+    };
+
+    // Filtered lists
+    const calTerms = terms.filter(t => t.academic_year_id === selectedCalYearId);
+    const calStreams = streams.filter(s => s.grade_id === selectedCalGradeId);
 
     const tabs = [
         { key: 'profile' as const, label: 'School Profile' },
         { key: 'academic' as const, label: 'Academic Structure' },
         { key: 'grading' as const, label: 'Grading Systems' },
+        { key: 'calendar' as const, label: '📅 Academic Calendar' },
     ];
 
     return (
@@ -177,11 +285,11 @@ export default function SettingsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-[var(--color-border)] mb-8">
+            <div className="flex border-b border-[var(--color-border)] mb-8 overflow-x-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.key}
-                        className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${activeTab === tab.key ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-secondary)] hover:text-white'}`}
+                        className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-secondary)] hover:text-white'}`}
                         onClick={() => setActiveTab(tab.key)}
                     >
                         {tab.label}
@@ -242,7 +350,7 @@ export default function SettingsPage() {
                                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Academic Levels</h3>
                                 <p className="text-xs text-[var(--color-text-muted)] mb-4">Kenya&apos;s education curricula</p>
                                 <div className="overflow-x-auto">
-                                    <table className="data-table w-full whitespace-nowrap">
+                                    <table className="data-table w-full sm:whitespace-nowrap">
                                         <thead>
                                             <tr><th>Code</th><th>Name</th></tr>
                                         </thead>
@@ -262,7 +370,7 @@ export default function SettingsPage() {
                                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Grades / Classes</h3>
                                 <p className="text-xs text-[var(--color-text-muted)] mb-4">All grades across both curricula</p>
                                 <div className="overflow-x-auto">
-                                    <table className="data-table w-full whitespace-nowrap">
+                                    <table className="data-table w-full sm:whitespace-nowrap">
                                         <thead>
                                             <tr><th>Code</th><th>Display Name</th><th>Curriculum</th></tr>
                                         </thead>
@@ -297,7 +405,7 @@ export default function SettingsPage() {
                                         </p>
                                         {scales.length > 0 && (
                                             <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-                                                <table className="data-table w-full text-left whitespace-nowrap">
+                                                <table className="data-table w-full text-left sm:whitespace-nowrap">
                                                     <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
                                                         <tr>
                                                             <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Symbol</th>
@@ -332,6 +440,214 @@ export default function SettingsPage() {
                                     </p>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* ── Academic Calendar Tab ──────────────────────── */}
+                    {activeTab === 'calendar' && (
+                        <div className="lg:col-span-3 flex flex-col gap-6">
+
+                            {/* Feedback */}
+                            {calMsg && (
+                                <div className={`p-3 rounded-md text-sm ${calMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                                    {calMsg}
+                                </div>
+                            )}
+
+                            {/* ── Academic Years ── */}
+                            <div className="card">
+                                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📅 Academic Years</h3>
+
+                                {academicYears.length > 0 ? (
+                                    <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
+                                        <table className="data-table w-full text-left sm:whitespace-nowrap">
+                                            <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Year</th>
+                                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Start</th>
+                                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">End</th>
+                                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Terms</th>
+                                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[var(--color-border)]">
+                                                {academicYears.map(y => (
+                                                    <tr key={y.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                                                        <td className="px-4 py-3 font-bold">{y.name}</td>
+                                                        <td className="px-4 py-3 text-sm font-mono">{y.start_date}</td>
+                                                        <td className="px-4 py-3 text-sm font-mono">{y.end_date}</td>
+                                                        <td className="px-4 py-3 text-sm">{terms.filter(t => t.academic_year_id === y.id).length}</td>
+                                                        <td className="px-4 py-3">
+                                                            <button
+                                                                className="text-xs text-red-400 hover:text-red-300"
+                                                                onClick={() => deleteStructure('academic_year', y.id)}
+                                                                disabled={calSaving}
+                                                            >🗑</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-[var(--color-text-muted)] mb-4">No academic years yet. Add one below.</p>
+                                )}
+
+                                {/* Add Year Form */}
+                                <form onSubmit={handleAddYear} className="flex flex-wrap items-end gap-3">
+                                    <div className="flex-1 min-w-[120px]">
+                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Year Name *</label>
+                                        <input className="input-field w-full" placeholder="e.g. 2026" value={newYear.name} onChange={e => setNewYear(p => ({ ...p, name: e.target.value }))} />
+                                    </div>
+                                    <div className="flex-1 min-w-[140px]">
+                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Start Date *</label>
+                                        <input type="date" className="input-field w-full" value={newYear.start_date} onChange={e => setNewYear(p => ({ ...p, start_date: e.target.value }))} />
+                                    </div>
+                                    <div className="flex-1 min-w-[140px]">
+                                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">End Date *</label>
+                                        <input type="date" className="input-field w-full" value={newYear.end_date} onChange={e => setNewYear(p => ({ ...p, end_date: e.target.value }))} />
+                                    </div>
+                                    <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newYear.name.trim() || !newYear.start_date || !newYear.end_date}>
+                                        {calSaving ? '...' : '+ Add Year'}
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* ── Terms ── */}
+                            <div className="card">
+                                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📋 Terms</h3>
+
+                                <div className="mb-4">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Select Academic Year</label>
+                                    {academicYears.length === 0 ? (
+                                        <p className="text-xs text-orange-400">Add an academic year first.</p>
+                                    ) : (
+                                        <select className="input-field w-full md:w-64" value={selectedCalYearId} onChange={e => setSelectedCalYearId(e.target.value)}>
+                                            {academicYears.map(y => (
+                                                <option key={y.id} value={y.id}>{y.name}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                {selectedCalYearId && (
+                                    <>
+                                        {calTerms.length > 0 ? (
+                                            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
+                                                <table className="data-table w-full text-left sm:whitespace-nowrap">
+                                                    <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Term</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Start</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">End</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Current</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-[var(--color-border)]">
+                                                        {calTerms.map(t => (
+                                                            <tr key={t.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                                                                <td className="px-4 py-3 font-medium">{t.name}</td>
+                                                                <td className="px-4 py-3 text-sm font-mono">{t.start_date}</td>
+                                                                <td className="px-4 py-3 text-sm font-mono">{t.end_date}</td>
+                                                                <td className="px-4 py-3 text-sm">{t.is_current ? '✅' : ''}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteStructure('term', t.id)} disabled={calSaving}>🗑</button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-[var(--color-text-muted)] mb-4">No terms for this year. Add one below.</p>
+                                        )}
+
+                                        <form onSubmit={handleAddTerm} className="flex flex-wrap items-end gap-3">
+                                            <div className="flex-1 min-w-[120px]">
+                                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term Name *</label>
+                                                <input className="input-field w-full" placeholder="e.g. Term 1" value={newTerm.name} onChange={e => setNewTerm(p => ({ ...p, name: e.target.value }))} />
+                                            </div>
+                                            <div className="flex-1 min-w-[140px]">
+                                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Start Date *</label>
+                                                <input type="date" className="input-field w-full" value={newTerm.start_date} onChange={e => setNewTerm(p => ({ ...p, start_date: e.target.value }))} />
+                                            </div>
+                                            <div className="flex-1 min-w-[140px]">
+                                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">End Date *</label>
+                                                <input type="date" className="input-field w-full" value={newTerm.end_date} onChange={e => setNewTerm(p => ({ ...p, end_date: e.target.value }))} />
+                                            </div>
+                                            <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date}>
+                                                {calSaving ? '...' : '+ Add Term'}
+                                            </button>
+                                        </form>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* ── Grade Streams ── */}
+                            <div className="card">
+                                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Grade Streams</h3>
+
+                                <div className="mb-4">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Select Grade</label>
+                                    {grades.length === 0 ? (
+                                        <p className="text-xs text-orange-400">No grades found. Run seed SQL first.</p>
+                                    ) : (
+                                        <select className="input-field w-full md:w-64" value={selectedCalGradeId} onChange={e => setSelectedCalGradeId(e.target.value)}>
+                                            <option value="">-- Select Grade --</option>
+                                            {grades.map(g => (
+                                                <option key={g.id} value={g.id}>{g.name_display} ({academicLevels.find(l => l.id === g.academic_level_id)?.code || ''})</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                {selectedCalGradeId && (
+                                    <>
+                                        {calStreams.length > 0 ? (
+                                            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
+                                                <table className="data-table w-full text-left sm:whitespace-nowrap">
+                                                    <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Stream</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Full Name</th>
+                                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-[var(--color-border)]">
+                                                        {calStreams.map(s => (
+                                                            <tr key={s.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                                                                <td className="px-4 py-3 font-bold">{s.name}</td>
+                                                                <td className="px-4 py-3 text-sm">{s.full_name}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteStructure('stream', s.id)} disabled={calSaving}>🗑</button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-[var(--color-text-muted)] mb-4">No streams for this grade. Add one below.</p>
+                                        )}
+
+                                        <form onSubmit={handleAddStream} className="flex flex-wrap items-end gap-3">
+                                            <div className="flex-1 min-w-[100px]">
+                                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Stream Name *</label>
+                                                <input className="input-field w-full" placeholder="e.g. A" value={newStream.name} onChange={e => setNewStream(p => ({ ...p, name: e.target.value }))} />
+                                            </div>
+                                            <div className="flex-1 min-w-[160px]">
+                                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Full Name (auto-filled)</label>
+                                                <input className="input-field w-full" placeholder="e.g. Grade 7A" value={newStream.full_name} onChange={e => setNewStream(p => ({ ...p, full_name: e.target.value }))} />
+                                            </div>
+                                            <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newStream.name.trim()}>
+                                                {calSaving ? '...' : '+ Add Stream'}
+                                            </button>
+                                        </form>
+                                    </>
+                                )}
+                            </div>
+
                         </div>
                     )}
 

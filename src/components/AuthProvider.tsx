@@ -2,8 +2,7 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { useSession, signOut as nextAuthSignOut, SessionProvider } from 'next-auth/react';
-
-export type UserRole = 'ADMIN' | 'CLASS_TEACHER' | 'SUBJECT_TEACHER' | 'STUDENT';
+import type { UserRole } from '@/types';
 
 interface UserProfile {
     id: string;
@@ -14,6 +13,8 @@ interface UserProfile {
     is_active: boolean;
     school_id: string | null;
 }
+
+export type { UserRole };
 
 interface AuthContextType {
     user: { id: string; email: string } | null;
