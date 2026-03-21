@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 interface StudentMissing {
     id: string;
@@ -16,7 +15,6 @@ interface Props {
 }
 
 export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
-    const supabase = createSupabaseBrowserClient();
     const [students, setStudents] = useState<StudentMissing[]>([]);
     const [scores, setScores] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
@@ -31,32 +29,34 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
             setLoading(true);
             setMessage(null);
 
-            // Get all students in the stream
-            const { data: allStudents } = await supabase
-                .from('students')
-                .select('id, admission_number, users(first_name, last_name)')
-                .eq('current_grade_stream_id', gradeStreamId);
+            try {
+                // Get all students in the stream
+                const stuRes = await fetch('/api/school/data?type=students');
+                const stuData = await stuRes.json();
+                const allStudents = (stuData.data || []).filter((s: any) => s.current_grade_stream_id === gradeStreamId);
 
-            // Get students who already have marks
-            const { data: existingMarks } = await supabase
-                .from('exam_marks')
-                .select('student_id')
-                .eq('exam_id', examId);
+                // Get existing marks
+                const marksRes = await fetch(`/api/school/exam-marks?exam_id=${examId}`);
+                const existingData = await marksRes.json();
+                const markedIds = new Set((existingData.data || []).map((m: any) => m.student_id));
 
-            const markedIds = new Set((existingMarks || []).map(m => m.student_id));
+                const missing = allStudents
+                    .filter((s: any) => !markedIds.has(s.id))
+                    .map((s: any) => ({
+                        id: s.id,
+                        name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
+                        admission_number: s.admission_number || '',
+                    }))
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
-            const missing = (allStudents || [])
-                .filter(s => !markedIds.has(s.id))
-                .map(s => ({
-                    id: s.id,
-                    name: `${(s as any).users?.first_name || ''} ${(s as any).users?.last_name || ''}`.trim(),
-                    admission_number: s.admission_number || '',
-                }))
-                .sort((a, b) => a.name.localeCompare(b.name));
-
-            setStudents(missing);
-            setScores({});
-            setLoading(false);
+                setStudents(missing);
+                setScores({});
+            } catch (err) {
+                console.error('Failed to load missing students:', err);
+                setMessage({ type: 'error', text: 'Error loading students.' });
+            } finally {
+                setLoading(false);
+            }
         };
 
         fetchMissing();
@@ -83,39 +83,27 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
 
         try {
             // 1. Fetch exam max_score
-            const { data: examData } = await supabase
-                .from('exams')
-                .select('max_score, grade_id')
-                .eq('id', examId)
-                .single();
+            const examsRes = await fetch('/api/school/data?type=exams');
+            const { data: examsData } = await examsRes.json();
+            const examData = examsData?.find((e: any) => e.id === examId);
             const examMaxScore = examData?.max_score || 100;
 
-            // 2. Fetch grading scales (via the grade's academic level → grading system)
+            // 2. Fetch grading scales
+            const scalesRes = await fetch('/api/school/data?type=grading_scales');
+            const scalesObj = await scalesRes.json();
             let gradingScales: { symbol: string; min_percentage: number; max_percentage: number }[] = [];
-            if (examData?.grade_id) {
-                const { data: gradeData } = await supabase
-                    .from('grades')
-                    .select('academic_level_id')
-                    .eq('id', examData.grade_id)
-                    .single();
-
-                if (gradeData?.academic_level_id) {
-                    const { data: gs } = await supabase
-                        .from('grading_systems')
-                        .select('id')
-                        .eq('academic_level_id', gradeData.academic_level_id)
-                        .limit(1)
-                        .single();
-
-                    if (gs) {
-                        const { data: scales } = await supabase
-                            .from('grading_scales')
-                            .select('symbol, min_percentage, max_percentage')
-                            .eq('grading_system_id', gs.id)
-                            .order('min_percentage', { ascending: false });
-                        gradingScales = scales || [];
-                    }
-                }
+            
+            // Assume the first grading system applies, or flatten all scales (adjust if multiple systems exist)
+            if (scalesObj.data) {
+                scalesObj.data.forEach((sys: any) => {
+                    sys.grading_scales?.forEach((sc: any) => {
+                        gradingScales.push({
+                            symbol: sc.symbol,
+                            min_percentage: sc.min_percentage,
+                            max_percentage: sc.max_percentage,
+                        });
+                    });
+                });
             }
 
             // 3. Build entries with percentage and auto-grade
@@ -133,18 +121,23 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                 }
 
                 return {
-                    exam_id: examId,
                     student_id: studentId,
                     raw_score: rawScore,
                     percentage,
                     grade_symbol: gradeSymbol,
+                    remarks: '',
                 };
             });
 
-            const { error } = await supabase.from('exam_marks').insert(entries);
+            const res = await fetch('/api/school/exam-marks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exam_id: examId, marks: entries })
+            });
+            const result = await res.json();
 
-            if (error) {
-                setMessage({ type: 'error', text: `Failed to save: ${error.message}` });
+            if (!res.ok) {
+                setMessage({ type: 'error', text: `Failed to save: ${result.error}` });
             } else {
                 setMessage({ type: 'success', text: `${entries.length} mark(s) saved successfully!` });
                 onSaved();

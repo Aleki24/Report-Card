@@ -37,8 +37,8 @@ export const gradeSchema = z.object({
 
 export const streamSchema = z.object({
     grade_id: z.string().uuid('Invalid grade ID'),
-    name: z.string().min(1, 'Stream name is required').max(50),
-    full_name: z.string().min(1, 'Full name is required').max(100).optional(),
+    name: z.string().max(50).optional(),
+    full_name: z.string().max(100).optional(),
 });
 
 export const subjectSchema = z.object({

@@ -11,8 +11,8 @@ interface ExamOption {
     name: string;
     exam_type: string;
     max_score: number;
-    subjects: { name: string } | null;
-    grades: { name_display: string } | null;
+    subject_name: string;
+    grade_name: string;
 }
 
 interface DropdownItem { id: string; name: string; }
@@ -55,9 +55,11 @@ export default function MarksPage() {
     const [allTerms, setAllTerms] = useState<TermItem[]>([]);
     const [grades, setGrades] = useState<GradeItem[]>([]);
     const [allStreams, setAllStreams] = useState<StreamItem[]>([]);
+    const [academicLevels, setAcademicLevels] = useState<DropdownItem[]>([]);
     const [dropdownsLoading, setDropdownsLoading] = useState(false);
 
     // Inline quick-add state
+    const [addingSubject, setAddingSubject] = useState(false);
     const [addingYear, setAddingYear] = useState(false);
     const [addingTerm, setAddingTerm] = useState(false);
     const [addingStream, setAddingStream] = useState(false);
@@ -66,22 +68,29 @@ export default function MarksPage() {
     const [qYear, setQYear] = useState({ name: '', start_date: '', end_date: '' });
     const [qTerm, setQTerm] = useState({ name: '', start_date: '', end_date: '' });
     const [qStream, setQStream] = useState({ name: '' });
+    const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '' });
 
     // Fetch exams
     const fetchExams = useCallback(async () => {
-        const { data, error } = await supabase
-            .from('exams')
-            .select('id, name, exam_type, max_score, subjects:subject_id(name), grades:grade_id(name_display)')
-            .order('exam_date', { ascending: false });
-
-        if (error) console.error('Error fetching exams:', error);
-
-        if (data && data.length > 0) {
-            setExams(data as unknown as ExamOption[]);
-            if (!selectedExamId || !data.find(e => e.id === selectedExamId)) {
-                setSelectedExamId(data[0].id);
+        try {
+            const res = await fetch('/api/school/exams');
+            if (res.ok) {
+                const json = await res.json();
+                const examList = json?.data || [];
+                if (examList.length > 0) {
+                    setExams(examList as ExamOption[]);
+                    if (!selectedExamId || !examList.find((e: any) => e.id === selectedExamId)) {
+                        setSelectedExamId(examList[0].id);
+                    }
+                } else {
+                    setExams([]);
+                }
+            } else {
+                console.error('Failed to fetch exams');
+                setExams([]);
             }
-        } else {
+        } catch (error) {
+            console.error('Error fetching exams:', error);
             setExams([]);
         }
         setLoading(false);
@@ -99,6 +108,7 @@ export default function MarksPage() {
             if (!res.ok) throw new Error(data.error || 'Failed to load form data');
 
             if (data.subjects) setSubjects(data.subjects);
+            if (data.academic_levels) setAcademicLevels(data.academic_levels);
             if (data.academic_years) {
                 setAcademicYears(data.academic_years);
                 if (data.academic_years.length > 0 && !selectedAcademicYearId) {
@@ -187,6 +197,17 @@ export default function MarksPage() {
         }
     };
 
+    const handleQuickAddSubject = async (e: React.FormEvent | React.MouseEvent) => {
+        e.preventDefault();
+        if (!qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id) return;
+        const result = await quickAdd('subject', qSubject);
+        if (result) {
+            setSelectedSubjectId(result.id);
+            setQSubject({ name: '', code: '', academic_level_id: '' });
+            setAddingSubject(false);
+        }
+    };
+
     // Handle exam creation
     const handleCreateExam = async () => {
         setSaveMessage(null);
@@ -213,13 +234,21 @@ export default function MarksPage() {
         };
         if (selectedStreamId) insertPayload.grade_stream_id = selectedStreamId;
 
-        const { data, error } = await supabase.from('exams').insert(insertPayload).select('id').single();
+        const res = await fetch('/api/school/exams', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(insertPayload),
+        });
 
-        if (error) {
-            setSaveMessage({ type: 'error', text: `Failed to create exam: ${error.message}` });
+        if (!res.ok) {
+            const errData = await res.json();
+            setSaveMessage({ type: 'error', text: `Failed to create exam: ${errData.error || 'Unknown error'}` });
             setCreating(false);
             return;
         }
+
+        const respData = await res.json();
+        const newExamId = respData?.data?.id;
 
         setSaveMessage({ type: 'success', text: 'Exam created successfully!' });
         setCreating(false);
@@ -230,9 +259,9 @@ export default function MarksPage() {
         setSelectedSubjectId(''); setSelectedTermId(''); setSelectedGradeId(''); setSelectedStreamId('');
 
         // Refresh + select new exam
-        if (data?.id) setSelectedExamId(data.id);
+        if (newExamId) setSelectedExamId(newExamId);
         await fetchExams();
-        if (data?.id) setSelectedExamId(data.id);
+        if (newExamId) setSelectedExamId(newExamId);
 
         setTimeout(() => { setShowCreateModal(false); setSaveMessage(null); }, 1200);
     };
@@ -244,7 +273,7 @@ export default function MarksPage() {
             {/* Page Header */}
             <div
                 className="flex flex-col sm:flex-row sm:justify-between sm:items-start"
-                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}
+                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}
             >
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Mark Entry</h1>
@@ -253,6 +282,19 @@ export default function MarksPage() {
                     </p>
                 </div>
                 <button className="btn-primary shrink-0" onClick={() => setShowCreateModal(true)}>+ Create Exam</button>
+            </div>
+
+            {/* Guide */}
+            <div className="mb-6 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <div className="text-sm">
+                    <h3 className="font-semibold mb-1">How to enter marks:</h3>
+                    <ul className="list-disc pl-4 space-y-1 opacity-90">
+                        <li><strong>Step 1:</strong> Click <strong>+ Create Exam</strong> if you haven&apos;t created one yet.</li>
+                        <li><strong>Step 2:</strong> Select the exam from the dropdown below.</li>
+                        <li><strong>Step 3:</strong> Choose either <strong>Bulk Upload</strong> (via CSV) or <strong>Manual Entry</strong> (direct grid input).</li>
+                    </ul>
+                </div>
             </div>
 
             {/* Controls Bar */}
@@ -300,7 +342,7 @@ export default function MarksPage() {
                         ) : (
                             exams.map(exam => (
                                 <option key={exam.id} value={exam.id}>
-                                    {exam.name} — {exam.subjects?.name || 'N/A'} ({exam.grades?.name_display || 'N/A'})
+                                    {exam.name} — {exam.subject_name || 'N/A'} ({exam.grade_name || 'N/A'})
                                 </option>
                             ))
                         )}
@@ -311,7 +353,7 @@ export default function MarksPage() {
             {/* Selected Exam Info */}
             {selectedExam && (
                 <div className="mb-6 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
-                    <strong>Selected:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subjects?.name || 'N/A'} · <strong>Grade:</strong> {selectedExam.grades?.name_display || 'N/A'} · <strong>Max Score:</strong> {selectedExam.max_score}
+                    <strong>Selected:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name || 'N/A'} · <strong>Grade:</strong> {selectedExam.grade_name || 'N/A'} · <strong>Max Score:</strong> {selectedExam.max_score}
                 </div>
             )}
 
@@ -372,16 +414,40 @@ export default function MarksPage() {
 
                                 {/* Subject */}
                                 <div>
-                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Subject *</label>
-                                    {subjects.length === 0 ? (
-                                        <p className="text-xs text-orange-400">No subjects found. Add subjects in Settings first.</p>
-                                    ) : (
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-xs text-[var(--color-text-muted)]">Subject *</label>
+                                        <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
+                                            {addingSubject ? '✕ Cancel' : '+ Add'}
+                                        </button>
+                                    </div>
+                                    {subjects.length === 0 && !addingSubject ? (
+                                        <p className="text-xs text-orange-400">No subjects found. Click <strong>+ Add</strong> above.</p>
+                                    ) : !addingSubject ? (
                                         <select className="input-field w-full" value={selectedSubjectId} onChange={e => setSelectedSubjectId(e.target.value)}>
                                             <option value="">-- Select Subject --</option>
                                             {subjects.map(s => (
                                                 <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                                             ))}
                                         </select>
+                                    ) : null}
+
+                                    {/* Inline Add Subject Form */}
+                                    {addingSubject && (
+                                        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2 mt-1">
+                                            <div className="flex gap-2">
+                                                <input className="input-field flex-1 text-xs" placeholder="Subject Name, e.g. Mathematics" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
+                                                <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code e.g. MAT" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                                            </div>
+                                            <select className="input-field w-full text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
+                                                <option value="">-- Select Academic Level --</option>
+                                                {academicLevels.map(al => (
+                                                    <option key={al.id} value={al.id}>{al.name}</option>
+                                                ))}
+                                            </select>
+                                            <button type="button" onClick={handleQuickAddSubject} className="btn-primary text-xs py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
+                                                {quickSaving ? '...' : '✓ Save Subject'}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 

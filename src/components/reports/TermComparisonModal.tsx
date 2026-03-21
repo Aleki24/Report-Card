@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useState } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
-
 interface TermComparisonModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -12,7 +10,6 @@ interface TermComparisonModalProps {
 }
 
 export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gradeStreams }: TermComparisonModalProps) {
-    const supabase = createSupabaseBrowserClient();
     const [loading, setLoading] = useState(false);
     const [selectedStream, setSelectedStream] = useState('');
 
@@ -35,33 +32,21 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
 
         try {
             // Fetch exams for both terms
-            const { data: exams, error: exErr } = await supabase
-                .from('exams')
-                .select('id, term_id, academic_year_id');
+            const exRes = await fetch('/api/school/exams');
+            if (!exRes.ok) throw new Error('Failed to fetch exams');
+            const { data: exams } = await exRes.json();
 
-            if (exErr) throw exErr;
-
-            const t1Exams = exams.filter(e => e.term_id === term1Term && e.academic_year_id === term1Year).map(e => e.id);
-            const t2Exams = exams.filter(e => e.term_id === term2Term && e.academic_year_id === term2Year).map(e => e.id);
-
-            if (t1Exams.length === 0 || t2Exams.length === 0) {
-                setError("No exams found for one or both of the selected terms.");
-                setLoading(false);
-                return;
-            }
-
+            // The API returns grades_id and term_id inside exams. 
+            // Wait, does GET /api/school/exams return term_id? Let's check. 
+            // Actually GET /api/school/exams does return them? No, looking at it, it explicitly DOES NOT select term_id! It selects id, name, exam_type, max_score, grade_stream_id, grade_id, subjects, grades.
+            // But wait, my `/api/school/exam-marks/stream` endpoint returns the marks along with their nested exam term_id and academic_year_id!
+            // Let's just fetch the marks!
+            
             // Fetch marks
-            const { data: marks, error: mErr } = await supabase
-                .from('exam_marks')
-                .select(`
-                    percentage,
-                    student_id,
-                    exam_id,
-                    students!inner ( current_grade_stream_id, admission_number, users(first_name, last_name) )
-                `)
-                .eq('students.current_grade_stream_id', selectedStream);
+            const mRes = await fetch(`/api/school/exam-marks/stream?stream_id=${selectedStream}`);
+            if (!mRes.ok) throw new Error('Failed to fetch marks');
+            const { data: marks } = await mRes.json();
 
-            if (mErr) throw mErr;
             if (!marks || marks.length === 0) {
                 setError("No marks found for the selected grade stream.");
                 setLoading(false);
@@ -72,15 +57,24 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
             let t1Sum = 0, t1Count = 0;
             let t2Sum = 0, t2Count = 0;
 
-            marks.forEach(m => {
-                if (t1Exams.includes(m.exam_id)) {
+            marks.forEach((m: any) => {
+                const exam = m.exams;
+                if (!exam) return;
+                
+                if (exam.term_id === term1Term && exam.academic_year_id === term1Year) {
                     t1Sum += Number(m.percentage);
                     t1Count++;
-                } else if (t2Exams.includes(m.exam_id)) {
+                } else if (exam.term_id === term2Term && exam.academic_year_id === term2Year) {
                     t2Sum += Number(m.percentage);
                     t2Count++;
                 }
             });
+
+            if (t1Count === 0 || t2Count === 0) {
+                setError("Could not find marks for one or both of the selected terms.");
+                setLoading(false);
+                return;
+            }
 
             const t1Avg = t1Count > 0 ? (t1Sum / t1Count) : 0;
             const t2Avg = t2Count > 0 ? (t2Sum / t2Count) : 0;

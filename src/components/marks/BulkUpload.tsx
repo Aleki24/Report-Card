@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback } from 'react';
 import Papa from 'papaparse';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 interface ParsedRow {
     [key: string]: string;
@@ -20,8 +19,6 @@ interface Props {
 }
 
 export function BulkUpload({ examId }: Props) {
-    const supabase = createSupabaseBrowserClient();
-
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
@@ -92,24 +89,23 @@ export function BulkUpload({ examId }: Props) {
 
         try {
             // 1. Fetch exam max_score
-            const { data: examData } = await supabase
-                .from('exams')
-                .select('max_score')
-                .eq('id', examId)
-                .single();
+            const examRes = await fetch('/api/school/data?type=exams');
+            const examJson = await examRes.json();
+            const examData = examJson.data?.find((e: any) => e.id === examId);
             const examMaxScore = examData?.max_score || 100;
 
             // 2. Resolve student IDs from admission numbers
+            const studentRes = await fetch('/api/school/data?type=students');
+            const studentJson = await studentRes.json();
+            const studentsData = studentJson.data || [];
+
             const admissionNumbers = Array.from(new Set(parsedData.map(r => r[mapping.admissionNumber])));
-
-            const { data: studentsData, error: studentsError } = await supabase
-                .from('students')
-                .select('id, admission_number')
-                .in('admission_number', admissionNumbers);
-
-            if (studentsError) throw studentsError;
-
-            const studentMap = new Map(studentsData?.map(s => [s.admission_number, s.id]));
+            const studentMap = new Map();
+            studentsData.forEach((s: any) => {
+                if (admissionNumbers.includes(s.admission_number)) {
+                    studentMap.set(s.admission_number, s.id);
+                }
+            });
 
             // 4. Build rows with auto-calculated percentage and grade
             const rows: any[] = [];
@@ -142,10 +138,15 @@ export function BulkUpload({ examId }: Props) {
                 return;
             }
 
-            const { error } = await supabase.from('exam_marks').insert(rows);
+            const res = await fetch('/api/school/exam-marks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exam_id: examId, marks: rows }),
+            });
+            const data = await res.json();
 
-            if (error) {
-                setSubmitMessage({ type: 'error', text: `Database error: ${error.message}` });
+            if (!res.ok) {
+                setSubmitMessage({ type: 'error', text: `Database error: ${data.error}` });
             } else {
                 let text = `✅ Successfully saved ${rows.length} marks!`;
                 if (missingStudents.length > 0) {

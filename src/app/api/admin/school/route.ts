@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 /**
  * Create or update a school profile.
@@ -8,15 +10,17 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
  */
 export async function POST(request: NextRequest) {
     try {
+        const session = await getServerSession(authOptions) as any;
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        
+        const user_id = session.user.id;
         const body = await request.json();
-        const { name, address, phone, email, school_id, user_id } = body;
+        const { name, address, phone, email, school_id } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: 'School name is required' }, { status: 400 });
-        }
-
-        if (!user_id) {
-            return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
         }
 
         const supabaseAdmin = createSupabaseAdmin();

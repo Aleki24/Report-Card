@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import React, { useState, useEffect } from 'react';
 
 interface Props {
     gradeStreamId: string;
@@ -18,7 +17,6 @@ interface StudentRow {
 }
 
 export function AllSubjectsView({ gradeStreamId }: Props) {
-    const supabase = useMemo(() => createSupabaseBrowserClient(), []);
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState<StudentRow[]>([]);
     const [subjectNames, setSubjectNames] = useState<string[]>([]);
@@ -28,108 +26,101 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
         const fetchAll = async () => {
             setLoading(true);
 
-            // Get the grade_id for this stream so we can find all exams for this grade/stream
-            const { data: streamData } = await supabase
-                .from('grade_streams')
-                .select('grade_id')
-                .eq('id', gradeStreamId)
-                .single();
+            try {
+                // Fetch all marks for students in this stream, with exam + subject info
+                const res = await fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}`);
+                if (!res.ok) throw new Error('Failed to fetch marks');
+                const { data: marks } = await res.json();
 
-            if (!streamData) { setLoading(false); return; }
+                if (!marks || marks.length === 0) {
+                    setRows([]);
+                    setSubjectNames([]);
+                    setLoading(false);
+                    return;
+                }
 
-            // Fetch all marks for students in this stream, with exam + subject info
-            const { data: marks } = await supabase
-                .from('exam_marks')
-                .select(`
-                    id, raw_score, percentage, grade_symbol, student_id,
-                    exams ( id, name, subject_id, subjects(name) ),
-                    students!inner ( admission_number, current_grade_stream_id, users(first_name, last_name) )
-                `)
-                .eq('students.current_grade_stream_id', gradeStreamId);
+                const validMarks = marks.filter((m: any) => m.students && m.exams && m.exams.subjects);
 
-            if (!marks || marks.length === 0) {
+                // Aggregate: for each student × subject, keep the latest (or best) score
+                // Using a map: studentId → { name, admNo, subjects: { subjectName → { score, grade } } }
+                const studentMap: Record<string, {
+                    name: string;
+                    admNo: string;
+                    subjects: Record<string, { score: number; grade: string }>;
+                }> = {};
+                const allSubjects = new Set<string>();
+
+                validMarks.forEach((m: any) => {
+                    const exam = m.exams;
+                    const stu = m.students;
+                    const subjName = exam.subjects?.name || 'Unknown';
+                    const firstName = stu?.users?.first_name || '';
+                    const lastName = stu?.users?.last_name || '';
+                    const pct = Number(m.percentage);
+                    const grade = m.grade_symbol || '-';
+
+                    allSubjects.add(subjName);
+
+                    if (!studentMap[m.student_id]) {
+                        studentMap[m.student_id] = {
+                            name: `${firstName} ${lastName}`.trim() || 'Unknown',
+                            admNo: stu?.admission_number || '',
+                            subjects: {},
+                        };
+                    }
+
+                    // If student already has a score for this subject, keep the latest (higher percentage wins)
+                    const existing = studentMap[m.student_id].subjects[subjName];
+                    if (!existing || pct > existing.score) {
+                        studentMap[m.student_id].subjects[subjName] = { score: pct, grade };
+                    }
+                });
+
+                const subjects = Array.from(allSubjects).sort();
+                setSubjectNames(subjects);
+
+                // Build rows with total, average, and rank
+                const rawRows = Object.entries(studentMap).map(([studentId, ObjectData]) => {
+                    const data = ObjectData as any;
+                    const subjectScores = subjects.map(s => data.subjects[s]?.score || 0);
+                    const enteredCount = subjects.filter(s => data.subjects[s]).length;
+                    const total = subjectScores.reduce((s, v) => s + v, 0);
+                    const average = enteredCount > 0 ? total / enteredCount : 0;
+
+                    return {
+                        studentId,
+                        studentName: data.name,
+                        admissionNumber: data.admNo,
+                        subjects: data.subjects,
+                        total: Number(total.toFixed(1)),
+                        average: Number(average.toFixed(1)),
+                        rank: 0,
+                    };
+                });
+
+                // Sort by average descending and assign ranks
+                rawRows.sort((a, b) => b.average - a.average);
+                let rank = 0;
+                let lastAvg = -1;
+                rawRows.forEach((row, i) => {
+                    if (row.average !== lastAvg) {
+                        rank = i + 1;
+                        lastAvg = row.average;
+                    }
+                    row.rank = rank;
+                });
+
+                setRows(rawRows);
+            } catch (err) {
+                console.error(err);
                 setRows([]);
                 setSubjectNames([]);
+            } finally {
                 setLoading(false);
-                return;
             }
-
-            const validMarks = marks.filter(m => m.students && m.exams && (m.exams as any).subjects);
-
-            // Aggregate: for each student × subject, keep the latest (or best) score
-            // Using a map: studentId → { name, admNo, subjects: { subjectName → { score, grade } } }
-            const studentMap: Record<string, {
-                name: string;
-                admNo: string;
-                subjects: Record<string, { score: number; grade: string }>;
-            }> = {};
-            const allSubjects = new Set<string>();
-
-            validMarks.forEach(m => {
-                const exam = m.exams as any;
-                const stu = m.students as any;
-                const subjName = exam.subjects?.name || 'Unknown';
-                const firstName = stu?.users?.first_name || '';
-                const lastName = stu?.users?.last_name || '';
-                const pct = Number(m.percentage);
-                const grade = m.grade_symbol || '-';
-
-                allSubjects.add(subjName);
-
-                if (!studentMap[m.student_id]) {
-                    studentMap[m.student_id] = {
-                        name: `${firstName} ${lastName}`.trim() || 'Unknown',
-                        admNo: stu?.admission_number || '',
-                        subjects: {},
-                    };
-                }
-
-                // If student already has a score for this subject, keep the latest (higher percentage wins)
-                const existing = studentMap[m.student_id].subjects[subjName];
-                if (!existing || pct > existing.score) {
-                    studentMap[m.student_id].subjects[subjName] = { score: pct, grade };
-                }
-            });
-
-            const subjects = Array.from(allSubjects).sort();
-            setSubjectNames(subjects);
-
-            // Build rows with total, average, and rank
-            const rawRows = Object.entries(studentMap).map(([studentId, data]) => {
-                const subjectScores = subjects.map(s => data.subjects[s]?.score || 0);
-                const enteredCount = subjects.filter(s => data.subjects[s]).length;
-                const total = subjectScores.reduce((s, v) => s + v, 0);
-                const average = enteredCount > 0 ? total / enteredCount : 0;
-
-                return {
-                    studentId,
-                    studentName: data.name,
-                    admissionNumber: data.admNo,
-                    subjects: data.subjects,
-                    total: Number(total.toFixed(1)),
-                    average: Number(average.toFixed(1)),
-                    rank: 0,
-                };
-            });
-
-            // Sort by average descending and assign ranks
-            rawRows.sort((a, b) => b.average - a.average);
-            let rank = 0;
-            let lastAvg = -1;
-            rawRows.forEach((row, i) => {
-                if (row.average !== lastAvg) {
-                    rank = i + 1;
-                    lastAvg = row.average;
-                }
-                row.rank = rank;
-            });
-
-            setRows(rawRows);
-            setLoading(false);
         };
 
         fetchAll();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [gradeStreamId]);
 
     if (loading) {

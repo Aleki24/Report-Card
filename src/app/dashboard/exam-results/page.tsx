@@ -119,13 +119,21 @@ export default function ExamResultsPage() {
     // 4. Fetch academic years + terms (for reports tab)
     useEffect(() => {
         const fetchYearsTerms = async () => {
-            const [yearsRes, termsRes] = await Promise.all([
-                supabase.from('academic_years').select('id, name').order('start_date', { ascending: false }),
-                supabase.from('terms').select('id, name, academic_year_id').order('start_date'),
-            ]);
-            setAcademicYears(yearsRes.data || []);
-            setAllTerms(termsRes.data || []);
-            if (yearsRes.data && yearsRes.data.length > 0) setSelectedYearId(yearsRes.data[0].id);
+            try {
+                const [yearsRes, termsRes] = await Promise.all([
+                    fetch('/api/school/data?type=academic_years'),
+                    fetch('/api/school/data?type=terms'),
+                ]);
+                const [yearsJson, termsJson] = await Promise.all([
+                    yearsRes.json(),
+                    termsRes.json(),
+                ]);
+                setAcademicYears(yearsJson.data || []);
+                setAllTerms(termsJson.data || []);
+                if (yearsJson.data && yearsJson.data.length > 0) setSelectedYearId(yearsJson.data[0].id);
+            } catch (err) {
+                console.error('Failed to fetch years/terms:', err);
+            }
         };
         fetchYearsTerms();
         // eslint-disable-next-line react-hooks/exhaustive-deps

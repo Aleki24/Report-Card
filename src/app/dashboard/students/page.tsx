@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
 
 interface StudentRow {
@@ -24,7 +23,6 @@ interface AcademicLevelOption {
 }
 
 export default function StudentsPage() {
-    const supabase = createSupabaseBrowserClient();
     const { profile } = useAuth();
 
     /* ── Data state ──────────────────────────────────── */
@@ -50,37 +48,44 @@ export default function StudentsPage() {
     /* ── Fetch students (join users + grade_streams) ── */
     const fetchStudents = async () => {
         setFetchError(null);
-        const { data, error } = await supabase
-            .from('students')
-            .select('id, admission_number, status, users(first_name, last_name, email), grade_streams:current_grade_stream_id(full_name)')
-            .order('admission_number', { ascending: true });
-
-        if (error) {
-            console.error('Error fetching students:', error);
-            setFetchError(`Failed to load students: ${error.message}`);
+        try {
+            const res = await fetch('/api/school/data?type=students');
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to load students');
+            setStudents(json.data || []);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            setFetchError(`Failed to load students: ${message}`);
         }
-        setStudents((data as unknown as StudentRow[]) || []);
         setLoading(false);
     };
 
     /* ── Fetch grade streams for dropdown (with academic level) ── */
     const fetchGradeStreams = async () => {
-        const { data } = await supabase
-            .from('grade_streams')
-            .select('id, full_name, grades!inner(academic_level_id)')
-            .order('full_name');
-        const mapped = (data || []).map((d: any) => ({
-            id: d.id,
-            full_name: d.full_name,
-            academic_level_id: d.grades?.academic_level_id || null,
-        }));
-        setGradeStreams(mapped);
+        try {
+            const res = await fetch('/api/school/data?type=grade_streams');
+            const json = await res.json();
+            if (!res.ok) return;
+            const mapped = (json.data || []).map((d: any) => ({
+                id: d.id,
+                full_name: d.full_name,
+                academic_level_id: d.grades?.academic_level_id || d.academic_level_id || null,
+            }));
+            setGradeStreams(mapped);
+        } catch {
+            // non-critical
+        }
     };
 
     /* ── Fetch academic levels for dropdown ───────────── */
     const fetchAcademicLevels = async () => {
-        const { data } = await supabase.from('academic_levels').select('id, name').order('name');
-        setAcademicLevels((data as AcademicLevelOption[]) || []);
+        try {
+            const res = await fetch('/api/admin/academic-structure');
+            const json = await res.json();
+            setAcademicLevels(json.academic_levels || []);
+        } catch {
+            // non-critical
+        }
     };
 
     useEffect(() => {
@@ -132,13 +137,6 @@ export default function StudentsPage() {
         setSaving(true);
         setSaveMessage(null);
 
-        // Look up school_id from DB if JWT is stale
-        let schoolId = profile?.school_id || null;
-        if (!schoolId) {
-            const { data: userData } = await supabase.from('users').select('school_id').eq('id', profile?.id ?? '').single();
-            schoolId = userData?.school_id || null;
-        }
-
         try {
             const res = await fetch('/api/admin/add-student', {
                 method: 'POST',
@@ -149,7 +147,6 @@ export default function StudentsPage() {
                     admission_number: newStudent.admission_number.trim() || null,
                     grade_stream_id: newStudent.grade_stream_id || null,
                     academic_level_id: newStudent.academic_level_id,
-                    school_id: schoolId,
                     admin_user_id: profile?.id,
                 }),
             });
@@ -179,7 +176,7 @@ export default function StudentsPage() {
             {/* Page Header */}
             <div
                 className="flex flex-col sm:flex-row sm:justify-between sm:items-start"
-                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}
+                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}
             >
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Students</h1>
@@ -188,6 +185,19 @@ export default function StudentsPage() {
                     </p>
                 </div>
                 <button className="btn-primary shrink-0" onClick={() => setShowAddModal(true)}>+ Add Student</button>
+            </div>
+
+            {/* Guide */}
+            <div className="mb-6 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                <div className="text-sm">
+                    <h3 className="font-semibold mb-1">How to manage students:</h3>
+                    <ul className="list-disc pl-4 space-y-1 opacity-90">
+                        <li><strong>Step 1:</strong> Click <strong>+ Add Student</strong> to enroll a new student.</li>
+                        <li><strong>Step 2:</strong> Enter required details (name, academic level). Assigning a specific class is optional but recommended.</li>
+                        <li><strong>Step 3:</strong> Use the search bar below to quickly find students, view their report cards, or manage their records.</li>
+                    </ul>
+                </div>
             </div>
 
             {/* Search & Filter */}
@@ -218,7 +228,7 @@ export default function StudentsPage() {
                             <tr>
                                 <th>Student</th>
                                 <th>Admission #</th>
-                                <th>Grade Stream</th>
+                                <th>Class (Optional)</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -237,7 +247,7 @@ export default function StudentsPage() {
                                             {s.users?.first_name || '—'} {s.users?.last_name || ''}
                                         </td>
                                         <td data-label="Admission #" className="text-[var(--color-text-muted)] font-mono text-sm">{s.admission_number}</td>
-                                        <td data-label="Grade Stream">{s.grade_streams?.full_name || '—'}</td>
+                                        <td data-label="Class (Optional)">{s.grade_streams?.full_name || '—'}</td>
                                         <td data-label="Status">
                                             <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
                                                 {s.status}
@@ -335,13 +345,13 @@ export default function StudentsPage() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream</label>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class (Optional)</label>
                                 <select
                                     className="input-field w-full"
                                     value={newStudent.grade_stream_id}
                                     onChange={e => setNewStudent(p => ({ ...p, grade_stream_id: e.target.value }))}
                                 >
-                                    <option value="">-- Select Grade Stream --</option>
+                                    <option value="">-- Select Class --</option>
                                     {gradeStreams
                                         .filter(gs => !newStudent.academic_level_id || gs.academic_level_id === newStudent.academic_level_id)
                                         .map(gs => (

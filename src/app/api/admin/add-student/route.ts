@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
 
         // 1. Generate a UUID for the new student
         const userId = crypto.randomUUID();
-        const emailBase = admNo ? admNo.toLowerCase().replace(/[^a-z0-9]/g, '') : userId.slice(0, 8);
+        const finalAdmNo = admNo || `STU-${Date.now().toString().slice(-6)}`;
+        const emailBase = finalAdmNo.toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
         // 2. Insert into public.users (no password — students don't log in by default)
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
         // 3. Insert into public.students
         const { error: studentError } = await supabaseAdmin.from('students').insert({
             id: userId,
-            admission_number: admNo,
+            admission_number: finalAdmNo,
             current_grade_stream_id: grade_stream_id || null,
             academic_level_id: academic_level_id,
         });
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             success: true,
             student_id: userId,
-            admission_number: admission_number.trim(),
+            admission_number: finalAdmNo,
             message: `Student ${first_name.trim()} ${last_name.trim()} added successfully.`,
         });
     } catch (err: unknown) {

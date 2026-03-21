@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 interface GradeOption {
     symbol: string;
     label: string;
     systemName: string;
+    min_percentage: number;
+    max_percentage: number;
 }
 
 export interface EditMarkData {
@@ -28,8 +29,6 @@ interface Props {
 }
 
 export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: Props) {
-    const supabase = createSupabaseBrowserClient();
-
     const [score, setScore] = useState(String(mark.raw_score));
     const [grade, setGrade] = useState(mark.grade_symbol);
     const [remarks, setRemarks] = useState(mark.remarks || '');
@@ -42,57 +41,40 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
     // Fetch grade options
     useEffect(() => {
         const fetchGrades = async () => {
-            const { data } = await supabase
-                .from('grading_scales')
-                .select('symbol, label, grading_systems!inner(name)')
-                .order('order_index');
-            if (data) {
-                setGradeOptions(data.map((d: any) => ({
-                    symbol: d.symbol,
-                    label: d.label,
-                    systemName: d.grading_systems?.name || '',
-                })));
+            try {
+                const res = await fetch('/api/school/data?type=grading_scales');
+                const scaleData = await res.json();
+                
+                let options: GradeOption[] = [];
+                if (scaleData.data) {
+                    scaleData.data.forEach((sys: any) => {
+                        sys.grading_scales?.forEach((sc: any) => {
+                            options.push({
+                                symbol: sc.symbol,
+                                label: sc.label || sc.symbol,
+                                systemName: sys.name,
+                                min_percentage: sc.min_percentage,
+                                max_percentage: sc.max_percentage,
+                            });
+                        });
+                    });
+                }
+                setGradeOptions(options);
+            } catch (err) {
+                console.error("Failed to load grades", err);
             }
         };
         fetchGrades();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Auto-resolve grade when score changes
-    const autoResolveGrade = useCallback(async (newScore: number) => {
-        if (maxScore <= 0) return;
+    const autoResolveGrade = useCallback((newScore: number) => {
+        if (maxScore <= 0 || gradeOptions.length === 0) return;
         const newPercentage = Math.round((newScore / maxScore) * 10000) / 100;
 
-        try {
-            const { data: examData } = await supabase
-                .from('exam_marks')
-                .select('exams!inner(grade_id, grades!inner(academic_level_id))')
-                .eq('id', mark.id)
-                .single();
-
-            const levelId = (examData as any)?.exams?.grades?.academic_level_id;
-            if (levelId) {
-                const { data: gs } = await supabase
-                    .from('grading_systems')
-                    .select('id')
-                    .eq('academic_level_id', levelId)
-                    .limit(1)
-                    .single();
-                if (gs) {
-                    const { data: scale } = await supabase
-                        .from('grading_scales')
-                        .select('symbol')
-                        .eq('grading_system_id', gs.id)
-                        .lte('min_percentage', newPercentage)
-                        .gte('max_percentage', newPercentage)
-                        .limit(1)
-                        .single();
-                    if (scale) setGrade(scale.symbol);
-                }
-            }
-        } catch { /* best-effort */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mark.id, maxScore]);
+        const matching = gradeOptions.find(o => newPercentage >= o.min_percentage && newPercentage <= o.max_percentage);
+        if (matching) setGrade(matching.symbol);
+    }, [maxScore, gradeOptions]);
 
     const handleScoreChange = (val: string) => {
         setScore(val);
@@ -119,22 +101,29 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
 
         const newPercentage = maxScore > 0 ? Math.round((numScore / maxScore) * 10000) / 100 : 0;
 
-        const { error: updateErr } = await supabase
-            .from('exam_marks')
-            .update({
-                raw_score: numScore,
-                percentage: newPercentage,
-                grade_symbol: grade,
-                remarks: remarks.trim() || null,
-            })
-            .eq('id', mark.id);
+        try {
+            const res = await fetch('/api/school/exam-marks', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: mark.id,
+                    raw_score: numScore,
+                    percentage: newPercentage,
+                    grade_symbol: grade,
+                    remarks: remarks.trim() || null
+                })
+            });
 
-        setSaving(false);
-
-        if (updateErr) {
-            setError(`Failed to save: ${updateErr.message}`);
-        } else {
-            onSaved();
+            const data = await res.json();
+            if (!res.ok) {
+                setError(`Failed to save: ${data.error}`);
+            } else {
+                onSaved();
+            }
+        } catch (err: unknown) {
+            setError(`Failed to save: ${err instanceof Error ? err.message : 'Unknown Error'}`);
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -142,17 +131,21 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
         setDeleting(true);
         setError('');
 
-        const { error: deleteErr } = await supabase
-            .from('exam_marks')
-            .delete()
-            .eq('id', mark.id);
+        try {
+            const res = await fetch(`/api/school/exam-marks?id=${mark.id}`, {
+                method: 'DELETE'
+            });
 
-        setDeleting(false);
-
-        if (deleteErr) {
-            setError(`Failed to delete: ${deleteErr.message}`);
-        } else {
-            onDeleted();
+            const data = await res.json();
+            if (!res.ok) {
+                setError(`Failed to delete: ${data.error}`);
+            } else {
+                onDeleted();
+            }
+        } catch (err: unknown) {
+            setError(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown Error'}`);
+        } finally {
+            setDeleting(false);
         }
     };
 

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 interface GradeOption {
     symbol: string;
@@ -38,8 +37,6 @@ const emptyRow = (): MarkRow => ({
 });
 
 export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
-    const supabase = createSupabaseBrowserClient();
-
     // Class/stream filter
     const [grades, setGrades] = useState<GradeItem[]>([]);
     const [allStreams, setAllStreams] = useState<StreamItem[]>([]);
@@ -79,21 +76,27 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     // ── Fetch grading scales + grade options on mount ────
     useEffect(() => {
         const fetchGrades = async () => {
-            const { data } = await supabase
-                .from('grading_scales')
-                .select('symbol, label, min_percentage, max_percentage, grading_systems!inner(name)')
-                .order('order_index');
-            if (data) {
-                setGradeOptions(data.map((d: any) => ({
-                    symbol: d.symbol,
-                    label: d.label,
-                    systemName: d.grading_systems?.name || '',
-                })));
-                setGradingScales(data.map((d: any) => ({
-                    symbol: d.symbol,
-                    min_percentage: d.min_percentage,
-                    max_percentage: d.max_percentage,
-                })));
+            try {
+                const res = await fetch('/api/school/data?type=grading_scales');
+                const dataObj = await res.json();
+                if (dataObj.data) {
+                    const scales: any[] = [];
+                    dataObj.data.forEach((sys: any) => {
+                        sys.grading_scales?.forEach((sc: any) => {
+                            scales.push({
+                                symbol: sc.symbol,
+                                label: sc.label || '',
+                                systemName: sys.name,
+                                min_percentage: sc.min_percentage,
+                                max_percentage: sc.max_percentage,
+                            });
+                        });
+                    });
+                    setGradeOptions(scales);
+                    setGradingScales(scales);
+                }
+            } catch (err) {
+                console.error('Failed to load grading scales:', err);
             }
         };
         fetchGrades();
@@ -103,30 +106,48 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     // ── Reset stream when grade changes ──────────────────
     useEffect(() => { setSelectedStreamId(''); }, [selectedGradeId]);
 
-    // ── Fetch students when stream changes ───────────────
+    // ── Fetch students when grade or stream changes ──────
     const fetchStudents = useCallback(async () => {
-        if (!selectedStreamId) {
+        if (!selectedGradeId) {
             setStudents([]);
             return;
         }
+
+        const hasStreams = allStreams.some(s => s.grade_id === selectedGradeId);
+        if (hasStreams && !selectedStreamId) {
+            setStudents([]);
+            return;
+        }
+
         setStudentsLoading(true);
-        const { data } = await supabase
-            .from('students')
-            .select('id, admission_number, users(first_name, last_name)')
-            .eq('current_grade_stream_id', selectedStreamId);
+        try {
+            const res = await fetch('/api/school/data?type=students');
+            const { data } = await res.json();
 
-        const list: StudentOption[] = (data || [])
-            .map((s: any) => ({
-                id: s.id,
-                name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-                admission_number: s.admission_number || '',
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name));
+            const filteredStudents = (data || []).filter((s: any) => {
+                if (hasStreams) {
+                    return s.current_grade_stream_id === selectedStreamId;
+                } else {
+                    return s.academic_level_id === selectedGradeId;
+                }
+            });
 
-        setStudents(list);
-        setStudentsLoading(false);
+            const list: StudentOption[] = filteredStudents
+                .map((s: any) => ({
+                    id: s.id,
+                    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
+                    admission_number: s.admission_number || '',
+                }))
+                .sort((a: StudentOption, b: StudentOption) => a.name.localeCompare(b.name));
+
+            setStudents(list);
+        } catch (err) {
+            console.error('Failed to load students:', err);
+        } finally {
+            setStudentsLoading(false);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStreamId]);
+    }, [selectedGradeId, selectedStreamId, allStreams]);
 
     useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
@@ -225,11 +246,9 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
 
         try {
             // Fetch exam max_score for accurate percentage
-            const { data: examData } = await supabase
-                .from('exams')
-                .select('max_score')
-                .eq('id', examId)
-                .single();
+            const examRes = await fetch('/api/school/data?type=exams');
+            const { data: examsData } = await examRes.json();
+            const examData = examsData?.find((e: any) => e.id === examId);
             const examMaxScore = examData?.max_score || maxScore;
 
             const insertRows = filledRows.map(r => {
@@ -245,10 +264,15 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 };
             });
 
-            const { error } = await supabase.from('exam_marks').insert(insertRows);
+            const res = await fetch('/api/school/exam-marks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ exam_id: examId, marks: insertRows }),
+            });
+            const result = await res.json();
 
-            if (error) {
-                setSaveMessage({ type: 'error', text: `Database error: ${error.message}` });
+            if (!res.ok) {
+                setSaveMessage({ type: 'error', text: `Database error: ${result.error}` });
             } else {
                 setSaveMessage({ type: 'success', text: `✅ Successfully saved ${filledRows.length} mark${filledRows.length !== 1 ? 's' : ''}!` });
                 // Refresh students list (some are now entered) and reset rows
@@ -298,20 +322,27 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Stream</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Class (Optional)</label>
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}
                         onChange={e => setSelectedStreamId(e.target.value)}
                         disabled={!selectedGradeId || filteredStreams.length === 0}
                     >
-                        <option value="">{!selectedGradeId ? 'Select class first' : filteredStreams.length === 0 ? 'No streams' : '— Select Stream —'}</option>
+                        <option value="">{!selectedGradeId ? 'Select grade first' : filteredStreams.length === 0 ? 'No classes' : '— Select Class —'}</option>
                         {filteredStreams.map(s => (
                             <option key={s.id} value={s.id}>{s.full_name}</option>
                         ))}
                     </select>
                 </div>
-                {selectedStreamId && (
+                {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
+                    <div className="flex items-end">
+                        <div className="text-xs text-[var(--color-accent)] font-semibold py-2">
+                           Please select a class
+                        </div>
+                    </div>
+                )}
+                {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && (
                     <div className="flex items-end">
                         <div className="text-xs text-[var(--color-accent)] font-semibold py-2">
                             {studentsLoading ? 'Loading…' : `${students.length} student${students.length !== 1 ? 's' : ''}`}
@@ -320,15 +351,22 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 )}
             </div>
 
-            {/* No stream selected hint */}
-            {!selectedStreamId && (
+            {/* No class selected hint */}
+            {!selectedGradeId && (
                 <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
-                    👆 Select a <strong>Class</strong> and <strong>Stream</strong> above to load students
+                    👆 Select a <strong>Class</strong> above to load students
                 </div>
             )}
 
-            {/* ── Entry Table (only shown when stream selected) ── */}
-            {selectedStreamId && students.length > 0 && (
+            {/* No stream selected hint */}
+            {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
+                <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
+                    👆 Select a <strong>Class</strong> above to load students
+                </div>
+            )}
+
+            {/* ── Entry Table ── */}
+            {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && students.length > 0 && (
                 <>
                     {saveMessage && (
                         <div className={`mb-6 p-3 rounded-md text-sm ${saveMessage.type === 'success'
@@ -457,10 +495,10 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 </>
             )}
 
-            {/* Stream selected but no students */}
-            {selectedStreamId && !studentsLoading && students.length === 0 && (
+            {/* Class/Stream selected but no students */}
+            {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && !studentsLoading && students.length === 0 && (
                 <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
-                    No students found in this class/stream. Add students in the <strong>Students</strong> page first.
+                    No students found in this class. Add students in the <strong>Students</strong> page first.
                 </div>
             )}
         </div>
