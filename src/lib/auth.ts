@@ -6,6 +6,7 @@ import type { UserRole } from '@/types';
 
 interface DbUser {
     id: string;
+    username: string;
     email: string;
     password_hash: string | null;
     role: UserRole;
@@ -17,6 +18,7 @@ interface DbUser {
 
 interface SessionUser {
     id: string;
+    username: string;
     email: string;
     name: string;
     role: UserRole;
@@ -31,24 +33,34 @@ export const authOptions: NextAuthOptions = {
         CredentialsProvider({
             name: 'Credentials',
             credentials: {
-                email: { label: 'Email', type: 'email' },
+                identifier: { label: 'Username or Email', type: 'text' },
                 password: { label: 'Password', type: 'password' },
             },
             async authorize(credentials): Promise<SessionUser | null> {
-                if (!credentials?.email || !credentials?.password) {
-                    throw new Error('Email and password are required');
+                if (!credentials?.identifier || !credentials?.password) {
+                    throw new Error('Username/Email and password are required');
                 }
 
                 const supabase = createSupabaseAdmin();
+                const identifier = credentials.identifier.trim();
 
-                const { data: user, error } = await supabase
+                let query = supabase
                     .from('users')
-                    .select('id, email, password_hash, role, school_id, first_name, last_name, is_active')
-                    .eq('email', credentials.email.trim())
-                    .single();
+                    .select('id, username, email, password_hash, role, school_id, first_name, last_name, is_active');
 
-                if (error || !user) {
-                    throw new Error('Invalid email or password');
+                if (identifier.includes('@')) {
+                    query = query.ilike('email', identifier);
+                } else {
+                    query = query.ilike('username', identifier);
+                }
+
+                const { data: user, error } = await query.limit(1).maybeSingle();
+
+                if (error) {
+                    throw new Error(`DB Error: ${error.message} (details: ${error.details}, hint: ${error.hint})`);
+                }
+                if (!user) {
+                    throw new Error('No user found with this identifier');
                 }
 
                 const dbUser = user as DbUser;
@@ -63,7 +75,7 @@ export const authOptions: NextAuthOptions = {
 
                 const isValid = await bcrypt.compare(credentials.password, dbUser.password_hash);
                 if (!isValid) {
-                    throw new Error('Invalid email or password');
+                    throw new Error('Incorrect password');
                 }
 
                 let schoolName: string | null = null;
@@ -78,6 +90,7 @@ export const authOptions: NextAuthOptions = {
 
                 return {
                     id: dbUser.id,
+                    username: dbUser.username,
                     email: dbUser.email,
                     name: `${dbUser.first_name} ${dbUser.last_name}`,
                     role: dbUser.role,
@@ -97,21 +110,29 @@ export const authOptions: NextAuthOptions = {
         signIn: '/login',
     },
     callbacks: {
-        async jwt({ token, user }) {
+        async jwt({ token, user, trigger, session }) {
             if (user) {
                 const sessionUser = user as SessionUser;
                 token.userId = sessionUser.id;
+                token.username = sessionUser.username;
                 token.role = sessionUser.role;
                 token.schoolId = sessionUser.schoolId;
                 token.schoolName = sessionUser.schoolName;
                 token.firstName = sessionUser.firstName;
                 token.lastName = sessionUser.lastName;
             }
+
+            // Allow role updates on the fly
+            if (trigger === "update" && session?.role) {
+                token.role = session.role;
+            }
+
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
                 (session.user as SessionUser & { id: string }).id = token.userId as string;
+                (session.user as SessionUser & { username: string }).username = token.username as string;
                 (session.user as SessionUser & { role: UserRole }).role = token.role as UserRole;
                 (session.user as SessionUser & { schoolId: string | null }).schoolId = token.schoolId as string | null;
                 (session.user as SessionUser & { schoolName: string | null }).schoolName = token.schoolName as string | null;

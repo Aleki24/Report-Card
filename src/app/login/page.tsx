@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 export default function LoginPage() {
     const router = useRouter();
 
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,7 +18,7 @@ export default function LoginPage() {
         setLoading(true);
 
         const result = await signIn('credentials', {
-            email: email.trim(),
+            identifier: identifier.trim(),
             password,
             redirect: false,
         });
@@ -100,15 +100,15 @@ export default function LoginPage() {
                                 marginBottom: 'var(--space-2)',
                                 color: 'var(--color-text-secondary)',
                             }}>
-                                Email Address
+                                Username or Email
                             </label>
                             <input
                                 className="input-field"
                                 style={{ width: '100%' }}
-                                type="email"
-                                placeholder="you@school.com"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
+                                type="text"
+                                placeholder="username or you@school.com"
+                                value={identifier}
+                                onChange={e => setIdentifier(e.target.value)}
                                 required
                                 autoFocus
                             />
@@ -159,8 +159,6 @@ export default function LoginPage() {
                     marginTop: 'var(--space-6)',
                 }}>
                     <a href="/signup" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>Admin signup</a>
-                    {' · '}
-                    <a href="/register" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>Activate invite</a>
                 </p>
             </div>
         </div>

@@ -68,10 +68,9 @@ export async function GET(request: NextRequest) {
         const supabaseAdmin = createSupabaseAdmin();
 
         // Global/shared data (curriculum) — no school filter needed
-        const [levelsRes, gradesRes, subjectsRes, gsRes, gscRes] = await Promise.all([
+        const [levelsRes, gradesRes, gsRes, gscRes] = await Promise.all([
             supabaseAdmin.from('academic_levels').select('id, code, name').order('code'),
             supabaseAdmin.from('grades').select('id, name_display, code, academic_level_id, numeric_order').order('numeric_order'),
-            supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').order('display_order'),
             supabaseAdmin.from('grading_systems').select('*').order('name'),
             supabaseAdmin.from('grading_scales').select('*').order('order_index'),
         ]);
@@ -80,16 +79,22 @@ export async function GET(request: NextRequest) {
         let yearsData: any[] = [];
         let termsData: any[] = [];
         let streamsData: any[] = [];
+        let subjectsData: any[] = [];
 
         if (schoolId) {
-            const [yearsRes, termsRes, streamsRes] = await Promise.all([
+            const [yearsRes, termsRes, streamsRes, subjectsRes] = await Promise.all([
                 supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
+                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').or(`school_id.eq.${schoolId},school_id.is.null`).order('display_order'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
             streamsData = streamsRes.data ?? [];
+            subjectsData = subjectsRes.data ?? [];
+        } else {
+             const subjectsRes = await supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').is('school_id', null).order('display_order');
+             subjectsData = subjectsRes.data ?? [];
         }
 
         return NextResponse.json({
@@ -97,7 +102,7 @@ export async function GET(request: NextRequest) {
             terms: termsData,
             grades: gradesRes.data || [],
             grade_streams: streamsData,
-            subjects: subjectsRes.data || [],
+            subjects: subjectsData,
             academic_levels: levelsRes.data || [],
             grading_systems: gsRes.data || [],
             grading_scales: gscRes.data || [],
@@ -122,9 +127,14 @@ export async function POST(request: NextRequest) {
         const schoolId = auth.schoolId;
         const role = auth.role;
 
-        // Check role permissions: Teacher can ONLY add 'subject'. Admin can add anything.
-        if (role !== 'ADMIN' && !(role === 'TEACHER' && type === 'subject')) {
-            return NextResponse.json({ error: 'Unauthorized. Admins only.' }, { status: 403 });
+        const isTeacher = role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER';
+
+        // Check role permissions: Teachers can add basic exam-related structure. Admins can add anything.
+        if (role !== 'ADMIN') {
+            const allowedForTeachers = ['subject', 'stream', 'term', 'academic_year'];
+            if (!isTeacher || !allowedForTeachers.includes(type)) {
+                return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
+            }
         }
 
         const supabaseAdmin = createSupabaseAdmin();
@@ -161,6 +171,7 @@ export async function POST(request: NextRequest) {
             },
 
             subject: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = subjectSchema.parse(payload);
                 const { data: result, error } = await supabaseAdmin
                     .from('subjects')
@@ -170,7 +181,8 @@ export async function POST(request: NextRequest) {
                         academic_level_id: data.academic_level_id,
                         is_compulsory: data.is_compulsory ?? true,
                         display_order: data.display_order ?? 0,
-                        category: data.category ?? 'OTHER'
+                        category: data.category ?? 'OTHER',
+                        school_id: schoolId
                     })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'subject');
@@ -259,12 +271,12 @@ export async function DELETE(request: NextRequest) {
             academic_year: 'academic_years',
             term: 'terms',
             stream: 'grade_streams',
+            subject: 'subjects',
         };
 
         const globalTables: Record<string, string> = {
             level: 'academic_levels',
             grade: 'grades',
-            subject: 'subjects',
             grading_system: 'grading_systems',
             grading_scale: 'grading_scales',
         };

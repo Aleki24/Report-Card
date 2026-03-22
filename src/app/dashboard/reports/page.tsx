@@ -6,6 +6,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import JSZip from 'jszip';
 import { pdf } from '@react-pdf/renderer';
 import { ReportCardDocument, ReportCardData } from '@/lib/pdfGenerator';
+import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import QRCode from 'qrcode';
 
 interface StudentOption {
@@ -25,6 +26,7 @@ export default function ReportsPage() {
   const [customReportTitle, setCustomReportTitle] = useState('');
   
   const [generating, setGenerating] = useState(false);
+  const [generatingMarkSheet, setGeneratingMarkSheet] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
 
   const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
@@ -204,6 +206,54 @@ export default function ReportsPage() {
     setTimeout(() => setToast(null), 5000);
   };
 
+  const handleGenerateMarkSheet = async () => {
+    if (!selectedGradeStream || !selectedAcademicYear || !selectedTerm) {
+      showToastMsg('Please select Academic Year, Term, and Grade Stream.');
+      return;
+    }
+
+    setGeneratingMarkSheet(true);
+    setProgress({ current: 0, total: 0, message: 'Fetching mark sheet data...' });
+
+    try {
+      const params = new URLSearchParams();
+      params.append('yearId', selectedAcademicYear);
+      params.append('termId', selectedTerm);
+      if (customReportTitle) params.append('customTitle', customReportTitle);
+
+      const response = await fetch(`/api/reports/marksheet/${selectedGradeStream}?${params.toString()}`);
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Failed to fetch mark sheet data');
+      }
+
+      const markSheetData: MarkSheetData = await response.json();
+      
+      setProgress({ current: 0, total: 0, message: 'Generating PDF...' });
+      const blob = await pdf(<MarkSheetDocument data={markSheetData} />).toBlob();
+      
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      
+      const termName = terms.find(t => t.id === selectedTerm)?.name || 'Term';
+      const streamName = gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class';
+      
+      link.download = `${streamName}_${termName}_MarkSheet.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      showToastMsg('✅ Mark Sheet downloaded!');
+    } catch (err: any) {
+      showToastMsg(`Failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setGeneratingMarkSheet(false);
+      setProgress({ current: 0, total: 0, message: '' });
+    }
+  };
+
   const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
 
   return (
@@ -290,10 +340,25 @@ export default function ReportsPage() {
           </button>
         </div>
 
+        {/* Class Mark Sheet */}
+        <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
+          <div className="text-4xl mb-4">📝</div>
+          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Class Mark Sheet</h3>
+          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Ranked mark sheet with subject scores for the entire class.</p>
+          <button 
+            className="btn-secondary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleGenerateMarkSheet} 
+            disabled={!isConfigured || generatingMarkSheet}
+            title={!isConfigured ? "Please configure the Report Settings above first" : ""}
+          >
+            {generatingMarkSheet ? 'Processing...' : 'Generate Mark Sheet →'}
+          </button>
+        </div>
+
       </div>
 
       {/* Progress Overlay */}
-      {generating && progress.message && (
+      {(generating || generatingMarkSheet) && progress.message && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="card w-full max-w-md p-8 text-center" style={{ animation: 'zoomIn 0.3s ease' }}>
             <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-4">Processing Reports</h3>

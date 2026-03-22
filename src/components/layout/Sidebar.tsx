@@ -161,7 +161,7 @@ interface SidebarProps {
 
 export function Sidebar({ mobileMenuOpen, setMobileMenuOpen, collapsed = false, setCollapsed }: SidebarProps) {
     const pathname = usePathname();
-    const { profile, role, schoolName, loading, signOut } = useAuth();
+    const { profile, role, availableRoles, switchRole, schoolName, loading, signOut } = useAuth();
     const [showUserMenu, setShowUserMenu] = useState(false);
 
     // Filter nav items based on user role (show all if still loading or no role)
@@ -313,6 +313,54 @@ export function Sidebar({ mobileMenuOpen, setMobileMenuOpen, collapsed = false, 
 
                                     {/* Divider */}
                                     <div style={{ height: 1, background: 'var(--color-border)', margin: 'var(--space-2) 0' }} />
+
+                                    {/* Role Switcher if applicable */}
+                                    {availableRoles.length > 1 && (
+                                        <div style={{ padding: '0 0 var(--space-2) 0' }}>
+                                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 var(--space-3)', marginBottom: 'var(--space-2)' }}>
+                                                Switch Role
+                                            </div>
+                                            {availableRoles.map(r => (
+                                                <button
+                                                    key={r}
+                                                    onClick={async () => {
+                                                        await switchRole(r);
+                                                        setShowUserMenu(false);
+                                                    }}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        width: '100%',
+                                                        padding: 'var(--space-2) var(--space-3)',
+                                                        background: role === r ? 'var(--color-surface-hover)' : 'transparent',
+                                                        border: 'none',
+                                                        color: role === r ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                                                        fontSize: 13,
+                                                        fontWeight: role === r ? 600 : 400,
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => { if (role !== r) e.currentTarget.style.background = 'var(--color-surface-hover)'; }}
+                                                    onMouseLeave={e => { if (role !== r) e.currentTarget.style.background = 'transparent'; }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                                                        <div style={{
+                                                            width: 8, height: 8, borderRadius: '50%',
+                                                            background: roleBadgeColors[r],
+                                                        }} />
+                                                        {r.replace('_', ' ')}
+                                                    </div>
+                                                    {role === r && (
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            ))}
+                                            <div style={{ height: 1, background: 'var(--color-border)', margin: 'var(--space-2) 0 0 0' }} />
+                                        </div>
+                                    )}
 
                                     {/* Sign Out button */}
                                     <button
