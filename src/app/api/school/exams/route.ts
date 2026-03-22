@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
         max_score: Number(max_score),
         exam_date,
         created_by_teacher_id: userId,
+        school_id: schoolId,
       })
       .select('id')
       .single();

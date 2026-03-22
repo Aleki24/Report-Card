@@ -11,7 +11,6 @@ interface SchoolProfile { id?: string; name: string; address: string; phone: str
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
-interface Subject { id: string; name: string; code: string; academic_level_id: string; }
 export default function SettingsPage() {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar'>('profile');
@@ -20,7 +19,6 @@ export default function SettingsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
   const [gradingScales, setGradingScales] = useState<GradingScale[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
@@ -35,7 +33,6 @@ export default function SettingsPage() {
   const [calSaving, setCalSaving] = useState(false);
   const [newYear, setNewYear] = useState({ name: '', start_date: '', end_date: '' });
   const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '' });
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '' });
 
   // ── Fetch all data via server APIs ─────────────────────────
   const fetchAllData = useCallback(async () => {
@@ -63,7 +60,6 @@ export default function SettingsPage() {
       setGrades(structureData.grades || []);
       setGradingSystems(structureData.grading_systems || []);
       setGradingScales(structureData.grading_scales || []);
-      setSubjects(structureData.subjects || []);
 
       // School-scoped data
       const years = yearsData.data || [];
@@ -263,8 +259,6 @@ export default function SettingsPage() {
                   <h3 className="font-semibold mb-1">How to setup Academic Structure:</h3>
                   <ul className="list-disc pl-4 space-y-1 opacity-90">
                     <li>Kenya&apos;s educational curricula and class grades are pre-configured for your convenience.</li>
-                    <li><strong>Action required:</strong> You must add the specific <strong>Subjects</strong> taught in your school below.</li>
-                    <li>Assign each subject to the correct Academic Level (e.g., CBC or 8-4-4).</li>
                   </ul>
                 </div>
               </div>
@@ -301,61 +295,6 @@ export default function SettingsPage() {
                           </td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Subjects */}
-              <div className="card lg:col-span-3">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Subjects</h3>
-                
-                {/* Add Subject Inline Form */}
-                <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-wrap gap-3 mb-4 items-end">
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Subject Name *</label>
-                    <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
-                  </div>
-                  <div className="w-24">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Code *</label>
-                    <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
-                  </div>
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Level *</label>
-                    <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
-                      <option value="">-- Select --</option>
-                      {academicLevels.map(al => (
-                        <option key={al.id} value={al.id}>{al.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button type="button" onClick={async () => {
-                    await postStructure('subject', newSubject);
-                    setNewSubject({ name: '', code: '', academic_level_id: '' });
-                    fetchAllData();
-                  }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
-                    {calSaving ? '...' : '+ Add Subject'}
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="data-table w-full sm:whitespace-nowrap">
-                    <thead><tr><th>Code</th><th>Subject Name</th><th>Curriculum</th></tr></thead>
-                    <tbody>
-                      {subjects.map(sub => (
-                        <tr key={sub.id}>
-                          <td className="font-mono text-sm">{sub.code}</td>
-                          <td className="font-medium">{sub.name}</td>
-                          <td className="text-[var(--color-text-muted)] text-sm">
-                            {academicLevels.find(l => l.id === sub.academic_level_id)?.code || '—'}
-                          </td>
-                        </tr>
-                      ))}
-                      {subjects.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="text-center py-4 text-[var(--color-text-muted)] text-sm">No subjects found.</td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>

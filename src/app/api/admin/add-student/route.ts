@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import crypto from 'crypto';
 
 /**
  * Directly add a student to the system.
@@ -8,17 +11,20 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
  */
 export async function POST(request: NextRequest) {
     try {
+        const session = await getServerSession(authOptions) as any;
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const user_id = session.user.id;
         const body = await request.json();
-        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, school_id, admin_user_id } = body;
+        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id } = body;
 
         if (!first_name?.trim() || !last_name?.trim()) {
             return NextResponse.json({ error: 'First name and last name are required.' }, { status: 400 });
         }
         if (!academic_level_id) {
             return NextResponse.json({ error: 'Academic level is required.' }, { status: 400 });
-        }
-        if (!admin_user_id) {
-            return NextResponse.json({ error: 'admin_user_id is required.' }, { status: 400 });
         }
 
         const supabaseAdmin = createSupabaseAdmin();
@@ -27,27 +33,31 @@ export async function POST(request: NextRequest) {
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
             .select('role, school_id')
-            .eq('id', admin_user_id)
+            .eq('id', user_id)
             .single();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only admins can add students.' }, { status: 403 });
+        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
+            return NextResponse.json({ error: 'Only admins with a school can add students.' }, { status: 403 });
         }
 
-        const effectiveSchoolId = school_id || adminProfile.school_id;
+        const effectiveSchoolId = adminProfile.school_id;
 
         // Check if admission number already exists in students table
         // Check for duplicate admission number (only if provided)
         const admNo = admission_number?.trim() || null;
         if (admNo) {
+            // Must check if admission number already exists WITHIN THE SAME SCHOOL
+            // Wait, admission_number is globally unique? No, usually per school.
+            // But let's check the users table for the school and students table.
             const { data: existingStudent } = await supabaseAdmin
-                .from('students')
-                .select('id')
-                .eq('admission_number', admNo)
+                .from('users')
+                .select('id, students!inner(admission_number)')
+                .eq('school_id', effectiveSchoolId)
+                .eq('students.admission_number', admNo)
                 .maybeSingle();
 
             if (existingStudent) {
-                return NextResponse.json({ error: `A student with admission number "${admNo}" already exists.` }, { status: 409 });
+                return NextResponse.json({ error: `A student with admission number "${admNo}" already exists in your school.` }, { status: 409 });
             }
         }
 

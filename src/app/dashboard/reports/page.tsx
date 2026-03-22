@@ -3,6 +3,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import JSZip from 'jszip';
+import { pdf } from '@react-pdf/renderer';
+import { ReportCardDocument, ReportCardData } from '@/lib/pdfGenerator';
+import QRCode from 'qrcode';
 
 interface StudentOption {
   id: string;
@@ -19,7 +23,9 @@ export default function ReportsPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
   const [customReportTitle, setCustomReportTitle] = useState('');
+  
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
 
   const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
@@ -97,96 +103,138 @@ export default function ReportsPage() {
     window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
   };
 
-  const handleBulkGenerate = async () => {
+  const handleGenerateAndDownload = async () => {
     if (!selectedGradeStream || !selectedAcademicYear || !selectedTerm) {
       showToastMsg('Please select Academic Year, Term, and Grade Stream.');
       return;
     }
+
     setGenerating(true);
+    setProgress({ current: 0, total: 0, message: 'Step 1 of 3: Aggregating database grades...' });
+
     try {
+      // 1. Calculate & Generating Grades Data in Database
       const { error } = await supabase.rpc('generate_term_reports', {
         p_term_id: selectedTerm,
         p_grade_stream_id: selectedGradeStream,
       });
+
       if (error) {
-        showToastMsg(`Error: ${error.message}`);
-      } else {
-        showToastMsg('✅ Reports generated successfully!');
+        throw new Error(`Grade aggregation failed: ${error.message}`);
       }
+
+      // 2. Fetching JSON report arrays
+      setProgress({ current: 0, total: 0, message: 'Step 2 of 3: Fetching report data...' });
+      
+      const params = new URLSearchParams();
+      params.append('yearId', selectedAcademicYear);
+      params.append('termId', selectedTerm);
+      if (customReportTitle) params.append('customTitle', customReportTitle);
+      
+      const response = await fetch(`/api/reports/class/${selectedGradeStream}?${params.toString()}`);
+      if (!response.ok) {
+        const errJson = await response.json();
+        throw new Error(errJson.error || 'Failed to fetch report data');
+      }
+      
+      const reportCardsData: ReportCardData[] = await response.json();
+      
+      if (!reportCardsData || reportCardsData.length === 0) {
+        throw new Error('No students or grades found for this setup. Ensure marks are entered.');
+      }
+
+      // 3. Local PDF processing
+      const total = reportCardsData.length;
+      setProgress({ current: 0, total, message: 'Step 3 of 3: Generating PDFs from data...' });
+
+      const zip = new JSZip();
+
+      for (let i = 0; i < total; i++) {
+        const reportData = reportCardsData[i];
+        
+        // Update UI asynchronously every file
+        setProgress({ current: i + 1, total, message: `Creating PDF for ${reportData.studentName}...` });
+        
+        // Ensure UI updates render by waiting a tick
+        await new Promise(r => setTimeout(r, 10));
+
+        let qrCodeDataUri = undefined;
+        if (reportData.resultUrl) {
+          try {
+            qrCodeDataUri = await QRCode.toDataURL(reportData.resultUrl, { margin: 1, width: 64 });
+          } catch (e) {
+            console.error("Failed to generate QR code", e);
+          }
+        }
+
+        const blob = await pdf(<ReportCardDocument data={reportData} qrCodeDataUri={qrCodeDataUri} />).toBlob();
+        
+        const pName = `${reportData.studentName.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`;
+        zip.file(pName, blob);
+      }
+
+      setProgress({ current: total, total, message: 'Bundling ZIP archive...' });
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      
+      const termName = terms.find(t => t.id === selectedTerm)?.name || 'Term';
+      const streamName = gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class';
+      
+      link.download = `${streamName}_${termName}_Reports.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      showToastMsg('✅ Download complete!');
     } catch (err: any) {
-      showToastMsg(`Failed to generate reports: ${err.message || 'Unknown error'}`);
+      showToastMsg(`Failed: ${err.message || 'Unknown error'}`);
     } finally {
       setGenerating(false);
+      setProgress({ current: 0, total: 0, message: '' });
     }
-  };
-
-  const handleBulkDownload = () => {
-    if (!selectedGradeStream || !selectedAcademicYear || !selectedTerm) {
-      showToastMsg('Please select Academic Year, Term, and Grade Stream.');
-      return;
-    }
-    const params = new URLSearchParams();
-    params.append('yearId', selectedAcademicYear);
-    params.append('termId', selectedTerm);
-    if (customReportTitle) params.append('customTitle', customReportTitle);
-    window.open(`/api/reports/class/${selectedGradeStream}?${params.toString()}`, '_blank');
   };
 
   const showToastMsg = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 5000);
   };
 
+  const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
+
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <div style={{ marginBottom: 'var(--space-8)' }}>
+    <div className="w-full max-w-7xl mx-auto position-relative">
+      <div style={{ marginBottom: 'var(--space-6)' }}>
         <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Reports</h1>
         <p className="text-sm text-[var(--color-text-muted)]">Generate and download professional PDF report cards</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
-        <div className="card text-center p-8 flex flex-col h-full">
-          <div className="text-4xl mb-4">📋</div>
-          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Individual Report</h3>
-          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Generate a single student report card.</p>
-          <button className="btn-secondary w-full justify-center" onClick={() => setShowStudentPicker(true)}>Select Student →</button>
-        </div>
-        <div className="card text-center p-8 flex flex-col h-full">
-          <div className="text-4xl mb-4">📦</div>
-          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Bulk Class Reports</h3>
-          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Download all students in a class as a ZIP.</p>
-          <button className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBulkDownload} disabled={!selectedGradeStream || !selectedAcademicYear || !selectedTerm}>
-            Download Class Reports →
-          </button>
-        </div>
-        <div className="card text-center p-8 flex flex-col h-full">
-          <div className="text-4xl mb-4">📊</div>
-          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Term Comparison</h3>
-          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Compare performance across multiple terms.</p>
-          <button className="btn-secondary w-full justify-center" onClick={() => setShowTermComparison(true)}>Compare Terms →</button>
-        </div>
-      </div>
-
-      {/* Report Settings */}
-      <div className="card">
-        <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-4">Report Settings</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+      {/* Report Settings - MOVED TO TOP */}
+      <div className="card mb-8">
+        <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-4">Report Global Settings</h3>
+        <p className="text-xs text-[var(--color-text-muted)] mb-4 -mt-2">Filter and apply these settings to generate individual or bulk report cards.</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year</label>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year <span className="text-red-500">*</span></label>
             <select className="input-field w-full" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
               <option value="">-- Choose Year --</option>
               {academicYears.map(ay => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term</label>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term <span className="text-red-500">*</span></label>
             <select className="input-field w-full" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
               <option value="">-- Choose Term --</option>
               {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream</label>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream <span className="text-red-500">*</span></label>
             <select className="input-field w-full" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)}>
               <option value="">-- Choose Stream --</option>
               {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
@@ -197,15 +245,79 @@ export default function ReportsPage() {
             <input className="input-field w-full" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <button className="btn-primary w-full justify-center h-[42px] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBulkGenerate} disabled={generating || !selectedGradeStream || !selectedAcademicYear || !selectedTerm}>
-            {generating ? '⏳ Generating...' : '⚙️ 1. Generate & Calculate Grades Data'}
-          </button>
-          <button className="btn-secondary w-full justify-center h-[42px] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleBulkDownload} disabled={generating || !selectedGradeStream || !selectedAcademicYear || !selectedTerm}>
-            📥 2. Download All PDFs
+      </div>
+
+      {/* Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
+        
+        {/* Individual Report */}
+        <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
+          <div className="text-4xl mb-4">📋</div>
+          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Individual Report</h3>
+          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Generate a single student report card.</p>
+          <button 
+            className="btn-secondary w-full justify-center disabled:cursor-not-allowed" 
+            onClick={() => setShowStudentPicker(true)} 
+            disabled={!isConfigured}
+            title={!isConfigured ? "Please configure the Report Settings above first" : ""}
+          >
+            Select Student →
           </button>
         </div>
+
+        {/* Bulk Reports */}
+        <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
+          <div className="text-4xl mb-4">📦</div>
+          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Bulk Class Reports</h3>
+          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Generate and download all reports at once.</p>
+          <button 
+            className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={handleGenerateAndDownload} 
+            disabled={!isConfigured || generating}
+            title={!isConfigured ? "Please configure the Report Settings above first" : ""}
+          >
+            {generating ? 'Processing...' : 'Generate & Download →'}
+          </button>
+        </div>
+
+        {/* Term Comparison */}
+        <div className="card text-center p-8 flex flex-col h-full">
+          <div className="text-4xl mb-4">📊</div>
+          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Term Comparison</h3>
+          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Compare performance across multiple terms.</p>
+          <button className="btn-secondary w-full justify-center" onClick={() => setShowTermComparison(true)}>
+            Compare Terms →
+          </button>
+        </div>
+
       </div>
+
+      {/* Progress Overlay */}
+      {generating && progress.message && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="card w-full max-w-md p-8 text-center" style={{ animation: 'zoomIn 0.3s ease' }}>
+            <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-4">Processing Reports</h3>
+            
+            {progress.total > 0 ? (
+              <div className="w-full bg-[var(--color-border)] rounded-full h-3 mb-2 overflow-hidden mx-auto mt-6">
+                <div 
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out" 
+                  style={{ width: `${Math.min(100, (progress.current / progress.total) * 100)}%` }}
+                />
+              </div>
+            ) : (
+              <div className="flex justify-center my-6">
+                <div className="w-8 h-8 rounded-full border-4 border-[var(--color-border)] border-t-blue-600 animate-spin"></div>
+              </div>
+            )}
+            
+            <p className="text-sm font-medium mt-4">{progress.message}</p>
+            {progress.total > 0 && (
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">{progress.current} of {progress.total} generated</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Student Picker Modal */}
       {showStudentPicker && (
@@ -238,6 +350,7 @@ export default function ReportsPage() {
         </div>
       )}
 
+      {/* Toast Notifier */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', animation: 'fadeIn .25s ease' }}>
           {toast}

@@ -70,6 +70,10 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions) as any;
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     
+    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const schoolId = session.user.schoolId;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
@@ -81,6 +85,20 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin();
+
+    // Get student IDs for this school only to validate
+    const { data: schoolUsers } = await supabase
+      .from('users')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('role', 'STUDENT');
+      
+    const validStudentIds = new Set((schoolUsers || []).map(u => u.id));
+    for (const m of marks) {
+      if (!validStudentIds.has(m.student_id)) {
+         return NextResponse.json({ error: 'Invalid student ID' }, { status: 400 });
+      }
+    }
 
     // Upsert marks using admin client
     const { data, error } = await supabase
@@ -110,12 +128,30 @@ export async function PATCH(request: NextRequest) {
     const session = await getServerSession(authOptions) as any;
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const schoolId = session.user.schoolId;
+    if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+
     const body = await request.json();
     const { id, raw_score, percentage, grade_symbol, remarks } = body;
 
     if (!id) return NextResponse.json({ error: 'Mark ID required' }, { status: 400 });
 
     const supabase = createSupabaseAdmin();
+    
+    // Verify mark ownership
+    const { data: markCheck } = await supabase
+      .from('exam_marks')
+      .select('id, students!inner ( users!inner ( school_id ) )')
+      .eq('id', id)
+      .single();
+
+    if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
+       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const { data, error } = await supabase
       .from('exam_marks')
       .update({ raw_score, percentage, grade_symbol, remarks })
@@ -135,12 +171,30 @@ export async function DELETE(request: NextRequest) {
     const session = await getServerSession(authOptions) as any;
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const schoolId = session.user.schoolId;
+    if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) return NextResponse.json({ error: 'Mark ID required' }, { status: 400 });
 
     const supabase = createSupabaseAdmin();
+
+    // Verify mark ownership
+    const { data: markCheck } = await supabase
+      .from('exam_marks')
+      .select('id, students!inner ( users!inner ( school_id ) )')
+      .eq('id', id)
+      .single();
+
+    if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
+       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const { error } = await supabase.from('exam_marks').delete().eq('id', id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

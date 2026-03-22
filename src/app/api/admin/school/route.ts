@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
         // Verify the user is an ADMIN
         const { data: userProfile } = await supabaseAdmin
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', user_id)
             .single();
 
@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
         }
 
         if (school_id) {
+            // Guard against cross-tenant school updates
+            if (userProfile.school_id && userProfile.school_id !== school_id) {
+                return NextResponse.json({ error: 'You can only update your own school profile.' }, { status: 403 });
+            }
+
             // Update existing school
             const { error } = await supabaseAdmin.from('schools').update({
                 name: name.trim(),

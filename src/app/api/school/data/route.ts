@@ -29,8 +29,12 @@ type DataType =
 async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string; role: string } | null> {
   const session = await getServerSession(authOptions) as any;
   if (!session?.user?.id) return null;
+  
+  const supabaseAdmin = createSupabaseAdmin();
+  const { data } = await supabaseAdmin.from('users').select('school_id').eq('id', session.user.id).single();
+
   return {
-    schoolId: session.user.schoolId,
+    schoolId: (data?.school_id || session.user.schoolId) as string,
     userId: session.user.id,
     role: session.user.role,
   };

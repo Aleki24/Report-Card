@@ -22,14 +22,19 @@ import {
 
 type CreatePayload = Record<string, unknown>;
 
-// Get session and school_id from NextAuth (not from request body)
-async function getAdminSession() {
+// Get session and school_id from NextAuth (with DB lookup for freshness)
+async function getLatestSession() {
     const session = await getServerSession(authOptions) as any;
     if (!session?.user?.id) return null;
-    if (session.user.role !== 'ADMIN') return null;
+    
+    // Always fetch latest school_id to avoid stale session issues after admin creates a school
+    const supabaseAdmin = createSupabaseAdmin();
+    const { data } = await supabaseAdmin.from('users').select('school_id').eq('id', session.user.id).single();
+    
     return {
         userId: session.user.id,
-        schoolId: session.user.schoolId as string | null,
+        schoolId: (data?.school_id || session.user.schoolId) as string | null,
+        role: session.user.role,
     };
 }
 
@@ -54,12 +59,12 @@ function handleZodError(error: ZodError): NextResponse {
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const auth = await getLatestSession();
+        if (!auth) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const schoolId = session.user.schoolId as string | null;
+        const schoolId = auth.schoolId;
         const supabaseAdmin = createSupabaseAdmin();
 
         // Global/shared data (curriculum) — no school filter needed
@@ -108,14 +113,14 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { type, ...payload } = body as CreatePayload & { type: string };
 
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const auth = await getLatestSession();
+        if (!auth) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userId = session.user.id;
-        const schoolId = session.user.schoolId as string | null;
-        const role = session.user.role;
+        const userId = auth.userId;
+        const schoolId = auth.schoolId;
+        const role = auth.role;
 
         // Check role permissions: Teacher can ONLY add 'subject'. Admin can add anything.
         if (role !== 'ADMIN' && !(role === 'TEACHER' && type === 'subject')) {
@@ -241,12 +246,12 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'type and id are required as query params' }, { status: 400 });
         }
 
-        const adminSession = await getAdminSession();
-        if (!adminSession) {
+        const auth = await getLatestSession();
+        if (!auth || auth.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized or not an admin' }, { status: 403 });
         }
 
-        const { schoolId } = adminSession;
+        const { schoolId } = auth;
         const supabaseAdmin = createSupabaseAdmin();
 
         // For school-scoped tables, verify ownership before deleting

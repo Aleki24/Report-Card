@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 /**
@@ -8,13 +10,19 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
  */
 export async function POST(request: NextRequest) {
     try {
+        const session = await getServerSession(authOptions) as any;
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const user_id = session.user.id;
         const body = await request.json();
-        const { first_name, last_name, phone, role, school_id, admission_number, grade_stream_id, academic_level_id } = body;
+        const { first_name, last_name, phone, role, admission_number, grade_stream_id, academic_level_id } = body;
 
         // Validate required fields
-        if (!first_name || !last_name || !phone || !role || !school_id) {
+        if (!first_name || !last_name || !phone || !role) {
             return NextResponse.json(
-                { error: 'Missing required fields: first_name, last_name, phone, role, school_id' },
+                { error: 'Missing required fields: first_name, last_name, phone, role' },
                 { status: 400 }
             );
         }
@@ -28,6 +36,19 @@ export async function POST(request: NextRequest) {
         }
 
         const supabaseAdmin = createSupabaseAdmin();
+
+        // Verify the user is an ADMIN and get their school_id
+        const { data: adminProfile } = await supabaseAdmin
+            .from('users')
+            .select('role, school_id')
+            .eq('id', user_id)
+            .single();
+
+        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
+            return NextResponse.json({ error: 'Only admins with a school can create users.' }, { status: 403 });
+        }
+
+        const school_id = adminProfile.school_id;
 
         // Check if phone already has a pending invite for this school
         const { data: existingInvite } = await supabaseAdmin

@@ -146,7 +146,7 @@ function groupByCategory(marks: ReportCardData['subjectMarks']) {
 }
 
 /* ── React-PDF Document ─────────────────────────────────── */
-function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
+export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
     const groups = groupByCategory(data.subjectMarks);
     const isKCSE = data.gradingSystemType === 'KCSE';
     const pointsLabel = isKCSE ? 'Points' : 'Rubric';

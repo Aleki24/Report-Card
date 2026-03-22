@@ -48,19 +48,23 @@ export async function GET(
         let schoolLogoUrl: string | undefined;
         let schoolAddress: string | undefined;
         
-        let targetSchoolId = (students[0].users as any)?.school_id;
+        const targetSchoolId = (students[0].users as any)?.school_id;
 
-        if (!targetSchoolId) {
-            try {
-                const { getServerSession } = await import('next-auth');
-                const { authOptions } = await import('@/lib/auth');
-                const session = await getServerSession(authOptions);
-                if (session?.user && (session.user as any).schoolId) {
-                    targetSchoolId = (session.user as any).schoolId;
-                }
-            } catch (err) {
-                console.warn('Could not get session for school fallback:', err);
-            }
+        const { getServerSession } = await import('next-auth');
+        const { authOptions } = await import('@/lib/auth');
+        const session = await getServerSession(authOptions) as any;
+
+        if (!session?.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userSchoolId = session.user.schoolId;
+        if (!userSchoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
+        if (targetSchoolId && targetSchoolId !== userSchoolId) {
+            return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
         }
 
         if (targetSchoolId) {
@@ -190,8 +194,8 @@ export async function GET(
         const ranks = calculateClassRanks(aggregates);
         const rankedStudentCount = aggregates.length;
 
-        // 8. Generate PDFs and add to ZIP
-        const zip = new JSZip();
+        // 8. Generate raw data array instead of PDFs
+        const reportCardsData: ReportCardData[] = [];
 
         for (const student of students) {
             const studentMarks = marksByStudent[student.id];
@@ -301,24 +305,13 @@ export async function GET(
                 resultUrl: `${baseUrl}/student/${student.id}`,
             };
 
-            const pdfBuffer = await generateStudentReportCardPDF(reportData);
-
-            const fileName = `${lastName}_${firstName}_${termTitle}.pdf`;
-            zip.file(fileName, pdfBuffer);
+            reportCardsData.push(reportData);
         }
 
-        const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
-
-        return new NextResponse(new Uint8Array(zipContent), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/zip',
-                'Content-Disposition': `attachment; filename="Class_Reports_${termTitle}.zip"`,
-            },
-        });
+        return NextResponse.json(reportCardsData, { status: 200 });
 
     } catch (error: any) {
-        console.error('Batch PDF Generation Error:', error);
+        console.error('Batch Data Generation Error:', error);
         return NextResponse.json({ error: error.message || 'Failed to generate class reports' }, { status: 500 });
     }
 }

@@ -23,9 +23,10 @@ export async function GET(request: NextRequest) {
         .select(`
             id, raw_score, percentage, grade_symbol, student_id, exam_id, remarks,
             exams!inner ( id, name, subject_id, term_id, academic_year_id, subjects(name) ),
-            students!inner ( current_grade_stream_id, admission_number, users(first_name, last_name) )
+            students!inner ( current_grade_stream_id, admission_number, users!inner(first_name, last_name, school_id) )
         `)
-        .eq('students.current_grade_stream_id', streamId);
+        .eq('students.current_grade_stream_id', streamId)
+        .eq('students.users.school_id', schoolId);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 

@@ -17,7 +17,7 @@ type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
 
 export default function ExamResultsPage() {
     const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
 
     // ----- Cascading filters -----
     const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
@@ -46,16 +46,22 @@ export default function ExamResultsPage() {
     // 1. Fetch all grade streams
     useEffect(() => {
         const fetchStreams = async () => {
-            const { data } = await supabase
-                .from('grade_streams')
-                .select('id, full_name, grade_id')
-                .order('grade_id')
-                .order('name');
-            setGradeStreams(data || []);
-            setLoadingStreams(false);
+            try {
+                const res = await fetch('/api/school/data?type=grade_streams');
+                if (res.ok) {
+                    const json = await res.json();
+                    setGradeStreams(json.data || []);
+                } else {
+                    setGradeStreams([]);
+                }
+            } catch (err) {
+                console.error('Failed to fetch streams:', err);
+                setGradeStreams([]);
+            } finally {
+                setLoadingStreams(false);
+            }
         };
         fetchStreams();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // 2. Fetch exams for selected stream
@@ -67,9 +73,12 @@ export default function ExamResultsPage() {
             const stream = gradeStreams.find(s => s.id === selectedStreamId);
             if (!stream) { setLoadingExams(false); return; }
 
+            if (!profile?.school_id) { setLoadingExams(false); return; }
+
             const { data } = await supabase
                 .from('exams')
                 .select('id, name, exam_type, max_score, subjects:subject_id(name)')
+                .eq('school_id', profile.school_id)
                 .or(`grade_stream_id.eq.${selectedStreamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`)
                 .order('exam_date', { ascending: false });
 
@@ -86,7 +95,7 @@ export default function ExamResultsPage() {
         };
         fetchExams();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStreamId]);
+    }, [selectedStreamId, profile?.school_id]);
 
     // 3. Fetch marks for selected exam
     const fetchMarks = useCallback(async () => {

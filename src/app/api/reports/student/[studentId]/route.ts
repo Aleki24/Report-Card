@@ -49,20 +49,23 @@ export async function GET(
         let schoolAddress: string | undefined;
         
         // Try getting school_id from the student's user relation first (if exists)
-        let targetSchoolId = student.users?.school_id;
+        const targetSchoolId = student.users?.school_id;
         
-        // If not found, try to get it from the current logged-in user's session
-        if (!targetSchoolId) {
-            try {
-                const { getServerSession } = await import('next-auth');
-                const { authOptions } = await import('@/lib/auth');
-                const session = await getServerSession(authOptions);
-                if (session?.user && (session.user as any).schoolId) {
-                    targetSchoolId = (session.user as any).schoolId;
-                }
-            } catch (err) {
-                console.warn('Could not get session for school fallback:', err);
-            }
+        const { getServerSession } = await import('next-auth');
+        const { authOptions } = await import('@/lib/auth');
+        const session = await getServerSession(authOptions) as any;
+
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const userSchoolId = session.user.schoolId;
+        if (!userSchoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
+        if (targetSchoolId && targetSchoolId !== userSchoolId) {
+            return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
         }
 
         if (targetSchoolId) {
