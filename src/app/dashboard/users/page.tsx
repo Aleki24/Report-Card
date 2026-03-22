@@ -13,6 +13,7 @@ interface UserRow {
   role: UserRole;
   is_active: boolean;
   created_at: string;
+  plain_password?: string | null;
 }
 
 interface GradeStreamOption { id: string; full_name: string; }
@@ -201,7 +202,7 @@ export default function UsersPage() {
           <div className="overflow-x-auto">
             <table className="data-table w-full sm:whitespace-nowrap">
               <thead>
-                <tr><th>Name</th><th>Email</th><th>Username</th><th>Role</th><th>Joined</th><th>Status</th></tr>
+                <tr><th>Name</th><th>Email</th><th>Username</th><th>Password</th><th>Role</th><th>Joined</th><th>Status</th></tr>
               </thead>
               <tbody>
                 {users.map(u => (
@@ -209,6 +210,7 @@ export default function UsersPage() {
                     <td data-label="Name" className="font-medium">{u.first_name} {u.last_name}</td>
                     <td data-label="Email" className="text-[var(--color-text-muted)] text-sm">{u.email || '—'}</td>
                     <td data-label="Username" className="text-[var(--color-text-muted)] text-sm">{u.username || '—'}</td>
+                    <td data-label="Password" className="text-[var(--color-text-muted)] text-sm font-mono">{u.plain_password || '—'}</td>
                     <td data-label="Role">
                       <span className="badge" style={{ background: `${roleBadgeColors[u.role]}20`, color: roleBadgeColors[u.role], border: `1px solid ${roleBadgeColors[u.role]}40` }}>
                         {u.role.replace('_', ' ')}

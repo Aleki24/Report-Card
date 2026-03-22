@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
       case 'users': {
         const { data, error } = await supabase
           .from('users')
-          .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id')
+          .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id, plain_password')
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 

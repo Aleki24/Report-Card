@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
                 school_id,
                 username,
                 password_hash,
+                plain_password: rawPassword,
                 is_active: true,
                 // Email is required by schema, but they won't use it. Generate a dummy one.
                 email: `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`,
