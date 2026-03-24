@@ -286,7 +286,7 @@ export default function AnalyticsPage() {
         </>
       ) : (
         <div className="card p-12 text-center text-[var(--color-text-muted)]">
-          <div className="text-4xl mb-4">📊</div>
+          <img src="https://em-content.zobj.net/source/apple/354/bar-chart_1f4ca.png" alt="Analytics" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <p>No mark data available for this selection.</p>
           <p className="text-sm mt-2">Enter marks for exams to see performance analytics here.</p>
         </div>

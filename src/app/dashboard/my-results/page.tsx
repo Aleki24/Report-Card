@@ -294,7 +294,7 @@ export default function MyResultsPage() {
     if (role && role !== 'STUDENT' && role !== 'ADMIN') {
         return (
             <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>🔒</div>
+                <img src="https://em-content.zobj.net/source/apple/354/locked_1f512.png" alt="Locked" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
                 <h2 style={{ fontSize: 20, marginBottom: 'var(--space-2)' }}>Access Restricted</h2>
                 <p style={{ fontSize: 14 }}>This page is only available to students.</p>
             </div>
@@ -357,7 +357,7 @@ export default function MyResultsPage() {
                 </div>
             ) : (
                 <div className="card text-center p-8 mb-6">
-                    <div className="text-4xl mb-4">📭</div>
+                    <img src="https://em-content.zobj.net/source/apple/354/open-mailbox-with-lowered-flag_1f4ed.png" alt="Empty" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">No Results Yet</h3>
                     <p className="text-sm text-[var(--color-text-muted)]">
                         You don&apos;t have any published marks at the moment.
@@ -426,7 +426,7 @@ export default function MyResultsPage() {
             {/* Single term — show a note instead of chart */}
             {trendData.length === 1 && (
                 <div className="card text-center p-8">
-                    <div className="text-4xl mb-4">📈</div>
+                    <img src="https://em-content.zobj.net/source/apple/354/chart-increasing_1f4c8.png" alt="Chart" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
                     <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Performance Trend</h3>
                     <p className="text-sm text-[var(--color-text-muted)]">
                         Your trend chart will appear here once results for more than one term are available.

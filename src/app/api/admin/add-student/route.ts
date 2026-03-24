@@ -61,13 +61,66 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Get school name for username generation
+        const { data: school } = await supabaseAdmin
+            .from('schools')
+            .select('name')
+            .eq('id', effectiveSchoolId)
+            .single();
+
+        if (!school) {
+            return NextResponse.json({ error: 'School not found.' }, { status: 404 });
+        }
+
         // 1. Generate a UUID for the new student
         const userId = crypto.randomUUID();
         const finalAdmNo = admNo || `STU-${Date.now().toString().slice(-6)}`;
         const emailBase = finalAdmNo.toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
-        // 2. Insert into public.users (no password — students don't log in by default)
+        const sequenceMatch = finalAdmNo.match(/\d+/);
+        const sequence_number = sequenceMatch ? parseInt(sequenceMatch[0], 10) : Math.floor(Math.random() * 900) + 100;
+
+        const { generateUsername } = await import('@/lib/generate-username');
+        const { gradeToWord } = await import('@/lib/grade-to-word');
+        const username = generateUsername(first_name, school.name, sequence_number);
+
+        let uniqueUsername = username;
+        const { data: existingUsername } = await supabaseAdmin
+            .from('users')
+            .select('id')
+            .eq('username', uniqueUsername)
+            .maybeSingle();
+
+        if (existingUsername) {
+             uniqueUsername = `${username}${Math.floor(Math.random() * 1000)}`;
+        }
+
+        let rawPassword = 'password';
+        if (grade_stream_id) {
+             const { data: stream } = await supabaseAdmin
+                .from('grade_streams')
+                .select('grade_id')
+                .eq('id', grade_stream_id)
+                .eq('school_id', effectiveSchoolId)
+                .single();
+
+             if (stream) {
+                 const { data: grade } = await supabaseAdmin
+                    .from('grades')
+                    .select('numeric_order')
+                    .eq('id', stream.grade_id)
+                    .single();
+                 if (grade) {
+                     rawPassword = gradeToWord(grade.numeric_order);
+                 }
+             }
+        }
+
+        const bcrypt = await import('bcryptjs');
+        const password_hash = await bcrypt.hash(rawPassword, 10);
+
+        // 2. Insert into public.users (with generated credentials)
         const { error: userError } = await supabaseAdmin.from('users').insert({
             id: userId,
             first_name: first_name.trim(),
@@ -75,6 +128,10 @@ export async function POST(request: NextRequest) {
             email: placeholderEmail,
             role: 'STUDENT',
             school_id: effectiveSchoolId,
+            username: uniqueUsername,
+            password_hash,
+            plain_password: rawPassword,
+            is_active: true
         });
 
         if (userError) {

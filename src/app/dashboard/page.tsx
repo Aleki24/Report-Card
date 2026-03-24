@@ -8,7 +8,7 @@ interface KPI { label: string; value: string; sub: string; color?: string; }
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-      <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📊</div>
+      <img src="/images/empty_state.png" alt="Bar Chart" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
       <p style={{ fontSize: 14, color: 'var(--color-text-muted)', textAlign: 'center' }}>{message}</p>
     </div>
   );
@@ -99,7 +99,7 @@ function AdminDashboard() {
       <KPICards kpis={kpis} />
       <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>👥</div>
+          <img src="/images/dashboard_users_icon.png" alt="Users" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>Manage Users</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
             Invite teachers, add students, and manage roles
@@ -109,7 +109,7 @@ function AdminDashboard() {
           </a>
         </div>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📊</div>
+          <img src="/images/dashboard_comparison_icon.png" alt="Analytics" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>School Analytics</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
             View performance trends and subject statistics
@@ -174,7 +174,7 @@ function ClassTeacherDashboard() {
       <KPICards kpis={kpis} />
       <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📋</div>
+          <img src="/images/dashboard_report_icon.png" alt="Reports" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>Generate Reports</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
             Generate report cards for all students in your homeroom
@@ -184,7 +184,7 @@ function ClassTeacherDashboard() {
           </a>
         </div>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📊</div>
+          <img src="/images/dashboard_comparison_icon.png" alt="Analytics" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>Class Analytics</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>
             View performance trends for your class
@@ -246,7 +246,7 @@ function SubjectTeacherDashboard() {
       <KPICards kpis={kpis} />
       <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📝</div>
+          <img src="/images/dashboard_marks_icon.png" alt="Marks" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>Enter Marks</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>Create exams and enter student marks</p>
           <a href="/dashboard/marks" style={{ textDecoration: 'none' }}>
@@ -254,7 +254,7 @@ function SubjectTeacherDashboard() {
           </a>
         </div>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📊</div>
+          <img src="/images/dashboard_comparison_icon.png" alt="Analytics" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>Subject Analytics</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>View your subject&apos;s performance</p>
           <a href="/dashboard/analytics" style={{ textDecoration: 'none' }}>
@@ -314,7 +314,7 @@ function StudentDashboard() {
       <KPICards kpis={kpis} />
       <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📄</div>
+          <img src="/images/dashboard_report_icon.png" alt="Reports" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>View My Reports</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>View and download your report cards</p>
           <a href="/dashboard/my-results" style={{ textDecoration: 'none' }}>
@@ -322,7 +322,7 @@ function StudentDashboard() {
           </a>
         </div>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-8)' }}>
-          <div style={{ fontSize: 48, marginBottom: 'var(--space-4)' }}>📊</div>
+          <img src="/images/dashboard_comparison_icon.png" alt="Analytics" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
           <h3 style={{ fontSize: 16, marginBottom: 'var(--space-2)', fontWeight: 600 }}>My Analytics</h3>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', textAlign: 'center', marginBottom: 'var(--space-4)' }}>See how you are performing across subjects</p>
           <a href="/dashboard/analytics" style={{ textDecoration: 'none' }}>

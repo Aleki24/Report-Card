@@ -6,7 +6,6 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
     const { schoolName, profile, role } = useAuth();
 
@@ -29,22 +28,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     }}>{displayName.substring(0, 2).toUpperCase()}</div>
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{displayName}</span>
                 </div>
-                <button
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', padding: 8 }}
-                >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {mobileMenuOpen
-                            ? <path d="M18 6L6 18M6 6l12 12" />
-                            : <path d="M3 12h18M3 6h18M3 18h18" />
-                        }
-                    </svg>
-                </button>
             </div>
 
             <Sidebar
-                mobileMenuOpen={mobileMenuOpen}
-                setMobileMenuOpen={setMobileMenuOpen}
                 collapsed={collapsed}
                 setCollapsed={setCollapsed}
             />

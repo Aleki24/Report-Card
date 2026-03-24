@@ -322,14 +322,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Class (Optional)</label>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Stream</label>
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}
                         onChange={e => setSelectedStreamId(e.target.value)}
                         disabled={!selectedGradeId || filteredStreams.length === 0}
                     >
-                        <option value="">{!selectedGradeId ? 'Select grade first' : filteredStreams.length === 0 ? 'No classes' : '— Select Class —'}</option>
+                        <option value="">{!selectedGradeId ? 'Select class/level first' : filteredStreams.length === 0 ? 'No stream' : '— Select Stream —'}</option>
                         {filteredStreams.map(s => (
                             <option key={s.id} value={s.id}>{s.full_name}</option>
                         ))}
@@ -338,7 +338,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
                     <div className="flex items-end">
                         <div className="text-xs text-[var(--color-accent)] font-semibold py-2">
-                           Please select a class
+                           Please select a stream
                         </div>
                     </div>
                 )}
@@ -354,14 +354,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             {/* No class selected hint */}
             {!selectedGradeId && (
                 <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
-                    👆 Select a <strong>Class</strong> above to load students
+                    👆 Select a <strong>Class / Level</strong> above to load students
                 </div>
             )}
 
             {/* No stream selected hint */}
             {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
                 <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
-                    👆 Select a <strong>Class</strong> above to load students
+                    👆 Select a <strong>Stream</strong> above to load students
                 </div>
             )}
 
@@ -398,6 +398,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         <td data-label="Student">
                                             <select
                                                 className="input-field text-sm w-full min-w-[200px]"
+                                                style={{ padding: '8px 12px' }}
                                                 value={row.studentId}
                                                 onChange={e => updateRow(i, 'studentId', e.target.value)}
                                             >
@@ -422,7 +423,9 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         {/* Score */}
                                         <td data-label="Score">
                                             <input
+                                                type="text"
                                                 className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
+                                                style={{ padding: '8px 12px' }}
                                                 placeholder={`0-${maxScore}`}
                                                 value={row.score}
                                                 onChange={e => updateRow(i, 'score', e.target.value)}
@@ -432,6 +435,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         <td data-label="Grade">
                                             <select
                                                 className="input-field text-sm"
+                                                style={{ padding: '8px 12px' }}
                                                 value={row.grade}
                                                 onChange={e => updateRow(i, 'grade', e.target.value)}
                                             >
@@ -451,6 +455,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         <td data-label="Remarks">
                                             <input
                                                 className="input-field text-sm"
+                                                style={{ padding: '8px 12px' }}
                                                 placeholder="Optional"
                                                 value={row.remarks}
                                                 onChange={e => updateRow(i, 'remarks', e.target.value)}

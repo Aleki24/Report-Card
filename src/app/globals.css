@@ -326,7 +326,7 @@ select.input-field {
 .dashboard-main {
   flex: 1;
   min-height: 100vh;
-  padding: 72px var(--space-4) var(--space-8);
+  padding: 72px var(--space-4) calc(80px + env(safe-area-inset-bottom));
   transition: margin-left 0.3s ease;
 }
 
@@ -389,4 +389,53 @@ select.input-field {
     flex-shrink: 0;
     margin-right: var(--space-4);
   }
+}
+
+/* --- Premium UI Enhancements --- */
+.hero-panel {
+  position: relative;
+  background-image: url('/images/dashboard_hero.png');
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--radius-xl);
+  padding: var(--space-10) var(--space-8);
+  margin-bottom: var(--space-8);
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  color: #F9FAFB;
+}
+
+.hero-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(11, 17, 32, 0.85) 0%, rgba(31, 41, 55, 0.4) 100%);
+  z-index: 1;
+}
+
+.hero-panel > * {
+  position: relative;
+  z-index: 2;
+}
+
+.glass-panel {
+  background: rgba(17, 24, 39, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+}
+
+:root[data-theme="light"] .glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.empty-state-img {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  margin: 0 auto var(--space-6);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }

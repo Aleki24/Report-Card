@@ -21,7 +21,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'exam_id and class_id are required' }, { status: 400 });
     }
 
+    const authRole = session.user.role;
+    const userId = session.user.id;
     const supabase = createSupabaseAdmin();
+
+    if (authRole !== 'ADMIN') {
+      const { getTeacherPermissions, isStreamVisibleToTeacher, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
+      const perms = await getTeacherPermissions(userId);
+
+      // Verify exam access
+      const { data: examData } = await supabase.from('exams').select('*').eq('id', examId).single();
+      if (!examData || !isExamVisibleToTeacher(examData, perms)) {
+        return NextResponse.json({ error: 'Unauthorized to view this exam' }, { status: 403 });
+      }
+
+      // Verify stream access
+      const { data: streamData } = await supabase.from('grade_streams').select('*').eq('id', classId).single();
+      if (!streamData || !isStreamVisibleToTeacher(streamData, perms)) {
+        return NextResponse.json({ error: 'Unauthorized to view this stream' }, { status: 403 });
+      }
+    }
 
     const { data: students, error: studentError } = await supabase
       .from('students')

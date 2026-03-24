@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
                 .from('grade_streams')
                 .select('grade_id')
                 .eq('id', grade_stream_id)
+                .eq('school_id', school_id)
                 .single();
 
              if (stream) {
@@ -140,6 +141,7 @@ export async function POST(request: NextRequest) {
                     .from('grade_streams')
                     .select('grade_id')
                     .eq('id', class_teacher_grade_stream_id)
+                    .eq('school_id', school_id)
                     .single();
                  if (stream) {
                      const { data: grade } = await supabaseAdmin
@@ -163,6 +165,7 @@ export async function POST(request: NextRequest) {
                     .from('subjects')
                     .select('name')
                     .eq('id', firstSubjectId)
+                    .eq('school_id', school_id)
                     .single();
                  if (subject) {
                      rawPassword = subject.name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -179,11 +182,13 @@ export async function POST(request: NextRequest) {
 
         const bcrypt = await import('bcryptjs');
         const password_hash = await bcrypt.hash(rawPassword, 10);
+        const { randomUUID } = await import('crypto');
 
         // 3. CREATE USER IN DB
         const { data: newUser, error: insertError } = await supabaseAdmin
             .from('users')
             .insert({
+                id: randomUUID(),
                 first_name: first_name.trim(),
                 last_name: last_name.trim(),
                 phone: phone.trim(),

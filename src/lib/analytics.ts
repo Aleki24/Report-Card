@@ -18,10 +18,12 @@ export function calculatePercentage(score: number, totalPossible: number): numbe
  */
 export function getGradeFromScales(percentage: number, scales?: GradingScale[]): string {
     if (scales && scales.length > 0) {
+        const rounded = Math.round(percentage);
         const match = scales.find(s =>
-            percentage >= Number(s.min_percentage) && percentage <= Number(s.max_percentage)
+            rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
         );
         if (match) return match.symbol;
+        return '-'; // Return placeholder if scales exist but there's a gap
     }
     // Fallback when no DB scales are available
     return getGradeFromPercentage(percentage);
@@ -32,8 +34,9 @@ export function getGradeFromScales(percentage: number, scales?: GradingScale[]):
  * Returns the `points` field from the matching scale, or undefined.
  */
 export function getPointsFromScales(percentage: number, scales: GradingScale[]): number | undefined {
+    const rounded = Math.round(percentage);
     const match = scales.find(s =>
-        percentage >= Number(s.min_percentage) && percentage <= Number(s.max_percentage)
+        rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
     );
     return match?.points ?? undefined;
 }
@@ -43,8 +46,9 @@ export function getPointsFromScales(percentage: number, scales: GradingScale[]):
  * Uses the `symbol` field from the matching scale.
  */
 export function getRubricFromScales(percentage: number, scales: GradingScale[]): string | undefined {
+    const rounded = Math.round(percentage);
     const match = scales.find(s =>
-        percentage >= Number(s.min_percentage) && percentage <= Number(s.max_percentage)
+        rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
     );
     return match?.symbol ?? undefined;
 }

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
 import { ZodError, ZodIssue } from 'zod';
 import {
     academicYearSchema,
@@ -86,21 +87,42 @@ export async function GET(request: NextRequest) {
                 supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').or(`school_id.eq.${schoolId},school_id.is.null`).order('display_order'),
+                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').eq('school_id', schoolId).order('display_order'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
             streamsData = streamsRes.data ?? [];
             subjectsData = subjectsRes.data ?? [];
+
+            if (auth.role !== 'ADMIN') {
+                const perms = await getTeacherPermissions(auth.userId);
+                streamsData = streamsData.filter(s => isStreamVisibleToTeacher(s, perms));
+                subjectsData = subjectsData.filter(s => isSubjectVisibleToTeacher(s, perms));
+            }
         } else {
-             const subjectsRes = await supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').is('school_id', null).order('display_order');
-             subjectsData = subjectsRes.data ?? [];
+             // If no school ID, do not fetch subjects
+             subjectsData = [];
         }
+
+        // Filter out unwanted grades (as per user request: Form 1-2, Standard X)
+        // Keep CBC Grade 1-12, and 844 Form 3-4
+        const filteredGrades = (gradesRes.data || []).filter(g => {
+            const name = g.name_display || '';
+            
+            if (name.startsWith('Standard ')) return false;
+            
+            if (name.startsWith('Form ')) {
+                // Keep only exactly Form 3 and Form 4
+                return ['Form 3', 'Form 4'].includes(name.trim());
+            }
+            
+            return true;
+        });
 
         return NextResponse.json({
             academic_years: yearsData,
             terms: termsData,
-            grades: gradesRes.data || [],
+            grades: filteredGrades,
             grade_streams: streamsData,
             subjects: subjectsData,
             academic_levels: levelsRes.data || [],

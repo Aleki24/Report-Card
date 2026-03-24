@@ -31,22 +31,14 @@ export async function GET(request: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
-    // Get all teacher/admin IDs in this school
-    const { data: schoolTeachers } = await supabase
-      .from('users')
-      .select('id')
-      .eq('school_id', schoolId)
-      .in('role', ['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER']);
-
-    const teacherIds = (schoolTeachers || []).map(u => u.id);
-
     let query = supabase
       .from('exams')
       .select(`
-        id, name, exam_type, max_score, grade_stream_id, grade_id,
+        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id,
         subjects:subject_id ( name ),
         grades:grade_id ( name_display )
       `)
+      .eq('school_id', schoolId)
       .order('exam_date', { ascending: false });
 
     // Filter by stream/grade
@@ -58,17 +50,17 @@ export async function GET(request: NextRequest) {
       query = query.eq('grade_stream_id', streamId);
     }
 
-    // Only return exams created by teachers in this school
-    if (teacherIds.length > 0) {
-      query = query.or(
-        `created_by_teacher_id.in.(${teacherIds.join(',')}),created_by_teacher_id.is.null`
-      );
-    }
-
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    const mapped = (data || []).map((e: any) => ({
+    let filteredExams = data || [];
+    if (auth.role !== 'ADMIN') {
+      const { getTeacherPermissions, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
+      const perms = await getTeacherPermissions(auth.userId);
+      filteredExams = filteredExams.filter((exam: any) => isExamVisibleToTeacher(exam, perms));
+    }
+
+    const mapped = (filteredExams).map((e: any) => ({
       id: e.id,
       name: e.name,
       exam_type: e.exam_type,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -11,18 +13,15 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 
 export async function GET(request: Request) {
     try {
-        // 1. Get the first active school (assuming single tenant or admin context)
-        const { data: schools, error: schoolErr } = await supabase
-            .from('schools')
-            .select('*')
-            .limit(1)
-            .single();
-
-        if (schoolErr || !schools) {
-            return NextResponse.json({ success: false, error: 'No school found to seed' }, { status: 400 });
+        const session = await getServerSession(authOptions) as any;
+        if (!session?.user?.id || session.user.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        
-        const schoolId = schools.id;
+        const schoolId = session.user.schoolId;
+        if (!schoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
 
         // 2. Fetch academic levels to map appropriately
         // Often 'Primary', 'Secondary', etc. Let's just fetch them or insert them.
@@ -52,8 +51,11 @@ export async function GET(request: Request) {
             { code: 'G7', name_display: 'Grade 7', numeric_order: 7, level: primaryLevel },
             { code: 'G8', name_display: 'Grade 8', numeric_order: 8, level: primaryLevel },
             { code: 'G9', name_display: 'Grade 9', numeric_order: 9, level: primaryLevel },
-            { code: 'F3', name_display: 'Form 3', numeric_order: 11, level: secondaryLevel },
-            { code: 'F4', name_display: 'Form 4', numeric_order: 12, level: secondaryLevel },
+            { code: 'G10', name_display: 'Grade 10', numeric_order: 10, level: secondaryLevel },
+            { code: 'G11', name_display: 'Grade 11', numeric_order: 11, level: secondaryLevel },
+            { code: 'G12', name_display: 'Grade 12', numeric_order: 12, level: secondaryLevel },
+            { code: 'F3', name_display: 'Form 3', numeric_order: 13, level: secondaryLevel },
+            { code: 'F4', name_display: 'Form 4', numeric_order: 14, level: secondaryLevel },
         ];
 
         let results = [];
@@ -85,25 +87,8 @@ export async function GET(request: Request) {
                 gradeId = grade.id;
             }
 
-            // Create Grade Stream for it (so it can be selected as a "Class")
-            const gStreamCode = g.code; // Just use code as stream name
-            const { data: existingStream } = await supabase
-                .from('grade_streams')
-                .select('id')
-                .eq('school_id', schoolId)
-                .eq('grade_id', gradeId)
-                .eq('name', 'General') // "General" since streams are meant to be optional, we just link it
-                .maybeSingle();
-            
-            if (!existingStream) {
-                await supabase.from('grade_streams').insert({
-                    school_id: schoolId,
-                    grade_id: gradeId,
-                    name: 'General',
-                    full_name: `${g.name_display}`
-                });
-                results.push(`Created Class (Stream) for ${g.name_display}`);
-            }
+            // We no longer auto-create 'General' streams for every grade.
+            // Users will explicitly add the classes they need in the Classes tab.
         }
 
         return NextResponse.json({ success: true, message: 'Seeding completed successfully', actions: results });

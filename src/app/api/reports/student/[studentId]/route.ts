@@ -23,8 +23,8 @@ export async function GET(
         const studentId = (await params).studentId;
         const { searchParams } = new URL(request.url);
         const baseUrl = new URL(request.url).origin;
-        const termId = searchParams.get('term');
-        const yearId = searchParams.get('year');
+        const termId = searchParams.get('termId') || searchParams.get('term');
+        const yearId = searchParams.get('yearId') || searchParams.get('year');
 
         const supabase = createSupabaseAdmin();
 
@@ -34,7 +34,7 @@ export async function GET(
             .select(`
                 *,
                 users(first_name, last_name, school_id),
-                grade_streams(full_name)
+                grade_streams(full_name, grade_id)
             `)
             .eq('id', studentId)
             .single();
@@ -66,6 +66,21 @@ export async function GET(
 
         if (targetSchoolId && targetSchoolId !== userSchoolId) {
             return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
+        }
+
+        const role = session.user.role;
+        const userId = session.user.id;
+
+        if (role === 'STUDENT') {
+            if (userId !== studentId) {
+                 return NextResponse.json({ error: 'Unauthorized to view this student report' }, { status: 403 });
+            }
+        } else if (role !== 'ADMIN') {
+            const { getTeacherPermissions } = await import('@/lib/teacher-utils');
+            const perms = await getTeacherPermissions(userId);
+            if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(student.current_grade_stream_id)) {
+                return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate student reports.' }, { status: 403 });
+            }
         }
 
         if (targetSchoolId) {
@@ -118,6 +133,19 @@ export async function GET(
             }
         }
 
+        // 3.5 Fetch all term exams to ensure empty subjects are displayed
+        const gradeId = student.grade_streams?.grade_id;
+
+        let examsQ = supabase
+            .from('exams')
+            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, category, display_order)')
+            .eq('term_id', termId);
+        
+        if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
+        if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
+
+        const { data: termExams } = await examsQ;
+
         // 4. Fetch Marks with subject details including category
         let marksQuery = supabase
             .from('exam_marks')
@@ -145,20 +173,28 @@ export async function GET(
             return NextResponse.json({ error: 'Supabase error fetching marks', details: marksErr }, { status: 500 });
         }
 
-        if (!marks || marks.length === 0) {
-            return NextResponse.json({ error: 'No marks found for student in this term' }, { status: 404 });
+        if ((!marks || marks.length === 0) && (!termExams || termExams.length === 0)) {
+            return NextResponse.json({ error: 'No marks and no exams found for student in this term' }, { status: 404 });
         }
 
-        const firstExam = marks[0].exams as any;
-        let termTitle = firstExam.terms?.name || 'Term Report';
+        const safeMarks = marks || [];
+        const firstExam = safeMarks.length > 0 ? safeMarks[0].exams : (termExams && termExams.length > 0 ? termExams[0] : null);
+
+        let termTitle = 'Term Report';
+        let academicYear = 'Academic Year';
+        
+        if (firstExam) {
+            termTitle = (firstExam as any).terms?.name || 'Term Report';
+            academicYear = (firstExam as any).academic_years?.name || 'Academic Year';
+        }
+
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
             termTitle = customTitle;
         }
-        const academicYear = firstExam.academic_years?.name || 'Academic Year';
 
         // 5. Map to analytics interface and calculate performance
-        const mappedMarks: ExamMarkWithDetails[] = marks.map((m: any) => ({
+        const mappedMarks: ExamMarkWithDetails[] = safeMarks.map((m: any) => ({
             id: m.id,
             student_id: studentId,
             exam_id: m.exams.id || '',
@@ -170,7 +206,7 @@ export async function GET(
             remarks: m.remarks
         }));
 
-        const studentPerf = aggregateStudentPerformance(mappedMarks, gradingScales);
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-' };
 
         // 6. Calculate class ranking
         let classRank = 0;
@@ -255,10 +291,11 @@ export async function GET(
         }));
 
         // 10. Build subject marks with category, points/rubric, and teacher comments
-        const subjectMarks = marks.map((m: any) => {
+        const subjMarksMap = new Map<string, any>();
+        
+        safeMarks.forEach((m: any) => {
             const subject = m.exams.subjects;
-            const sname = subject?.name || 'Unknown Subject';
-            const category = subject?.category || 'OTHER';
+            if (!subject) return;
             const pct = Number(m.percentage);
 
             // Determine grade, points, rubric from scales
@@ -274,9 +311,9 @@ export async function GET(
                 ? getRubricFromScales(pct, gradingScales)
                 : undefined;
 
-            return {
-                subjectName: sname,
-                category,
+            subjMarksMap.set(subject.id, {
+                subjectName: subject.name || 'Unknown Subject',
+                category: subject.category || 'OTHER',
                 score: Number(m.raw_score),
                 totalPossible: Number(m.exams.max_score),
                 percentage: pct,
@@ -284,8 +321,30 @@ export async function GET(
                 points,
                 rubric,
                 teacherComment: m.remarks || '',
-            };
+            });
         });
+
+        // Ensure all term exams exist in the report
+        if (termExams) {
+            termExams.forEach((ex: any) => {
+                const subject = ex.subjects;
+                if (subject && !subjMarksMap.has(subject.id)) {
+                    subjMarksMap.set(subject.id, {
+                        subjectName: subject.name,
+                        category: subject.category || 'OTHER',
+                        score: null,
+                        totalPossible: Number(ex.max_score || 100),
+                        percentage: null,
+                        grade: '-',
+                        points: undefined,
+                        rubric: undefined,
+                        teacherComment: '',
+                    });
+                }
+            });
+        }
+
+        const subjectMarks = Array.from(subjMarksMap.values());
 
         // Sort by category then display_order
         subjectMarks.sort((a: any, b: any) => {

@@ -16,7 +16,7 @@ interface UserRow {
   plain_password?: string | null;
 }
 
-interface GradeStreamOption { id: string; full_name: string; }
+interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
 interface AcademicLevelOption { id: string; code: string; name: string; }
 interface SubjectOption { id: string; name: string; }
 interface GradeOption { id: string; name_display: string; }
@@ -29,7 +29,7 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [showInviteResult, setShowInviteResult] = useState(false);
   const [invitedUsername, setInvitedUsername] = useState('');
-  const [passwordHint, setPasswordHint] = useState('');
+  const [invitedPassword, setInvitedPassword] = useState('');
   const [invitedName, setInvitedName] = useState('');
 
   const [formFirstName, setFormFirstName] = useState('');
@@ -75,8 +75,8 @@ export default function UsersPage() {
     if (showModal) {
       const fetchDropdowns = async () => {
         const [gsRes, structureRes] = await Promise.all([
-          fetch('/api/school/data?type=grade_streams'),
-          fetch('/api/admin/academic-structure'),
+          fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
+          fetch('/api/admin/academic-structure', { cache: 'no-store' }),
         ]);
         const [gsJson, structureJson] = await Promise.all([
           gsRes.json(),
@@ -135,10 +135,10 @@ export default function UsersPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setFormError(data.error || 'Failed to invite user');
+        setFormError(data.error || 'Failed to add user');
       } else {
         setInvitedUsername(data.credentials?.username ?? '');
-        setPasswordHint(data.credentials?.password_hint ?? '');
+        setInvitedPassword(data.credentials?.raw_password ?? '');
         setInvitedName(`${data.user?.first_name || ''} ${data.user?.last_name || ''}`);
         setShowModal(false);
         setShowInviteResult(true);
@@ -164,10 +164,10 @@ export default function UsersPage() {
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">User Management</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">Invite teachers and students by phone number</p>
+          <p className="text-sm text-[var(--color-text-muted)]">Add teachers and students by phone number</p>
         </div>
         <button className="btn-primary shrink-0" onClick={() => { resetForm(); setShowModal(true); }}>
-          + Invite User
+          + Add User
         </button>
       </div>
 
@@ -179,8 +179,8 @@ export default function UsersPage() {
           <ul className="list-disc pl-4 space-y-1 opacity-90 text-[var(--color-text)]">
             <li><strong>Admins & Principals:</strong> Must log in using their <strong>Email Address</strong>.</li>
             <li><strong>Teachers & Students:</strong> Must log in using their unique auto-generated <strong>Username</strong> (listed in the table below).</li>
-            <li><strong>Default Passwords:</strong> Users created before the recent update have the default password <strong>password123</strong>. New users will be assigned a dynamic password hint shown to you at creation time.</li>
-            <li><strong>Creating Users:</strong> Click <strong>+ Invite User</strong>. After providing their details, the system will instantly generate a username and password hint for them. Simply share those details so they can log in!</li>
+            <li><strong>Default Passwords:</strong> Users created before the recent update have the default password <strong>password123</strong>. New users will be assigned an exact password shown to you at creation time.</li>
+            <li><strong>Creating Users:</strong> Click <strong>+ Add User</strong>. After providing their details, the system will instantly generate a username and password for them. Simply share those details so they can log in!</li>
           </ul>
         </div>
       </div>
@@ -195,8 +195,8 @@ export default function UsersPage() {
           <div className="p-12 text-center text-[var(--color-text-muted)]">Loading users...</div>
         ) : users.length === 0 ? (
           <div className="p-12 text-center text-[var(--color-text-muted)]">
-            <div className="text-4xl mb-4">👤</div>
-            <p>No users yet. Click &quot;Invite User&quot; to add your first team member.</p>
+            <img src="https://em-content.zobj.net/source/apple/354/bust-in-silhouette_1f464.png" alt="User" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+            <p>No users yet. Click &quot;Add User&quot; to add your first team member.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -236,7 +236,7 @@ export default function UsersPage() {
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowModal(false); resetForm(); }}>
           <div className="card w-full max-w-lg" style={{ animation: 'fadeIn .2s ease', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">Invite User</h2>
+            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">Add User</h2>
             <p className="text-xs text-[var(--color-text-muted)] mb-6">Add a phone number. The user will receive an invite code to set up their own account.</p>
 
             <form onSubmit={handleInviteUser}>
@@ -293,10 +293,12 @@ export default function UsersPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class (Optional) *</label>
-                      <select className="input-field w-full" value={formGradeStreamId} onChange={e => setFormGradeStreamId(e.target.value)} required>
+                      <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class (Optional)</label>
+                      <select className="input-field w-full" value={formGradeStreamId} onChange={e => setFormGradeStreamId(e.target.value)}>
                         <option value="">-- Select --</option>
-                        {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                        {gradeStreams
+                           .filter(gs => !formAcademicLevelId || gs.grades?.academic_level_id === formAcademicLevelId)
+                           .map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
                       </select>
                     </div>
                   </div>
@@ -340,7 +342,9 @@ export default function UsersPage() {
                              setFormSubjectTeacherSubjects(newSubj);
                           }}>
                             <option value="">-- Grade --</option>
-                            {grades.map(g => <option key={g.id} value={g.id}>{g.name_display}</option>)}
+                             {grades
+                               .filter(g => gradeStreams.some(gs => gs.grade_id === g.id))
+                               .map(g => <option key={g.id} value={g.id}>{g.name_display}</option>)}
                           </select>
                        </div>
                        <button
@@ -361,7 +365,7 @@ export default function UsersPage() {
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--color-border)]">
                 <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetForm(); }} disabled={submitting}>Cancel</button>
                 <button type="submit" className="btn-primary disabled:opacity-50" disabled={submitting}>
-                  {submitting ? '⏳ Inviting...' : 'Send Invite'}
+                  {submitting ? '⏳ Adding...' : 'Add User'}
                 </button>
               </div>
             </form>
@@ -373,8 +377,8 @@ export default function UsersPage() {
       {showInviteResult && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowInviteResult(false)}>
           <div className="card w-full max-w-md text-center" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <div className="text-5xl mb-4">✅</div>
-            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">User Invited!</h2>
+            <img src="https://em-content.zobj.net/source/apple/354/check-mark-button_2705.png" alt="Success" className="mb-4" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">User Added!</h2>
             <p className="text-sm text-[var(--color-text-muted)] mb-6">
               Please provide these login details to <strong>{invitedName}</strong>:
             </p>
@@ -384,8 +388,8 @@ export default function UsersPage() {
                 <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-mono, monospace)', color: 'var(--color-accent)' }}>{invitedUsername}</div>
               </div>
               <div style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 'var(--space-4)' }}>
-                <div className="text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Password Hint</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text)' }}>{passwordHint}</div>
+                <div className="text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Password</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text)' }}>{invitedPassword}</div>
               </div>
             </div>
             <p className="text-xs text-[var(--color-text-muted)] mb-6">

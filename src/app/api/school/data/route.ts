@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 type DataType =
   | 'students'
@@ -64,24 +65,38 @@ export async function GET(request: NextRequest) {
           .select(`
             id, admission_number, status, academic_level_id, current_grade_stream_id,
             users!inner (first_name, last_name, email, school_id),
-            grade_streams (full_name)
+            grade_streams (full_name, grade_id)
           `)
           .eq('users.school_id', schoolId)
           .order('admission_number');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+        
+        let filteredStudents = data ?? [];
+        if (auth.role !== 'ADMIN') {
+          const perms = await getTeacherPermissions(auth.userId);
+          filteredStudents = filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
+        }
+        
+        return NextResponse.json({ data: filteredStudents });
       }
 
       case 'grade_streams': {
         const { data, error } = await supabase
           .from('grade_streams')
-          .select('id, name, full_name, grade_id, school_id, grades ( academic_level_id )')
+          .select('id, name, full_name, grade_id, school_id, grades ( academic_level_id, name_display )')
           .eq('school_id', schoolId)
           .order('full_name');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+        let filteredStreams = data || [];
+
+        if (auth.role !== 'ADMIN') {
+          const perms = await getTeacherPermissions(auth.userId);
+          filteredStreams = filteredStreams.filter(stream => isStreamVisibleToTeacher(stream, perms));
+        }
+
+        return NextResponse.json({ data: filteredStreams });
       }
 
       case 'academic_years': {
@@ -109,7 +124,7 @@ export async function GET(request: NextRequest) {
       case 'users': {
         const { data, error } = await supabase
           .from('users')
-          .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id, plain_password')
+          .select('id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, plain_password')
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 
@@ -173,12 +188,19 @@ export async function GET(request: NextRequest) {
       case 'exams': {
         const { data, error } = await supabase
           .from('exams')
-          .select('id, name, max_score, academic_year_id, term_id, status, created_at')
+          .select('id, name, max_score, academic_year_id, term_id, status, created_at, grade_stream_id, grade_id, subject_id')
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+        
+        let filteredExams = data ?? [];
+        if (auth.role !== 'ADMIN') {
+           const perms = await getTeacherPermissions(auth.userId);
+           filteredExams = filteredExams.filter(exam => isExamVisibleToTeacher(exam, perms));
+        }
+        
+        return NextResponse.json({ data: filteredExams });
       }
 
       default:

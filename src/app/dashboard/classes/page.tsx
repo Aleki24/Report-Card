@@ -23,14 +23,12 @@ export default function ClassesPage() {
   const [calSaving, setCalSaving] = useState(false);
   const [newStream, setNewStream] = useState({ name: '', full_name: '' });
   const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '' });
-  const [showStreamForm, setShowStreamForm] = useState(false);
-
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
       const [structureRes, streamsRes] = await Promise.all([
-        fetch('/api/admin/academic-structure'),
-        fetch('/api/school/data?type=grade_streams'),
+        fetch('/api/admin/academic-structure', { cache: 'no-store' }),
+        fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
       ]);
 
       const [structureData, streamsData] = await Promise.all([
@@ -97,24 +95,19 @@ export default function ClassesPage() {
     e.preventDefault();
     if (!selectedCalGradeId) return;
     const grade = grades.find(g => g.id === selectedCalGradeId);
-    
-    // If name is left blank, default to "General" or simply the grade name
-    const finalName = newStream.name.trim() || 'General';
-    const finalFullName = newStream.full_name.trim() || `${grade?.name_display || ''} ${finalName}`.trim();
+    // If name is left blank, use the grade's default name instead of "General"
+    const finalName = newStream.name.trim() || grade?.name_display || 'Class';
+    const finalFullName = newStream.full_name.trim() || (newStream.name.trim() ? `${grade?.name_display || ''} ${finalName}`.trim() : finalName);
     
     await postStructure('stream', { grade_id: selectedCalGradeId, name: finalName, full_name: finalFullName });
     if (!calMsg.startsWith('❌')) {
       setNewStream({ name: '', full_name: '' });
-      setShowStreamForm(false);
     }
   };
 
   const calStreams = streams.filter(s => s.grade_id === selectedCalGradeId);
 
-  // When changing grade, collapse the form
-  useEffect(() => {
-    setShowStreamForm(false);
-  }, [selectedCalGradeId]);
+
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
@@ -130,7 +123,7 @@ export default function ClassesPage() {
           <h3 className="font-semibold mb-1">How to manage classes:</h3>
           <ul className="list-disc pl-4 space-y-1 opacity-90">
             <li><strong>Step 1:</strong> Select a Grade to view its classes (streams/sections).</li>
-            <li><strong>Step 2:</strong> If no streams exist, click <strong>+ Add a Stream/Section</strong>. Leave the name blank for a default &quot;General&quot; stream.</li>
+            <li><strong>Step 2:</strong> Use the <strong>Add New Class</strong> form below. Leave the stream name blank to simply use the Grade name (e.g. &quot;Grade 5&quot; or &quot;Form 3&quot;).</li>
             <li><strong>Step 3:</strong> Manage <strong>Subjects</strong> taught in your school below. Assign each subject to the correct Academic Level.</li>
             <li><strong>Note:</strong> Grades and Academic Levels are managed by the initial school setup script.</li>
           </ul>
@@ -149,7 +142,7 @@ export default function ClassesPage() {
             )}
             
             <div className="card">
-              <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Classes / Streams</h3>
+              <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Manage Classes</h3>
               <div className="mb-4">
                 <label className="block text-xs text-[var(--color-text-muted)] mb-1">Select Grade</label>
                 {grades.length === 0 ? (
@@ -158,78 +151,71 @@ export default function ClassesPage() {
                   <select className="input-field w-full md:w-64" value={selectedCalGradeId} onChange={e => setSelectedCalGradeId(e.target.value)}>
                     <option value="">-- Select Grade --</option>
                     {grades.map(g => (
-                      <option key={g.id} value={g.id}>{g.name_display} ({academicLevels.find(l => l.id === g.academic_level_id)?.code || ''})</option>
+                      <option key={g.id} value={g.id}>{g.name_display}</option>
                     ))}
                   </select>
                 )}
               </div>
               
               {selectedCalGradeId && (
-                <>
-                  {calStreams.length > 0 ? (
-                    <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
-                      <table className="data-table w-full text-left sm:whitespace-nowrap">
-                        <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
-                          <tr>
-                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Class/Stream</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Full Name</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--color-border)]">
-                          {calStreams.map(s => (
-                            <tr key={s.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
-                              <td className="px-4 py-3 font-bold">{s.name}</td>
-                              <td className="px-4 py-3 text-sm">{s.full_name}</td>
-                              <td className="px-4 py-3 text-right">
-                                <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteStructure('stream', s.id)} disabled={calSaving}>🗑 Delete</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-md">
-                      <p className="text-sm text-blue-400 mb-1">ℹ️ No streams found for this grade.</p>
-                      <p className="text-xs text-blue-400/80">If your school only has one class per grade, you do not need to add streams. Just selecting the Grade above is sufficient.</p>
-                    </div>
-                  )}
-
-                  {!showStreamForm ? (
-                    <button 
-                      onClick={() => setShowStreamForm(true)} 
-                      className="text-sm px-4 py-2 bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded hover:bg-[var(--color-border)] transition-colors"
-                    >
-                      + Add a Stream/Section
+                <form onSubmit={handleAddStream} className="flex flex-wrap items-end gap-3 p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-surface-raised)]/30 mt-2">
+                  <div className="w-full mb-1">
+                    <h4 className="text-sm font-bold">Add New Class</h4>
+                    <p className="text-xs text-[var(--color-text-muted)]">Leave stream name blank to just use the grade name as the class.</p>
+                  </div>
+                  <div className="flex-1 min-w-[100px]">
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Stream Name (Optional)</label>
+                    <input className="input-field w-full" placeholder="e.g. East, A" value={newStream.name} onChange={e => setNewStream(p => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Full Name (Auto-filled if blank)</label>
+                    <input className="input-field w-full" placeholder="e.g. Grade 7A" value={newStream.full_name} onChange={e => setNewStream(p => ({ ...p, full_name: e.target.value }))} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving}>
+                      {calSaving ? 'Saving...' : 'Save Class'}
                     </button>
-                  ) : (
-                    <form onSubmit={handleAddStream} className="flex flex-wrap items-end gap-3 p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-surface-raised)]/30">
-                      <div className="w-full mb-1">
-                        <h4 className="text-sm font-bold">Add New Stream</h4>
-                        <p className="text-xs text-[var(--color-text-muted)]">Leave stream name blank to default to &quot;General&quot;</p>
-                      </div>
-                      <div className="flex-1 min-w-[100px]">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Stream Name (Optional)</label>
-                        <input className="input-field w-full" placeholder="e.g. East, A" value={newStream.name} onChange={e => setNewStream(p => ({ ...p, name: e.target.value }))} />
-                      </div>
-                      <div className="flex-1 min-w-[160px]">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Full Name (Auto-filled if blank)</label>
-                        <input className="input-field w-full" placeholder="e.g. Grade 7A" value={newStream.full_name} onChange={e => setNewStream(p => ({ ...p, full_name: e.target.value }))} />
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setShowStreamForm(false)} className="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-white transition-colors">
-                          Cancel
-                        </button>
-                        <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving}>
-                          {calSaving ? 'Saving...' : 'Save Stream'}
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </>
+                  </div>
+                </form>
               )}
             </div>
+
+            {selectedCalGradeId && (
+              <div className="card">
+                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">
+                  🏫 Added Classes for {grades.find(g => g.id === selectedCalGradeId)?.name_display}
+                </h3>
+                {calStreams.length > 0 ? (
+                  <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+                    <table className="data-table w-full text-left sm:whitespace-nowrap">
+                      <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                        <tr>
+                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Class/Stream</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Full Name</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--color-border)]">
+                        {calStreams.map(s => (
+                          <tr key={s.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                            <td className="px-4 py-3 font-bold">{s.name}</td>
+                            <td className="px-4 py-3 text-sm">{s.full_name}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteStructure('stream', s.id)} disabled={calSaving}>🗑 Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-md">
+                    <p className="text-sm text-blue-400 mb-1">ℹ️ No classes added for this grade yet.</p>
+                    <p className="text-xs text-blue-400/80">Ensure you add at least one class for this grade (even if it has no streams) so students and teachers can be assigned to it.</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Subjects Card */}
             <div className="card">

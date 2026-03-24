@@ -222,7 +222,7 @@ export default function SettingsPage() {
               ) : !school.id ? (
                 <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
                   <div className="text-center mb-6">
-                    <div className="text-5xl mb-4">🏫</div>
+                    <img src="https://em-content.zobj.net/source/apple/354/school_1f3eb.png" alt="School" className="mb-4" style={{ width: 64, height: 64, objectFit: 'contain' }} />
                     <h2 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Setup Your School</h2>
                     <p className="text-sm text-[var(--color-text-muted)]">Add your school details. This will appear in reports across the app.</p>
                   </div>
@@ -354,7 +354,7 @@ export default function SettingsPage() {
                 );
               }) : (
                 <div className="card text-center p-8">
-                  <div className="text-4xl mb-4">📐</div>
+                  <img src="https://em-content.zobj.net/source/apple/354/triangular-ruler_1f4d0.png" alt="Settings" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
                   <p className="text-sm text-[var(--color-text-muted)]">Grading systems have not been configured yet.</p>
                 </div>
               )}

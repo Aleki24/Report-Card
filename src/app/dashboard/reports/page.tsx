@@ -258,15 +258,15 @@ export default function ReportsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto position-relative">
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Reports</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">Generate and download professional PDF report cards</p>
+      <div className="hero-panel">
+        <h1 className="text-3xl md:text-5xl font-bold font-[family-name:var(--font-display)] mb-4">Academic Reports</h1>
+        <p className="text-lg opacity-90 max-w-2xl">Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics.</p>
       </div>
 
       {/* Report Settings - MOVED TO TOP */}
-      <div className="card mb-8">
-        <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-4">Report Global Settings</h3>
-        <p className="text-xs text-[var(--color-text-muted)] mb-4 -mt-2">Filter and apply these settings to generate individual or bulk report cards.</p>
+      <div className="card glass-panel mb-8 relative z-10" style={{ marginTop: '-2rem' }}>
+        <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-4">Report Global Settings</h3>
+        <p className="text-sm text-[var(--color-text-muted)] mb-6 -mt-2">Filter and apply these settings to generate individual or bulk report cards.</p>
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
@@ -302,7 +302,7 @@ export default function ReportsPage() {
         
         {/* Individual Report */}
         <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
-          <div className="text-4xl mb-4">📋</div>
+          <img src="/images/dashboard_report_icon.png" alt="Report" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Individual Report</h3>
           <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Generate a single student report card.</p>
           <button 
@@ -317,7 +317,7 @@ export default function ReportsPage() {
 
         {/* Bulk Reports */}
         <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
-          <div className="text-4xl mb-4">📦</div>
+          <img src="/images/dashboard_report_icon.png" alt="Empty" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Bulk Class Reports</h3>
           <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Generate and download all reports at once.</p>
           <button 
@@ -332,7 +332,7 @@ export default function ReportsPage() {
 
         {/* Term Comparison */}
         <div className="card text-center p-8 flex flex-col h-full">
-          <div className="text-4xl mb-4">📊</div>
+          <img src="/images/dashboard_comparison_icon.png" alt="Stats" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Term Comparison</h3>
           <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Compare performance across multiple terms.</p>
           <button className="btn-secondary w-full justify-center" onClick={() => setShowTermComparison(true)}>
@@ -342,7 +342,7 @@ export default function ReportsPage() {
 
         {/* Class Mark Sheet */}
         <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
-          <div className="text-4xl mb-4">📝</div>
+          <img src="/images/dashboard_marks_icon.png" alt="Result" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Class Mark Sheet</h3>
           <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Ranked mark sheet with subject scores for the entire class.</p>
           <button 
