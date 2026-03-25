@@ -43,23 +43,24 @@ export interface ReportCardData {
 }
 
 /* ── Colour helpers ─────────────────────────────────────── */
-const BLUE_DARK = '#1B2B5E';
-const BLUE_MID = '#2E4A8E';
-const BLUE_LIGHT = '#E8EDF6';
-const BLUE_ACCENT = '#4A7CC9';
-const ORANGE = '#E8850C';
+const NAVY = '#1A365D';
+const SKY_BLUE = '#87CEEB';
+const ORANGE = '#FF8C00';
+const STEEL_BLUE = '#4682B4';
+const LIGHT_GRAY = '#F2F2F2';
 const GREEN = '#22A86B';
-const GRAY_50 = '#F7F8FA';
 const GRAY_200 = '#E2E6ED';
 const GRAY_400 = '#9CA3AF';
 const GRAY_700 = '#374151';
 const WHITE = '#FFFFFF';
+const BLACK = '#000000';
+const PHOTO_GRAY = '#E5E7EB';
 
 const gradeColor = (grade: string) => {
     const base = grade.replace(/[+-\d]/g, '').toUpperCase();
     switch (base) {
         case 'A': case 'EE': return GREEN;
-        case 'B': case 'ME': return BLUE_ACCENT;
+        case 'B': case 'ME': return '#2563EB';
         case 'C': case 'AE': return ORANGE;
         case 'D': case 'BE': return '#DC2626';
         default: return '#EF4444';
@@ -68,63 +69,67 @@ const gradeColor = (grade: string) => {
 
 /* ── Styles ─────────────────────────────────────────────── */
 const s = StyleSheet.create({
-    page: { padding: 24, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700 },
+    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700 },
 
-    /* Header band */
+    /* Top / bottom navy decorative bars */
+    navyBar: { height: 6, backgroundColor: NAVY, marginBottom: 0 },
+    navyBarBottom: { height: 6, backgroundColor: NAVY, marginTop: 'auto' },
+
+    /* Header – white background */
     headerBand: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: BLUE_DARK,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        marginHorizontal: -24,
-        marginTop: -24,
+        backgroundColor: WHITE,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
     },
     logo: { width: 52, height: 52, borderRadius: 26, objectFit: 'contain', backgroundColor: WHITE },
-    logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: BLUE_MID },
+    logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: LIGHT_GRAY, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
-    schoolName: { fontSize: 16, fontWeight: 'bold', color: WHITE, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
-    schoolAddress: { fontSize: 8, color: '#BCC7E0', marginTop: 3, textAlign: 'center' },
-    photoPlaceholder: { width: 46, height: 52, borderRadius: 4, backgroundColor: '#3A5199', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    photoSilhouette: { fontSize: 26, color: '#5A74B8' },
+    schoolName: { fontSize: 16, fontWeight: 'bold', color: BLACK, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
+    schoolAddress: { fontSize: 8, color: GRAY_400, marginTop: 3, textAlign: 'center' },
+    photoPlaceholder: { width: 46, height: 52, borderRadius: 4, backgroundColor: PHOTO_GRAY, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    photoSilhouette: { fontSize: 26, color: GRAY_400 },
 
-    /* Banner ribbon */
+    /* Banner ribbon – sky blue with rounded corners */
     bannerRibbon: {
-        backgroundColor: BLUE_ACCENT,
+        backgroundColor: SKY_BLUE,
         paddingVertical: 6,
         paddingHorizontal: 16,
-        marginHorizontal: -24,
+        marginHorizontal: 24,
         alignItems: 'center',
-        marginBottom: 14,
+        marginBottom: 12,
+        borderRadius: 6,
     },
     bannerText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 2 },
 
     /* Student info grid */
-    infoGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 2 },
+    infoGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 26 },
     infoItem: { flex: 1, marginHorizontal: 3 },
-    infoLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: GRAY_400, textTransform: 'uppercase', marginBottom: 1 },
-    infoValue: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, borderBottom: `1pt solid ${GRAY_200}`, paddingBottom: 3 },
+    infoLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: BLACK, textTransform: 'uppercase', marginBottom: 1 },
+    infoValue: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: NAVY, borderBottom: `1pt solid ${GRAY_200}`, paddingBottom: 3 },
 
     /* Exam + Performance summary row */
     summaryStrip: {
         flexDirection: 'row',
-        backgroundColor: BLUE_LIGHT,
+        backgroundColor: LIGHT_GRAY,
         borderRadius: 4,
         padding: 8,
         marginBottom: 12,
-        borderLeft: `3pt solid ${BLUE_DARK}`,
+        marginHorizontal: 24,
+        borderLeft: `3pt solid ${NAVY}`,
     },
     summaryLeft: { flex: 1, borderRight: `1pt solid ${GRAY_200}`, paddingRight: 8 },
     summaryRight: { flex: 1, paddingLeft: 8, flexDirection: 'row', justifyContent: 'space-around' },
     summaryLabel: { fontSize: 7, color: GRAY_400, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
-    summaryVal: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: BLUE_DARK },
+    summaryVal: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: NAVY },
 
     /* Table */
-    table: { marginBottom: 10, borderRadius: 4, overflow: 'hidden', border: `1pt solid ${GRAY_200}` },
-    tableHeader: { flexDirection: 'row', backgroundColor: BLUE_DARK, paddingVertical: 6, paddingHorizontal: 4 },
+    table: { marginBottom: 10, overflow: 'hidden', border: `1pt solid ${GRAY_200}`, marginHorizontal: 24 },
+    tableHeader: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 6, paddingHorizontal: 4 },
     thText: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase' },
     tableRow: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 5, paddingHorizontal: 4, backgroundColor: WHITE },
-    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 5, paddingHorizontal: 4, backgroundColor: GRAY_50 },
+    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 5, paddingHorizontal: 4, backgroundColor: LIGHT_GRAY },
 
     /* Column widths — CBC */
     colNo: { width: '5%', textAlign: 'center' },
@@ -144,52 +149,54 @@ const s = StyleSheet.create({
     colKcsePoints: { width: '8%', textAlign: 'center' },
     colKcseComment: { width: '29%' },
 
-    tdText: { fontSize: 8.5 },
+    tdText: { fontSize: 8.5, color: BLACK },
     tdSmall: { fontSize: 7.5, color: GRAY_700 },
-    tdBold: { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
+    tdBold: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: BLACK },
 
-    /* Totals row */
-    totalsRow: { flexDirection: 'row', backgroundColor: BLUE_LIGHT, paddingVertical: 6, paddingHorizontal: 4, borderTop: `1.5pt solid ${BLUE_DARK}` },
+    /* Totals row – sky blue bg */
+    totalsRow: { flexDirection: 'row', backgroundColor: SKY_BLUE, paddingVertical: 6, paddingHorizontal: 4, borderTop: `1.5pt solid ${NAVY}` },
 
     /* Bottom: Average badge + Grading key */
-    bottomRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12 },
+    bottomRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12, paddingHorizontal: 24, alignItems: 'flex-start' },
 
-    /* Average badge */
+    /* Average badge — circular */
     avgBadge: {
-        width: 120,
-        height: 80,
-        borderRadius: 8,
+        width: 90,
+        height: 90,
+        borderRadius: 45,
         backgroundColor: ORANGE,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 8,
+        padding: 6,
     },
-    avgLabel: { fontSize: 8, color: WHITE, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
-    avgValue: { fontSize: 22, color: WHITE, fontFamily: 'Helvetica-Bold' },
-    avgGrade: { fontSize: 10, color: WHITE, marginTop: 2 },
+    avgLabel: { fontSize: 7, color: WHITE, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 1 },
+    avgValue: { fontSize: 20, color: WHITE, fontFamily: 'Helvetica-Bold' },
+    avgGrade: { fontSize: 9, color: WHITE, marginTop: 1 },
 
-    /* Grading key */
+    /* Grading key — Steel Blue body */
     gradingKey: {
         flex: 1,
-        backgroundColor: BLUE_LIGHT,
-        borderRadius: 6,
-        padding: 8,
-        borderLeft: `3pt solid ${BLUE_ACCENT}`,
+        backgroundColor: STEEL_BLUE,
+        borderRadius: 4,
+        padding: 0,
+        overflow: 'hidden',
     },
-    gradingKeyTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, marginBottom: 6, textTransform: 'uppercase' },
-    gradingRow: { flexDirection: 'row', marginBottom: 3 },
-    gradingSymbol: { width: 30, fontSize: 8, fontFamily: 'Helvetica-Bold' },
-    gradingLabel: { flex: 1, fontSize: 8, color: GRAY_700 },
-    gradingRange: { width: 60, fontSize: 8, color: GRAY_400, textAlign: 'right' },
+    gradingKeyHeader: { backgroundColor: NAVY, paddingVertical: 5, paddingHorizontal: 8 },
+    gradingKeyTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase' },
+    gradingRow: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 8 },
+    gradingRowAlt: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 8, backgroundColor: '#5A9AC2' },
+    gradingSymbol: { width: 30, fontSize: 8, fontFamily: 'Helvetica-Bold', color: WHITE },
+    gradingLabel: { flex: 1, fontSize: 8, color: WHITE },
+    gradingRange: { width: 60, fontSize: 8, color: '#D0E8F5', textAlign: 'right' },
 
     /* Comments */
-    commentBox: { border: `1pt solid ${GRAY_200}`, borderRadius: 4, padding: 10, marginBottom: 8, backgroundColor: WHITE },
-    commentTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, marginBottom: 6 },
+    commentBox: { borderLeft: `3pt solid ${NAVY}`, borderRadius: 0, padding: 10, marginBottom: 8, backgroundColor: WHITE, marginHorizontal: 24, border: `1pt solid ${GRAY_200}` },
+    commentTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 6 },
     commentText: { fontSize: 9, fontStyle: 'italic', color: GRAY_700, lineHeight: 1.6 },
     commentLine: { borderBottom: `1pt dotted ${GRAY_400}`, height: 18, width: '100%', marginBottom: 2 },
 
     /* Signatures */
-    signaturesRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 6, paddingHorizontal: 8 },
+    signaturesRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 6, paddingHorizontal: 28 },
     sigBlock: { width: '45%' },
     sigLabel: { fontSize: 8, color: GRAY_700, marginBottom: 2 },
     sigLine: { borderBottom: `1pt solid ${GRAY_700}`, height: 24 },
@@ -199,9 +206,8 @@ const s = StyleSheet.create({
         textAlign: 'center',
         fontSize: 7,
         color: GRAY_400,
-        borderTop: `1pt solid ${GRAY_200}`,
         paddingTop: 6,
-        marginTop: 'auto',
+        paddingBottom: 2,
     },
     footerLine: { marginBottom: 2 },
 });
@@ -220,25 +226,33 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
     return (
         <Document>
             <Page size="A4" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
+                {/* ═══ TOP NAVY BAR ═══ */}
+                <View style={s.navyBar} />
+
                 <View style={{ flex: 1 }}>
 
-                    {/* ═══ HEADER BAND ═══ */}
+                    {/* ═══ HEADER BAND (white bg) ═══ */}
                     <View style={s.headerBand}>
                         {/* Logo */}
                         <View>
                             {data.schoolLogoUrl ? (
                                 <Image style={s.logo} src={data.schoolLogoUrl} />
                             ) : (
-                                <View style={s.logoPlaceholder} />
+                                <View style={s.logoPlaceholder}>
+                                    <Text style={{ fontSize: 20, color: GRAY_400 }}>🏫</Text>
+                                </View>
                             )}
                         </View>
 
                         {/* School Name */}
                         <View style={s.headerCenter}>
                             <Text style={s.schoolName}>{data.schoolName}</Text>
+                            {data.schoolAddress && (
+                                <Text style={s.schoolAddress}>{data.schoolAddress}</Text>
+                            )}
                         </View>
 
-                        {/* Student Photo / QR */}
+                        {/* QR Code */}
                         <View>
                             {qrCodeDataUri ? (
                                 <Image style={{ width: 46, height: 52, borderRadius: 4, backgroundColor: WHITE, padding: 2 }} src={qrCodeDataUri} />
@@ -250,7 +264,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         </View>
                     </View>
 
-                    {/* ═══ BANNER RIBBON ═══ */}
+                    {/* ═══ SKY BLUE BANNER RIBBON ═══ */}
                     <View style={s.bannerRibbon}>
                         <Text style={s.bannerText}>
                             {isKCSE ? 'Learner Academic Report' : 'Learner Assessment Report'}
@@ -341,7 +355,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                         <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
                                         <Text style={[s.tdBold, s.colKcseScore]}>{sm.score ?? '—'}</Text>
                                         <Text style={[s.tdText, s.colKcsePct]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
-                                        <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ?? '—'}</Text>
+                                        <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
                                         <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
                                         <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
                                         <Text style={[s.tdSmall, s.colKcseComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
@@ -357,7 +371,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                     <Text style={[s.tdBold, s.colMarks]}>
                                         {sm.score != null ? `${sm.score} / ${sm.percentage}%` : '—'}
                                     </Text>
-                                    <Text style={[s.tdText, s.colRank]}>{sm.subjectRank ?? '—'}</Text>
+                                    <Text style={[s.tdText, s.colRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colPoints, { color: gradeColor(sm.grade) }]}>
                                         {sm.rubric || sm.grade || '—'}
                                     </Text>
@@ -367,23 +381,23 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             );
                         })}
 
-                        {/* Totals row */}
+                        {/* Totals row – sky blue bg */}
                         <View style={s.totalsRow}>
                             <Text style={[s.tdBold, s.colNo]}></Text>
-                            <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: BLUE_DARK }]}>TOTAL</Text>
+                            <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: NAVY }]}>TOTAL</Text>
                             {isKCSE ? (
                                 <>
-                                    <Text style={[s.tdBold, s.colKcseScore, { color: BLUE_DARK }]}>{totalScore}</Text>
-                                    <Text style={[s.tdBold, s.colKcsePct, { color: BLUE_DARK }]}>{data.overallPercentage}%</Text>
-                                    <Text style={[s.tdBold, s.colKcseRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
+                                    <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{totalScore}</Text>
+                                    <Text style={[s.tdBold, s.colKcsePct, { color: NAVY }]}>{data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colKcseRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
-                                    <Text style={[s.tdBold, s.colKcsePoints, { color: BLUE_DARK }]}>{data.totalPoints ?? '—'}</Text>
+                                    <Text style={[s.tdBold, s.colKcsePoints, { color: NAVY }]}>{data.totalPoints ?? '—'}</Text>
                                     <Text style={[s.tdBold, s.colKcseComment]}></Text>
                                 </>
                             ) : (
                                 <>
-                                    <Text style={[s.tdBold, s.colMarks, { color: BLUE_DARK }]}>{totalScore} / {data.overallPercentage}%</Text>
-                                    <Text style={[s.tdBold, s.colRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
+                                    <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore} / {data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colPoints, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colComment]}></Text>
                                     <Text style={[s.tdBold, s.colInstructor]}></Text>
@@ -392,12 +406,27 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         </View>
                     </View>
 
-                    {/* ═══ AVERAGE BADGE ═══ */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
+                    {/* ═══ AVERAGE BADGE + GRADING KEY ═══ */}
+                    <View style={s.bottomRow}>
+                        {/* Circular orange badge */}
                         <View style={s.avgBadge}>
-                            <Text style={s.avgLabel}>Average Marks</Text>
+                            <Text style={s.avgLabel}>Average</Text>
                             <Text style={s.avgValue}>{data.overallPercentage}%</Text>
                             <Text style={s.avgGrade}>{data.overallGrade}</Text>
+                        </View>
+
+                        {/* Grading key — Steel Blue */}
+                        <View style={s.gradingKey}>
+                            <View style={s.gradingKeyHeader}>
+                                <Text style={s.gradingKeyTitle}>Grading Key</Text>
+                            </View>
+                            {data.gradeBoundaries.map((gb, idx) => (
+                                <View style={idx % 2 === 0 ? s.gradingRow : s.gradingRowAlt} key={gb.symbol}>
+                                    <Text style={s.gradingSymbol}>{gb.symbol}</Text>
+                                    <Text style={s.gradingLabel}>{gb.label}</Text>
+                                    <Text style={s.gradingRange}>{gb.min}-{gb.max}%</Text>
+                                </View>
+                            ))}
                         </View>
                     </View>
 
@@ -426,6 +455,15 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         )}
                     </View>
 
+                    {/* ═══ HOI / HEAD OF INSTITUTION REMARKS ═══ */}
+                    <View style={s.commentBox}>
+                        <Text style={s.commentTitle}>HOI&apos;s Remarks:</Text>
+                        <View>
+                            <View style={s.commentLine} />
+                            <View style={s.commentLine} />
+                        </View>
+                    </View>
+
                     {/* ═══ SIGNATURES ═══ */}
                     <View style={s.signaturesRow}>
                         <View style={s.sigBlock}>
@@ -446,8 +484,12 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                     {data.openingDate && (
                         <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>
                     )}
-                    <Text>Generated by Matokeo • This document is electronically generated</Text>
+                    <Text style={s.footerLine}>System developed by: Blaise Technologies</Text>
+                    <Text>This document is electronically generated</Text>
                 </View>
+
+                {/* ═══ BOTTOM NAVY BAR ═══ */}
+                <View style={s.navyBarBottom} />
             </Page>
         </Document>
     );
