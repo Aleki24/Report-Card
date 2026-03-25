@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.98.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/papaparse": "^5.5.2",
+    "africastalking": "^0.7.9",
     "bcryptjs": "^3.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^1.0.1",

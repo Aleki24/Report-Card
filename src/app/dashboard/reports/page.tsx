@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import JSZip from 'jszip';
@@ -8,6 +8,15 @@ import { pdf } from '@react-pdf/renderer';
 import { ReportCardDocument, ReportCardData } from '@/lib/pdfGenerator';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import QRCode from 'qrcode';
+
+interface SMSStudent {
+  id: string;
+  admission_number: string;
+  guardian_phone: string | null;
+  guardian_name: string | null;
+  users: { first_name: string; last_name: string } | null;
+  selected: boolean;
+}
 
 interface StudentOption {
   id: string;
@@ -55,6 +64,14 @@ export default function ReportsPage() {
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [commentSearch, setCommentSearch] = useState('');
+
+  // ── SMS state ─────────────────────────────────────────
+  const [showSMSModal, setShowSMSModal] = useState(false);
+  const [smsStudents, setSmsStudents] = useState<SMSStudent[]>([]);
+  const [loadingSMSStudents, setLoadingSMSStudents] = useState(false);
+  const [smsSearch, setSmsSearch] = useState('');
+  const [sendingSMS, setSendingSMS] = useState(false);
+  const [smsResult, setSmsResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -356,6 +373,84 @@ export default function ReportsPage() {
       )
     : studentComments;
 
+  // ── SMS helpers ──────────────────────────────────────────
+  const fetchSMSStudents = useCallback(async () => {
+    if (!selectedGradeStream) return;
+    setLoadingSMSStudents(true);
+    try {
+      const res = await fetch('/api/school/data?type=students');
+      const json = await res.json();
+      const data = (json.data || []) as any[];
+      const filtered = data
+        .filter((s: any) => s.current_grade_stream_id === selectedGradeStream)
+        .map((s: any) => ({
+          id: s.id,
+          admission_number: s.admission_number,
+          guardian_phone: s.guardian_phone || null,
+          guardian_name: s.guardian_name || null,
+          users: s.users,
+          selected: !!s.guardian_phone,
+        }));
+      setSmsStudents(filtered);
+    } catch (err) {
+      console.error('Failed to fetch SMS students:', err);
+    }
+    setLoadingSMSStudents(false);
+  }, [selectedGradeStream]);
+
+  useEffect(() => {
+    if (showSMSModal) {
+      fetchSMSStudents();
+      setSmsResult(null);
+    }
+  }, [showSMSModal, fetchSMSStudents]);
+
+  const toggleSMSStudent = (id: string) => {
+    setSmsStudents(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s));
+  };
+
+  const selectAllSMS = () => setSmsStudents(prev => prev.map(s => ({ ...s, selected: !!s.guardian_phone })));
+  const deselectAllSMS = () => setSmsStudents(prev => prev.map(s => ({ ...s, selected: false })));
+
+  const smsSelectedCount = smsStudents.filter(s => s.selected && s.guardian_phone).length;
+  const smsMissingPhoneCount = smsStudents.filter(s => !s.guardian_phone).length;
+
+  const filteredSMSStudents = smsSearch.trim()
+    ? smsStudents.filter(s =>
+        `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.toLowerCase().includes(smsSearch.toLowerCase()) ||
+        s.admission_number.toLowerCase().includes(smsSearch.toLowerCase())
+      )
+    : smsStudents;
+
+  const handleSendSMS = async () => {
+    const selected = smsStudents.filter(s => s.selected && s.guardian_phone);
+    if (!selected.length) {
+      showToastMsg('No students with valid phone numbers selected.');
+      return;
+    }
+    setSendingSMS(true);
+    setSmsResult(null);
+    try {
+      const res = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentIds: selected.map(s => s.id),
+          termId: selectedTerm,
+          academicYearId: selectedAcademicYear,
+          gradeStreamId: selectedGradeStream,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to send SMS');
+      setSmsResult({ sent: json.sent || 0, failed: json.failed || 0, skipped: json.skipped?.length || 0 });
+      showToastMsg(`✅ SMS sent: ${json.sent} delivered, ${json.failed} failed`);
+    } catch (err: any) {
+      showToastMsg(`❌ ${err.message || 'SMS send failed'}`);
+    }
+    setSendingSMS(false);
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto position-relative">
       <div className="hero-panel">
@@ -452,6 +547,21 @@ export default function ReportsPage() {
             title={!isConfigured ? "Please configure the Report Settings above first" : ""}
           >
             {generatingMarkSheet ? 'Processing...' : 'Generate Mark Sheet →'}
+          </button>
+        </div>
+
+        {/* SMS Results to Parents */}
+        <div className={`card text-center p-8 flex flex-col h-full ${!isConfigured ? 'opacity-50' : ''}`}>
+          <div className="mb-4 text-4xl">📱</div>
+          <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">SMS Results to Parents</h3>
+          <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Send student results to parents/guardians via SMS.</p>
+          <button 
+            className="btn-secondary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed" 
+            onClick={() => setShowSMSModal(true)} 
+            disabled={!isConfigured}
+            title={!isConfigured ? "Please configure the Report Settings above first" : ""}
+          >
+            Send SMS →
           </button>
         </div>
 
@@ -602,6 +712,132 @@ export default function ReportsPage() {
             </div>
             <div className="flex justify-end mt-4 pt-4 border-t border-[var(--color-border)]">
               <button className="btn-secondary" onClick={() => { setShowStudentPicker(false); setStudentSearch(''); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMS Modal */}
+      {showSMSModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowSMSModal(false); setSmsSearch(''); }}>
+          <div className="card w-full max-w-2xl" style={{ animation: 'fadeIn .2s ease', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">📱 SMS Results to Parents</h2>
+              <button className="btn-secondary text-xs py-1 px-3" onClick={() => { setShowSMSModal(false); setSmsSearch(''); }}>✕ Close</button>
+            </div>
+
+            {/* Info banner */}
+            <div className="rounded-lg p-3 mb-4 text-sm" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+              <strong>How it works:</strong> Select students below to send their term results summary to their guardian&apos;s phone via SMS.
+              {smsMissingPhoneCount > 0 && (
+                <span className="block mt-1 text-amber-500">⚠ {smsMissingPhoneCount} student{smsMissingPhoneCount > 1 ? 's' : ''} missing guardian phone number.</span>
+              )}
+            </div>
+
+            {/* Search + Select All */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mb-4">
+              <input
+                className="input-field flex-1"
+                placeholder="Search by name or admission number..."
+                value={smsSearch}
+                onChange={e => setSmsSearch(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button className="btn-secondary text-xs py-1 px-3" onClick={selectAllSMS}>Select All</button>
+                <button className="btn-secondary text-xs py-1 px-3" onClick={deselectAllSMS}>Deselect All</button>
+              </div>
+            </div>
+
+            {/* Student list */}
+            <div className="overflow-y-auto flex-1 mb-4" style={{ maxHeight: '40vh' }}>
+              {loadingSMSStudents ? (
+                <div className="text-center py-8">
+                  <div className="w-6 h-6 rounded-full border-3 border-[var(--color-border)] border-t-blue-600 animate-spin mx-auto mb-2"></div>
+                  <p className="text-sm text-[var(--color-text-muted)]">Loading students…</p>
+                </div>
+              ) : filteredSMSStudents.length === 0 ? (
+                <p className="text-center text-sm text-[var(--color-text-muted)] py-6">
+                  {smsSearch ? 'No students match your search.' : 'No students found in this class.'}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {filteredSMSStudents.map(s => {
+                    const name = `${s.users?.first_name || '—'} ${s.users?.last_name || ''}`;
+                    const hasPhone = !!s.guardian_phone;
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-md transition-colors cursor-pointer ${
+                          s.selected ? 'bg-blue-500/10' : 'hover:bg-[var(--color-surface-raised)]'
+                        } ${!hasPhone ? 'opacity-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={s.selected}
+                          disabled={!hasPhone}
+                          onChange={() => toggleSMSStudent(s.id)}
+                          className="accent-blue-600 w-4 h-4"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{name}</div>
+                          <div className="text-xs text-[var(--color-text-muted)] font-mono">{s.admission_number}</div>
+                        </div>
+                        <div className="text-right">
+                          {hasPhone ? (
+                            <span className="text-xs text-green-500 font-mono">{s.guardian_phone}</span>
+                          ) : (
+                            <span className="text-xs text-red-400">No phone</span>
+                          )}
+                        </div>
+                        {s.guardian_name && hasPhone && (
+                          <div className="text-xs text-[var(--color-text-muted)] hidden md:block" style={{ maxWidth: 100 }}>
+                            {s.guardian_name}
+                          </div>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* SMS Preview */}
+            {smsSelectedCount > 0 && (
+              <div className="rounded-lg p-3 mb-4 text-xs font-mono" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>
+                <div className="text-[var(--color-text-muted)] mb-1 font-sans text-xs font-semibold">Message Preview:</div>
+                {`MATOKEO Results: [Student Name]\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''} - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''}\nAvg: 78.5% | Grade: B+ | Rank: 5/40\nMath 85 | Eng 72 | Sci 80 | ...`}
+              </div>
+            )}
+
+            {/* Result feedback */}
+            {smsResult && (
+              <div className="rounded-lg p-3 mb-4 text-sm" style={{ background: smsResult.failed > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)', border: `1px solid ${smsResult.failed > 0 ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}` }}>
+                ✅ Sent: <strong>{smsResult.sent}</strong> &nbsp;|&nbsp; ❌ Failed: <strong>{smsResult.failed}</strong>
+                {smsResult.skipped > 0 && <> &nbsp;|&nbsp; ⏭ Skipped: <strong>{smsResult.skipped}</strong></>}
+              </div>
+            )}
+
+            {/* Send button */}
+            <div className="flex items-center justify-between pt-4 border-t border-[var(--color-border)]">
+              <span className="text-sm text-[var(--color-text-muted)]">
+                {smsSelectedCount} student{smsSelectedCount !== 1 ? 's' : ''} selected
+                {smsSelectedCount > 0 && <span className="text-xs ml-1">(~KES {(smsSelectedCount * 0.8).toFixed(1)} est.)</span>}
+              </span>
+              <button
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSendSMS}
+                disabled={sendingSMS || smsSelectedCount === 0}
+              >
+                {sendingSMS ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
+                    Sending…
+                  </span>
+                ) : (
+                  `📱 Send SMS to ${smsSelectedCount} Parent${smsSelectedCount !== 1 ? 's' : ''}`
+                )}
+              </button>
             </div>
           </div>
         </div>
