@@ -10,7 +10,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     const { schoolName, profile, role } = useAuth();
 
     const sidebarWidth = collapsed ? 72 : 260;
-    const displayName = schoolName || 'ResultsApp';
+    const displayName = schoolName || 'Matokeo';
 
     // Show setup banner for admins who haven't created their school yet
     const needsSchoolSetup = role === 'ADMIN' && profile && !profile.school_id;

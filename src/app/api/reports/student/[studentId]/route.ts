@@ -208,10 +208,11 @@ export async function GET(
 
         const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-' };
 
-        // 6. Calculate class ranking
+        // 6. Calculate class ranking + per-subject ranks
         let classRank = 0;
         let totalStudents = 0;
         const gradeStreamId = student.current_grade_stream_id;
+        const subjectRanksMap = new Map<string, number>(); // subjectId -> this student's rank
 
         if (gradeStreamId) {
             const { data: classmates } = await supabase
@@ -225,7 +226,7 @@ export async function GET(
 
                 let rankQuery = supabase
                     .from('exam_marks')
-                    .select('student_id, raw_score, exams!inner(max_score, term_id, academic_year_id)')
+                    .select('student_id, raw_score, exams!inner(max_score, term_id, academic_year_id, subjects(id))')
                     .in('student_id', classmateIds);
 
                 if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
@@ -235,13 +236,26 @@ export async function GET(
 
                 if (allMarks && allMarks.length > 0) {
                     const studentAggs: Record<string, { totalScore: number; totalPossible: number }> = {};
+                    // Per-subject aggregation: subjectId -> { studentId -> percentage }
+                    const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
+
                     for (const m of allMarks as any[]) {
                         const sid = m.student_id;
+                        const subjectId = m.exams.subjects?.id;
                         if (!studentAggs[sid]) studentAggs[sid] = { totalScore: 0, totalPossible: 0 };
                         studentAggs[sid].totalScore += Number(m.raw_score);
                         studentAggs[sid].totalPossible += Number(m.exams.max_score);
+
+                        // Accumulate per-subject scores
+                        if (subjectId) {
+                            if (!subjectAggs[subjectId]) subjectAggs[subjectId] = [];
+                            const maxScore = Number(m.exams.max_score);
+                            const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
+                            subjectAggs[subjectId].push({ studentId: sid, pct });
+                        }
                     }
 
+                    // Overall class ranks
                     const aggregates = Object.entries(studentAggs)
                         .filter(([, v]) => v.totalPossible > 0)
                         .map(([sid, v]) => ({
@@ -252,6 +266,15 @@ export async function GET(
                     const ranks = calculateClassRanks(aggregates);
                     classRank = ranks.get(studentId) || 0;
                     totalStudents = aggregates.length;
+
+                    // Per-subject ranks for this student
+                    for (const [subjId, entries] of Object.entries(subjectAggs)) {
+                        const subjRanks = calculateClassRanks(
+                            entries.map(e => ({ studentId: e.studentId, percentage: e.pct }))
+                        );
+                        const rank = subjRanks.get(studentId);
+                        if (rank) subjectRanksMap.set(subjId, rank);
+                    }
                 }
             }
         }
@@ -290,7 +313,7 @@ export async function GET(
             points: s.points,
         }));
 
-        // 10. Build subject marks with category, points/rubric, and teacher comments
+        // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
         const subjMarksMap = new Map<string, any>();
         
         safeMarks.forEach((m: any) => {
@@ -321,6 +344,7 @@ export async function GET(
                 points,
                 rubric,
                 teacherComment: m.remarks || '',
+                subjectRank: subjectRanksMap.get(subject.id) ?? undefined,
             });
         });
 
@@ -353,7 +377,11 @@ export async function GET(
             return a.subjectName.localeCompare(b.subjectName);
         });
 
-        // 11. Structure data for PDF Generator
+        // 11. Calculate total score / total possible for the summary strip
+        const computedTotalScore = subjectMarks.reduce((sum: number, m: any) => sum + (m.score || 0), 0);
+        const computedTotalPossible = subjectMarks.reduce((sum: number, m: any) => sum + (m.totalPossible || 0), 0);
+
+        // 12. Structure data for PDF Generator
         const reportData: ReportCardData = {
             schoolName,
             schoolLogoUrl,
@@ -374,6 +402,8 @@ export async function GET(
             principalComment: principalComment || undefined,
             gradeBoundaries,
             resultUrl: `${baseUrl}/student/${studentId}`,
+            totalScore: computedTotalScore,
+            totalPossible: computedTotalPossible,
         };
 
         // 12. Generate PDF Buffer

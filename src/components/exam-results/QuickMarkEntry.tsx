@@ -17,6 +17,8 @@ interface Props {
 export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
     const [students, setStudents] = useState<StudentMissing[]>([]);
     const [scores, setScores] = useState<Record<string, string>>({});
+    const [manualGrades, setManualGrades] = useState<Record<string, string>>({});
+    const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; systemName: string; min_percentage: number; max_percentage: number }[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -63,8 +65,56 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId, gradeStreamId]);
 
+    // Fetch grading scales on mount
+    useEffect(() => {
+        const fetchScales = async () => {
+            try {
+                const res = await fetch('/api/school/data?type=grading_scales');
+                const dataObj = await res.json();
+                if (dataObj.data) {
+                    const scales: typeof gradingScales = [];
+                    dataObj.data.forEach((sys: any) => {
+                        sys.grading_scales?.forEach((sc: any) => {
+                            scales.push({
+                                symbol: sc.symbol,
+                                label: sc.label || '',
+                                systemName: sys.name,
+                                min_percentage: sc.min_percentage,
+                                max_percentage: sc.max_percentage,
+                            });
+                        });
+                    });
+                    setGradingScales(scales);
+                }
+            } catch (err) {
+                console.error('Failed to load grading scales:', err);
+            }
+        };
+        fetchScales();
+    }, []);
+
+    const autoResolveGrade = (scoreStr: string, maxScoreVal: number): string => {
+        const num = parseFloat(scoreStr);
+        if (!scoreStr || isNaN(num) || maxScoreVal <= 0) return '';
+        const pct = (num / maxScoreVal) * 100;
+        for (const scale of gradingScales) {
+            if (pct >= scale.min_percentage && pct <= scale.max_percentage) {
+                return scale.symbol;
+            }
+        }
+        return '';
+    };
+
     const handleScoreChange = (studentId: string, value: string) => {
         setScores(prev => ({ ...prev, [studentId]: value }));
+        // Auto-resolve grade only if the user hasn't manually set one
+        if (!manualGrades[studentId]) {
+            // We'll resolve on render since we may not have max_score yet
+        }
+    };
+
+    const handleGradeChange = (studentId: string, value: string) => {
+        setManualGrades(prev => ({ ...prev, [studentId]: value }));
     };
 
     const handleSubmit = async () => {
@@ -124,7 +174,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                     student_id: studentId,
                     raw_score: rawScore,
                     percentage,
-                    grade_symbol: gradeSymbol,
+                    grade_symbol: manualGrades[studentId] || gradeSymbol,
                     remarks: '',
                 };
             });
@@ -184,6 +234,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                                 <th style={thStyle}>Student</th>
                                 <th style={thStyle}>Admission No</th>
                                 <th style={{ ...thStyle, textAlign: 'center' }}>Score</th>
+                                <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -208,6 +259,21 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                                             value={scores[s.id] || ''}
                                             onChange={e => handleScoreChange(s.id, e.target.value)}
                                         />
+                                    </td>
+                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                        <select
+                                            className="input-field"
+                                            style={{ width: 100, padding: '4px 8px', fontSize: 13 }}
+                                            value={manualGrades[s.id] || autoResolveGrade(scores[s.id] || '', 100)}
+                                            onChange={e => handleGradeChange(s.id, e.target.value)}
+                                        >
+                                            <option value="">—</option>
+                                            {gradingScales.map(g => (
+                                                <option key={g.symbol} value={g.symbol}>
+                                                    {g.symbol}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </td>
                                 </tr>
                             ))}

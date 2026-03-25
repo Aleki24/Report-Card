@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer, Circle, Svg } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { getCategoryOrder, getCategoryLabel } from './analytics';
 
@@ -25,6 +25,8 @@ export interface ReportCardData {
         points?: number;
         rubric?: string;
         teacherComment: string;
+        subjectRank?: number;
+        instructorName?: string;
     }[];
     overallPercentage: number;
     overallGrade: string;
@@ -35,291 +37,429 @@ export interface ReportCardData {
     principalComment?: string;
     gradeBoundaries: { symbol: string; label: string; min: number; max: number; points?: number }[];
     resultUrl?: string;
+    openingDate?: string;
+    totalScore?: number;
+    totalPossible?: number;
 }
 
 /* ── Colour helpers ─────────────────────────────────────── */
+const BLUE_DARK = '#1B2B5E';
+const BLUE_MID = '#2E4A8E';
+const BLUE_LIGHT = '#E8EDF6';
+const BLUE_ACCENT = '#4A7CC9';
+const ORANGE = '#E8850C';
+const GREEN = '#22A86B';
+const GRAY_50 = '#F7F8FA';
+const GRAY_200 = '#E2E6ED';
+const GRAY_400 = '#9CA3AF';
+const GRAY_700 = '#374151';
+const WHITE = '#FFFFFF';
+
 const gradeColor = (grade: string) => {
     const base = grade.replace(/[+-\d]/g, '').toUpperCase();
     switch (base) {
-        case 'A': case 'EE': return '#10B981';
-        case 'B': case 'ME': return '#3B82F6';
-        case 'C': case 'AE': return '#F59E0B';
-        case 'D': case 'BE': return '#EA580C';
+        case 'A': case 'EE': return GREEN;
+        case 'B': case 'ME': return BLUE_ACCENT;
+        case 'C': case 'AE': return ORANGE;
+        case 'D': case 'BE': return '#DC2626';
         default: return '#EF4444';
     }
 };
 
-const categoryBgColor = '#E0E7FF';
-
 /* ── Styles ─────────────────────────────────────────────── */
 const s = StyleSheet.create({
-    page: { padding: 32, fontFamily: 'Helvetica', fontSize: 10, color: '#333' },
+    page: { padding: 24, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700 },
 
-    /* Header */
-    headerWrap: { flexDirection: 'row', alignItems: 'center', borderBottom: '2pt solid #1E3A8A', paddingBottom: 12, marginBottom: 8, justifyContent: 'space-between' },
-    logo: { width: 52, height: 52 },
-    qrCode: { width: 52, height: 52 },
-    headerTextWrap: { flex: 1, alignItems: 'center' },
-    schoolName: { fontSize: 18, fontWeight: 'bold', color: '#1E3A8A', fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-    schoolAddress: { fontSize: 9, color: '#64748B', marginTop: 2, textAlign: 'center' },
-    reportTitle: { textAlign: 'center', fontSize: 13, fontFamily: 'Helvetica-Bold', color: '#1E3A8A', marginVertical: 8, paddingVertical: 4, backgroundColor: '#F0F4FF', borderRadius: 3 },
+    /* Header band */
+    headerBand: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: BLUE_DARK,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        marginHorizontal: -24,
+        marginTop: -24,
+    },
+    logo: { width: 52, height: 52, borderRadius: 26, objectFit: 'contain', backgroundColor: WHITE },
+    logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: BLUE_MID },
+    headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
+    schoolName: { fontSize: 16, fontWeight: 'bold', color: WHITE, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
+    schoolAddress: { fontSize: 8, color: '#BCC7E0', marginTop: 3, textAlign: 'center' },
+    photoPlaceholder: { width: 46, height: 52, borderRadius: 4, backgroundColor: '#3A5199', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    photoSilhouette: { fontSize: 26, color: '#5A74B8' },
 
-    /* Student info */
-    infoRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 10, borderRadius: 4, marginBottom: 12 },
-    infoGroup: { flexDirection: 'column' },
-    infoLabel: { fontSize: 7, color: '#64748B', textTransform: 'uppercase', fontFamily: 'Helvetica-Bold', marginBottom: 1 },
-    infoValue: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#0F172A' },
+    /* Banner ribbon */
+    bannerRibbon: {
+        backgroundColor: BLUE_ACCENT,
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        marginHorizontal: -24,
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    bannerText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 2 },
+
+    /* Student info grid */
+    infoGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingHorizontal: 2 },
+    infoItem: { flex: 1, marginHorizontal: 3 },
+    infoLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: GRAY_400, textTransform: 'uppercase', marginBottom: 1 },
+    infoValue: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, borderBottom: `1pt solid ${GRAY_200}`, paddingBottom: 3 },
+
+    /* Exam + Performance summary row */
+    summaryStrip: {
+        flexDirection: 'row',
+        backgroundColor: BLUE_LIGHT,
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 12,
+        borderLeft: `3pt solid ${BLUE_DARK}`,
+    },
+    summaryLeft: { flex: 1, borderRight: `1pt solid ${GRAY_200}`, paddingRight: 8 },
+    summaryRight: { flex: 1, paddingLeft: 8, flexDirection: 'row', justifyContent: 'space-around' },
+    summaryLabel: { fontSize: 7, color: GRAY_400, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
+    summaryVal: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: BLUE_DARK },
 
     /* Table */
-    table: { marginBottom: 12 },
-    tableHeader: { flexDirection: 'row', backgroundColor: '#1E3A8A', paddingVertical: 5, paddingHorizontal: 4 },
-    thText: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' },
+    table: { marginBottom: 10, borderRadius: 4, overflow: 'hidden', border: `1pt solid ${GRAY_200}` },
+    tableHeader: { flexDirection: 'row', backgroundColor: BLUE_DARK, paddingVertical: 6, paddingHorizontal: 4 },
+    thText: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase' },
+    tableRow: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 5, paddingHorizontal: 4, backgroundColor: WHITE },
+    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 5, paddingHorizontal: 4, backgroundColor: GRAY_50 },
 
-    categoryRow: { flexDirection: 'row', backgroundColor: categoryBgColor, paddingVertical: 4, paddingHorizontal: 6, borderBottom: '0.5pt solid #CBD5E1' },
-    categoryText: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#3730A3' },
-
-    tableRow: { flexDirection: 'row', borderBottom: '0.5pt solid #E2E8F0', paddingVertical: 5, paddingHorizontal: 4 },
-    tableRowAlt: { flexDirection: 'row', borderBottom: '0.5pt solid #E2E8F0', paddingVertical: 5, paddingHorizontal: 4, backgroundColor: '#F8FAFC' },
-
-    /* Column widths */
+    /* Column widths — CBC */
     colNo: { width: '5%', textAlign: 'center' },
-    colSubject: { width: '25%' },
-    colScore: { width: '10%', textAlign: 'right' },
-    colPct: { width: '10%', textAlign: 'right' },
-    colGrade: { width: '10%', textAlign: 'center' },
-    colPoints: { width: '15%', textAlign: 'center' },
-    colComment: { width: '25%' },
+    colSubject: { width: '22%' },
+    colMarks: { width: '13%', textAlign: 'center' },
+    colRank: { width: '8%', textAlign: 'center' },
+    colPoints: { width: '10%', textAlign: 'center' },
+    colComment: { width: '30%' },
+    colInstructor: { width: '12%' },
 
-    tdText: { fontSize: 9 },
-    tdSmall: { fontSize: 8, color: '#475569' },
+    /* Column widths — KCSE */
+    colKcseSubject: { width: '22%' },
+    colKcseScore: { width: '10%', textAlign: 'center' },
+    colKcsePct: { width: '10%', textAlign: 'center' },
+    colKcseRank: { width: '8%', textAlign: 'center' },
+    colKcseGrade: { width: '8%', textAlign: 'center' },
+    colKcsePoints: { width: '8%', textAlign: 'center' },
+    colKcseComment: { width: '29%' },
+
+    tdText: { fontSize: 8.5 },
+    tdSmall: { fontSize: 7.5, color: GRAY_700 },
+    tdBold: { fontSize: 8.5, fontFamily: 'Helvetica-Bold' },
 
     /* Totals row */
-    totalsRow: { flexDirection: 'row', backgroundColor: '#EFF6FF', paddingVertical: 6, paddingHorizontal: 4, borderTop: '1.5pt solid #1E3A8A' },
-    totalsLabel: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#1E3A8A' },
-    totalsValue: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#0F172A' },
+    totalsRow: { flexDirection: 'row', backgroundColor: BLUE_LIGHT, paddingVertical: 6, paddingHorizontal: 4, borderTop: `1.5pt solid ${BLUE_DARK}` },
 
-    /* Summary box */
-    summaryBox: { border: '1pt solid #CBD5E1', borderRadius: 4, padding: 12, marginBottom: 12 },
-    summaryTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#1E3A8A', marginBottom: 8, borderBottom: '0.5pt solid #E2E8F0', paddingBottom: 4 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-around', textAlign: 'center', marginBottom: 10 },
-    summaryItem: { alignItems: 'center' },
-    summaryItemLabel: { fontSize: 7, color: '#64748B', textTransform: 'uppercase', fontFamily: 'Helvetica-Bold', marginBottom: 1 },
-    summaryItemValue: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#0F172A' },
+    /* Bottom: Average badge + Grading key */
+    bottomRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, gap: 12 },
+
+    /* Average badge */
+    avgBadge: {
+        width: 120,
+        height: 80,
+        borderRadius: 8,
+        backgroundColor: ORANGE,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 8,
+    },
+    avgLabel: { fontSize: 8, color: WHITE, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
+    avgValue: { fontSize: 22, color: WHITE, fontFamily: 'Helvetica-Bold' },
+    avgGrade: { fontSize: 10, color: WHITE, marginTop: 2 },
+
+    /* Grading key */
+    gradingKey: {
+        flex: 1,
+        backgroundColor: BLUE_LIGHT,
+        borderRadius: 6,
+        padding: 8,
+        borderLeft: `3pt solid ${BLUE_ACCENT}`,
+    },
+    gradingKeyTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, marginBottom: 6, textTransform: 'uppercase' },
+    gradingRow: { flexDirection: 'row', marginBottom: 3 },
+    gradingSymbol: { width: 30, fontSize: 8, fontFamily: 'Helvetica-Bold' },
+    gradingLabel: { flex: 1, fontSize: 8, color: GRAY_700 },
+    gradingRange: { width: 60, fontSize: 8, color: GRAY_400, textAlign: 'right' },
 
     /* Comments */
-    commentsContainer: { marginTop: 'auto', paddingTop: 12 },
-    commentBox: { border: '1pt solid #CBD5E1', borderRadius: 4, padding: 10, marginBottom: 8 },
-    commentTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#1E3A8A', marginBottom: 6 },
-    commentText: { fontSize: 9, fontStyle: 'italic', color: '#334155', lineHeight: 1.4 },
-    commentLines: { borderBottom: '1pt dotted #CBD5E1', height: 16, width: '100%', marginBottom: 4 },
+    commentBox: { border: `1pt solid ${GRAY_200}`, borderRadius: 4, padding: 10, marginBottom: 8, backgroundColor: WHITE },
+    commentTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, marginBottom: 6 },
+    commentText: { fontSize: 9, fontStyle: 'italic', color: GRAY_700, lineHeight: 1.6 },
+    commentLine: { borderBottom: `1pt dotted ${GRAY_400}`, height: 18, width: '100%', marginBottom: 2 },
 
-    /* Grade boundaries */
-    boundaryBox: { backgroundColor: '#F8FAFC', borderRadius: 4, padding: 8, marginBottom: 8 },
-    boundaryTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#64748B', marginBottom: 4 },
-    boundaryText: { fontSize: 7, color: '#475569' },
+    /* Signatures */
+    signaturesRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 6, paddingHorizontal: 8 },
+    sigBlock: { width: '45%' },
+    sigLabel: { fontSize: 8, color: GRAY_700, marginBottom: 2 },
+    sigLine: { borderBottom: `1pt solid ${GRAY_700}`, height: 24 },
 
     /* Footer */
-    footer: { position: 'absolute', bottom: 24, left: 32, right: 32, textAlign: 'center', fontSize: 7, color: '#94A3B8', borderTop: '0.5pt solid #E2E8F0', paddingTop: 6 },
+    footer: {
+        textAlign: 'center',
+        fontSize: 7,
+        color: GRAY_400,
+        borderTop: `1pt solid ${GRAY_200}`,
+        paddingTop: 6,
+        marginTop: 'auto',
+    },
+    footerLine: { marginBottom: 2 },
 });
-
-/* ── Helpers ────────────────────────────────────────────── */
-
-function groupByCategory(marks: ReportCardData['subjectMarks']) {
-    // Sort by category order, then by subject name
-    const sorted = [...marks].sort((a, b) => {
-        const catDiff = getCategoryOrder(a.category) - getCategoryOrder(b.category);
-        if (catDiff !== 0) return catDiff;
-        return a.subjectName.localeCompare(b.subjectName);
-    });
-
-    // Group into categories
-    const groups: { category: string; label: string; subjects: typeof marks }[] = [];
-    let currentCat = '';
-    for (const subject of sorted) {
-        if (subject.category !== currentCat) {
-            currentCat = subject.category;
-            groups.push({ category: currentCat, label: getCategoryLabel(currentCat), subjects: [] });
-        }
-        groups[groups.length - 1].subjects.push(subject);
-    }
-    return groups;
-}
 
 /* ── React-PDF Document ─────────────────────────────────── */
 export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
-    const groups = groupByCategory(data.subjectMarks);
     const isKCSE = data.gradingSystemType === 'KCSE';
-    const pointsLabel = isKCSE ? 'Points' : 'Rubric';
 
-    const totalScore = data.subjectMarks.reduce((sum, m) => sum + m.score, 0);
-    const totalPossible = data.subjectMarks.reduce((sum, m) => sum + m.totalPossible, 0);
+    const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, m) => sum + (m.score || 0), 0);
+    const totalPossible = data.totalPossible ?? data.subjectMarks.reduce((sum, m) => sum + m.totalPossible, 0);
 
     let rowCounter = 0;
+
+    const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
     return (
         <Document>
             <Page size="A4" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
-                {/* ── Wrapper to push comments to the bottom ── */}
                 <View style={{ flex: 1 }}>
-                    {/* ── Header with logo and QR ── */}
-                    <View style={s.headerWrap}>
-                        <View style={{ width: 52 }}>
-                            {qrCodeDataUri && <Image style={s.qrCode} src={qrCodeDataUri} />}
-                        </View>
-                        <View style={s.headerTextWrap}>
-                            <Text style={s.schoolName}>{data.schoolName}</Text>
-                            {data.schoolAddress && (
-                                <Text style={s.schoolAddress}>{data.schoolAddress}</Text>
+
+                    {/* ═══ HEADER BAND ═══ */}
+                    <View style={s.headerBand}>
+                        {/* Logo */}
+                        <View>
+                            {data.schoolLogoUrl ? (
+                                <Image style={s.logo} src={data.schoolLogoUrl} />
+                            ) : (
+                                <View style={s.logoPlaceholder} />
                             )}
                         </View>
-                    {data.schoolLogoUrl ? (
-                         <Image style={s.logo} src={data.schoolLogoUrl} />
-                    ) : (
-                         <View style={{ width: 52 }} />
-                    )}
-                </View>
 
-                {/* ── Report Title ── */}
-                <Text style={s.reportTitle}>
-                    {data.examTitle} Report Card — {data.academicYear}
-                </Text>
+                        {/* School Name */}
+                        <View style={s.headerCenter}>
+                            <Text style={s.schoolName}>{data.schoolName}</Text>
+                        </View>
 
-                {/* ── Student Info ── */}
-                <View style={s.infoRow}>
-                    <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Student Name</Text>
-                        <Text style={s.infoValue}>{data.studentName}</Text>
-                    </View>
-                    <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Adm No.</Text>
-                        <Text style={s.infoValue}>{data.enrollmentNumber || '—'}</Text>
-                    </View>
-                    <View style={s.infoGroup}>
-                        <Text style={s.infoLabel}>Class</Text>
-                        <Text style={s.infoValue}>{data.className}</Text>
-                    </View>
-                </View>
-
-                {/* ── Subject Marks Table ── */}
-                <View style={s.table}>
-                    {/* Header */}
-                    <View style={s.tableHeader}>
-                        <Text style={[s.thText, s.colNo]}>#</Text>
-                        <Text style={[s.thText, s.colSubject]}>Subject</Text>
-                        <Text style={[s.thText, s.colScore]}>Score</Text>
-                        <Text style={[s.thText, s.colPct]}>%</Text>
-                        <Text style={[s.thText, s.colGrade]}>Grade</Text>
-                        <Text style={[s.thText, s.colPoints]}>{pointsLabel}</Text>
-                        <Text style={[s.thText, s.colComment]}>Comment</Text>
+                        {/* Student Photo / QR */}
+                        <View>
+                            {qrCodeDataUri ? (
+                                <Image style={{ width: 46, height: 52, borderRadius: 4, backgroundColor: WHITE, padding: 2 }} src={qrCodeDataUri} />
+                            ) : (
+                                <View style={s.photoPlaceholder}>
+                                    <Text style={s.photoSilhouette}>👤</Text>
+                                </View>
+                            )}
+                        </View>
                     </View>
 
-                    {/* Grouped rows */}
-                    {groups.map((group) => (
-                        <React.Fragment key={group.category}>
-                            {/* Subject rows */}
-                            {group.subjects.map((sm) => {
-                                rowCounter++;
-                                const rowStyle = rowCounter % 2 === 0 ? s.tableRowAlt : s.tableRow;
+                    {/* ═══ BANNER RIBBON ═══ */}
+                    <View style={s.bannerRibbon}>
+                        <Text style={s.bannerText}>
+                            {isKCSE ? 'Learner Academic Report' : 'Learner Assessment Report'}
+                        </Text>
+                    </View>
+
+                    {/* ═══ STUDENT INFO GRID ═══ */}
+                    <View style={s.infoGrid}>
+                        <View style={s.infoItem}>
+                            <Text style={s.infoLabel}>Name</Text>
+                            <Text style={s.infoValue}>{data.studentName}</Text>
+                        </View>
+                        <View style={[s.infoItem, { flex: 0.6 }]}>
+                            <Text style={s.infoLabel}>Class</Text>
+                            <Text style={s.infoValue}>{data.className}</Text>
+                        </View>
+                        <View style={[s.infoItem, { flex: 0.6 }]}>
+                            <Text style={s.infoLabel}>Adm No</Text>
+                            <Text style={s.infoValue}>{data.enrollmentNumber || '—'}</Text>
+                        </View>
+                        <View style={[s.infoItem, { flex: 0.5 }]}>
+                            <Text style={s.infoLabel}>Year</Text>
+                            <Text style={s.infoValue}>{data.academicYear}</Text>
+                        </View>
+                    </View>
+
+                    {/* ═══ EXAM DETAILS + PERFORMANCE SUMMARY ═══ */}
+                    <View style={s.summaryStrip}>
+                        <View style={s.summaryLeft}>
+                            <Text style={s.summaryLabel}>Exam</Text>
+                            <Text style={s.summaryVal}>{data.examTitle}</Text>
+                        </View>
+                        <View style={s.summaryRight}>
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={s.summaryLabel}>Rank</Text>
+                                <Text style={s.summaryVal}>
+                                    {data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}
+                                </Text>
+                            </View>
+                            <View style={{ alignItems: 'center' }}>
+                                <Text style={s.summaryLabel}>Total Marks</Text>
+                                <Text style={s.summaryVal}>{totalScore}/{totalPossible}</Text>
+                            </View>
+                            {isKCSE && data.totalPoints !== undefined && (
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={s.summaryLabel}>Points</Text>
+                                    <Text style={s.summaryVal}>{data.totalPoints}</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* ═══ SUBJECT TABLE ═══ */}
+                    <View style={s.table}>
+                        {/* Table header */}
+                        {isKCSE ? (
+                            <View style={s.tableHeader}>
+                                <Text style={[s.thText, s.colNo]}>#</Text>
+                                <Text style={[s.thText, s.colKcseSubject]}>Subject</Text>
+                                <Text style={[s.thText, s.colKcseScore]}>Score</Text>
+                                <Text style={[s.thText, s.colKcsePct]}>%</Text>
+                                <Text style={[s.thText, s.colKcseRank]}>Rank</Text>
+                                <Text style={[s.thText, s.colKcseGrade]}>Grade</Text>
+                                <Text style={[s.thText, s.colKcsePoints]}>Pts</Text>
+                                <Text style={[s.thText, s.colKcseComment]}>Comment</Text>
+                            </View>
+                        ) : (
+                            <View style={s.tableHeader}>
+                                <Text style={[s.thText, s.colNo]}>#</Text>
+                                <Text style={[s.thText, s.colSubject]}>Learning Area</Text>
+                                <Text style={[s.thText, s.colMarks]}>Marks / %</Text>
+                                <Text style={[s.thText, s.colRank]}>Rank</Text>
+                                <Text style={[s.thText, s.colPoints]}>Points</Text>
+                                <Text style={[s.thText, s.colComment]}>Comments</Text>
+                                <Text style={[s.thText, s.colInstructor]}>Instructor</Text>
+                            </View>
+                        )}
+
+                        {/* Subject rows */}
+                        {data.subjectMarks.map((sm) => {
+                            rowCounter++;
+                            const rowStyle = rowCounter % 2 === 0 ? s.tableRowAlt : s.tableRow;
+
+                            if (isKCSE) {
                                 return (
-                                    <View style={rowStyle} key={`${group.category}-${sm.subjectName}`}>
+                                    <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                         <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                        <Text style={[s.tdText, s.colSubject]}>{sm.subjectName}</Text>
-                                        <Text style={[s.tdText, s.colScore]}>{sm.score}</Text>
-                                        <Text style={[s.tdText, s.colPct]}>{sm.percentage}%</Text>
-                                        <Text style={[s.tdText, s.colGrade, { color: gradeColor(sm.grade) }]}>
-                                            {sm.grade}
-                                        </Text>
-                                        <Text style={[s.tdText, s.colPoints]}>
-                                            {isKCSE ? (sm.points ?? '—') : (sm.rubric ?? '—')}
-                                        </Text>
-                                        <Text style={[s.tdSmall, s.colComment]}>{sm.teacherComment}</Text>
+                                        <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
+                                        <Text style={[s.tdBold, s.colKcseScore]}>{sm.score ?? '—'}</Text>
+                                        <Text style={[s.tdText, s.colKcsePct]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
+                                        <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ?? '—'}</Text>
+                                        <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
+                                        <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
+                                        <Text style={[s.tdSmall, s.colKcseComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                                     </View>
                                 );
-                            })}
-                        </React.Fragment>
-                    ))}
+                            }
 
-                    {/* Totals */}
-                    <View style={s.totalsRow}>
-                        <Text style={[s.totalsLabel, s.colNo]}></Text>
-                        <Text style={[s.totalsLabel, s.colSubject]}>Total</Text>
-                        <Text style={[s.totalsValue, s.colScore]}>{totalScore}</Text>
-                        <Text style={[s.totalsValue, s.colPct]}>{data.overallPercentage}%</Text>
-                        <Text style={[s.totalsValue, s.colGrade, { color: gradeColor(data.overallGrade) }]}>
-                            {data.overallGrade}
-                        </Text>
-                        <Text style={[s.totalsValue, s.colPoints]}>
-                            {isKCSE ? (data.totalPoints ?? '—') : '—'}
-                        </Text>
-                        <Text style={[s.totalsLabel, s.colComment]}></Text>
-                    </View>
-                </View>
+                            // CBC layout
+                            return (
+                                <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
+                                    <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
+                                    <Text style={[s.tdText, s.colSubject]}>{sm.subjectName}</Text>
+                                    <Text style={[s.tdBold, s.colMarks]}>
+                                        {sm.score != null ? `${sm.score} / ${sm.percentage}%` : '—'}
+                                    </Text>
+                                    <Text style={[s.tdText, s.colRank]}>{sm.subjectRank ?? '—'}</Text>
+                                    <Text style={[s.tdBold, s.colPoints, { color: gradeColor(sm.grade) }]}>
+                                        {sm.rubric || sm.grade || '—'}
+                                    </Text>
+                                    <Text style={[s.tdSmall, s.colComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
+                                    <Text style={[s.tdSmall, s.colInstructor]}>{sm.instructorName || ''}</Text>
+                                </View>
+                            );
+                        })}
 
-                {/* ── Performance Summary ── */}
-                <View style={s.summaryBox}>
-                    <Text style={s.summaryTitle}>Performance Summary</Text>
-                    <View style={s.summaryRow}>
-                        <View style={s.summaryItem}>
-                            <Text style={s.summaryItemLabel}>Overall %</Text>
-                            <Text style={s.summaryItemValue}>{data.overallPercentage}%</Text>
-                        </View>
-                        <View style={s.summaryItem}>
-                            <Text style={s.summaryItemLabel}>Grade</Text>
-                            <Text style={s.summaryItemValue}>{data.overallGrade}</Text>
-                        </View>
-                        <View style={s.summaryItem}>
-                            <Text style={s.summaryItemLabel}>
-                                {isKCSE ? 'Total Points' : 'Overall Rubric'}
-                            </Text>
-                            <Text style={s.summaryItemValue}>
-                                {isKCSE ? (data.totalPoints ?? '—') : data.overallGrade}
-                            </Text>
-                        </View>
-                        <View style={s.summaryItem}>
-                            <Text style={s.summaryItemLabel}>Class Rank</Text>
-                            <Text style={s.summaryItemValue}>
-                                {data.classRank > 0 ? `${data.classRank} / ${data.totalStudents}` : '—'}
-                            </Text>
+                        {/* Totals row */}
+                        <View style={s.totalsRow}>
+                            <Text style={[s.tdBold, s.colNo]}></Text>
+                            <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: BLUE_DARK }]}>TOTAL</Text>
+                            {isKCSE ? (
+                                <>
+                                    <Text style={[s.tdBold, s.colKcseScore, { color: BLUE_DARK }]}>{totalScore}</Text>
+                                    <Text style={[s.tdBold, s.colKcsePct, { color: BLUE_DARK }]}>{data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colKcseRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
+                                    <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
+                                    <Text style={[s.tdBold, s.colKcsePoints, { color: BLUE_DARK }]}>{data.totalPoints ?? '—'}</Text>
+                                    <Text style={[s.tdBold, s.colKcseComment]}></Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={[s.tdBold, s.colMarks, { color: BLUE_DARK }]}>{totalScore} / {data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
+                                    <Text style={[s.tdBold, s.colPoints, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
+                                    <Text style={[s.tdBold, s.colComment]}></Text>
+                                    <Text style={[s.tdBold, s.colInstructor]}></Text>
+                                </>
+                            )}
                         </View>
                     </View>
-                </View>
 
-                </View>
+                    {/* ═══ AVERAGE BADGE ═══ */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
+                        <View style={s.avgBadge}>
+                            <Text style={s.avgLabel}>Average Marks</Text>
+                            <Text style={s.avgValue}>{data.overallPercentage}%</Text>
+                            <Text style={s.avgGrade}>{data.overallGrade}</Text>
+                        </View>
+                    </View>
 
-                {/* ── Comments at the Bottom ── */}
-                <View style={s.commentsContainer}>
+                    {/* ═══ COMMENTS ═══ */}
                     <View style={s.commentBox}>
-                        <Text style={s.commentTitle}>📝 Class Teacher's Comment:</Text>
+                        <Text style={s.commentTitle}>Class Teacher&apos;s Comment:</Text>
                         {data.classTeacherComment ? (
                             <Text style={s.commentText}>{data.classTeacherComment}</Text>
                         ) : (
                             <View>
-                                <View style={s.commentLines} />
-                                <View style={s.commentLines} />
+                                <View style={s.commentLine} />
+                                <View style={s.commentLine} />
                             </View>
                         )}
                     </View>
 
                     <View style={s.commentBox}>
-                        <Text style={s.commentTitle}>📝 Principal's Comment:</Text>
+                        <Text style={s.commentTitle}>Principal&apos;s Comment:</Text>
                         {data.principalComment ? (
                             <Text style={s.commentText}>{data.principalComment}</Text>
                         ) : (
                             <View>
-                                <View style={s.commentLines} />
-                                <View style={s.commentLines} />
+                                <View style={s.commentLine} />
+                                <View style={s.commentLine} />
                             </View>
                         )}
                     </View>
+
+                    {/* ═══ SIGNATURES ═══ */}
+                    <View style={s.signaturesRow}>
+                        <View style={s.sigBlock}>
+                            <Text style={s.sigLabel}>Parent&apos;s / Guardian&apos;s Signature</Text>
+                            <View style={s.sigLine} />
+                        </View>
+                        <View style={s.sigBlock}>
+                            <Text style={s.sigLabel}>Class Teacher&apos;s Signature</Text>
+                            <View style={s.sigLine} />
+                        </View>
+                    </View>
+
                 </View>
 
-                {/* ── Footer ── */}
-                <Text style={s.footer}>
-                    Generated by ResultsApp • This document is electronically generated and requires no physical signature.
-                </Text>
+                {/* ═══ FOOTER ═══ */}
+                <View style={s.footer}>
+                    <Text style={s.footerLine}>Report generated on {today}</Text>
+                    {data.openingDate && (
+                        <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>
+                    )}
+                    <Text>Generated by Matokeo • This document is electronically generated</Text>
+                </View>
             </Page>
         </Document>
     );
+}
+
+/* ── Short feedback helper ──────────────────────────────── */
+function generateShortFeedback(percentage: number | null, grade: string): string {
+    if (percentage == null) return '';
+    if (percentage >= 80) return 'Excellent work';
+    if (percentage >= 60) return 'Good progress';
+    if (percentage >= 40) return 'Fair, needs improvement';
+    return 'Needs more effort';
 }
 
 /**

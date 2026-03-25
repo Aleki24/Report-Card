@@ -135,11 +135,10 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
         window.location.href = '/login';
     };
 
-    const maxBottomItems = 5;
-    const showMoreButton = visibleNavItems.length > maxBottomItems;
-    // If we have more than 5 items, we show 4 + "More", else we show all
-    const mainBottomItems = showMoreButton ? visibleNavItems.slice(0, maxBottomItems - 1) : visibleNavItems;
-    const overflowItems = showMoreButton ? visibleNavItems.slice(maxBottomItems - 1) : [];
+    const maxBottomItems = 4;
+    // Always show the More button on mobile so sign-out is always accessible
+    const mainBottomItems = visibleNavItems.slice(0, maxBottomItems);
+    const overflowItems = visibleNavItems.slice(maxBottomItems);
 
     return (
         <>
@@ -177,7 +176,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     {!collapsed && (
                         <div>
                             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>
-                                {schoolName || 'ResultsApp'}
+                                {schoolName || 'Matokeo'}
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                                 {schoolName ? 'Student Analytics' : 'Analytics Platform'}
@@ -514,8 +513,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     );
                 })}
 
-                {/* The "More" Button */}
-                {showMoreButton && (
+                {/* The "More" Button - always visible so sign-out is accessible */}
                     <button
                         onClick={() => setShowMoreMenu(!showMoreMenu)}
                         style={{
@@ -571,7 +569,6 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             More
                         </span>
                     </button>
-                )}
             </nav>
 
             {/* Mobile More Pop-up Menu */}

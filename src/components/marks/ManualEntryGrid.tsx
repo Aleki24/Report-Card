@@ -25,6 +25,7 @@ interface MarkRow {
     grade: string;
     remarks: string;
     error: string;
+    isGradeManuallySet: boolean; // True when teacher manually overrides the grade
 }
 
 interface Props {
@@ -33,7 +34,7 @@ interface Props {
 }
 
 const emptyRow = (): MarkRow => ({
-    studentId: '', studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '',
+    studentId: '', studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '', isGradeManuallySet: false,
 });
 
 export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
@@ -188,15 +189,20 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 }
             }
 
-            // When score changes, validate and auto-resolve grade
+            // When grade is manually changed by the teacher, mark it
+            if (field === 'grade') {
+                row.isGradeManuallySet = true;
+            }
+
+            // When score changes, validate and auto-resolve grade (unless manually overridden)
             if (field === 'score') {
                 const num = parseFloat(value);
                 if (value && isNaN(num)) {
                     row.error = 'Score must be a number';
                 } else if (value && (num < 0 || num > maxScore)) {
                     row.error = `Score must be between 0 and ${maxScore}`;
-                } else {
-                    // Auto-resolve grade
+                } else if (!row.isGradeManuallySet) {
+                    // Auto-resolve grade only if teacher hasn't manually set one
                     const resolved = autoResolveGrade(value);
                     if (resolved) row.grade = resolved;
                 }

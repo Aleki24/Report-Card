@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: 'ResultsApp - Student Analytics Platform',
+  title: 'Matokeo - Student Analytics Platform',
   description: 'Comprehensive results analysis, mark entry, analytics generation, and downloadable PDF reports for teachers and schools.',
 };
 

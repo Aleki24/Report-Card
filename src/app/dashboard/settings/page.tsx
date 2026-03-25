@@ -7,7 +7,7 @@ interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; }
+interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; }
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
@@ -24,7 +24,7 @@ export default function SettingsPage() {
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedCalYearId, setSelectedCalYearId] = useState('');
 
-  const [school, setSchool] = useState<SchoolProfile>({ name: '', address: '', phone: '', email: '' });
+  const [school, setSchool] = useState<SchoolProfile>({ name: '', address: '', phone: '', email: '', logo_url: '' });
   const [schoolLoading, setSchoolLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -78,6 +78,7 @@ export default function SettingsPage() {
           address: schoolData.data.address || '',
           phone: schoolData.data.phone || '',
           email: schoolData.data.email || '',
+          logo_url: schoolData.data.logo_url || '',
         });
       }
     } catch (err) {
@@ -108,6 +109,7 @@ export default function SettingsPage() {
           address: school.address.trim() || null,
           phone: school.phone.trim() || null,
           email: school.email.trim() || null,
+          logo_url: school.logo_url || null,
           school_id: school.id || null,
           user_id: profile?.id,
         }),
@@ -509,8 +511,46 @@ export default function SettingsPage() {
 }
 
 function SchoolForm({ school, setSchool }: { school: SchoolProfile; setSchool: React.Dispatch<React.SetStateAction<SchoolProfile>> }) {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Logo file MUST be less than 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setSchool(prev => ({ ...prev, logo_url: base64String }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-6 mb-6">
+        <div className="shrink-0">
+          {school.logo_url ? (
+            <img src={school.logo_url} alt="School Logo" className="w-24 h-24 rounded-lg object-contain bg-[var(--color-surface-raised)] border border-[var(--color-border)]" />
+          ) : (
+            <div className="w-24 h-24 rounded-lg bg-[var(--color-surface-raised)] flex items-center justify-center border border-[var(--color-border)] text-3xl">
+              🏫
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm font-semibold mb-2">School Logo</label>
+          <input 
+            type="file" 
+            accept="image/*" 
+            onChange={handleLogoUpload}
+            className="block w-full text-sm text-[var(--color-text-muted)] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[var(--color-accent)] file:text-white hover:file:bg-blue-600 transition-colors"
+          />
+          <p className="text-xs text-[var(--color-text-muted)] mt-2">Recommended: Square image, max 2MB. Background should be transparent (PNG).</p>
+        </div>
+      </div>
       <div>
         <label className="block text-xs text-[var(--color-text-muted)] mb-1">School Name *</label>
         <input className="input-field w-full" value={school.name} onChange={e => setSchool(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g. Sunrise Academy" required />

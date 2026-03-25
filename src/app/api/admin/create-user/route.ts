@@ -83,13 +83,15 @@ export async function POST(request: NextRequest) {
         }
 
         if (role === 'STUDENT') {
+             // Check admission number uniqueness WITHIN the same school
              const { data: existingStudent } = await supabaseAdmin
-                .from('students')
-                .select('id')
-                .eq('admission_number', admission_number.trim())
-                .single();
+                .from('users')
+                .select('id, students!inner(admission_number)')
+                .eq('school_id', school_id)
+                .eq('students.admission_number', admission_number.trim())
+                .maybeSingle();
              if (existingStudent) {
-                  return NextResponse.json({ error: 'A student with this admission number already exists.' }, { status: 409 });
+                  return NextResponse.json({ error: 'A student with this admission number already exists in your school.' }, { status: 409 });
              }
         }
 
@@ -228,6 +230,7 @@ export async function POST(request: NextRequest) {
              const { data: currentYear } = await supabaseAdmin
                   .from('academic_years')
                   .select('id')
+                  .eq('school_id', school_id)
                   .limit(1)
                   .single();
 
@@ -243,7 +246,7 @@ export async function POST(request: NextRequest) {
         if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
               const { data: tRecord } = await supabaseAdmin.from('subject_teachers').insert({ user_id: newUser.id }).select('id').single();
               if (tRecord) {
-                   const currentYear = await supabaseAdmin.from('academic_years').select('id').limit(1).single();
+                   const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).limit(1).single();
                    if (currentYear.data) {
                         const assignments = subject_teacher_subjects.map((sub: any) => ({
                              subject_teacher_id: tRecord.id,

@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
         
         const user_id = session.user.id;
         const body = await request.json();
-        const { name, address, phone, email, school_id } = body;
+        const { name, address, phone, email, school_id, logo_url } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: 'School name is required' }, { status: 400 });
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
                 address: address?.trim() || null,
                 phone: phone?.trim() || null,
                 email: email?.trim() || null,
+                logo_url: logo_url || null,
             }).eq('id', school_id);
 
             if (error) {
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
                 address: address?.trim() || null,
                 phone: phone?.trim() || null,
                 email: email?.trim() || null,
+                logo_url: logo_url || null,
             }).select('id').single();
 
             if (error) {

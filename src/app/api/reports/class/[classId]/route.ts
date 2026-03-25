@@ -199,14 +199,26 @@ export async function GET(
             }
         }
 
-        // 7. Group marks by student and calculate ranks
+        // 7. Group marks by student and calculate ranks + per-subject ranks
         const marksByStudent: Record<string, any[]> = {};
+        // Per-subject aggregation: subjectId -> { studentId -> pct }[]
+        const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
+
         for (const m of allMarks || []) {
             if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
             marksByStudent[m.student_id].push(m);
+
+            // Accumulate per-subject scores for ranking
+            const subjectId = (m as any).exams?.subjects?.id;
+            if (subjectId) {
+                if (!subjectAggs[subjectId]) subjectAggs[subjectId] = [];
+                const maxScore = Number((m as any).exams.max_score);
+                const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
+                subjectAggs[subjectId].push({ studentId: m.student_id, pct });
+            }
         }
 
-        // Aggregate each student for ranking
+        // Aggregate each student for overall ranking
         const aggregates = students.map(student => {
             const marks = marksByStudent[student.id] || [];
             if (marks.length === 0) return { studentId: student.id, percentage: 0, totalPoints: 0 };
@@ -228,6 +240,14 @@ export async function GET(
 
         const ranks = calculateClassRanks(aggregates);
         const rankedStudentCount = aggregates.length;
+
+        // Build per-subject rank maps: subjectId -> Map<studentId, rank>
+        const subjectRankMaps: Record<string, Map<string, number>> = {};
+        for (const [subjId, entries] of Object.entries(subjectAggs)) {
+            subjectRankMaps[subjId] = calculateClassRanks(
+                entries.map(e => ({ studentId: e.studentId, percentage: e.pct }))
+            );
+        }
 
         // 8. Generate raw data array instead of PDFs
         const reportCardsData: ReportCardData[] = [];
@@ -307,6 +327,7 @@ export async function GET(
                     points,
                     rubric,
                     teacherComment: m.remarks || '',
+                    subjectRank: subjectRankMaps[subject.id]?.get(student.id) ?? undefined,
                 });
             });
 
@@ -339,6 +360,10 @@ export async function GET(
                 return a.subjectName.localeCompare(b.subjectName);
             });
 
+            // Calculate total score / total possible for the summary strip
+            const computedTotalScore = subjectMarks.reduce((sum: number, m: any) => sum + (m.score || 0), 0);
+            const computedTotalPossible = subjectMarks.reduce((sum: number, m: any) => sum + (m.totalPossible || 0), 0);
+
             const reportData: ReportCardData = {
                 schoolName,
                 schoolLogoUrl,
@@ -359,6 +384,8 @@ export async function GET(
                 principalComment: principalComment || undefined,
                 gradeBoundaries,
                 resultUrl: `${baseUrl}/student/${student.id}`,
+                totalScore: computedTotalScore,
+                totalPossible: computedTotalPossible,
             };
 
             reportCardsData.push(reportData);

@@ -68,7 +68,7 @@ export default function LoginPage() {
                         fontFamily: 'var(--font-display)',
                         marginBottom: 'var(--space-2)',
                     }}>
-                        Sign in to ResultsApp
+                        Sign in to Matokeo
                     </h1>
                     <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
                         Enter your credentials to access your dashboard
