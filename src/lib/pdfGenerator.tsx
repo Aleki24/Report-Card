@@ -181,16 +181,16 @@ const s = StyleSheet.create({
         padding: 0,
         overflow: 'hidden',
     },
-    gradingKeyHeader: { backgroundColor: NAVY, paddingVertical: 5, paddingHorizontal: 8 },
-    gradingKeyTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase' },
-    gradingRow: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 8 },
-    gradingRowAlt: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 8, backgroundColor: '#5A9AC2' },
-    gradingSymbol: { width: 30, fontSize: 8, fontFamily: 'Helvetica-Bold', color: WHITE },
-    gradingLabel: { flex: 1, fontSize: 8, color: WHITE },
-    gradingRange: { width: 60, fontSize: 8, color: '#D0E8F5', textAlign: 'right' },
+    gradingKeyHeader: { backgroundColor: NAVY, paddingVertical: 4, paddingHorizontal: 6 },
+    gradingKeyTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase' },
+    gradingContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 4 },
+    gradingItem: { flexDirection: 'row', width: '25%', paddingVertical: 2, paddingHorizontal: 2, alignItems: 'center' },
+    gradingSymbol: { width: 14, fontSize: 7, fontFamily: 'Helvetica-Bold', color: WHITE },
+    gradingLabel: { flex: 1, fontSize: 6, color: WHITE, overflow: 'hidden', textOverflow: 'ellipsis' },
+    gradingRange: { width: 34, fontSize: 6, color: '#D0E8F5', textAlign: 'right' },
 
     /* Comments */
-    commentBox: { borderLeft: `3pt solid ${NAVY}`, borderRadius: 0, padding: 10, marginBottom: 8, backgroundColor: WHITE, marginHorizontal: 24, border: `1pt solid ${GRAY_200}` },
+    commentBox: { borderLeft: `3pt solid ${NAVY}`, padding: 10, marginBottom: 8, backgroundColor: WHITE, marginHorizontal: 24, border: `1pt solid ${GRAY_200}` },
     commentTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 6 },
     commentText: { fontSize: 9, fontStyle: 'italic', color: GRAY_700, lineHeight: 1.6 },
     commentLine: { borderBottom: `1pt dotted ${GRAY_400}`, height: 18, width: '100%', marginBottom: 2 },
@@ -420,13 +420,15 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <View style={s.gradingKeyHeader}>
                                 <Text style={s.gradingKeyTitle}>Grading Key</Text>
                             </View>
-                            {data.gradeBoundaries.map((gb, idx) => (
-                                <View style={idx % 2 === 0 ? s.gradingRow : s.gradingRowAlt} key={gb.symbol}>
-                                    <Text style={s.gradingSymbol}>{gb.symbol}</Text>
-                                    <Text style={s.gradingLabel}>{gb.label}</Text>
-                                    <Text style={s.gradingRange}>{gb.min}-{gb.max}%</Text>
-                                </View>
-                            ))}
+                            <View style={s.gradingContainer}>
+                                {data.gradeBoundaries.map((gb) => (
+                                    <View style={s.gradingItem} key={gb.symbol}>
+                                        <Text style={s.gradingSymbol}>{gb.symbol}</Text>
+                                        <Text style={s.gradingLabel}>{gb.label}</Text>
+                                        <Text style={s.gradingRange}>{gb.min}-{gb.max}%</Text>
+                                    </View>
+                                ))}
+                            </View>
                         </View>
                     </View>
 

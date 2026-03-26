@@ -24,24 +24,25 @@ export interface MarkSheetData {
     meanPercentage: number;
 }
 
-/* ── Colour palette (matching Report Card) ─────────────── */
-const BLUE_DARK = '#1B2B5E';
-const BLUE_MID = '#2E4A8E';
-const BLUE_LIGHT = '#E8EDF6';
-const BLUE_ACCENT = '#4A7CC9';
-const ORANGE = '#E8850C';
+/* ── Colour palette (aligned with Report Card) ────────── */
+const NAVY = '#1A365D';
+const SKY_BLUE = '#87CEEB';
+const ORANGE = '#FF8C00';
+const STEEL_BLUE = '#4682B4';
+const LIGHT_GRAY = '#F2F2F2';
 const GREEN = '#22A86B';
-const GRAY_50 = '#F7F8FA';
 const GRAY_200 = '#E2E6ED';
 const GRAY_400 = '#9CA3AF';
 const GRAY_700 = '#374151';
 const WHITE = '#FFFFFF';
+const BLACK = '#000000';
+const PHOTO_GRAY = '#E5E7EB';
 
 const gradeColor = (grade: string) => {
     const base = grade.replace(/[+-\d]/g, '').toUpperCase();
     switch (base) {
         case 'A': case 'EE': return GREEN;
-        case 'B': case 'ME': return BLUE_ACCENT;
+        case 'B': case 'ME': return '#2563EB';
         case 'C': case 'AE': return ORANGE;
         case 'D': case 'BE': return '#DC2626';
         default: return '#EF4444';
@@ -51,59 +52,64 @@ const gradeColor = (grade: string) => {
 const scoreColor = (score: number | null) => {
     if (score === null) return GRAY_400;
     if (score >= 80) return GREEN;
-    if (score >= 60) return BLUE_ACCENT;
+    if (score >= 60) return '#2563EB';
     if (score >= 40) return ORANGE;
     return '#EF4444';
 };
 
-/* ── Styles (Report Card-aligned) ──────────────────────── */
+/* ── Styles (aligned with Report Card) ─────────────────── */
 const s = StyleSheet.create({
-    page: { padding: 24, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700 },
+    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700 },
 
-    /* Header band — identical to report card */
+    /* Top / bottom navy decorative bars — matching report card */
+    navyBar: { height: 6, backgroundColor: NAVY, marginBottom: 0 },
+    navyBarBottom: { height: 6, backgroundColor: NAVY, marginTop: 'auto' },
+
+    /* Header – white background — matching report card */
     headerBand: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: BLUE_DARK,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        marginHorizontal: -24,
-        marginTop: -24,
+        backgroundColor: WHITE,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
     },
     logo: { width: 52, height: 52, borderRadius: 26, objectFit: 'contain', backgroundColor: WHITE },
-    logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: BLUE_MID },
+    logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: LIGHT_GRAY, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
-    schoolName: { fontSize: 16, fontWeight: 'bold', color: WHITE, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
+    schoolName: { fontSize: 16, fontWeight: 'bold', color: BLACK, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
+    schoolAddress: { fontSize: 8, color: GRAY_400, marginTop: 3, textAlign: 'center' },
 
-    /* Banner ribbon — matching report card */
+    /* Banner ribbon — sky blue with rounded corners, matching report card */
     bannerRibbon: {
-        backgroundColor: BLUE_ACCENT,
+        backgroundColor: SKY_BLUE,
         paddingVertical: 6,
         paddingHorizontal: 16,
-        marginHorizontal: -24,
+        marginHorizontal: 24,
         alignItems: 'center',
         marginBottom: 10,
+        borderRadius: 6,
     },
     bannerText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 2 },
 
     /* Info strip — matching report card summary style */
     summaryStrip: {
         flexDirection: 'row',
-        backgroundColor: BLUE_LIGHT,
+        backgroundColor: LIGHT_GRAY,
         borderRadius: 4,
         padding: 8,
         marginBottom: 10,
-        borderLeft: `3pt solid ${BLUE_DARK}`,
+        marginHorizontal: 24,
+        borderLeft: `3pt solid ${NAVY}`,
     },
     summaryItem: { flex: 1, alignItems: 'center' },
     summaryLabel: { fontSize: 7, color: GRAY_400, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
-    summaryVal: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: BLUE_DARK },
+    summaryVal: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: NAVY },
 
     /* Table */
-    table: { marginBottom: 10, borderRadius: 4, overflow: 'hidden', border: `1pt solid ${GRAY_200}` },
-    tableHeader: { flexDirection: 'row', backgroundColor: BLUE_DARK, paddingVertical: 5, paddingHorizontal: 2 },
+    table: { marginBottom: 10, overflow: 'hidden', border: `1pt solid ${GRAY_200}`, marginHorizontal: 24 },
+    tableHeader: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 5, paddingHorizontal: 2 },
     tableRow: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: WHITE },
-    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: GRAY_50 },
+    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: LIGHT_GRAY },
     tableRowHighlight: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: '#FFF8ED' },
 
     /* Fixed column widths */
@@ -116,43 +122,43 @@ const s = StyleSheet.create({
     tdText: { fontSize: 6.5 },
     tdTextBold: { fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
 
-    /* Totals row */
-    totalsRow: { flexDirection: 'row', backgroundColor: BLUE_LIGHT, paddingVertical: 5, paddingHorizontal: 2, borderTop: `1.5pt solid ${BLUE_DARK}` },
+    /* Totals row – sky blue bg, matching report card */
+    totalsRow: { flexDirection: 'row', backgroundColor: SKY_BLUE, paddingVertical: 5, paddingHorizontal: 2, borderTop: `1.5pt solid ${NAVY}` },
 
     /* Bottom summary — matching report card style */
-    bottomRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+    bottomRow: { flexDirection: 'row', gap: 10, marginBottom: 8, paddingHorizontal: 24 },
 
     summaryCard: {
         flex: 1,
-        backgroundColor: BLUE_LIGHT,
+        backgroundColor: LIGHT_GRAY,
         borderRadius: 6,
         padding: 8,
-        borderLeft: `3pt solid ${BLUE_ACCENT}`,
+        borderLeft: `3pt solid ${NAVY}`,
     },
-    summaryCardTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: BLUE_DARK, marginBottom: 6, textTransform: 'uppercase' },
+    summaryCardTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 6, textTransform: 'uppercase' },
     summaryCardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
     summaryCardLabel: { fontSize: 7, color: GRAY_700 },
-    summaryCardValue: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: BLUE_DARK },
+    summaryCardValue: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY },
 
     gradeDistCard: {
         flex: 1,
-        backgroundColor: BLUE_LIGHT,
+        backgroundColor: LIGHT_GRAY,
         borderRadius: 6,
-        padding: 8,
+        padding: 6,
         borderLeft: `3pt solid ${GREEN}`,
     },
-    gradeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+    gradeDistContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    gradeRow: { flexDirection: 'row', width: '30%', paddingVertical: 1, alignItems: 'center', gap: 4 },
     gradeLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold' },
-    gradeCount: { fontSize: 7, color: GRAY_700 },
+    gradeCount: { fontSize: 6, color: GRAY_700 },
 
     /* Footer — matching report card */
     footer: {
         textAlign: 'center',
         fontSize: 7,
         color: GRAY_400,
-        borderTop: `1pt solid ${GRAY_200}`,
         paddingTop: 6,
-        marginTop: 'auto',
+        paddingBottom: 2,
     },
     footerLine: { marginBottom: 2 },
 });
@@ -173,24 +179,32 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
     return (
         <Document>
             <Page size="A4" orientation="portrait" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
+                {/* ═══ TOP NAVY BAR ═══ */}
+                <View style={s.navyBar} />
+
                 <View style={{ flex: 1 }}>
 
-                    {/* ═══ HEADER BAND (matching report card) ═══ */}
+                    {/* ═══ HEADER BAND (white bg, matching report card) ═══ */}
                     <View style={s.headerBand}>
                         <View>
                             {data.schoolLogoUrl ? (
                                 <Image style={s.logo} src={data.schoolLogoUrl} />
                             ) : (
-                                <View style={s.logoPlaceholder} />
+                                <View style={s.logoPlaceholder}>
+                                    <Text style={{ fontSize: 20, color: GRAY_400 }}>🏫</Text>
+                                </View>
                             )}
                         </View>
                         <View style={s.headerCenter}>
                             <Text style={s.schoolName}>{data.schoolName}</Text>
+                            {data.schoolAddress && (
+                                <Text style={s.schoolAddress}>{data.schoolAddress}</Text>
+                            )}
                         </View>
                         <View style={{ width: 52 }} />
                     </View>
 
-                    {/* ═══ BANNER RIBBON (matching report card) ═══ */}
+                    {/* ═══ SKY BLUE BANNER RIBBON ═══ */}
                     <View style={s.bannerRibbon}>
                         <Text style={s.bannerText}>
                             {data.examTitle} — Class Broad Sheet
@@ -310,16 +324,18 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                         {data.gradeDistribution && Object.keys(data.gradeDistribution).length > 0 && (
                             <View style={s.gradeDistCard}>
                                 <Text style={[s.summaryCardTitle, { color: GREEN }]}>Grade Distribution</Text>
-                                {Object.entries(data.gradeDistribution)
-                                    .sort(([a], [b]) => a.localeCompare(b))
-                                    .map(([grade, count]) => (
-                                        <View key={grade} style={s.gradeRow}>
-                                            <Text style={[s.gradeLabel, { color: gradeColor(grade) }]}>{grade}</Text>
-                                            <Text style={s.gradeCount}>
-                                                {count} student{count !== 1 ? 's' : ''} ({((count / data.students.length) * 100).toFixed(0)}%)
-                                            </Text>
-                                        </View>
-                                    ))}
+                                <View style={s.gradeDistContainer}>
+                                    {Object.entries(data.gradeDistribution)
+                                        .sort(([a], [b]) => a.localeCompare(b))
+                                        .map(([grade, count]) => (
+                                            <View key={grade} style={s.gradeRow}>
+                                                <Text style={[s.gradeLabel, { color: gradeColor(grade) }]}>{grade}</Text>
+                                                <Text style={s.gradeCount}>
+                                                    {count} ({((count / data.students.length) * 100).toFixed(0)}%)
+                                                </Text>
+                                            </View>
+                                        ))}
+                                </View>
                             </View>
                         )}
                     </View>
@@ -329,8 +345,12 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 {/* ═══ FOOTER (matching report card) ═══ */}
                 <View style={s.footer}>
                     <Text style={s.footerLine}>Report generated on {today}</Text>
-                    <Text>Generated by Matokeo • Class Broad Sheet • {data.academicYear}</Text>
+                    <Text style={s.footerLine}>System developed by: Blaise Technologies</Text>
+                    <Text>This document is electronically generated</Text>
                 </View>
+
+                {/* ═══ BOTTOM NAVY BAR ═══ */}
+                <View style={s.navyBarBottom} />
             </Page>
         </Document>
     );

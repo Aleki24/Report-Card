@@ -7,6 +7,8 @@ interface StudentRow {
     id: string;
     admission_number: string;
     status: string;
+    guardian_phone: string | null;
+    guardian_name: string | null;
     users: { first_name: string; last_name: string; email: string } | null;
     grade_streams: { full_name: string } | null;
 }
@@ -39,8 +41,15 @@ export default function StudentsPage() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [newStudent, setNewStudent] = useState({
         first_name: '', last_name: '',
-        admission_number: '', grade_stream_id: '', academic_level_id: ''
+        admission_number: '', grade_stream_id: '', academic_level_id: '',
+        guardian_phone: '', guardian_name: ''
     });
+
+    /* ── Inline edit guardian state ───────────────────── */
+    const [editingGuardianId, setEditingGuardianId] = useState<string | null>(null);
+    const [editGuardianPhone, setEditGuardianPhone] = useState('');
+    const [editGuardianName, setEditGuardianName] = useState('');
+    const [savingGuardian, setSavingGuardian] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -124,6 +133,48 @@ export default function StudentsPage() {
         setDeletingId(null);
     };
 
+    /* ── Update Guardian handler ──────────────────────── */
+    const handleStartEditGuardian = (student: StudentRow) => {
+        setEditingGuardianId(student.id);
+        setEditGuardianPhone(student.guardian_phone || '');
+        setEditGuardianName(student.guardian_name || '');
+    };
+
+    const handleCancelEditGuardian = () => {
+        setEditingGuardianId(null);
+        setEditGuardianPhone('');
+        setEditGuardianName('');
+    };
+
+    const handleSaveGuardian = async (studentId: string) => {
+        setSavingGuardian(true);
+        try {
+            const res = await fetch('/api/admin/update-student', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    guardian_phone: editGuardianPhone.trim() || null,
+                    guardian_name: editGuardianName.trim() || null,
+                }),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                alert(result.error || 'Failed to update guardian info.');
+            } else {
+                setStudents(prev => prev.map(s =>
+                    s.id === studentId
+                        ? { ...s, guardian_phone: editGuardianPhone.trim() || null, guardian_name: editGuardianName.trim() || null }
+                        : s
+                ));
+                setEditingGuardianId(null);
+            }
+        } catch {
+            alert('Unexpected error updating guardian info.');
+        }
+        setSavingGuardian(false);
+    };
+
     /* ── Add Student handler (via admin API) ──────────── */
     const handleAddStudent = async () => {
         if (!newStudent.first_name.trim() || !newStudent.last_name.trim()) {
@@ -147,6 +198,8 @@ export default function StudentsPage() {
                     admission_number: newStudent.admission_number.trim() || null,
                     grade_stream_id: newStudent.grade_stream_id || null,
                     academic_level_id: newStudent.academic_level_id,
+                    guardian_phone: newStudent.guardian_phone.trim() || null,
+                    guardian_name: newStudent.guardian_name.trim() || null,
                     admin_user_id: profile?.id,
                 }),
             });
@@ -157,7 +210,7 @@ export default function StudentsPage() {
                 setSaveMessage({ type: 'error', text: result.error || 'Failed to add student.' });
             } else {
                 setSaveMessage({ type: 'success', text: result.message || 'Student added successfully!' });
-                setNewStudent({ first_name: '', last_name: '', admission_number: '', grade_stream_id: '', academic_level_id: '' });
+                setNewStudent({ first_name: '', last_name: '', admission_number: '', grade_stream_id: '', academic_level_id: '', guardian_phone: '', guardian_name: '' });
                 await fetchStudents();
                 setTimeout(() => {
                     setShowAddModal(false);
@@ -228,7 +281,8 @@ export default function StudentsPage() {
                             <tr>
                                 <th>Student</th>
                                 <th>Admission #</th>
-                                <th>Class (Optional)</th>
+                                <th>Class</th>
+                                <th>Guardian Phone</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -236,7 +290,7 @@ export default function StudentsPage() {
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="text-center text-[var(--color-text-muted)] py-8">
+                                    <td colSpan={6} className="text-center text-[var(--color-text-muted)] py-8">
                                         Loading students...
                                     </td>
                                 </tr>
@@ -247,7 +301,57 @@ export default function StudentsPage() {
                                             {s.users?.first_name || '—'} {s.users?.last_name || ''}
                                         </td>
                                         <td data-label="Admission #" className="text-[var(--color-text-muted)] font-mono text-sm">{s.admission_number}</td>
-                                        <td data-label="Class (Optional)">{s.grade_streams?.full_name || '—'}</td>
+                                        <td data-label="Class">{s.grade_streams?.full_name || '—'}</td>
+                                        <td data-label="Guardian Phone">
+                                            {editingGuardianId === s.id ? (
+                                                <div className="flex flex-col gap-1" style={{ minWidth: 160 }}>
+                                                    <input
+                                                        className="input-field w-full text-xs py-1 px-2"
+                                                        placeholder="e.g. 0712345678"
+                                                        value={editGuardianPhone}
+                                                        onChange={e => setEditGuardianPhone(e.target.value)}
+                                                        autoFocus
+                                                    />
+                                                    <input
+                                                        className="input-field w-full text-xs py-1 px-2"
+                                                        placeholder="Guardian name"
+                                                        value={editGuardianName}
+                                                        onChange={e => setEditGuardianName(e.target.value)}
+                                                    />
+                                                    <div className="flex gap-1">
+                                                        <button
+                                                            className="px-2 py-0.5 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                                                            onClick={() => handleSaveGuardian(s.id)}
+                                                            disabled={savingGuardian}
+                                                        >
+                                                            {savingGuardian ? '...' : '✓ Save'}
+                                                        </button>
+                                                        <button
+                                                            className="px-2 py-0.5 text-xs rounded border border-[var(--color-border)] hover:bg-[var(--color-surface-raised)]"
+                                                            onClick={handleCancelEditGuardian}
+                                                            disabled={savingGuardian}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1">
+                                                    {s.guardian_phone ? (
+                                                        <span className="text-xs font-mono text-green-500">{s.guardian_phone}</span>
+                                                    ) : (
+                                                        <span className="text-xs text-[var(--color-text-muted)]">—</span>
+                                                    )}
+                                                    <button
+                                                        className="ml-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                                        onClick={() => handleStartEditGuardian(s)}
+                                                        title="Edit guardian phone"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td data-label="Status">
                                             <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
                                                 {s.status}
@@ -276,7 +380,7 @@ export default function StudentsPage() {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={5} className="text-center text-[var(--color-text-muted)] py-8">
+                                    <td colSpan={6} className="text-center text-[var(--color-text-muted)] py-8">
                                         {search ? 'No students match your search.' : 'No students found. Click "+ Add Student" to get started.'}
                                     </td>
                                 </tr>
@@ -358,6 +462,26 @@ export default function StudentsPage() {
                                             <option key={gs.id} value={gs.id}>{gs.full_name}</option>
                                         ))}
                                 </select>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Guardian Phone</label>
+                                    <input
+                                        className="input-field w-full"
+                                        placeholder="e.g. 0712345678"
+                                        value={newStudent.guardian_phone}
+                                        onChange={e => setNewStudent(p => ({ ...p, guardian_phone: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Guardian Name</label>
+                                    <input
+                                        className="input-field w-full"
+                                        placeholder="e.g. Mary Moraa"
+                                        value={newStudent.guardian_name}
+                                        onChange={e => setNewStudent(p => ({ ...p, guardian_name: e.target.value }))}
+                                    />
+                                </div>
                             </div>
                         </div>
 

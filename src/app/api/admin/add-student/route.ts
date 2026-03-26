@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
         const user_id = session.user.id;
         const body = await request.json();
-        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id } = body;
+        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name } = body;
 
         if (!first_name?.trim() || !last_name?.trim()) {
             return NextResponse.json({ error: 'First name and last name are required.' }, { status: 400 });
@@ -144,6 +144,8 @@ export async function POST(request: NextRequest) {
             admission_number: finalAdmNo,
             current_grade_stream_id: grade_stream_id || null,
             academic_level_id: academic_level_id,
+            guardian_phone: guardian_phone?.trim() || null,
+            guardian_name: guardian_name?.trim() || null,
         });
 
         if (studentError) {
