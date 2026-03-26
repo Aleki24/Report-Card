@@ -71,7 +71,8 @@ export async function POST(request: NextRequest) {
         });
 
         if (profileError) {
-            // Rollback school creation on error (though in MVP manual cleanup or ignoring orphan schools is fine)
+            // Rollback: delete the orphan school we just created
+            await supabaseAdmin.from('schools').delete().eq('id', schoolId);
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
         }
 

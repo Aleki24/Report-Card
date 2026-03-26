@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import {
@@ -17,6 +19,12 @@ interface SendSMSBody {
 
 export async function POST(request: Request) {
     try {
+        // Auth check — only authenticated users can send SMS
+        const session = await getServerSession(authOptions) as any;
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body: SendSMSBody = await request.json();
         const { studentIds, termId, academicYearId, gradeStreamId } = body;
 
@@ -45,15 +53,33 @@ export async function POST(request: Request) {
         // Get school_id from first student
         const schoolId = (students[0] as any).users?.school_id;
 
-        // 2. Fetch grading scales for this school
+        // 2. Fetch grading scales via grading_systems (grading_scales doesn't have school_id)
         let gradingScales: GradingScale[] = [];
         if (schoolId) {
-            const { data: scales } = await supabase
-                .from('grading_scales')
-                .select('*')
-                .eq('school_id', schoolId)
-                .order('min_score', { ascending: false });
-            gradingScales = (scales || []) as GradingScale[];
+            // First find the student's academic level to get the right grading system
+            const { data: firstStudent } = await supabase
+                .from('students')
+                .select('academic_level_id')
+                .eq('id', studentIds[0])
+                .single();
+
+            if (firstStudent?.academic_level_id) {
+                const { data: gradingSystem } = await supabase
+                    .from('grading_systems')
+                    .select('id')
+                    .eq('academic_level_id', firstStudent.academic_level_id)
+                    .limit(1)
+                    .single();
+
+                if (gradingSystem) {
+                    const { data: scales } = await supabase
+                        .from('grading_scales')
+                        .select('*')
+                        .eq('grading_system_id', gradingSystem.id)
+                        .order('order_index', { ascending: true });
+                    gradingScales = (scales || []) as GradingScale[];
+                }
+            }
         }
 
         // 3. Fetch term & year names

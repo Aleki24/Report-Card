@@ -27,7 +27,7 @@ export async function GET() {
             const { data: classAssigned } = await supabase
                 .from('class_teachers')
                 .select('id')
-                .eq('teacher_id', userId)
+                .eq('user_id', userId)
                 .limit(1);
 
             if (classAssigned && classAssigned.length > 0) {
@@ -38,7 +38,7 @@ export async function GET() {
             const { data: subjectAssigned } = await supabase
                 .from('subject_teachers')
                 .select('id')
-                .eq('teacher_id', userId)
+                .eq('user_id', userId)
                 .limit(1);
 
             if (subjectAssigned && subjectAssigned.length > 0) {

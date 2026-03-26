@@ -296,12 +296,15 @@ export async function DELETE(request: NextRequest) {
             subject: 'subjects',
         };
 
-        const globalTables: Record<string, string> = {
-            level: 'academic_levels',
-            grade: 'grades',
-            grading_system: 'grading_systems',
-            grading_scale: 'grading_scales',
-        };
+        // Global/shared curriculum tables — deletion is blocked for individual school admins
+        const globalTypes = ['level', 'grade', 'grading_system', 'grading_scale'];
+
+        if (globalTypes.includes(type)) {
+            return NextResponse.json(
+                { error: 'Cannot delete shared curriculum data. Contact system administrator.' },
+                { status: 403 }
+            );
+        }
 
         if (schoolScopedTables[type]) {
             const table = schoolScopedTables[type];
@@ -316,10 +319,6 @@ export async function DELETE(request: NextRequest) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
             }
 
-            const { error } = await supabaseAdmin.from(table).delete().eq('id', id);
-            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        } else if (globalTables[type]) {
-            const table = globalTables[type];
             const { error } = await supabaseAdmin.from(table).delete().eq('id', id);
             if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         } else {

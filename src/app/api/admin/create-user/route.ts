@@ -198,7 +198,6 @@ export async function POST(request: NextRequest) {
                 school_id,
                 username,
                 password_hash,
-                plain_password: rawPassword,
                 is_active: true,
                 // Email is required by schema, but they won't use it. Generate a dummy one.
                 email: `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`,
@@ -231,6 +230,7 @@ export async function POST(request: NextRequest) {
                   .from('academic_years')
                   .select('id')
                   .eq('school_id', school_id)
+                  .order('start_date', { ascending: false })
                   .limit(1)
                   .single();
 
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
         if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
               const { data: tRecord } = await supabaseAdmin.from('subject_teachers').insert({ user_id: newUser.id }).select('id').single();
               if (tRecord) {
-                   const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).limit(1).single();
+                   const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).order('start_date', { ascending: false }).limit(1).single();
                    if (currentYear.data) {
                         const assignments = subject_teacher_subjects.map((sub: any) => ({
                              subject_teacher_id: tRecord.id,
