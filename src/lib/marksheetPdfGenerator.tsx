@@ -9,7 +9,7 @@ export interface MarkSheetData {
     academicYear: string;
     className: string;
     gradingSystemType: 'KCSE' | 'CBC';
-    subjects: string[];
+    subjects: { code: string; name: string }[];
     students: {
         studentName: string;
         admissionNumber: string;
@@ -207,7 +207,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                     {/* ═══ SKY BLUE BANNER RIBBON ═══ */}
                     <View style={s.bannerRibbon}>
                         <Text style={s.bannerText}>
-                            {data.examTitle} — Class Broad Sheet
+                            {data.examTitle} — Class Marksheet
                         </Text>
                     </View>
 
@@ -244,8 +244,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                             <View style={s.colAdm}><Text style={s.thText}>Adm No.</Text></View>
 
                             {data.subjects.map(subj => (
-                                <View key={subj} style={{ width: colSubjWidth, textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
-                                    <Text style={[s.thText, { textAlign: 'center' }]}>{subj.length > 6 ? subj.substring(0, 5) + '.' : subj}</Text>
+                                <View key={subj.code} style={{ width: colSubjWidth, textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
+                                    <Text style={[s.thText, { textAlign: 'center' }]}>{subj.code}</Text>
                                 </View>
                             ))}
 
@@ -271,9 +271,9 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                     </View>
 
                                     {data.subjects.map(subj => {
-                                        const val = student.marks[subj];
+                                        const val = student.marks[subj.code];
                                         return (
-                                            <View key={subj} style={{ width: colSubjWidth, textAlign: 'center', borderRight: `0.5pt solid ${GRAY_200}`, paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
+                                            <View key={subj.code} style={{ width: colSubjWidth, textAlign: 'center', borderRight: `0.5pt solid ${GRAY_200}`, paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
                                                 <Text style={[s.tdText, { textAlign: 'center', color: scoreColor(val) }]}>
                                                     {val !== null && val !== undefined ? val : '-'}
                                                 </Text>
@@ -345,7 +345,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 {/* ═══ FOOTER (matching report card) ═══ */}
                 <View style={s.footer}>
                     <Text style={s.footerLine}>Report generated on {today}</Text>
-                    <Text style={s.footerLine}>System developed by: Blaise Technologies</Text>
+                    <Text style={s.footerLine}>System developed by: Matokeo</Text>
                     <Text>This document is electronically generated</Text>
                 </View>
 

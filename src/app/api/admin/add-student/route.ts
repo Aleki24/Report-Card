@@ -74,7 +74,8 @@ export async function POST(request: NextRequest) {
 
         // 1. Generate a UUID for the new student
         const userId = crypto.randomUUID();
-        const finalAdmNo = admNo || `STU-${Date.now().toString().slice(-6)}`;
+        // Keep admission number empty if not provided (no auto-generation)
+        const finalAdmNo = admNo || null;
         const emailBase = finalAdmNo.toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 

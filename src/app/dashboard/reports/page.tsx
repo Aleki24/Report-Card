@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { useAuth } from '@/components/AuthProvider';
 import JSZip from 'jszip';
 import { pdf } from '@react-pdf/renderer';
 import { ReportCardDocument, ReportCardData } from '@/lib/pdfGenerator';
@@ -37,6 +38,9 @@ interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
 export default function ReportsPage() {
+  const { profile, availableRoles } = useAuth();
+  const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
+
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
@@ -457,6 +461,25 @@ export default function ReportsPage() {
         <h1 className="text-3xl md:text-5xl font-bold font-[family-name:var(--font-display)] mb-4">Academic Reports</h1>
         <p className="text-lg opacity-90 max-w-2xl">Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics.</p>
       </div>
+
+      {/* Dual-role navigation banner */}
+      {isAlsoSubjectTeacher && (
+          <a
+              href="/dashboard/marks"
+              className="mb-6 flex items-center gap-3 p-4 rounded-lg border transition-all hover:shadow-md"
+              style={{
+                  background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.08))',
+                  borderColor: 'rgba(99,102,241,0.25)',
+              }}
+          >
+              <span className="text-2xl">📚</span>
+              <div className="flex-1">
+                  <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Go to My Subjects</span>
+                  <span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>Enter and manage marks for your assigned subjects</span>
+              </div>
+              <span className="text-lg" style={{ color: 'rgba(99,102,241,0.7)' }}>→</span>
+          </a>
+      )}
 
       {/* Report Settings - MOVED TO TOP */}
       <div className="card glass-panel mb-8 relative z-10" style={{ marginTop: '-2rem' }}>

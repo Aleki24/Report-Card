@@ -141,23 +141,24 @@ export async function POST(request: Request) {
             const subjectLines = studentMarks
                 .map((m: any) => {
                     const subjectName = (m as any).subjects?.name || '?';
-                    const shortName = subjectName.length > 4 ? subjectName.substring(0, 4) : subjectName;
-                    return `${shortName} ${m.score || '-'}`;
+                    const score = m.score != null ? m.score : '-';
+                    const grade = m.grade || (m.score != null && gradingScales.length > 0 ? getGradeFromScales(Number(m.score), gradingScales) : '-');
+                    return `${subjectName}: ${score}% (${grade})`;
                 })
-                .slice(0, 8) // Max 8 subjects to keep SMS short
-                .join(' | ');
+                .slice(0, 8); // Max 8 subjects to keep SMS short
 
             const avg = report?.average_score ? Number(report.average_score).toFixed(1) : '-';
             const grade = report?.overall_grade || (report?.average_score ? getGradeFromScales(Number(report.average_score), gradingScales) : '-');
             const rank = report?.rank || '-';
             const rankStr = totalInClass ? `${rank}/${totalInClass}` : `${rank}`;
 
-            let message = `MATOKEO Results: ${studentName}`;
-            message += `\n${termName} ${yearName} - ${streamName}`;
-            message += `\nAvg: ${avg}% | Grade: ${grade} | Rank: ${rankStr}`;
-            if (subjectLines) {
-                message += `\n${subjectLines}`;
+            let message = `Sathya Student Results`;
+            message += `\n${studentName} - ${streamName}`;
+            message += `\n${termName} ${yearName}`;
+            if (subjectLines.length > 0) {
+                message += `\n${subjectLines.join('\n')}`;
             }
+            message += `\nAvg: ${avg}% | Grade: ${grade} | Rank: ${rankStr}`;
 
             recipients.push({ phone, message });
         }

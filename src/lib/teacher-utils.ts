@@ -23,16 +23,42 @@ export async function getTeacherPermissions(userId: string): Promise<TeacherPerm
     subjectTeacherAssignments: [],
   };
 
-  // 1. Check class teacher
-  const { data: classTeacherData } = await supabase
+  // Get user's school to find current academic year
+  const { data: userData } = await supabase
+    .from('users')
+    .select('school_id')
+    .eq('id', userId)
+    .single();
+
+  let currentYearId: string | null = null;
+  if (userData?.school_id) {
+    const { data: currentYear } = await supabase
+      .from('academic_years')
+      .select('id')
+      .eq('school_id', userData.school_id)
+      .order('start_date', { ascending: false })
+      .limit(1)
+      .single();
+    currentYearId = currentYear?.id ?? null;
+  }
+
+  // 1. Check class teacher - filter by current academic year
+  let classQuery = supabase
     .from('class_teachers')
-    .select('current_grade_stream_id, grade_streams(grade_id)')
+    .select('current_grade_stream_id, grade_streams(grade_id), academic_year_id')
     .eq('user_id', userId);
 
-  if (classTeacherData && classTeacherData.length > 0) {
+  const { data: classTeacherData } = await classQuery;
+
+  // Filter to current year if available
+  const filteredClassData = currentYearId 
+    ? (classTeacherData ?? []).filter(ct => ct.academic_year_id === currentYearId)
+    : classTeacherData ?? [];
+
+  if (filteredClassData && filteredClassData.length > 0) {
     perms.isClassTeacher = true;
-    perms.classTeacherStreams = classTeacherData.map(r => r.current_grade_stream_id);
-    perms.classTeacherGrades = Array.from(new Set(classTeacherData.map(r => (r.grade_streams as any)?.grade_id).filter(Boolean)));
+    perms.classTeacherStreams = filteredClassData.map(r => r.current_grade_stream_id);
+    perms.classTeacherGrades = Array.from(new Set(filteredClassData.map(r => (r.grade_streams as any)?.grade_id).filter(Boolean)));
   }
 
   // 2. Check subject teacher
@@ -43,14 +69,21 @@ export async function getTeacherPermissions(userId: string): Promise<TeacherPerm
     .single();
 
   if (subjectTeacherData) {
-    const { data: assignments } = await supabase
+    let assignmentsQuery = supabase
       .from('subject_teacher_assignments')
-      .select('subject_id, grade_id, grade_stream_id')
+      .select('subject_id, grade_id, grade_stream_id, academic_year_id')
       .eq('subject_teacher_id', subjectTeacherData.id);
+
+    const { data: assignments } = await assignmentsQuery;
+
+    // Filter to current year if available
+    const filteredAssignments = currentYearId
+      ? (assignments ?? []).filter(a => a.academic_year_id === currentYearId)
+      : assignments ?? [];
       
-    if (assignments && assignments.length > 0) {
+    if (filteredAssignments && filteredAssignments.length > 0) {
       perms.isSubjectTeacher = true;
-      perms.subjectTeacherAssignments = assignments.map(a => ({
+      perms.subjectTeacherAssignments = filteredAssignments.map(a => ({
         subject_id: a.subject_id,
         grade_id: a.grade_id,
         grade_stream_id: a.grade_stream_id,
@@ -92,23 +125,12 @@ export function isExamVisibleToTeacher(exam: any, perms: TeacherPermissions) {
   }
   
   if (perms.isSubjectTeacher) {
-    const teachesSubject = perms.subjectTeacherAssignments.some(a => a.subject_id === exam.subject_id);
-    if (!teachesSubject) return false;
-    
-    // Check if the stream/grade matches
+    // Subject teacher sees an exam if they teach the same subject
+    // for the same grade (regardless of specific stream assignment)
     const matchesAssignment = perms.subjectTeacherAssignments.some(a => {
       if (a.subject_id !== exam.subject_id) return false;
-      if (a.grade_stream_id) {
-         // They teach specific stream
-         if (exam.grade_stream_id) return a.grade_stream_id === exam.grade_stream_id;
-         // Exam is for whole grade; they teach specific stream, so they can see this exam?
-         // Yes, because it applies to their stream too.
-         return a.grade_id === exam.grade_id;
-      } else {
-         // They teach whole grade, so they see exams for the whole grade or any stream in it
-         /* Wait, do we let subject teacher see exams for specific streams if they teach whole grade? */
-         return a.grade_id === exam.grade_id;
-      }
+      // Grade must match
+      return a.grade_id === exam.grade_id;
     });
     if (matchesAssignment) return true;
   }

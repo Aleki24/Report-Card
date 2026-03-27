@@ -29,6 +29,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ marks: [], totalReports: 0 });
       }
 
+      // Get current academic year
+      const { data: currentYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .single();
+
       // Get all student IDs for this school
       const { data: schoolUsers } = await supabase
         .from('users')
@@ -42,9 +51,17 @@ export async function GET(request: NextRequest) {
       let totalReports = 0;
 
       if (studentIds.length > 0) {
+        let marksQuery = supabase.from('exam_marks').select('percentage').in('student_id', studentIds);
+        let reportsQuery = supabase.from('report_cards').select('id', { count: 'exact', head: true }).in('student_id', studentIds);
+
+        if (currentYear) {
+          marksQuery = (marksQuery as any).eq('exams.academic_year_id', currentYear.id);
+          reportsQuery = reportsQuery.eq('academic_year_id', currentYear.id);
+        }
+
         const [marksRes, reportsRes] = await Promise.all([
-          supabase.from('exam_marks').select('percentage').in('student_id', studentIds),
-          supabase.from('report_cards').select('id', { count: 'exact', head: true }).in('student_id', studentIds),
+          marksQuery,
+          reportsQuery,
         ]);
         marks = (marksRes.data || []) as { percentage: number }[];
         totalReports = reportsRes.count ?? 0;
@@ -55,39 +72,116 @@ export async function GET(request: NextRequest) {
 
     // ── CLASS TEACHER stats ──────────────────────────────────
     if (queryRole === 'class_teacher') {
-      const { data: ctData } = await supabase
-        .from('class_teachers')
-        .select('current_grade_stream_id, grade_streams(full_name)')
-        .eq('user_id', userId)
+      // Get current academic year
+      const { data: currentYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .order('start_date', { ascending: false })
         .limit(1)
         .single();
+
+      // Get class teacher assignment for current academic year
+      let ctQuery = supabase
+        .from('class_teachers')
+        .select('current_grade_stream_id, grade_streams(full_name)')
+        .eq('user_id', userId);
+
+      if (currentYear) {
+        ctQuery = ctQuery.eq('academic_year_id', currentYear.id);
+      }
+
+      const { data: ctData } = await ctQuery.limit(1).single();
 
       const streamId = ctData?.current_grade_stream_id;
       const streamName = (ctData?.grade_streams as any)?.full_name || '—';
 
       let studentCount = 0;
+      let streamAvg = '—';
+      let reportsPending = 0;
+
       if (streamId) {
+        // Get student count
         const { count } = await supabase
           .from('students')
           .select('id', { count: 'exact', head: true })
           .eq('current_grade_stream_id', streamId);
         studentCount = count ?? 0;
+
+        // Get stream students
+        const { data: streamStudents } = await supabase
+          .from('students')
+          .select('id')
+          .eq('current_grade_stream_id', streamId);
+
+        const studentIds = (streamStudents || []).map(s => s.id);
+
+        if (studentIds.length > 0 && currentYear) {
+          // Calculate stream average from exam marks
+          const { data: marks } = await supabase
+            .from('exam_marks')
+            .select('percentage')
+            .in('student_id', studentIds);
+
+          if (marks && marks.length > 0) {
+            const sum = marks.reduce((a, m) => a + Number(m.percentage), 0);
+            streamAvg = (sum / marks.length).toFixed(1);
+          }
+
+          // Get terms for current year to count how many report cards needed
+          const { data: terms } = await supabase
+            .from('terms')
+            .select('id')
+            .eq('academic_year_id', currentYear.id);
+
+          const termCount = terms?.length || 1;
+          const requiredReports = studentIds.length * termCount;
+
+          // Count existing report cards for this stream in current year
+          const { count: existingReports } = await supabase
+            .from('report_cards')
+            .select('id', { count: 'exact', head: true })
+            .eq('grade_stream_id', streamId)
+            .eq('academic_year_id', currentYear.id);
+
+          reportsPending = Math.max(0, requiredReports - (existingReports ?? 0));
+        }
       }
 
-      return NextResponse.json({ streamName, studentCount });
+      return NextResponse.json({ streamName, studentCount, streamAvg, reportsPending });
     }
 
     // ── SUBJECT TEACHER stats ────────────────────────────────
     if (queryRole === 'subject_teacher') {
-      const { count: examCount } = await supabase
+      // Get current academic year
+      const { data: currentYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .single();
+
+      let examQuery = supabase
         .from('exams')
         .select('id', { count: 'exact', head: true })
         .eq('created_by_teacher_id', userId);
 
-      const { data: teacherExams } = await supabase
+      if (currentYear) {
+        examQuery = examQuery.eq('academic_year_id', currentYear.id);
+      }
+      const { count: examCount } = await examQuery;
+
+      let examsQuery = supabase
         .from('exams')
         .select('id')
         .eq('created_by_teacher_id', userId);
+
+      if (currentYear) {
+        examsQuery = examsQuery.eq('academic_year_id', currentYear.id);
+      }
+
+      const { data: teacherExams } = await examsQuery;
 
       let avg = '—';
       let markCount = 0;
@@ -111,6 +205,15 @@ export async function GET(request: NextRequest) {
 
     // ── STUDENT stats ────────────────────────────────────────
     if (queryRole === 'student') {
+      // Get current academic year
+      const { data: currentYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('school_id', schoolId)
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .single();
+
       // Find this student's record
       const { data: studentRecord } = await supabase
         .from('students')
@@ -122,10 +225,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ avg: 0, markCount: 0, bestSubject: '—', bestScore: 0, position: '—', positionSub: 'N/A' });
       }
 
-      const { data: marks } = await supabase
+      // Get marks filtered by academic year via exam relationship
+      let query = supabase
         .from('exam_marks')
-        .select('percentage, raw_score, exams(subject_id, max_score, subjects(name))')
+        .select('percentage, raw_score, exams(subject_id, max_score, subjects(name), academic_year_id)')
         .eq('student_id', studentRecord.id);
+
+      if (currentYear) {
+        query = query.eq('exams.academic_year_id', currentYear.id);
+      }
+
+      const { data: marks } = await query;
 
       if (!marks || marks.length === 0) {
         return NextResponse.json({ avg: 0, markCount: 0, bestSubject: '—', bestScore: 0, position: '—', positionSub: 'N/A' });
@@ -155,7 +265,7 @@ export async function GET(request: NextRequest) {
       let position = '—';
       let positionSub = 'N/A';
       const gradeStreamId = studentRecord.current_grade_stream_id;
-      if (gradeStreamId) {
+      if (gradeStreamId && currentYear) {
         const { data: classmates } = await supabase
           .from('students')
           .select('id')
@@ -163,10 +273,13 @@ export async function GET(request: NextRequest) {
 
         if (classmates && classmates.length > 0) {
           const classmateIds = classmates.map(c => c.id);
-          const { data: allMarks } = await supabase
+          let marksQuery = supabase
             .from('exam_marks')
             .select('student_id, raw_score, exams!inner(max_score)')
-            .in('student_id', classmateIds);
+            .in('student_id', classmateIds)
+            .eq('exams.academic_year_id', currentYear.id);
+
+          const { data: allMarks } = await marksQuery;
 
           if (allMarks && allMarks.length > 0) {
             const aggs: Record<string, { score: number; possible: number }> = {};

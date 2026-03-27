@@ -122,13 +122,14 @@ export async function GET(
             return NextResponse.json({ error: 'No marks found for this class and term' }, { status: 404 });
         }
 
-        // Collect all distinct subject names for the table columns
-        const subjectsSet = new Set<string>();
+        // Collect all distinct subject names and codes for the table columns
+        const subjectsMap = new Map<string, { code: string; name: string }>();
         allMarks.forEach((m: any) => {
             const sname = m.exams.subjects?.name;
-            if (sname) subjectsSet.add(sname);
+            const scode = m.exams.subjects?.code;
+            if (sname) subjectsMap.set(scode || sname, { code: scode || sname, name: sname });
         });
-        const subjectsArray = Array.from(subjectsSet).sort();
+        const subjectsArray = Array.from(subjectsMap.values()).sort((a, b) => a.code.localeCompare(b.code));
 
         // 6. Group marks by student and calculate ranks
         const marksByStudent: Record<string, any[]> = {};
@@ -157,7 +158,6 @@ export async function GET(
         const rankedStudentCount = aggregates.length;
 
         // 7. Aggregate data for the specific report format
-        const gradeDistribution: Record<string, number> = {};
         let totalClassPercentage = 0;
 
         const studentsData = students.map(student => {
@@ -179,9 +179,6 @@ export async function GET(
                 ? getGradeFromScales(studentPerf.percentage, gradingScales)
                 : studentPerf.grade;
 
-            if (overallGradeSymbol) {
-                gradeDistribution[overallGradeSymbol] = (gradeDistribution[overallGradeSymbol] || 0) + 1;
-            }
             if (studentMarks.length > 0) {
                 totalClassPercentage += studentPerf.percentage;
             }
@@ -190,13 +187,13 @@ export async function GET(
             const lastName = (student.users as any)?.last_name || '';
 
             const marksRecord: Record<string, number | null> = {};
-            // Initialize with null
-            subjectsArray.forEach(sub => marksRecord[sub] = null);
+            // Initialize with null using subject codes as keys
+            subjectsArray.forEach(sub => marksRecord[sub.code] = null);
             
             studentMarks.forEach((m: any) => {
-                const sname = m.exams.subjects?.name;
-                if (sname) {
-                    marksRecord[sname] = Number(m.percentage); // Taking percentage for the mark sheet
+                const scode = m.exams.subjects?.code || m.exams.subjects?.name;
+                if (scode) {
+                    marksRecord[scode] = Number(m.percentage); // Taking percentage for the mark sheet
                 }
             });
 
@@ -213,6 +210,14 @@ export async function GET(
 
         // Sort students by rank
         studentsData.sort((a, b) => a.classRank - b.classRank);
+
+        // Grade distribution — computed ONLY from students who have marks (after filter)
+        const gradeDistribution: Record<string, number> = {};
+        for (const s of studentsData) {
+            if (s.overallGrade) {
+                gradeDistribution[s.overallGrade] = (gradeDistribution[s.overallGrade] || 0) + 1;
+            }
+        }
 
         const meanPercentage = studentsData.length > 0 ? (totalClassPercentage / studentsData.length) : 0;
         const meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';

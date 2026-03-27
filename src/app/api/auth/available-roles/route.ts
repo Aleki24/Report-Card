@@ -18,30 +18,50 @@ export async function GET() {
         const sessionUser = session.user as any;
         const currentRole = sessionUser.role;
         const userId = sessionUser.id;
+        const schoolId = sessionUser.schoolId;
+
+        // Get current academic year
+        let currentYearId: string | null = null;
+        if (schoolId) {
+            const { data: currentYear } = await supabase
+                .from('academic_years')
+                .select('id')
+                .eq('school_id', schoolId)
+                .order('start_date', { ascending: false })
+                .limit(1)
+                .single();
+            currentYearId = currentYear?.id ?? null;
+        }
         
         if (currentRole === 'CLASS_TEACHER' || currentRole === 'SUBJECT_TEACHER') {
             // Add current role
             availableRoles.add(currentRole);
 
-            // Check if they are a class teacher
-            const { data: classAssigned } = await supabase
+            // Check if they are a class teacher (for current academic year)
+            let classQuery = supabase
                 .from('class_teachers')
                 .select('id')
-                .eq('user_id', userId)
-                .limit(1);
+                .eq('user_id', userId);
+            
+            if (currentYearId) {
+                classQuery = classQuery.eq('academic_year_id', currentYearId);
+            }
 
-            if (classAssigned && classAssigned.length > 0) {
+            const { data: classAssigned } = await classQuery.limit(1).maybeSingle();
+
+            if (classAssigned) {
                 availableRoles.add('CLASS_TEACHER');
             }
 
-            // Check if they are a subject teacher
+            // Check if they are a subject teacher (they should have subject_teachers record)
             const { data: subjectAssigned } = await supabase
                 .from('subject_teachers')
                 .select('id')
                 .eq('user_id', userId)
-                .limit(1);
+                .limit(1)
+                .maybeSingle();
 
-            if (subjectAssigned && subjectAssigned.length > 0) {
+            if (subjectAssigned) {
                 availableRoles.add('SUBJECT_TEACHER');
             }
         } else {

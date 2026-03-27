@@ -156,7 +156,7 @@ export async function GET(
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, remarks,
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
-                    subjects ( id, name, category, display_order )
+                    subjects ( id, name, code, category, display_order )
                 )
             `)
             .in('student_id', studentIds)
@@ -176,7 +176,7 @@ export async function GET(
         // Fetch all exams for this term and grade to ensure all subjects are shown even if missing from exam_marks
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, subjects(id, name, category, display_order)')
+            .select('id, max_score, subjects(id, name, code, category, display_order)')
             .eq('term_id', termId);
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
         if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
@@ -307,9 +307,12 @@ export async function GET(
                 const subject = m.exams.subjects;
                 if (!subject) return;
                 const pct = Number(m.percentage);
-                const grade = gradingScales.length > 0
-                    ? getGradeFromScales(pct, gradingScales)
-                    : (m.grade_symbol || '-');
+                // Prioritise manually-entered grade_symbol over auto-calculated
+                const grade = m.grade_symbol
+                    ? m.grade_symbol
+                    : (gradingScales.length > 0
+                        ? getGradeFromScales(pct, gradingScales)
+                        : '-');
                 const points = gradingScales.length > 0
                     ? getPointsFromScales(pct, gradingScales)
                     : undefined;
@@ -318,6 +321,7 @@ export async function GET(
                     : undefined;
 
                 subjMarksMap.set(subject.id, {
+                    subjectCode: subject.code || subject.name || 'Unknown',
                     subjectName: subject.name || 'Unknown Subject',
                     category: subject.category || 'OTHER',
                     score: Number(m.raw_score),
@@ -331,27 +335,8 @@ export async function GET(
                 });
             });
 
-            // Ensure all term exams exist in the report
-            if (termExams) {
-                termExams.forEach((ex: any) => {
-                    const subject = ex.subjects;
-                    if (subject && !subjMarksMap.has(subject.id)) {
-                        subjMarksMap.set(subject.id, {
-                            subjectName: subject.name,
-                            category: subject.category || 'OTHER',
-                            score: null,
-                            totalPossible: Number(ex.max_score || 100),
-                            percentage: null,
-                            grade: '-',
-                            points: undefined,
-                            rubric: undefined,
-                            teacherComment: '',
-                        });
-                    }
-                });
-            }
-
-            const subjectMarks = Array.from(subjMarksMap.values());
+            const subjectMarks = Array.from(subjMarksMap.values())
+                .filter((m: any) => m.score !== null && m.score !== undefined);
 
             // Sort by category then name
             subjectMarks.sort((a: any, b: any) => {

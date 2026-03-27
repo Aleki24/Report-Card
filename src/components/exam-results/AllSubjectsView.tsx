@@ -10,7 +10,7 @@ interface StudentRow {
     studentId: string;
     studentName: string;
     admissionNumber: string;
-    subjects: Record<string, { score: number; grade: string }>;
+    subjects: Record<string, { score: number; grade: string; name: string }>;
     total: number;
     average: number;
     rank: number;
@@ -19,7 +19,7 @@ interface StudentRow {
 export function AllSubjectsView({ gradeStreamId }: Props) {
     const [loading, setLoading] = useState(true);
     const [rows, setRows] = useState<StudentRow[]>([]);
-    const [subjectNames, setSubjectNames] = useState<string[]>([]);
+    const [subjectCodes, setSubjectCodes] = useState<string[]>([]);
 
     useEffect(() => {
         if (!gradeStreamId) return;
@@ -34,7 +34,7 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
 
                 if (!marks || marks.length === 0) {
                     setRows([]);
-                    setSubjectNames([]);
+                    setSubjectCodes([]);
                     setLoading(false);
                     return;
                 }
@@ -42,24 +42,25 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                 const validMarks = marks.filter((m: any) => m.students && m.exams && m.exams.subjects);
 
                 // Aggregate: for each student × subject, keep the latest (or best) score
-                // Using a map: studentId → { name, admNo, subjects: { subjectName → { score, grade } } }
+                // Using a map: studentId → { name, admNo, subjects: { subjectCode → { score, grade, name } } }
                 const studentMap: Record<string, {
                     name: string;
                     admNo: string;
-                    subjects: Record<string, { score: number; grade: string }>;
+                    subjects: Record<string, { score: number; grade: string; name: string }>;
                 }> = {};
                 const allSubjects = new Set<string>();
 
                 validMarks.forEach((m: any) => {
                     const exam = m.exams;
                     const stu = m.students;
-                    const subjName = exam.subjects?.name || 'Unknown';
+                    const subjCode = exam.subjects?.code || exam.subjects?.name || 'Unknown';
+                    const subjName = exam.subjects?.name || subjCode;
                     const firstName = stu?.users?.first_name || '';
                     const lastName = stu?.users?.last_name || '';
                     const pct = Number(m.percentage);
                     const grade = m.grade_symbol || '-';
 
-                    allSubjects.add(subjName);
+                    allSubjects.add(subjCode);
 
                     if (!studentMap[m.student_id]) {
                         studentMap[m.student_id] = {
@@ -70,14 +71,14 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                     }
 
                     // If student already has a score for this subject, keep the latest (higher percentage wins)
-                    const existing = studentMap[m.student_id].subjects[subjName];
+                    const existing = studentMap[m.student_id].subjects[subjCode];
                     if (!existing || pct > existing.score) {
-                        studentMap[m.student_id].subjects[subjName] = { score: pct, grade };
+                        studentMap[m.student_id].subjects[subjCode] = { score: pct, grade, name: subjName };
                     }
                 });
 
                 const subjects = Array.from(allSubjects).sort();
-                setSubjectNames(subjects);
+                setSubjectCodes(subjects);
 
                 // Build rows with total, average, and rank
                 const rawRows = Object.entries(studentMap).map(([studentId, ObjectData]) => {
@@ -114,7 +115,7 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
             } catch (err) {
                 console.error(err);
                 setRows([]);
-                setSubjectNames([]);
+                setSubjectCodes([]);
             } finally {
                 setLoading(false);
             }
@@ -148,7 +149,7 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                     📋 All Subjects — Aggregated Results
                 </h3>
                 <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                    Showing best score per subject for each student. {rows.length} students · {subjectNames.length} subjects
+                    Showing best score per subject for each student. {rows.length} students · {subjectCodes.length} subjects
                 </p>
             </div>
             <div style={{ overflowX: 'auto' }}>
@@ -158,8 +159,8 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                             <th style={thStyle}>Rank</th>
                             <th style={thStyle}>Student</th>
                             <th style={thStyle}>Adm No</th>
-                            {subjectNames.map(s => (
-                                <th key={s} style={{ ...thStyle, textAlign: 'center', minWidth: 80 }}>{s}</th>
+                            {subjectCodes.map(s => (
+                                <th key={s} style={{ ...thStyle, textAlign: 'center', minWidth: 80 }} title={rows[0]?.subjects[s]?.name || s}>{s}</th>
                             ))}
                             <th style={{ ...thStyle, textAlign: 'center' }}>Total</th>
                             <th style={{ ...thStyle, textAlign: 'center' }}>Avg</th>
@@ -178,13 +179,13 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                                     {row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : `#${row.rank}`}
                                 </td>
                                 <td style={{ ...tdStyle, fontWeight: 500 }}>{row.studentName}</td>
-                                <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber}</td>
-                                {subjectNames.map(s => {
+                                <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber || '—'}</td>
+                                {subjectCodes.map(s => {
                                     const val = row.subjects[s];
                                     return (
                                         <td key={s} style={{ ...tdStyle, textAlign: 'center' }}>
                                             {val ? (
-                                                <span title={`Grade: ${val.grade}`}>
+                                                <span title={`${val.name} - Grade: ${val.grade}`}>
                                                     <span style={{ fontWeight: 600 }}>{val.score.toFixed(0)}</span>
                                                     <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 2 }}>{val.grade}</span>
                                                 </span>

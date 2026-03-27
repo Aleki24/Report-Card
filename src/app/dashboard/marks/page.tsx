@@ -19,13 +19,15 @@ interface DropdownItem { id: string; name: string; }
 interface GradeItem { id: string; name_display: string; code: string; academic_level_id: string; }
 interface TermItem { id: string; name: string; academic_year_id: string; }
 interface StreamItem { id: string; name: string; full_name: string; grade_id: string; }
-interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; }
+interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; category?: string; }
+interface MySubject { id: string; code: string; name: string; academic_level_id: string; category?: string; exams?: { id: string; name: string; exam_type: string; max_score: number; }[]; }
 
 const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER'];
 
 export default function MarksPage() {
     const supabase = createSupabaseBrowserClient();
-    const { user, profile } = useAuth();
+    const { user, profile, availableRoles } = useAuth();
+    const isAlsoClassTeacher = profile?.role === 'SUBJECT_TEACHER' && availableRoles.includes('CLASS_TEACHER');
 
     // Existing exam list state
     const [mode, setMode] = useState<'bulk' | 'manual'>('bulk');
@@ -33,9 +35,15 @@ export default function MarksPage() {
     const [selectedExamId, setSelectedExamId] = useState('');
     const [loading, setLoading] = useState(true);
 
+    // Subject teacher view state
+    const [mySubjects, setMySubjects] = useState<MySubject[]>([]);
+    const [loadingMySubjects, setLoadingMySubjects] = useState(false);
+
+
     // Modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [deletingExamId, setDeletingExamId] = useState<string | null>(null);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Form fields
@@ -98,6 +106,44 @@ export default function MarksPage() {
     }, []);
 
     useEffect(() => { fetchExams(); }, [fetchExams]);
+
+    // Fetch subject teacher's assigned subjects
+    const fetchMySubjects = useCallback(async () => {
+        setLoadingMySubjects(true);
+        try {
+            const res = await fetch('/api/school/data?type=my_subjects');
+            if (res.ok) {
+                const json = await res.json();
+                const subjectList = json?.data || [];
+                
+                // Fetch exams for each subject
+                const subjectsWithExams = await Promise.all(
+                    subjectList.map(async (subject: MySubject) => {
+                        const examRes = await fetch('/api/school/exams');
+                        if (examRes.ok) {
+                            const examJson = await examRes.json();
+                            const subjectExams = (examJson?.data || []).filter((e: any) => e.subject_id === subject.id);
+                            return { ...subject, exams: subjectExams };
+                        }
+                        return { ...subject, exams: [] };
+                    })
+                );
+                setMySubjects(subjectsWithExams);
+            } else {
+                setMySubjects([]);
+            }
+        } catch (error) {
+            console.error('Error fetching my subjects:', error);
+            setMySubjects([]);
+        }
+        setLoadingMySubjects(false);
+    }, []);
+
+    useEffect(() => { 
+        if (profile?.role === 'SUBJECT_TEACHER') {
+            fetchMySubjects(); 
+        }
+    }, [profile?.role, fetchMySubjects]);
 
     // Fetch dropdown data when modal opens — via server API to bypass RLS
     const fetchDropdowns = useCallback(async () => {
@@ -209,10 +255,11 @@ export default function MarksPage() {
     };
 
     // Handle exam creation
-    const handleCreateExam = async () => {
+    const handleCreateExam = async (overrideSubjectId?: string) => {
+        const effectiveSubjectId = overrideSubjectId || selectedSubjectId;
         setSaveMessage(null);
         if (!examName.trim()) return setSaveMessage({ type: 'error', text: 'Exam name is required.' });
-        if (!selectedSubjectId) return setSaveMessage({ type: 'error', text: 'Please select a subject.' });
+        if (!effectiveSubjectId) return setSaveMessage({ type: 'error', text: 'Please select a subject.' });
         if (!selectedAcademicYearId) return setSaveMessage({ type: 'error', text: 'Please select an academic year.' });
         if (!selectedTermId) return setSaveMessage({ type: 'error', text: 'Please select a term.' });
         if (!selectedGradeId) return setSaveMessage({ type: 'error', text: 'Please select a grade.' });
@@ -224,7 +271,7 @@ export default function MarksPage() {
         const insertPayload: Record<string, unknown> = {
             name: examName.trim(),
             exam_type: examType,
-            subject_id: selectedSubjectId,
+            subject_id: effectiveSubjectId,
             academic_year_id: selectedAcademicYearId,
             term_id: selectedTermId,
             grade_id: selectedGradeId,
@@ -261,9 +308,37 @@ export default function MarksPage() {
         // Refresh + select new exam
         if (newExamId) setSelectedExamId(newExamId);
         await fetchExams();
+        if (profile?.role === 'SUBJECT_TEACHER') await fetchMySubjects();
         if (newExamId) setSelectedExamId(newExamId);
 
         setTimeout(() => { setShowCreateModal(false); setSaveMessage(null); }, 1200);
+    };
+
+    const handleDeleteExam = async (examId: string) => {
+        if (!confirm('Are you sure you want to delete this exam? This action cannot be undone and all associated marks will be lost.')) return;
+        
+        try {
+            setDeletingExamId(examId);
+            const res = await fetch(`/api/school/exams/${examId}`, {
+                method: 'DELETE',
+            });
+            
+            if (res.ok) {
+                setExams(prev => prev.filter(e => e.id !== examId));
+                if (selectedExamId === examId) {
+                    const remaining = exams.filter(e => e.id !== examId);
+                    setSelectedExamId(remaining.length > 0 ? remaining[0].id : '');
+                }
+            } else {
+                const data = await res.json();
+                alert(`Failed to delete exam: ${data.error || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error('Error deleting exam:', err);
+            alert('An error occurred while deleting the exam.');
+        } finally {
+            setDeletingExamId(null);
+        }
     };
 
     const selectedExam = exams.find(e => e.id === selectedExamId);
@@ -284,6 +359,29 @@ export default function MarksPage() {
                 <button className="btn-primary shrink-0" onClick={() => setShowCreateModal(true)}>+ Create Exam</button>
             </div>
 
+            {/* Dual-role navigation banner */}
+            {isAlsoClassTeacher && (
+                <a
+                    href="/dashboard/reports"
+                    className="mb-6 flex items-center gap-3 p-4 rounded-lg border transition-all hover:scale-[1.01]"
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.08))',
+                        border: '1px solid rgba(139,92,246,0.25)',
+                        textDecoration: 'none',
+                        color: 'inherit',
+                    }}
+                >
+                    <span style={{ fontSize: 22 }}>📋</span>
+                    <div style={{ flex: 1 }}>
+                        <span className="font-semibold text-sm" style={{ color: 'rgb(167,139,250)' }}>Go to My Class</span>
+                        <span className="text-xs block" style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>
+                            Switch to your class teacher dashboard to generate reports &amp; manage students
+                        </span>
+                    </div>
+                    <span style={{ fontSize: 18, opacity: 0.6 }}>→</span>
+                </a>
+            )}
+
             {/* Guide */}
             <div className="mb-6 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
@@ -296,6 +394,116 @@ export default function MarksPage() {
                     </ul>
                 </div>
             </div>
+
+            {/* Subject Teacher View - My Subjects */}
+            {profile?.role === 'SUBJECT_TEACHER' && (
+                <div className="mb-6">
+                    <h2 className="text-lg font-semibold font-[family-name:var(--font-display)] mb-4">My Subjects</h2>
+                    {loadingMySubjects ? (
+                        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
+                            <p style={{ color: 'var(--color-text-muted)' }}>Loading your subjects...</p>
+                        </div>
+                    ) : mySubjects.length === 0 ? (
+                        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-8)' }}>
+                            <p style={{ color: 'var(--color-text-muted)' }}>No subjects assigned to you. Contact administrator.</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
+                            {mySubjects.map(subject => (
+                                <div key={subject.id} className="card" style={{ padding: 'var(--space-5)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>
+                                        <div>
+                                            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+                                                {subject.name}
+                                            </h3>
+                                            <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontFamily: 'monospace' }}>
+                                                {subject.code}
+                                            </span>
+                                            {subject.category && (
+                                                <span style={{ 
+                                                    display: 'inline-block', 
+                                                    marginLeft: 8, 
+                                                    fontSize: 10, 
+                                                    padding: '2px 6px', 
+                                                    background: 'var(--color-surface-raised)', 
+                                                    borderRadius: 4 
+                                                }}>
+                                                    {subject.category}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Existing Exams */}
+                                    <div style={{ marginBottom: 'var(--space-3)' }}>
+                                        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 'var(--space-2)', textTransform: 'uppercase' }}>
+                                            Exams ({subject.exams?.length || 0})
+                                        </p>
+                                        {subject.exams && subject.exams.length > 0 ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                                {subject.exams.slice(0, 3).map(exam => (
+                                                    <div 
+                                                        key={exam.id}
+                                                        style={{ 
+                                                            display: 'flex', 
+                                                            justifyContent: 'space-between', 
+                                                            alignItems: 'center',
+                                                            padding: 'var(--space-2) var(--space-3)',
+                                                            background: selectedExamId === exam.id ? 'var(--color-accent-transparent)' : 'var(--color-surface-raised)',
+                                                            borderRadius: 6,
+                                                            border: selectedExamId === exam.id ? '1px solid var(--color-accent)' : '1px solid transparent',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => setSelectedExamId(exam.id)}
+                                                    >
+                                                        <div>
+                                                            <span style={{ fontSize: 13, fontWeight: 500 }}>{exam.name}</span>
+                                                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 8 }}>{exam.exam_type}</span>
+                                                        </div>
+                                                        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Max: {exam.max_score}</span>
+                                                    </div>
+                                                ))}
+                                                {subject.exams.length > 3 && (
+                                                    <p style={{ fontSize: 11, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+                                                        +{subject.exams.length - 3} more exams
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                                                No exams created yet
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                        <button 
+                                            className="btn-primary flex-1"
+                                            style={{ fontSize: 12, padding: 'var(--space-2) var(--space-3)' }}
+                                            onClick={() => {
+                                                setSelectedSubjectId(subject.id);
+                                                setShowCreateModal(true);
+                                            }}
+                                        >
+                                            + New Exam
+                                        </button>
+                                        {subject.exams && subject.exams.length > 0 && (
+                                            <button 
+                                                className="btn-secondary"
+                                                style={{ fontSize: 12, padding: 'var(--space-2) var(--space-3)' }}
+                                                onClick={() => setSelectedExamId(subject.exams![0].id)}
+                                            >
+                                                View Marks
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Controls Bar */}
             <div
@@ -352,8 +560,19 @@ export default function MarksPage() {
 
             {/* Selected Exam Info */}
             {selectedExam && (
-                <div className="mb-6 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
-                    <strong>Selected:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name || 'N/A'} · <strong>Grade:</strong> {selectedExam.grade_name || 'N/A'} · <strong>Max Score:</strong> {selectedExam.max_score}
+                <div className="mb-6 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)] flex justify-between items-center flex-wrap gap-2">
+                    <div>
+                        <strong>Selected:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name || 'N/A'} · <strong>Grade:</strong> {selectedExam.grade_name || 'N/A'} · <strong>Max Score:</strong> {selectedExam.max_score}
+                    </div>
+                    {profile?.role === 'ADMIN' && (
+                        <button 
+                            onClick={() => handleDeleteExam(selectedExam.id)}
+                            disabled={deletingExamId === selectedExam.id}
+                            className="text-xs px-3 py-1 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded border border-red-500/20 transition-colors disabled:opacity-50"
+                        >
+                            {deletingExamId === selectedExam.id ? 'Deleting...' : 'Delete Exam'}
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -416,11 +635,25 @@ export default function MarksPage() {
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
                                         <label className="text-xs text-[var(--color-text-muted)]">Subject *</label>
-                                        <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
-                                            {addingSubject ? '✕ Cancel' : '+ Add'}
-                                        </button>
+                                        {/* Show quick-add only when subject is NOT pre-selected */}
+                                        {!selectedSubjectId && (
+                                            <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
+                                                {addingSubject ? '✕ Cancel' : '+ Add'}
+                                            </button>
+                                        )}
                                     </div>
-                                    {subjects.length === 0 && !addingSubject ? (
+
+                                    {/* If subject is pre-selected (e.g. from subject teacher card), show read-only */}
+                                    {selectedSubjectId && subjects.find(s => s.id === selectedSubjectId) ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="input-field w-full bg-[var(--color-surface-raised)] cursor-not-allowed opacity-80">
+                                                {subjects.find(s => s.id === selectedSubjectId)?.name} ({subjects.find(s => s.id === selectedSubjectId)?.code})
+                                            </div>
+                                            <button type="button" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] whitespace-nowrap" onClick={() => setSelectedSubjectId('')}>
+                                                Change
+                                            </button>
+                                        </div>
+                                    ) : subjects.length === 0 && !addingSubject ? (
                                         <p className="text-xs text-orange-400">No subjects found. Click <strong>+ Add</strong> above.</p>
                                     ) : !addingSubject ? (
                                         <select className="input-field w-full" value={selectedSubjectId} onChange={e => setSelectedSubjectId(e.target.value)}>
@@ -432,7 +665,7 @@ export default function MarksPage() {
                                     ) : null}
 
                                     {/* Inline Add Subject Form */}
-                                    {addingSubject && (
+                                    {addingSubject && !selectedSubjectId && (
                                         <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2 mt-1">
                                             <div className="flex gap-2">
                                                 <input className="input-field flex-1 text-xs" placeholder="Subject Name, e.g. Mathematics" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
@@ -622,7 +855,7 @@ export default function MarksPage() {
                             </button>
                             <button
                                 className="btn-primary disabled:opacity-50"
-                                onClick={handleCreateExam}
+                                onClick={() => handleCreateExam()}
                                 disabled={creating || dropdownsLoading}
                             >
                                 {creating ? 'Creating...' : 'Create Exam'}
@@ -631,6 +864,7 @@ export default function MarksPage() {
                     </div>
                 </div>
             )}
+
         </div>
     );
 }

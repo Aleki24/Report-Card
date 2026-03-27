@@ -138,7 +138,7 @@ export async function GET(
 
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, category, display_order)')
+            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order)')
             .eq('term_id', termId);
         
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
@@ -154,7 +154,7 @@ export async function GET(
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
                     terms ( name ),
                     academic_years ( name ),
-                    subjects ( id, name, category, display_order )
+                    subjects ( id, name, code, category, display_order )
                 )
             `)
             .eq('student_id', studentId);
@@ -322,9 +322,12 @@ export async function GET(
             const pct = Number(m.percentage);
 
             // Determine grade, points, rubric from scales
-            const grade = gradingScales.length > 0
-                ? getGradeFromScales(pct, gradingScales)
-                : (m.grade_symbol || '-');
+            // Prioritise manually-entered grade_symbol over auto-calculated
+            const grade = m.grade_symbol
+                ? m.grade_symbol
+                : (gradingScales.length > 0
+                    ? getGradeFromScales(pct, gradingScales)
+                    : '-');
 
             const points = gradingScales.length > 0
                 ? getPointsFromScales(pct, gradingScales)
@@ -335,6 +338,7 @@ export async function GET(
                 : undefined;
 
             subjMarksMap.set(subject.id, {
+                subjectCode: subject.code || subject.name || 'Unknown',
                 subjectName: subject.name || 'Unknown Subject',
                 category: subject.category || 'OTHER',
                 score: Number(m.raw_score),
@@ -348,27 +352,10 @@ export async function GET(
             });
         });
 
-        // Ensure all term exams exist in the report
-        if (termExams) {
-            termExams.forEach((ex: any) => {
-                const subject = ex.subjects;
-                if (subject && !subjMarksMap.has(subject.id)) {
-                    subjMarksMap.set(subject.id, {
-                        subjectName: subject.name,
-                        category: subject.category || 'OTHER',
-                        score: null,
-                        totalPossible: Number(ex.max_score || 100),
-                        percentage: null,
-                        grade: '-',
-                        points: undefined,
-                        rubric: undefined,
-                        teacherComment: '',
-                    });
-                }
-            });
-        }
-
-        const subjectMarks = Array.from(subjMarksMap.values());
+        // Only include subjects that have marks entered (filter out exams without marks)
+        // This handles CBC students who don't take all subjects
+        const subjectMarks = Array.from(subjMarksMap.values())
+            .filter((m: any) => m.score !== null && m.score !== undefined);
 
         // Sort by category then display_order
         subjectMarks.sort((a: any, b: any) => {
@@ -377,7 +364,7 @@ export async function GET(
             return a.subjectName.localeCompare(b.subjectName);
         });
 
-        // 11. Calculate total score / total possible for the summary strip
+        // 11. Calculate total score / total possible for the summary strip (only for subjects with marks)
         const computedTotalScore = subjectMarks.reduce((sum: number, m: any) => sum + (m.score || 0), 0);
         const computedTotalPossible = subjectMarks.reduce((sum: number, m: any) => sum + (m.totalPossible || 0), 0);
 

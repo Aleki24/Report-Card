@@ -98,6 +98,7 @@ CREATE TABLE users (
     phone TEXT,
     role user_role NOT NULL,
     is_active BOOLEAN DEFAULT true NOT NULL,
+    plain_password TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

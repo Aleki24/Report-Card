@@ -37,18 +37,21 @@ export async function sendSMS(to: string, message: string): Promise<SMSResult> {
         }
 
         const result = await sms.send(options);
+        console.log('[SMS] AT response:', JSON.stringify(result, null, 2));
 
         const recipient = result.SMSMessageData?.Recipients?.[0];
-        if (recipient && recipient.statusCode === 101) {
+        if (recipient && (recipient.statusCode === 100 || recipient.statusCode === 101)) {
             return { success: true, to: phone, messageId: recipient.messageId };
         }
 
+        console.error('[SMS] Send failed for', phone, ':', recipient?.status, '| statusCode:', recipient?.statusCode, '| full:', JSON.stringify(result.SMSMessageData));
         return {
             success: false,
             to: phone,
             error: recipient?.status || 'Unknown error',
         };
     } catch (err: any) {
+        console.error('[SMS] Exception sending to', phone, ':', err.message || err);
         return { success: false, to: phone, error: err.message || 'SMS send failed' };
     }
 }

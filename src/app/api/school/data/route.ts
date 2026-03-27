@@ -25,7 +25,9 @@ type DataType =
   | 'pending_invites'
   | 'school_profile'
   | 'grading_scales'
-  | 'exams';
+  | 'exams'
+  | 'my_subjects'
+  | 'class_teacher_assignments';
 
 async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string; role: string } | null> {
   const session = await getServerSession(authOptions) as any;
@@ -202,6 +204,56 @@ export async function GET(request: NextRequest) {
         }
         
         return NextResponse.json({ data: filteredExams });
+      }
+
+      case 'my_subjects': {
+        // Returns subjects assigned to the current user (for subject teachers)
+        const perms = await getTeacherPermissions(auth.userId);
+        
+        if (!perms.isSubjectTeacher) {
+          return NextResponse.json({ data: [] });
+        }
+
+        // Get subject IDs from assignments
+        const subjectIds = [...new Set(perms.subjectTeacherAssignments.map(a => a.subject_id))];
+        if (subjectIds.length === 0) {
+          return NextResponse.json({ data: [] });
+        }
+
+        const { data, error } = await supabase
+          .from('subjects')
+          .select('id, code, name, academic_level_id, category, is_compulsory, display_order')
+          .in('id', subjectIds)
+          .order('display_order');
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ data: data ?? [] });
+      }
+
+      case 'class_teacher_assignments': {
+        // Get all class teacher assignments for the school (for filtering users)
+        const { data: classTeachers, error } = await supabase
+          .from('class_teachers')
+          .select('user_id, current_grade_stream_id, academic_year_id, grade_streams(full_name)')
+          .order('created_at', { ascending: false });
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        
+        // Get current academic year to filter
+        const { data: currentYear } = await supabase
+          .from('academic_years')
+          .select('id')
+          .eq('school_id', schoolId)
+          .order('start_date', { ascending: false })
+          .limit(1)
+          .single();
+        
+        // Filter to only current year assignments
+        const filtered = currentYear 
+          ? (classTeachers ?? []).filter(ct => ct.academic_year_id === currentYear.id)
+          : classTeachers ?? [];
+        
+        return NextResponse.json({ data: filtered });
       }
 
       default:

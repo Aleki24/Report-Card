@@ -16,6 +16,7 @@ export interface ReportCardData {
     className: string;
     gradingSystemType: 'KCSE' | 'CBC';
     subjectMarks: {
+        subjectCode?: string;
         subjectName: string;
         category: string;
         score: number;
@@ -283,7 +284,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         </View>
                         <View style={[s.infoItem, { flex: 0.6 }]}>
                             <Text style={s.infoLabel}>Adm No</Text>
-                            <Text style={s.infoValue}>{data.enrollmentNumber || '—'}</Text>
+                            <Text style={s.infoValue}>{data.enrollmentNumber || ''}</Text>
                         </View>
                         <View style={[s.infoItem, { flex: 0.5 }]}>
                             <Text style={s.infoLabel}>Year</Text>
@@ -306,7 +307,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             </View>
                             <View style={{ alignItems: 'center' }}>
                                 <Text style={s.summaryLabel}>Total Marks</Text>
-                                <Text style={s.summaryVal}>{totalScore}/{totalPossible}</Text>
+                                <Text style={s.summaryVal}>{totalScore}</Text>
                             </View>
                             {isKCSE && data.totalPoints !== undefined && (
                                 <View style={{ alignItems: 'center' }}>
@@ -352,7 +353,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                 return (
                                     <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                         <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                        <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
+                                        <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectCode || sm.subjectName}</Text>
                                         <Text style={[s.tdBold, s.colKcseScore]}>{sm.score ?? '—'}</Text>
                                         <Text style={[s.tdText, s.colKcsePct]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                                         <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
@@ -367,7 +368,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             return (
                                 <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                     <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                    <Text style={[s.tdText, s.colSubject]}>{sm.subjectName}</Text>
+                                    <Text style={[s.tdText, s.colSubject]}>{sm.subjectCode || sm.subjectName}</Text>
                                     <Text style={[s.tdBold, s.colMarks]}>
                                         {sm.score != null ? `${sm.score} / ${sm.percentage}%` : '—'}
                                     </Text>
@@ -396,7 +397,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                 </>
                             ) : (
                                 <>
-                                    <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore} / {data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore}</Text>
                                     <Text style={[s.tdBold, s.colRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colPoints, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colComment]}></Text>
@@ -457,14 +458,6 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         )}
                     </View>
 
-                    {/* ═══ HOI / HEAD OF INSTITUTION REMARKS ═══ */}
-                    <View style={s.commentBox}>
-                        <Text style={s.commentTitle}>HOI&apos;s Remarks:</Text>
-                        <View>
-                            <View style={s.commentLine} />
-                            <View style={s.commentLine} />
-                        </View>
-                    </View>
 
                     {/* ═══ SIGNATURES ═══ */}
                     <View style={s.signaturesRow}>
@@ -486,7 +479,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                     {data.openingDate && (
                         <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>
                     )}
-                    <Text style={s.footerLine}>System developed by: Blaise Technologies</Text>
+                    <Text style={s.footerLine}>System developed by: Matokeo</Text>
                     <Text>This document is electronically generated</Text>
                 </View>
 

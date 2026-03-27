@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
 
 interface UserRow {
@@ -31,6 +31,15 @@ export default function UsersPage() {
   const [invitedUsername, setInvitedUsername] = useState('');
   const [invitedPassword, setInvitedPassword] = useState('');
   const [invitedName, setInvitedName] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const usersPerPage = 5;
+
+  // Password reset state
+  const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
+  const [showResetResult, setShowResetResult] = useState(false);
+  const [resetResultPassword, setResetResultPassword] = useState('');
 
   const [formFirstName, setFormFirstName] = useState('');
   const [formLastName, setFormLastName] = useState('');
@@ -159,6 +168,43 @@ export default function UsersPage() {
     STUDENT: '#10B981',
   };
 
+  // Reset password handler
+  const resetUserPassword = async (user: UserRow) => {
+    if (!confirm(`Reset password for ${user.first_name} ${user.last_name}?`)) return;
+    setResettingPasswordId(user.id);
+    try {
+      const res = await fetch('/api/admin/reset-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Failed to reset password');
+      } else {
+        setResetResultPassword(data.password);
+        setShowResetResult(true);
+        fetchData();
+      }
+    } catch {
+      alert('Network error');
+    } finally {
+      setResettingPasswordId(null);
+    }
+  };
+
+  // Reset to page 1 when users list changes (for simplicity)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [users.length]);
+
+  // Compute filtered and paginated users
+  const { paginatedUsers, totalPages } = useMemo(() => {
+    const total = Math.ceil(users.length / usersPerPage);
+    const paginated = users.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
+    return { paginatedUsers: paginated, totalPages: total };
+  }, [users, currentPage, usersPerPage]);
+
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
@@ -202,10 +248,10 @@ export default function UsersPage() {
           <div className="overflow-x-auto">
             <table className="data-table w-full sm:whitespace-nowrap">
               <thead>
-                <tr><th>Name</th><th>Email</th><th>Username</th><th>Password</th><th>Role</th><th>Joined</th><th>Status</th></tr>
+                <tr><th>Name</th><th>Email</th><th>Username</th><th>Password</th><th>Role</th><th>Joined</th><th>Status</th><th></th></tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {paginatedUsers.map(u => (
                   <tr key={u.id}>
                     <td data-label="Name" className="font-medium">{u.first_name} {u.last_name}</td>
                     <td data-label="Email" className="text-[var(--color-text-muted)] text-sm">{u.email || '—'}</td>
@@ -224,10 +270,42 @@ export default function UsersPage() {
                         {u.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+                    <td data-label="Actions">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => resetUserPassword(u)} 
+                          disabled={resettingPasswordId === u.id}
+                          className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition disabled:opacity-50"
+                          title="Reset Password"
+                        >
+                          {resettingPasswordId === u.id ? '...' : '🔑'}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-4 border-t border-[var(--color-border)]">
+                <div className="text-sm text-[var(--color-text-muted)]">
+                  Showing {(currentPage - 1) * usersPerPage + 1} to {Math.min(currentPage * usersPerPage, users.length)} of {users.length} users
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm rounded-lg border transition disabled:opacity-50" style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                    ← Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button key={page} onClick={() => setCurrentPage(page)} className="px-3 py-1.5 text-sm rounded-lg border transition" style={{ backgroundColor: currentPage === page ? 'var(--color-accent)' : 'var(--color-surface-raised)', borderColor: currentPage === page ? 'var(--color-accent)' : 'var(--color-border)', color: currentPage === page ? '#fff' : 'var(--color-text-secondary)' }}>
+                      {page}
+                    </button>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm rounded-lg border transition disabled:opacity-50" style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -396,6 +474,32 @@ export default function UsersPage() {
               The user can log in immediately at <strong>/login</strong>. It's recommended they update their password after their first login.
             </p>
             <button className="btn-primary w-full" onClick={() => setShowInviteResult(false)}>Done</button>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Result Modal */}
+      {showResetResult && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowResetResult(false)}>
+          <div className="card w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)' }}>
+                <span className="text-3xl">🔑</span>
+              </div>
+              <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">Password Reset</h2>
+              <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>
+                New password for this user:
+              </p>
+              <div className="bg-[var(--color-surface-raised)] border rounded-lg p-4 mb-4">
+                <code className="text-xl font-mono font-bold" style={{ color: 'var(--color-success)' }}>{resetResultPassword}</code>
+              </div>
+              <p className="text-xs mb-4" style={{ color: 'var(--color-text-muted)' }}>
+                Share this password with the user securely.
+              </p>
+              <button onClick={() => setShowResetResult(false)} className="btn-primary w-full">
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

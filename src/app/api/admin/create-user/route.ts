@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
             grade_stream_id,
             academic_level_id,
             class_teacher_grade_stream_id, // For class teachers
-            subject_teacher_subjects       // Array of { subject_id, grade_id, grade_stream_id? } for subject teachers
+            subject_teacher_subjects,      // Array of { subject_id, grade_id, grade_stream_id? } for subject teachers
+            is_class_teacher               // For subject teachers who are also class teachers
         } = body;
 
         // Validate required fields
@@ -198,6 +199,7 @@ export async function POST(request: NextRequest) {
                 school_id,
                 username,
                 password_hash,
+                plain_password: rawPassword,
                 is_active: true,
                 // Email is required by schema, but they won't use it. Generate a dummy one.
                 email: `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`,
@@ -243,7 +245,7 @@ export async function POST(request: NextRequest) {
              }
         }
 
-        if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
+if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
               const { data: tRecord } = await supabaseAdmin.from('subject_teachers').insert({ user_id: newUser.id }).select('id').single();
               if (tRecord) {
                    const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).order('start_date', { ascending: false }).limit(1).single();
@@ -257,7 +259,26 @@ export async function POST(request: NextRequest) {
                         }));
                         await supabaseAdmin.from('subject_teacher_assignments').insert(assignments);
                    }
-              }
+               }
+        }
+
+        // Handle subject teacher who is also a class teacher
+        if (role === 'SUBJECT_TEACHER' && is_class_teacher && class_teacher_grade_stream_id) {
+             const { data: currentYear } = await supabaseAdmin
+                  .from('academic_years')
+                  .select('id')
+                  .eq('school_id', school_id)
+                  .order('start_date', { ascending: false })
+                  .limit(1)
+                  .single();
+
+             if (currentYear) {
+                  await supabaseAdmin.from('class_teachers').insert({
+                      user_id: newUser.id,
+                      current_grade_stream_id: class_teacher_grade_stream_id,
+                      academic_year_id: currentYear.id
+                  });
+             }
         }
 
         return NextResponse.json({

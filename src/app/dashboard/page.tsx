@@ -137,12 +137,14 @@ function ClassTeacherDashboard() {
         const json = await res.json();
         const streamName = json.streamName || '—';
         const studentCount = json.studentCount || 0;
+        const streamAvg = json.streamAvg || '—';
+        const reportsPending = json.reportsPending || 0;
 
         setKpis([
           { label: 'My Stream', value: streamName, sub: 'Assigned homeroom' },
           { label: 'Stream Students', value: studentCount.toString(), sub: studentCount ? 'Enrolled' : 'No students yet' },
-          { label: 'Stream Average', value: '—', sub: 'Enter marks to see' },
-          { label: 'Reports Pending', value: '—', sub: 'Generate reports to track' },
+          { label: 'Stream Average', value: streamAvg !== '—' ? `${streamAvg}%` : '—', sub: streamAvg !== '—' ? 'Class average' : 'Enter marks to see' },
+          { label: 'Reports Pending', value: reportsPending.toString(), sub: reportsPending > 0 ? 'Need generation' : 'All done!' },
         ]);
       } catch {
         setKpis([

@@ -51,7 +51,7 @@ export default function MyResultsPage() {
             const { data: studentRecord } = await supabase
                 .from('students')
                 .select('id, current_grade_stream_id')
-                .eq('user_id', user.id)
+                .eq('id', user.id)
                 .limit(1)
                 .single();
 
