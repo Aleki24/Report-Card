@@ -56,8 +56,28 @@ export async function POST(request: NextRequest) {
             .eq('id', user_id)
             .single();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
-            return NextResponse.json({ error: 'Only admins with a school can create users.' }, { status: 403 });
+        // Allow admins and class teachers to create users
+        if (!adminProfile || !adminProfile.school_id) {
+            return NextResponse.json({ error: 'User must have a school to create users.' }, { status: 403 });
+        }
+        
+        const canCreateUsers = adminProfile.role === 'ADMIN' || adminProfile.role === 'CLASS_TEACHER';
+        if (!canCreateUsers) {
+            return NextResponse.json({ error: 'Only admins and class teachers can create users.' }, { status: 403 });
+        }
+
+        // If class teacher, verify they're creating a student for their assigned stream
+        if (adminProfile.role === 'CLASS_TEACHER' && role === 'STUDENT') {
+            // Get class teacher's assigned stream
+            const { data: teacherAssignment } = await supabaseAdmin
+                .from('class_teachers')
+                .select('current_grade_stream_id')
+                .eq('user_id', user_id)
+                .single();
+            
+            if (!teacherAssignment || teacherAssignment.current_grade_stream_id !== grade_stream_id) {
+                return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
+            }
         }
 
         const school_id = adminProfile.school_id;

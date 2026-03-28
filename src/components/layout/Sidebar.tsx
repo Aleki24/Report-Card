@@ -95,7 +95,7 @@ const navItems: NavItem[] = [
     {
         label: 'Users',
         href: '/dashboard/users',
-        roles: ['ADMIN'],
+        roles: ['ADMIN', 'CLASS_TEACHER'],
         icon: <UserCircle size={24} style={{ flexShrink: 0 }} />
     },
     {
