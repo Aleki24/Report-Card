@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         const emailBase = (finalAdmNo || 'student').toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
-        const sequenceMatch = finalAdmNo.match(/\d+/);
+        const sequenceMatch = finalAdmNo?.match(/\d+/);
         const sequence_number = sequenceMatch ? parseInt(sequenceMatch[0], 10) : Math.floor(Math.random() * 900) + 100;
 
         const { generateUsername } = await import('@/lib/generate-username');
