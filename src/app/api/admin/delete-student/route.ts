@@ -24,20 +24,27 @@ export async function DELETE(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller is an ADMIN and get their school_id
+        // Verify the caller is an ADMIN or CLASS_TEACHER and get their school_id
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
             .select('role, school_id')
             .eq('id', user_id)
             .single();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
-            return NextResponse.json({ error: 'Only admins with a school can delete students.' }, { status: 403 });
+        if (!adminProfile || !adminProfile.school_id) {
+            return NextResponse.json({ error: 'You must have a school to delete students.' }, { status: 403 });
+        }
+
+        const isAdmin = adminProfile.role === 'ADMIN';
+        const isClassTeacher = adminProfile.role === 'CLASS_TEACHER';
+
+        if (!isAdmin && !isClassTeacher) {
+            return NextResponse.json({ error: 'Only admins and class teachers can delete students.' }, { status: 403 });
         }
 
         const school_id = adminProfile.school_id;
 
-        // Verify the student exists and belongs to the admin's school
+        // Verify the student exists and belongs to the school
         const { data: studentUser } = await supabaseAdmin
             .from('users')
             .select('id, school_id')
