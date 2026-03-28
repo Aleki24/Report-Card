@@ -14,6 +14,7 @@ interface UserRow {
   is_active: boolean;
   created_at: string;
   plain_password?: string | null;
+  admission_number?: string | null;
 }
 
 interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
@@ -31,6 +32,10 @@ export default function UsersPage() {
   const [invitedUsername, setInvitedUsername] = useState('');
   const [invitedPassword, setInvitedPassword] = useState('');
   const [invitedName, setInvitedName] = useState('');
+
+  // Filter and search state
+  const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -196,14 +201,33 @@ export default function UsersPage() {
   // Reset to page 1 when users list changes (for simplicity)
   useEffect(() => {
     setCurrentPage(1);
-  }, [users.length]);
+  }, [users.length, roleFilter, searchQuery]);
 
   // Compute filtered and paginated users
-  const { paginatedUsers, totalPages } = useMemo(() => {
-    const total = Math.ceil(users.length / usersPerPage);
-    const paginated = users.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
-    return { paginatedUsers: paginated, totalPages: total };
-  }, [users, currentPage, usersPerPage]);
+  const { paginatedUsers, totalPages, filteredUsers } = useMemo(() => {
+    let filtered = users;
+    
+    // Apply role filter
+    if (roleFilter !== 'ALL') {
+      filtered = filtered.filter(u => u.role === roleFilter);
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(u => 
+        `${u.first_name} ${u.last_name}`.toLowerCase().includes(query) ||
+        (u.email && u.email.toLowerCase().includes(query)) ||
+        (u.username && u.username.toLowerCase().includes(query)) ||
+        (u.phone && u.phone.includes(query)) ||
+        u.admission_number?.toLowerCase().includes(query)
+      );
+    }
+    
+    const total = Math.ceil(filtered.length / usersPerPage);
+    const paginated = filtered.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
+    return { paginatedUsers: paginated, totalPages: total, filteredUsers: filtered };
+  }, [users, currentPage, usersPerPage, roleFilter, searchQuery]);
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
@@ -233,9 +257,52 @@ export default function UsersPage() {
 
       {/* Active Users */}
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-lg">👥</span>
-          <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Active Users ({users.length})</h3>
+        {/* Filter Tabs and Search */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👥</span>
+            <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Active Users ({filteredUsers.length})</h3>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search Input - visible on mobile */}
+            <div className="relative">
+              <input
+                type="text"
+                className="input-field w-full sm:w-64 pl-9"
+                placeholder="Search users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Role Filter Tabs - hidden on very small screens, shown as scrollable on mobile */}
+        <div className="flex overflow-x-auto pb-2 mb-4 -mx-2 px-2 gap-1">
+          {(['ALL', 'ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'] as const).map((role) => (
+            <button
+              key={role}
+              onClick={() => setRoleFilter(role)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                roleFilter === role
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]'
+              }`}
+            >
+              {role === 'ALL' ? 'All' : role.replace('_', ' ')}
+            </button>
+          ))}
         </div>
         {loading ? (
           <div className="p-12 text-center text-[var(--color-text-muted)]">Loading users...</div>
@@ -289,7 +356,7 @@ export default function UsersPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-4 border-t border-[var(--color-border)]">
                 <div className="text-sm text-[var(--color-text-muted)]">
-                  Showing {(currentPage - 1) * usersPerPage + 1} to {Math.min(currentPage * usersPerPage, users.length)} of {users.length} users
+                  Showing {(currentPage - 1) * usersPerPage + 1} to {Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm rounded-lg border transition disabled:opacity-50" style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>

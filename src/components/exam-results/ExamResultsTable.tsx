@@ -204,6 +204,7 @@ export function ExamResultsTable({ marks, maxScore, examId, onRefresh }: Props) 
                 <EditMarkModal
                     mark={editingMark}
                     maxScore={maxScore}
+                    examId={examId}
                     onClose={() => setEditingMark(null)}
                     onSaved={() => { setEditingMark(null); onRefresh(); }}
                     onDeleted={() => { setEditingMark(null); onRefresh(); }}

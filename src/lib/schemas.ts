@@ -48,6 +48,7 @@ export const subjectSchema = z.object({
     is_compulsory: z.boolean().optional().default(true),
     display_order: z.number().int().min(0).optional().default(0),
     category: z.enum(['LANGUAGE', 'SCIENCE', 'HUMANITIES', 'TECHNICAL', 'OTHER']).optional().default('OTHER'),
+    grading_system_id: z.string().uuid('Invalid grading system ID').optional().nullable(),
 });
 
 export const gradingSystemSchema = z.object({

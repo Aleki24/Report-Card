@@ -220,19 +220,19 @@ export default function AnalyticsPage() {
           {subjectStats.length > 0 && (
             <div className="card">
               <h3 style={{ fontSize: 16, marginBottom: 'var(--space-4)' }} className="font-bold font-[family-name:var(--font-display)]">Subject Performance Summary</h3>
-              <div className="overflow-x-auto">
-                <table className="data-table w-full min-w-[700px]">
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                <table className="data-table w-full min-w-[600px] sm:min-w-[700px]">
                   <thead>
                     <tr>
-                      <th></th>
-                      <th>Subject</th><th>Mean</th><th>Median</th><th>Highest</th><th>Lowest</th><th>Pass Rate</th><th>Students</th><th>Status</th>
+                      <th className="w-8"></th>
+                      <th>Subject</th><th>Mean</th><th>Median</th><th>Highest</th><th>Lowest</th><th>Pass Rate</th><th className="whitespace-nowrap">Students</th><th className="whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {subjectStats.map((s, i) => (
                       <React.Fragment key={i}>
                         <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedSubject(expandedSubject === s.name ? null : s.name)}>
-                          <td style={{ width: 30, textAlign: 'center' }}>{expandedSubject === s.name ? '▼' : '▶'}</td>
+                          <td className="text-center">{expandedSubject === s.name ? '▼' : '▶'}</td>
                           <td style={{ fontWeight: 500 }}>{s.name}</td>
                           <td>{s.mean}%</td>
                           <td>{s.median}%</td>
@@ -248,30 +248,32 @@ export default function AnalyticsPage() {
                         </tr>
                         {expandedSubject === s.name && (
                           <tr>
-                            <td colSpan={9} style={{ padding: 0 }}>
-                              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-3) var(--space-4)', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)', overflowX: 'auto' }}>
-                                <table style={{ minWidth: 500, width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                                  <thead>
-                                    <tr style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                      <th style={{ textAlign: 'left', padding: '4px 8px' }}>#</th>
-                                      <th style={{ textAlign: 'left', padding: '4px 8px' }}>Student</th>
-                                      <th style={{ textAlign: 'left', padding: '4px 8px' }}>Adm No</th>
-                                      <th style={{ textAlign: 'center', padding: '4px 8px' }}>Score</th>
-                                      <th style={{ textAlign: 'center', padding: '4px 8px' }}>Grade</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {s.students.map((st, idx) => (
-                                      <tr key={idx} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                        <td style={{ padding: '4px 8px', color: 'var(--color-text-muted)' }}>{idx + 1}</td>
-                                        <td style={{ padding: '4px 8px', fontWeight: 500 }}>{st.studentName}</td>
-                                        <td style={{ padding: '4px 8px', color: 'var(--color-text-muted)' }}>{st.admissionNumber}</td>
-                                        <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 600 }}>{st.percentage.toFixed(1)}%</td>
-                                        <td style={{ padding: '4px 8px', textAlign: 'center' }}>{st.gradeSymbol}</td>
+                            <td colSpan={9} className="p-0">
+                              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-3)', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+                                <div className="overflow-x-auto -mx-3">
+                                  <table className="w-full min-w-[400px] text-sm" style={{ borderCollapse: 'collapse' }}>
+                                    <thead>
+                                      <tr style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th className="text-left p-2">#</th>
+                                        <th className="text-left p-2">Student</th>
+                                        <th className="text-left p-2">Adm No</th>
+                                        <th className="text-center p-2">Score</th>
+                                        <th className="text-center p-2">Grade</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                                    </thead>
+                                    <tbody>
+                                      {s.students.map((st, idx) => (
+                                        <tr key={idx} className="border-b border-[var(--color-border)]">
+                                          <td className="p-2 text-[var(--color-text-muted)]">{idx + 1}</td>
+                                          <td className="p-2 font-medium">{st.studentName}</td>
+                                          <td className="p-2 text-[var(--color-text-muted)]">{st.admissionNumber}</td>
+                                          <td className="p-2 text-center font-semibold">{st.percentage.toFixed(1)}%</td>
+                                          <td className="p-2 text-center">{st.gradeSymbol}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             </td>
                           </tr>

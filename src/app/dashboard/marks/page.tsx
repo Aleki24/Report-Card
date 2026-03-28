@@ -76,7 +76,8 @@ export default function MarksPage() {
     const [qYear, setQYear] = useState({ name: '', start_date: '', end_date: '' });
     const [qTerm, setQTerm] = useState({ name: '', start_date: '', end_date: '' });
     const [qStream, setQStream] = useState({ name: '' });
-    const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '' });
+    const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '', grading_system_id: '' });
+    const [gradingSystems, setGradingSystems] = useState<{ id: string; name: string; academic_level_id: string }[]>([]);
 
     // Fetch exams
     const fetchExams = useCallback(async () => {
@@ -164,6 +165,7 @@ export default function MarksPage() {
             if (data.terms) setAllTerms(data.terms);
             if (data.grades) setGrades(data.grades);
             if (data.grade_streams) setAllStreams(data.grade_streams);
+            if (data.grading_systems) setGradingSystems(data.grading_systems);
         } catch (err) {
             console.error('Error fetching dropdown data:', err);
         }
@@ -249,7 +251,7 @@ export default function MarksPage() {
         const result = await quickAdd('subject', qSubject);
         if (result) {
             setSelectedSubjectId(result.id);
-            setQSubject({ name: '', code: '', academic_level_id: '' });
+            setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '' });
             setAddingSubject(false);
         }
     };
@@ -671,11 +673,25 @@ export default function MarksPage() {
                                                 <input className="input-field flex-1 text-xs" placeholder="Subject Name, e.g. Mathematics" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
                                                 <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code e.g. MAT" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                                             </div>
-                                            <select className="input-field w-full text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
+                                            <select className="input-field w-full text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
                                                 <option value="">-- Select Academic Level --</option>
                                                 {academicLevels.map(al => (
                                                     <option key={al.id} value={al.id}>{al.name}</option>
                                                 ))}
+                                            </select>
+                                            {/* Grading System Selection - filtered by academic level */}
+                                            <select 
+                                                className="input-field w-full text-xs" 
+                                                value={qSubject.grading_system_id} 
+                                                onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}
+                                            >
+                                                <option value="">-- Grading System (Optional) --</option>
+                                                {gradingSystems
+                                                    .filter(gs => gs.academic_level_id === qSubject.academic_level_id)
+                                                    .map(gs => (
+                                                        <option key={gs.id} value={gs.id}>{gs.name}</option>
+                                                    ))
+                                                }
                                             </select>
                                             <button type="button" onClick={handleQuickAddSubject} className="btn-primary text-xs py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
                                                 {quickSaving ? '...' : '✓ Save Subject'}

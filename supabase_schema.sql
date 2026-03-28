@@ -321,6 +321,7 @@ RETURNS user_role AS $$
 $$ LANGUAGE sql SECURITY DEFINER;
 
 -- 1. TRIGGER: Auto-calculate Percentage and Grade Symbol on Exam Marks
+-- Only auto-calculate grade if NOT provided (NULL or empty)
 CREATE OR REPLACE FUNCTION calculate_exam_mark_grade()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -339,23 +340,27 @@ BEGIN
         NEW.percentage := 0;
     END IF;
     
-    -- Get student's academic level based on their profile
-    SELECT academic_level_id INTO v_academic_level_id FROM students WHERE id = NEW.student_id;
-    
-    -- Find the appropriate grading system for this academic level
-    -- We look for the first grading system that matches the student's academic level 
-    SELECT id INTO v_grading_system_id FROM grading_systems WHERE academic_level_id = v_academic_level_id LIMIT 1;
+    -- Only auto-calculate grade if NOT provided (allow teachers to manually set grades)
+    IF NEW.grade_symbol IS NULL OR NEW.grade_symbol = '' THEN
+        -- Get student's academic level based on their profile
+        SELECT academic_level_id INTO v_academic_level_id FROM students WHERE id = NEW.student_id;
+        
+        -- Find the appropriate grading system for this academic level
+        -- We look for the first grading system that matches the student's academic level 
+        SELECT id INTO v_grading_system_id FROM grading_systems WHERE academic_level_id = v_academic_level_id LIMIT 1;
 
-    -- Lookup the grade symbol from grading_scales based on the percentage
-    SELECT symbol INTO v_grade_symbol
-    FROM grading_scales
-    WHERE grading_system_id = v_grading_system_id
-      AND NEW.percentage >= min_percentage
-      AND NEW.percentage <= max_percentage
-    ORDER BY min_percentage DESC
-    LIMIT 1;
+        -- Lookup the grade symbol from grading_scales based on the percentage
+        SELECT symbol INTO v_grade_symbol
+        FROM grading_scales
+        WHERE grading_system_id = v_grading_system_id
+          AND NEW.percentage >= min_percentage
+          AND NEW.percentage <= max_percentage
+        ORDER BY min_percentage DESC
+        LIMIT 1;
+        
+        NEW.grade_symbol := v_grade_symbol;
+    END IF;
     
-    NEW.grade_symbol := v_grade_symbol;
     NEW.updated_at := now();
     
     RETURN NEW;

@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       case 'exams': {
         const { data, error } = await supabase
           .from('exams')
-          .select('id, name, max_score, academic_year_id, term_id, status, created_at, grade_stream_id, grade_id, subject_id')
+          .select('id, name, max_score, academic_year_id, term_id, status, created_at, grade_stream_id, grade_id, subject_id, subjects(academic_level_id, grading_system_id), grades(academic_level_id)')
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 

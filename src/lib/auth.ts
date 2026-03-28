@@ -122,9 +122,14 @@ export const authOptions: NextAuthOptions = {
                 token.lastName = sessionUser.lastName;
             }
 
-            // Allow role updates on the fly
-            if (trigger === "update" && session?.role) {
-                token.role = session.role;
+            // Allow role and schoolName updates on the fly
+            if (trigger === "update") {
+                if (session?.role) {
+                    token.role = session.role;
+                }
+                if (session?.schoolName) {
+                    token.schoolName = session.schoolName;
+                }
             }
 
             return token;

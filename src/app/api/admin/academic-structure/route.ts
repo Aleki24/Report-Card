@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
                 supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id').eq('school_id', schoolId).order('display_order'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
@@ -204,7 +204,8 @@ export async function POST(request: NextRequest) {
                         is_compulsory: data.is_compulsory ?? true,
                         display_order: data.display_order ?? 0,
                         category: data.category ?? 'OTHER',
-                        school_id: schoolId
+                        school_id: schoolId,
+                        grading_system_id: data.grading_system_id ?? null
                     })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'subject');

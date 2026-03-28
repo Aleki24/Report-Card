@@ -138,7 +138,7 @@ export async function GET(
 
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order)')
+            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
             .eq('term_id', termId);
         
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
@@ -146,7 +146,7 @@ export async function GET(
 
         const { data: termExams } = await examsQ;
 
-        // 4. Fetch Marks with subject details including category
+        // 4. Fetch Marks with subject details including grading_system_id
         let marksQuery = supabase
             .from('exam_marks')
             .select(`
@@ -154,7 +154,7 @@ export async function GET(
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
                     terms ( name ),
                     academic_years ( name ),
-                    subjects ( id, name, code, category, display_order )
+                    subjects ( id, name, code, category, display_order, grading_system_id )
                 )
             `)
             .eq('student_id', studentId);
@@ -175,6 +175,51 @@ export async function GET(
 
         if ((!marks || marks.length === 0) && (!termExams || termExams.length === 0)) {
             return NextResponse.json({ error: 'No marks and no exams found for student in this term' }, { status: 404 });
+        }
+
+        // 4.5 Fetch subject-specific grading systems
+        const subjectGradingSystems: Record<string, GradingScale[]> = {};
+        const subjectGradingSystemTypes: Record<string, 'KCSE' | 'CBC'> = {};
+        
+        const gradingSystemIds = new Set<string>();
+        if (termExams) {
+            for (const exam of termExams) {
+                const subj = (exam as any).subjects;
+                if (subj?.grading_system_id) {
+                    gradingSystemIds.add(subj.grading_system_id);
+                }
+            }
+        }
+        if (marks) {
+            for (const m of marks) {
+                const subj = (m as any).exams?.subjects;
+                if (subj?.grading_system_id) {
+                    gradingSystemIds.add(subj.grading_system_id);
+                }
+            }
+        }
+
+        for (const gsId of gradingSystemIds) {
+            const { data: gs } = await supabase
+                .from('grading_systems')
+                .select('id, academic_levels!inner(code)')
+                .eq('id', gsId)
+                .single();
+            
+            if (gs) {
+                const levelCode = (gs.academic_levels as any)?.code;
+                subjectGradingSystemTypes[gsId] = levelCode === 'CBC' ? 'CBC' : 'KCSE';
+            }
+
+            const { data: scales } = await supabase
+                .from('grading_scales')
+                .select('*')
+                .eq('grading_system_id', gsId)
+                .order('order_index', { ascending: true });
+            
+            if (scales) {
+                subjectGradingSystems[gsId] = scales as GradingScale[];
+            }
         }
 
         const safeMarks = marks || [];
@@ -314,6 +359,7 @@ export async function GET(
         }));
 
         // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
+        // Use subject-specific grading when available, otherwise use academic level grading
         const subjMarksMap = new Map<string, any>();
         
         safeMarks.forEach((m: any) => {
@@ -321,26 +367,31 @@ export async function GET(
             if (!subject) return;
             const pct = Number(m.percentage);
 
-            // Determine grade, points, rubric from scales
-            // Prioritise manually-entered grade_symbol over auto-calculated
-            const grade = m.grade_symbol
-                ? m.grade_symbol
-                : (gradingScales.length > 0
-                    ? getGradeFromScales(pct, gradingScales)
-                    : '-');
+            // Get subject-specific grading if available
+            const subjectGsId = subject.grading_system_id;
+            const subjectScales = subjectGsId ? subjectGradingSystems[subjectGsId] : null;
+            const isSubjectCBC = subjectGsId ? subjectGradingSystemTypes[subjectGsId] === 'CBC' : gradingSystemType === 'CBC';
+            
+            // Use subject-specific scales if available, otherwise fall back to academic level
+            const effectiveScales = subjectScales && subjectScales.length > 0 ? subjectScales : gradingScales;
+            
+            // Use ONLY manually-entered grade - NO auto-grading
+            // Teachers must manually select grades for each student
+            const grade = m.grade_symbol ? m.grade_symbol : '-';
 
-            const points = gradingScales.length > 0
-                ? getPointsFromScales(pct, gradingScales)
+            const points = m.grade_symbol && effectiveScales.length > 0
+                ? getPointsFromScales(pct, effectiveScales)
                 : undefined;
 
-            const rubric = (gradingSystemType === 'CBC' && gradingScales.length > 0)
-                ? getRubricFromScales(pct, gradingScales)
+            const rubric = (isSubjectCBC && m.grade_symbol && effectiveScales.length > 0)
+                ? getRubricFromScales(pct, effectiveScales)
                 : undefined;
 
             subjMarksMap.set(subject.id, {
                 subjectCode: subject.code || subject.name || 'Unknown',
                 subjectName: subject.name || 'Unknown Subject',
                 category: subject.category || 'OTHER',
+                gradingSystemType: isSubjectCBC ? 'CBC' : 'KCSE',
                 score: Number(m.raw_score),
                 totalPossible: Number(m.exams.max_score),
                 percentage: pct,
@@ -368,6 +419,56 @@ export async function GET(
         const computedTotalScore = subjectMarks.reduce((sum: number, m: any) => sum + (m.score || 0), 0);
         const computedTotalPossible = subjectMarks.reduce((sum: number, m: any) => sum + (m.totalPossible || 0), 0);
 
+        // 11.5 Fetch subject trend data (historical performance across terms)
+        const subjectTrendData: { subjectName: string; scores: { term: string; percentage: number }[] }[] = [];
+        
+        try {
+            // Get all marks for this student across all terms
+            const { data: allMarks } = await supabase
+                .from('exam_marks')
+                .select(`
+                    percentage,
+                    exams!inner ( 
+                        term_id,
+                        subjects ( id, name )
+                    )
+                `)
+                .eq('student_id', studentId);
+            
+            if (allMarks && allMarks.length > 0) {
+                // Group by subject
+                const subjTrends: Record<string, { termId: string; pct: number }[]> = {};
+                
+                for (const m of allMarks as any[]) {
+                    const examData = m.exams as any;
+                    const subjName = examData?.subjects?.name;
+                    const markTermId = examData?.term_id;
+                    if (subjName && markTermId && markTermId !== termId) { // Skip current term marks (already in subjectMarks)
+                        if (!subjTrends[subjName]) subjTrends[subjName] = [];
+                        subjTrends[subjName].push({ termId: markTermId, pct: Number(m.percentage) });
+                    }
+                }
+                
+                // Convert to trend data
+                for (const [subjName, scores] of Object.entries(subjTrends)) {
+                    // Take last 4 scores
+                    const recentScores = scores.slice(-4).map((s, idx) => ({
+                        term: `T${idx + 1}`,
+                        percentage: s.pct
+                    }));
+                    
+                    if (recentScores.length > 0) {
+                        subjectTrendData.push({
+                            subjectName: subjName,
+                            scores: recentScores
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching trend data:', err);
+        }
+
         // 12. Structure data for PDF Generator
         const reportData: ReportCardData = {
             schoolName,
@@ -391,6 +492,7 @@ export async function GET(
             resultUrl: `${baseUrl}/student/${studentId}`,
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
+            subjectTrendData: subjectTrendData.length > 0 ? subjectTrendData : undefined,
         };
 
         // 12. Generate PDF Buffer

@@ -23,14 +23,16 @@ export interface EditMarkData {
 interface Props {
     mark: EditMarkData;
     maxScore: number;
+    examId: string;
     onClose: () => void;
     onSaved: () => void;
     onDeleted: () => void;
 }
 
-export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: Props) {
+export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDeleted }: Props) {
     const [score, setScore] = useState(String(mark.raw_score));
     const [grade, setGrade] = useState(mark.grade_symbol);
+    const [gradeManuallySet, setGradeManuallySet] = useState(false);
     const [remarks, setRemarks] = useState(mark.remarks || '');
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -38,17 +40,38 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
     const [error, setError] = useState('');
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
 
-    // Fetch grade options
+    // Fetch grade options filtered by exam's subject level
     useEffect(() => {
         const fetchGrades = async () => {
             try {
-                const res = await fetch('/api/school/data?type=grading_scales');
-                const scaleData = await res.json();
+                // Get exam details first
+                const examsRes = await fetch('/api/school/data?type=exams');
+                const examsData = await examsRes.json();
+                const exam = (examsData.data || []).find((e: any) => e.id === examId);
+                
+                // Get academic level from subject or grade
+                let academicLevelId = null;
+                if (exam?.subjects?.academic_level_id) {
+                    academicLevelId = exam.subjects.academic_level_id;
+                } else if (exam?.grades?.academic_level_id) {
+                    academicLevelId = exam.grades.academic_level_id;
+                }
+                
+                // Fetch all grading systems and filter by academic level
+                const structureRes = await fetch('/api/admin/academic-structure');
+                const structureData = await structureRes.json();
+                
+                const allGradingSystems = structureData.grading_systems || [];
+                const allScales = structureData.grading_scales || [];
                 
                 let options: GradeOption[] = [];
-                if (scaleData.data) {
-                    scaleData.data.forEach((sys: any) => {
-                        sys.grading_scales?.forEach((sc: any) => {
+                
+                // Filter by academic level
+                allGradingSystems
+                    .filter((gs: any) => gs.academic_level_id === academicLevelId)
+                    .forEach((sys: any) => {
+                        const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
+                        sysScales.forEach((sc: any) => {
                             options.push({
                                 symbol: sc.symbol,
                                 label: sc.label || sc.symbol,
@@ -58,23 +81,24 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
                             });
                         });
                     });
-                }
+                
                 setGradeOptions(options);
             } catch (err) {
                 console.error("Failed to load grades", err);
             }
         };
         fetchGrades();
-    }, []);
+    }, [examId]);
 
-    // Auto-resolve grade when score changes
+    // Auto-resolve grade when score changes (only if teacher hasn't manually set a grade)
     const autoResolveGrade = useCallback((newScore: number) => {
+        if (gradeManuallySet) return; // Don't auto-resolve if teacher manually selected a grade
         if (maxScore <= 0 || gradeOptions.length === 0) return;
         const newPercentage = Math.round((newScore / maxScore) * 10000) / 100;
 
         const matching = gradeOptions.find(o => newPercentage >= o.min_percentage && newPercentage <= o.max_percentage);
         if (matching) setGrade(matching.symbol);
-    }, [maxScore, gradeOptions]);
+    }, [maxScore, gradeOptions, gradeManuallySet]);
 
     const handleScoreChange = (val: string) => {
         setScore(val);
@@ -83,6 +107,11 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
         if (val && !isNaN(num) && num >= 0 && num <= maxScore) {
             autoResolveGrade(num);
         }
+    };
+
+    const handleGradeChange = (val: string) => {
+        setGrade(val);
+        setGradeManuallySet(true); // Mark that teacher manually selected a grade
     };
 
     const handleSave = async () => {
@@ -208,7 +237,7 @@ export function EditMarkModal({ mark, maxScore, onClose, onSaved, onDeleted }: P
                         <select
                             className="input-field w-full"
                             value={grade}
-                            onChange={e => setGrade(e.target.value)}
+                            onChange={e => handleGradeChange(e.target.value)}
                         >
                             <option value="">Select grade</option>
                             {Object.entries(groupedOptions).map(([systemName, opts]) => (

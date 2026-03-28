@@ -40,6 +40,7 @@ export default function ExamResultsPage() {
     const [reportGenerating, setReportGenerating] = useState(false);
     const [reportMsg, setReportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [customReportTitle, setCustomReportTitle] = useState('');
+    const [classStudents, setClassStudents] = useState<{ id: string; name: string; admission_number: string }[]>([]);
 
     // ═══════════════════ Data fetching ═══════════════════
 
@@ -124,6 +125,34 @@ export default function ExamResultsPage() {
     }, [selectedExamId]);
 
     useEffect(() => { fetchMarks(); }, [fetchMarks]);
+
+    // 3.5. Fetch all students in the selected class (for reports tab)
+    const fetchClassStudents = useCallback(async () => {
+        if (!selectedStreamId) { setClassStudents([]); return; }
+        
+        try {
+            const res = await fetch('/api/school/data?type=students');
+            const json = await res.json();
+            const allStudents = (json.data || []) as any[];
+            
+            const filtered = allStudents.filter((s: any) => 
+                s.current_grade_stream_id === selectedStreamId
+            ).map((s: any) => ({
+                id: s.id,
+                name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
+                admission_number: s.admission_number || '',
+            })).sort((a: any, b: any) => a.name.localeCompare(b.name));
+            
+            setClassStudents(filtered);
+        } catch (err) {
+            console.error('Failed to fetch class students:', err);
+            setClassStudents([]);
+        }
+    }, [selectedStreamId]);
+
+    useEffect(() => { 
+        if (selectedStreamId) fetchClassStudents(); 
+    }, [selectedStreamId, fetchClassStudents]);
 
     // 4. Fetch academic years + terms (for reports tab)
     useEffect(() => {
@@ -357,22 +386,22 @@ export default function ExamResultsPage() {
                                         <p className="text-sm text-[var(--color-text-muted)]" style={{ marginBottom: 'var(--space-4)' }}>
                                             Click a student to download their PDF report card.
                                         </p>
-                                        {marks.length === 0 ? (
-                                            <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students with marks to generate reports for.</p>
+                                        {classStudents.length === 0 ? (
+                                            <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students found in this class.</p>
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
-                                                {marks.map(m => (
+                                                {classStudents.map(s => (
                                                     <button
-                                                        key={m.student_id}
+                                                        key={s.id}
                                                         className="btn-secondary text-left"
                                                         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', fontSize: 13 }}
-                                                        onClick={() => handleDownloadReport(m.student_id)}
+                                                        onClick={() => handleDownloadReport(s.id)}
                                                     >
                                                         <span style={{ fontSize: 18 }}>📄</span>
                                                         <span>
-                                                            <strong>{m.student_name}</strong>
+                                                            <strong>{s.name}</strong>
                                                             <br />
-                                                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{m.admission_number}</span>
+                                                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{s.admission_number}</span>
                                                         </span>
                                                     </button>
                                                 ))}

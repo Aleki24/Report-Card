@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { useSession } from 'next-auth/react';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -13,6 +14,7 @@ interface Term { id: string; academic_year_id: string; name: string; start_date:
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
 export default function SettingsPage() {
   const { profile } = useAuth();
+  const { update: updateSession } = useSession();
   const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar'>('profile');
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
@@ -119,7 +121,11 @@ export default function SettingsPage() {
         setSaveMsg(`❌ ${data.error}`);
       } else if (data.school_id) {
         setSchool(prev => ({ ...prev, id: data.school_id }));
-        setSaveMsg(school.id ? '✅ School profile updated!' : '✅ School created! Refresh to see changes.');
+        setSaveMsg(school.id ? '✅ School profile updated!' : '✅ School created!');
+        // Refresh session to update school name in header
+        await updateSession({ schoolName: school.name });
+        // Force a page reload to ensure all components reflect the new name
+        window.location.reload();
       }
     } catch (err) {
       setSaveMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);

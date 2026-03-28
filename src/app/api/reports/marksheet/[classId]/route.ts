@@ -197,6 +197,9 @@ export async function GET(
                 }
             });
 
+            // Check if student has any marks entered (at least one non-null mark)
+            const hasAnyMarks = Object.values(marksRecord).some(mark => mark !== null);
+            
             return {
                 studentName: `${firstName} ${lastName}`,
                 admissionNumber: student.admission_number || '',
@@ -205,21 +208,23 @@ export async function GET(
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints || 0,
                 classRank: ranks.get(student.id) || 0,
+                hasAnyMarks,
             };
-        }).filter(s => s.overallPercentage > 0); // only students with marks
+        }).filter(s => s.hasAnyMarks); // only students with at least one mark entered
 
         // Sort students by rank
         studentsData.sort((a, b) => a.classRank - b.classRank);
 
-        // Grade distribution — computed ONLY from students who have marks (after filter)
+        // Grade distribution — computed ONLY from students who have marks
         const gradeDistribution: Record<string, number> = {};
-        for (const s of studentsData) {
+        const studentsWithMarks = studentsData.filter(s => s.overallPercentage > 0);
+        for (const s of studentsWithMarks) {
             if (s.overallGrade) {
                 gradeDistribution[s.overallGrade] = (gradeDistribution[s.overallGrade] || 0) + 1;
             }
         }
 
-        const meanPercentage = studentsData.length > 0 ? (totalClassPercentage / studentsData.length) : 0;
+        const meanPercentage = studentsWithMarks.length > 0 ? (totalClassPercentage / studentsWithMarks.length) : 0;
         const meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
 
         const markSheetData = {

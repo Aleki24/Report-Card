@@ -41,6 +41,11 @@ export interface ReportCardData {
     openingDate?: string;
     totalScore?: number;
     totalPossible?: number;
+    // For subject performance graphs
+    subjectTrendData?: {
+        subjectName: string;
+        scores: { term: string; percentage: number }[];
+    }[];
 }
 
 /* ── Colour helpers ─────────────────────────────────────── */
@@ -407,7 +412,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         </View>
                     </View>
 
-                    {/* ═══ AVERAGE BADGE + GRADING KEY ═══ */}
+                    {/* ═══ AVERAGE BADGE + SUBJECT PERFORMANCE GRAPH ═══ */}
                     <View style={s.bottomRow}>
                         {/* Circular orange badge */}
                         <View style={s.avgBadge}>
@@ -416,20 +421,65 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <Text style={s.avgGrade}>{data.overallGrade}</Text>
                         </View>
 
-                        {/* Grading key — Steel Blue */}
+                        {/* Subject Performance Graph - replaces grading key */}
                         <View style={s.gradingKey}>
                             <View style={s.gradingKeyHeader}>
-                                <Text style={s.gradingKeyTitle}>Grading Key</Text>
+                                <Text style={s.gradingKeyTitle}>Subject Performance Analysis</Text>
                             </View>
-                            <View style={s.gradingContainer}>
-                                {data.gradeBoundaries.map((gb) => (
-                                    <View style={s.gradingItem} key={gb.symbol}>
-                                        <Text style={s.gradingSymbol}>{gb.symbol}</Text>
-                                        <Text style={s.gradingLabel}>{gb.label}</Text>
-                                        <Text style={s.gradingRange}>{gb.min}-{gb.max}%</Text>
+                            {data.subjectTrendData && data.subjectTrendData.length > 0 ? (
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                                    {data.subjectTrendData.slice(0, 6).map((subj, idx) => {
+                                        const maxScore = 100;
+                                        const currentScore = subj.scores[subj.scores.length - 1]?.percentage || 0;
+                                        const barHeight = (currentScore / maxScore) * 50;
+                                        const barColor = currentScore >= 80 ? '#22A86B' : currentScore >= 60 ? '#2563EB' : currentScore >= 40 ? '#FF8C00' : '#DC2626';
+                                        
+                                        return (
+                                            <View key={idx} style={{ width: 70, alignItems: 'center', marginBottom: 4 }}>
+                                                <View style={{ height: 50, width: 20, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
+                                                    <View style={{ 
+                                                        height: barHeight, 
+                                                        width: 20, 
+                                                        backgroundColor: barColor, 
+                                                        borderRadius: 2 
+                                                    }} />
+                                                </View>
+                                                <Text style={{ fontSize: 6, marginTop: 2, color: GRAY_700 }}>{currentScore.toFixed(0)}%</Text>
+                                                <Text style={{ fontSize: 5, color: GRAY_400, textAlign: 'center', marginTop: 1 }}>
+                                                    {subj.subjectName.length > 10 ? subj.subjectName.substring(0, 8) + '..' : subj.subjectName}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            ) : (
+                                <View style={{ marginTop: 8 }}>
+                                    <Text style={{ fontSize: 7, color: GRAY_700, marginBottom: 6 }}>Current Term Performance</Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                        {data.subjectMarks.slice(0, 8).map((subj, idx) => {
+                                            const maxScore = 100;
+                                            const currentScore = subj.percentage || 0;
+                                            const barHeight = (currentScore / maxScore) * 40;
+                                            const barColor = currentScore >= 80 ? '#22A86B' : currentScore >= 60 ? '#2563EB' : currentScore >= 40 ? '#FF8C00' : '#DC2626';
+                                            
+                                            return (
+                                                <View key={idx} style={{ width: 50, alignItems: 'center', marginBottom: 4 }}>
+                                                    <View style={{ height: 40, width: 14, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
+                                                        <View style={{ 
+                                                            height: barHeight, 
+                                                            width: 14, 
+                                                            backgroundColor: barColor, 
+                                                            borderRadius: 2 
+                                                        }} />
+                                                    </View>
+                                                    <Text style={{ fontSize: 5, marginTop: 2, color: GRAY_700 }}>{currentScore.toFixed(0)}%</Text>
+                                                </View>
+                                            );
+                                        })}
                                     </View>
-                                ))}
-                            </View>
+                                    <Text style={{ fontSize: 6, color: GRAY_400, marginTop: 4 }}>Score distribution by subject</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 

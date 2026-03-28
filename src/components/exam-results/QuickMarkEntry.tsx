@@ -19,6 +19,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
     const [scores, setScores] = useState<Record<string, string>>({});
     const [manualGrades, setManualGrades] = useState<Record<string, string>>({});
     const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; systemName: string; min_percentage: number; max_percentage: number }[]>([]);
+    const [examAcademicLevelId, setExamAcademicLevelId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -65,17 +66,46 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId, gradeStreamId]);
 
-    // Fetch grading scales on mount
+    // Fetch grading scales filtered by exam's subject level
     useEffect(() => {
         const fetchScales = async () => {
             try {
-                const res = await fetch('/api/school/data?type=grading_scales');
-                const dataObj = await res.json();
-                if (dataObj.data) {
-                    const scales: typeof gradingScales = [];
-                    dataObj.data.forEach((sys: any) => {
-                        sys.grading_scales?.forEach((sc: any) => {
-                            scales.push({
+                // First get exam details to find the academic level
+                const examsRes = await fetch('/api/school/data?type=exams');
+                const examsData = await examsRes.json();
+                const exam = (examsData.data || []).find((e: any) => e.id === examId);
+                
+                // Get academic level from subject or grade
+                let academicLevelId = null;
+                if (exam?.subjects?.academic_level_id) {
+                    academicLevelId = exam.subjects.academic_level_id;
+                } else if (exam?.grades?.academic_level_id) {
+                    academicLevelId = exam.grades.academic_level_id;
+                }
+                setExamAcademicLevelId(academicLevelId);
+
+                // Fetch all grading systems and filter by academic level
+                const structureRes = await fetch('/api/admin/academic-structure');
+                const structureData = await structureRes.json();
+                
+                const allGradingSystems = structureData.grading_systems || [];
+                const allScales = structureData.grading_scales || [];
+                
+                // Filter grading systems by academic level
+                const relevantSystemIds = new Set(
+                    allGradingSystems
+                        .filter((gs: any) => gs.academic_level_id === academicLevelId)
+                        .map((gs: any) => gs.id)
+                );
+                
+                // Build filtered scales
+                const filteredScales: typeof gradingScales = [];
+                allGradingSystems
+                    .filter((gs: any) => gs.academic_level_id === academicLevelId)
+                    .forEach((sys: any) => {
+                        const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
+                        sysScales.forEach((sc: any) => {
+                            filteredScales.push({
                                 symbol: sc.symbol,
                                 label: sc.label || '',
                                 systemName: sys.name,
@@ -84,14 +114,14 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                             });
                         });
                     });
-                    setGradingScales(scales);
-                }
+                
+                setGradingScales(filteredScales);
             } catch (err) {
                 console.error('Failed to load grading scales:', err);
             }
         };
-        fetchScales();
-    }, []);
+        if (examId) fetchScales();
+    }, [examId]);
 
     const autoResolveGrade = (scoreStr: string, maxScoreVal: number): string => {
         const num = parseFloat(scoreStr);
