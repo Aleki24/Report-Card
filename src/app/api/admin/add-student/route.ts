@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
         const userId = crypto.randomUUID();
         // Keep admission number empty if not provided (no auto-generation)
         const finalAdmNo = admNo || null;
-        const emailBase = (finalAdmNo || 'student').toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Use userId to ensure unique email even without admission number
+        const emailBase = (finalAdmNo || userId.substring(0, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
         const sequenceMatch = finalAdmNo?.match(/\d+/);
