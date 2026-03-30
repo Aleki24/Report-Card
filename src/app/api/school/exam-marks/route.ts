@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from('exam_marks')
       .select(`
-        id, student_id, raw_score, percentage, grade_symbol, remarks,
+        id, student_id, raw_score, percentage, grade_symbol, rubric, remarks,
         students!inner (
           admission_number,
           users ( first_name, last_name )
@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       raw_score: m.raw_score,
       percentage: m.percentage,
       grade_symbol: m.grade_symbol,
+      rubric: m.rubric,
       remarks: m.remarks,
     }));
 
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
           raw_score: m.raw_score,
           percentage: m.percentage,
           grade_symbol: m.grade_symbol,
+          rubric: m.rubric || null,
           remarks: m.remarks
         })),
         { onConflict: 'student_id,exam_id' }
@@ -136,7 +138,7 @@ export async function PATCH(request: NextRequest) {
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
     const body = await request.json();
-    const { id, raw_score, percentage, grade_symbol, remarks } = body;
+    const { id, raw_score, percentage, grade_symbol, rubric, remarks } = body;
 
     if (!id) return NextResponse.json({ error: 'Mark ID required' }, { status: 400 });
 
@@ -152,9 +154,15 @@ export async function PATCH(request: NextRequest) {
     if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    
+    const updateData: Record<string, any> = { raw_score, percentage, grade_symbol, remarks };
+    if (rubric !== undefined) {
+        updateData.rubric = rubric;
+    }
+    
     const { data, error } = await supabase
       .from('exam_marks')
-      .update({ raw_score, percentage, grade_symbol, remarks })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();

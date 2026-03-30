@@ -150,7 +150,7 @@ export async function GET(
         let marksQuery = supabase
             .from('exam_marks')
             .select(`
-                id, percentage, raw_score, grade_symbol, remarks,
+                id, percentage, raw_score, grade_symbol, rubric, remarks,
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
                     terms ( name ),
                     academic_years ( name ),
@@ -239,19 +239,29 @@ export async function GET(
         }
 
         // 5. Map to analytics interface and calculate performance
-        const mappedMarks: ExamMarkWithDetails[] = safeMarks.map((m: any) => ({
-            id: m.id,
-            student_id: studentId,
-            exam_id: m.exams.id || '',
-            subject_id: m.exams.subjects?.id || '',
-            raw_score: Number(m.raw_score),
-            percentage: Number(m.percentage || 0),
-            max_score: Number(m.exams.max_score),
-            grade_symbol: m.grade_symbol,
-            remarks: m.remarks
-        }));
+        const subjectNamesMap: Record<string, string> = {};
+        const mappedMarks: ExamMarkWithDetails[] = safeMarks.map((m: any) => {
+            const subjId = m.exams.subjects?.id || '';
+            const subjName = m.exams.subjects?.name || '';
+            if (subjId && subjName) {
+                subjectNamesMap[subjId] = subjName;
+            }
+            return {
+                id: m.id,
+                student_id: studentId,
+                exam_id: m.exams.id || '',
+                subject_id: subjId,
+                raw_score: Number(m.raw_score),
+                percentage: Number(m.percentage || 0),
+                max_score: Number(m.exams.max_score),
+                grade_symbol: m.grade_symbol,
+                remarks: m.remarks
+            };
+        });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        
+        const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 
         // 6. Calculate class ranking + per-subject ranks
         let classRank = 0;
@@ -324,10 +334,13 @@ export async function GET(
             }
         }
 
-        // 7. Resolve overall grade from DB grading scales
-        const overallGradeSymbol = gradingScales.length > 0
-            ? getGradeFromScales(studentPerf.percentage, gradingScales)
-            : studentPerf.grade;
+        // 7. Resolve overall grade from total points (KCSE) or percentage (CBC)
+        const isKCSE = gradingSystemType === 'KCSE';
+        const overallGradeSymbol = isKCSE 
+            ? studentPerf.overallGrade 
+            : (gradingScales.length > 0 
+                ? getGradeFromScales(studentPerf.percentage, gradingScales) 
+                : studentPerf.grade);
 
         // 8. Fetch class teacher and principal comments from report_cards table
         let classTeacherComment = '';
@@ -383,9 +396,9 @@ export async function GET(
                 ? getPointsFromScales(pct, effectiveScales)
                 : undefined;
 
-            const rubric = (isSubjectCBC && m.grade_symbol && effectiveScales.length > 0)
+            const rubric = m.rubric || ((isSubjectCBC && m.grade_symbol && effectiveScales.length > 0)
                 ? getRubricFromScales(pct, effectiveScales)
-                : undefined;
+                : undefined);
 
             subjMarksMap.set(subject.id, {
                 subjectCode: subject.code || subject.name || 'Unknown',
@@ -400,6 +413,7 @@ export async function GET(
                 rubric,
                 teacherComment: m.remarks || '',
                 subjectRank: subjectRanksMap.get(subject.id) ?? undefined,
+                includedInPoints: selectedSubjectIds.has(subject.id),
             });
         });
 

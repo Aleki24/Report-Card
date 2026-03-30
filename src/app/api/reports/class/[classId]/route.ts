@@ -154,7 +154,7 @@ export async function GET(
         let marksQuery = supabase
             .from('exam_marks')
             .select(`
-                id, student_id, percentage, raw_score, grade_symbol, remarks,
+                id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
                     subjects ( id, name, code, category, display_order )
                 )
@@ -272,10 +272,13 @@ export async function GET(
             const studentPerf = // only base on available marks
                  (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
 
-            // Resolve overall grade from DB grading scales
-            const overallGradeSymbol = gradingScales.length > 0
-                ? getGradeFromScales(studentPerf.percentage, gradingScales)
-                : studentPerf.grade;
+            // Resolve overall grade from total points (KCSE) or percentage (CBC)
+            const isKCSE = gradingSystemType === 'KCSE';
+            const overallGradeSymbol = isKCSE 
+                ? studentPerf.overallGrade 
+                : (gradingScales.length > 0 
+                    ? getGradeFromScales(studentPerf.percentage, gradingScales) 
+                    : studentPerf.grade);
 
             // Fetch class teacher and principal comments
             let classTeacherComment = '';
@@ -316,9 +319,9 @@ export async function GET(
                 const points = gradingScales.length > 0
                     ? getPointsFromScales(pct, gradingScales)
                     : undefined;
-                const rubric = (gradingSystemType === 'CBC' && gradingScales.length > 0)
+                const rubric = m.rubric || ((gradingSystemType === 'CBC' && gradingScales.length > 0)
                     ? getRubricFromScales(pct, gradingScales)
-                    : undefined;
+                    : undefined);
 
                 subjMarksMap.set(subject.id, {
                     subjectCode: subject.code || subject.name || 'Unknown',

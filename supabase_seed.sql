@@ -274,9 +274,9 @@ BEGIN
   SELECT id INTO v_cbc FROM academic_levels WHERE code = 'CBC';
   SELECT id INTO v_844 FROM academic_levels WHERE code = '844';
 
-  -- CBC grading system
+  -- CBC grading system (8-level achievement)
   INSERT INTO grading_systems (academic_level_id, name, description)
-  VALUES (v_cbc, 'CBC Default Grading', 'Competency-based rubric levels: EE, ME, AE, BE')
+  VALUES (v_cbc, 'CBC 8-Level Achievement', 'Competency-based rubric: EE1, EE2, ME1, ME2, AE1, AE2, BE1, BE2')
   ON CONFLICT DO NOTHING;
   SELECT id INTO v_gs_cbc FROM grading_systems WHERE academic_level_id = v_cbc LIMIT 1;
 
@@ -284,10 +284,14 @@ BEGIN
     -- Only insert if no scales exist yet
     IF NOT EXISTS (SELECT 1 FROM grading_scales WHERE grading_system_id = v_gs_cbc LIMIT 1) THEN
       INSERT INTO grading_scales (grading_system_id, min_percentage, max_percentage, symbol, label, points, order_index) VALUES
-        (v_gs_cbc, 75.00, 100.00, 'EE', 'Exceeding Expectations',  4, 1),
-        (v_gs_cbc, 50.00,  74.99, 'ME', 'Meeting Expectations',     3, 2),
-        (v_gs_cbc, 25.00,  49.99, 'AE', 'Approaching Expectations', 2, 3),
-        (v_gs_cbc,  0.00,  24.99, 'BE', 'Below Expectations',       1, 4);
+        (v_gs_cbc, 90, 100, 'EE1', 'Exceeding Expectations - Exceptional', 8, 8),
+        (v_gs_cbc, 75, 89, 'EE2', 'Exceeding Expectations - Very Good', 7, 7),
+        (v_gs_cbc, 58, 74, 'ME1', 'Meeting Expectations - Good', 6, 6),
+        (v_gs_cbc, 41, 57, 'ME2', 'Meeting Expectations - Satisfactory', 5, 5),
+        (v_gs_cbc, 31, 40, 'AE1', 'Approaching Expectations - Needs Improvement', 4, 4),
+        (v_gs_cbc, 21, 30, 'AE2', 'Approaching Expectations - Below Average', 3, 3),
+        (v_gs_cbc, 11, 20, 'BE1', 'Below Expectations', 2, 2),
+        (v_gs_cbc, 1, 10, 'BE2', 'Beginning', 1, 1);
     END IF;
   END IF;
 

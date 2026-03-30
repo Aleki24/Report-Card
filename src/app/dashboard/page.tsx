@@ -70,8 +70,8 @@ function AdminDashboard() {
 
         setKpis([
           { label: 'Total Students', value: totalStudents.toString(), sub: totalStudents > 0 ? 'Enrolled' : 'No students yet' },
-          { label: 'School Average', value: marks.length > 0 ? `${avg.toFixed(1)}%` : '—', sub: marks.length > 0 ? `From ${marks.length} marks` : 'No exam data yet' },
-          { label: 'Pass Rate', value: marks.length > 0 ? `${passRate.toFixed(1)}%` : '—', sub: marks.length > 0 ? '≥ 50% threshold' : 'No exam data yet' },
+          { label: 'School Average', value: marks.length > 0 ? `${Math.round(avg)}%` : '—', sub: marks.length > 0 ? `From ${marks.length} marks` : 'No exam data yet' },
+          { label: 'Pass Rate', value: marks.length > 0 ? `${Math.round(passRate)}%` : '—', sub: marks.length > 0 ? '≥ 50% threshold' : 'No exam data yet' },
           { label: 'Reports Generated', value: totalReports.toString(), sub: totalReports > 0 ? 'Total' : 'None yet' },
         ]);
       } catch (err) {

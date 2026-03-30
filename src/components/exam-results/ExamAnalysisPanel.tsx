@@ -64,10 +64,10 @@ export function ExamAnalysisPanel({ marks }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
             {/* Summary Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-4)' }}>
-                <StatCard label="Mean" value={`${stats.mean.toFixed(1)}%`} color="#3B82F6" />
-                <StatCard label="Median" value={`${stats.median.toFixed(1)}%`} color="#8B5CF6" />
-                <StatCard label="Highest" value={`${stats.highest.toFixed(1)}%`} color="#10B981" />
-                <StatCard label="Lowest" value={`${stats.lowest.toFixed(1)}%`} color="#EF4444" />
+                <StatCard label="Mean" value={`${Math.round(stats.mean)}%`} color="#3B82F6" />
+                <StatCard label="Median" value={`${Math.round(stats.median)}%`} color="#8B5CF6" />
+                <StatCard label="Highest" value={`${Math.round(stats.highest)}%`} color="#10B981" />
+                <StatCard label="Lowest" value={`${Math.round(stats.lowest)}%`} color="#EF4444" />
                 <StatCard label="Pass Rate" value={`${stats.passRate.toFixed(0)}%`} color="#F59E0B" />
                 <StatCard label="Students" value={String(stats.count)} color="#6366F1" />
             </div>
@@ -105,7 +105,7 @@ export function ExamAnalysisPanel({ marks }: Props) {
                                     </td>
                                     <td style={tdStyle}>{s.name}</td>
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admNo}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{s.pct.toFixed(1)}%</td>
+                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{Math.round(s.pct)}%</td>
                                     <td style={{ ...tdStyle, textAlign: 'center' }}>{s.grade}</td>
                                 </tr>
                             ))}

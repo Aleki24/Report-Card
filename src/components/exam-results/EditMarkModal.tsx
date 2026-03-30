@@ -18,6 +18,7 @@ export interface EditMarkData {
     raw_score: number;
     percentage: number;
     grade_symbol: string;
+    rubric: string | null;
     remarks: string | null;
 }
 
@@ -33,6 +34,7 @@ interface Props {
 export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDeleted }: Props) {
     const [score, setScore] = useState(String(mark.raw_score));
     const [grade, setGrade] = useState(mark.grade_symbol);
+    const [rubric, setRubric] = useState(mark.rubric || '');
     const [gradeManuallySet, setGradeManuallySet] = useState(false);
     const [remarks, setRemarks] = useState(mark.remarks || '');
     const [saving, setSaving] = useState(false);
@@ -41,6 +43,15 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     const [error, setError] = useState('');
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
     const [totalPoints, setTotalPoints] = useState<number>(0);
+    const [isCBC, setIsCBC] = useState(false);
+
+    // CBC grade to rubric points mapping
+    const CBC_RUBRIC_MAP: Record<string, string> = {
+        'EE1': '8', 'EE2': '7',
+        'ME1': '6', 'ME2': '5',
+        'AE1': '4', 'AE2': '3',
+        'BE1': '2', 'BE2': '1',
+    };
 
     // Fetch grade options filtered by exam's subject level
     useEffect(() => {
@@ -50,6 +61,11 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                 const examsRes = await fetch('/api/school/data?type=exams');
                 const examsData = await examsRes.json();
                 const exam = (examsData.data || []).find((e: any) => e.id === examId);
+                
+                // Check if exam is CBC type
+                const examType = exam?.exam_type?.toUpperCase() || '';
+                const isCBCExam = examType === 'CBC' || examType === '844';
+                setIsCBC(isCBCExam);
                 
                 // Get academic level from subject or grade
                 let academicLevelId = null;
@@ -165,6 +181,10 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     const handleGradeChange = (val: string) => {
         setGrade(val);
         setGradeManuallySet(true); // Mark that teacher manually selected a grade
+        // Auto-fill rubric for CBC exams
+        if (isCBC && CBC_RUBRIC_MAP[val]) {
+            setRubric(CBC_RUBRIC_MAP[val]);
+        }
     };
 
     const handleSave = async () => {
@@ -192,6 +212,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     raw_score: numScore,
                     percentage: newPercentage,
                     grade_symbol: grade,
+                    rubric: isCBC ? (rubric || null) : null,
                     remarks: remarks.trim() || null
                 })
             });
@@ -286,7 +307,9 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
                     {/* Grade */}
                     <div>
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade *</label>
+                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">
+                            Grade {isCBC ? '(EE1-BE)' : '*'}
+                        </label>
                         <select
                             className="input-field w-full"
                             value={grade}
@@ -304,6 +327,28 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                             ))}
                         </select>
                     </div>
+
+                    {/* Rubric - only for CBC */}
+                    {isCBC && (
+                        <div>
+                            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Rubric (Points)</label>
+                            <select
+                                className="input-field w-full"
+                                value={rubric}
+                                onChange={e => setRubric(e.target.value)}
+                            >
+                                <option value="">Select points</option>
+                                <option value="8">8 - EE1</option>
+                                <option value="7">7 - EE2</option>
+                                <option value="6">6 - ME1</option>
+                                <option value="5">5 - ME2</option>
+                                <option value="4">4 - AE1</option>
+                                <option value="3">3 - AE2</option>
+                                <option value="2">2 - BE1</option>
+                                <option value="1">1 - BE2</option>
+                            </select>
+                        </div>
+                    )}
 
                     {/* Remarks */}
                     <div>

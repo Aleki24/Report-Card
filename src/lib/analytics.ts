@@ -95,39 +95,81 @@ export function getGPAFromPercentage(percentage: number): number {
 
 /* ── Aggregation ─────────────────────────────────────────── */
 
-export function aggregateStudentPerformance(marks: ExamMarkWithDetails[], scales?: GradingScale[]) {
+export interface AggregateResult {
+    totalScore: number;
+    totalPossible: number;
+    percentage: number;
+    gpa: number;
+    totalPoints: number;
+    grade: string;
+    overallGrade: string;
+    markCount: number;
+    selectedSubjectIds?: string[];
+}
+
+export function aggregateStudentPerformance(
+    marks: ExamMarkWithDetails[], 
+    scales?: GradingScale[], 
+    gradingSystemType?: 'KCSE' | 'CBC',
+    subjectNames?: Record<string, string>
+): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
     }
 
-    const totalScore = marks.reduce((sum, mark) => sum + mark.raw_score, 0);
-    const totalPossible = marks.reduce((sum, mark) => sum + mark.max_score, 0);
+    let marksToProcess = marks;
+    let selectedSubjectIds: string[] = [];
+    
+    if (subjectNames && Object.keys(subjectNames).length > 0) {
+        const marksWithNames: MarkWithSubjectName[] = marks.map(m => ({
+            ...m,
+            subjectName: subjectNames[m.subject_id] || ''
+        }));
+        
+        if (marksWithNames.length >= 8) {
+            const selectedMarks = select844Subjects(marksWithNames, scales || []);
+            marksToProcess = selectedMarks as ExamMarkWithDetails[];
+            selectedSubjectIds = selectedMarks.map(m => m.subject_id);
+        } else {
+            selectedSubjectIds = marks.map(m => m.subject_id);
+        }
+    }
 
-    const percentage = calculatePercentage(totalScore, totalPossible);
-    const gpa = getGPAFromPercentage(percentage);
-    const grade = scales ? getGradeFromScales(percentage, scales) : getGradeFromPercentage(percentage);
+    const totalScore = marksToProcess.reduce((sum, mark) => sum + mark.raw_score, 0);
+    const totalPossible = marksToProcess.reduce((sum, mark) => sum + mark.max_score, 0);
 
-    // Calculate total KCSE points (sum of per-subject points)
+    const subjectPercentages = marksToProcess.map(m => calculatePercentage(m.raw_score, m.max_score));
+
     let totalPoints = 0;
     if (scales && scales.length > 0) {
-        for (const mark of marks) {
+        for (const mark of marksToProcess) {
             const pct = calculatePercentage(mark.raw_score, mark.max_score);
             const pts = getPointsFromScales(pct, scales);
             if (pts !== undefined) totalPoints += pts;
         }
     }
 
+    const numSubjects = marksToProcess.length;
+    const meanPoints = numSubjects > 0 ? totalPoints / numSubjects : 0;
+    const maxPointsPerSubject = 12;
+    const avgPercentage = (meanPoints / maxPointsPerSubject) * 100;
+
+    const percentage = calculatePercentage(totalScore, totalPossible);
+    const gpa = getGPAFromPercentage(avgPercentage);
+    const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
+
     const overallGrade = getOverallGradeFromPoints(totalPoints);
 
     return {
         totalScore,
         totalPossible,
-        percentage,
+        percentage: avgPercentage,
         gpa,
         totalPoints,
         grade,
         overallGrade,
-        markCount: marks.length
+        markCount: marksToProcess.length,
+        selectedSubjectIds
     };
 }
 
@@ -257,4 +299,103 @@ export function getCategoryLabel(category: string): string {
         'OTHER': 'Other Subjects',
     };
     return labels[category] || category;
+}
+
+export type SubjectCategory = 'LANGUAGE' | 'MATHEMATICS' | 'SCIENCE' | 'HUMANITY' | 'TECHNICAL' | 'OTHER';
+
+export interface MarkWithSubjectName extends ExamMarkWithDetails {
+    subjectName?: string;
+    category?: SubjectCategory;
+    points?: number;
+}
+
+function identifySubjectCategory(subjectName: string): SubjectCategory {
+    const name = subjectName.toLowerCase();
+    
+    if (name.includes('english')) return 'LANGUAGE';
+    if (name.includes('kiswahili')) return 'LANGUAGE';
+    if (name.includes('math')) return 'MATHEMATICS';
+    if (name.includes('physics')) return 'SCIENCE';
+    if (name.includes('chemistry')) return 'SCIENCE';
+    if (name.includes('biology')) return 'SCIENCE';
+    if (name.includes('geography')) return 'HUMANITY';
+    if (name.includes('history')) return 'HUMANITY';
+    if (name.includes('cre')) return 'HUMANITY';
+    if (name.includes('computer')) return 'TECHNICAL';
+    if (name.includes('business')) return 'TECHNICAL';
+    if (name.includes('agriculture')) return 'TECHNICAL';
+    if (name.includes('technical')) return 'TECHNICAL';
+    
+    return 'OTHER';
+}
+
+export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingScale[]): MarkWithSubjectName[] {
+    if (!marks || marks.length === 0) return marks;
+    
+    const numSubjects = marks.length;
+    
+    if (numSubjects <= 7) {
+        return marks;
+    }
+    
+    const marksWithCategory = marks.map(m => ({
+        ...m,
+        category: identifySubjectCategory(m.subjectName || ''),
+        points: m.subjectName ? getPointsFromScales(calculatePercentage(m.raw_score, m.max_score), scales) ?? 0 : 0
+    }));
+    
+    const languages = marksWithCategory.filter(m => m.category === 'LANGUAGE');
+    const mathematics = marksWithCategory.filter(m => m.category === 'MATHEMATICS');
+    const sciences = marksWithCategory.filter(m => m.category === 'SCIENCE');
+    const humanities = marksWithCategory.filter(m => m.category === 'HUMANITY');
+    const technicals = marksWithCategory.filter(m => m.category === 'TECHNICAL');
+    const others = marksWithCategory.filter(m => m.category === 'OTHER');
+    
+    const selected: MarkWithSubjectName[] = [];
+    
+    // Step 1: Always include all languages
+    selected.push(...languages);
+    
+    // Step 2: Always include mathematics
+    selected.push(...mathematics);
+    
+    // Step 3: Sciences - if 2, include both; if 3+, include best 2
+    const sortedSciences = [...sciences].sort((a, b) => b.points - a.points);
+    if (sciences.length <= 2) {
+        selected.push(...sciences);
+    } else {
+        selected.push(sortedSciences[0], sortedSciences[1]);
+    }
+    
+    // Step 4: Humanities - if 2, include best 1
+    if (humanities.length > 0) {
+        const sortedHumanities = [...humanities].sort((a, b) => b.points - a.points);
+        selected.push(sortedHumanities[0]);
+    }
+    
+    // Step 5: Technicals - if 2+, include best 1
+    if (technicals.length > 0) {
+        const sortedTechnicals = [...technicals].sort((a, b) => b.points - a.points);
+        selected.push(sortedTechnicals[0]);
+    }
+    
+    // Step 6: Others if needed to reach 7
+    const allOthers = [...others].sort((a, b) => b.points - a.points);
+    for (const m of allOthers) {
+        if (!selected.includes(m) && selected.length < 7) {
+            selected.push(m);
+        }
+    }
+    
+    // If still under 7, fill with remaining sciences/humanities/technicals by points
+    const remainingSorted = [...sciences, ...humanities, ...technicals, ...others]
+        .sort((a, b) => b.points - a.points);
+    
+    for (const m of remainingSorted) {
+        if (!selected.includes(m) && selected.length < 7) {
+            selected.push(m);
+        }
+    }
+    
+    return selected;
 }

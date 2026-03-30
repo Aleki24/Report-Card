@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
             const row: Record<string, any> = { examName, _date: new Date(examDates[examName]).getTime() };
             for (const subj of subjects) {
               if (subjMap[subj]) {
-                row[subj] = Number((subjMap[subj].sum / subjMap[subj].count).toFixed(1));
+                row[subj] = Math.round(subjMap[subj].sum / subjMap[subj].count);
               }
             }
             return row;
@@ -135,7 +135,7 @@ export default function AnalyticsPage() {
 
         const allPcts = marks.map((m: any) => Number(m.percentage));
         const avg = allPcts.length > 0 ? allPcts.reduce((s: number, v: number) => s + v, 0) / allPcts.length : 0;
-        setClassAverage(Number(avg.toFixed(1)));
+        setClassAverage(Math.round(avg));
 
         // ── Subject Stats ──────────────────────────────────
         const subjAgg: Record<string, StudentMark[]> = {};
@@ -162,11 +162,11 @@ export default function AnalyticsPage() {
           const passRate = (passes / count) * 100;
           return {
             name,
-            mean: Number(mean.toFixed(1)),
-            median: Number(median.toFixed(1)),
-            highest: Number(scores[count - 1].toFixed(1)),
-            lowest: Number(scores[0].toFixed(1)),
-            passRate: Number(passRate.toFixed(1)),
+            mean: Math.round(mean),
+            median: Math.round(median),
+            highest: Math.round(scores[count - 1]),
+            lowest: Math.round(scores[0]),
+            passRate: Math.round(passRate),
             studentCount: count,
             students: [...students].sort((a, b) => b.percentage - a.percentage),
           };
@@ -267,7 +267,7 @@ export default function AnalyticsPage() {
                                           <td className="p-2 text-[var(--color-text-muted)]">{idx + 1}</td>
                                           <td className="p-2 font-medium">{st.studentName}</td>
                                           <td className="p-2 text-[var(--color-text-muted)]">{st.admissionNumber}</td>
-                                          <td className="p-2 text-center font-semibold">{st.percentage.toFixed(1)}%</td>
+                                          <td className="p-2 text-center font-semibold">{Math.round(st.percentage)}%</td>
                                           <td className="p-2 text-center">{st.gradeSymbol}</td>
                                         </tr>
                                       ))}

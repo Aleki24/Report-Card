@@ -105,7 +105,7 @@ export default function ExamResultsPage() {
 
         const { data } = await supabase
             .from('exam_marks')
-            .select('id, student_id, raw_score, percentage, grade_symbol, remarks, students!inner(admission_number, users(first_name, last_name))')
+            .select('id, student_id, raw_score, percentage, grade_symbol, rubric, remarks, students!inner(admission_number, users(first_name, last_name))')
             .eq('exam_id', selectedExamId);
 
         const mapped: MarkRow[] = (data || []).map((m: any) => ({
@@ -116,6 +116,7 @@ export default function ExamResultsPage() {
             raw_score: Number(m.raw_score),
             percentage: Number(m.percentage || 0),
             grade_symbol: m.grade_symbol || '-',
+            rubric: m.rubric,
             remarks: m.remarks,
         }));
 

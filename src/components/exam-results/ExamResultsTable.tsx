@@ -11,6 +11,7 @@ export interface MarkRow {
     raw_score: number;
     percentage: number;
     grade_symbol: string;
+    rubric: string | null;
     remarks: string | null;
 }
 
@@ -133,6 +134,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
             raw_score: mark.raw_score,
             percentage: mark.percentage,
             grade_symbol: mark.grade_symbol,
+            rubric: mark.rubric,
             remarks: mark.remarks,
         });
     };
@@ -225,7 +227,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
                                     <td style={tdStyle}>{mark.student_name}</td>
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{mark.admission_number}</td>
                                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
-                                        {mark.percentage.toFixed(1)}%
+                                        {Math.round(mark.percentage)}%
                                     </td>
                                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                                         <span style={{

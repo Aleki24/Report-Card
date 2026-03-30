@@ -172,7 +172,7 @@ export default function MyResultsPage() {
                     (s, subj) => s + (subj.maxScore > 0 ? (subj.score / subj.maxScore) * 100 : 0),
                     0
                 );
-                g.average = g.subjects.length > 0 ? Number((sum / g.subjects.length).toFixed(1)) : 0;
+                g.average = g.subjects.length > 0 ? Math.round(sum / g.subjects.length) : 0;
                 return {
                     term: g.term,
                     termId: g.termId,
@@ -262,11 +262,11 @@ export default function MyResultsPage() {
             const latestTerm = resultsArray.length > 0 ? resultsArray[resultsArray.length - 1] : null;
             if (count > 0) {
                 setStats({
-                    termAverage: Number((totalPct / count).toFixed(1)),
+                    termAverage: Math.round(totalPct / count),
                     bestSubject: bestSub,
-                    bestScore: Number(bestScore.toFixed(1)),
+                    bestScore: Math.round(bestScore),
                     weakestSubject: worstSub,
-                    weakestScore: Number(worstScore.toFixed(1)),
+                    weakestScore: Math.round(worstScore),
                     streamPosition: latestTerm?.position || 0,
                     totalInStream: latestTerm?.totalStudents || 0,
                 });

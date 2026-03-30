@@ -28,6 +28,7 @@ export interface ReportCardData {
         teacherComment: string;
         subjectRank?: number;
         instructorName?: string;
+        includedInPoints?: boolean;
     }[];
     overallPercentage: number;
     overallGrade: string;
@@ -141,11 +142,11 @@ const s = StyleSheet.create({
     /* Column widths — CBC */
     colNo: { width: '5%', textAlign: 'center' },
     colSubject: { width: '22%' },
-    colMarks: { width: '13%', textAlign: 'center' },
+    colMarks: { width: '10%', textAlign: 'center' },
+    colGrade: { width: '10%', textAlign: 'center' },
+    colRubric: { width: '10%', textAlign: 'center' },
     colRank: { width: '8%', textAlign: 'center' },
-    colPoints: { width: '10%', textAlign: 'center' },
     colComment: { width: '30%' },
-    colInstructor: { width: '12%' },
 
     /* Column widths — KCSE */
     colKcseSubject: { width: '22%' },
@@ -343,11 +344,11 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <View style={s.tableHeader}>
                                 <Text style={[s.thText, s.colNo]}>#</Text>
                                 <Text style={[s.thText, s.colSubject]}>Learning Area</Text>
-                                <Text style={[s.thText, s.colMarks]}>Marks / %</Text>
+                                <Text style={[s.thText, s.colMarks]}>Marks</Text>
+                                <Text style={[s.thText, s.colGrade]}>Grade</Text>
+                                <Text style={[s.thText, s.colRubric]}>Points</Text>
                                 <Text style={[s.thText, s.colRank]}>Rank</Text>
-                                <Text style={[s.thText, s.colPoints]}>Points</Text>
                                 <Text style={[s.thText, s.colComment]}>Comments</Text>
-                                <Text style={[s.thText, s.colInstructor]}>Instructor</Text>
                             </View>
                         )}
 
@@ -360,7 +361,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                 return (
                                     <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                         <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                        <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectCode || sm.subjectName}</Text>
+                                        <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
                                         <Text style={[s.tdBold, s.colKcseScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                                         <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
                                         <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
@@ -374,16 +375,18 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             return (
                                 <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                     <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                    <Text style={[s.tdText, s.colSubject]}>{sm.subjectCode || sm.subjectName}</Text>
+                                    <Text style={[s.tdText, s.colSubject]}>{sm.subjectName}</Text>
                                     <Text style={[s.tdBold, s.colMarks]}>
-                                        {sm.score != null ? `${sm.score} / ${sm.percentage}%` : '—'}
+                                        {sm.score != null ? `${sm.score}` : '—'}
+                                    </Text>
+                                    <Text style={[s.tdBold, s.colGrade, { color: gradeColor(sm.grade) }]}>
+                                        {sm.grade || '—'}
+                                    </Text>
+                                    <Text style={[s.tdBold, s.colRubric]}>
+                                        {sm.points != null ? `${sm.points}` : '—'}
                                     </Text>
                                     <Text style={[s.tdText, s.colRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
-                                    <Text style={[s.tdBold, s.colPoints, { color: gradeColor(sm.grade) }]}>
-                                        {sm.rubric || sm.grade || '—'}
-                                    </Text>
                                     <Text style={[s.tdSmall, s.colComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
-                                    <Text style={[s.tdSmall, s.colInstructor]}>{sm.instructorName || ''}</Text>
                                 </View>
                             );
                         })}
@@ -394,7 +397,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: NAVY }]}>TOTAL</Text>
                             {isKCSE ? (
                                 <>
-                                    <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{Math.round(data.overallPercentage)}%</Text>
                                     <Text style={[s.tdBold, s.colKcseRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallPointsGrade || data.overallGrade) }]}>{data.overallPointsGrade || data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colKcsePoints, { color: NAVY }]}>{data.totalPoints ?? '—'}</Text>
@@ -403,10 +406,10 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             ) : (
                                 <>
                                     <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore}</Text>
+                                    <Text style={[s.tdBold, s.colGrade]}></Text>
+                                    <Text style={[s.tdBold, s.colRubric]}></Text>
                                     <Text style={[s.tdBold, s.colRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                                    <Text style={[s.tdBold, s.colPoints, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colComment]}></Text>
-                                    <Text style={[s.tdBold, s.colInstructor]}></Text>
                                 </>
                             )}
                         </View>
@@ -417,7 +420,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         {/* Circular orange badge */}
                         <View style={s.avgBadge}>
                             <Text style={s.avgLabel}>Average</Text>
-                            <Text style={s.avgValue}>{data.overallPercentage}%</Text>
+                            <Text style={s.avgValue}>{Math.round(data.overallPercentage)}%</Text>
                             <Text style={s.avgGrade}>{data.overallGrade}</Text>
                         </View>
 
@@ -427,7 +430,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                 <Text style={s.gradingKeyTitle}>Subject Performance Analysis</Text>
                             </View>
                             {data.subjectTrendData && data.subjectTrendData.length > 0 ? (
-                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
                                     {data.subjectTrendData.slice(0, 6).map((subj, idx) => {
                                         const maxScore = 100;
                                         const currentScore = subj.scores[subj.scores.length - 1]?.percentage || 0;
@@ -435,7 +438,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                         const barColor = currentScore >= 80 ? '#22A86B' : currentScore >= 60 ? '#2563EB' : currentScore >= 40 ? '#FF8C00' : '#DC2626';
                                         
                                         return (
-                                            <View key={idx} style={{ width: 70, alignItems: 'center', marginBottom: 4 }}>
+                                            <View key={idx} style={{ width: 55, alignItems: 'center', marginBottom: 4 }}>
                                                 <View style={{ height: 50, width: 20, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
                                                     <View style={{ 
                                                         height: barHeight, 
@@ -455,7 +458,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             ) : (
                                 <View style={{ marginTop: 8 }}>
                                     <Text style={{ fontSize: 7, color: GRAY_700, marginBottom: 6 }}>Current Term Performance</Text>
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
                                         {data.subjectMarks.slice(0, 8).map((subj, idx) => {
                                             const maxScore = 100;
                                             const currentScore = subj.percentage || 0;
@@ -463,7 +466,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                             const barColor = currentScore >= 80 ? '#22A86B' : currentScore >= 60 ? '#2563EB' : currentScore >= 40 ? '#FF8C00' : '#DC2626';
                                             
                                             return (
-                                                <View key={idx} style={{ width: 50, alignItems: 'center', marginBottom: 4 }}>
+                                                <View key={idx} style={{ width: 40, alignItems: 'center', marginBottom: 4 }}>
                                                     <View style={{ height: 40, width: 14, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
                                                         <View style={{ 
                                                             height: barHeight, 

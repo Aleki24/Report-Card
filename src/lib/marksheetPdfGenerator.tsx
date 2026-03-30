@@ -232,7 +232,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                         </View>
                         <View style={s.summaryItem}>
                             <Text style={s.summaryLabel}>Mean %</Text>
-                            <Text style={s.summaryVal}>{data.meanPercentage.toFixed(1)}%</Text>
+                            <Text style={s.summaryVal}>{Math.round(data.meanPercentage)}%</Text>
                         </View>
                     </View>
 
@@ -284,7 +284,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
 
                                     <View style={[s.colSummary, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
                                         <Text style={[s.tdTextBold, { color: scoreColor(student.overallPercentage) }]}>
-                                            {student.overallPercentage.toFixed(1)}
+                                            {Math.round(student.overallPercentage)}
                                         </Text>
                                     </View>
                                     {isKCSE && (
@@ -316,7 +316,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                             </View>
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Mean Percentage</Text>
-                                <Text style={s.summaryCardValue}>{data.meanPercentage.toFixed(2)}%</Text>
+                                <Text style={s.summaryCardValue}>{Math.round(data.meanPercentage)}%</Text>
                             </View>
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Mean Grade</Text>

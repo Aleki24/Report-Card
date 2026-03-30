@@ -93,8 +93,8 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                         studentName: data.name,
                         admissionNumber: data.admNo,
                         subjects: data.subjects,
-                        total: Number(total.toFixed(1)),
-                        average: Number(average.toFixed(1)),
+                        total: Math.round(total),
+                        average: Math.round(average),
                         rank: 0,
                     };
                 });
@@ -202,7 +202,7 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                                     fontWeight: 700,
                                     color: row.average >= 70 ? '#10B981' : row.average >= 50 ? '#F59E0B' : '#EF4444',
                                 }}>
-                                    {row.average.toFixed(1)}%
+                                    {Math.round(row.average)}%
                                 </td>
                             </tr>
                         ))}

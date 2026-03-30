@@ -81,9 +81,9 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
             const delta = t2Avg - t1Avg;
 
             setResults({
-                term1Avg: t1Avg.toFixed(1),
-                term2Avg: t2Avg.toFixed(1),
-                delta: delta.toFixed(1),
+                term1Avg: String(Math.round(t1Avg)),
+                term2Avg: String(Math.round(t2Avg)),
+                delta: String(Math.round(delta)),
                 improved: delta > 0,
                 decreased: delta < 0
             });
