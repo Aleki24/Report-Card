@@ -91,29 +91,26 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                 const allGradingSystems = structureData.grading_systems || [];
                 const allScales = structureData.grading_scales || [];
                 
-                // Filter grading systems by academic level
-                const relevantSystemIds = new Set(
-                    allGradingSystems
-                        .filter((gs: any) => gs.academic_level_id === academicLevelId)
-                        .map((gs: any) => gs.id)
-                );
-                
                 // Build filtered scales
                 const filteredScales: typeof gradingScales = [];
-                allGradingSystems
-                    .filter((gs: any) => gs.academic_level_id === academicLevelId)
-                    .forEach((sys: any) => {
-                        const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
-                        sysScales.forEach((sc: any) => {
-                            filteredScales.push({
-                                symbol: sc.symbol,
-                                label: sc.label || '',
-                                systemName: sys.name,
-                                min_percentage: sc.min_percentage,
-                                max_percentage: sc.max_percentage,
-                            });
+                
+                // Get systems that match the academic level, or all systems as fallback
+                const relevantSystems = academicLevelId 
+                    ? allGradingSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
+                    : allGradingSystems;
+                
+                relevantSystems.forEach((sys: any) => {
+                    const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
+                    sysScales.forEach((sc: any) => {
+                        filteredScales.push({
+                            symbol: sc.symbol,
+                            label: sc.label || '',
+                            systemName: sys.name,
+                            min_percentage: sc.min_percentage,
+                            max_percentage: sc.max_percentage,
                         });
                     });
+                });
                 
                 setGradingScales(filteredScales);
             } catch (err) {

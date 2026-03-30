@@ -327,6 +327,7 @@ export default function ExamResultsPage() {
                                     marks={marks}
                                     maxScore={selectedExam?.max_score || 100}
                                     examId={selectedExamId}
+                                    gradeStreamId={selectedStreamId}
                                     onRefresh={fetchMarks}
                                 />
                             )}

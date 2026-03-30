@@ -12,6 +12,7 @@ interface GradeOption {
 
 export interface EditMarkData {
     id: string;
+    student_id: string;
     student_name: string;
     admission_number: string;
     raw_score: number;
@@ -39,6 +40,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [error, setError] = useState('');
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
+    const [totalPoints, setTotalPoints] = useState<number>(0);
 
     // Fetch grade options filtered by exam's subject level
     useEffect(() => {
@@ -66,21 +68,23 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                 
                 let options: GradeOption[] = [];
                 
-                // Filter by academic level
-                allGradingSystems
-                    .filter((gs: any) => gs.academic_level_id === academicLevelId)
-                    .forEach((sys: any) => {
-                        const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
-                        sysScales.forEach((sc: any) => {
-                            options.push({
-                                symbol: sc.symbol,
-                                label: sc.label || sc.symbol,
-                                systemName: sys.name,
-                                min_percentage: sc.min_percentage,
-                                max_percentage: sc.max_percentage,
-                            });
+                // Get systems that match the academic level, or all systems as fallback
+                const relevantSystems = academicLevelId 
+                    ? allGradingSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
+                    : allGradingSystems;
+                
+                relevantSystems.forEach((sys: any) => {
+                    const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);
+                    sysScales.forEach((sc: any) => {
+                        options.push({
+                            symbol: sc.symbol,
+                            label: sc.label || sc.symbol,
+                            systemName: sys.name,
+                            min_percentage: sc.min_percentage,
+                            max_percentage: sc.max_percentage,
                         });
                     });
+                });
                 
                 setGradeOptions(options);
             } catch (err) {
@@ -89,6 +93,55 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
         };
         fetchGrades();
     }, [examId]);
+
+    // Fetch total points for this student
+    useEffect(() => {
+        const fetchTotalPoints = async () => {
+            if (!mark.student_id) return;
+
+            try {
+                const [marksRes, structureRes] = await Promise.all([
+                    fetch('/api/school/data?type=students'),
+                    fetch('/api/admin/academic-structure')
+                ]);
+
+                const studentsData = await marksRes.json();
+                const structureData = await structureRes.json();
+
+                const student = (studentsData.data || []).find((s: any) => s.id === mark.student_id);
+                const streamId = student?.current_grade_stream_id;
+
+                if (!streamId) return;
+
+                const streamMarksRes = await fetch(`/api/school/exam-marks/stream?stream_id=${streamId}`);
+                const marksData = await streamMarksRes.json();
+
+                const allMarks = marksData.data || [];
+                const gradingScales = structureData.grading_scales || [];
+
+                const scalesMap: Record<string, number> = {};
+                gradingScales.forEach((sc: any) => {
+                    scalesMap[sc.symbol] = sc.points ?? 0;
+                });
+
+                let totalPts = 0;
+                allMarks
+                    .filter((m: any) => m.student_id === mark.student_id)
+                    .forEach((m: any) => {
+                        const gradeSymbol = m.grade_symbol;
+                        if (gradeSymbol && scalesMap[gradeSymbol]) {
+                            totalPts += scalesMap[gradeSymbol];
+                        }
+                    });
+
+                setTotalPoints(totalPts);
+            } catch (err) {
+                console.error("Failed to load total points", err);
+            }
+        };
+
+        fetchTotalPoints();
+    }, [mark.student_id]);
 
     // Auto-resolve grade when score changes (only if teacher hasn't manually set a grade)
     const autoResolveGrade = useCallback((newScore: number) => {
@@ -271,6 +324,11 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                                 ? ((parseFloat(score) / maxScore) * 100).toFixed(1)
                                 : '—'}%
                         </strong>
+                    </div>
+
+                    {/* Total Points */}
+                    <div className="text-xs text-[var(--color-accent)] bg-[var(--color-accent-glow)] p-2 rounded-md">
+                        Total Points (all subjects): <strong>{totalPoints}</strong>
                     </div>
                 </div>
 

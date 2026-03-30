@@ -251,7 +251,7 @@ export async function GET(
             remarks: m.remarks
         }));
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-' };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
 
         // 6. Calculate class ranking + per-subject ranks
         let classRank = 0;
@@ -484,6 +484,7 @@ export async function GET(
             overallPercentage: studentPerf.percentage,
             overallGrade: overallGradeSymbol,
             totalPoints: studentPerf.totalPoints,
+            overallPointsGrade: studentPerf.overallGrade,
             classRank,
             totalStudents,
             classTeacherComment: classTeacherComment || undefined,

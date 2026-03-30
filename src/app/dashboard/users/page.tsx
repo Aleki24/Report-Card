@@ -46,6 +46,17 @@ export default function UsersPage() {
   const [showResetResult, setShowResetResult] = useState(false);
   const [resetResultPassword, setResetResultPassword] = useState('');
 
+  // Edit user state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('CLASS_TEACHER');
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editClassTeacherStreamId, setEditClassTeacherStreamId] = useState('');
+  const [editSubjectTeacherSubjects, setEditSubjectTeacherSubjects] = useState<{subject_id: string, grade_id: string}[]>([]);
+
   const [formFirstName, setFormFirstName] = useState('');
   const [formLastName, setFormLastName] = useState('');
   const [formPhone, setFormPhone] = useState('');
@@ -198,6 +209,105 @@ export default function UsersPage() {
     }
   };
 
+  const handleEditClick = async (user: UserRow) => {
+    setEditingUser(user);
+    setEditFirstName(user.first_name);
+    setEditLastName(user.last_name);
+    setEditPhone(user.phone || '');
+    setEditRole(user.role);
+    setEditIsActive(user.is_active);
+    setEditClassTeacherStreamId('');
+    setEditSubjectTeacherSubjects([]);
+    
+    if (gradeStreams.length === 0) {
+      try {
+        const [gsRes, structureRes] = await Promise.all([
+          fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
+          fetch('/api/admin/academic-structure', { cache: 'no-store' }),
+        ]);
+        const [gsJson, structureJson] = await Promise.all([
+          gsRes.json(),
+          structureRes.json(),
+        ]);
+        setGradeStreams(gsJson.data || []);
+        setAcademicLevels(structureJson.academic_levels || []);
+        setSubjects(structureJson.subjects || []);
+        setGrades(structureJson.grades || []);
+      } catch (err) {
+        console.error('Failed to load dropdowns', err);
+      }
+    }
+
+    setShowEditModal(true);
+    setFormError('');
+
+    if (user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER') {
+      try {
+        const res = await fetch(`/api/admin/user-assignments?user_id=${user.id}`);
+        const data = await res.json();
+        if (res.ok) {
+           if (data.class_teacher) {
+              setEditClassTeacherStreamId(data.class_teacher.grade_stream_id);
+           }
+           if (data.subject_assignments && data.subject_assignments.length > 0) {
+              setEditSubjectTeacherSubjects(data.subject_assignments.map((a: any) => ({
+                  subject_id: a.subject_id,
+                  grade_id: a.grade_id
+              })));
+           } else if (user.role === 'SUBJECT_TEACHER') {
+               setEditSubjectTeacherSubjects([{ subject_id: '', grade_id: '' }]);
+           }
+        }
+      } catch(err) {
+        console.error('Failed to fetch assignments', err);
+      }
+    }
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setFormError('');
+    setSubmitting(true);
+
+    const payload: Record<string, any> = {
+      user_id: editingUser.id,
+      first_name: editFirstName.trim(),
+      last_name: editLastName.trim(),
+      phone: editPhone.trim(),
+      role: editRole,
+      is_active: editIsActive,
+    };
+
+    if (editRole === 'CLASS_TEACHER') {
+      payload.class_teacher_grade_stream_id = editClassTeacherStreamId;
+      payload.subject_teacher_subjects = [];
+    } else if (editRole === 'SUBJECT_TEACHER') {
+      payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
+      payload.class_teacher_grade_stream_id = null;
+    }
+
+    try {
+      const res = await fetch('/api/admin/update-user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setFormError(data.error || 'Failed to update user');
+      } else {
+        setShowEditModal(false);
+        fetchData();
+      }
+    } catch {
+      setFormError('Network error. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Reset to page 1 when users list changes (for simplicity)
   useEffect(() => {
     setCurrentPage(1);
@@ -339,6 +449,13 @@ export default function UsersPage() {
                     </td>
                     <td data-label="Actions">
                       <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleEditClick(u)} 
+                          className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 transition"
+                          title="Edit User"
+                        >
+                          ✏️
+                        </button>
                         <button 
                           onClick={() => resetUserPassword(u)} 
                           disabled={resettingPasswordId === u.id}
@@ -511,6 +628,121 @@ export default function UsersPage() {
                 <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); resetForm(); }} disabled={submitting}>Cancel</button>
                 <button type="submit" className="btn-primary disabled:opacity-50" disabled={submitting}>
                   {submitting ? '⏳ Adding...' : 'Add User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && editingUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowEditModal(false)}>
+          <div className="card w-full max-w-lg" style={{ animation: 'fadeIn .2s ease', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-6">Edit User & Assignments</h2>
+
+            <form onSubmit={handleUpdateUser}>
+              {formError && (
+                <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">First Name *</label>
+                  <input className="input-field w-full" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} required />
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Last Name *</label>
+                  <input className="input-field w-full" value={editLastName} onChange={e => setEditLastName(e.target.value)} required />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Phone Number</label>
+                  <input className="input-field w-full" type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Status</label>
+                  <select className="input-field w-full" value={editIsActive ? 'true' : 'false'} onChange={e => setEditIsActive(e.target.value === 'true')}>
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Role *</label>
+                <select className="input-field w-full" value={editRole} onChange={e => setEditRole(e.target.value as UserRole)} disabled={editingUser.role === 'STUDENT'}>
+                  <option value="CLASS_TEACHER">Class Teacher</option>
+                  <option value="SUBJECT_TEACHER">Subject Teacher</option>
+                  <option value="ADMIN">Admin</option>
+                  {editingUser.role === 'STUDENT' && <option value="STUDENT">Student</option>}
+                </select>
+                {editingUser.role === 'STUDENT' && <p className="text-[10px] text-[var(--color-text-muted)] mt-1 opacity-70">Students must be managed separately.</p>}
+              </div>
+
+              {editRole === 'CLASS_TEACHER' && (
+                <div className="border-t border-[var(--color-border)] pt-4 mt-4">
+                  <p className="text-xs font-semibold text-[var(--color-text-muted)] mb-3 uppercase tracking-wide">Class Teacher Assignment</p>
+                  <div>
+                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class</label>
+                    <select className="input-field w-full" value={editClassTeacherStreamId} onChange={e => setEditClassTeacherStreamId(e.target.value)}>
+                      <option value="">-- Unassigned --</option>
+                      {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {editRole === 'SUBJECT_TEACHER' && (
+                <div className="border-t border-[var(--color-border)] pt-4 mt-4">
+                  <p className="text-xs font-semibold text-[var(--color-text-muted)] mb-3 uppercase tracking-wide">Subject Teacher Assignment</p>
+                  {editSubjectTeacherSubjects.map((st, i) => (
+                    <div key={i} className="flex items-start gap-2 mb-2">
+                       <div className="flex-1">
+                          <label className="block text-[10px] text-[var(--color-text-muted)] mb-1">Subject</label>
+                          <select className="input-field w-full py-1 text-sm" value={st.subject_id} onChange={e => {
+                             const newSubj = [...editSubjectTeacherSubjects];
+                             newSubj[i].subject_id = e.target.value;
+                             setEditSubjectTeacherSubjects(newSubj);
+                          }}>
+                            <option value="">-- Subject --</option>
+                            {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                          </select>
+                       </div>
+                       <div className="flex-1">
+                          <label className="block text-[10px] text-[var(--color-text-muted)] mb-1">Grade Level</label>
+                          <select className="input-field w-full py-1 text-sm" value={st.grade_id} onChange={e => {
+                             const newSubj = [...editSubjectTeacherSubjects];
+                             newSubj[i].grade_id = e.target.value;
+                             setEditSubjectTeacherSubjects(newSubj);
+                          }}>
+                            <option value="">-- Grade --</option>
+                             {grades
+                               .filter(g => gradeStreams.some(gs => gs.grade_id === g.id))
+                               .map(g => <option key={g.id} value={g.id}>{g.name_display}</option>)}
+                          </select>
+                       </div>
+                       <button
+                          type="button"
+                          onClick={() => setEditSubjectTeacherSubjects(editSubjectTeacherSubjects.filter((_, idx) => idx !== i))}
+                          className="mt-6 text-red-500 hover:text-red-400 p-1"
+                       >
+                         &times;
+                       </button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setEditSubjectTeacherSubjects([...editSubjectTeacherSubjects, { subject_id: '', grade_id: '' }])} className="text-xs text-[var(--color-accent)] hover:underline mt-1">
+                    + Add Subject
+                  </button>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[var(--color-border)]">
+                <button type="button" className="btn-secondary" onClick={() => setShowEditModal(false)} disabled={submitting}>Cancel</button>
+                <button type="submit" className="btn-primary disabled:opacity-50" disabled={submitting}>
+                  {submitting ? '⏳ Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

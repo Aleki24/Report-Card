@@ -32,6 +32,7 @@ export interface ReportCardData {
     overallPercentage: number;
     overallGrade: string;
     totalPoints?: number;
+    overallPointsGrade?: string;
     classRank: number;
     totalStudents: number;
     classTeacherComment?: string;
@@ -148,12 +149,11 @@ const s = StyleSheet.create({
 
     /* Column widths — KCSE */
     colKcseSubject: { width: '22%' },
-    colKcseScore: { width: '10%', textAlign: 'center' },
-    colKcsePct: { width: '10%', textAlign: 'center' },
+    colKcseScore: { width: '12%', textAlign: 'center' },
     colKcseRank: { width: '8%', textAlign: 'center' },
     colKcseGrade: { width: '8%', textAlign: 'center' },
     colKcsePoints: { width: '8%', textAlign: 'center' },
-    colKcseComment: { width: '29%' },
+    colKcseComment: { width: '37%' },
 
     tdText: { fontSize: 8.5, color: BLACK },
     tdSmall: { fontSize: 7.5, color: GRAY_700 },
@@ -318,6 +318,9 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                 <View style={{ alignItems: 'center' }}>
                                     <Text style={s.summaryLabel}>Points</Text>
                                     <Text style={s.summaryVal}>{data.totalPoints}</Text>
+                                    {data.overallPointsGrade && (
+                                        <Text style={[s.summaryLabel, { marginTop: 2 }]}>({data.overallPointsGrade})</Text>
+                                    )}
                                 </View>
                             )}
                         </View>
@@ -330,8 +333,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <View style={s.tableHeader}>
                                 <Text style={[s.thText, s.colNo]}>#</Text>
                                 <Text style={[s.thText, s.colKcseSubject]}>Subject</Text>
-                                <Text style={[s.thText, s.colKcseScore]}>Score</Text>
-                                <Text style={[s.thText, s.colKcsePct]}>%</Text>
+                                <Text style={[s.thText, s.colKcseScore]}>Scores(%)</Text>
                                 <Text style={[s.thText, s.colKcseRank]}>Rank</Text>
                                 <Text style={[s.thText, s.colKcseGrade]}>Grade</Text>
                                 <Text style={[s.thText, s.colKcsePoints]}>Pts</Text>
@@ -359,8 +361,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                     <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                         <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
                                         <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectCode || sm.subjectName}</Text>
-                                        <Text style={[s.tdBold, s.colKcseScore]}>{sm.score ?? '—'}</Text>
-                                        <Text style={[s.tdText, s.colKcsePct]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
+                                        <Text style={[s.tdBold, s.colKcseScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                                         <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
                                         <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
                                         <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
@@ -393,10 +394,9 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: NAVY }]}>TOTAL</Text>
                             {isKCSE ? (
                                 <>
-                                    <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{totalScore}</Text>
-                                    <Text style={[s.tdBold, s.colKcsePct, { color: NAVY }]}>{data.overallPercentage}%</Text>
+                                    <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{data.overallPercentage}%</Text>
                                     <Text style={[s.tdBold, s.colKcseRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                                    <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
+                                    <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallPointsGrade || data.overallGrade) }]}>{data.overallPointsGrade || data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colKcsePoints, { color: NAVY }]}>{data.totalPoints ?? '—'}</Text>
                                     <Text style={[s.tdBold, s.colKcseComment]}></Text>
                                 </>

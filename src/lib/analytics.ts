@@ -1,5 +1,25 @@
 import type { ExamMark, GradingScale } from '../types';
 
+export const OVERALL_POINTS_GRADES = [
+    { symbol: 'A', min: 81, max: 84 },
+    { symbol: 'A-', min: 74, max: 80 },
+    { symbol: 'B+', min: 67, max: 73 },
+    { symbol: 'B', min: 60, max: 66 },
+    { symbol: 'B-', min: 53, max: 59 },
+    { symbol: 'C+', min: 46, max: 52 },
+    { symbol: 'C', min: 39, max: 45 },
+    { symbol: 'C-', min: 32, max: 38 },
+    { symbol: 'D+', min: 25, max: 31 },
+    { symbol: 'D', min: 18, max: 24 },
+    { symbol: 'D-', min: 11, max: 17 },
+    { symbol: 'E', min: 7, max: 10 },
+];
+
+export function getOverallGradeFromPoints(totalPoints: number): string {
+    const match = OVERALL_POINTS_GRADES.find(g => totalPoints >= g.min && totalPoints <= g.max);
+    return match?.symbol || '-';
+}
+
 export interface ExamMarkWithDetails extends ExamMark {
     subject_id: string;
     max_score: number;
@@ -77,7 +97,7 @@ export function getGPAFromPercentage(percentage: number): number {
 
 export function aggregateStudentPerformance(marks: ExamMarkWithDetails[], scales?: GradingScale[]) {
     if (!marks || marks.length === 0) {
-        return { totalScore: 0, totalPossible: 0, percentage: 0, gpa: 0, totalPoints: 0, grade: 'N/A', markCount: 0 };
+        return { totalScore: 0, totalPossible: 0, percentage: 0, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
     }
 
     const totalScore = marks.reduce((sum, mark) => sum + mark.raw_score, 0);
@@ -97,6 +117,8 @@ export function aggregateStudentPerformance(marks: ExamMarkWithDetails[], scales
         }
     }
 
+    const overallGrade = getOverallGradeFromPoints(totalPoints);
+
     return {
         totalScore,
         totalPossible,
@@ -104,6 +126,7 @@ export function aggregateStudentPerformance(marks: ExamMarkWithDetails[], scales
         gpa,
         totalPoints,
         grade,
+        overallGrade,
         markCount: marks.length
     };
 }

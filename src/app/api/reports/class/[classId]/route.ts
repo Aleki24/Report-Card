@@ -270,7 +270,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-' };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
 
             // Resolve overall grade from DB grading scales
             const overallGradeSymbol = gradingScales.length > 0
@@ -363,6 +363,7 @@ export async function GET(
                 overallPercentage: studentPerf.percentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints,
+                overallPointsGrade: studentPerf.overallGrade,
                 classRank: ranks.get(student.id) || 0,
                 totalStudents: rankedStudentCount,
                 classTeacherComment: classTeacherComment || undefined,

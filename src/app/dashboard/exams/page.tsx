@@ -273,7 +273,7 @@ export default function ExamResultsPage() {
               {activeTab === 'allsubjects' && <AllSubjectsView gradeStreamId={selectedStreamId} />}
 
               {activeTab === 'results' && selectedExamId && (
-                <ExamResultsTable marks={marks} maxScore={selectedExam?.max_score || 100} examId={selectedExamId} onRefresh={fetchMarks} />
+                <ExamResultsTable marks={marks} maxScore={selectedExam?.max_score || 100} examId={selectedExamId} gradeStreamId={selectedStreamId} onRefresh={fetchMarks} />
               )}
               {activeTab === 'results' && !selectedExamId && (
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>

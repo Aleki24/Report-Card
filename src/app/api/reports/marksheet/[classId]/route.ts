@@ -207,6 +207,7 @@ export async function GET(
                 overallPercentage: studentPerf.percentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints || 0,
+                overallPointsGrade: studentPerf.overallGrade,
                 classRank: ranks.get(student.id) || 0,
                 hasAnyMarks,
             };

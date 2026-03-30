@@ -17,6 +17,7 @@ export interface MarkSheetData {
         overallPercentage: number;
         overallGrade: string;
         totalPoints: number;
+        overallPointsGrade?: string;
         classRank: number;
     }[];
     gradeDistribution: Record<string, number>;
@@ -289,6 +290,9 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                     {isKCSE && (
                                         <View style={[s.colSummary, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
                                             <Text style={s.tdTextBold}>{student.totalPoints}</Text>
+                                            {student.overallPointsGrade && (
+                                                <Text style={[s.tdText, { fontSize: 8, color: GRAY_400 }]}>({student.overallPointsGrade})</Text>
+                                            )}
                                         </View>
                                     )}
                                     <View style={s.colSummary}>
