@@ -107,7 +107,7 @@ export async function GET(
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, remarks,
                 exams!inner ( id, name, max_score, term_id, academic_year_id,
-                    subjects ( id, name, category, display_order )
+                    subjects ( id, code, name, category, display_order )
                 )
             `)
             .in('student_id', studentIds)
