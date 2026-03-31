@@ -177,6 +177,49 @@ export async function GET(
         // 7. Aggregate data for the specific report format
         let totalClassPercentage = 0;
 
+        // Calculate subject-wise statistics (mean, rank)
+        const subjectStats: Record<string, { mean: number; highest: number; lowest: number; studentCount: number }> = {};
+        
+        // Initialize subject stats
+        subjectsArray.forEach(sub => {
+            subjectStats[sub.code] = { mean: 0, highest: 0, lowest: 100, studentCount: 0 };
+        });
+
+        // Calculate mean per subject across all students
+        const subjectScores: Record<string, number[]> = {};
+        subjectsArray.forEach(sub => subjectScores[sub.code] = []);
+
+        for (const student of students) {
+            const studentMarks = marksByStudent[student.id] || [];
+            studentMarks.forEach((m: any) => {
+                const scode = m.exams.subjects?.code || m.exams.subjects?.name;
+                if (scode && m.percentage !== null && m.percentage !== undefined) {
+                    const pct = Number(m.percentage);
+                    subjectScores[scode].push(pct);
+                }
+            });
+        }
+
+        // Calculate stats for each subject
+        for (const sub of subjectsArray) {
+            const scores = subjectScores[sub.code];
+            if (scores.length > 0) {
+                const sum = scores.reduce((a, b) => a + b, 0);
+                subjectStats[sub.code] = {
+                    mean: Math.round(sum / scores.length),
+                    highest: Math.round(Math.max(...scores)),
+                    lowest: Math.round(Math.min(...scores)),
+                    studentCount: scores.length
+                };
+            }
+        }
+
+        // Calculate subject ranks (rank subjects by mean score)
+        const subjectRankings = subjectsArray
+            .map(sub => ({ code: sub.code, mean: subjectStats[sub.code].mean }))
+            .sort((a, b) => b.mean - a.mean)
+            .map((sub, idx) => ({ ...sub, rank: idx + 1 }));
+
         const studentsData = students.map(student => {
             const studentMarks = marksByStudent[student.id] || [];
             
@@ -273,6 +316,8 @@ export async function GET(
             gradeDistribution,
             meanGrade,
             meanPercentage: Math.round(meanPercentage),
+            subjectStats,
+            subjectRankings,
         };
 
         return NextResponse.json(markSheetData, { status: 200 });
