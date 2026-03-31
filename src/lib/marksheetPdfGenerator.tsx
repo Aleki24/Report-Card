@@ -142,7 +142,8 @@ const s = StyleSheet.create({
     totalsRow: { flexDirection: 'row', backgroundColor: SKY_BLUE, paddingVertical: 5, paddingHorizontal: 2, borderTop: `1.5pt solid ${NAVY}` },
 
     /* Bottom summary — matching report card style */
-    bottomRow: { flexDirection: 'row', gap: 10, marginBottom: 8, paddingHorizontal: 24 },
+    bottomRow: { flexDirection: 'row', gap: 8, marginBottom: 8, paddingHorizontal: 24 },
+    bottomRowStack: { flexDirection: 'column', gap: 8, paddingHorizontal: 24, marginBottom: 8 },
 
     summaryCard: {
         flex: 1,
@@ -169,19 +170,20 @@ const s = StyleSheet.create({
     gradeCount: { fontSize: 6, color: GRAY_700 },
 
     subjectPerfCard: {
-        backgroundColor: LIGHT_GRAY,
+        backgroundColor: WHITE,
         borderRadius: 6,
-        padding: 8,
-        borderLeft: `3pt solid ${STEEL_BLUE}`,
+        padding: 10,
+        border: `1pt solid ${GRAY_200}`,
     },
-    subjectPerfTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: STEEL_BLUE, marginBottom: 6, textTransform: 'uppercase' },
-    subjectPerfRow: { flexDirection: 'row', paddingVertical: 2, borderBottom: `0.5pt solid ${GRAY_200}` },
-    subjectPerfColCode: { width: '15%', fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
-    subjectPerfColMean: { width: '15%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColHighest: { width: '15%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColLowest: { width: '15%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColCount: { width: '20%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColRank: { width: '20%', fontSize: 6.5, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
+    subjectPerfTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: STEEL_BLUE, marginBottom: 8, textTransform: 'uppercase', textAlign: 'center' },
+    subjectPerfHeader: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 4 },
+    subjectPerfRow: { flexDirection: 'row', paddingVertical: 4, borderBottom: `0.5pt solid ${GRAY_200}` },
+    subjectPerfColCode: { width: '12%', fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
+    subjectPerfColMean: { width: '12%', fontSize: 6.5, textAlign: 'center' },
+    subjectPerfColHighest: { width: '14%', fontSize: 6.5, textAlign: 'center' },
+    subjectPerfColLowest: { width: '14%', fontSize: 6.5, textAlign: 'center' },
+    subjectPerfColCount: { width: '18%', fontSize: 6.5, textAlign: 'center' },
+    subjectPerfColRank: { width: '30%', fontSize: 7, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
 
     /* Footer — matching report card */
     footer: {
@@ -336,13 +338,13 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                     <View style={s.bottomRow}>
                         {/* Class Summary */}
                         <View style={s.summaryCard}>
-                            <Text style={s.summaryCardTitle}>Class Performance Summary</Text>
+                            <Text style={s.summaryCardTitle}>Class Performance</Text>
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Total Students</Text>
                                 <Text style={s.summaryCardValue}>{data.students.length}</Text>
                             </View>
                             <View style={s.summaryCardRow}>
-                                <Text style={s.summaryCardLabel}>Mean Percentage</Text>
+                                <Text style={s.summaryCardLabel}>Mean %</Text>
                                 <Text style={s.summaryCardValue}>{Math.round(data.meanPercentage)}%</Text>
                             </View>
                             <View style={s.summaryCardRow}>
@@ -369,36 +371,38 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                 </View>
                             </View>
                         )}
+                    </View>
 
-                        {/* Subject Performance */}
-                        {data.subjectRankings && data.subjectRankings.length > 0 && (
-                            <View style={[s.subjectPerfCard, { marginTop: 8 }]}>
-                                <Text style={s.subjectPerfTitle}>Subject Performance (Ranked by Mean)</Text>
-                                <View style={{ flexDirection: 'row', borderBottom: `1pt solid ${NAVY}`, paddingBottom: 2, marginBottom: 2 }}>
-                                    <Text style={[s.subjectPerfColCode, { color: NAVY }]}>Subject</Text>
-                                    <Text style={[s.subjectPerfColMean, { color: NAVY }]}>Mean</Text>
-                                    <Text style={[s.subjectPerfColHighest, { color: NAVY }]}>Highest</Text>
-                                    <Text style={[s.subjectPerfColLowest, { color: NAVY }]}>Lowest</Text>
-                                    <Text style={[s.subjectPerfColCount, { color: NAVY }]}>Students</Text>
-                                    <Text style={[s.subjectPerfColRank, { color: NAVY }]}>Rank</Text>
+                    {/* Subject Performance - Full Width Below */}
+                    {data.subjectRankings && data.subjectRankings.length > 0 && (
+                        <View style={s.bottomRowStack}>
+                            <View style={s.subjectPerfCard}>
+                                <Text style={s.subjectPerfTitle}>📊 Subject Performance Ranking</Text>
+                                <View style={s.subjectPerfHeader}>
+                                    <Text style={[s.subjectPerfColCode, { color: WHITE }]}>Subject</Text>
+                                    <Text style={[s.subjectPerfColMean, { color: WHITE }]}>Mean</Text>
+                                    <Text style={[s.subjectPerfColHighest, { color: WHITE }]}>Highest</Text>
+                                    <Text style={[s.subjectPerfColLowest, { color: WHITE }]}>Lowest</Text>
+                                    <Text style={[s.subjectPerfColCount, { color: WHITE }]}>Students</Text>
+                                    <Text style={[s.subjectPerfColRank, { color: WHITE }]}>Rank</Text>
                                 </View>
                                 {data.subjectRankings.map((subj, idx) => {
                                     const stats = data.subjectStats[subj.code];
                                     const isTop3 = subj.rank <= 3;
                                     return (
-                                        <View key={subj.code} style={[s.subjectPerfRow, idx % 2 === 0 ? { backgroundColor: WHITE } : {}]} wrap={false}>
+                                        <View key={subj.code} style={[s.subjectPerfRow, idx % 2 === 0 ? { backgroundColor: LIGHT_GRAY } : { backgroundColor: WHITE }]} wrap={false}>
                                             <Text style={[s.subjectPerfColCode, isTop3 ? { color: ORANGE } : { color: GRAY_700 }]}>{subj.code}</Text>
                                             <Text style={s.subjectPerfColMean}>{stats?.mean || '-'}</Text>
                                             <Text style={s.subjectPerfColHighest}>{stats?.highest || '-'}</Text>
                                             <Text style={s.subjectPerfColLowest}>{stats?.lowest || '-'}</Text>
                                             <Text style={s.subjectPerfColCount}>{stats?.studentCount || '-'}</Text>
-                                            <Text style={[s.subjectPerfColRank, isTop3 ? { color: ORANGE, fontFamily: 'Helvetica-Bold' } : { color: GRAY_700 }]}>{subj.rank}</Text>
+                                            <Text style={[s.subjectPerfColRank, isTop3 ? { color: ORANGE, fontFamily: 'Helvetica-Bold' } : { color: GRAY_700 }]}>#{subj.rank}</Text>
                                         </View>
                                     );
                                 })}
                             </View>
-                        )}
-                    </View>
+                        </View>
+                    )}
 
                 </View>
 
