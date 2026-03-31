@@ -75,11 +75,11 @@ const scoreColor = (score: number | null) => {
 
 /* ── Styles (aligned with Report Card) ─────────────────── */
 const s = StyleSheet.create({
-    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700 },
+    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700, minHeight: '800px' },
 
     /* Top / bottom navy decorative bars — matching report card */
-    navyBar: { height: 6, backgroundColor: NAVY, marginBottom: 0 },
-    navyBarBottom: { height: 6, backgroundColor: NAVY, marginTop: 'auto' },
+    navyBar: { height: 8, backgroundColor: NAVY, marginBottom: 0 },
+    navyBarBottom: { height: 8, backgroundColor: NAVY, marginTop: 'auto' },
 
     /* Header – white background — matching report card */
     headerBand: {
@@ -142,8 +142,8 @@ const s = StyleSheet.create({
     totalsRow: { flexDirection: 'row', backgroundColor: SKY_BLUE, paddingVertical: 5, paddingHorizontal: 2, borderTop: `1.5pt solid ${NAVY}` },
 
     /* Bottom summary — matching report card style */
-    bottomRow: { flexDirection: 'row', gap: 8, marginBottom: 8, paddingHorizontal: 24 },
-    bottomRowStack: { flexDirection: 'column', gap: 8, paddingHorizontal: 24, marginBottom: 8 },
+    bottomRow: { flexDirection: 'row', gap: 8, marginBottom: 12, paddingHorizontal: 24 },
+    bottomRowStack: { marginTop: 8, marginBottom: 10 },
 
     summaryCard: {
         flex: 1,
@@ -170,20 +170,23 @@ const s = StyleSheet.create({
     gradeCount: { fontSize: 6, color: GRAY_700 },
 
     subjectPerfCard: {
-        backgroundColor: WHITE,
-        borderRadius: 6,
-        padding: 10,
-        border: `1pt solid ${GRAY_200}`,
+        backgroundColor: '#F0F9FF',
+        borderRadius: 8,
+        padding: 12,
+        border: `2pt solid ${STEEL_BLUE}`,
+        marginHorizontal: 24,
+        marginBottom: 10,
+        minHeight: 80,
     },
-    subjectPerfTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: STEEL_BLUE, marginBottom: 8, textTransform: 'uppercase', textAlign: 'center' },
-    subjectPerfHeader: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 4, paddingHorizontal: 4, borderRadius: 4 },
-    subjectPerfRow: { flexDirection: 'row', paddingVertical: 4, borderBottom: `0.5pt solid ${GRAY_200}` },
-    subjectPerfColCode: { width: '12%', fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
-    subjectPerfColMean: { width: '12%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColHighest: { width: '14%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColLowest: { width: '14%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColCount: { width: '18%', fontSize: 6.5, textAlign: 'center' },
-    subjectPerfColRank: { width: '30%', fontSize: 7, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
+    subjectPerfTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: STEEL_BLUE, marginBottom: 10, textTransform: 'uppercase', textAlign: 'center', letterSpacing: 1 },
+    subjectPerfHeader: { flexDirection: 'row', backgroundColor: STEEL_BLUE, paddingVertical: 5, paddingHorizontal: 6, borderRadius: 4, marginBottom: 4 },
+    subjectPerfRow: { flexDirection: 'row', paddingVertical: 5, borderBottom: `1pt solid ${GRAY_200}`, paddingHorizontal: 4 },
+    subjectPerfColCode: { width: '12%', fontSize: 7, fontFamily: 'Helvetica-Bold', color: GRAY_700 },
+    subjectPerfColMean: { width: '12%', fontSize: 7, textAlign: 'center', color: GRAY_700 },
+    subjectPerfColHighest: { width: '14%', fontSize: 7, textAlign: 'center', color: GREEN },
+    subjectPerfColLowest: { width: '14%', fontSize: 7, textAlign: 'center', color: '#EF4444' },
+    subjectPerfColCount: { width: '18%', fontSize: 7, textAlign: 'center', color: GRAY_700 },
+    subjectPerfColRank: { width: '30%', fontSize: 8, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
 
     /* Footer — matching report card */
     footer: {
@@ -215,7 +218,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 {/* ═══ TOP NAVY BAR ═══ */}
                 <View style={s.navyBar} />
 
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minHeight: 600 }}>
 
                     {/* ═══ HEADER BAND (white bg, matching report card) ═══ */}
                     <View style={s.headerBand}>
