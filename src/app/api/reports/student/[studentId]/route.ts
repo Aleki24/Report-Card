@@ -423,7 +423,7 @@ export async function GET(
             subjMarksMap.set(subject.id, {
                 subjectCode: subject.code || subject.name || 'Unknown',
                 subjectName: subject.name || 'Unknown Subject',
-                category: subject.category || 'OTHER',
+                category: subject.category || 'TECHNICAL',
                 gradingSystemType: isSubjectCBC ? 'CBC' : 'KCSE',
                 score: Number(m.raw_score),
                 totalPossible: Number(m.exams.max_score),

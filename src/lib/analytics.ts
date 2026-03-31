@@ -313,10 +313,10 @@ export function generateFeedback(percentage: number, subjectName: string): strin
 
 const CATEGORY_ORDER: Record<string, number> = {
     'LANGUAGE': 1,
-    'SCIENCE': 2,
-    'HUMANITIES': 3,
-    'TECHNICAL': 4,
-    'OTHER': 5,
+    'MATHEMATICS': 2,
+    'SCIENCE': 3,
+    'HUMANITY': 4,
+    'TECHNICAL': 5,
 };
 
 export function getCategoryOrder(category: string): number {
@@ -326,15 +326,15 @@ export function getCategoryOrder(category: string): number {
 export function getCategoryLabel(category: string): string {
     const labels: Record<string, string> = {
         'LANGUAGE': 'Languages',
+        'MATHEMATICS': 'Mathematics',
         'SCIENCE': 'Sciences',
-        'HUMANITIES': 'Humanities',
+        'HUMANITY': 'Humanities',
         'TECHNICAL': 'Technical Subjects',
-        'OTHER': 'Other Subjects',
     };
     return labels[category] || category;
 }
 
-export type SubjectCategory = 'LANGUAGE' | 'MATHEMATICS' | 'SCIENCE' | 'HUMANITY' | 'TECHNICAL' | 'OTHER';
+export type SubjectCategory = 'LANGUAGE' | 'MATHEMATICS' | 'SCIENCE' | 'HUMANITY' | 'TECHNICAL';
 
 export interface MarkWithSubjectName extends ExamMarkWithDetails {
     subjectName?: string;
@@ -343,7 +343,7 @@ export interface MarkWithSubjectName extends ExamMarkWithDetails {
 }
 
 function identifySubjectCategory(subjectName: string): SubjectCategory {
-    const name = subjectName.toLowerCase();
+    const name = subjectName.toLowerCase().trim();
     
     if (name.includes('english')) return 'LANGUAGE';
     if (name.includes('kiswahili')) return 'LANGUAGE';
@@ -352,14 +352,13 @@ function identifySubjectCategory(subjectName: string): SubjectCategory {
     if (name.includes('chemistry')) return 'SCIENCE';
     if (name.includes('biology')) return 'SCIENCE';
     if (name.includes('geography')) return 'HUMANITY';
-    if (name.includes('history')) return 'HUMANITY';
-    if (name.includes('cre')) return 'HUMANITY';
+    if (name.includes('history') || name.includes('religious') || name.includes('cre')) return 'HUMANITY';
     if (name.includes('computer')) return 'TECHNICAL';
     if (name.includes('business')) return 'TECHNICAL';
     if (name.includes('agriculture')) return 'TECHNICAL';
     if (name.includes('technical')) return 'TECHNICAL';
     
-    return 'OTHER';
+    return 'TECHNICAL';
 }
 
 export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingScale[]): MarkWithSubjectName[] {
@@ -371,18 +370,21 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
         return marks;
     }
     
-    const marksWithCategory = marks.map(m => ({
-        ...m,
-        category: identifySubjectCategory(m.subjectName || ''),
-        points: m.subjectName ? getPointsFromScales(calculatePercentage(m.raw_score, m.max_score), scales) ?? 0 : 0
-    }));
+    const marksWithCategory = marks.map(m => {
+        const pct = calculatePercentage(m.raw_score, m.max_score);
+        const pts = m.subjectName ? getPointsFromScales(pct, scales) ?? 0 : 0;
+        return {
+            ...m,
+            category: identifySubjectCategory(m.subjectName || ''),
+            points: pts
+        };
+    });
     
     const languages = marksWithCategory.filter(m => m.category === 'LANGUAGE');
     const mathematics = marksWithCategory.filter(m => m.category === 'MATHEMATICS');
     const sciences = marksWithCategory.filter(m => m.category === 'SCIENCE');
     const humanities = marksWithCategory.filter(m => m.category === 'HUMANITY');
     const technicals = marksWithCategory.filter(m => m.category === 'TECHNICAL');
-    const others = marksWithCategory.filter(m => m.category === 'OTHER');
     
     const selected: MarkWithSubjectName[] = [];
     
@@ -392,7 +394,7 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     // Step 2: Always include mathematics
     selected.push(...mathematics);
     
-    // Step 3: Sciences - if 2, include both; if 3+, include best 2
+    // Step 3: Sciences - if 2 or fewer, include all; if 3+, include best 2
     const sortedSciences = [...sciences].sort((a, b) => b.points - a.points);
     if (sciences.length <= 2) {
         selected.push(...sciences);
@@ -400,28 +402,20 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
         selected.push(sortedSciences[0], sortedSciences[1]);
     }
     
-    // Step 4: Humanities - if 2, include best 1
+    // Step 4: Humanities - include best 1
     if (humanities.length > 0) {
         const sortedHumanities = [...humanities].sort((a, b) => b.points - a.points);
         selected.push(sortedHumanities[0]);
     }
     
-    // Step 5: Technicals - if 2+, include best 1
-    if (technicals.length > 0) {
+    // Step 5: Technicals - only include best 1 if 8+ subjects total
+    if (technicals.length > 0 && numSubjects >= 8) {
         const sortedTechnicals = [...technicals].sort((a, b) => b.points - a.points);
         selected.push(sortedTechnicals[0]);
     }
     
-    // Step 6: Others if needed to reach 7
-    const allOthers = [...others].sort((a, b) => b.points - a.points);
-    for (const m of allOthers) {
-        if (!selected.includes(m) && selected.length < 7) {
-            selected.push(m);
-        }
-    }
-    
-    // If still under 7, fill with remaining sciences/humanities/technicals by points
-    const remainingSorted = [...sciences, ...humanities, ...technicals, ...others]
+    // If still under 7, fill with remaining best subjects by points
+    const remainingSorted = [...sciences, ...humanities, ...technicals]
         .sort((a, b) => b.points - a.points);
     
     for (const m of remainingSorted) {

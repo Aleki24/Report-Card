@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
                         academic_level_id: data.academic_level_id,
                         is_compulsory: data.is_compulsory ?? true,
                         display_order: data.display_order ?? 0,
-                        category: data.category ?? 'OTHER',
+                        category: data.category ?? 'TECHNICAL',
                         school_id: schoolId,
                         grading_system_id: data.grading_system_id ?? null
                     })
