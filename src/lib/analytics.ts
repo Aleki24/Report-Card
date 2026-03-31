@@ -12,7 +12,7 @@ export const OVERALL_POINTS_GRADES = [
     { symbol: 'D+', min: 25, max: 31 },
     { symbol: 'D', min: 18, max: 24 },
     { symbol: 'D-', min: 11, max: 17 },
-    { symbol: 'E', min: 7, max: 10 },
+    { symbol: 'E', min: 1, max: 10 },
 ];
 
 export function getOverallGradeFromPoints(totalPoints: number): string {
@@ -39,6 +39,7 @@ export function calculatePercentage(score: number, totalPossible: number): numbe
 export function getGradeFromScales(percentage: number, scales?: GradingScale[]): string {
     if (scales && scales.length > 0) {
         const rounded = Math.round(percentage);
+        console.log('[getGradeFromScales] Looking for:', rounded, 'scales:', scales.map(s => `${s.symbol}(${s.min_percentage}-${s.max_percentage})`));
         const match = scales.find(s =>
             rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
         );
@@ -99,6 +100,8 @@ export interface AggregateResult {
     totalScore: number;
     totalPossible: number;
     percentage: number;
+    rawAverage: number;
+    used844Selection: boolean;
     gpa: number;
     totalPoints: number;
     grade: string;
@@ -114,11 +117,12 @@ export function aggregateStudentPerformance(
     subjectNames?: Record<string, string>
 ): AggregateResult {
     if (!marks || marks.length === 0) {
-        return { totalScore: 0, totalPossible: 0, percentage: 0, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
+        return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
     }
 
     let marksToProcess = marks;
     let selectedSubjectIds: string[] = [];
+    let used844Selection = false;
     
     if (subjectNames && Object.keys(subjectNames).length > 0) {
         const marksWithNames: MarkWithSubjectName[] = marks.map(m => ({
@@ -130,6 +134,7 @@ export function aggregateStudentPerformance(
             const selectedMarks = select844Subjects(marksWithNames, scales || []);
             marksToProcess = selectedMarks as ExamMarkWithDetails[];
             selectedSubjectIds = selectedMarks.map(m => m.subject_id);
+            used844Selection = true;
         } else {
             selectedSubjectIds = marks.map(m => m.subject_id);
         }
@@ -154,9 +159,11 @@ export function aggregateStudentPerformance(
     const maxPointsPerSubject = 12;
     const avgPercentage = (meanPoints / maxPointsPerSubject) * 100;
 
-    const percentage = calculatePercentage(totalScore, totalPossible);
-    const gpa = getGPAFromPercentage(avgPercentage);
-    const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
+    const rawAverage = numSubjects > 0 ? totalScore / numSubjects : 0;
+
+    const percentage = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
+    const gpa = getGPAFromPercentage(percentage);
+    const grade = scales ? getGradeFromScales(percentage, scales) : getGradeFromPercentage(percentage);
 
     const overallGrade = getOverallGradeFromPoints(totalPoints);
 
@@ -164,6 +171,8 @@ export function aggregateStudentPerformance(
         totalScore,
         totalPossible,
         percentage: avgPercentage,
+        rawAverage,
+        used844Selection,
         gpa,
         totalPoints,
         grade,
@@ -175,23 +184,47 @@ export function aggregateStudentPerformance(
 
 /* ── Class Ranking ──────────────────────────────────────── */
 
-export function calculateClassRanks(studentAggregates: { studentId: string, percentage: number }[]) {
+export function calculateClassRanks(
+    studentAggregates: { studentId: string, percentage: number, totalPoints?: number }[],
+    rankingBy: 'percentage' | 'points' = 'percentage'
+) {
     if (!studentAggregates || studentAggregates.length === 0) {
         return new Map<string, number>();
     }
-    const sorted = [...studentAggregates].sort((a, b) => b.percentage - a.percentage);
+    
+    const sorted = [...studentAggregates].sort((a, b) => {
+        if (rankingBy === 'points' && a.totalPoints !== undefined && b.totalPoints !== undefined) {
+            return b.totalPoints - a.totalPoints;
+        }
+        return b.percentage - a.percentage;
+    });
 
     const ranks = new Map<string, number>();
     let currentRank = 1;
 
     for (let i = 0; i < sorted.length; i++) {
-        if (i > 0 && sorted[i].percentage < sorted[i - 1].percentage) {
+        const aVal = rankingBy === 'points' ? (sorted[i] as any).totalPoints : sorted[i].percentage;
+        const bVal = rankingBy === 'points' ? (sorted[i-1] as any)?.totalPoints : sorted[i-1]?.percentage;
+        
+        if (i > 0 && aVal < bVal) {
             currentRank = i + 1;
         }
         ranks.set(sorted[i].studentId, currentRank);
     }
 
     return ranks;
+}
+
+/* ── Per-subject student count ────────────────────────── */
+
+export function getSubjectStudentCounts(subjectAggs: Record<string, { studentId: string; pct: number }[]>): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const [subjId, entries] of Object.entries(subjectAggs)) {
+        // Get unique student IDs for this subject
+        const uniqueStudents = new Set(entries.map(e => e.studentId));
+        counts[subjId] = uniqueStudents.size;
+    }
+    return counts;
 }
 
 /* ── Subject Stats ──────────────────────────────────────── */

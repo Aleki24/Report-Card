@@ -9,6 +9,7 @@ import {
     getPointsFromScales,
     getRubricFromScales,
     getCategoryOrder,
+    getSubjectStudentCounts,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -243,6 +244,7 @@ export async function GET(
 
         // Build per-subject rank maps: subjectId -> Map<studentId, rank>
         const subjectRankMaps: Record<string, Map<string, number>> = {};
+        const subjectStudentCounts = getSubjectStudentCounts(subjectAggs);
         for (const [subjId, entries] of Object.entries(subjectAggs)) {
             subjectRankMaps[subjId] = calculateClassRanks(
                 entries.map(e => ({ studentId: e.studentId, percentage: e.pct }))
@@ -335,6 +337,7 @@ export async function GET(
                     rubric,
                     teacherComment: m.remarks || '',
                     subjectRank: subjectRankMaps[subject.id]?.get(student.id) ?? undefined,
+                    totalStudents: subjectStudentCounts[subject.id] ?? undefined,
                 });
             });
 

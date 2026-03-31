@@ -27,6 +27,7 @@ export interface ReportCardData {
         rubric?: string;
         teacherComment: string;
         subjectRank?: number;
+        totalStudents?: number;
         instructorName?: string;
         includedInPoints?: boolean;
     }[];
@@ -363,7 +364,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                         <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
                                         <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
                                         <Text style={[s.tdBold, s.colKcseScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
-                                        <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
+                                        <Text style={[s.tdText, s.colKcseRank]}>{sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—'}</Text>
                                         <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
                                         <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
                                         <Text style={[s.tdSmall, s.colKcseComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
@@ -385,7 +386,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                                     <Text style={[s.tdBold, s.colRubric]}>
                                         {sm.points != null ? `${sm.points}` : '—'}
                                     </Text>
-                                    <Text style={[s.tdText, s.colRank]}>{sm.subjectRank ? `${sm.subjectRank}/${data.totalStudents}` : '—'}</Text>
+                                    <Text style={[s.tdText, s.colRank]}>{sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—'}</Text>
                                     <Text style={[s.tdSmall, s.colComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                                 </View>
                             );
@@ -421,7 +422,6 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         <View style={s.avgBadge}>
                             <Text style={s.avgLabel}>Average</Text>
                             <Text style={s.avgValue}>{Math.round(data.overallPercentage)}%</Text>
-                            <Text style={s.avgGrade}>{data.overallGrade}</Text>
                         </View>
 
                         {/* Subject Performance Graph - replaces grading key */}

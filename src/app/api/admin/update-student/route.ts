@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 /**
  * PATCH /api/admin/update-student
- * Update guardian_phone and guardian_name for an existing student.
+ * Update student details - allows admins and teachers to update various fields.
  */
 export async function PATCH(request: NextRequest) {
     try {
@@ -15,7 +15,16 @@ export async function PATCH(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { student_id, guardian_phone, guardian_name } = body;
+        const { 
+            student_id, 
+            first_name, 
+            last_name, 
+            admission_number, 
+            guardian_phone, 
+            guardian_name,
+            grade_stream_id,
+            status
+        } = body;
 
         if (!student_id) {
             return NextResponse.json({ error: 'student_id is required' }, { status: 400 });
@@ -23,15 +32,15 @@ export async function PATCH(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller is an ADMIN
-        const { data: adminProfile } = await supabaseAdmin
+        // Verify the caller is an admin or teacher
+        const { data: profile } = await supabaseAdmin
             .from('users')
             .select('role, school_id')
             .eq('id', session.user.id)
             .single();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
-            return NextResponse.json({ error: 'Only admins can update students.' }, { status: 403 });
+        if (!profile || !['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role) || !profile.school_id) {
+            return NextResponse.json({ error: 'Only admins and teachers can update students.' }, { status: 403 });
         }
 
         // Verify the student belongs to this school
@@ -39,27 +48,63 @@ export async function PATCH(request: NextRequest) {
             .from('students')
             .select('id, users!inner(school_id)')
             .eq('id', student_id)
-            .eq('users.school_id', adminProfile.school_id)
+            .eq('users.school_id', profile.school_id)
             .maybeSingle();
 
         if (!student) {
             return NextResponse.json({ error: 'Student not found in your school.' }, { status: 404 });
         }
 
-        // Update guardian fields
-        const { error } = await supabaseAdmin
-            .from('students')
-            .update({
-                guardian_phone: guardian_phone?.trim() || null,
-                guardian_name: guardian_name?.trim() || null,
-            })
-            .eq('id', student_id);
+        // Build update object for student table
+        const studentUpdates: Record<string, any> = {};
+        if (guardian_phone !== undefined) studentUpdates.guardian_phone = guardian_phone?.trim() || null;
+        if (guardian_name !== undefined) studentUpdates.guardian_name = guardian_name?.trim() || null;
+        if (grade_stream_id !== undefined) studentUpdates.current_grade_stream_id = grade_stream_id || null;
+        if (status !== undefined) studentUpdates.status = status;
 
-        if (error) {
-            return NextResponse.json({ error: `Update failed: ${error.message}` }, { status: 400 });
+        // Build update object for users table
+        const userUpdates: Record<string, any> = {};
+        if (first_name !== undefined) userUpdates.first_name = first_name?.trim() || null;
+        if (last_name !== undefined) userUpdates.last_name = last_name?.trim() || null;
+        if (admission_number !== undefined) {
+            // Need to update the students table admission_number
+            studentUpdates.admission_number = admission_number?.trim() || null;
         }
 
-        return NextResponse.json({ success: true, message: 'Guardian info updated.' });
+        // Update student record
+        if (Object.keys(studentUpdates).length > 0) {
+            const { error: studentError } = await supabaseAdmin
+                .from('students')
+                .update(studentUpdates)
+                .eq('id', student_id);
+
+            if (studentError) {
+                return NextResponse.json({ error: `Update failed: ${studentError.message}` }, { status: 400 });
+            }
+        }
+
+        // Update user record (name)
+        if (Object.keys(userUpdates).length > 0) {
+            // First get the user_id for this student
+            const { data: studentUser } = await supabaseAdmin
+                .from('students')
+                .select('users:id')
+                .eq('id', student_id)
+                .single();
+
+            if (studentUser?.users) {
+                const { error: userError } = await supabaseAdmin
+                    .from('users')
+                    .update(userUpdates)
+                    .eq('id', studentUser.users);
+
+                if (userError) {
+                    return NextResponse.json({ error: `Update failed: ${userError.message}` }, { status: 400 });
+                }
+            }
+        }
+
+        return NextResponse.json({ success: true, message: 'Student updated successfully.' });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });

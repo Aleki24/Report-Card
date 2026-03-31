@@ -9,6 +9,7 @@ import {
     getPointsFromScales,
     getRubricFromScales,
     getCategoryOrder,
+    getSubjectStudentCounts,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -259,15 +260,19 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
+        
+        // For display, use percentage based on whether 844 selection was applied
+        const displayPercentage = studentPerf.used844Selection ? studentPerf.percentage : studentPerf.rawAverage;
 
         // 6. Calculate class ranking + per-subject ranks
         let classRank = 0;
         let totalStudents = 0;
         const gradeStreamId = student.current_grade_stream_id;
         const subjectRanksMap = new Map<string, number>(); // subjectId -> this student's rank
+        const subjectStudentCountMap = new Map<string, number>(); // subjectId -> total students taking this subject
 
         if (gradeStreamId) {
             const { data: classmates } = await supabase
@@ -322,13 +327,20 @@ export async function GET(
                     classRank = ranks.get(studentId) || 0;
                     totalStudents = aggregates.length;
 
+                    // Get student counts per subject
+                    const subjectStudentCounts = getSubjectStudentCounts(subjectAggs);
+
                     // Per-subject ranks for this student
                     for (const [subjId, entries] of Object.entries(subjectAggs)) {
                         const subjRanks = calculateClassRanks(
                             entries.map(e => ({ studentId: e.studentId, percentage: e.pct }))
                         );
                         const rank = subjRanks.get(studentId);
-                        if (rank) subjectRanksMap.set(subjId, rank);
+                        if (rank) {
+                            subjectRanksMap.set(subjId, rank);
+                            // Also store the total students taking this subject
+                            subjectStudentCountMap.set(subjId, subjectStudentCounts[subjId]);
+                        }
                     }
                 }
             }
@@ -392,9 +404,17 @@ export async function GET(
             // Teachers must manually select grades for each student
             const grade = m.grade_symbol ? m.grade_symbol : '-';
 
-            const points = m.grade_symbol && effectiveScales.length > 0
-                ? getPointsFromScales(pct, effectiveScales)
-                : undefined;
+            // Points: if manual grade entered, use points from that grade; otherwise calculate from percentage
+            let points: number | undefined;
+            if (m.grade_symbol && effectiveScales.length > 0) {
+                const gradeMatch = effectiveScales.find(s => s.symbol === m.grade_symbol);
+                if (gradeMatch) {
+                    points = gradeMatch.points;
+                }
+            }
+            if (points === undefined && effectiveScales.length > 0) {
+                points = getPointsFromScales(pct, effectiveScales);
+            }
 
             const rubric = m.rubric || ((isSubjectCBC && m.grade_symbol && effectiveScales.length > 0)
                 ? getRubricFromScales(pct, effectiveScales)
@@ -413,6 +433,7 @@ export async function GET(
                 rubric,
                 teacherComment: m.remarks || '',
                 subjectRank: subjectRanksMap.get(subject.id) ?? undefined,
+                totalStudents: subjectStudentCountMap.get(subject.id) ?? undefined,
                 includedInPoints: selectedSubjectIds.has(subject.id),
             });
         });
@@ -495,8 +516,8 @@ export async function GET(
             className: student.grade_streams?.full_name || 'N/A',
             gradingSystemType,
             subjectMarks,
-            overallPercentage: studentPerf.percentage,
-            overallGrade: overallGradeSymbol,
+            overallPercentage: displayPercentage,
+            overallGrade: gradingScales.length > 0 ? getGradeFromScales(displayPercentage, gradingScales) : studentPerf.grade,
             totalPoints: studentPerf.totalPoints,
             overallPointsGrade: studentPerf.overallGrade,
             classRank,

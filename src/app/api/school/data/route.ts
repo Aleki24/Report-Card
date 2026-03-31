@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
             id, admission_number, status, academic_level_id, current_grade_stream_id,
             guardian_phone, guardian_name,
             users!inner (first_name, last_name, email, school_id),
-            grade_streams (full_name, grade_id)
+            grade_streams (id, full_name, grade_id)
           `)
           .eq('users.school_id', schoolId)
           .order('admission_number');

@@ -10,7 +10,7 @@ interface StudentRow {
     guardian_phone: string | null;
     guardian_name: string | null;
     users: { first_name: string; last_name: string; email: string } | null;
-    grade_streams: { full_name: string } | null;
+    grade_streams: { id: string; full_name: string } | null;
 }
 
 interface GradeStreamOption {
@@ -34,8 +34,14 @@ export default function StudentsPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
-    /* ── Search state ────────────────────────────────── */
+    /* ── Search & Filter state ───────────────────────── */
     const [search, setSearch] = useState('');
+    const [filterGradeStream, setFilterGradeStream] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
+
+    /* ── Pagination state ─────────────────────────────── */
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize] = useState(20);
 
     /* ── Add Student modal state ─────────────────────── */
     const [showAddModal, setShowAddModal] = useState(false);
@@ -44,6 +50,14 @@ export default function StudentsPage() {
         admission_number: '', grade_stream_id: '', academic_level_id: '',
         guardian_phone: '', guardian_name: ''
     });
+
+    /* ── Edit Student modal state ─────────────────── */
+    const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+    const [editData, setEditData] = useState({
+        first_name: '', last_name: '', admission_number: '',
+        guardian_phone: '', guardian_name: '', grade_stream_id: '', status: ''
+    });
+    const [savingEdit, setSavingEdit] = useState(false);
 
     /* ── Inline edit guardian state ───────────────────── */
     const [editingGuardianId, setEditingGuardianId] = useState<string | null>(null);
@@ -106,14 +120,41 @@ export default function StudentsPage() {
 
     /* ── Client-side search filter ────────────────────── */
     const filtered = useMemo(() => {
-        if (!search.trim()) return students;
-        const q = search.toLowerCase();
-        return students.filter(
-            s =>
-                `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.toLowerCase().includes(q) ||
-                s.admission_number.toLowerCase().includes(q)
-        );
-    }, [students, search]);
+        let result = students;
+        
+        // Filter by grade stream
+        if (filterGradeStream) {
+            result = result.filter(s => s.grade_streams?.id === filterGradeStream);
+        }
+        
+        // Filter by status
+        if (filterStatus) {
+            result = result.filter(s => s.status === filterStatus);
+        }
+        
+        // Filter by search
+        const searchTrim = search?.trim();
+        if (searchTrim) {
+            const q = searchTrim.toLowerCase();
+            result = result.filter(
+                s =>
+                    `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.toLowerCase().includes(q) ||
+                    (s.admission_number || '').toLowerCase().includes(q)
+            );
+        }
+        
+        return result;
+    }, [students, search, filterGradeStream, filterStatus]);
+
+    /* ── Pagination ───────────────────────────────────── */
+    const totalPages = Math.ceil(filtered.length / pageSize);
+    const paginatedStudents = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filtered.slice(start, start + pageSize);
+    }, [filtered, currentPage, pageSize]);
+
+    // Reset to page 1 when filters change
+    useEffect(() => { setCurrentPage(1); }, [search, filterGradeStream, filterStatus]);
 
     /* ── Delete Student handler ───────────────────────── */
     const handleDeleteStudent = async (studentId: string, name: string) => {
@@ -173,6 +214,67 @@ export default function StudentsPage() {
             alert('Unexpected error updating guardian info.');
         }
         setSavingGuardian(false);
+    };
+
+    /* ── Edit Student handlers ───────────────────────── */
+    const handleStartEditStudent = (student: StudentRow) => {
+        setEditingStudent(student);
+        setEditData({
+            first_name: student.users?.first_name || '',
+            last_name: student.users?.last_name || '',
+            admission_number: student.admission_number || '',
+            guardian_phone: student.guardian_phone || '',
+            guardian_name: student.guardian_name || '',
+            grade_stream_id: student.grade_streams?.id || '',
+            status: student.status || 'ACTIVE'
+        });
+    };
+
+    const handleCancelEditStudent = () => {
+        setEditingStudent(null);
+        setEditData({ first_name: '', last_name: '', admission_number: '', guardian_phone: '', guardian_name: '', grade_stream_id: '', status: '' });
+    };
+
+    const handleSaveStudent = async () => {
+        if (!editingStudent) return;
+        setSavingEdit(true);
+        try {
+            const res = await fetch('/api/admin/update-student', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: editingStudent.id,
+                    first_name: editData.first_name.trim(),
+                    last_name: editData.last_name.trim(),
+                    admission_number: editData.admission_number.trim(),
+                    guardian_phone: editData.guardian_phone.trim() || null,
+                    guardian_name: editData.guardian_name.trim() || null,
+                    grade_stream_id: editData.grade_stream_id || null,
+                    status: editData.status,
+                }),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                alert(result.error || 'Failed to update student.');
+            } else {
+                setStudents(prev => prev.map(s => {
+                    if (s.id !== editingStudent.id) return s;
+                    return {
+                        ...s,
+                        admission_number: editData.admission_number.trim(),
+                        guardian_phone: editData.guardian_phone.trim() || null,
+                        guardian_name: editData.guardian_name.trim() || null,
+                        status: editData.status,
+                        users: s.users ? { ...s.users, first_name: editData.first_name.trim(), last_name: editData.last_name.trim() } : null,
+                        grade_streams: editData.grade_stream_id ? gradeStreams.find(gs => gs.id === editData.grade_stream_id) || s.grade_streams : null
+                    };
+                }));
+                setEditingStudent(null);
+            }
+        } catch {
+            alert('Unexpected error updating student.');
+        }
+        setSavingEdit(false);
     };
 
     /* ── Add Student handler (via admin API) ──────────── */
@@ -254,16 +356,41 @@ export default function StudentsPage() {
             </div>
 
             {/* Search & Filter */}
+            {/* Search & Filters */}
             <div
                 className="flex flex-col sm:flex-row"
                 style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}
             >
                 <input
-                    className="input-field sm:max-w-md w-full"
-                    placeholder="Search by name or admission number..."
+                    className="input-field sm:max-w-xs w-full"
+                    placeholder="Search by name or admission..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                 />
+                <select
+                    className="input-field sm:w-40 w-full"
+                    value={filterGradeStream}
+                    onChange={e => setFilterGradeStream(e.target.value)}
+                >
+                    <option value="">All Classes</option>
+                    {gradeStreams.map(gs => (
+                        <option key={gs.id} value={gs.id}>{gs.full_name}</option>
+                    ))}
+                </select>
+                <select
+                    className="input-field sm:w-32 w-full"
+                    value={filterStatus}
+                    onChange={e => setFilterStatus(e.target.value)}
+                >
+                    <option value="">All Status</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="TRANSFERRED">TRANSFERRED</option>
+                    <option value="GRADUATED">GRADUATED</option>
+                    <option value="DEACTIVATED">DEACTIVATED</option>
+                </select>
+                <div className="text-sm text-[var(--color-text-muted)] py-2 self-center">
+                    {filtered.length} student{filtered.length !== 1 ? 's' : ''}
+                </div>
             </div>
 
             {/* Error Banner */}
@@ -294,8 +421,8 @@ export default function StudentsPage() {
                                         Loading students...
                                     </td>
                                 </tr>
-                            ) : filtered.length > 0 ? (
-                                filtered.map((s) => (
+                            ) : paginatedStudents.length > 0 ? (
+                                paginatedStudents.map((s) => (
                                     <tr key={s.id}>
                                         <td data-label="Student" className="font-medium text-[var(--color-text-primary)]">
                                             {s.users?.first_name || '—'} {s.users?.last_name || ''}
@@ -359,6 +486,12 @@ export default function StudentsPage() {
                                         </td>
                                         <td data-label="Actions">
                                             <div className="flex gap-2">
+                                                <button
+                                                    className="btn-secondary px-3 py-1 text-xs inline-flex"
+                                                    onClick={() => handleStartEditStudent(s)}
+                                                >
+                                                    ✏️ Edit
+                                                </button>
                                                 <a
                                                     href={`/api/reports/student/${s.id}`}
                                                     className="btn-secondary px-3 py-1 text-xs inline-flex"
@@ -381,7 +514,7 @@ export default function StudentsPage() {
                             ) : (
                                 <tr>
                                     <td colSpan={6} className="text-center text-[var(--color-text-muted)] py-8">
-                                        {search ? 'No students match your search.' : 'No students found. Click "+ Add Student" to get started.'}
+                                        {search || filterGradeStream || filterStatus ? 'No students match your filters.' : 'No students found. Click "+ Add Student" to get started.'}
                                     </td>
                                 </tr>
                             )}
@@ -389,6 +522,31 @@ export default function StudentsPage() {
                     </table>
                 </div>
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                    <div className="text-sm text-[var(--color-text-muted)]">
+                        Page {currentPage} of {totalPages}
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            className="btn-secondary px-3 py-1 text-sm disabled:opacity-50"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            ← Previous
+                        </button>
+                        <button
+                            className="btn-secondary px-3 py-1 text-sm disabled:opacity-50"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Next →
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── Add Student Modal ──────────────────────── */}
             {showAddModal && (
@@ -511,6 +669,114 @@ export default function StudentsPage() {
                                 disabled={saving}
                             >
                                 {saving ? 'Saving...' : 'Add Student'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Edit Student Modal ────────────────────────── */}
+            {editingStudent && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                    style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                    onClick={handleCancelEditStudent}
+                >
+                    <div
+                        className="card w-full max-w-md"
+                        style={{ animation: 'fadeIn .2s ease' }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-6">Edit Student</h2>
+
+                        <div className="flex flex-col gap-4 mb-6">
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">First Name *</label>
+                                    <input
+                                        className="input-field w-full"
+                                        value={editData.first_name}
+                                        onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Last Name *</label>
+                                    <input
+                                        className="input-field w-full"
+                                        value={editData.last_name}
+                                        onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Admission Number</label>
+                                <input
+                                    className="input-field w-full"
+                                    value={editData.admission_number}
+                                    onChange={e => setEditData(p => ({ ...p, admission_number: e.target.value }))}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class</label>
+                                <select
+                                    className="input-field w-full"
+                                    value={editData.grade_stream_id}
+                                    onChange={e => setEditData(p => ({ ...p, grade_stream_id: e.target.value }))}
+                                >
+                                    <option value="">-- No Class --</option>
+                                    {gradeStreams.map(gs => (
+                                        <option key={gs.id} value={gs.id}>{gs.full_name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Status</label>
+                                <select
+                                    className="input-field w-full"
+                                    value={editData.status}
+                                    onChange={e => setEditData(p => ({ ...p, status: e.target.value }))}
+                                >
+                                    <option value="ACTIVE">ACTIVE</option>
+                                    <option value="TRANSFERRED">TRANSFERRED</option>
+                                    <option value="GRADUATED">GRADUATED</option>
+                                    <option value="DEACTIVATED">DEACTIVATED</option>
+                                </select>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Guardian Phone</label>
+                                    <input
+                                        className="input-field w-full"
+                                        value={editData.guardian_phone}
+                                        onChange={e => setEditData(p => ({ ...p, guardian_phone: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Guardian Name</label>
+                                    <input
+                                        className="input-field w-full"
+                                        value={editData.guardian_name}
+                                        onChange={e => setEditData(p => ({ ...p, guardian_name: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                className="btn-secondary"
+                                onClick={handleCancelEditStudent}
+                                disabled={savingEdit}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="btn-primary disabled:opacity-50"
+                                onClick={handleSaveStudent}
+                                disabled={savingEdit}
+                            >
+                                {savingEdit ? 'Saving...' : 'Save Changes'}
                             </button>
                         </div>
                     </div>

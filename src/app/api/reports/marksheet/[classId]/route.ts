@@ -80,7 +80,15 @@ export async function GET(
 
             if (gradingSystem) {
                 const { data: scales } = await supabase.from('grading_scales').select('*').eq('grading_system_id', gradingSystem.id).order('order_index', { ascending: true });
-                if (scales) gradingScales = scales as GradingScale[];
+                if (scales) {
+                    gradingScales = (scales as any[]).map(s => ({
+                        ...s,
+                        min_percentage: Number(s.min_percentage),
+                        max_percentage: Number(s.max_percentage),
+                        points: s.points ? Number(s.points) : undefined,
+                        order_index: Number(s.order_index)
+                    })) as GradingScale[];
+                }
             }
         }
 
@@ -156,10 +164,14 @@ export async function GET(
                 remarks: m.remarks,
             }));
             const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
-            return { studentId: sid, percentage: perf.percentage };
+            const rankingValue = (gradingSystemType === 'KCSE' && perf.totalPoints !== undefined) 
+                ? perf.totalPoints 
+                : perf.rawAverage;
+            return { studentId: sid, percentage: perf.rawAverage, totalPoints: perf.totalPoints, rankingValue };
         });
 
-        const ranks = calculateClassRanks(aggregates);
+        const rankingBy = gradingSystemType === 'KCSE' ? 'points' : 'percentage';
+        const ranks = calculateClassRanks(aggregates, rankingBy);
         const rankedStudentCount = aggregates.length;
 
         // 7. Aggregate data for the specific report format
@@ -181,14 +193,15 @@ export async function GET(
 
             const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
             const isKCSE = gradingSystemType === 'KCSE';
+            const displayPercentage = studentPerf.used844Selection ? studentPerf.percentage : studentPerf.rawAverage;
             const overallGradeSymbol = isKCSE 
                 ? studentPerf.overallGrade 
                 : (gradingScales.length > 0 
-                    ? getGradeFromScales(studentPerf.percentage, gradingScales) 
+                    ? getGradeFromScales(displayPercentage, gradingScales) 
                     : studentPerf.grade);
 
             if (studentMarks.length > 0) {
-                totalClassPercentage += studentPerf.percentage;
+                totalClassPercentage += displayPercentage;
             }
 
             const firstName = (student.users as any)?.first_name || 'Student';
@@ -212,7 +225,7 @@ export async function GET(
                 studentName: `${firstName} ${lastName}`,
                 admissionNumber: student.admission_number || '',
                 marks: marksRecord,
-                overallPercentage: studentPerf.percentage,
+                overallPercentage: displayPercentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints || 0,
                 overallPointsGrade: studentPerf.overallGrade,
@@ -234,7 +247,18 @@ export async function GET(
         }
 
         const meanPercentage = studentsWithMarks.length > 0 ? (totalClassPercentage / studentsWithMarks.length) : 0;
-        const meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
+        
+        let meanGrade: string;
+        if (gradingSystemType === 'KCSE') {
+            const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
+            const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
+            const { getOverallGradeFromPoints } = await import('@/lib/analytics');
+            meanGrade = getOverallGradeFromPoints(meanPoints);
+        } else {
+            meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
+        }
+        
+        console.log('[Marksheet] Mean:', meanPercentage, 'MeanGrade:', meanGrade, 'System:', gradingSystemType);
 
         const markSheetData = {
             schoolName,
