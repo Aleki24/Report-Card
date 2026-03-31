@@ -91,6 +91,9 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
 
         const firstAcademicLevelId = students[0].academic_level_id;
+        const gradeCode = (students[0].grade_streams as any)?.full_name || '';
+        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase
                 .from('academic_levels')
@@ -98,7 +101,10 @@ export async function GET(
                 .eq('id', firstAcademicLevelId)
                 .single();
 
-            if (academicLevel) {
+            // Use grade code to determine KCSE vs CBC, fallback to academic level
+            if (isKCSEGrade) {
+                gradingSystemType = 'KCSE';
+            } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
 

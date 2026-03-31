@@ -101,6 +101,10 @@ export async function GET(
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
 
+        // Determine grading system by grade code - G7-9, G10-12, F3-4 use KCSE style
+        const gradeCode = student.grade_streams?.full_name || '';
+        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+
         if (student.academic_level_id) {
             // Fetch the academic level code to determine KCSE vs CBC
             const { data: academicLevel } = await supabase
@@ -109,7 +113,10 @@ export async function GET(
                 .eq('id', student.academic_level_id)
                 .single();
 
-            if (academicLevel) {
+            // Use grade code to determine KCSE vs CBC, fallback to academic level
+            if (isKCSEGrade) {
+                gradingSystemType = 'KCSE';
+            } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
 

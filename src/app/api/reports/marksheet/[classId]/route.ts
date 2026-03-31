@@ -4,6 +4,7 @@ import {
     aggregateStudentPerformance,
     calculateClassRanks,
     getGradeFromScales,
+    getGradeFromPercentage,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -69,10 +70,20 @@ export async function GET(
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
 
+        // Determine grading system by grade code - G7-9, G10-12, F3-4 use KCSE style (points-based)
+        // G1-G6 use CBC style (rubric-based)
         const firstAcademicLevelId = students[0].academic_level_id;
+        const gradeCode = (students[0] as any)?.grade_streams?.full_name || '';
+        
+        // Check if grade code indicates KCSE-style grading (G7-9, G10-12, F3-4)
+        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).single();
-            if (academicLevel) {
+            // Use grade code to determine KCSE vs CBC, fallback to academic level
+            if (isKCSEGrade) {
+                gradingSystemType = 'KCSE';
+            } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
 
@@ -236,17 +247,7 @@ export async function GET(
 
             const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
             const isKCSE = gradingSystemType === 'KCSE';
-            const displayPercentage = studentPerf.used844Selection ? studentPerf.percentage : studentPerf.rawAverage;
-            const overallGradeSymbol = isKCSE 
-                ? studentPerf.overallGrade 
-                : (gradingScales.length > 0 
-                    ? getGradeFromScales(displayPercentage, gradingScales) 
-                    : studentPerf.grade);
-
-            if (studentMarks.length > 0) {
-                totalClassPercentage += displayPercentage;
-            }
-
+            
             const firstName = (student.users as any)?.first_name || 'Student';
             const lastName = (student.users as any)?.last_name || '';
 
@@ -260,6 +261,26 @@ export async function GET(
                     marksRecord[scode] = Number(m.percentage); // Taking percentage for the mark sheet
                 }
             });
+
+            // Calculate average percentage: sum of percentages / number of subjects
+            const subjectPercentages = Object.values(marksRecord).filter(p => p !== null) as number[];
+            const totalPercentage = subjectPercentages.length > 0 
+                ? subjectPercentages.reduce((a, b) => a + b, 0) 
+                : 0;
+            const averagePercentage = subjectPercentages.length > 0 
+                ? totalPercentage / subjectPercentages.length 
+                : 0;
+            
+            const displayPercentage = isKCSE && studentPerf.used844Selection ? studentPerf.percentage : averagePercentage;
+            const overallGradeSymbol = isKCSE 
+                ? studentPerf.overallGrade 
+                : (gradingScales.length > 0 
+                    ? getGradeFromScales(displayPercentage, gradingScales) 
+                    : getGradeFromPercentage(Math.round(displayPercentage)));
+
+            if (studentMarks.length > 0) {
+                totalClassPercentage += displayPercentage;
+            }
 
             // Check if student has any marks entered (at least one non-null mark)
             const hasAnyMarks = Object.values(marksRecord).some(mark => mark !== null);
