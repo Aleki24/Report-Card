@@ -407,7 +407,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                             ) : (
                                 <>
                                     <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore}</Text>
-                                    <Text style={[s.tdBold, s.colGrade]}></Text>
+                                    <Text style={[s.tdBold, s.colGrade, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
                                     <Text style={[s.tdBold, s.colRubric]}></Text>
                                     <Text style={[s.tdBold, s.colRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                                     <Text style={[s.tdBold, s.colComment]}></Text>
