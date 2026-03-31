@@ -101,9 +101,10 @@ export async function GET(
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
 
-        // Determine grading system by grade code - G7-9, G10-12, F3-4 use KCSE style
+        // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style
+        // Grade 9 and 10 are CBC
         const gradeCode = student.grade_streams?.full_name || '';
-        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
 
         if (student.academic_level_id) {
             // Fetch the academic level code to determine KCSE vs CBC
@@ -354,6 +355,7 @@ export async function GET(
         }
 
         // 7. Resolve overall grade from total points (KCSE) or percentage (CBC)
+        // Use same logic as marksheet: KCSE uses points-based grade, CBC uses percentage-based grade
         const isKCSE = gradingSystemType === 'KCSE';
         const overallGradeSymbol = isKCSE 
             ? studentPerf.overallGrade 

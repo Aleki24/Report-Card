@@ -92,7 +92,8 @@ export async function GET(
 
         const firstAcademicLevelId = students[0].academic_level_id;
         const gradeCode = (students[0].grade_streams as any)?.full_name || '';
-        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+        // Grade 9 and 10 are CBC, not KCSE
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase

@@ -71,13 +71,13 @@ export async function GET(
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
 
-        // Determine grading system by grade code - G7-9, G10-12, F3-4 use KCSE style (points-based)
-        // G1-G6 use CBC style (rubric-based)
+        // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
+        // G1-G6, G9-G10 use CBC style (rubric-based)
         const firstAcademicLevelId = students[0].academic_level_id;
         const gradeCode = (students[0] as any)?.grade_streams?.full_name || '';
         
-        // Check if grade code indicates KCSE-style grading (G7-9, G10-12, F3-4)
-        const isKCSEGrade = /^(G[789]|G1[012]|F[34])/.test(gradeCode);
+        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).single();
