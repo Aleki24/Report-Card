@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
+    calculatePercentage,
     getGradeFromScales,
     getGradeFromPercentage,
 } from '@/lib/analytics';
@@ -175,10 +176,17 @@ export async function GET(
                 remarks: m.remarks,
             }));
             const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
+            
+            // Calculate average percentage consistently: sum of percentages / number of subjects
+            const subjectPercentages = mapped.map(m => calculatePercentage(m.raw_score, m.max_score));
+            const avgPercentage = subjectPercentages.length > 0
+                ? subjectPercentages.reduce((a, b) => a + b, 0) / subjectPercentages.length
+                : 0;
+            
             const rankingValue = (gradingSystemType === 'KCSE' && perf.totalPoints !== undefined) 
                 ? perf.totalPoints 
-                : perf.rawAverage;
-            return { studentId: sid, percentage: perf.rawAverage, totalPoints: perf.totalPoints, rankingValue };
+                : avgPercentage;
+            return { studentId: sid, percentage: avgPercentage, totalPoints: perf.totalPoints, rankingValue };
         });
 
         const rankingBy = gradingSystemType === 'KCSE' ? 'points' : 'percentage';
