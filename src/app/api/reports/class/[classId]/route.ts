@@ -7,6 +7,7 @@ import {
     generateFeedback,
     getGradeFromScales,
     getPointsFromScales,
+    getPointsFromGrade,
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
@@ -369,9 +370,12 @@ export async function GET(
                     : (gradingScales.length > 0
                         ? getGradeFromScales(pct, gradingScales)
                         : '-');
-                const points = gradingScales.length > 0
-                    ? getPointsFromScales(pct, gradingScales)
-                    : undefined;
+                // Points based on the grade selected, not percentage
+                const points = m.grade_symbol && gradingScales.length > 0
+                    ? getPointsFromGrade(m.grade_symbol)
+                    : (gradingScales.length > 0
+                        ? getPointsFromScales(pct, gradingScales)
+                        : undefined);
                 const rubric = m.rubric || ((gradingSystemType === 'CBC' && gradingScales.length > 0)
                     ? getRubricFromScales(pct, gradingScales)
                     : undefined);
