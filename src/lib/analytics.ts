@@ -173,11 +173,20 @@ export function aggregateStudentPerformance(
 
     const subjectPercentages = marksToProcess.map(m => calculatePercentage(m.raw_score, m.max_score));
 
-    // Use user-selected grade_symbol for points (not percentage-based)
+    // Use grade-based points for KCSE, scale-based points for CBC
     let totalPoints = 0;
-    for (const mark of marksToProcess) {
-        const pts = getPointsFromGrade((mark as any).grade_symbol || '');
-        totalPoints += pts;
+    if (gradingSystemType === 'KCSE') {
+        for (const mark of marksToProcess) {
+            const pts = getPointsFromGrade((mark as any).grade_symbol || '');
+            totalPoints += pts;
+        }
+    } else {
+        // CBC: use points from grading scales
+        for (const mark of marksToProcess) {
+            const pct = calculatePercentage(mark.raw_score, mark.max_score);
+            const pts = scales ? getPointsFromScales(pct, scales) : 0;
+            totalPoints += pts || 0;
+        }
     }
 
     const numSubjects = marksToProcess.length;
