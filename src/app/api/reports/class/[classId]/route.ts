@@ -247,6 +247,8 @@ export async function GET(
         const marksByStudent: Record<string, any[]> = {};
         // Per-subject aggregation: subjectId -> { studentId -> pct }[]
         const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
+        // Build subjectNamesMap for 8-4-4 selection logic
+        const subjectNamesMap: Record<string, string> = {};
 
         for (const m of allMarks || []) {
             if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
@@ -259,6 +261,12 @@ export async function GET(
                 const maxScore = Number((m as any).exams.max_score);
                 const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
                 subjectAggs[subjectId].push({ studentId: m.student_id, pct });
+                
+                // Build subjectNamesMap
+                const sname = (m as any).exams?.subjects?.name;
+                if (sname && !subjectNamesMap[subjectId]) {
+                    subjectNamesMap[subjectId] = sname;
+                }
             }
         }
 
@@ -278,7 +286,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
                 remarks: m.remarks,
             }));
-            const perf = aggregateStudentPerformance(mapped, gradingScales);
+            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
             return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
@@ -315,7 +323,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
 
             // Resolve overall grade from total points (KCSE) or percentage (CBC)
             const isKCSE = gradingSystemType === 'KCSE';
