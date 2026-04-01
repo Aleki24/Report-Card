@@ -489,28 +489,28 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year <span className="text-red-500">*</span></label>
-            <select className="input-field w-full" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
+            <select className="input-field w-full" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)} suppressHydrationWarning>
               <option value="">-- Choose Year --</option>
               {academicYears.map(ay => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term <span className="text-red-500">*</span></label>
-            <select className="input-field w-full" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
+            <select className="input-field w-full" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)} suppressHydrationWarning>
               <option value="">-- Choose Term --</option>
               {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade Stream <span className="text-red-500">*</span></label>
-            <select className="input-field w-full" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)}>
+            <select className="input-field w-full" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)} suppressHydrationWarning>
               <option value="">-- Choose Stream --</option>
               {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-[var(--color-text-muted)] mb-1">Custom Title (Optional)</label>
-            <input className="input-field w-full" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
+            <input className="input-field w-full" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} suppressHydrationWarning />
           </div>
         </div>
       </div>
@@ -553,7 +553,7 @@ export default function ReportsPage() {
           <img src="/images/dashboard_comparison_icon.png" alt="Stats" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Term Comparison</h3>
           <p className="text-sm text-[var(--color-text-muted)] mb-6 flex-grow">Compare performance across multiple terms.</p>
-          <button className="btn-secondary w-full justify-center" onClick={() => setShowTermComparison(true)}>
+          <button className="btn-secondary w-full justify-center" onClick={() => setShowTermComparison(true)} suppressHydrationWarning>
             Compare Terms →
           </button>
         </div>

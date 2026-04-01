@@ -27,6 +27,7 @@ function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
             }}
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            suppressHydrationWarning
         >
             {theme === 'dark' ? '☀️' : '🌙'}
             {!collapsed && (theme === 'dark' ? 'Light Mode' : 'Dark Mode')}
@@ -435,6 +436,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         fontWeight: 500,
                     }}
                     onClick={() => setCollapsed?.(!collapsed)}
+                    suppressHydrationWarning
                 >
                     {collapsed ? '→' : '← Collapse'}
                 </button>

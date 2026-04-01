@@ -156,14 +156,16 @@ export function aggregateStudentPerformance(
 
     const numSubjects = marksToProcess.length;
     const meanPoints = numSubjects > 0 ? totalPoints / numSubjects : 0;
-    const maxPointsPerSubject = 12;
-    const avgPercentage = (meanPoints / maxPointsPerSubject) * 100;
+
+    const avgPercentage = numSubjects > 0 
+        ? subjectPercentages.reduce((a, b) => a + b, 0) / numSubjects 
+        : 0;
 
     const rawAverage = numSubjects > 0 ? totalScore / numSubjects : 0;
 
     const percentage = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
-    const gpa = getGPAFromPercentage(percentage);
-    const grade = scales ? getGradeFromScales(percentage, scales) : getGradeFromPercentage(percentage);
+    const gpa = getGPAFromPercentage(avgPercentage);
+    const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
     const overallGrade = getOverallGradeFromPoints(totalPoints);
 
@@ -342,6 +344,10 @@ export interface MarkWithSubjectName extends ExamMarkWithDetails {
     points?: number;
 }
 
+function sortByPointsDesc(arr: MarkWithSubjectName[]): MarkWithSubjectName[] {
+    return [...arr].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+}
+
 function identifySubjectCategory(subjectName: string): SubjectCategory {
     const name = subjectName.toLowerCase().trim();
     
@@ -352,10 +358,15 @@ function identifySubjectCategory(subjectName: string): SubjectCategory {
     if (name.includes('chemistry')) return 'SCIENCE';
     if (name.includes('biology')) return 'SCIENCE';
     if (name.includes('geography')) return 'HUMANITY';
-    if (name.includes('history') || name.includes('religious') || name.includes('cre')) return 'HUMANITY';
+    if (name.includes('history')) return 'HUMANITY';
+    if (name.includes('christian religious') || name === 'cre') return 'HUMANITY';
+    if (name.includes('islamic religious') || name === 'ire') return 'HUMANITY';
+    if (name.includes('hindu religious') || name === 'hre') return 'HUMANITY';
+    if (name.includes('religious')) return 'HUMANITY';
     if (name.includes('computer')) return 'TECHNICAL';
     if (name.includes('business')) return 'TECHNICAL';
     if (name.includes('agriculture')) return 'TECHNICAL';
+    if (name.includes('home science')) return 'TECHNICAL';
     if (name.includes('technical')) return 'TECHNICAL';
     
     return 'TECHNICAL';
@@ -394,29 +405,28 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     // Step 2: Always include mathematics
     selected.push(...mathematics);
     
-    // Step 3: Sciences - if 2 or fewer, include all; if 3+, include best 2
-    const sortedSciences = [...sciences].sort((a, b) => b.points - a.points);
+    // Step 3: Sciences - if 2 or fewer, include all (sorted); if 3+, include best 2 (SORT BEFORE SLICE)
+    const sortedSciences = sortByPointsDesc(sciences);
     if (sciences.length <= 2) {
-        selected.push(...sciences);
+        selected.push(...sortedSciences); // FIX: use sorted array
     } else {
         selected.push(sortedSciences[0], sortedSciences[1]);
     }
     
-    // Step 4: Humanities - include best 1
+    // Step 4: Humanities - include best 1 (SORT BEFORE SLICE)
     if (humanities.length > 0) {
-        const sortedHumanities = [...humanities].sort((a, b) => b.points - a.points);
+        const sortedHumanities = sortByPointsDesc(humanities);
         selected.push(sortedHumanities[0]);
     }
     
-    // Step 5: Technicals - only include best 1 if 8+ subjects total
+    // Step 5: Technicals - only include best 1 if 8+ subjects total (SORT BEFORE SLICE)
     if (technicals.length > 0 && numSubjects >= 8) {
-        const sortedTechnicals = [...technicals].sort((a, b) => b.points - a.points);
+        const sortedTechnicals = sortByPointsDesc(technicals);
         selected.push(sortedTechnicals[0]);
     }
     
     // If still under 7, fill with remaining best subjects by points
-    const remainingSorted = [...sciences, ...humanities, ...technicals]
-        .sort((a, b) => b.points - a.points);
+    const remainingSorted = sortByPointsDesc([...sciences, ...humanities, ...technicals]);
     
     for (const m of remainingSorted) {
         if (!selected.includes(m) && selected.length < 7) {

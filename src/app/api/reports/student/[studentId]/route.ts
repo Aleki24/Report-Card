@@ -103,8 +103,22 @@ export async function GET(
 
         // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style
         // Grade 9 and 10 are CBC
-        const gradeCode = student.grade_streams?.full_name || '';
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        const streamName = student.grade_streams?.full_name || '';
+        const gradeId = student.grade_streams?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
+        
+        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (student.academic_level_id) {
             // Fetch the academic level code to determine KCSE vs CBC
@@ -143,8 +157,6 @@ export async function GET(
         }
 
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
-        const gradeId = student.grade_streams?.grade_id;
-
         let examsQ = supabase
             .from('exams')
             .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
@@ -269,6 +281,7 @@ export async function GET(
         });
 
         const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
         

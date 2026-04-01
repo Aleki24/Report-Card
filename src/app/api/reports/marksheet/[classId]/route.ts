@@ -74,10 +74,22 @@ export async function GET(
         // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
         // G1-G6, G9-G10 use CBC style (rubric-based)
         const firstAcademicLevelId = students[0].academic_level_id;
-        const gradeCode = (students[0] as any)?.grade_streams?.full_name || '';
+        const streamName = (students[0] as any)?.grade_streams?.full_name || '';
+        const gradeId = (students[0] as any)?.grade_streams?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
         
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).single();
@@ -87,7 +99,7 @@ export async function GET(
             } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
-
+            
             const { data: gradingSystem } = await supabase.from('grading_systems').select('id').eq('academic_level_id', firstAcademicLevelId).limit(1).single();
 
             if (gradingSystem) {
@@ -330,8 +342,6 @@ export async function GET(
             meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
         }
         
-        console.log('[Marksheet] Mean:', meanPercentage, 'MeanGrade:', meanGrade, 'System:', gradingSystemType);
-
         const markSheetData = {
             schoolName,
             schoolLogoUrl,

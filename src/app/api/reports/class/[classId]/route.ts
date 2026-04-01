@@ -91,9 +91,22 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
 
         const firstAcademicLevelId = students[0].academic_level_id;
-        const gradeCode = (students[0].grade_streams as any)?.full_name || '';
-        // Grade 9 and 10 are CBC, not KCSE
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        const streamName = (students[0].grade_streams as any)?.full_name || '';
+        const gradeId = (students[0].grade_streams as any)?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
+        
+        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase
@@ -108,7 +121,7 @@ export async function GET(
             } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
-
+            
             const { data: gradingSystem } = await supabase
                 .from('grading_systems')
                 .select('id')
@@ -157,7 +170,6 @@ export async function GET(
 
         // 6. Fetch all marks and also ALL exams for this term and class
         const studentIds = students.map(s => s.id);
-        const gradeId = (students[0].grade_streams as any)?.grade_id;
 
         let marksQuery = supabase
             .from('exam_marks')
