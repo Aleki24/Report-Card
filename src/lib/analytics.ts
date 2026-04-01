@@ -1,5 +1,13 @@
 import type { ExamMark, GradingScale } from '../types';
 
+export const GRADE_TO_POINTS: Record<string, number> = {
+    'A': 12, 'A-': 11,
+    'B+': 10, 'B': 9, 'B-': 8,
+    'C+': 7, 'C': 6, 'C-': 5,
+    'D+': 4, 'D': 3, 'D-': 2,
+    'E': 1,
+};
+
 export const OVERALL_POINTS_GRADES = [
     { symbol: 'A', min: 81, max: 84 },
     { symbol: 'A-', min: 74, max: 80 },
@@ -20,9 +28,14 @@ export function getOverallGradeFromPoints(totalPoints: number): string {
     return match?.symbol || '-';
 }
 
+export function getPointsFromGrade(grade: string): number {
+    return GRADE_TO_POINTS[grade?.trim()] ?? 0;
+}
+
 export interface ExamMarkWithDetails extends ExamMark {
     subject_id: string;
     max_score: number;
+    grade_symbol?: string;
 }
 
 export function calculatePercentage(score: number, totalPossible: number): number {
@@ -39,14 +52,12 @@ export function calculatePercentage(score: number, totalPossible: number): numbe
 export function getGradeFromScales(percentage: number, scales?: GradingScale[]): string {
     if (scales && scales.length > 0) {
         const rounded = Math.round(percentage);
-        console.log('[getGradeFromScales] Looking for:', rounded, 'scales:', scales.map(s => `${s.symbol}(${s.min_percentage}-${s.max_percentage})`));
         const match = scales.find(s =>
             rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
         );
         if (match) return match.symbol;
-        return '-'; // Return placeholder if scales exist but there's a gap
+        return '-';
     }
-    // Fallback when no DB scales are available
     return getGradeFromPercentage(percentage);
 }
 
@@ -145,13 +156,11 @@ export function aggregateStudentPerformance(
 
     const subjectPercentages = marksToProcess.map(m => calculatePercentage(m.raw_score, m.max_score));
 
+    // Use user-selected grade_symbol for points (not percentage-based)
     let totalPoints = 0;
-    if (scales && scales.length > 0) {
-        for (const mark of marksToProcess) {
-            const pct = calculatePercentage(mark.raw_score, mark.max_score);
-            const pts = getPointsFromScales(pct, scales);
-            if (pts !== undefined) totalPoints += pts;
-        }
+    for (const mark of marksToProcess) {
+        const pts = getPointsFromGrade((mark as any).grade_symbol || '');
+        totalPoints += pts;
     }
 
     const numSubjects = marksToProcess.length;
@@ -382,8 +391,8 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     }
     
     const marksWithCategory = marks.map(m => {
-        const pct = calculatePercentage(m.raw_score, m.max_score);
-        const pts = m.subjectName ? getPointsFromScales(pct, scales) ?? 0 : 0;
+        // Use user-selected grade_symbol for points, not percentage-based
+        const pts = getPointsFromGrade((m as any).grade_symbol || '');
         return {
             ...m,
             category: identifySubjectCategory(m.subjectName || ''),
