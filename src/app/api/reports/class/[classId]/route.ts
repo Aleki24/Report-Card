@@ -370,12 +370,15 @@ export async function GET(
                     : (gradingScales.length > 0
                         ? getGradeFromScales(pct, gradingScales)
                         : '-');
-                // Points based on the grade selected, not percentage
-                const points = m.grade_symbol && gradingScales.length > 0
-                    ? getPointsFromGrade(m.grade_symbol)
-                    : (gradingScales.length > 0
-                        ? getPointsFromScales(pct, gradingScales)
-                        : undefined);
+                // Points: KCSE uses grade-based, CBC uses scale-based
+                let points: number | undefined;
+                if (gradingScales.length > 0) {
+                    if (gradingSystemType === 'KCSE') {
+                        points = m.grade_symbol ? getPointsFromGrade(m.grade_symbol) : getPointsFromScales(pct, gradingScales);
+                    } else {
+                        points = getPointsFromScales(pct, gradingScales);
+                    }
+                }
                 const rubric = m.rubric || ((gradingSystemType === 'CBC' && gradingScales.length > 0)
                     ? getRubricFromScales(pct, gradingScales)
                     : undefined);
