@@ -122,18 +122,42 @@ export async function GET(
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
             
-            const { data: gradingSystem } = await supabase
+            // Fetch grading systems for this academic level - get the one with scales
+            const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
-                .select('id')
-                .eq('academic_level_id', firstAcademicLevelId)
-                .limit(1)
-                .single();
+                .select('id, name')
+                .eq('academic_level_id', firstAcademicLevelId);
 
-            if (gradingSystem) {
+            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
+            let gradingSystemId: string | null = null;
+            if (allGradingSystems && allGradingSystems.length > 0) {
+                for (const gs of allGradingSystems) {
+                    const { count } = await supabase
+                        .from('grading_scales')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('grading_system_id', gs.id)
+                        .single();
+                    
+                    if (count && count > 0) {
+                        gradingSystemId = gs.id;
+                        break; // Found one with scales
+                    }
+                }
+                // Fallback: prefer system with "KCSE" or "Letter" in name
+                if (!gradingSystemId && allGradingSystems.length > 0) {
+                    const preferred = allGradingSystems.find((gs: any) => 
+                        gs.name?.toLowerCase().includes('kcse') || 
+                        gs.name?.toLowerCase().includes('letter')
+                    );
+                    gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
+                }
+            }
+
+            if (gradingSystemId) {
                 const { data: scales } = await supabase
                     .from('grading_scales')
                     .select('*')
-                    .eq('grading_system_id', gradingSystem.id)
+                    .eq('grading_system_id', gradingSystemId)
                     .order('order_index', { ascending: true });
 
                 if (scales) {
