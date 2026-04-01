@@ -177,8 +177,14 @@ export function aggregateStudentPerformance(
     const gpa = getGPAFromPercentage(avgPercentage);
     const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
-    // overallGrade from mean points (not total points)
-    const overallGrade = getOverallGradeFromMeanPoints(meanPoints);
+    // overallGrade: KCSE uses mean points, CBC uses percentage-based grade
+    let overallGrade: string;
+    if (gradingSystemType === 'KCSE') {
+        overallGrade = getOverallGradeFromMeanPoints(meanPoints);
+    } else {
+        // CBC: use the grade derived from percentage
+        overallGrade = grade;
+    }
 
     return {
         totalScore,
