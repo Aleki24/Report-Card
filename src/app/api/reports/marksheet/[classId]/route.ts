@@ -363,7 +363,7 @@ export async function GET(
         const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0);
         const meanPoints = studentsWithMarks.length > 0 ? Math.round(totalPointsSum / studentsWithMarks.length) : 0;
         
-        const meanGrade = getGradeFromPercentageSimple(meanPoints);
+        const meanGrade = gradingSystemType === 'KCSE' ? getGradeFromPercentageSimple(meanPoints) : '';
         
         const markSheetData = {
             schoolName,

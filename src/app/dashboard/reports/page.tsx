@@ -6,7 +6,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
 import JSZip from 'jszip';
 import { pdf } from '@react-pdf/renderer';
-import { ReportCardDocument, ReportCardData } from '@/lib/pdfGenerator';
+import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import QRCode from 'qrcode';
 
@@ -181,48 +181,23 @@ export default function ReportsPage() {
         throw new Error('No students or grades found for this setup. Ensure marks are entered.');
       }
 
-      // 3. Local PDF processing
       const total = reportCardsData.length;
-      setProgress({ current: 0, total, message: 'Step 3 of 3: Generating PDFs from data...' });
 
-      const zip = new JSZip();
-
-      for (let i = 0; i < total; i++) {
-        const reportData = reportCardsData[i];
-        
-        // Update UI asynchronously every file
-        setProgress({ current: i + 1, total, message: `Creating PDF for ${reportData.studentName}...` });
-        
-        // Ensure UI updates render by waiting a tick
-        await new Promise(r => setTimeout(r, 10));
-
-        let qrCodeDataUri = undefined;
-        if (reportData.resultUrl) {
-          try {
-            qrCodeDataUri = await QRCode.toDataURL(reportData.resultUrl, { margin: 1, width: 64 });
-          } catch (e) {
-            console.error("Failed to generate QR code", e);
-          }
-        }
-
-        const blob = await pdf(<ReportCardDocument data={reportData} qrCodeDataUri={qrCodeDataUri} />).toBlob();
-        
-        const pName = `${reportData.studentName.replace(/[^a-zA-Z0-9]/g, '_')}_Report.pdf`;
-        zip.file(pName, blob);
-      }
-
-      setProgress({ current: total, total, message: 'Bundling ZIP archive...' });
-
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      // 3. Generate single PDF with all reports
+      setProgress({ current: 0, total, message: 'Step 3 of 3: Generating combined PDF...' });
       
-      const blobUrl = URL.createObjectURL(zipBlob);
+      const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData);
+      
+      const uint8Array = new Uint8Array(pdfBuffer);
+      const blob = new Blob([uint8Array], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
       
       const termName = terms.find(t => t.id === selectedTerm)?.name || 'Term';
       const streamName = gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class';
       
-      link.download = `${streamName}_${termName}_Reports.zip`;
+      link.download = `${streamName}_${termName}_Reports.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -230,6 +205,7 @@ export default function ReportsPage() {
 
       showToastMsg('✅ Download complete!');
     } catch (err: any) {
+      console.error('Bulk download error:', err);
       showToastMsg(`Failed: ${err.message || 'Unknown error'}`);
     } finally {
       setGenerating(false);

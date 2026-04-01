@@ -75,11 +75,11 @@ const scoreColor = (score: number | null) => {
 
 /* ── Styles (aligned with Report Card) ─────────────────── */
 const s = StyleSheet.create({
-    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700, minHeight: '800px' },
+    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 8, color: GRAY_700 },
 
     /* Top / bottom navy decorative bars — matching report card */
     navyBar: { height: 8, backgroundColor: NAVY, marginBottom: 0 },
-    navyBarBottom: { height: 8, backgroundColor: NAVY, marginTop: 'auto' },
+    navyBarBottom: { height: 8, backgroundColor: NAVY },
 
     /* Header – white background — matching report card */
     headerBand: {
@@ -210,11 +210,11 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
 
     return (
         <Document>
-            <Page size="A4" orientation="portrait" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
+            <Page size="A4" orientation="portrait" style={s.page}>
                 {/* ═══ TOP NAVY BAR ═══ */}
                 <View style={s.navyBar} />
 
-                <View style={{ flex: 1 }}>
+                <View>
 
                     {/* ═══ HEADER BAND (white bg, matching report card) ═══ */}
                     <View style={s.headerBand}>
@@ -258,12 +258,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                             <Text style={s.summaryVal}>{data.students.length}</Text>
                         </View>
                         <View style={s.summaryItem}>
-                            <Text style={s.summaryLabel}>Mean Grade</Text>
-                            <Text style={[s.summaryVal, { color: gradeColor(data.meanGrade) }]}>{data.meanGrade}</Text>
-                        </View>
-                        <View style={s.summaryItem}>
-                            <Text style={s.summaryLabel}>Mean Points</Text>
-                            <Text style={s.summaryVal}>{data.meanPoints}</Text>
+                            <Text style={s.summaryLabel}>{isKCSE ? 'Mean Points' : 'Mean %'}</Text>
+                            <Text style={s.summaryVal}>{isKCSE ? data.meanPoints : Math.round(data.students.reduce((sum, s) => sum + s.overallPercentage, 0) / data.students.length)}</Text>
                         </View>
                     </View>
 
@@ -334,27 +330,29 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                     </View>
 
                     {/* ═══ BOTTOM SUMMARY (matching report card style) ═══ */}
-                    <View style={s.bottomRow} break>
+                    <View style={s.bottomRow} wrap={false}>
                         {/* Class Summary */}
-                        <View style={s.summaryCard}>
+                        <View style={s.summaryCard} wrap={false}>
                             <Text style={s.summaryCardTitle}>Class Performance</Text>
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Total Students</Text>
                                 <Text style={s.summaryCardValue}>{data.students.length}</Text>
                             </View>
                             <View style={s.summaryCardRow}>
-                                <Text style={s.summaryCardLabel}>Mean Points</Text>
-                                <Text style={s.summaryCardValue}>{data.meanPoints}</Text>
+                                <Text style={s.summaryCardLabel}>{isKCSE ? 'Mean Points' : 'Mean %'}</Text>
+                                <Text style={s.summaryCardValue}>{isKCSE ? data.meanPoints : Math.round(data.students.reduce((sum, s) => sum + s.overallPercentage, 0) / data.students.length)}</Text>
                             </View>
+                            {isKCSE && (
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Mean Grade</Text>
                                 <Text style={[s.summaryCardValue, { color: gradeColor(data.meanGrade) }]}>{data.meanGrade}</Text>
                             </View>
+                            )}
                         </View>
 
                         {/* Grade Distribution */}
                         {data.gradeDistribution && Object.keys(data.gradeDistribution).length > 0 && (
-                            <View style={s.gradeDistCard}>
+                            <View style={s.gradeDistCard} wrap={false}>
                                 <Text style={[s.summaryCardTitle, { color: GREEN }]}>Grade Distribution</Text>
                                 <View style={s.gradeDistContainer}>
                                     {Object.entries(data.gradeDistribution)
@@ -374,19 +372,19 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
 
                     {/* Subject Performance - Full Width Below - Top 3 Only */}
                     {data.subjectRankings && data.subjectRankings.length > 0 && (
-                        <View style={s.bottomRowStack} break>
-                            <View style={s.subjectPerfCard}>
-                                <Text style={s.subjectPerfTitle}>📊 Top 3 Subjects by Mean</Text>
+                        <View style={s.bottomRowStack}>
+                            <View style={s.subjectPerfCard} wrap={false}>
+                                <Text style={s.subjectPerfTitle}>Subject Rankings</Text>
                                 <View style={s.subjectPerfHeader}>
                                     <Text style={[s.subjectPerfColCode, { color: WHITE }]}>Subject</Text>
-                                    <Text style={[s.subjectPerfColMean, { color: WHITE }]}>Mean %</Text>
+                                    <Text style={[s.subjectPerfColMean, { color: WHITE }]}>Mean</Text>
                                     <Text style={[s.subjectPerfColRank, { color: WHITE }]}>Rank</Text>
                                 </View>
-                                {data.subjectRankings.slice(0, 3).map((subj, idx) => {
+                                {data.subjectRankings.map((subj, idx) => {
                                     const stats = data.subjectStats[subj.code];
                                     const isTop3 = subj.rank <= 3;
                                     return (
-                                        <View key={subj.code} style={[s.subjectPerfRow, idx % 2 === 0 ? { backgroundColor: LIGHT_GRAY } : { backgroundColor: WHITE }]} wrap={false}>
+                                        <View key={subj.code} style={[s.subjectPerfRow, idx % 2 === 0 ? { backgroundColor: LIGHT_GRAY } : { backgroundColor: WHITE }]}>
                                             <Text style={[s.subjectPerfColCode, isTop3 ? { color: ORANGE } : { color: GRAY_700 }]}>{subj.code}</Text>
                                             <Text style={s.subjectPerfColMean}>{stats?.mean || '-'}</Text>
                                             <Text style={[s.subjectPerfColRank, isTop3 ? { color: ORANGE, fontFamily: 'Helvetica-Bold' } : { color: GRAY_700 }]}>#{subj.rank}</Text>
