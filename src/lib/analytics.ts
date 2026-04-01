@@ -29,6 +29,22 @@ export function getOverallGradeFromMeanPoints(meanPoints: number): string {
     return match?.symbol || '-';
 }
 
+export function getGradeFromPercentageSimple(percentage: number): string {
+    if (percentage >= 81) return 'A';
+    if (percentage >= 74) return 'A-';
+    if (percentage >= 67) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 53) return 'B-';
+    if (percentage >= 46) return 'C+';
+    if (percentage >= 39) return 'C';
+    if (percentage >= 32) return 'C-';
+    if (percentage >= 25) return 'D+';
+    if (percentage >= 18) return 'D';
+    if (percentage >= 11) return 'D-';
+    if (percentage >= 7) return 'E';
+    return 'E';
+}
+
 export function getPointsFromGrade(grade: string): number {
     return GRADE_TO_POINTS[grade?.trim()] ?? 0;
 }

@@ -6,6 +6,7 @@ import {
     calculatePercentage,
     getGradeFromScales,
     getGradeFromPercentage,
+    getGradeFromPercentageSimple,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -359,17 +360,10 @@ export async function GET(
             }
         }
 
-        const meanPercentage = studentsWithMarks.length > 0 ? (totalClassPercentage / studentsWithMarks.length) : 0;
+        const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
+        const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
         
-        let meanGrade: string;
-        if (gradingSystemType === 'KCSE') {
-            const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
-            const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
-            const { getOverallGradeFromMeanPoints } = await import('@/lib/analytics');
-            meanGrade = getOverallGradeFromMeanPoints(meanPoints);
-        } else {
-            meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
-        }
+        const meanGrade = getGradeFromPercentageSimple(Math.round(meanPoints));
         
         const markSheetData = {
             schoolName,
@@ -383,7 +377,7 @@ export async function GET(
             students: studentsData,
             gradeDistribution,
             meanGrade,
-            meanPercentage: Math.round(meanPercentage),
+            meanPoints: Math.round(meanPoints * 10) / 10,
             subjectStats,
             subjectRankings,
         };

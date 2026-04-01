@@ -35,7 +35,7 @@ export interface MarkSheetData {
     }[];
     gradeDistribution: Record<string, number>;
     meanGrade: string;
-    meanPercentage: number;
+    meanPoints: number;
     subjectStats: Record<string, SubjectStats>;
     subjectRankings: SubjectRanking[];
 }
@@ -214,7 +214,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 {/* ═══ TOP NAVY BAR ═══ */}
                 <View style={s.navyBar} />
 
-                <View style={{ flex: 1, minHeight: 600 }}>
+                <View style={{ flex: 1 }}>
 
                     {/* ═══ HEADER BAND (white bg, matching report card) ═══ */}
                     <View style={s.headerBand}>
@@ -262,8 +262,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                             <Text style={[s.summaryVal, { color: gradeColor(data.meanGrade) }]}>{data.meanGrade}</Text>
                         </View>
                         <View style={s.summaryItem}>
-                            <Text style={s.summaryLabel}>Mean %</Text>
-                            <Text style={s.summaryVal}>{Math.round(data.meanPercentage)}%</Text>
+                            <Text style={s.summaryLabel}>Mean Points</Text>
+                            <Text style={s.summaryVal}>{data.meanPoints}</Text>
                         </View>
                     </View>
 
@@ -343,8 +343,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                 <Text style={s.summaryCardValue}>{data.students.length}</Text>
                             </View>
                             <View style={s.summaryCardRow}>
-                                <Text style={s.summaryCardLabel}>Mean %</Text>
-                                <Text style={s.summaryCardValue}>{Math.round(data.meanPercentage)}%</Text>
+                                <Text style={s.summaryCardLabel}>Mean Points</Text>
+                                <Text style={s.summaryCardValue}>{data.meanPoints}</Text>
                             </View>
                             <View style={s.summaryCardRow}>
                                 <Text style={s.summaryCardLabel}>Mean Grade</Text>
