@@ -360,10 +360,10 @@ export async function GET(
             }
         }
 
-        const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
-        const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
+        const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0);
+        const meanPoints = studentsWithMarks.length > 0 ? Math.round(totalPointsSum / studentsWithMarks.length) : 0;
         
-        const meanGrade = getGradeFromPercentageSimple(Math.round(meanPoints));
+        const meanGrade = getGradeFromPercentageSimple(meanPoints);
         
         const markSheetData = {
             schoolName,
@@ -377,7 +377,7 @@ export async function GET(
             students: studentsData,
             gradeDistribution,
             meanGrade,
-            meanPoints: Math.round(meanPoints * 10) / 10,
+            meanPoints,
             subjectStats,
             subjectRankings,
         };
