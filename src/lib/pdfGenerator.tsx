@@ -492,24 +492,18 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                         {data.classTeacherComment ? (
                             <Text style={s.commentText}>{data.classTeacherComment}</Text>
                         ) : (
-                            <View>
-                                <View style={s.commentLine} />
-                                <View style={s.commentLine} />
-                            </View>
+                            <Text style={s.commentText}>{generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
                         )}
                     </View>
 
-                    <View style={s.commentBox}>
-                        <Text style={s.commentTitle}>Principal&apos;s Comment:</Text>
-                        {data.principalComment ? (
-                            <Text style={s.commentText}>{data.principalComment}</Text>
-                        ) : (
-                            <View>
-                                <View style={s.commentLine} />
-                                <View style={s.commentLine} />
-                            </View>
-                        )}
-                    </View>
+            <View style={s.commentBox}>
+                <Text style={s.commentTitle}>Principal&apos;s Comment:</Text>
+                {data.principalComment ? (
+                    <Text style={s.commentText}>{data.principalComment}</Text>
+                ) : (
+                    <Text style={s.commentText}>{generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
+                )}
+            </View>
 
 
                     {/* ═══ SIGNATURES ═══ */}
@@ -550,6 +544,26 @@ function generateShortFeedback(percentage: number | null, grade: string): string
     if (percentage >= 60) return 'Good progress';
     if (percentage >= 40) return 'Fair, needs improvement';
     return 'Needs more effort';
+}
+
+function generateClassTeacherComment(percentage: number, grade: string, totalPoints?: number): string {
+    if (percentage >= 90) return 'Outstanding performance! Keep up the excellent work.';
+    if (percentage >= 80) return 'Great work! You are performing very well.';
+    if (percentage >= 70) return 'Good progress. Keep working hard.';
+    if (percentage >= 60) return 'Fair performance. Focus on improving weak areas.';
+    if (percentage >= 50) return 'You need to put more effort. Seek help where needed.';
+    if (percentage >= 40) return 'Performance is below average. Please see me for extra help.';
+    return 'Urgent improvement needed. Parent meeting required.';
+}
+
+function generatePrincipalComment(percentage: number, grade: string, totalPoints?: number): string {
+    if (percentage >= 90) return 'Congratulations on your outstanding achievement. Keep aiming for excellence.';
+    if (percentage >= 80) return 'Excellent performance. You make us proud. Continue the good work.';
+    if (percentage >= 70) return 'Good performance. With more dedication, you can achieve even better results.';
+    if (percentage >= 60) return 'Satisfactory performance. We encourage you to work harder.';
+    if (percentage >= 50) return 'Performance needs improvement. We believe you can do better.';
+    if (percentage >= 40) return 'Performance is unsatisfactory. Please put more effort.';
+    return 'Poor performance. Immediate improvement is required. Parents to see the principal.';
 }
 
 /* ── Report Card Content (for bulk PDF) ───────────────── */
@@ -806,10 +820,7 @@ export function ReportCardContent({ data, qrCodeDataUri }: { data: ReportCardDat
                 {data.classTeacherComment ? (
                     <Text style={s.commentText}>{data.classTeacherComment}</Text>
                 ) : (
-                    <View>
-                        <View style={s.commentLine} />
-                        <View style={s.commentLine} />
-                    </View>
+                    <Text style={s.commentText}>{generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
                 )}
             </View>
 
@@ -818,10 +829,7 @@ export function ReportCardContent({ data, qrCodeDataUri }: { data: ReportCardDat
                 {data.principalComment ? (
                     <Text style={s.commentText}>{data.principalComment}</Text>
                 ) : (
-                    <View>
-                        <View style={s.commentLine} />
-                        <View style={s.commentLine} />
-                    </View>
+                    <Text style={s.commentText}>{generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
                 )}
             </View>
 
