@@ -8,23 +8,24 @@ export const GRADE_TO_POINTS: Record<string, number> = {
     'E': 1,
 };
 
-export const OVERALL_POINTS_GRADES = [
-    { symbol: 'A', min: 81, max: 84 },
-    { symbol: 'A-', min: 74, max: 80 },
-    { symbol: 'B+', min: 67, max: 73 },
-    { symbol: 'B', min: 60, max: 66 },
-    { symbol: 'B-', min: 53, max: 59 },
-    { symbol: 'C+', min: 46, max: 52 },
-    { symbol: 'C', min: 39, max: 45 },
-    { symbol: 'C-', min: 32, max: 38 },
-    { symbol: 'D+', min: 25, max: 31 },
-    { symbol: 'D', min: 18, max: 24 },
-    { symbol: 'D-', min: 11, max: 17 },
-    { symbol: 'E', min: 1, max: 10 },
+// KNEC mean points to overall grade scale (meanPoints = totalPoints / 7)
+export const MEAN_POINTS_GRADES = [
+    { symbol: 'A', min: 11.5 },
+    { symbol: 'A-', min: 10.5 },
+    { symbol: 'B+', min: 9.5 },
+    { symbol: 'B', min: 8.5 },
+    { symbol: 'B-', min: 7.5 },
+    { symbol: 'C+', min: 6.5 },
+    { symbol: 'C', min: 5.5 },
+    { symbol: 'C-', min: 4.5 },
+    { symbol: 'D+', min: 3.5 },
+    { symbol: 'D', min: 2.5 },
+    { symbol: 'D-', min: 1.5 },
+    { symbol: 'E', min: 0 },
 ];
 
-export function getOverallGradeFromPoints(totalPoints: number): string {
-    const match = OVERALL_POINTS_GRADES.find(g => totalPoints >= g.min && totalPoints <= g.max);
+export function getOverallGradeFromMeanPoints(meanPoints: number): string {
+    const match = MEAN_POINTS_GRADES.find(g => meanPoints >= g.min);
     return match?.symbol || '-';
 }
 
@@ -176,7 +177,8 @@ export function aggregateStudentPerformance(
     const gpa = getGPAFromPercentage(avgPercentage);
     const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
-    const overallGrade = getOverallGradeFromPoints(totalPoints);
+    // overallGrade from mean points (not total points)
+    const overallGrade = getOverallGradeFromMeanPoints(meanPoints);
 
     return {
         totalScore,

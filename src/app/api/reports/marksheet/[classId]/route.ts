@@ -365,8 +365,8 @@ export async function GET(
         if (gradingSystemType === 'KCSE') {
             const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
             const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
-            const { getOverallGradeFromPoints } = await import('@/lib/analytics');
-            meanGrade = getOverallGradeFromPoints(meanPoints);
+            const { getOverallGradeFromMeanPoints } = await import('@/lib/analytics');
+            meanGrade = getOverallGradeFromMeanPoints(meanPoints);
         } else {
             meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
         }
