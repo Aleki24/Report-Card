@@ -532,7 +532,7 @@ export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardDa
                     {data.openingDate && (
                         <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>
                     )}
-                    <Text style={s.footerLine}>System developed by: Matokeo</Text>
+                    <Text style={s.footerLine}>System developed by: Alex Otieno</Text>
                     <Text>This document is electronically generated</Text>
                 </View>
 
@@ -843,7 +843,7 @@ export function ReportCardContent({ data, qrCodeDataUri }: { data: ReportCardDat
                 {data.openingDate && (
                     <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>
                 )}
-                <Text style={s.footerLine}>System developed by: Matokeo</Text>
+                <Text style={s.footerLine}>System developed by: Alex Otieno</Text>
                 <Text>This document is electronically generated</Text>
             </View>
         </>

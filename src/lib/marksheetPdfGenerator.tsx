@@ -319,7 +319,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                         <View style={s.footerWrap} fixed>
                             <View style={s.footer}>
                                 <Text style={s.footerLine}>Report generated on {today}</Text>
-                                <Text style={s.footerLine}>System developed by: Matokeo</Text>
+                                <Text style={s.footerLine}>System developed by: Alex Otieno</Text>
                                 <Text>This document is electronically generated</Text>
                             </View>
                         </View>
@@ -373,7 +373,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                     <View style={s.footerWrap} fixed>
                         <View style={s.footer}>
                             <Text style={s.footerLine}>Report generated on {today}</Text>
-                            <Text style={s.footerLine}>System developed by: Matokeo</Text>
+                            <Text style={s.footerLine}>System developed by: Alex Otieno</Text>
                             <Text>This document is electronically generated</Text>
                         </View>
                     </View>
