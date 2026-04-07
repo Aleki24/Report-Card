@@ -158,14 +158,13 @@ export function aggregateStudentPerformance(
             subjectName: subjectNames[m.subject_id] || ''
         }));
         
-        if (marksWithNames.length >= 8) {
-            const selectedMarks = select844Subjects(marksWithNames, scales || []);
-            marksToProcess = selectedMarks as ExamMarkWithDetails[];
-            selectedSubjectIds = selectedMarks.map(m => m.subject_id);
-            used844Selection = true;
-        } else {
-            selectedSubjectIds = marks.map(m => m.subject_id);
-        }
+        // FIX 1: Always run selection — select844Subjects handles <=7 internally
+        const selectedMarks = select844Subjects(marksWithNames, scales || []);
+        marksToProcess = selectedMarks as ExamMarkWithDetails[];
+        selectedSubjectIds = selectedMarks.map(m => m.subject_id);
+        used844Selection = true;
+    } else {
+        selectedSubjectIds = marks.map(m => m.subject_id);
     }
 
     const totalScore = marksToProcess.reduce((sum, mark) => sum + mark.raw_score, 0);
@@ -417,12 +416,9 @@ function identifySubjectCategory(subjectName: string): SubjectCategory {
 export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingScale[]): MarkWithSubjectName[] {
     if (!marks || marks.length === 0) return marks;
     
-    const numSubjects = marks.length;
-    
-    if (numSubjects <= 7) {
-        return marks;
-    }
-    
+    // If 7 or fewer subjects, no selection needed — return all as-is
+    if (marks.length <= 7) return marks;
+
     const marksWithCategory = marks.map(m => {
         // Use user-selected grade_symbol for points, not percentage-based
         const pts = getPointsFromGrade((m as any).grade_symbol || '');
@@ -441,38 +437,42 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     
     const selected: MarkWithSubjectName[] = [];
     
-    // Step 1: Always include all languages
+    // Step 1: Always include all languages (English + Kiswahili)
     selected.push(...languages);
     
     // Step 2: Always include mathematics
     selected.push(...mathematics);
     
-    // Step 3: Sciences - if 2 or fewer, include all (sorted); if 3+, include best 2 (SORT BEFORE SLICE)
+    // Step 3: Sciences - best 2 if 3+, all if 2 or fewer
     const sortedSciences = sortByPointsDesc(sciences);
     if (sciences.length <= 2) {
-        selected.push(...sortedSciences); // FIX: use sorted array
+        selected.push(...sortedSciences);
     } else {
         selected.push(sortedSciences[0], sortedSciences[1]);
     }
     
-    // Step 4: Humanities - include best 1 (SORT BEFORE SLICE)
+    // Step 4: Humanities - best 1 always
     if (humanities.length > 0) {
         const sortedHumanities = sortByPointsDesc(humanities);
         selected.push(sortedHumanities[0]);
     }
     
-    // Step 5: Technicals - only include best 1 if 8+ subjects total (SORT BEFORE SLICE)
-    if (technicals.length > 0 && numSubjects >= 8) {
+    // FIX 2: Technicals - best 1 always (removed numSubjects >= 8 gate)
+    if (technicals.length > 0) {
         const sortedTechnicals = sortByPointsDesc(technicals);
         selected.push(sortedTechnicals[0]);
     }
     
-    // If still under 7, fill with remaining best subjects by points
-    const remainingSorted = sortByPointsDesc([...sciences, ...humanities, ...technicals]);
-    
-    for (const m of remainingSorted) {
-        if (!selected.includes(m) && selected.length < 7) {
-            selected.push(m);
+    // FIX 3: Fill-up only from extra technicals (index 1+)
+    // Never re-add from sciences or humanities — they are capped by design
+    if (selected.length < 7 && technicals.length > 1) {
+        const usedIds = new Set(selected.map(m => m.subject_id));
+        const extraTechnicals = sortByPointsDesc(technicals).slice(1);
+        for (const m of extraTechnicals) {
+            if (!usedIds.has(m.subject_id) && selected.length < 7) {
+                selected.push(m);
+                usedIds.add(m.subject_id);
+            }
         }
     }
     
