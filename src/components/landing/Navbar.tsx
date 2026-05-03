@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, BarChart3, Sun, Moon, Menu, X } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -23,15 +24,16 @@ export default function Navbar() {
       <div className="flex items-center justify-between" style={{ maxWidth: '1280px', margin: '0 auto' }}>
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div
-            className="w-11 h-11 rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-105"
+          <Image
+            src="/images/logo.jpg"
+            alt="Matokeo Logo"
+            width={44}
+            height={44}
+            className="rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
             style={{
-              background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-              boxShadow: '0 4px 20px rgba(212, 168, 83, 0.25)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
             }}
-          >
-            <BarChart3 className="w-5 h-5 text-white" />
-          </div>
+          />
           <span
             style={{
               fontFamily: 'var(--font-display)',

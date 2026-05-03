@@ -12,26 +12,26 @@
 }
 
 :root {
-  /* --- Color System: Midnight Slate (Dark) --- */
-  --color-bg: #0F1117;
-  --color-surface: #171B24;
-  --color-surface-raised: #1E2330;
-  --color-border: #2D3348;
-  --color-border-subtle: #242A3A;
+  /* --- Color System: Academic Navy & Green --- */
+  --color-bg: #0A1121;
+  --color-surface: #131B2F;
+  --color-surface-raised: #1E293B;
+  --color-border: #334155;
+  --color-border-subtle: #1E293B;
 
-  --color-text-primary: #E8EAF0;
-  --color-text-secondary: #8B92A8;
-  --color-text-muted: #5E6580;
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
 
-  --color-accent: #7C6BF0;
-  --color-accent-light: #A594FF;
-  --color-accent-glow: rgba(124, 107, 240, 0.12);
+  --color-accent: #22C55E;
+  --color-accent-light: #4ADE80;
+  --color-accent-glow: rgba(34, 197, 94, 0.15);
 
-  --color-success: #4ADE80;
-  --color-warning: #FBBF24;
-  --color-danger: #F87171;
+  --color-success: #22C55E;
+  --color-warning: #EAB308;
+  --color-danger: #EF4444;
 
-  --color-purple-500: #A78BFA;
+  --color-purple-500: #F97316;
 
   /* --- Typography --- */
   --font-display: 'Lora', Georgia, serif;

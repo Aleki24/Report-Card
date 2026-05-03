@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { BarChart3 } from 'lucide-react';
 
 export default function Footer() {
@@ -16,16 +17,13 @@ export default function Footer() {
         style={{ maxWidth: '1280px', margin: '0 auto', gap: '24px' }}
       >
         <div className="flex items-center" style={{ gap: '12px' }}>
-          <div
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: '36px',
-              height: '36px',
-              background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-            }}
-          >
-            <BarChart3 className="w-4 h-4 text-white" />
-          </div>
+          <Image
+            src="/images/logo.jpg"
+            alt="Matokeo Logo"
+            width={36}
+            height={36}
+            className="rounded-lg object-cover"
+          />
           <span
             style={{
               fontFamily: 'var(--font-display)',

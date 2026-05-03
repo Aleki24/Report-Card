@@ -434,7 +434,6 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
             ...m,
             category: identifySubjectCategory(m.subjectName || ''),
             points: pts,
-            percentage: pct
         };
     });
     
