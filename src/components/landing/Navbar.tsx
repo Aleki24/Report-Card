@@ -20,7 +20,15 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="relative z-10" style={{ padding: 'clamp(16px, 3vw, 24px) clamp(16px, 5vw, 48px)' }}>
+    <nav 
+      className="sticky top-0 z-50 backdrop-blur-xl" 
+      style={{ 
+        padding: 'clamp(16px, 3vw, 24px) clamp(16px, 5vw, 48px)',
+        background: 'var(--color-bg)',
+        backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)',
+        borderBottom: '1px solid var(--color-border-subtle)'
+      }}
+    >
       <div className="flex items-center justify-between" style={{ maxWidth: '1280px', margin: '0 auto' }}>
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
@@ -64,9 +72,9 @@ export default function Navbar() {
             style={{
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-body)',
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
               fontWeight: 500,
-              padding: '10px 20px',
+              padding: '8px 16px',
               letterSpacing: '0.01em',
             }}
           >
@@ -80,9 +88,9 @@ export default function Navbar() {
               background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
               color: '#1A1816',
               fontFamily: 'var(--font-body)',
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
               fontWeight: 600,
-              padding: '10px 20px',
+              padding: '8px 16px',
               gap: '8px',
               letterSpacing: '0.01em',
               boxShadow: '0 2px 12px rgba(212, 168, 83, 0.2)',

@@ -47,7 +47,7 @@ export default function HeroSection() {
             style={{
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
-              fontSize: 'clamp(2rem, 5.5vw, 5rem)',
+              fontSize: 'clamp(1.75rem, 4.5vw, 4rem)',
               lineHeight: 1.08,
               letterSpacing: '-0.02em',
               color: 'var(--color-text-primary)',
@@ -67,7 +67,7 @@ export default function HeroSection() {
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-body)',
               fontWeight: 400,
-              fontSize: 'clamp(1rem, 1.8vw, 1.25rem)',
+              fontSize: 'clamp(0.9375rem, 1.5vw, 1.125rem)',
               lineHeight: 1.7,
               maxWidth: '560px',
               letterSpacing: '0.01em',
@@ -88,8 +88,8 @@ export default function HeroSection() {
                 color: '#1A1816',
                 fontFamily: 'var(--font-body)',
                 fontWeight: 600,
-                fontSize: '1rem',
-                padding: 'clamp(14px, 2vw, 16px) clamp(24px, 3vw, 28px)',
+                fontSize: '0.875rem',
+                padding: 'clamp(10px, 1.5vw, 12px) clamp(18px, 2.5vw, 22px)',
                 gap: '12px',
                 letterSpacing: '0.01em',
                 boxShadow: '0 4px 24px rgba(212, 168, 83, 0.3)',
@@ -106,8 +106,8 @@ export default function HeroSection() {
                 color: 'var(--color-text-primary)',
                 fontFamily: 'var(--font-body)',
                 fontWeight: 500,
-                fontSize: '1rem',
-                padding: 'clamp(14px, 2vw, 16px) clamp(24px, 3vw, 28px)',
+                fontSize: '0.875rem',
+                padding: 'clamp(10px, 1.5vw, 12px) clamp(18px, 2.5vw, 22px)',
                 gap: '12px',
                 background: 'transparent',
                 letterSpacing: '0.01em',
@@ -187,7 +187,7 @@ export default function HeroSection() {
                       style={{
                         color: 'var(--color-text-primary)',
                         fontFamily: 'var(--font-body)',
-                        fontSize: '0.875rem',
+                        fontSize: '0.8125rem',
                         fontWeight: 700,
                         marginBottom: '2px',
                         letterSpacing: '0.01em',
@@ -199,7 +199,7 @@ export default function HeroSection() {
                       style={{
                         color: 'var(--color-text-muted)',
                         fontFamily: 'var(--font-body)',
-                        fontSize: '0.75rem',
+                        fontSize: '0.6875rem',
                         letterSpacing: '0.02em',
                       }}
                     >

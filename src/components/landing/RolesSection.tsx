@@ -52,7 +52,7 @@ export default function RolesSection() {
             style={{
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
-              fontSize: 'clamp(1.75rem, 4vw, 3.2rem)',
+              fontSize: 'clamp(1.5rem, 3.5vw, 2.75rem)',
               lineHeight: 1.12,
               letterSpacing: '-0.02em',
               color: 'var(--color-text-primary)',
@@ -67,7 +67,7 @@ export default function RolesSection() {
             style={{
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-body)',
-              fontSize: 'clamp(0.9375rem, 1.6vw, 1.125rem)',
+              fontSize: 'clamp(0.875rem, 1.4vw, 1rem)',
               lineHeight: 1.7,
               maxWidth: '480px',
               letterSpacing: '0.01em',
@@ -118,7 +118,7 @@ export default function RolesSection() {
               style={{
                 color: 'var(--color-text-primary)',
                 fontFamily: 'var(--font-display)',
-                fontSize: 'clamp(1.25rem, 2vw, 1.5rem)',
+                fontSize: 'clamp(1.125rem, 1.8vw, 1.25rem)',
                 fontWeight: 700,
                 marginTop: '8px',
                 marginBottom: '16px',
@@ -148,7 +148,7 @@ export default function RolesSection() {
                   style={{
                     color: 'var(--color-text-secondary)',
                     fontFamily: 'var(--font-body)',
-                    fontSize: '0.875rem',
+                    fontSize: '0.8125rem',
                     gap: '12px',
                     letterSpacing: '0.01em',
                   }}
@@ -210,7 +210,7 @@ export default function RolesSection() {
               style={{
                 color: 'var(--color-text-primary)',
                 fontFamily: 'var(--font-display)',
-                fontSize: 'clamp(1.25rem, 2vw, 1.5rem)',
+                fontSize: 'clamp(1.125rem, 1.8vw, 1.25rem)',
                 fontWeight: 700,
                 marginTop: '8px',
                 marginBottom: '16px',
@@ -240,7 +240,7 @@ export default function RolesSection() {
                   style={{
                     color: 'var(--color-text-secondary)',
                     fontFamily: 'var(--font-body)',
-                    fontSize: '0.875rem',
+                    fontSize: '0.8125rem',
                     gap: '12px',
                     letterSpacing: '0.01em',
                   }}

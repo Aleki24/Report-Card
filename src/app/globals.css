@@ -9,6 +9,12 @@
   --breakpoint-md: 769px;
   --breakpoint-lg: 1025px;
   --breakpoint-xl: 1201px;
+
+  /* Map Tailwind blue to theme accent for dashboard components */
+  --color-blue-300: var(--color-accent-light);
+  --color-blue-400: var(--color-accent);
+  --color-blue-500: var(--color-accent);
+  --color-blue-600: var(--color-accent-light);
 }
 
 :root {
@@ -59,25 +65,25 @@
 /* LIGHT THEME OVERRIDES          */
 /* ============================== */
 :root[data-theme="light"] {
-  --color-bg: oklch(0.9777 0.0041 301.4256);
-  --color-surface: oklch(1.0000 0 0);
-  --color-surface-raised: oklch(0.8906 0.0139 299.7754);
-  --color-border: oklch(0.8447 0.0226 300.1421);
-  --color-border-subtle: oklch(0.9329 0.0124 301.2783);
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F1F5F9;
+  --color-border: #CBD5E1;
+  --color-border-subtle: #E2E8F0;
 
-  --color-text-primary: oklch(0.3651 0.0325 287.0807);
-  --color-text-secondary: oklch(0.5288 0.0375 290.7895);
-  --color-text-muted: oklch(0.5288 0.0375 290.7895);
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748B;
 
-  --color-accent: oklch(0.6104 0.0767 299.7335);
-  --color-accent-light: oklch(0.7889 0.0802 359.9375);
-  --color-accent-glow: oklch(0.6104 0.0767 299.7335 / 0.08);
+  --color-accent: #16A34A;
+  --color-accent-light: #22C55E;
+  --color-accent-glow: rgba(22, 163, 74, 0.1);
 
-  --color-success: #3D8B5A;
-  --color-warning: #BF8C30;
-  --color-danger: oklch(0.6332 0.1578 22.6734);
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
 
-  --color-purple-500: #7C5DC0;
+  --color-purple-500: #EA580C;
 }
 
 * {

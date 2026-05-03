@@ -68,7 +68,7 @@ export default function CTASection() {
               style={{
                 fontFamily: 'var(--font-display)',
                 fontWeight: 700,
-                fontSize: 'clamp(1.75rem, 4.5vw, 3.5rem)',
+                fontSize: 'clamp(1.5rem, 3.5vw, 2.75rem)',
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
                 color: 'var(--color-text-primary)',
@@ -84,7 +84,7 @@ export default function CTASection() {
               style={{
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 'clamp(0.9375rem, 1.6vw, 1.125rem)',
+                fontSize: 'clamp(0.875rem, 1.4vw, 1rem)',
                 lineHeight: 1.7,
                 marginBottom: '40px',
                 maxWidth: '540px',
@@ -104,8 +104,8 @@ export default function CTASection() {
                 color: '#1A1816',
                 fontFamily: 'var(--font-body)',
                 fontWeight: 600,
-                fontSize: '1rem',
-                padding: 'clamp(14px, 2vw, 16px) clamp(28px, 3vw, 32px)',
+                fontSize: '0.875rem',
+                padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
                 gap: '12px',
                 letterSpacing: '0.01em',
                 boxShadow: '0 4px 30px rgba(212, 168, 83, 0.35)',
