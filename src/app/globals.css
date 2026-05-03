@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;1,9..40,400&family=Space+Grotesk:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
@@ -11,30 +12,32 @@
 }
 
 :root {
-  /* --- Color System: Deep Academic Navy --- */
-  --color-bg: #0B1120;
-  --color-surface: #111827;
-  --color-surface-raised: #1F2937;
-  --color-border: #4B5563; /* slightly higher contrast border */
-  --color-border-subtle: #374151;
+  /* --- Color System: Midnight Slate (Dark) --- */
+  --color-bg: #0F1117;
+  --color-surface: #171B24;
+  --color-surface-raised: #1E2330;
+  --color-border: #2D3348;
+  --color-border-subtle: #242A3A;
 
-  --color-text-primary: #F9FAFB;
-  --color-text-secondary: #9CA3AF;
-  --color-text-muted: #6B7280;
+  --color-text-primary: #E8EAF0;
+  --color-text-secondary: #8B92A8;
+  --color-text-muted: #5E6580;
 
-  --color-accent: #3B82F6;
-  --color-accent-light: #60A5FA;
-  --color-accent-glow: rgba(59, 130, 246, 0.15);
+  --color-accent: #7C6BF0;
+  --color-accent-light: #A594FF;
+  --color-accent-glow: rgba(124, 107, 240, 0.12);
 
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
+  --color-success: #4ADE80;
+  --color-warning: #FBBF24;
+  --color-danger: #F87171;
+
+  --color-purple-500: #A78BFA;
 
   /* --- Typography --- */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Lora', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
 
-  /* --- Spacing Rhythm (adjusted for a more spacious, premium layout) --- */
+  /* --- Spacing Rhythm --- */
   --space-1: 6px;
   --space-2: 12px;
   --space-3: 16px;
@@ -56,23 +59,25 @@
 /* LIGHT THEME OVERRIDES          */
 /* ============================== */
 :root[data-theme="light"] {
-  --color-bg: #F3F4F6;
-  --color-surface: #FFFFFF;
-  --color-surface-raised: #F9FAFB;
-  --color-border: #D1D5DB; /* elevated contrast for borders */
-  --color-border-subtle: #E5E7EB;
+  --color-bg: oklch(0.9777 0.0041 301.4256);
+  --color-surface: oklch(1.0000 0 0);
+  --color-surface-raised: oklch(0.8906 0.0139 299.7754);
+  --color-border: oklch(0.8447 0.0226 300.1421);
+  --color-border-subtle: oklch(0.9329 0.0124 301.2783);
 
-  --color-text-primary: #111827;
-  --color-text-secondary: #4B5563;
-  --color-text-muted: #9CA3AF;
+  --color-text-primary: oklch(0.3651 0.0325 287.0807);
+  --color-text-secondary: oklch(0.5288 0.0375 290.7895);
+  --color-text-muted: oklch(0.5288 0.0375 290.7895);
 
-  --color-accent: #3B82F6;
-  --color-accent-light: #2563EB;
-  --color-accent-glow: rgba(59, 130, 246, 0.1);
+  --color-accent: oklch(0.6104 0.0767 299.7335);
+  --color-accent-light: oklch(0.7889 0.0802 359.9375);
+  --color-accent-glow: oklch(0.6104 0.0767 299.7335 / 0.08);
 
-  --color-success: #059669;
-  --color-warning: #D97706;
-  --color-danger: #DC2626;
+  --color-success: #3D8B5A;
+  --color-warning: #BF8C30;
+  --color-danger: oklch(0.6332 0.1578 22.6734);
+
+  --color-purple-500: #7C5DC0;
 }
 
 * {
@@ -439,3 +444,101 @@ select.input-field {
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
+
+/* ============================================= */
+/* HOMEPAGE PREMIUM ANIMATIONS                   */
+/* ============================================= */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  20% { transform: translate(-15%, 5%); }
+  30% { transform: translate(7%, -25%); }
+  40% { transform: translate(-5%, 25%); }
+  50% { transform: translate(-15%, 10%); }
+  60% { transform: translate(15%, 0%); }
+  70% { transform: translate(0%, 15%); }
+  80% { transform: translate(3%, 35%); }
+  90% { transform: translate(-10%, 10%); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out both;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.7s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.6s ease-out both;
+}
+
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-300 { animation-delay: 300ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+.animation-delay-600 { animation-delay: 600ms; }
+.animation-delay-700 { animation-delay: 700ms; }
+.animation-delay-800 { animation-delay: 800ms; }
+.animation-delay-900 { animation-delay: 900ms; }
+.animation-delay-1000 { animation-delay: 1000ms; }
+.animation-delay-1200 { animation-delay: 1200ms; }
+.animation-delay-1400 { animation-delay: 1400ms; }

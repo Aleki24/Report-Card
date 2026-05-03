@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       name: e.name,
       exam_type: e.exam_type,
       max_score: e.max_score,
+      subject_id: e.subject_id,
       subject_name: e.subjects?.name || 'N/A',
       grade_name: e.grades?.name_display || 'N/A',
       grade_stream_id: e.grade_stream_id,

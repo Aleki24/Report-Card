@@ -124,7 +124,10 @@ export function aggregateStudentPerformance(
     let selectedSubjectIds: string[] = [];
     let used844Selection = false;
     
-    if (subjectNames && Object.keys(subjectNames).length > 0) {
+    // Only apply 844 selection for KCSE system (grades 7-12, form 1-4), not for CBC
+    const isKCSE = gradingSystemType !== 'CBC';
+    
+    if (isKCSE && subjectNames && Object.keys(subjectNames).length > 0) {
         const marksWithNames: MarkWithSubjectName[] = marks.map(m => ({
             ...m,
             subjectName: subjectNames[m.subject_id] || ''
@@ -135,6 +138,7 @@ export function aggregateStudentPerformance(
             marksToProcess = selectedMarks as ExamMarkWithDetails[];
             selectedSubjectIds = selectedMarks.map(m => m.subject_id);
             used844Selection = true;
+            console.log('[aggregateStudentPerformance] 844 Selection applied:', marksWithNames.length, '->', selectedMarks.length, 'subjects');
         } else {
             selectedSubjectIds = marks.map(m => m.subject_id);
         }
@@ -376,7 +380,8 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
         return {
             ...m,
             category: identifySubjectCategory(m.subjectName || ''),
-            points: pts
+            points: pts,
+            percentage: pct
         };
     });
     
@@ -423,6 +428,8 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
             selected.push(m);
         }
     }
+    
+    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', selected.length, 'Categories:', selected.map(s => `${s.subjectName}(${s.points})`).join(', '));
     
     return selected;
 }

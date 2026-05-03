@@ -11,7 +11,9 @@ interface ExamOption {
     name: string;
     exam_type: string;
     max_score: number;
+    subject_id: string;
     subject_name: string;
+    grade_id: string;
     grade_name: string;
 }
 
@@ -20,9 +22,9 @@ interface GradeItem { id: string; name_display: string; code: string; academic_l
 interface TermItem { id: string; name: string; academic_year_id: string; }
 interface StreamItem { id: string; name: string; full_name: string; grade_id: string; }
 interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; category?: string; }
-interface MySubject { id: string; code: string; name: string; academic_level_id: string; category?: string; exams?: { id: string; name: string; exam_type: string; max_score: number; }[]; }
+interface MySubject { id: string; code: string; name: string; academic_level_id: string; category?: string; exams?: ExamOption[]; }
 
-const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER'];
+const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'END TERM', 'OPENER'];
 
 export default function MarksPage() {
     const supabase = createSupabaseBrowserClient();
@@ -34,6 +36,11 @@ export default function MarksPage() {
     const [exams, setExams] = useState<ExamOption[]>([]);
     const [selectedExamId, setSelectedExamId] = useState('');
     const [loading, setLoading] = useState(true);
+
+    // Exam filters
+    const [filterGradeId, setFilterGradeId] = useState('');
+    const [filterSubjectId, setFilterSubjectId] = useState('');
+    const [filterExamType, setFilterExamType] = useState('');
 
     // Subject teacher view state
     const [mySubjects, setMySubjects] = useState<MySubject[]>([]);
@@ -107,6 +114,22 @@ export default function MarksPage() {
     }, []);
 
     useEffect(() => { fetchExams(); }, [fetchExams]);
+
+    // Fetch dropdown data for filters on page load
+    const fetchFilterDropdowns = useCallback(async () => {
+        try {
+            const res = await fetch('/api/admin/academic-structure');
+            const data = await res.json();
+            if (res.ok) {
+                if (data.subjects) setSubjects(data.subjects);
+                if (data.grades) setGrades(data.grades);
+            }
+        } catch (err) {
+            console.error('Error fetching filter dropdowns:', err);
+        }
+    }, []);
+
+    useEffect(() => { fetchFilterDropdowns(); }, [fetchFilterDropdowns]);
 
     // Fetch subject teacher's assigned subjects
     const fetchMySubjects = useCallback(async () => {
@@ -537,28 +560,74 @@ export default function MarksPage() {
                 </div>
 
                 {/* Exam Selector */}
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Exam:</label>
+                <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
+                    <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Filter:</label>
                     <select
-                        className="input-field flex-1 md:w-64"
-                        value={selectedExamId}
-                        onChange={(e) => setSelectedExamId(e.target.value)}
-                        disabled={loading || exams.length === 0}
+                        className="input-field w-32"
+                        value={filterGradeId}
+                        onChange={(e) => { setFilterGradeId(e.target.value); setSelectedExamId(''); }}
                     >
-                        {loading ? (
-                            <option value="">Loading...</option>
-                        ) : exams.length === 0 ? (
-                            <option value="">No exams — click &quot;+ Create Exam&quot;</option>
-                        ) : (
-                            exams.map(exam => (
-                                <option key={exam.id} value={exam.id}>
-                                    {exam.name} — {exam.subject_name || 'N/A'} ({exam.grade_name || 'N/A'})
-                                </option>
-                            ))
-                        )}
+                        <option value="">All Grades</option>
+                        {grades.map(g => (
+                            <option key={g.id} value={g.id}>{g.name_display}</option>
+                        ))}
+                    </select>
+                    <select
+                        className="input-field w-32"
+                        value={filterSubjectId}
+                        onChange={(e) => { setFilterSubjectId(e.target.value); setSelectedExamId(''); }}
+                    >
+                        <option value="">All Subjects</option>
+                        {subjects.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                    <select
+                        className="input-field w-28"
+                        value={filterExamType}
+                        onChange={(e) => { setFilterExamType(e.target.value); setSelectedExamId(''); }}
+                    >
+                        <option value="">All Types</option>
+                        {EXAM_TYPES.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                        ))}
                     </select>
                 </div>
             </div>
+
+                {/* Filtered exams for selection */}
+                {(() => {
+                    const filteredExams = exams.filter(e => {
+                        if (filterGradeId && e.grade_id !== filterGradeId) return false;
+                        if (filterSubjectId && e.subject_id !== filterSubjectId) return false;
+                        if (filterExamType && e.exam_type !== filterExamType) return false;
+                        return true;
+                    });
+
+                    return (
+                    <div className="flex items-center gap-3 w-full md:w-auto mb-4">
+                        <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Exam:</label>
+                        <select
+                            className="input-field flex-1 md:w-64"
+                            value={selectedExamId}
+                            onChange={(e) => setSelectedExamId(e.target.value)}
+                            disabled={loading || filteredExams.length === 0}
+                        >
+                            {loading ? (
+                                <option value="">Loading...</option>
+                            ) : filteredExams.length === 0 ? (
+                                <option value="">No matching exams</option>
+                            ) : (
+                                filteredExams.map(exam => (
+                                    <option key={exam.id} value={exam.id}>
+                                        {exam.name} — {exam.subject_name || 'N/A'} ({exam.grade_name || 'N/A'})
+                                    </option>
+                                ))
+                            )}
+                        </select>
+                    </div>
+                );
+            })()}
 
             {/* Selected Exam Info */}
             {selectedExam && (
