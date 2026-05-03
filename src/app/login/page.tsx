@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
     const router = useRouter();
+    const formId = useId();
 
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
@@ -17,17 +18,28 @@ export default function LoginPage() {
         setError('');
         setLoading(true);
 
-        const result = await signIn('credentials', {
-            identifier: identifier.trim(),
-            password,
-            redirect: false,
-        });
+        try {
+            const result = await signIn('credentials', {
+                identifier: identifier.trim(),
+                password,
+                redirect: false,
+            });
 
-        if (result?.error) {
-            setError(result.error);
+            console.log('SignIn result:', result);
+
+            if (result?.error) {
+                setError(result.error);
+                setLoading(false);
+            } else if (result?.ok) {
+                router.push('/dashboard');
+            } else {
+                setError('Login failed unexpectedly');
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('Login error:', err);
+            setError('An unexpected error occurred');
             setLoading(false);
-        } else {
-            router.push('/dashboard');
         }
     };
 
@@ -93,7 +105,7 @@ export default function LoginPage() {
                         )}
 
                         <div style={{ marginBottom: 'var(--space-5)' }}>
-                            <label style={{
+                            <label htmlFor={`${formId}-identifier`} style={{
                                 display: 'block',
                                 fontSize: 13,
                                 fontWeight: 500,
@@ -103,6 +115,7 @@ export default function LoginPage() {
                                 Username or Email
                             </label>
                             <input
+                                id={`${formId}-identifier`}
                                 className="input-field"
                                 style={{ width: '100%' }}
                                 type="text"
@@ -111,11 +124,12 @@ export default function LoginPage() {
                                 onChange={e => setIdentifier(e.target.value)}
                                 required
                                 autoFocus
+                                suppressHydrationWarning
                             />
                         </div>
 
                         <div style={{ marginBottom: 'var(--space-6)' }}>
-                            <label style={{
+                            <label htmlFor={`${formId}-password`} style={{
                                 display: 'block',
                                 fontSize: 13,
                                 fontWeight: 500,
@@ -125,6 +139,7 @@ export default function LoginPage() {
                                 Password
                             </label>
                             <input
+                                id={`${formId}-password`}
                                 className="input-field"
                                 style={{ width: '100%' }}
                                 type="password"
@@ -132,6 +147,7 @@ export default function LoginPage() {
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
                                 required
+                                suppressHydrationWarning
                             />
                         </div>
 

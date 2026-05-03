@@ -7,6 +7,7 @@ import {
     generateFeedback,
     getGradeFromScales,
     getPointsFromScales,
+    getPointsFromGrade,
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
@@ -91,9 +92,22 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
 
         const firstAcademicLevelId = students[0].academic_level_id;
-        const gradeCode = (students[0].grade_streams as any)?.full_name || '';
-        // Grade 9 and 10 are CBC, not KCSE
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        const streamName = (students[0].grade_streams as any)?.full_name || '';
+        const gradeId = (students[0].grade_streams as any)?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
+        
+        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase
@@ -108,19 +122,43 @@ export async function GET(
             } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
-
-            const { data: gradingSystem } = await supabase
+            
+            // Fetch grading systems for this academic level - get the one with scales
+            const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
-                .select('id')
-                .eq('academic_level_id', firstAcademicLevelId)
-                .limit(1)
-                .single();
+                .select('id, name')
+                .eq('academic_level_id', firstAcademicLevelId);
 
-            if (gradingSystem) {
+            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
+            let gradingSystemId: string | null = null;
+            if (allGradingSystems && allGradingSystems.length > 0) {
+                for (const gs of allGradingSystems) {
+                    const { count } = await supabase
+                        .from('grading_scales')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('grading_system_id', gs.id)
+                        .single();
+                    
+                    if (count && count > 0) {
+                        gradingSystemId = gs.id;
+                        break; // Found one with scales
+                    }
+                }
+                // Fallback: prefer system with "KCSE" or "Letter" in name
+                if (!gradingSystemId && allGradingSystems.length > 0) {
+                    const preferred = allGradingSystems.find((gs: any) => 
+                        gs.name?.toLowerCase().includes('kcse') || 
+                        gs.name?.toLowerCase().includes('letter')
+                    );
+                    gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
+                }
+            }
+
+            if (gradingSystemId) {
                 const { data: scales } = await supabase
                     .from('grading_scales')
                     .select('*')
-                    .eq('grading_system_id', gradingSystem.id)
+                    .eq('grading_system_id', gradingSystemId)
                     .order('order_index', { ascending: true });
 
                 if (scales) {
@@ -157,7 +195,6 @@ export async function GET(
 
         // 6. Fetch all marks and also ALL exams for this term and class
         const studentIds = students.map(s => s.id);
-        const gradeId = (students[0].grade_streams as any)?.grade_id;
 
         let marksQuery = supabase
             .from('exam_marks')
@@ -211,6 +248,8 @@ export async function GET(
         const marksByStudent: Record<string, any[]> = {};
         // Per-subject aggregation: subjectId -> { studentId -> pct }[]
         const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
+        // Build subjectNamesMap for 8-4-4 selection logic
+        const subjectNamesMap: Record<string, string> = {};
 
         for (const m of allMarks || []) {
             if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
@@ -223,6 +262,12 @@ export async function GET(
                 const maxScore = Number((m as any).exams.max_score);
                 const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
                 subjectAggs[subjectId].push({ studentId: m.student_id, pct });
+                
+                // Build subjectNamesMap
+                const sname = (m as any).exams?.subjects?.name;
+                if (sname && !subjectNamesMap[subjectId]) {
+                    subjectNamesMap[subjectId] = sname;
+                }
             }
         }
 
@@ -242,7 +287,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
                 remarks: m.remarks,
             }));
-            const perf = aggregateStudentPerformance(mapped, gradingScales);
+            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
             return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
@@ -279,7 +324,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
 
             // Resolve overall grade from total points (KCSE) or percentage (CBC)
             const isKCSE = gradingSystemType === 'KCSE';
@@ -325,9 +370,15 @@ export async function GET(
                     : (gradingScales.length > 0
                         ? getGradeFromScales(pct, gradingScales)
                         : '-');
-                const points = gradingScales.length > 0
-                    ? getPointsFromScales(pct, gradingScales)
-                    : undefined;
+                // Points: KCSE uses grade-based, CBC uses scale-based
+                let points: number | undefined;
+                if (gradingScales.length > 0) {
+                    if (gradingSystemType === 'KCSE') {
+                        points = m.grade_symbol ? getPointsFromGrade(m.grade_symbol) : getPointsFromScales(pct, gradingScales);
+                    } else {
+                        points = getPointsFromScales(pct, gradingScales);
+                    }
+                }
                 const rubric = m.rubric || ((gradingSystemType === 'CBC' && gradingScales.length > 0)
                     ? getRubricFromScales(pct, gradingScales)
                     : undefined);

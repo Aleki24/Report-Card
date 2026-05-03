@@ -1,28 +1,58 @@
 import type { ExamMark, GradingScale } from '../types';
 
-export const OVERALL_POINTS_GRADES = [
-    { symbol: 'A', min: 81, max: 84 },
-    { symbol: 'A-', min: 74, max: 80 },
-    { symbol: 'B+', min: 67, max: 73 },
-    { symbol: 'B', min: 60, max: 66 },
-    { symbol: 'B-', min: 53, max: 59 },
-    { symbol: 'C+', min: 46, max: 52 },
-    { symbol: 'C', min: 39, max: 45 },
-    { symbol: 'C-', min: 32, max: 38 },
-    { symbol: 'D+', min: 25, max: 31 },
-    { symbol: 'D', min: 18, max: 24 },
-    { symbol: 'D-', min: 11, max: 17 },
-    { symbol: 'E', min: 1, max: 10 },
+export const GRADE_TO_POINTS: Record<string, number> = {
+    'A': 12, 'A-': 11,
+    'B+': 10, 'B': 9, 'B-': 8,
+    'C+': 7, 'C': 6, 'C-': 5,
+    'D+': 4, 'D': 3, 'D-': 2,
+    'E': 1,
+};
+
+// KNEC mean points to overall grade scale (meanPoints = totalPoints / 7)
+export const MEAN_POINTS_GRADES = [
+    { symbol: 'A', min: 11.5 },
+    { symbol: 'A-', min: 10.5 },
+    { symbol: 'B+', min: 9.5 },
+    { symbol: 'B', min: 8.5 },
+    { symbol: 'B-', min: 7.5 },
+    { symbol: 'C+', min: 6.5 },
+    { symbol: 'C', min: 5.5 },
+    { symbol: 'C-', min: 4.5 },
+    { symbol: 'D+', min: 3.5 },
+    { symbol: 'D', min: 2.5 },
+    { symbol: 'D-', min: 1.5 },
+    { symbol: 'E', min: 0 },
 ];
 
-export function getOverallGradeFromPoints(totalPoints: number): string {
-    const match = OVERALL_POINTS_GRADES.find(g => totalPoints >= g.min && totalPoints <= g.max);
+export function getOverallGradeFromMeanPoints(meanPoints: number): string {
+    const match = MEAN_POINTS_GRADES.find(g => meanPoints >= g.min);
     return match?.symbol || '-';
+}
+
+export function getGradeFromPercentageSimple(percentage: number): string {
+    if (percentage >= 81) return 'A';
+    if (percentage >= 74) return 'A-';
+    if (percentage >= 67) return 'B+';
+    if (percentage >= 60) return 'B';
+    if (percentage >= 53) return 'B-';
+    if (percentage >= 46) return 'C+';
+    if (percentage >= 39) return 'C';
+    if (percentage >= 32) return 'C-';
+    if (percentage >= 25) return 'D+';
+    if (percentage >= 18) return 'D';
+    if (percentage >= 11) return 'D-';
+    if (percentage >= 7) return 'E';
+    return 'E';
+}
+
+export function getPointsFromGrade(grade: string): number {
+    return GRADE_TO_POINTS[grade?.trim()] ?? 0;
 }
 
 export interface ExamMarkWithDetails extends ExamMark {
     subject_id: string;
     max_score: number;
+    grade_symbol?: string;
 }
 
 export function calculatePercentage(score: number, totalPossible: number): number {
@@ -39,14 +69,12 @@ export function calculatePercentage(score: number, totalPossible: number): numbe
 export function getGradeFromScales(percentage: number, scales?: GradingScale[]): string {
     if (scales && scales.length > 0) {
         const rounded = Math.round(percentage);
-        console.log('[getGradeFromScales] Looking for:', rounded, 'scales:', scales.map(s => `${s.symbol}(${s.min_percentage}-${s.max_percentage})`));
         const match = scales.find(s =>
             rounded >= Number(s.min_percentage) && rounded <= Number(s.max_percentage)
         );
         if (match) return match.symbol;
-        return '-'; // Return placeholder if scales exist but there's a gap
+        return '-';
     }
-    // Fallback when no DB scales are available
     return getGradeFromPercentage(percentage);
 }
 
@@ -149,27 +177,43 @@ export function aggregateStudentPerformance(
 
     const subjectPercentages = marksToProcess.map(m => calculatePercentage(m.raw_score, m.max_score));
 
+    // Use grade-based points for KCSE, scale-based points for CBC
     let totalPoints = 0;
-    if (scales && scales.length > 0) {
+    if (gradingSystemType === 'KCSE') {
+        for (const mark of marksToProcess) {
+            const pts = getPointsFromGrade((mark as any).grade_symbol || '');
+            totalPoints += pts;
+        }
+    } else {
+        // CBC: use points from grading scales
         for (const mark of marksToProcess) {
             const pct = calculatePercentage(mark.raw_score, mark.max_score);
-            const pts = getPointsFromScales(pct, scales);
-            if (pts !== undefined) totalPoints += pts;
+            const pts = scales ? getPointsFromScales(pct, scales) : 0;
+            totalPoints += pts || 0;
         }
     }
 
     const numSubjects = marksToProcess.length;
     const meanPoints = numSubjects > 0 ? totalPoints / numSubjects : 0;
-    const maxPointsPerSubject = 12;
-    const avgPercentage = (meanPoints / maxPointsPerSubject) * 100;
+
+    const avgPercentage = numSubjects > 0 
+        ? subjectPercentages.reduce((a, b) => a + b, 0) / numSubjects 
+        : 0;
 
     const rawAverage = numSubjects > 0 ? totalScore / numSubjects : 0;
 
     const percentage = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
-    const gpa = getGPAFromPercentage(percentage);
-    const grade = scales ? getGradeFromScales(percentage, scales) : getGradeFromPercentage(percentage);
+    const gpa = getGPAFromPercentage(avgPercentage);
+    const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
-    const overallGrade = getOverallGradeFromPoints(totalPoints);
+    // overallGrade: KCSE uses mean points, CBC uses percentage-based grade
+    let overallGrade: string;
+    if (gradingSystemType === 'KCSE') {
+        overallGrade = getOverallGradeFromMeanPoints(meanPoints);
+    } else {
+        // CBC: use the grade derived from percentage
+        overallGrade = grade;
+    }
 
     return {
         totalScore,
@@ -346,6 +390,10 @@ export interface MarkWithSubjectName extends ExamMarkWithDetails {
     points?: number;
 }
 
+function sortByPointsDesc(arr: MarkWithSubjectName[]): MarkWithSubjectName[] {
+    return [...arr].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
+}
+
 function identifySubjectCategory(subjectName: string): SubjectCategory {
     const name = subjectName.toLowerCase().trim();
     
@@ -356,10 +404,15 @@ function identifySubjectCategory(subjectName: string): SubjectCategory {
     if (name.includes('chemistry')) return 'SCIENCE';
     if (name.includes('biology')) return 'SCIENCE';
     if (name.includes('geography')) return 'HUMANITY';
-    if (name.includes('history') || name.includes('religious') || name.includes('cre')) return 'HUMANITY';
+    if (name.includes('history')) return 'HUMANITY';
+    if (name.includes('christian religious') || name === 'cre') return 'HUMANITY';
+    if (name.includes('islamic religious') || name === 'ire') return 'HUMANITY';
+    if (name.includes('hindu religious') || name === 'hre') return 'HUMANITY';
+    if (name.includes('religious')) return 'HUMANITY';
     if (name.includes('computer')) return 'TECHNICAL';
     if (name.includes('business')) return 'TECHNICAL';
     if (name.includes('agriculture')) return 'TECHNICAL';
+    if (name.includes('home science')) return 'TECHNICAL';
     if (name.includes('technical')) return 'TECHNICAL';
     
     return 'TECHNICAL';
@@ -375,8 +428,8 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     }
     
     const marksWithCategory = marks.map(m => {
-        const pct = calculatePercentage(m.raw_score, m.max_score);
-        const pts = m.subjectName ? getPointsFromScales(pct, scales) ?? 0 : 0;
+        // Use user-selected grade_symbol for points, not percentage-based
+        const pts = getPointsFromGrade((m as any).grade_symbol || '');
         return {
             ...m,
             category: identifySubjectCategory(m.subjectName || ''),
@@ -399,29 +452,28 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     // Step 2: Always include mathematics
     selected.push(...mathematics);
     
-    // Step 3: Sciences - if 2 or fewer, include all; if 3+, include best 2
-    const sortedSciences = [...sciences].sort((a, b) => b.points - a.points);
+    // Step 3: Sciences - if 2 or fewer, include all (sorted); if 3+, include best 2 (SORT BEFORE SLICE)
+    const sortedSciences = sortByPointsDesc(sciences);
     if (sciences.length <= 2) {
-        selected.push(...sciences);
+        selected.push(...sortedSciences); // FIX: use sorted array
     } else {
         selected.push(sortedSciences[0], sortedSciences[1]);
     }
     
-    // Step 4: Humanities - include best 1
+    // Step 4: Humanities - include best 1 (SORT BEFORE SLICE)
     if (humanities.length > 0) {
-        const sortedHumanities = [...humanities].sort((a, b) => b.points - a.points);
+        const sortedHumanities = sortByPointsDesc(humanities);
         selected.push(sortedHumanities[0]);
     }
     
-    // Step 5: Technicals - only include best 1 if 8+ subjects total
+    // Step 5: Technicals - only include best 1 if 8+ subjects total (SORT BEFORE SLICE)
     if (technicals.length > 0 && numSubjects >= 8) {
-        const sortedTechnicals = [...technicals].sort((a, b) => b.points - a.points);
+        const sortedTechnicals = sortByPointsDesc(technicals);
         selected.push(sortedTechnicals[0]);
     }
     
     // If still under 7, fill with remaining best subjects by points
-    const remainingSorted = [...sciences, ...humanities, ...technicals]
-        .sort((a, b) => b.points - a.points);
+    const remainingSorted = sortByPointsDesc([...sciences, ...humanities, ...technicals]);
     
     for (const m of remainingSorted) {
         if (!selected.includes(m) && selected.length < 7) {

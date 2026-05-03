@@ -6,6 +6,7 @@ import {
     calculatePercentage,
     getGradeFromScales,
     getGradeFromPercentage,
+    getGradeFromPercentageSimple,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -74,10 +75,22 @@ export async function GET(
         // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
         // G1-G6, G9-G10 use CBC style (rubric-based)
         const firstAcademicLevelId = students[0].academic_level_id;
-        const gradeCode = (students[0] as any)?.grade_streams?.full_name || '';
+        const streamName = (students[0] as any)?.grade_streams?.full_name || '';
+        const gradeId = (students[0] as any)?.grade_streams?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
         
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).single();
@@ -87,11 +100,40 @@ export async function GET(
             } else if (academicLevel) {
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
+            
+            // Fetch grading systems for this academic level - get the one with scales
+            const { data: allGradingSystems } = await supabase
+                .from('grading_systems')
+                .select('id, name')
+                .eq('academic_level_id', firstAcademicLevelId);
 
-            const { data: gradingSystem } = await supabase.from('grading_systems').select('id').eq('academic_level_id', firstAcademicLevelId).limit(1).single();
+            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
+            let gradingSystemId: string | null = null;
+            if (allGradingSystems && allGradingSystems.length > 0) {
+                for (const gs of allGradingSystems) {
+                    const { count } = await supabase
+                        .from('grading_scales')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('grading_system_id', gs.id)
+                        .single();
+                    
+                    if (count && count > 0) {
+                        gradingSystemId = gs.id;
+                        break; // Found one with scales
+                    }
+                }
+                // Fallback: prefer system with "KCSE" or "Letter" in name
+                if (!gradingSystemId && allGradingSystems.length > 0) {
+                    const preferred = allGradingSystems.find((gs: any) => 
+                        gs.name?.toLowerCase().includes('kcse') || 
+                        gs.name?.toLowerCase().includes('letter')
+                    );
+                    gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
+                }
+            }
 
-            if (gradingSystem) {
-                const { data: scales } = await supabase.from('grading_scales').select('*').eq('grading_system_id', gradingSystem.id).order('order_index', { ascending: true });
+            if (gradingSystemId) {
+                const { data: scales } = await supabase.from('grading_scales').select('*').eq('grading_system_id', gradingSystemId).order('order_index', { ascending: true });
                 if (scales) {
                     gradingScales = (scales as any[]).map(s => ({
                         ...s,
@@ -318,20 +360,11 @@ export async function GET(
             }
         }
 
-        const meanPercentage = studentsWithMarks.length > 0 ? (totalClassPercentage / studentsWithMarks.length) : 0;
+        const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0);
+        const meanPoints = studentsWithMarks.length > 0 ? Math.round(totalPointsSum / studentsWithMarks.length) : 0;
         
-        let meanGrade: string;
-        if (gradingSystemType === 'KCSE') {
-            const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + s.totalPoints, 0);
-            const meanPoints = studentsWithMarks.length > 0 ? (totalPointsSum / studentsWithMarks.length) : 0;
-            const { getOverallGradeFromPoints } = await import('@/lib/analytics');
-            meanGrade = getOverallGradeFromPoints(meanPoints);
-        } else {
-            meanGrade = gradingScales.length > 0 ? getGradeFromScales(meanPercentage, gradingScales) : '';
-        }
+        const meanGrade = gradingSystemType === 'KCSE' ? getGradeFromPercentageSimple(meanPoints) : '';
         
-        console.log('[Marksheet] Mean:', meanPercentage, 'MeanGrade:', meanGrade, 'System:', gradingSystemType);
-
         const markSheetData = {
             schoolName,
             schoolLogoUrl,
@@ -344,7 +377,7 @@ export async function GET(
             students: studentsData,
             gradeDistribution,
             meanGrade,
-            meanPercentage: Math.round(meanPercentage),
+            meanPoints,
             subjectStats,
             subjectRankings,
         };

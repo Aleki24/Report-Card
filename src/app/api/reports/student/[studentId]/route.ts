@@ -103,8 +103,22 @@ export async function GET(
 
         // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style
         // Grade 9 and 10 are CBC
-        const gradeCode = student.grade_streams?.full_name || '';
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/.test(gradeCode);
+        const streamName = student.grade_streams?.full_name || '';
+        const gradeId = student.grade_streams?.grade_id;
+        
+        // Fetch grade code from grades table
+        let gradeLevelCode = '';
+        if (gradeId) {
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            if (gradeData) gradeLevelCode = gradeData.code || '';
+        }
+        
+        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        // Check both stream name AND grade code for compatibility
+        const combinedCode = `${gradeLevelCode} ${streamName}`;
+        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
+                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
+                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (student.academic_level_id) {
             // Fetch the academic level code to determine KCSE vs CBC
@@ -121,19 +135,41 @@ export async function GET(
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
 
-            // Fetch grading scales for this academic level
-            const { data: gradingSystem } = await supabase
+            // Fetch grading systems for this academic level - get the one with scales
+            const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
-                .select('id')
-                .eq('academic_level_id', student.academic_level_id)
-                .limit(1)
-                .single();
+                .select('id, name')
+                .eq('academic_level_id', student.academic_level_id);
 
-            if (gradingSystem) {
+            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
+            let gradingSystemId: string | null = null;
+            if (allGradingSystems && allGradingSystems.length > 0) {
+                for (const gs of allGradingSystems) {
+                    const { data: scalesCount } = await supabase
+                        .from('grading_scales')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('grading_system_id', gs.id);
+                    
+                    if (scalesCount && (scalesCount as any).length > 0) {
+                        gradingSystemId = gs.id;
+                        break; // Found one with scales
+                    }
+                }
+                // Fallback: prefer system with "KCSE" or "Letter" in name
+                if (!gradingSystemId && allGradingSystems.length > 0) {
+                    const preferred = allGradingSystems.find((gs: any) => 
+                        gs.name?.toLowerCase().includes('kcse') || 
+                        gs.name?.toLowerCase().includes('letter')
+                    );
+                    gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
+                }
+            }
+
+            if (gradingSystemId) {
                 const { data: scales } = await supabase
                     .from('grading_scales')
                     .select('*')
-                    .eq('grading_system_id', gradingSystem.id)
+                    .eq('grading_system_id', gradingSystemId)
                     .order('order_index', { ascending: true });
 
                 if (scales) {
@@ -143,8 +179,6 @@ export async function GET(
         }
 
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
-        const gradeId = student.grade_streams?.grade_id;
-
         let examsQ = supabase
             .from('exams')
             .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
@@ -269,6 +303,7 @@ export async function GET(
         });
 
         const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
         
