@@ -16,7 +16,7 @@ export default function HeroSection() {
   const { theme } = useTheme();
 
   return (
-    <section style={{ padding: 'clamp(32px, 5vw, 72px) clamp(16px, 5vw, 48px) clamp(48px, 6vw, 96px)' }}>
+    <section style={{ padding: 'clamp(112px, 12vw, 152px) clamp(16px, 5vw, 48px) clamp(48px, 6vw, 96px)' }}>
       <div className="grid lg:grid-cols-12 items-center" style={{ maxWidth: '1280px', margin: '0 auto', gap: 'clamp(24px, 3vw, 48px)' }}>
         {/* Left Column — Text */}
         <div className="lg:col-span-7 text-center lg:text-left items-center lg:items-start" style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(16px, 2.5vw, 24px)' }}>

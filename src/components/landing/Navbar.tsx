@@ -21,7 +21,7 @@ export default function Navbar() {
 
   return (
     <nav 
-      className="sticky top-0 z-50 backdrop-blur-xl" 
+      className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-xl" 
       style={{ 
         padding: 'clamp(16px, 3vw, 24px) clamp(16px, 5vw, 48px)',
         background: 'var(--color-bg)',
