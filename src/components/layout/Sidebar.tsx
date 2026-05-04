@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
-import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen } from 'lucide-react';
+import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen, Home } from 'lucide-react';
 
 function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
     const { theme, toggleTheme } = useTheme();
@@ -45,6 +45,12 @@ interface NavItem {
 const allRoles: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
 
 const navItems: NavItem[] = [
+    {
+        label: 'Homepage',
+        href: '/',
+        roles: allRoles,
+        icon: <Home size={24} style={{ flexShrink: 0 }} />
+    },
     {
         label: 'Dashboard',
         href: '/dashboard',
@@ -151,12 +157,15 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 }}
             >
                 {/* Logo */}
-                <div style={{
+                <Link href="/" style={{
                     padding: 'var(--space-6)',
                     borderBottom: '1px solid var(--color-border)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 'var(--space-3)',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    transition: 'opacity 0.15s ease',
                 }}>
                     <div style={{
                         width: 36,
@@ -184,7 +193,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             </div>
                         </div>
                     )}
-                </div>
+                </Link>
 
                 {/* Navigation */}
                 <nav style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>

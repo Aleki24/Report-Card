@@ -85,11 +85,11 @@ function AdminDashboard() {
 
   return (
     <>
-      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3 mb-6">
+      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <div className="text-sm">
-          <h3 className="font-semibold mb-1">Welcome to the Admin Dashboard</h3>
-          <ul className="list-disc pl-4 space-y-1 opacity-90">
+          <h3 className="font-semibold mb-2 text-base">Welcome to the Admin Dashboard</h3>
+          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
             <li>Ensure you setup the <strong>Academic Structure</strong> and <strong>Calendar</strong> in Settings first.</li>
             <li>Create <strong>Users</strong> (Teachers/Students) and assign them to their respective roles and classes.</li>
             <li>Monitor school-wide performance through the analytics module.</li>
@@ -162,11 +162,11 @@ function ClassTeacherDashboard() {
 
   return (
     <>
-      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3 mb-6">
+      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <div className="text-sm">
-          <h3 className="font-semibold mb-1">Class Teacher Guide</h3>
-          <ul className="list-disc pl-4 space-y-1 opacity-90">
+          <h3 className="font-semibold mb-2 text-base">Class Teacher Guide</h3>
+          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
             <li>As a Class Teacher, you manage the students in your assigned homeroom stream.</li>
             <li>You are responsible for generating the final <strong>Report Cards</strong> at the end of the term.</li>
             <li>Use the <strong>Generate Reports</strong> section below to compile marks across all subjects for your class.</li>
@@ -234,11 +234,11 @@ function SubjectTeacherDashboard() {
 
   return (
     <>
-      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3 mb-6">
+      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <div className="text-sm">
-          <h3 className="font-semibold mb-1">Subject Teacher Guide</h3>
-          <ul className="list-disc pl-4 space-y-1 opacity-90">
+          <h3 className="font-semibold mb-2 text-base">Subject Teacher Guide</h3>
+          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
             <li>As a Subject Teacher, you create exams and enter marks for the subjects you teach.</li>
             <li>Go to <strong>Exams</strong> to schedule a new assessment for your subjects.</li>
             <li>Use the <strong>Enter Marks</strong> section below to record student scores.</li>
@@ -302,11 +302,11 @@ function StudentDashboard() {
 
   return (
     <>
-      <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3 mb-6">
+      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         <div className="text-sm">
-          <h3 className="font-semibold mb-1">Student Guide</h3>
-          <ul className="list-disc pl-4 space-y-1 opacity-90">
+          <h3 className="font-semibold mb-2 text-base">Student Guide</h3>
+          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
             <li>Welcome to your personalized student dashboard!</li>
             <li>View your academic progress, track your performance over time, and download your <strong>Report Cards</strong>.</li>
             <li>Check the <strong>My Analytics</strong> section to see detailed subject breakdowns.</li>

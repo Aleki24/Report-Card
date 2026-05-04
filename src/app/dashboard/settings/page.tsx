@@ -261,11 +261,11 @@ export default function SettingsPage() {
           {activeTab === 'academic' && (
             <>
               {/* Guide */}
-              <div className="col-span-1 lg:col-span-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
+              <div className="col-span-1 lg:col-span-3 my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 <div className="text-sm">
-                  <h3 className="font-semibold mb-1">How to setup Academic Structure:</h3>
-                  <ul className="list-disc pl-4 space-y-1 opacity-90">
+                  <h3 className="font-semibold mb-2 text-base">How to setup Academic Structure:</h3>
+                  <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li>Kenya&apos;s educational curricula and class grades are pre-configured for your convenience.</li>
                   </ul>
                 </div>
@@ -314,11 +314,11 @@ export default function SettingsPage() {
           {activeTab === 'grading' && (
             <div className="lg:col-span-3 flex flex-col gap-6">
               {/* Guide */}
-              <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
+              <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 <div className="text-sm">
-                  <h3 className="font-semibold mb-1">Understanding Grading Systems:</h3>
-                  <ul className="list-disc pl-4 space-y-1 opacity-90">
+                  <h3 className="font-semibold mb-2 text-base">Understanding Grading Systems:</h3>
+                  <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li>Grading systems and scales are pre-configured based on national standards (e.g., KNEC standard 12-point scale, CBC scale).</li>
                     <li>These grading scales are automatically applied when teachers enter exam scores.</li>
                   </ul>
@@ -373,11 +373,11 @@ export default function SettingsPage() {
           {activeTab === 'calendar' && (
             <div className="col-span-1 lg:col-span-3 flex flex-col gap-6">
               {/* Guide */}
-              <div className="bg-blue-500/10 border border-blue-500/20 text-blue-400 p-4 rounded-lg flex items-start gap-3">
+              <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                 <div className="text-sm">
-                  <h3 className="font-semibold mb-1">How to manage the Academic Calendar:</h3>
-                  <ul className="list-disc pl-4 space-y-1 opacity-90">
+                  <h3 className="font-semibold mb-2 text-base">How to manage the Academic Calendar:</h3>
+                  <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li><strong>Step 1:</strong> Add an Academic Year (e.g., 2026).</li>
                     <li><strong>Step 2:</strong> Add Terms (e.g., Term 1, Term 2) and assign them to the academic year.</li>
                     <li>Make sure term dates do not overlap to prevent issues with exam and report assignments.</li>
