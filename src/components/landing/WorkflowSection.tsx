@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, ListChecks, Printer } from 'lucide-react';
+import { Settings, Users, FileText } from 'lucide-react';
 
 export default function WorkflowSection() {
   return (
@@ -41,9 +41,9 @@ export default function WorkflowSection() {
               wordSpacing: '0.02em',
             }}
           >
-            From Blank Sheets to{' '}
+            From Setup to{' '}
             <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>
-              Finalized Reports
+              Complete Management
             </span>
           </h2>
           <p
@@ -57,7 +57,7 @@ export default function WorkflowSection() {
               wordSpacing: '0.02em',
             }}
           >
-            A streamlined, three-step workflow that takes you from initial setup to polished PDF report cards.
+            A streamlined workflow that takes your school from initial setup to fully managed academic operations.
           </p>
         </div>
 
@@ -68,21 +68,21 @@ export default function WorkflowSection() {
               step: '01',
               icon: Settings,
               title: 'Configure Structure',
-              desc: 'Admins define the academic year, terms, classes, subjects, and grading criteria reflecting the school\'s curriculum.',
+              desc: 'Admins set up the school profile, academic year, terms, classes, streams, subjects, and grading criteria to match the school\'s curriculum.',
               color: 'var(--color-accent)',
             },
             {
               step: '02',
-              icon: ListChecks,
-              title: 'Enter Marks',
-              desc: 'Teachers log in to rapidly input exam scores for their subjects. Real-time auto-save ensures no data is ever lost.',
+              icon: Users,
+              title: 'Manage People',
+              desc: 'Add students, teachers, and parents. Assign teachers to subjects and classes. Enroll students into streams. Link parents to their children.',
               color: 'var(--color-success)',
             },
             {
               step: '03',
-              icon: Printer,
-              title: 'Generate Reports',
-              desc: 'One click compiles scores, calculates rankings, and produces beautifully formatted PDF report cards at scale.',
+              icon: FileText,
+              title: 'Record & Report',
+              desc: 'Enter exam marks, track daily attendance, generate professional report cards, and analyze academic performance — all from one dashboard.',
               color: 'var(--color-warning)',
             },
           ].map((item, idx) => (

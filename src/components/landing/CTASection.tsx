@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ArrowRight, Award } from 'lucide-react';
+import { ArrowRight, Award, ChevronRight } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 export default function CTASection() {
@@ -76,8 +76,8 @@ export default function CTASection() {
                 wordSpacing: '0.02em',
               }}
             >
-              Streamline Your{' '}
-              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>Academic Processing</span>
+              Transform Your School&apos;s{' '}
+              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>Academic Management</span>
             </h2>
 
             <p
@@ -93,27 +93,46 @@ export default function CTASection() {
                 wordSpacing: '0.02em',
               }}
             >
-              Configure your school structure, manage grades securely, and generate comprehensive reports — all from a single dashboard.
+              Manage students, teachers, classes, exams, attendance, and report cards — all from a single, powerful dashboard built for Kenyan schools.
             </p>
 
-            <Link
-              href="/dashboard"
-              className="group inline-flex items-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
-              style={{
-                background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-                color: '#1A1816',
-                fontFamily: 'var(--font-body)',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
-                gap: '12px',
-                letterSpacing: '0.01em',
-                boxShadow: '0 4px 30px rgba(212, 168, 83, 0.35)',
-              }}
-            >
-              Go to Dashboard
-              <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
-            </Link>
+            <div className="flex flex-col sm:flex-row justify-center" style={{ gap: '16px' }}>
+              <Link
+                href="/dashboard"
+                className="group inline-flex items-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
+                style={{
+                  background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
+                  color: '#1A1816',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
+                  gap: '12px',
+                  letterSpacing: '0.01em',
+                  boxShadow: '0 4px 30px rgba(212, 168, 83, 0.35)',
+                }}
+              >
+                Go to Dashboard
+                <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+              </Link>
+              <Link
+                href="/features"
+                className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-[var(--color-accent)]"
+                style={{
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
+                  gap: '12px',
+                  background: 'transparent',
+                }}
+              >
+                Explore Features
+                <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
+              </Link>
+            </div>
           </div>
         </div>
       </div>

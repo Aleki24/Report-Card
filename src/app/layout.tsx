@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: 'Matokeo - Student Analytics Platform',
-  description: 'Comprehensive results analysis, mark entry, analytics generation, and downloadable PDF reports for teachers and schools.',
+  title: 'Matokeo — Modern School Management System',
+  description: 'Manage report cards, students, teachers, classes, exams, attendance, parents, and academic analytics from one powerful platform.',
 };
 
 export default function RootLayout({

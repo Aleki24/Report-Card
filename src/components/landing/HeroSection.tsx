@@ -4,11 +4,12 @@ import Link from 'next/link';
 import {
   ArrowRight,
   ChevronRight,
-  FileText,
+  Layers,
   ShieldCheck,
   Sparkles,
   TrendingUp,
   Zap,
+  FileText,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
@@ -37,13 +38,12 @@ export default function HeroSection() {
               <span
                 style={{ width: '32px', height: '1px', background: 'var(--color-accent)', display: 'inline-block' }}
               />
-              Academic Intelligence Platform
+              School Management Platform
             </span>
           </div>
 
           {/* Main Headline */}
           <h1
-
             style={{
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
@@ -54,15 +54,14 @@ export default function HeroSection() {
               wordSpacing: '0.02em',
             }}
           >
-            Where Every Mark{' '}
+            Modern School Management for{' '}
             <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>
-              Tells a Story
+              Smarter Schools
             </span>
           </h1>
 
           {/* Subtext */}
           <p
-
             style={{
               color: 'var(--color-text-secondary)',
               fontFamily: 'var(--font-body)',
@@ -74,8 +73,7 @@ export default function HeroSection() {
               wordSpacing: '0.02em',
             }}
           >
-            Matokeo transforms raw exam data into comprehensive, beautifully formatted report cards —
-            automating calculations, rankings, and insights for thousands of students in moments.
+            Manage report cards, students, teachers, classes, exams, attendance, parents, and academic records from one powerful platform.
           </p>
 
           {/* CTA Group */}
@@ -99,7 +97,7 @@ export default function HeroSection() {
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             <Link
-              href="/login"
+              href="/features"
               className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-[var(--color-accent)]"
               style={{
                 border: '1px solid var(--color-border)',
@@ -113,7 +111,7 @@ export default function HeroSection() {
                 letterSpacing: '0.01em',
               }}
             >
-              Login to Portal
+              Explore Features
               <ChevronRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" style={{ color: 'var(--color-text-muted)' }} />
             </Link>
           </div>
@@ -166,8 +164,8 @@ export default function HeroSection() {
               {/* Stats Grid */}
               <div className="grid grid-cols-2" style={{ gap: 'clamp(12px, 2vw, 16px)' }}>
                 {[
-                  { icon: ShieldCheck, label: 'Role-Based', sub: 'Secure Access', color: 'var(--color-accent)' },
-                  { icon: Zap, label: 'Real-Time', sub: 'Auto Calculations', color: 'var(--color-success)' },
+                  { icon: Layers, label: '10+ Modules', sub: 'Complete SMS', color: 'var(--color-accent)' },
+                  { icon: ShieldCheck, label: 'Role-Based', sub: 'Secure Access', color: 'var(--color-success)' },
                   { icon: FileText, label: 'PDF Export', sub: 'Report Cards', color: 'var(--color-warning)' },
                   { icon: TrendingUp, label: 'Analytics', sub: 'Deep Insights', color: 'var(--color-purple-500)' },
                 ].map((stat, idx) => (
@@ -218,7 +216,6 @@ export default function HeroSection() {
                   borderRadius: '9999px',
                   background: 'linear-gradient(90deg, transparent, var(--color-accent), transparent)',
                   backgroundSize: '200% 100%',
-
                 }}
               />
             </div>

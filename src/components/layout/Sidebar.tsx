@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
-import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen, Home } from 'lucide-react';
+import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen, Home, ClipboardList, CalendarCheck, Heart } from 'lucide-react';
 
 function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
     const { theme, toggleTheme } = useTheme();
@@ -58,25 +58,7 @@ const navItems: NavItem[] = [
         icon: <LayoutDashboard size={24} style={{ flexShrink: 0 }} />
     },
     {
-        label: 'Mark Entry',
-        href: '/dashboard/marks',
-        roles: ['ADMIN', 'SUBJECT_TEACHER'],
-        icon: <PenTool size={24} style={{ flexShrink: 0 }} />
-    },
-    {
-        label: 'Exam Results',
-        href: '/dashboard/exam-results',
-        roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
-        icon: <GraduationCap size={24} style={{ flexShrink: 0 }} />
-    },
-    {
-        label: 'Analytics',
-        href: '/dashboard/analytics',
-        roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
-        icon: <LineChart size={24} style={{ flexShrink: 0 }} />
-    },
-    {
-        label: 'Reports',
+        label: 'Report Cards',
         href: '/dashboard/reports',
         roles: ['ADMIN', 'CLASS_TEACHER'],
         icon: <FileText size={24} style={{ flexShrink: 0 }} />
@@ -88,16 +70,64 @@ const navItems: NavItem[] = [
         icon: <Users size={24} style={{ flexShrink: 0 }} />
     },
     {
-        label: 'My Results',
-        href: '/dashboard/my-results',
-        roles: ['STUDENT'],
-        icon: <Trophy size={24} style={{ flexShrink: 0 }} />
+        label: 'Teachers',
+        href: '/dashboard/teachers',
+        roles: ['ADMIN'],
+        icon: <GraduationCap size={24} style={{ flexShrink: 0 }} />
     },
     {
         label: 'Classes',
         href: '/dashboard/classes',
         roles: ['ADMIN'],
         icon: <School size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Subjects',
+        href: '/dashboard/subjects',
+        roles: ['ADMIN'],
+        icon: <BookOpen size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Exams',
+        href: '/dashboard/exams',
+        roles: ['ADMIN', 'SUBJECT_TEACHER'],
+        icon: <ClipboardList size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Mark Entry',
+        href: '/dashboard/marks',
+        roles: ['ADMIN', 'SUBJECT_TEACHER'],
+        icon: <PenTool size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Exam Results',
+        href: '/dashboard/exam-results',
+        roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
+        icon: <Trophy size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Attendance',
+        href: '/dashboard/attendance',
+        roles: ['ADMIN', 'CLASS_TEACHER'],
+        icon: <CalendarCheck size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Parents',
+        href: '/dashboard/parents',
+        roles: ['ADMIN'],
+        icon: <Heart size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'Analytics',
+        href: '/dashboard/analytics',
+        roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'],
+        icon: <LineChart size={24} style={{ flexShrink: 0 }} />
+    },
+    {
+        label: 'My Results',
+        href: '/dashboard/my-results',
+        roles: ['STUDENT'],
+        icon: <Trophy size={24} style={{ flexShrink: 0 }} />
     },
     {
         label: 'Users',
