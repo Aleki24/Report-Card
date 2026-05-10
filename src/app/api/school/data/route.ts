@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
           .from('students')
           .select(`
             id, admission_number, status, academic_level_id, current_grade_stream_id,
-            guardian_phone, guardian_name,
+            guardian_phone, guardian_name, guardian_email, gender, date_of_birth, date_enrolled, avatar_url,
             users!inner (first_name, last_name, email, school_id),
             grade_streams (id, full_name, grade_id)
           `)

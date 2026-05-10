@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
         const user_id = session.user.id;
         const body = await request.json();
-        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name } = body;
+        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth, avatar_url } = body;
 
         if (!first_name?.trim() || !last_name?.trim()) {
             return NextResponse.json({ error: 'First name and last name are required.' }, { status: 400 });
@@ -161,14 +161,20 @@ export async function POST(request: NextRequest) {
         }
 
         // 3. Insert into public.students
-        const { error: studentError } = await supabaseAdmin.from('students').insert({
+        const studentInsert: Record<string, any> = {
             id: userId,
             admission_number: finalAdmNo,
             current_grade_stream_id: grade_stream_id || null,
             academic_level_id: academic_level_id,
             guardian_phone: guardian_phone?.trim() || null,
             guardian_name: guardian_name?.trim() || null,
-        });
+            guardian_email: guardian_email?.trim() || null,
+            gender: gender || null,
+            date_of_birth: date_of_birth || null,
+        };
+        if (avatar_url) studentInsert.avatar_url = avatar_url;
+
+        const { error: studentError } = await supabaseAdmin.from('students').insert(studentInsert);
 
         if (studentError) {
             // Cleanup: delete user row

@@ -6,10 +6,10 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function DashboardContent({ children }: { children: React.ReactNode }) {
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(true);
     const { schoolName, profile, role } = useAuth();
 
-    const sidebarWidth = collapsed ? 72 : 260;
+    const sidebarWidth = 72; // Always use collapsed width — sidebar overlays on hover
     const displayName = schoolName || 'Matokeo';
 
     const needsSchoolSetup = role === 'ADMIN' && profile && !profile.school_id;

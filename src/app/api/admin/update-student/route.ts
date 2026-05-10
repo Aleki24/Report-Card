@@ -22,8 +22,12 @@ export async function PATCH(request: NextRequest) {
             admission_number, 
             guardian_phone, 
             guardian_name,
+            guardian_email,
+            gender,
+            date_of_birth,
             grade_stream_id,
-            status
+            status,
+            avatar_url,
         } = body;
 
         if (!student_id) {
@@ -59,8 +63,12 @@ export async function PATCH(request: NextRequest) {
         const studentUpdates: Record<string, any> = {};
         if (guardian_phone !== undefined) studentUpdates.guardian_phone = guardian_phone?.trim() || null;
         if (guardian_name !== undefined) studentUpdates.guardian_name = guardian_name?.trim() || null;
+        if (guardian_email !== undefined) studentUpdates.guardian_email = guardian_email?.trim() || null;
+        if (gender !== undefined) studentUpdates.gender = gender || null;
+        if (date_of_birth !== undefined) studentUpdates.date_of_birth = date_of_birth || null;
         if (grade_stream_id !== undefined) studentUpdates.current_grade_stream_id = grade_stream_id || null;
         if (status !== undefined) studentUpdates.status = status;
+        if (avatar_url !== undefined) studentUpdates.avatar_url = avatar_url || null;
 
         // Build update object for users table
         const userUpdates: Record<string, any> = {};

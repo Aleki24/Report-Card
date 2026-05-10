@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // ── ADMIN stats ──────────────────────────────────────────
     if (queryRole === 'admin' || role === 'ADMIN') {
       if (!schoolId) {
-        return NextResponse.json({ marks: [], totalReports: 0 });
+        return NextResponse.json({ marks: [], totalReports: 0, totalStudents: 0, activeStudents: 0, totalTeachers: 0, classTeachers: 0, subjectTeachers: 0, totalClasses: 0, upcomingExams: [], recentActivities: [] });
       }
 
       // Get current academic year
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         .limit(1)
         .single();
 
-      // Get all student IDs for this school
+      // ── Students ──
       const { data: schoolUsers } = await supabase
         .from('users')
         .select('id')
@@ -47,8 +47,37 @@ export async function GET(request: NextRequest) {
 
       const studentIds = (schoolUsers || []).map(u => u.id);
 
+      const { count: activeStudents } = await supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'ACTIVE');
+
+      // ── Teachers ──
+      const { count: classTeachers } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .eq('role', 'CLASS_TEACHER');
+
+      const { count: subjectTeachers } = await supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .eq('role', 'SUBJECT_TEACHER');
+
+      const totalTeachers = (classTeachers ?? 0) + (subjectTeachers ?? 0);
+
+      // ── Classes ──
+      const { count: totalClasses } = await supabase
+        .from('grade_streams')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', schoolId);
+
+      // ── Exam marks + Reports ──
       let marks: { percentage: number }[] = [];
       let totalReports = 0;
+      let schoolAverage: number | null = null;
+      let passRate: number | null = null;
 
       if (studentIds.length > 0) {
         let marksQuery = supabase.from('exam_marks').select('percentage').in('student_id', studentIds);
@@ -65,9 +94,111 @@ export async function GET(request: NextRequest) {
         ]);
         marks = (marksRes.data || []) as { percentage: number }[];
         totalReports = reportsRes.count ?? 0;
+
+        if (marks.length > 0) {
+          const sum = marks.reduce((a, m) => a + Number(m.percentage), 0);
+          schoolAverage = Math.round((sum / marks.length) * 10) / 10;
+          const passed = marks.filter((m) => Number(m.percentage) >= 50).length;
+          passRate = Math.round((passed / marks.length) * 100);
+        }
       }
 
-      return NextResponse.json({ marks, totalReports });
+      // ── Upcoming exams (next 30 days) ──
+      const today = new Date().toISOString().split('T')[0];
+      const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const { data: upcomingExams } = await supabase
+        .from('exams')
+        .select(`
+          id, name, exam_date, max_score,
+          subjects!inner (name),
+          grades!inner (name_display)
+        `)
+        .eq('school_id', schoolId)
+        .gte('exam_date', today)
+        .lte('exam_date', thirtyDaysLater)
+        .order('exam_date', { ascending: true })
+        .limit(5);
+
+      // ── Recent activities ──
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const [recentUsersRes, recentExamsRes, recentMarksRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, first_name, last_name, role, created_at')
+          .eq('school_id', schoolId)
+          .gte('created_at', thirtyDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('exams')
+          .select('id, name, created_at')
+          .eq('school_id', schoolId)
+          .gte('created_at', thirtyDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('exam_marks')
+          .select('created_at, exams!inner(id, school_id)')
+          .eq('exams.school_id', schoolId)
+          .gte('created_at', thirtyDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(5),
+      ]);
+
+      // If exam_marks has no created_at, use updated_at or skip
+      let recentActivities: { type: string; description: string; timestamp: string }[] = [];
+
+      if (recentUsersRes.data) {
+        for (const u of recentUsersRes.data) {
+          recentActivities.push({
+            type: 'user',
+            description: `${u.first_name} ${u.last_name} joined as ${u.role.replace('_', ' ')}`,
+            timestamp: u.created_at,
+          });
+        }
+      }
+
+      if (recentExamsRes.data) {
+        for (const e of recentExamsRes.data) {
+          recentActivities.push({
+            type: 'exam',
+            description: `Exam created: ${e.name}`,
+            timestamp: e.created_at,
+          });
+        }
+      }
+
+      if (recentMarksRes.data) {
+        for (const m of recentMarksRes.data as any[]) {
+          if (m.created_at) {
+            recentActivities.push({
+              type: 'marks',
+              description: 'Marks recorded',
+              timestamp: m.created_at,
+            });
+          }
+        }
+      }
+
+      recentActivities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      recentActivities = recentActivities.slice(0, 10);
+
+      return NextResponse.json({
+        marks,
+        totalReports,
+        totalStudents: studentIds.length,
+        activeStudents: activeStudents ?? 0,
+        totalTeachers,
+        classTeachers: classTeachers ?? 0,
+        subjectTeachers: subjectTeachers ?? 0,
+        totalClasses: totalClasses ?? 0,
+        schoolAverage,
+        passRate,
+        upcomingExams: upcomingExams ?? [],
+        recentActivities,
+      });
     }
 
     // ── CLASS TEACHER stats ──────────────────────────────────
