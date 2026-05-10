@@ -293,11 +293,11 @@ function AttendanceChartCard({ data }: { data: any }) {
                 dataKey="value"
                 stroke="none"
               >
-                {attendanceData.map((entry, index) => (
+                {attendanceData.map((entry: any, index: any) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(val: number) => `${val}%`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+              <Tooltip formatter={(val: any) => `${val}%`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
