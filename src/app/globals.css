@@ -352,6 +352,10 @@ select.input-field {
     padding: var(--space-8);
     height: 100vh;
     min-height: 0;
+    overflow-y: auto;
+  }
+
+  .dashboard-main:has(.dashboard-grid) {
     overflow: hidden;
   }
 
