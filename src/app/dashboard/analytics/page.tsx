@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
 interface StudentMark {
   studentName: string;
@@ -187,8 +188,8 @@ export default function AnalyticsPage() {
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4" style={{ marginBottom: 'var(--space-8)' }}>
         <div>
-          <h1 style={{ fontSize: 28, marginBottom: 'var(--space-2)' }} className="font-bold font-[family-name:var(--font-display)]">Analytics</h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Analytics</h1>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
             Subject performance, grade distribution, and trend analysis
           </p>
         </div>
@@ -205,7 +206,7 @@ export default function AnalyticsPage() {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-[var(--color-text-muted)]">Analyzing data...</div>
+        <ContentSkeleton message="Analyzing data..." />
       ) : (trendData.length > 0 || gradeData.length > 0) ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>

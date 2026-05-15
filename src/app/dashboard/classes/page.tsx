@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -112,8 +113,8 @@ export default function ClassesPage() {
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Manage Classes</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">Configure class designations and streams</p>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Manage Classes</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Configure class designations and streams</p>
       </div>
 
       {/* Guide */}
@@ -131,7 +132,7 @@ export default function ClassesPage() {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-[var(--color-text-muted)]">Loading classes...</div>
+        <ContentSkeleton message="Loading classes..." />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-3 flex flex-col gap-6">

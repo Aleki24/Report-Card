@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
+import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
@@ -16,7 +16,6 @@ interface Term { id: string; name: string; academic_year_id: string; }
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
 
 export default function ExamResultsPage() {
-    const supabase = useMemo(() => createSupabaseBrowserClient(), []);
     const { user, profile } = useAuth();
 
     // ----- Cascading filters -----
@@ -42,9 +41,9 @@ export default function ExamResultsPage() {
     const [customReportTitle, setCustomReportTitle] = useState('');
     const [classStudents, setClassStudents] = useState<{ id: string; name: string; admission_number: string }[]>([]);
 
-    // ═══════════════════ Data fetching ═══════════════════
+    // ═══════════════════ Data fetching (all via server APIs) ═══════════════════
 
-    // 1. Fetch all grade streams
+    // 1. Fetch all grade streams (server-scoped)
     useEffect(() => {
         const fetchStreams = async () => {
             try {
@@ -65,7 +64,7 @@ export default function ExamResultsPage() {
         fetchStreams();
     }, []);
 
-    // 2. Fetch exams for selected stream
+    // 2. Fetch exams for selected stream (via server API instead of browser Supabase)
     useEffect(() => {
         if (!selectedStreamId) { setExams([]); setSelectedExamId(''); return; }
 
@@ -74,55 +73,69 @@ export default function ExamResultsPage() {
             const stream = gradeStreams.find(s => s.id === selectedStreamId);
             if (!stream) { setLoadingExams(false); return; }
 
-            if (!profile?.school_id) { setLoadingExams(false); return; }
-
-            const { data } = await supabase
-                .from('exams')
-                .select('id, name, exam_type, max_score, subjects:subject_id(name)')
-                .eq('school_id', profile.school_id)
-                .or(`grade_stream_id.eq.${selectedStreamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`)
-                .order('exam_date', { ascending: false });
-
-            const mapped = (data || []).map((e: any) => ({
-                id: e.id,
-                name: e.name,
-                exam_type: e.exam_type,
-                max_score: e.max_score,
-                subject_name: e.subjects?.name || 'N/A',
-            }));
-            setExams(mapped);
-            setSelectedExamId(mapped[0]?.id || '');
-            setLoadingExams(false);
+            try {
+                const params = new URLSearchParams({
+                    stream_id: selectedStreamId,
+                    grade_id: stream.grade_id,
+                });
+                const res = await fetch(`/api/school/exams?${params.toString()}`);
+                if (res.ok) {
+                    const json = await res.json();
+                    const mapped = (json.data || []).map((e: any) => ({
+                        id: e.id,
+                        name: e.name,
+                        exam_type: e.exam_type,
+                        max_score: e.max_score,
+                        subject_name: e.subject_name || 'N/A',
+                    }));
+                    setExams(mapped);
+                    setSelectedExamId(mapped[0]?.id || '');
+                } else {
+                    setExams([]);
+                    setSelectedExamId('');
+                }
+            } catch (err) {
+                console.error('Failed to fetch exams:', err);
+                setExams([]);
+                setSelectedExamId('');
+            } finally {
+                setLoadingExams(false);
+            }
         };
         fetchExams();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStreamId, profile?.school_id]);
+    }, [selectedStreamId]);
 
-    // 3. Fetch marks for selected exam
+    // 3. Fetch marks for selected exam (via server API instead of browser Supabase)
     const fetchMarks = useCallback(async () => {
         if (!selectedExamId) { setMarks([]); return; }
         setLoadingMarks(true);
 
-        const { data } = await supabase
-            .from('exam_marks')
-            .select('id, student_id, raw_score, percentage, grade_symbol, rubric, remarks, students!inner(admission_number, users(first_name, last_name))')
-            .eq('exam_id', selectedExamId);
-
-        const mapped: MarkRow[] = (data || []).map((m: any) => ({
-            id: m.id,
-            student_id: m.student_id,
-            student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(),
-            admission_number: m.students?.admission_number || '',
-            raw_score: Number(m.raw_score),
-            percentage: Number(m.percentage || 0),
-            grade_symbol: m.grade_symbol || '-',
-            rubric: m.rubric,
-            remarks: m.remarks,
-        }));
-
-        setMarks(mapped);
-        setLoadingMarks(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        try {
+            const res = await fetch(`/api/school/exam-marks?exam_id=${selectedExamId}`);
+            if (res.ok) {
+                const json = await res.json();
+                const mapped: MarkRow[] = (json.data || []).map((m: any) => ({
+                    id: m.id,
+                    student_id: m.student_id,
+                    student_name: m.student_name || '',
+                    admission_number: m.admission_number || '',
+                    raw_score: Number(m.raw_score),
+                    percentage: Number(m.percentage || 0),
+                    grade_symbol: m.grade_symbol || '-',
+                    rubric: m.rubric,
+                    remarks: m.remarks,
+                }));
+                setMarks(mapped);
+            } else {
+                setMarks([]);
+            }
+        } catch (err) {
+            console.error('Failed to fetch marks:', err);
+            setMarks([]);
+        } finally {
+            setLoadingMarks(false);
+        }
     }, [selectedExamId]);
 
     useEffect(() => { fetchMarks(); }, [fetchMarks]);
@@ -192,6 +205,7 @@ export default function ExamResultsPage() {
         window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
     };
 
+    // Bulk reports now use server API instead of browser-side supabase.rpc()
     const handleBulkReports = async () => {
         if (!selectedTermId || !selectedStreamId) {
             setReportMsg({ type: 'error', text: 'Select a term and class to generate bulk reports.' });
@@ -200,17 +214,27 @@ export default function ExamResultsPage() {
         setReportGenerating(true);
         setReportMsg(null);
 
-        const { error } = await supabase.rpc('generate_term_reports', {
-            p_term_id: selectedTermId,
-            p_grade_stream_id: selectedStreamId,
-        });
+        try {
+            const res = await fetch('/api/school/generate-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    term_id: selectedTermId,
+                    grade_stream_id: selectedStreamId,
+                }),
+            });
 
-        if (error) {
-            setReportMsg({ type: 'error', text: `Failed: ${error.message}` });
-        } else {
-            setReportMsg({ type: 'success', text: 'Bulk reports generated successfully!' });
+            const json = await res.json();
+            if (!res.ok || json.error) {
+                setReportMsg({ type: 'error', text: `Failed: ${json.error || 'Unknown error'}` });
+            } else {
+                setReportMsg({ type: 'success', text: 'Bulk reports generated successfully!' });
+            }
+        } catch (err) {
+            setReportMsg({ type: 'error', text: `Failed: ${err instanceof Error ? err.message : 'Network error'}` });
+        } finally {
+            setReportGenerating(false);
         }
-        setReportGenerating(false);
     };
 
     // ═══════════════════ Current exam info ═══════════════════
@@ -221,10 +245,10 @@ export default function ExamResultsPage() {
         <div className="w-full max-w-7xl mx-auto">
             {/* Header */}
             <div style={{ marginBottom: 'var(--space-8)' }}>
-                <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">
+                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
                     Exam Results
                 </h1>
-                <p className="text-sm text-[var(--color-text-muted)]">
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                     Select a class and exam to view results, analyze performance, and generate reports
                 </p>
             </div>
@@ -314,8 +338,8 @@ export default function ExamResultsPage() {
 
                     {/* ── Tab Content ── */}
                     {loadingMarks ? (
-                        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-                            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Loading marks…</p>
+                        <div className="card">
+                            <InlineLoadingSkeleton rows={6} />
                         </div>
                     ) : (
                         <>

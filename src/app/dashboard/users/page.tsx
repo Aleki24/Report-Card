@@ -15,8 +15,8 @@ export default function UsersPage() {
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">User Management</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">Add teachers and students by phone number</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>User Management</h1>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Add teachers and students by phone number</p>
         </div>
         <button className="btn-primary shrink-0" onClick={() => { h.resetForm(); h.setShowModal(true); }}>+ Add User</button>
       </div>

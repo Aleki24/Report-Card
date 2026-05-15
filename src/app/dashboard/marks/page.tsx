@@ -117,8 +117,8 @@ export default function MarksPage() {
         <div className="w-full max-w-7xl mx-auto">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Mark Entry</h1>
-                    <p className="text-sm text-[var(--color-text-muted)]">Upload marks in bulk or enter them manually for each exam</p>
+                    <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Mark Entry</h1>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Upload marks in bulk or enter them manually for each exam</p>
                 </div>
                 <button className="btn-primary shrink-0" onClick={() => { setPreselectedSubjectId(undefined); setShowCreateModal(true); }}>+ Create Exam</button>
             </div>

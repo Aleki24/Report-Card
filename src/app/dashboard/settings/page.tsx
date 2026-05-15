@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useSession } from 'next-auth/react';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
@@ -151,8 +152,8 @@ export default function SettingsPage() {
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">School Settings</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">System configuration and academic setup</p>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>School Settings</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>System configuration and academic setup</p>
       </div>
 
       <div className="flex border-b border-[var(--color-border)] mb-8 overflow-x-auto">
@@ -172,7 +173,7 @@ export default function SettingsPage() {
           {activeTab === 'profile' && (
             <div className="lg:col-span-3">
               {schoolLoading ? (
-                <div className="card p-12 text-center text-[var(--color-text-muted)]">Loading school profile...</div>
+                <ContentSkeleton message="Loading school profile..." />
               ) : !school.id ? (
                 <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
                   <div className="text-center mb-6">

@@ -1,20 +1,25 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { BookOpen, Search, Plus } from 'lucide-react';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
-// TODO: Connect to Supabase API — replace mock data with real queries
-const mockSubjects = [
-  { id: '1', name: 'Mathematics', code: 'MATH', category: 'MATHEMATICS', level: 'Secondary', compulsory: true, teachers: ['James Ochieng'], classes: ['Form 1', 'Form 2', 'Form 3'] },
-  { id: '2', name: 'English', code: 'ENG', category: 'LANGUAGE', level: 'Secondary', compulsory: true, teachers: ['Mary Wanjiku'], classes: ['Form 1', 'Form 2'] },
-  { id: '3', name: 'Kiswahili', code: 'KIS', category: 'LANGUAGE', level: 'Secondary', compulsory: true, teachers: ['Grace Akinyi'], classes: ['Form 1', 'Form 2', 'Form 3'] },
-  { id: '4', name: 'Chemistry', code: 'CHEM', category: 'SCIENCE', level: 'Secondary', compulsory: false, teachers: ['Peter Kamau'], classes: ['Form 2', 'Form 3'] },
-  { id: '5', name: 'Biology', code: 'BIO', category: 'SCIENCE', level: 'Secondary', compulsory: false, teachers: ['Peter Kamau'], classes: ['Form 1', 'Form 2'] },
-  { id: '6', name: 'Physics', code: 'PHY', category: 'SCIENCE', level: 'Secondary', compulsory: false, teachers: ['James Ochieng'], classes: ['Form 2', 'Form 3'] },
-  { id: '7', name: 'History', code: 'HIST', category: 'HUMANITY', level: 'Secondary', compulsory: false, teachers: ['David Mutua'], classes: ['Form 1', 'Form 2'] },
-  { id: '8', name: 'CRE', code: 'CRE', category: 'HUMANITY', level: 'Secondary', compulsory: false, teachers: ['David Mutua'], classes: ['Form 1'] },
-];
+interface Subject {
+  id: string;
+  name: string;
+  code: string;
+  category?: string;
+  academic_level_id?: string;
+  is_compulsory?: boolean;
+  grading_system_id?: string | null;
+}
+
+interface AcademicLevel {
+  id: string;
+  code: string;
+  name: string;
+}
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
   LANGUAGE: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' },
@@ -22,28 +27,74 @@ const categoryColors: Record<string, { bg: string; color: string }> = {
   SCIENCE: { bg: 'rgba(16, 185, 129, 0.15)', color: '#10B981' },
   HUMANITY: { bg: 'rgba(139, 92, 246, 0.15)', color: '#8B5CF6' },
   TECHNICAL: { bg: 'rgba(249, 115, 22, 0.15)', color: '#F97316' },
+  CREATIVE: { bg: 'rgba(236, 72, 153, 0.15)', color: '#EC4899' },
 };
 
 export default function SubjectsPage() {
   const { role } = useAuth();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = mockSubjects.filter(s => {
+  // Fetch subjects from the school-scoped academic-structure API
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const res = await fetch('/api/admin/academic-structure');
+        if (!res.ok) {
+          setError('Failed to load subjects');
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        setSubjects(json.subjects || []);
+        setAcademicLevels(json.academic_levels || []);
+      } catch (err) {
+        console.error('Failed to fetch subjects:', err);
+        setError('Failed to load subjects');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSubjects();
+  }, []);
+
+  const getLevelName = (levelId?: string) => {
+    if (!levelId) return '—';
+    return academicLevels.find(l => l.id === levelId)?.name || '—';
+  };
+
+  const filtered = subjects.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = categoryFilter === 'ALL' || s.category === categoryFilter;
+    const matchCategory = categoryFilter === 'ALL' || (s.category || '').toUpperCase() === categoryFilter;
     return matchSearch && matchCategory;
   });
 
-  const compulsory = mockSubjects.filter(s => s.compulsory).length;
-  const categories = [...new Set(mockSubjects.map(s => s.category))];
+  const compulsory = subjects.filter(s => s.is_compulsory).length;
+  const categories = [...new Set(subjects.map(s => (s.category || 'TECHNICAL').toUpperCase()))];
+
+  if (loading) {
+    return <ContentSkeleton message="Loading subjects..." />;
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
+        <BookOpen style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
+        <p style={{ fontSize: 14 }}>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
         <div>
-          <h1 style={{ fontSize: 28, marginBottom: 'var(--space-2)' }}>Subject Management</h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Manage subjects, assign teachers, and organize by curriculum.</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Subject Management</h1>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage subjects, assign teachers, and organize by curriculum.</p>
         </div>
         {role === 'ADMIN' && (
           <button className="btn-primary" style={{ gap: '8px' }}>
@@ -55,9 +106,9 @@ export default function SubjectsPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
         {[
-          { label: 'Total Subjects', value: mockSubjects.length.toString(), sub: 'Registered' },
+          { label: 'Total Subjects', value: subjects.length.toString(), sub: 'Registered' },
           { label: 'Compulsory', value: compulsory.toString(), sub: 'Required for all' },
-          { label: 'Optional', value: (mockSubjects.length - compulsory).toString(), sub: 'Elective subjects' },
+          { label: 'Optional', value: (subjects.length - compulsory).toString(), sub: 'Elective subjects' },
           { label: 'Departments', value: categories.length.toString(), sub: 'Subject categories' },
         ].map((s, i) => (
           <div className="stat-card" key={i}>
@@ -89,18 +140,18 @@ export default function SubjectsPage() {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
-              <thead><tr><th>Subject</th><th>Code</th><th>Category</th><th>Type</th><th>Teachers</th><th>Classes</th></tr></thead>
+              <thead><tr><th>Subject</th><th>Code</th><th>Category</th><th>Type</th><th>Level</th></tr></thead>
               <tbody>
                 {filtered.map(s => {
-                  const cat = categoryColors[s.category] || { bg: 'rgba(100,100,100,0.15)', color: 'var(--color-text-muted)' };
+                  const catKey = (s.category || 'TECHNICAL').toUpperCase();
+                  const cat = categoryColors[catKey] || { bg: 'rgba(100,100,100,0.15)', color: 'var(--color-text-muted)' };
                   return (
                     <tr key={s.id}>
                       <td data-label="Subject" style={{ fontWeight: 600 }}>{s.name}</td>
                       <td data-label="Code" style={{ fontFamily: 'monospace', fontSize: 13 }}>{s.code}</td>
-                      <td data-label="Category"><span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: 11, fontWeight: 600, background: cat.bg, color: cat.color }}>{s.category}</span></td>
-                      <td data-label="Type">{s.compulsory ? <span className="badge badge-success">Compulsory</span> : <span className="badge badge-warning">Optional</span>}</td>
-                      <td data-label="Teachers" style={{ fontSize: 13 }}>{s.teachers.join(', ')}</td>
-                      <td data-label="Classes" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{s.classes.join(', ')}</td>
+                      <td data-label="Category"><span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: 11, fontWeight: 600, background: cat.bg, color: cat.color }}>{catKey}</span></td>
+                      <td data-label="Type">{s.is_compulsory ? <span className="badge badge-success">Compulsory</span> : <span className="badge badge-warning">Optional</span>}</td>
+                      <td data-label="Level" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{getLevelName(s.academic_level_id)}</td>
                     </tr>
                   );
                 })}

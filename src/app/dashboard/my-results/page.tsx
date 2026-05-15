@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 
 interface TermResult {
@@ -22,13 +21,22 @@ interface TermResult {
     totalStudents: number;
 }
 
+interface Stats {
+    termAverage: number;
+    bestSubject: string;
+    bestScore: number;
+    weakestSubject: string;
+    weakestScore: number;
+    streamPosition: number;
+    totalInStream: number;
+}
+
 export default function MyResultsPage() {
     const { profile, user, role, loading } = useAuth();
-    const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
     const [studentId, setStudentId] = useState<string | null>(null);
     const [termResults, setTermResults] = useState<TermResult[]>([]);
-    const [stats, setStats] = useState({
+    const [stats, setStats] = useState<Stats>({
         termAverage: 0,
         bestSubject: '-',
         bestScore: 0,
@@ -47,231 +55,34 @@ export default function MyResultsPage() {
                 return;
             }
 
-            // Step 1: Look up the student record from the auth user ID
-            const { data: studentRecord } = await supabase
-                .from('students')
-                .select('id, current_grade_stream_id')
-                .eq('id', user.id)
-                .limit(1)
-                .single();
+            try {
+                const res = await fetch('/api/school/my-results');
+                if (!res.ok) {
+                    console.error('Failed to fetch results:', await res.text());
+                    setFetching(false);
+                    return;
+                }
 
-            if (!studentRecord) {
+                const json = await res.json();
+                const data = json.data;
+
+                if (!data || !data.termResults || data.termResults.length === 0) {
+                    setFetching(false);
+                    return;
+                }
+
+                setStudentId(data.studentId);
+                setTermResults(data.termResults);
+                setTrendData(data.trendData || []);
+
+                if (data.stats) {
+                    setStats(data.stats);
+                }
+            } catch (err) {
+                console.error('Error fetching results:', err);
+            } finally {
                 setFetching(false);
-                return;
             }
-
-            setStudentId(studentRecord.id);
-            const gradeStreamId = studentRecord.current_grade_stream_id;
-
-            // Step 2: Fetch all marks for this student
-            const { data, error } = await supabase
-                .from('exam_marks')
-                .select(`
-                    id,
-                    percentage,
-                    grade_symbol,
-                    raw_score,
-                    remarks,
-                    student_id,
-                    exams (
-                        id,
-                        name,
-                        max_score,
-                        term_id,
-                        academic_year_id,
-                        terms ( id, name ),
-                        academic_years ( id, name ),
-                        subjects ( name )
-                    )
-                `)
-                .eq('student_id', studentRecord.id);
-
-            if (error) {
-                console.error("Error fetching results:", error.message);
-                setFetching(false);
-                return;
-            }
-
-            if (!data || data.length === 0) {
-                setFetching(false);
-                return;
-            }
-
-            // Step 3: Group marks by term
-            const groups: Record<string, {
-                term: string;
-                termId: string | null;
-                yearId: string | null;
-                yearName: string;
-                subjects: { name: string; score: number; maxScore: number; grade: string; comment: string }[];
-                average: number;
-                position: number;
-                totalStudents: number;
-                examIds: string[];
-            }> = {};
-            let totalPct = 0;
-            let count = 0;
-            let bestSub = '';
-            let bestScore = -1;
-            let worstSub = '';
-            let worstScore = 101;
-
-            data.forEach((mark: any) => {
-                const ex = mark.exams;
-                if (!ex) return;
-
-                const termName = ex.terms?.name || 'Unknown Term';
-                const yearName = ex.academic_years?.name || '';
-                const termKey = `${termName} ${yearName}`.trim();
-                const termId = ex.term_id || ex.terms?.id || null;
-                const yearId = ex.academic_year_id || ex.academic_years?.id || null;
-
-                if (!groups[termKey]) {
-                    groups[termKey] = {
-                        term: termKey,
-                        termId,
-                        yearId,
-                        yearName,
-                        subjects: [],
-                        average: 0,
-                        position: 0,
-                        totalStudents: 0,
-                        examIds: [],
-                    };
-                }
-
-                if (ex.id && !groups[termKey].examIds.includes(ex.id)) {
-                    groups[termKey].examIds.push(ex.id);
-                }
-
-                const subjName = ex.subjects?.name || 'Unknown Subject';
-                groups[termKey].subjects.push({
-                    name: subjName,
-                    score: mark.raw_score,
-                    maxScore: ex.max_score,
-                    grade: mark.grade_symbol,
-                    comment: mark.remarks || 'No remarks',
-                });
-
-                totalPct += mark.percentage;
-                count++;
-
-                if (mark.percentage > bestScore) {
-                    bestScore = mark.percentage;
-                    bestSub = subjName;
-                }
-                if (mark.percentage < worstScore) {
-                    worstScore = mark.percentage;
-                    worstSub = subjName;
-                }
-            });
-
-            // Step 4: Calculate averages per term
-            const resultsArray: TermResult[] = Object.values(groups).map((g) => {
-                const sum = g.subjects.reduce(
-                    (s, subj) => s + (subj.maxScore > 0 ? (subj.score / subj.maxScore) * 100 : 0),
-                    0
-                );
-                g.average = g.subjects.length > 0 ? Math.round(sum / g.subjects.length) : 0;
-                return {
-                    term: g.term,
-                    termId: g.termId,
-                    yearId: g.yearId,
-                    yearName: g.yearName,
-                    subjects: g.subjects,
-                    average: g.average,
-                    position: 0,
-                    totalStudents: 0,
-                };
-            });
-
-            // Step 5: Calculate stream position for each term
-            if (gradeStreamId) {
-                // Get all classmates
-                const { data: classmates } = await supabase
-                    .from('students')
-                    .select('id')
-                    .eq('current_grade_stream_id', gradeStreamId);
-
-                if (classmates && classmates.length > 0) {
-                    const classmateIds = classmates.map(c => c.id);
-
-                    for (const term of resultsArray) {
-                        if (!term.termId) continue;
-
-                        // Get all marks for classmates for this term
-                        let rankQuery = supabase
-                            .from('exam_marks')
-                            .select('student_id, raw_score, percentage, exams!inner(max_score, term_id, academic_year_id)')
-                            .in('student_id', classmateIds)
-                            .eq('exams.term_id', term.termId);
-
-                        if (term.yearId) {
-                            rankQuery = rankQuery.eq('exams.academic_year_id', term.yearId);
-                        }
-
-                        const { data: allMarks } = await rankQuery;
-
-                        if (allMarks && allMarks.length > 0) {
-                            // Aggregate per student
-                            const studentAggs: Record<string, { totalScore: number; totalPossible: number }> = {};
-                            for (const m of allMarks as any[]) {
-                                const sid = m.student_id;
-                                if (!studentAggs[sid]) studentAggs[sid] = { totalScore: 0, totalPossible: 0 };
-                                studentAggs[sid].totalScore += Number(m.raw_score);
-                                studentAggs[sid].totalPossible += Number(m.exams.max_score);
-                            }
-
-                            // Sort by percentage descending
-                            const sorted = Object.entries(studentAggs)
-                                .filter(([, v]) => v.totalPossible > 0)
-                                .map(([sid, v]) => ({
-                                    sid,
-                                    pct: (v.totalScore / v.totalPossible) * 100,
-                                }))
-                                .sort((a, b) => b.pct - a.pct);
-
-                            term.totalStudents = sorted.length;
-
-                            // Find this student's rank (handle ties)
-                            let rank = 1;
-                            for (let i = 0; i < sorted.length; i++) {
-                                if (i > 0 && sorted[i].pct < sorted[i - 1].pct) {
-                                    rank = i + 1;
-                                }
-                                if (sorted[i].sid === studentRecord.id) {
-                                    term.position = rank;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            setTermResults(resultsArray);
-
-            // Step 6: Build performance trend data
-            const trend = resultsArray.map(t => ({
-                examName: t.term,
-                percentage: t.average,
-            }));
-            setTrendData(trend);
-
-            // Step 7: Set summary stats (use latest term for position)
-            const latestTerm = resultsArray.length > 0 ? resultsArray[resultsArray.length - 1] : null;
-            if (count > 0) {
-                setStats({
-                    termAverage: Math.round(totalPct / count),
-                    bestSubject: bestSub,
-                    bestScore: Math.round(bestScore),
-                    weakestSubject: worstSub,
-                    weakestScore: Math.round(worstScore),
-                    streamPosition: latestTerm?.position || 0,
-                    totalInStream: latestTerm?.totalStudents || 0,
-                });
-            }
-            setFetching(false);
         };
 
         if (role === 'STUDENT' && user) {
@@ -279,7 +90,7 @@ export default function MyResultsPage() {
         } else {
             setFetching(false);
         }
-    }, [user, role, supabase]);
+    }, [user, role]);
 
     if (loading || fetching) {
         return (
@@ -316,10 +127,10 @@ export default function MyResultsPage() {
         <div className="w-full max-w-7xl mx-auto pb-10">
             {/* Page Header */}
             <div style={{ marginBottom: 'var(--space-8)' }}>
-                <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">
+                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
                     My Results
                 </h1>
-                <p className="text-sm text-[var(--color-text-muted)]">
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                     Welcome, {studentName}. View your exam results and download report cards.
                 </p>
             </div>

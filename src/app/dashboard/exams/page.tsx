@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
@@ -180,8 +181,8 @@ export default function ExamResultsPage() {
   return (
     <div className="w-full max-w-7xl mx-auto">
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h1 className="text-2xl md:text-3xl font-bold font-[family-name:var(--font-display)] mb-2">Exam Results</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Exam Results</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
           Select a class and exam to view results, analyze performance, and generate reports
         </p>
       </div>
@@ -265,8 +266,8 @@ export default function ExamResultsPage() {
           </div>
 
           {loadingMarks ? (
-            <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Loading marks…</p>
+            <div className="card">
+              <InlineLoadingSkeleton rows={6} />
             </div>
           ) : (
             <>

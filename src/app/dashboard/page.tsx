@@ -5,7 +5,8 @@ import { useAuth } from '@/components/AuthProvider';
 import StatCard from '@/components/dashboard/StatCard';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
-  ArrowRight, Plus, BarChart3, Settings, ClipboardList, Activity, Wallet, Bell, User
+  ArrowRight, Plus, BarChart3, Settings, ClipboardList, Activity, Wallet, Bell, User,
+  PanelRightOpen, PanelRightClose
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -23,28 +24,7 @@ interface ActivityIconMap {
   [key: string]: React.ReactNode;
 }
 
-function LoadingSkeleton() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" style={{ gap: 'var(--space-4)' }}>
-        {[1, 2, 3, 4, 5, 6].map(i => (
-          <div key={i} className="stat-card" style={{ opacity: 0.4, minHeight: 80 }}>
-            <div className="stat-label">Loading...</div>
-            <div className="stat-value">—</div>
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3" style={{ gap: 'var(--space-6)' }}>
-        <div className="lg:col-span-2 card" style={{ padding: 'var(--space-6)', minHeight: 200 }}>
-          <div style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>Loading...</div>
-        </div>
-        <div className="card" style={{ padding: 'var(--space-6)', minHeight: 200 }}>
-          <div style={{ fontSize: 14, color: 'var(--color-text-muted)' }}>Loading...</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
 function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
   return (
@@ -516,6 +496,7 @@ function AcademicPerformanceCard({ stats = null }: { stats?: any }) {
 function AdminDashboard({ greeting, userName }: { greeting: string; userName: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -535,7 +516,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   if (loading) return <LoadingSkeleton />;
 
   return (
-    <div className="dashboard-grid" style={{ gap: 'var(--space-6)', alignItems: 'start' }}>
+    <div className={`dashboard-grid ${activityCollapsed ? 'dashboard-grid--collapsed' : ''}`} style={{ gap: 'var(--space-6)', alignItems: 'start' }}>
       
       {/* ─── Left Column (2/3 width) ─── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', minWidth: 0 }}>
@@ -546,7 +527,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             <h1 className="dashboard-title">
               {greeting}
             </h1>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', lineHeight: 1.5 }}>
               {userName ? `Welcome back, ${userName}! 👋 Here's your school overview.` : 'Overview of student performance and key metrics'}
             </p>
           </div>
@@ -661,18 +642,35 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         <AcademicPerformanceCard stats={null} />
       </div>
 
-      {/* ─── Right Sidebar Column (1/3 width) ─── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', minWidth: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: 17, fontWeight: 600, fontFamily: 'var(--font-body)' }}>Recent Activity</h2>
-          <button style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--color-border)', background: 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--color-text-secondary)' }}>
-            <Settings size={16} />
-          </button>
+      {/* ─── Right Sidebar Column / Edge Tab ─── */}
+      {activityCollapsed ? (
+        /* Collapsed: thin vertical edge tab */
+        <div
+          className="activity-edge-tab"
+          onClick={() => setActivityCollapsed(false)}
+          title="Open Recent Activity"
+        >
+          <PanelRightOpen size={16} />
+          <span>Recent Activity</span>
         </div>
-        <RecentAnnouncementsCard announcements={[]} />
-        <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
-        <RecentActivitiesCard activities={data?.recentActivities ?? []} />
-      </div>
+      ) : (
+        /* Expanded: full sidebar */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: 17, fontWeight: 600, fontFamily: 'var(--font-body)' }}>Recent Activity</h2>
+            <button
+              onClick={() => setActivityCollapsed(true)}
+              title="Collapse activity panel"
+              className="activity-collapse-btn"
+            >
+              <PanelRightClose size={16} />
+            </button>
+          </div>
+          <RecentAnnouncementsCard announcements={[]} />
+          <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
+          <RecentActivitiesCard activities={data?.recentActivities ?? []} />
+        </div>
+      )}
 
     </div>
   );

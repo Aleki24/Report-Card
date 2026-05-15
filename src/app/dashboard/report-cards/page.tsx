@@ -15,8 +15,8 @@ export default function ReportCardsPage() {
   return (
     <div>
       <div style={{ marginBottom: 'var(--space-8)' }}>
-        <h1 style={{ fontSize: 28, marginBottom: 'var(--space-2)' }}>Report Cards</h1>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Generate professional academic reports with marks, grades, comments, and PDF export.</p>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Report Cards</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Generate professional academic reports with marks, grades, comments, and PDF export.</p>
       </div>
 
       {/* Info Banner */}

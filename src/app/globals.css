@@ -339,6 +339,7 @@ select.input-field {
   min-height: 100vh;
   padding: 72px var(--space-4) calc(80px + env(safe-area-inset-bottom));
   transition: margin-left 0.3s ease;
+  font-size: 0.8125rem;
 }
 
 /* Desktop: hide topbar, shift main content for sidebar */
@@ -458,9 +459,10 @@ select.input-field {
 
 /* Dashboard header title */
 .dashboard-title {
-  font-size: 28px;
+  font-size: 1.375rem;
   margin-bottom: var(--space-1);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* Student report buttons grid */
@@ -527,7 +529,7 @@ select.input-field {
   }
 
   .dashboard-title {
-    font-size: 22px;
+    font-size: 1.25rem;
   }
 
   .dashboard-section-card {
@@ -584,7 +586,7 @@ select.input-field {
   }
 
   .dashboard-title {
-    font-size: 24px;
+    font-size: 1.375rem;
   }
 
   .dashboard-section-card {
@@ -635,6 +637,99 @@ select.input-field {
   .quick-actions-grid .setup-progress-link {
     grid-column: -1 / 1;
   }
+
+  /* Collapsed grid: main content takes full width, edge tab is narrow */
+  .dashboard-grid--collapsed {
+    grid-template-columns: 1fr auto !important;
+  }
+
+  /* Supabase-style vertical edge tab when sidebar is collapsed */
+  .activity-edge-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-2);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    user-select: none;
+    position: sticky;
+    top: var(--space-8);
+    height: fit-content;
+  }
+
+  .activity-edge-tab:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-glow);
+  }
+
+  .activity-edge-tab svg {
+    transform: rotate(90deg);
+  }
+
+  /* Collapse button inside the expanded sidebar header */
+  .activity-collapse-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .activity-collapse-btn:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background: var(--color-accent-glow);
+  }
+}
+
+/* ============================================= */
+/* SKELETON LOADING SYSTEM                       */
+/* ============================================= */
+.skeleton-bone {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-raised) 25%,
+    var(--color-border) 50%,
+    var(--color-surface-raised) 75%
+  );
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: skeletonSpin 0.8s linear infinite;
+}
+
+@keyframes skeletonSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* --- Premium UI Enhancements --- */

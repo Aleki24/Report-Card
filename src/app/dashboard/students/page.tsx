@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
+import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
@@ -143,7 +144,7 @@ export default function StudentsPage() {
             {/* Table Card */}
             <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                 {loading ? (
-                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Loading students...</div>
+                    <InlineLoadingSkeleton rows={6} />
                 ) : paginated.length === 0 ? (
                     <EmptyState icon={<Users style={{ width: 24, height: 24 }} />} title="No students found" description={search || filterGradeStream || filterStatus ? 'No students match your filters.' : 'Click "+ Add Student" to enroll your first student.'} action={!search && !filterGradeStream && !filterStatus ? <button className="btn-primary text-xs px-4 py-2" onClick={() => setShowAddModal(true)}>Add Student</button> : undefined} />
                 ) : (
@@ -319,7 +320,7 @@ export default function StudentsPage() {
                         {/* Content */}
                         <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5) var(--space-6)' }}>
                             {viewLoading ? (
-                                <div style={{ textAlign: 'center', padding: 'var(--space-8)', color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Loading...</div>
+                                <InlineLoadingSkeleton rows={4} />
                             ) : viewTab === 'profile' ? (
                                 <div>
                                     <div className="grid grid-cols-2" style={{ gap: 'var(--space-4)' }}>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
@@ -102,6 +102,18 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
         signOut,
     } = useAuth();
 
+    const [searchQuery, setSearchQuery] = useState("");
+    const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetch("/api/school/data?type=school_profile")
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.data?.logo_url) setSchoolLogo(data.data.logo_url);
+            })
+            .catch(() => {});
+    }, []);
+
     const { theme, toggleTheme } = useTheme();
 
     const [showUserMenu, setShowUserMenu] = useState(false);
@@ -112,13 +124,17 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
             ? navItems.filter((item) => item.roles.includes(role))
             : navItems.filter((item) => item.roles.includes("ADMIN"));
 
-        return allowedItems.filter(
+        const filtered = allowedItems.filter(
             (item) =>
                 item.label !== "Homepage" &&
                 item.label !== "Home" &&
                 item.href !== "/"
         );
-    }, [role]);
+
+        if (!searchQuery.trim()) return filtered;
+        const q = searchQuery.toLowerCase();
+        return filtered.filter((item) => item.label.toLowerCase().includes(q));
+    }, [role, searchQuery]);
 
     const groupedNavItems = useMemo(() => {
         return sidebarGroups
@@ -163,67 +179,68 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 onMouseLeave={() => setCollapsed?.(true)}
             >
                 {/* Logo */}
-                <Link
-                    href="/"
-                    style={{
-                        padding: collapsed ? "var(--space-4)" : "var(--space-4) var(--space-4) var(--space-3) var(--space-4)",
-                        borderBottom: "none",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: collapsed ? "center" : "flex-start",
-                        gap: "var(--space-3)",
-                        textDecoration: "none",
-                        color: "inherit",
-                        transition: "opacity 0.15s ease",
-                    }}
-                >
-                    <div
+                    <Link
+                        href="/"
                         style={{
-                            width: collapsed ? 32 : 34,
-                            height: collapsed ? 32 : 34,
-                            borderRadius: "var(--radius-md)",
-                            background: "linear-gradient(135deg, var(--color-accent), #1D4ED8)",
+                            padding: collapsed ? "var(--space-4)" : "var(--space-4) var(--space-4) var(--space-3) var(--space-4)",
+                            borderBottom: "none",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            fontFamily: "var(--font-display)",
-                            fontWeight: 800,
-                            fontSize: 13,
-                            color: "#fff",
-                            flexShrink: 0,
-                            boxShadow: "0 8px 18px rgba(37, 99, 235, 0.18)",
+                            justifyContent: collapsed ? "center" : "flex-start",
+                            gap: "var(--space-3)",
+                            textDecoration: "none",
+                            color: "inherit",
+                            transition: "opacity 0.15s ease",
+                            overflow: "hidden",
                         }}
                     >
-                        {schoolName ? schoolName.slice(0, 2).toUpperCase() : "RA"}
-                    </div>
+                    {schoolLogo ? (
+                        <img
+                            src={schoolLogo}
+                            alt={schoolName || "School"}
+                            style={{
+                                width: collapsed ? 44 : 56,
+                                height: collapsed ? 44 : 56,
+                                borderRadius: 0,
+                                objectFit: "contain",
+                                flexShrink: 0,
+                            }}
+                        />
+                    ) : (
+                        <div
+                            style={{
+                                width: collapsed ? 44 : 56,
+                                height: collapsed ? 44 : 56,
+                                borderRadius: "var(--radius-md)",
+                                background: "linear-gradient(135deg, var(--color-accent), #1D4ED8)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontFamily: "var(--font-display)",
+                                fontWeight: 800,
+                                fontSize: 13,
+                                color: "#fff",
+                                flexShrink: 0,
+                                boxShadow: "0 8px 18px rgba(37, 99, 235, 0.18)",
+                            }}
+                        >
+                            {schoolName ? schoolName.slice(0, 2).toUpperCase() : "RA"}
+                        </div>
+                    )}
 
                     {!collapsed && (
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                             <div
                                 style={{
                                     fontFamily: "var(--font-display)",
                                     fontWeight: 800,
                                     fontSize: 13,
-                                    lineHeight: 1.2,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
+                                    lineHeight: 1.3,
+                                    wordBreak: "break-word",
+                                    overflowWrap: "break-word",
                                 }}
                             >
                                 {schoolName || "Matokeo"}
-                            </div>
-
-                            <div
-                                style={{
-                                    marginTop: 2,
-                                    fontSize: 11,
-                                    color: "var(--color-text-muted)",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                }}
-                            >
-                                International School
                             </div>
                         </div>
                     )}
@@ -231,7 +248,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
 
                 {/* Search */}
                 {!collapsed && (
-                    <div style={{ padding: "0 var(--space-4) var(--space-4)" }}>
+                    <div style={{ padding: "var(--space-3) var(--space-4) var(--space-4)", marginTop: "var(--space-1)" }}>
                         <div
                             style={{
                                 display: "flex",
@@ -249,6 +266,8 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                 type="text"
                                 placeholder="Search menu..."
                                 aria-label="Search menu"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
                                     width: "100%",
                                     border: "none",

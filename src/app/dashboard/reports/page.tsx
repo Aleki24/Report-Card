@@ -217,8 +217,8 @@ export default function ReportsPage() {
   return (
     <div className="w-full max-w-7xl mx-auto position-relative">
       <div className="hero-panel">
-        <h1 className="text-3xl md:text-5xl font-bold font-[family-name:var(--font-display)] mb-4">Academic Reports</h1>
-        <p className="text-lg opacity-90 max-w-2xl">Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics.</p>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Academic Reports</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5, maxWidth: '42rem' }}>Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics.</p>
       </div>
 
       {isAlsoSubjectTeacher && (

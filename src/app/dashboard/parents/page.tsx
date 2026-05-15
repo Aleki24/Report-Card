@@ -1,57 +1,98 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import {
-  Heart, Search, Plus, Phone, Mail, Users, GraduationCap,
+  Heart, Search, Phone, Mail, Users, GraduationCap,
   MoreHorizontal, Eye, Pencil, Link2, Trash2,
 } from 'lucide-react';
+import { TablePageSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
-// TODO: Connect to Supabase API — replace mock data with real queries
-const mockParents = [
-  { id: '1', name: 'Mary Wanjiku', phone: '+254 712 345 678', email: 'mary.wanjiku@gmail.com', relationship: 'Mother', students: ['Brian Otieno'], status: 'Active' },
-  { id: '2', name: 'Peter Kamau', phone: '+254 723 456 789', email: 'peter.kamau@gmail.com', relationship: 'Father', students: ['Grace Kamau'], status: 'Active' },
-  { id: '3', name: 'Michael Adhiambo', phone: '+254 734 567 890', email: '', relationship: 'Father', students: ['Caroline Adhiambo'], status: 'Inactive' },
-  { id: '4', name: 'Jane Wafula', phone: '+254 711 678 901', email: 'jane.wafula@gmail.com', relationship: 'Mother', students: ['Dennis Wafula', 'Kevin Wafula'], status: 'Active' },
-  { id: '5', name: 'Peter Njeri', phone: '+254 700 789 012', email: 'peter.njeri@gmail.com', relationship: 'Guardian', students: ['Esther Njeri'], status: 'Active' },
-];
+interface ParentStudent {
+  id: string;
+  name: string;
+  admission_number: string;
+  class: string;
+  status: string;
+}
+
+interface Parent {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  students: ParentStudent[];
+}
 
 export default function ParentsPage() {
   const { role } = useAuth();
   const [search, setSearch] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [parents, setParents] = useState<Parent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = mockParents.filter(p =>
+  // Fetch parents from server API
+  useEffect(() => {
+    const fetchParents = async () => {
+      try {
+        const res = await fetch('/api/school/parents');
+        if (!res.ok) {
+          setError('Failed to load parent data');
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        setParents(json.data || []);
+      } catch (err) {
+        console.error('Failed to fetch parents:', err);
+        setError('Failed to load parent data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchParents();
+  }, []);
+
+  const filtered = parents.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.phone.includes(search) ||
     p.email.toLowerCase().includes(search.toLowerCase()) ||
-    p.students.some(s => s.toLowerCase().includes(search.toLowerCase()))
+    p.students.some(s => s.name.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const linkedStudents = new Set(mockParents.flatMap(p => p.students)).size;
-  const withPhone = mockParents.filter(p => p.phone).length;
-  const withEmail = mockParents.filter(p => p.email).length;
+  const linkedStudents = new Set(parents.flatMap(p => p.students.map(s => s.id))).size;
+  const withPhone = parents.filter(p => p.phone).length;
+  const withEmail = parents.filter(p => p.email).length;
 
   const stats = [
-    { label: 'Total Parents', value: mockParents.length.toString(), sub: 'Registered parent profiles', icon: <Users size={20} /> },
+    { label: 'Total Parents', value: parents.length.toString(), sub: 'Registered parent profiles', icon: <Users size={20} /> },
     { label: 'Linked Students', value: linkedStudents.toString(), sub: 'Connected to parents', icon: <GraduationCap size={20} /> },
     { label: 'Phone Contacts', value: withPhone.toString(), sub: 'Reachable by phone', icon: <Phone size={20} /> },
     { label: 'Email Contacts', value: withEmail.toString(), sub: 'Reachable by email', icon: <Mail size={20} /> },
   ];
+
+  if (loading) {
+    return <TablePageSkeleton statCards={4} columns={3} />;
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
+        <Heart style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
+        <p style={{ fontSize: 14 }}>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
         <div>
-          <h1 style={{ fontSize: 30, marginBottom: 'var(--space-1)', letterSpacing: '-0.025em' }}>Parents & Guardians</h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Manage parent profiles, contacts, and student relationships.</p>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Parents & Guardians</h1>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>View parent profiles, contacts, and student relationships.</p>
         </div>
-        {role === 'ADMIN' && (
-          <button className="btn-primary" style={{ gap: '8px', borderRadius: 'var(--radius-md)' }}>
-            <Plus style={{ width: 16, height: 16 }} /> Add Parent
-          </button>
-        )}
       </div>
 
       {/* Stats Grid */}
@@ -79,7 +120,7 @@ export default function ParentsPage() {
         }}>
           <div>
             <h2 style={{ fontSize: 18, marginBottom: 2 }}>Parent Directory</h2>
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>View, search, and manage parent contact details.</p>
+            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>View and search parent contact details aggregated from student records.</p>
           </div>
           <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
             <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--color-text-muted)' }} />
@@ -107,10 +148,8 @@ export default function ParentsPage() {
                   <th>Parent Name</th>
                   <th>Phone Number</th>
                   <th>Email Address</th>
-                  <th>Relationship</th>
-                  <th>Linked Student</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
+                  <th>Linked Students</th>
+                  <th>Class</th>
                 </tr>
               </thead>
               <tbody>
@@ -133,91 +172,27 @@ export default function ParentsPage() {
                     <td data-label="Phone Number">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Phone style={{ width: 14, height: 14, color: 'var(--color-text-muted)', flexShrink: 0 }} />
-                        {p.phone}
+                        {p.phone || '—'}
                       </div>
                     </td>
                     <td data-label="Email Address" style={{ color: p.email ? 'var(--color-text-secondary)' : 'var(--color-text-muted)' }}>
                       {p.email || '—'}
                     </td>
-                    <td data-label="Relationship">
-                      <span className="badge badge-info">{p.relationship}</span>
-                    </td>
-                    <td data-label="Linked Student">
+                    <td data-label="Linked Students">
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                         {p.students.map(s => (
-                          <span key={s} style={{
+                          <span key={s.id} style={{
                             display: 'inline-flex', alignItems: 'center',
                             padding: '2px 8px', borderRadius: '6px', fontSize: 12, fontWeight: 500,
                             background: 'var(--color-surface-raised)', color: 'var(--color-text-secondary)',
                           }}>
-                            {s}
+                            {s.name}
                           </span>
                         ))}
                       </div>
                     </td>
-                    <td data-label="Status">
-                      <span className={`badge ${p.status === 'Active' ? 'badge-success' : 'badge-warning'}`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td data-label="Actions" style={{ textAlign: 'right', position: 'relative' }}>
-                      <button
-                        onClick={() => setOpenMenu(openMenu === p.id ? null : p.id)}
-                        style={{
-                          background: 'none', border: '1px solid var(--color-border)',
-                          borderRadius: 'var(--radius-sm)', padding: '6px',
-                          cursor: 'pointer', color: 'var(--color-text-secondary)',
-                          display: 'inline-flex', alignItems: 'center',
-                        }}
-                      >
-                        <MoreHorizontal size={16} />
-                      </button>
-                      {openMenu === p.id && (
-                        <div style={{
-                          position: 'absolute', right: 0, top: '100%', zIndex: 20,
-                          minWidth: 160, borderRadius: 'var(--radius-md)',
-                          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', padding: '4px',
-                          marginTop: 4,
-                        }}>
-                          {[
-                            { label: 'View', icon: <Eye size={14} /> },
-                            { label: 'Edit', icon: <Pencil size={14} /> },
-                            { label: 'Link Student', icon: <Link2 size={14} /> },
-                          ].map(action => (
-                            <button
-                              key={action.label}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                width: '100%', padding: '8px 12px', borderRadius: '6px',
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                fontSize: 13, color: 'var(--color-text-secondary)',
-                                textAlign: 'left',
-                              }}
-                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-raised)')}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                              onClick={() => setOpenMenu(null)}
-                            >
-                              {action.icon} {action.label}
-                            </button>
-                          ))}
-                          <div style={{ height: 1, background: 'var(--color-border-subtle)', margin: '4px 0' }} />
-                          <button
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '8px',
-                              width: '100%', padding: '8px 12px', borderRadius: '6px',
-                              background: 'none', border: 'none', cursor: 'pointer',
-                              fontSize: 13, color: 'var(--color-danger)',
-                              textAlign: 'left',
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                            onClick={() => setOpenMenu(null)}
-                          >
-                            <Trash2 size={14} /> Delete
-                          </button>
-                        </div>
-                      )}
+                    <td data-label="Class" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                      {[...new Set(p.students.map(s => s.class))].join(', ')}
                     </td>
                   </tr>
                 ))}
