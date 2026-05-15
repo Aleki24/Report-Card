@@ -281,7 +281,7 @@ function AttendanceChartCard({ data }: { data: any }) {
         </select>
       </div>
       
-      <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 'var(--space-6)' }}>
+      <div className="attendance-chart-layout">
         <div style={{ width: 140, height: 140, position: 'relative' }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -342,7 +342,7 @@ function FeeCollectionOverviewCard({ collected = 0, total = 0, outstanding = 0, 
       </div>
       
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
+        <div className="fee-overview-top">
           <div>
             <div style={{ fontSize: 12, color: 'var(--color-success)', fontWeight: 600, marginBottom: '4px' }}>Collected</div>
             <div style={{ fontSize: 24, fontWeight: 700 }}>KES {collected.toLocaleString()}</div>
@@ -358,7 +358,7 @@ function FeeCollectionOverviewCard({ collected = 0, total = 0, outstanding = 0, 
           <div style={{ width: `${percent}%`, background: 'var(--color-success)' }} />
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-6)' }}>
+        <div className="fee-overview-bottom">
           <div>
             <div style={{ fontSize: 12, color: 'var(--color-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Outstanding</div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>KES {outstanding.toLocaleString()}</div>
@@ -543,7 +543,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         {/* Header: Title + Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
-            <h1 style={{ fontSize: 28, marginBottom: 'var(--space-1)', fontWeight: 600 }}>
+            <h1 className="dashboard-title">
               {greeting}
             </h1>
             <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
@@ -576,12 +576,12 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
 
         {/* Overview Section */}
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', border: '1px solid var(--color-border)' }}>
+        <div className="dashboard-section-card">
           <div style={{ marginBottom: 'var(--space-5)' }}>
             <h2 style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-body)' }}>Overview</h2>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 2 }}>Key metrics and performance indicators</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+          <div className="overview-stat-grid">
             <StatCard label="Total Students" value={data?.totalStudents ?? '—'} sub="" icon={Users} iconBg="var(--color-surface-raised)" iconColor="#6366f1" />
             <StatCard label="Total Teachers" value={data?.totalTeachers ?? '—'} sub="Active staff" icon={GraduationCap} iconBg="var(--color-surface-raised)" iconColor="#10b981" />
             <StatCard label="Total Classes" value={data?.totalClasses ?? '—'} sub="All streams" icon={Building2} iconBg="var(--color-surface-raised)" iconColor="#3b82f6" />
@@ -589,11 +589,11 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
 
         {/* Quick Actions */}
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', border: '1px solid var(--color-border)' }}>
+        <div className="dashboard-section-card">
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontFamily: 'var(--font-body)' }}>
             <Activity size={16} /> Quick Actions
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
+          <div className="quick-actions-grid">
             <QuickAction label="Students" desc="Manage enrollment" href="/dashboard/students" icon={<Users size={18} />} />
             <QuickAction label="Teachers" desc="Staff management" href="/dashboard/teachers" icon={<GraduationCap size={18} />} />
             <QuickAction label="Classes" desc="Streams & grades" href="/dashboard/classes" icon={<Building2 size={18} />} />
@@ -607,7 +607,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             <QuickAction label="Analytics" desc="Performance trends" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
             <QuickAction label="Users & Roles" desc="Manage access" href="/dashboard/users" icon={<Users size={18} />} />
             {/* Setup Progress — spans remaining columns */}
-            <a href="/dashboard/settings" style={{ textDecoration: 'none', gridColumn: '-1 / 1' }}>
+            <a href="/dashboard/settings" className="setup-progress-link" style={{ textDecoration: 'none' }}>
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 'var(--space-4)',
@@ -645,12 +645,12 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
 
         {/* School Activity Section */}
-        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', border: '1px solid var(--color-border)' }}>
+        <div className="dashboard-section-card">
           <div style={{ marginBottom: 'var(--space-5)' }}>
             <h2 style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-text-primary)', fontFamily: 'var(--font-body)' }}>School Activity</h2>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 2 }}>Attendance and fee collection overview</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--space-3)' }}>
+          <div className="activity-grid">
             <QuickAction label="Fee Collection" desc="Track payments" href="/dashboard/students" icon={<Wallet size={18} />} />
             <QuickAction label="Attendance" desc="Daily tracking" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
           </div>

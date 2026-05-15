@@ -25,7 +25,7 @@ export function MySubjectsGrid({ mySubjects, loadingMySubjects, selectedExamId, 
   return (
     <div className="mb-6">
       <h2 className="text-lg font-semibold font-[family-name:var(--font-display)] mb-4">My Subjects</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 'var(--space-4)' }}>
         {mySubjects.map(subject => (
           <div key={subject.id} className="card" style={{ padding: 'var(--space-5)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-3)' }}>

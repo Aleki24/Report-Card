@@ -319,7 +319,7 @@ export default function ExamResultsPage() {
                     {marks.length === 0 ? (
                       <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students with marks to generate reports for.</p>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
+                      <div className="student-reports-grid">
                         {marks.map(m => (
                           <button key={m.student_id} className="btn-secondary text-left" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', fontSize: 13 }} onClick={() => handleDownloadReport(m.student_id)}>
                             <span style={{ fontSize: 18 }}>📄</span>

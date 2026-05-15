@@ -358,37 +358,6 @@ select.input-field {
   .dashboard-main:has(.dashboard-grid) {
     overflow: hidden;
   }
-
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    height: 100%;
-  }
-
-  .dashboard-grid > div {
-    overflow-y: auto;
-    height: 100%;
-    padding-right: var(--space-2);
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border) transparent;
-  }
-
-  .dashboard-grid > div::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  .dashboard-grid > div::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .dashboard-grid > div::-webkit-scrollbar-thumb {
-    background: var(--color-border);
-    border-radius: 4px;
-  }
-
-  .dashboard-grid > div::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-muted);
-  }
 }
 
 /* ============================================= */
@@ -437,6 +406,234 @@ select.input-field {
     text-transform: uppercase;
     flex-shrink: 0;
     margin-right: var(--space-4);
+  }
+}
+
+/* ============================================= */
+/* RESPONSIVE DASHBOARD GRIDS                    */
+/* ============================================= */
+
+/* Overview stat grid: 3-col desktop, 2-col tablet, 1-col mobile */
+.overview-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+/* Quick actions grid */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+/* School activity grid */
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+/* Attendance chart: horizontal layout with chart + legend */
+.attendance-chart-layout {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: var(--space-6);
+}
+
+/* Fee overview: top row of collected/total */
+.fee-overview-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+
+/* Fee overview: bottom row of outstanding/overdue */
+.fee-overview-bottom {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-6);
+}
+
+/* Dashboard header title */
+.dashboard-title {
+  font-size: 28px;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+/* Student report buttons grid */
+.student-reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+/* Dashboard section card */
+.dashboard-section-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+}
+
+/* Mobile dashboard grid stacking */
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ============================================= */
+/* MOBILE RESPONSIVE OVERRIDES (max-width: 480px)*/
+/* ============================================= */
+@media (max-width: 480px) {
+  .overview-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quick-actions-grid .setup-progress-link {
+    grid-column: span 2;
+  }
+
+  .activity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-chart-layout {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .attendance-chart-layout > div:first-child {
+    margin: 0 auto;
+  }
+
+  .fee-overview-top,
+  .fee-overview-bottom {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .fee-overview-top > div:last-child,
+  .fee-overview-bottom > div:last-child {
+    text-align: left;
+  }
+
+  .dashboard-title {
+    font-size: 22px;
+  }
+
+  .dashboard-section-card {
+    padding: var(--space-4);
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+
+  .stat-card {
+    padding: var(--space-4);
+  }
+
+  .student-reports-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-panel {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .stat-card .stat-value {
+    font-size: 24px;
+  }
+
+  /* Compact stat card icon on mobile */
+  .stat-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .stat-card-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* ============================================= */
+/* TABLET RESPONSIVE (481px — 768px)             */
+/* ============================================= */
+@media (min-width: 481px) and (max-width: 768px) {
+  .overview-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quick-actions-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .quick-actions-grid .setup-progress-link {
+    grid-column: span 3;
+  }
+
+  .dashboard-title {
+    font-size: 24px;
+  }
+
+  .dashboard-section-card {
+    padding: var(--space-5);
+  }
+
+  .card {
+    padding: var(--space-5);
+  }
+}
+
+/* ============================================= */
+/* DESKTOP DASHBOARD GRID (769px+)               */
+/* ============================================= */
+@media (min-width: 769px) {
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    height: 100%;
+    flex-direction: unset;
+  }
+
+  .dashboard-grid > div {
+    overflow-y: auto;
+    height: 100%;
+    padding-right: var(--space-2);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .dashboard-grid > div::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .dashboard-grid > div::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dashboard-grid > div::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+  }
+
+  .dashboard-grid > div::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+  }
+
+  .quick-actions-grid .setup-progress-link {
+    grid-column: -1 / 1;
   }
 }
 

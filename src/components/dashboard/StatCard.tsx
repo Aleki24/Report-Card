@@ -26,6 +26,7 @@ export default function StatCard({ label, value, sub, icon: Icon, iconBg, iconCo
       }}
     >
       <div
+        className="stat-card-icon"
         style={{
           width: '48px',
           height: '48px',

@@ -391,7 +391,7 @@ export default function ExamResultsPage() {
                                         {classStudents.length === 0 ? (
                                             <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students found in this class.</p>
                                         ) : (
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--space-3)' }}>
+                                            <div className="student-reports-grid">
                                                 {classStudents.map(s => (
                                                     <button
                                                         key={s.id}
