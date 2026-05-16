@@ -132,10 +132,10 @@ export async function POST(request: NextRequest) {
       });
 
       if (result.error) {
-        return NextResponse.json({ error: result.error, ...result }, { status: 400 });
+        return NextResponse.json({ error: result.error, created: result.created, skipped: result.skipped }, { status: 400 });
       }
 
-      return NextResponse.json({ success: true, ...result });
+      return NextResponse.json({ success: true, created: result.created, skipped: result.skipped });
     }
 
     // ── Standard exam creation (for CATs etc.) ──

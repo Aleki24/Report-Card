@@ -7,6 +7,7 @@ import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamRe
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
+import { ALL_EXAM_TYPES, getExamTypeLabel } from '@/lib/exam-types';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_code: string; subject_id: string; grade_id: string; term_id: string; }
@@ -15,10 +16,7 @@ interface Term { id: string; name: string; academic_year_id: string; is_current:
 
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
 
-const EXAM_TYPE_LABELS: Record<string, string> = {
-  OPENER: '📝 Opener', MIDTERM: '📋 Midterm', ENDTERM: '📊 End Term', CAT: '📌 CAT',
-};
-const EXAM_TYPE_ORDER = ['OPENER', 'MIDTERM', 'ENDTERM', 'CAT'];
+const EXAM_TYPE_ORDER = ALL_EXAM_TYPES.map(et => et.code);
 
 export default function ExamResultsPage() {
   const { user } = useAuth();
@@ -211,7 +209,7 @@ export default function ExamResultsPage() {
               <select className="input-field w-full" value={selectedExamType} onChange={e => { setSelectedExamType(e.target.value); setSelectedExamId(''); }} disabled={!selectedStreamId || !selectedTermId}>
                 <option value="">{!selectedStreamId || !selectedTermId ? 'Select term & class first' : '-- Select Exam Type --'}</option>
                 {examTypes.map(t => (
-                  <option key={t} value={t}>{(EXAM_TYPE_LABELS[t] || t).replace(/[📝📋📊📌] /, '')} ({allExams.filter(e => e.exam_type === t).length} subjects)</option>
+                  <option key={t} value={t}>{getExamTypeLabel(t)} ({allExams.filter(e => e.exam_type === t).length} subjects)</option>
                 ))}
               </select>
             )}
@@ -234,7 +232,7 @@ export default function ExamResultsPage() {
         <>
           {selectedExamId && selectedExam && (
             <div className="mb-4 p-3 rounded-md text-sm" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))', border: '1px solid var(--color-border)' }}>
-              <strong>{selectedTermName}</strong> · <strong>{EXAM_TYPE_LABELS[selectedExam.exam_type] || selectedExam.exam_type}</strong> · <strong>{selectedExam.subject_name}</strong> · Max: {selectedExam.max_score}
+              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExam.exam_type)}</strong> · <strong>{selectedExam.subject_name}</strong> · Max: {selectedExam.max_score}
             </div>
           )}
 
