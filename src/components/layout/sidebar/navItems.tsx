@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen, Home, ClipboardList, CalendarCheck, Heart } from 'lucide-react';
+import { LayoutDashboard, PenTool, GraduationCap, LineChart, FileText, Users, Trophy, School, UserCircle, Settings, BookOpen, Home, ClipboardList, CalendarCheck, Heart, Bell, Briefcase, DollarSign } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
 
 export interface NavItem {
@@ -25,8 +25,10 @@ export const navItems: NavItem[] = [
     { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], icon: <CalendarCheck size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Parents', href: '/dashboard/parents', roles: ['ADMIN'], icon: <Heart size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Analytics', href: '/dashboard/analytics', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <LineChart size={18} style={{ flexShrink: 0 }} /> },
-    { label: 'My Results', href: '/dashboard/my-results', roles: ['STUDENT'], icon: <Trophy size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Users', href: '/dashboard/users', roles: ['ADMIN', 'CLASS_TEACHER'], icon: <UserCircle size={18} style={{ flexShrink: 0 }} /> },
+    { label: 'Announcements', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <Bell size={18} style={{ flexShrink: 0 }} /> },
+    { label: 'Assignments', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <Briefcase size={18} style={{ flexShrink: 0 }} /> },
+    { label: 'Fees', href: '/dashboard/fees', roles: ['ADMIN', 'CLASS_TEACHER'], icon: <DollarSign size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Settings', href: '/dashboard/settings', roles: ['ADMIN'], icon: <Settings size={18} style={{ flexShrink: 0 }} /> },
 ];
 

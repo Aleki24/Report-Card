@@ -1,6 +1,6 @@
 // src/app/api/school/exams/route.ts
 // GET: Returns exams scoped to the current user's school
-// POST: Creates a new exam, enforcing school isolation server-side
+// POST: Creates a new exam OR seeds exam slots for a term
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -28,18 +28,28 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const streamId = searchParams.get('stream_id');
     const gradeId = searchParams.get('grade_id');
+    const termId = searchParams.get('term_id');
+    const examType = searchParams.get('exam_type');
+    const subjectId = searchParams.get('subject_id');
 
     const supabase = createSupabaseAdmin();
 
     let query = supabase
       .from('exams')
       .select(`
-        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id,
-        subjects:subject_id ( name ),
+        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id,
+        subjects:subject_id ( name, code, category ),
         grades:grade_id ( name_display )
       `)
       .eq('school_id', schoolId)
-      .order('exam_date', { ascending: false });
+      .order('exam_type', { ascending: true });
+
+    // New: filter by term
+    if (termId) query = query.eq('term_id', termId);
+    // New: filter by exam type
+    if (examType) query = query.eq('exam_type', examType);
+    // New: filter by subject
+    if (subjectId) query = query.eq('subject_id', subjectId);
 
     // Filter by stream/grade
     if (streamId && gradeId) {
@@ -48,6 +58,8 @@ export async function GET(request: NextRequest) {
       );
     } else if (streamId) {
       query = query.eq('grade_stream_id', streamId);
+    } else if (gradeId) {
+      query = query.eq('grade_id', gradeId);
     }
 
     const { data, error } = await query;
@@ -67,9 +79,12 @@ export async function GET(request: NextRequest) {
       max_score: e.max_score,
       subject_id: e.subject_id,
       subject_name: e.subjects?.name || 'N/A',
+      subject_code: e.subjects?.code || '',
+      subject_category: e.subjects?.category || '',
       grade_name: e.grades?.name_display || 'N/A',
       grade_stream_id: e.grade_stream_id,
       grade_id: e.grade_id,
+      term_id: e.term_id,
     }));
 
     return NextResponse.json({ data: mapped });
@@ -96,6 +111,34 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    // ── Seed action: bulk-create exam slots for a term ──
+    if (body.action === 'seed') {
+      if (role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Only admins can seed exam slots' }, { status: 403 });
+      }
+
+      const { termId, academicYearId, examTypes } = body;
+      if (!termId || !academicYearId) {
+        return NextResponse.json({ error: 'termId and academicYearId are required' }, { status: 400 });
+      }
+
+      const { seedExamSlots } = await import('@/lib/seed-exam-slots');
+      const result = await seedExamSlots({
+        termId,
+        schoolId,
+        academicYearId,
+        examTypes,
+      });
+
+      if (result.error) {
+        return NextResponse.json({ error: result.error, ...result }, { status: 400 });
+      }
+
+      return NextResponse.json({ success: true, ...result });
+    }
+
+    // ── Standard exam creation (for CATs etc.) ──
     const {
       name, exam_type, subject_id, academic_year_id,
       term_id, grade_id, grade_stream_id, max_score, exam_date,
@@ -107,10 +150,8 @@ export async function POST(request: NextRequest) {
     if (!academic_year_id) return NextResponse.json({ error: 'Academic year is required' }, { status: 400 });
     if (!term_id) return NextResponse.json({ error: 'Term is required' }, { status: 400 });
     if (!grade_id) return NextResponse.json({ error: 'Grade is required' }, { status: 400 });
-    if (!exam_date) return NextResponse.json({ error: 'Exam date is required' }, { status: 400 });
-    if (!max_score || max_score <= 0) return NextResponse.json({ error: 'Max score must be greater than 0' }, { status: 400 });
 
-    // Verify the term and academic_year belong to this school
+    // Verify the term belongs to this school
     const supabase = createSupabaseAdmin();
 
     const { data: termCheck } = await supabase
@@ -140,14 +181,14 @@ export async function POST(request: NextRequest) {
       .from('exams')
       .insert({
         name: name.trim(),
-        exam_type: exam_type || 'MIDTERM',
+        exam_type: exam_type || 'CAT',
         subject_id,
         academic_year_id,
         term_id,
         grade_id,
         grade_stream_id: grade_stream_id || null,
-        max_score: Number(max_score),
-        exam_date,
+        max_score: Number(max_score) || 100,
+        exam_date: exam_date || null,
         created_by_teacher_id: userId,
         school_id: schoolId,
       })

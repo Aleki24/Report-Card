@@ -40,8 +40,8 @@
   --color-purple-500: #F97316;
 
   /* --- Typography --- */
-  --font-display: 'Lora', Georgia, serif;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-display: var(--font-helvetica-neue), 'Inter', sans-serif;
+  --font-body: var(--font-helvetica-neue), 'Inter', system-ui, sans-serif;
 
   /* --- Spacing Rhythm --- */
   --space-1: 4px;
@@ -878,3 +878,385 @@ select.input-field {
 .animation-delay-1000 { animation-delay: 1000ms; }
 .animation-delay-1200 { animation-delay: 1200ms; }
 .animation-delay-1400 { animation-delay: 1400ms; }
+
+/* ============================================= */
+/* STUDENT PORTAL LAYOUT                         */
+/* ============================================= */
+
+.student-sidebar {
+    display: none;
+}
+
+.student-topbar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    z-index: 40;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+}
+
+.student-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    align-items: center;
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+}
+
+.student-main {
+    flex: 1;
+    min-height: 100vh;
+    padding: 72px var(--space-4) calc(80px + env(safe-area-inset-bottom));
+    font-size: 0.8125rem;
+}
+
+.student-more-menu {
+    position: fixed;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    left: var(--space-3);
+    right: var(--space-3);
+    z-index: 70;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.25);
+    max-height: 60vh;
+    overflow-y: auto;
+    animation: slideUpFade 0.2s ease-out;
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Desktop: sidebar + shifted main */
+@media (min-width: 769px) {
+    .student-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 50;
+        height: 100vh;
+        background: var(--color-surface);
+        border-right: 1px solid var(--color-border);
+        transition: width 0.3s ease;
+        overflow: hidden;
+    }
+
+    .student-topbar {
+        display: none;
+    }
+
+    .student-bottom-nav {
+        display: none;
+    }
+
+    .student-main {
+        margin-left: 80px;
+        padding: var(--space-8);
+        min-height: 100vh;
+        height: auto;
+    }
+}
+
+/* ============================================= */
+/* STUDENT PORTAL COMPONENTS                     */
+/* ============================================= */
+
+.student-welcome-card {
+    background: linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(5,150,105,0.04) 100%);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    margin-bottom: var(--space-6);
+    position: relative;
+    overflow: hidden;
+}
+
+.student-welcome-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #10B981, #059669);
+}
+
+.student-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.student-section-title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* Attendance status indicators */
+.attendance-present { color: var(--color-success); background: rgba(16,185,129,0.12); }
+.attendance-absent { color: var(--color-danger); background: rgba(239,68,68,0.12); }
+.attendance-late { color: var(--color-warning); background: rgba(234,179,8,0.12); }
+.attendance-excused { color: #6366f1; background: rgba(99,102,241,0.12); }
+
+.attendance-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.attendance-dot-present { background: var(--color-success); }
+.attendance-dot-absent { background: var(--color-danger); }
+.attendance-dot-late { background: var(--color-warning); }
+.attendance-dot-excused { background: #6366f1; }
+
+/* Report card specific */
+.report-card-item {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    margin-bottom: var(--space-4);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.report-card-item:hover {
+    border-color: #10B981;
+    box-shadow: 0 0 0 1px rgba(16,185,129,0.15), 0 4px 16px rgba(0,0,0,0.15);
+}
+
+/* Subject cards */
+.subject-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    transition: border-color 0.15s, transform 0.15s;
+}
+
+.subject-card:hover {
+    border-color: #10B981;
+    transform: translateY(-2px);
+}
+
+/* Student page header */
+.student-page-header {
+    margin-bottom: var(--space-6);
+}
+
+.student-page-header h1 {
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+}
+
+.student-page-header p {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+/* Filter bar */
+.student-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+    padding: var(--space-4);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.student-filter-bar select {
+    padding: 8px 32px 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
+/* Responsive tweaks */
+@media (max-width: 480px) {
+    .student-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .student-welcome-card {
+        padding: var(--space-4);
+    }
+
+    .student-filter-bar {
+        flex-direction: column;
+    }
+
+    .student-filter-bar select {
+        width: 100%;
+    }
+}
+
+@media (min-width: 769px) {
+    .student-kpi-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Term badge */
+.term-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(16,185,129,0.1);
+    color: #10B981;
+    border: 1px solid rgba(16,185,129,0.2);
+}
+
+/* Skeleton specific for student portal */
+.student-skeleton-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+}
+
+/* ============================================= */
+/* PREMIUM INSPIRATION UI                        */
+/* ============================================= */
+
+.premium-card {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    padding: var(--space-5);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.premium-card:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05);
+}
+
+.premium-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+}
+
+.premium-card-title {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 700;
+    color: #1E293B;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.premium-card-action {
+    font-size: 13px;
+    color: #3B82F6;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.premium-card-action:hover {
+    text-decoration: underline;
+}
+
+.pill-ongoing {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10B981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.pill-upcoming {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8B5CF6;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.pill-progress {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3B82F6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.premium-list-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.premium-list-item:last-child {
+    border-bottom: none;
+}
+
+.premium-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}

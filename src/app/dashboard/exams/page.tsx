@@ -9,20 +9,30 @@ import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
-interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; }
+interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_code: string; subject_id: string; grade_id: string; term_id: string; }
 interface AcademicYear { id: string; name: string; }
-interface Term { id: string; name: string; academic_year_id: string; }
+interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
 
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
+
+const EXAM_TYPE_LABELS: Record<string, string> = {
+  OPENER: '📝 Opener', MIDTERM: '📋 Midterm', ENDTERM: '📊 End Term', CAT: '📌 CAT',
+};
+const EXAM_TYPE_ORDER = ['OPENER', 'MIDTERM', 'ENDTERM', 'CAT'];
 
 export default function ExamResultsPage() {
   const { user } = useAuth();
 
   const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
   const [selectedStreamId, setSelectedStreamId] = useState('');
-  const [exams, setExams] = useState<ExamOption[]>([]);
-  const [selectedExamId, setSelectedExamId] = useState('');
   const [loadingStreams, setLoadingStreams] = useState(true);
+
+  // Term + exam type cascade
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [selectedTermId, setSelectedTermId] = useState('');
+  const [allExams, setAllExams] = useState<ExamOption[]>([]);
+  const [selectedExamType, setSelectedExamType] = useState('');
+  const [selectedExamId, setSelectedExamId] = useState('');
   const [loadingExams, setLoadingExams] = useState(false);
 
   const [activeTab, setActiveTab] = useState<Tab>('allsubjects');
@@ -30,34 +40,43 @@ export default function ExamResultsPage() {
   const [loadingMarks, setLoadingMarks] = useState(false);
 
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [allTerms, setAllTerms] = useState<Term[]>([]);
   const [selectedYearId, setSelectedYearId] = useState('');
-  const [selectedTermId, setSelectedTermId] = useState('');
   const [reportGenerating, setReportGenerating] = useState(false);
   const [reportMsg, setReportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [customReportTitle, setCustomReportTitle] = useState('');
 
-  // ── Fetch grade streams via school-scoped API ──────────────
+  // ── Fetch grade streams + terms ──
   useEffect(() => {
-    const fetchStreams = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/school/data?type=grade_streams');
-        const json = await res.json();
-        setGradeStreams(json.data || []);
-      } catch (err) {
-        console.error('Failed to fetch grade streams:', err);
-      }
+        const [streamsRes, termsRes, yearsRes] = await Promise.all([
+          fetch('/api/school/data?type=grade_streams'),
+          fetch('/api/school/data?type=terms'),
+          fetch('/api/school/data?type=academic_years'),
+        ]);
+        const [sJson, tJson, yJson] = await Promise.all([streamsRes.json(), termsRes.json(), yearsRes.json()]);
+        setGradeStreams(sJson.data || []);
+        setTerms(tJson.data || []);
+        setAcademicYears(yJson.data || []);
+        // Auto-select current term
+        const current = (tJson.data || []).find((t: Term) => t.is_current);
+        if (current) setSelectedTermId(current.id);
+        else if (tJson.data?.length > 0) setSelectedTermId(tJson.data[0].id);
+        if (yJson.data?.length > 0) setSelectedYearId(yJson.data[0].id);
+      } catch (err) { console.error('Failed to fetch data:', err); }
       setLoadingStreams(false);
     };
-    fetchStreams();
+    fetchData();
   }, []);
 
-  // ── Fetch exams for selected stream via server API ─────────
+  // ── Fetch exams when stream + term change ──
   useEffect(() => {
-    if (!selectedStreamId) { setExams([]); setSelectedExamId(''); return; }
+    if (!selectedStreamId || !selectedTermId) { setAllExams([]); setSelectedExamType(''); setSelectedExamId(''); return; }
+    setLoadingExams(true);
+    setSelectedExamType('');
+    setSelectedExamId('');
 
     const fetchExams = async () => {
-      setLoadingExams(true);
       try {
         const stream = gradeStreams.find(s => s.id === selectedStreamId);
         if (!stream) { setLoadingExams(false); return; }
@@ -65,28 +84,36 @@ export default function ExamResultsPage() {
         const params = new URLSearchParams({
           stream_id: selectedStreamId,
           grade_id: stream.grade_id,
+          term_id: selectedTermId,
         });
         const res = await fetch(`/api/school/exams?${params.toString()}`);
         const json = await res.json();
 
         const mapped = (json.data || []).map((e: any) => ({
-          id: e.id,
-          name: e.name,
-          exam_type: e.exam_type,
-          max_score: e.max_score,
-          subject_name: e.subject_name || 'N/A',
+          id: e.id, name: e.name, exam_type: e.exam_type, max_score: e.max_score,
+          subject_name: e.subject_name || 'N/A', subject_code: e.subject_code || '',
+          subject_id: e.subject_id, grade_id: e.grade_id, term_id: e.term_id,
         }));
-        setExams(mapped);
-        setSelectedExamId(mapped[0]?.id || '');
-      } catch (err) {
-        console.error('Failed to fetch exams:', err);
-      }
+        setAllExams(mapped);
+      } catch (err) { console.error('Failed to fetch exams:', err); }
       setLoadingExams(false);
     };
     fetchExams();
-  }, [selectedStreamId, gradeStreams]);
+  }, [selectedStreamId, selectedTermId, gradeStreams]);
 
-  // ── Fetch marks for selected exam via server API ───────────
+  // ── Derived: exam types available ──
+  const examTypes = useMemo(() =>
+    [...new Set(allExams.map(e => e.exam_type))].sort(
+      (a, b) => EXAM_TYPE_ORDER.indexOf(a) - EXAM_TYPE_ORDER.indexOf(b)
+    ), [allExams]);
+
+  // ── Derived: exams for selected type ──
+  const examsForType = useMemo(() =>
+    allExams.filter(e => e.exam_type === selectedExamType)
+      .sort((a, b) => a.subject_name.localeCompare(b.subject_name)),
+    [allExams, selectedExamType]);
+
+  // ── Fetch marks for selected exam ──
   const fetchMarks = useCallback(async () => {
     if (!selectedExamId) { setMarks([]); return; }
     setLoadingMarks(true);
@@ -95,48 +122,19 @@ export default function ExamResultsPage() {
       const json = await res.json();
 
       const mapped: MarkRow[] = (json.data || []).map((m: any) => ({
-        id: m.id,
-        student_id: m.student_id,
-        student_name: m.student_name,
-        admission_number: m.admission_number,
-        raw_score: Number(m.raw_score),
-        percentage: Number(m.percentage || 0),
-        grade_symbol: m.grade_symbol || '-',
+        id: m.id, student_id: m.student_id, student_name: m.student_name,
+        admission_number: m.admission_number, raw_score: Number(m.raw_score),
+        percentage: Number(m.percentage || 0), grade_symbol: m.grade_symbol || '-',
         remarks: m.remarks,
       }));
       setMarks(mapped);
-    } catch (err) {
-      console.error('Failed to fetch marks:', err);
-    }
+    } catch (err) { console.error('Failed to fetch marks:', err); }
     setLoadingMarks(false);
   }, [selectedExamId]);
 
   useEffect(() => { fetchMarks(); }, [fetchMarks]);
 
-  // ── Fetch academic years + terms via school-scoped API ─────
-  useEffect(() => {
-    const fetchYearsTerms = async () => {
-      try {
-        const [yearsRes, termsRes] = await Promise.all([
-          fetch('/api/school/data?type=academic_years'),
-          fetch('/api/school/data?type=terms'),
-        ]);
-        const [yearsJson, termsJson] = await Promise.all([
-          yearsRes.json(), termsRes.json(),
-        ]);
-        setAcademicYears(yearsJson.data || []);
-        setAllTerms(termsJson.data || []);
-        if (yearsJson.data?.length > 0) setSelectedYearId(yearsJson.data[0].id);
-      } catch (err) {
-        console.error('Failed to fetch years/terms:', err);
-      }
-    };
-    fetchYearsTerms();
-  }, []);
-
-  useEffect(() => { setSelectedTermId(''); }, [selectedYearId]);
-
-  const filteredTerms = allTerms.filter(t => t.academic_year_id === selectedYearId);
+  const selectedTermName = terms.find(t => t.id === selectedTermId)?.name || '';
 
   const handleDownloadReport = (studentId: string) => {
     const params = new URLSearchParams();
@@ -153,7 +151,6 @@ export default function ExamResultsPage() {
     }
     setReportGenerating(true);
     setReportMsg(null);
-
     try {
       const res = await fetch('/api/reports/generate', {
         method: 'POST',
@@ -165,83 +162,79 @@ export default function ExamResultsPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setReportMsg({ type: 'error', text: `Failed: ${data.error}` });
-      } else {
-        setReportMsg({ type: 'success', text: 'Bulk reports generated successfully!' });
-      }
-    } catch {
-      setReportMsg({ type: 'error', text: 'Unexpected error generating reports.' });
-    }
+      if (!res.ok) setReportMsg({ type: 'error', text: `Failed: ${data.error}` });
+      else setReportMsg({ type: 'success', text: 'Bulk reports generated successfully!' });
+    } catch { setReportMsg({ type: 'error', text: 'Unexpected error generating reports.' }); }
     setReportGenerating(false);
   };
 
-  const selectedExam = exams.find(e => e.id === selectedExamId);
+  const selectedExam = allExams.find(e => e.id === selectedExamId);
 
   return (
     <div className="w-full max-w-7xl mx-auto">
       <div style={{ marginBottom: 'var(--space-6)' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Exam Results</h1>
         <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-          Select a class and exam to view results, analyze performance, and generate reports
+          Select term, class, and exam type to view results and generate reports
         </p>
       </div>
 
-      {/* Guide */}
-      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        <div className="text-sm">
-          <h3 className="font-semibold mb-2 text-base">How to manage exams & reports:</h3>
-          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-            <li><strong>Step 1:</strong> Select a Class and an Exam to view the results. (Exams are created in Settings).</li>
-            <li><strong>Step 2:</strong> Use the <strong>Quick Entry</strong> tab to rapidly enter marks for all students in the class.</li>
-            <li><strong>Step 3:</strong> Navigate to the <strong>Reports</strong> tab to generate and download individual or bulk PDF report cards.</li>
-          </ul>
-        </div>
-      </div>
+      {/* ══════ FILTERS: Term + Class + Exam Type ══════ */}
+      <div className="card mb-4" style={{ padding: 'var(--space-5)' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+          {/* Term */}
+          <div>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">① Term</label>
+            <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)}>
+              <option value="">-- Select Term --</option>
+              {terms.map(t => (
+                <option key={t.id} value={t.id}>{t.name} {t.is_current ? '(current)' : ''}</option>
+              ))}
+            </select>
+          </div>
 
-      {/* Cascading Filters */}
-      <div className="card flex flex-col md:flex-row md:items-end" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)', padding: 'var(--space-5)' }}>
-        <div className="flex-1">
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class / Stream</label>
-          <select
-            className="input-field w-full"
-            value={selectedStreamId}
-            onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('results'); }}
-            disabled={loadingStreams}
-          >
-            <option value="">-- Select Class --</option>
-            {gradeStreams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Exam</label>
-          <select
-            className="input-field w-full"
-            value={selectedExamId}
-            onChange={e => { setSelectedExamId(e.target.value); setActiveTab('results'); }}
-            disabled={!selectedStreamId || loadingExams}
-          >
-            {!selectedStreamId ? (
-              <option value="">Select a class first</option>
-            ) : loadingExams ? (
-              <option value="">Loading…</option>
-            ) : exams.length === 0 ? (
-              <option value="">No exams found</option>
+          {/* Class */}
+          <div>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">② Class</label>
+            <select className="input-field w-full" value={selectedStreamId} onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('allsubjects'); }} disabled={loadingStreams}>
+              <option value="">-- Select Class --</option>
+              {gradeStreams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </div>
+
+          {/* Exam Type */}
+          <div>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">③ Exam Type</label>
+            {loadingExams ? (
+              <div className="input-field w-full" style={{ color: 'var(--color-text-muted)' }}>Loading...</div>
             ) : (
-              exams.map(e => (
-                <option key={e.id} value={e.id}>{e.name} — {e.subject_name} ({e.exam_type})</option>
-              ))
+              <select className="input-field w-full" value={selectedExamType} onChange={e => { setSelectedExamType(e.target.value); setSelectedExamId(''); }} disabled={!selectedStreamId || !selectedTermId}>
+                <option value="">{!selectedStreamId || !selectedTermId ? 'Select term & class first' : '-- Select Exam Type --'}</option>
+                {examTypes.map(t => (
+                  <option key={t} value={t}>{(EXAM_TYPE_LABELS[t] || t).replace(/[📝📋📊📌] /, '')} ({allExams.filter(e => e.exam_type === t).length} subjects)</option>
+                ))}
+              </select>
             )}
-          </select>
+          </div>
+
+          {/* Subject/Exam */}
+          <div>
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">④ Subject</label>
+            <select className="input-field w-full" value={selectedExamId} onChange={e => { setSelectedExamId(e.target.value); setActiveTab('results'); }} disabled={!selectedExamType}>
+              <option value="">{!selectedExamType ? 'Select exam type first' : '-- Select Subject --'}</option>
+              {examsForType.map(e => (
+                <option key={e.id} value={e.id}>{e.subject_name} ({e.subject_code})</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {selectedStreamId && (
+      {selectedStreamId && selectedTermId && (
         <>
           {selectedExamId && selectedExam && (
-            <div className="mb-4 p-3 rounded-md text-sm bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
-              <strong>Exam:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name} · <strong>Max Score:</strong> {selectedExam.max_score}
+            <div className="mb-4 p-3 rounded-md text-sm" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))', border: '1px solid var(--color-border)' }}>
+              <strong>{selectedTermName}</strong> · <strong>{EXAM_TYPE_LABELS[selectedExam.exam_type] || selectedExam.exam_type}</strong> · <strong>{selectedExam.subject_name}</strong> · Max: {selectedExam.max_score}
             </div>
           )}
 
@@ -266,9 +259,7 @@ export default function ExamResultsPage() {
           </div>
 
           {loadingMarks ? (
-            <div className="card">
-              <InlineLoadingSkeleton rows={6} />
-            </div>
+            <div className="card"><InlineLoadingSkeleton rows={6} /></div>
           ) : (
             <>
               {activeTab === 'allsubjects' && <AllSubjectsView gradeStreamId={selectedStreamId} />}
@@ -278,7 +269,7 @@ export default function ExamResultsPage() {
               )}
               {activeTab === 'results' && !selectedExamId && (
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-                  <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Select an exam above to view individual results.</p>
+                  <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Select a subject above to view results.</p>
                 </div>
               )}
 
@@ -302,9 +293,8 @@ export default function ExamResultsPage() {
                       </div>
                       <div className="flex-1">
                         <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term</label>
-                        <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)} disabled={!selectedYearId}>
-                          <option value="">-- Select Term --</option>
-                          {filteredTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        <select className="input-field w-full" value={selectedTermId} disabled>
+                          {terms.filter(t => t.id === selectedTermId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </div>
                     </div>
@@ -324,11 +314,7 @@ export default function ExamResultsPage() {
                         {marks.map(m => (
                           <button key={m.student_id} className="btn-secondary text-left" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', fontSize: 13 }} onClick={() => handleDownloadReport(m.student_id)}>
                             <span style={{ fontSize: 18 }}>📄</span>
-                            <span>
-                              <strong>{m.student_name}</strong>
-                              <br />
-                              <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{m.admission_number}</span>
-                            </span>
+                            <span><strong>{m.student_name}</strong><br /><span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{m.admission_number}</span></span>
                           </button>
                         ))}
                       </div>
@@ -352,6 +338,14 @@ export default function ExamResultsPage() {
             </>
           )}
         </>
+      )}
+
+      {/* Empty state */}
+      {(!selectedStreamId || !selectedTermId) && !loadingStreams && (
+        <div className="card text-center py-16" style={{ color: 'var(--color-text-muted)' }}>
+          <p className="text-4xl mb-3">📊</p>
+          <p className="text-sm">Select a term and class above to view exam results</p>
+        </div>
       )}
     </div>
   );

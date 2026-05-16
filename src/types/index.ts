@@ -204,3 +204,139 @@ export interface PerformanceHistory {
     position_in_subject?: number;
     trend_vs_previous_term?: number;
 }
+
+// ── Student Portal Types ─────────────────────────────────────
+
+export interface CurrentStudent {
+    userId: string;
+    studentId: string;
+    role: 'STUDENT';
+    fullName: string;
+    email: string;
+    admissionNumber: string;
+    gradeStreamId: string;
+    academicLevelId: string;
+    schoolId: string;
+}
+
+export interface StudentProfileData {
+    id: string;
+    admission_number: string;
+    avatar_url?: string;
+    date_of_birth?: string;
+    gender?: string;
+    guardian_name?: string;
+    guardian_phone?: string;
+    guardian_email?: string;
+    date_enrolled?: string;
+    status: StudentStatus;
+    users: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+        phone?: string;
+        role: UserRole;
+    };
+    academic_levels?: {
+        id: string;
+        code: string;
+        name: string;
+    };
+    grade_streams?: {
+        id: string;
+        name: string;
+        full_name: string;
+        grades?: {
+            id: string;
+            code: string;
+            name_display: string;
+        };
+    };
+}
+
+export interface StudentResultItem {
+    id: string;
+    raw_score: number;
+    percentage: number;
+    grade_symbol?: string;
+    remarks?: string;
+    exams: {
+        id: string;
+        name: string;
+        exam_type: ExamType;
+        exam_date: string;
+        max_score: number;
+        subjects?: { id: string; code: string; name: string };
+        academic_years?: { id: string; name: string };
+        terms?: { id: string; name: string };
+    };
+}
+
+export interface StudentReportCardData {
+    id: string;
+    overall_average?: number;
+    overall_position?: number;
+    comments_class_teacher?: string;
+    comments_principal?: string;
+    behaviour_summary?: string;
+    attendance_present?: number;
+    attendance_total?: number;
+    generated_at?: string;
+    academic_years?: { id: string; name: string };
+    terms?: { id: string; name: string };
+    grade_streams?: {
+        id: string;
+        name: string;
+        full_name: string;
+        grades?: { id: string; code: string; name_display: string };
+    };
+    report_card_subjects?: {
+        id: string;
+        total_score?: number;
+        total_max_score?: number;
+        percentage?: number;
+        grade_symbol?: string;
+        teacher_comment?: string;
+        subjects?: { id: string; code: string; name: string };
+    }[];
+}
+
+export interface StudentAttendanceRecord {
+    id: string;
+    date: string;
+    status: 'present' | 'absent' | 'late' | 'excused';
+    notes?: string;
+}
+
+export interface StudentDashboardSummary {
+    profile: StudentProfileData;
+    stats: {
+        subjectsCount: number;
+        averageScore: number;
+        attendanceRate: number;
+        hasReportCard: boolean;
+        examsTaken: number;
+    };
+    latestResults: StudentResultItem[];
+    latestReport: StudentReportCardData | null;
+    upcomingExams: {
+        id: string;
+        name: string;
+        exam_date: string;
+        subject_name: string;
+    }[];
+    currentTerm?: { id: string; name: string };
+    currentYear?: { id: string; name: string };
+}
+
+export interface StudentPerformanceTrend {
+    termName: string;
+    yearName: string;
+    subjects: {
+        name: string;
+        average: number;
+        trend?: number;
+    }[];
+    overallAverage: number;
+}

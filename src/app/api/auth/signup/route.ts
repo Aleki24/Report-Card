@@ -58,12 +58,29 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `School error: ${schoolError.message}` }, { status: 400 });
         }
 
-        // 2. Insert into public.users as ADMIN, linked to the new school
+        // 2. Create the auth.users entry first (required by FK on public.users)
+        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: email.trim(),
+            password: password,
+            email_confirm: true,
+            user_metadata: { first_name, last_name, role: 'ADMIN' },
+        });
+
+        if (authError) {
+            // Rollback: delete the orphan school
+            await supabaseAdmin.from('schools').delete().eq('id', schoolId);
+            return NextResponse.json({ error: `Auth error: ${authError.message}` }, { status: 400 });
+        }
+
+        const authUserId = authUser.user.id;
+
+        // 3. Insert into public.users as ADMIN, using the auth user's ID
         const { error: profileError } = await supabaseAdmin.from('users').insert({
-            id: userId,
+            id: authUserId,
             first_name,
             last_name,
-            email,
+            email: email.trim(),
+            username: email.trim().split('@')[0],
             password_hash: passwordHash,
             role: 'ADMIN',
             is_active: true,
@@ -71,7 +88,8 @@ export async function POST(request: NextRequest) {
         });
 
         if (profileError) {
-            // Rollback: delete the orphan school we just created
+            // Rollback: delete auth user and orphan school
+            await supabaseAdmin.auth.admin.deleteUser(authUserId);
             await supabaseAdmin.from('schools').delete().eq('id', schoolId);
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
         }

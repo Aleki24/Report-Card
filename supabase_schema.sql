@@ -1,3 +1,8 @@
+-- ⚠️⚠️⚠️ WARNING: RUNNING THIS FILE WILL DELETE ALL DATA! ⚠️⚠️⚠️
+-- This file DROPS and recreates ALL tables from scratch.
+-- Only run this on a BRAND NEW empty database.
+-- If you need to add columns, use ALTER TABLE instead.
+-- ================================================================
 -- Supabase Database Schema for Results Analysis App
 -- Run this in the Supabase SQL Editor
 
@@ -85,8 +90,9 @@ CREATE TABLE IF NOT EXISTS grade_streams (
     grade_id UUID REFERENCES grades(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
     full_name TEXT NOT NULL,
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
-    UNIQUE (grade_id, name)
+    UNIQUE (school_id, grade_id, name)
 );
 
 -- 6. USERS
@@ -99,6 +105,9 @@ CREATE TABLE users (
     role user_role NOT NULL,
     is_active BOOLEAN DEFAULT true NOT NULL,
     plain_password TEXT,
+    username TEXT UNIQUE,
+    password_hash TEXT,
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

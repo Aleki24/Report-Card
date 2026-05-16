@@ -65,53 +65,56 @@ END $$;
 DO $$
 DECLARE
   v_id UUID;
+  v_school_id UUID;
 BEGIN
+  SELECT id INTO v_school_id FROM schools LIMIT 1;
+
   -- CBC Grade 7
   SELECT id INTO v_id FROM grades WHERE code = 'G7';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Grade 7A'), (v_id, 'B', 'Grade 7B')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Grade 7A', v_school_id), (v_id, 'B', 'Grade 7B', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 
   -- CBC Grade 8
   SELECT id INTO v_id FROM grades WHERE code = 'G8';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Grade 8A'), (v_id, 'B', 'Grade 8B')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Grade 8A', v_school_id), (v_id, 'B', 'Grade 8B', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 
   -- 8-4-4 Form 1
   SELECT id INTO v_id FROM grades WHERE code = 'F1';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Form 1A'), (v_id, 'B', 'Form 1B')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Form 1A', v_school_id), (v_id, 'B', 'Form 1B', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 
   -- 8-4-4 Form 2
   SELECT id INTO v_id FROM grades WHERE code = 'F2';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Form 2A'), (v_id, 'B', 'Form 2B')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Form 2A', v_school_id), (v_id, 'B', 'Form 2B', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 
   -- 8-4-4 Form 3
   SELECT id INTO v_id FROM grades WHERE code = 'F3';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Form 3A')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Form 3A', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 
   -- 8-4-4 Form 4
   SELECT id INTO v_id FROM grades WHERE code = 'F4';
-  IF v_id IS NOT NULL THEN
-    INSERT INTO grade_streams (grade_id, name, full_name) VALUES
-      (v_id, 'A', 'Form 4A')
-    ON CONFLICT (grade_id, name) DO NOTHING;
+  IF v_id IS NOT NULL AND v_school_id IS NOT NULL THEN
+    INSERT INTO grade_streams (grade_id, name, full_name, school_id) VALUES
+      (v_id, 'A', 'Form 4A', v_school_id)
+    ON CONFLICT (school_id, grade_id, name) DO NOTHING;
   END IF;
 END $$;
 
@@ -338,6 +341,71 @@ BEGIN
       (v_year, 'Term 2', '2026-05-05', '2026-08-07', false),
       (v_year, 'Term 3', '2026-09-01', '2026-11-27', false)
     ON CONFLICT (academic_year_id, name) DO NOTHING;
+  END IF;
+END $$;
+
+
+-- ── 7. ANNOUNCEMENTS (sample school-wide announcements) ──────
+
+DO $$
+DECLARE
+  v_school_id UUID;
+  v_admin_id UUID;
+BEGIN
+  SELECT id INTO v_school_id FROM schools LIMIT 1;
+  SELECT id INTO v_admin_id FROM users WHERE role = 'ADMIN' LIMIT 1;
+
+  IF v_school_id IS NOT NULL AND v_admin_id IS NOT NULL THEN
+    INSERT INTO announcements (school_id, title, content, posted_by, is_important) VALUES
+      (v_school_id, 'Mid-Term Break Notice', 'School will remain closed from 20 May to 30 June for mid-term holidays.', v_admin_id, true),
+      (v_school_id, 'Science Fair 2025', 'Register by 15 May to participate in the Science Fair.', v_admin_id, false)
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
+
+
+-- ── 8. ASSIGNMENTS (sample homework) ────────────────────────
+
+DO $$
+DECLARE
+  v_school_id UUID;
+  v_math_id UUID;
+  v_physics_id UUID;
+  v_stream_id UUID;
+BEGIN
+  SELECT id INTO v_school_id FROM schools LIMIT 1;
+  SELECT id INTO v_math_id FROM subjects WHERE code = 'MATH' LIMIT 1;
+  SELECT id INTO v_physics_id FROM subjects WHERE code = 'PHY' LIMIT 1;
+  SELECT id INTO v_stream_id FROM grade_streams LIMIT 1;
+
+  IF v_school_id IS NOT NULL AND v_math_id IS NOT NULL THEN
+    INSERT INTO assignments (school_id, subject_id, grade_stream_id, title, description, due_date) VALUES
+      (v_school_id, v_math_id, v_stream_id, 'Math Worksheet - Algebra', 'Solve problems 1-20 from Chapter 3.', CURRENT_DATE + INTERVAL '3 days'),
+      (v_school_id, v_physics_id, v_stream_id, 'Physics Chapter 4 Quiz', 'Complete the online quiz covering motion and forces.', CURRENT_DATE + INTERVAL '1 day')
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
+
+
+-- ── 9. LEARNING MATERIALS (sample notes & summaries) ────────
+
+DO $$
+DECLARE
+  v_school_id UUID;
+  v_bio_id UUID;
+  v_history_id UUID;
+  v_stream_id UUID;
+BEGIN
+  SELECT id INTO v_school_id FROM schools LIMIT 1;
+  SELECT id INTO v_bio_id FROM subjects WHERE code = 'BIO' LIMIT 1;
+  SELECT id INTO v_history_id FROM subjects WHERE code = 'HIST' LIMIT 1;
+  SELECT id INTO v_stream_id FROM grade_streams LIMIT 1;
+
+  IF v_school_id IS NOT NULL AND v_bio_id IS NOT NULL THEN
+    INSERT INTO learning_materials (school_id, subject_id, grade_stream_id, title, description, file_type, file_size_bytes) VALUES
+      (v_school_id, v_bio_id, v_stream_id, 'Biology Ch. 5 Summary', 'Comprehensive notes covering genetics and heredity.', 'PDF', 2457600),
+      (v_school_id, v_history_id, v_stream_id, 'History Revision Notes', 'Key events of the 20th century summarized.', 'PDF', 1126400)
+    ON CONFLICT DO NOTHING;
   END IF;
 END $$;
 
