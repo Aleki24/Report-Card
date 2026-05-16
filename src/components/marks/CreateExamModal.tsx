@@ -205,17 +205,17 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
         )}
 
         {dropdownsLoading ? (
-          <div className="text-sm text-[var(--color-text-muted)] py-8 text-center">Loading form data…</div>
+          <div className="text-sm text-muted-foreground py-8 text-center">Loading form data…</div>
         ) : (
           <div className="flex flex-col gap-4 mb-6">
             {/* Exam Name + Type */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Exam Name *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Exam Name *</label>
                 <input className="input-field w-full" placeholder="e.g. End of Term 1 Maths" value={examName} onChange={e => setExamName(e.target.value)} autoFocus />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Exam Type *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Exam Type *</label>
                 <select className="input-field w-full" value={examType} onChange={e => setExamType(e.target.value)}>
                   {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -225,15 +225,15 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Subject */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-[var(--color-text-muted)]">Subject *</label>
+                <label className="text-xs text-muted-foreground">Subject *</label>
                 {!preselectedSubjectId && (
-                  <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
                     {addingSubject ? '✕ Cancel' : '+ Add'}
                   </button>
                 )}
               </div>
               {preselectedSubjectId && subjects.find(s => s.id === preselectedSubjectId) ? (
-                <div className="input-field w-full bg-[var(--color-surface-raised)] cursor-not-allowed opacity-80">
+                <div className="input-field w-full bg-muted cursor-not-allowed opacity-80">
                   {subjects.find(s => s.id === preselectedSubjectId)?.name} ({subjects.find(s => s.id === preselectedSubjectId)?.code})
                 </div>
               ) : !addingSubject ? (
@@ -247,7 +247,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 )
               ) : null}
               {addingSubject && !preselectedSubjectId && (
-                <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2 mt-1">
+                <div className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
                   <div className="flex gap-2">
                     <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
                     <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
@@ -271,8 +271,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             <div className="flex gap-4">
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-[var(--color-text-muted)]">Academic Year *</label>
-                  <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingYear(!addingYear)}>{addingYear ? '✕ Cancel' : '+ Add'}</button>
+                  <label className="text-xs text-muted-foreground">Academic Year *</label>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingYear(!addingYear)}>{addingYear ? '✕ Cancel' : '+ Add'}</button>
                 </div>
                 {academicYears.length === 0 && !addingYear ? (
                   <p className="text-xs text-orange-400">No years. Click <strong>+ Add</strong>.</p>
@@ -283,7 +283,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                   </select>
                 ) : null}
                 {addingYear && (
-                  <form onSubmit={handleQuickAddYear} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2">
+                  <form onSubmit={handleQuickAddYear} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2">
                     <input className="input-field w-full text-xs" placeholder="Year name, e.g. 2026" value={qYear.name} onChange={e => setQYear(p => ({ ...p, name: e.target.value }))} />
                     <div className="flex gap-2">
                       <input type="date" className="input-field flex-1 text-xs" value={qYear.start_date} onChange={e => setQYear(p => ({ ...p, start_date: e.target.value }))} />
@@ -295,13 +295,13 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-[var(--color-text-muted)]">Term *</label>
+                  <label className="text-xs text-muted-foreground">Term *</label>
                   {selectedAcademicYearId && (
-                    <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingTerm(!addingTerm)}>{addingTerm ? '✕ Cancel' : '+ Add'}</button>
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingTerm(!addingTerm)}>{addingTerm ? '✕ Cancel' : '+ Add'}</button>
                   )}
                 </div>
                 {!selectedAcademicYearId ? (
-                  <p className="text-xs text-[var(--color-text-muted)]">Select a year first.</p>
+                  <p className="text-xs text-muted-foreground">Select a year first.</p>
                 ) : filteredTerms.length === 0 && !addingTerm ? (
                   <p className="text-xs text-orange-400">No terms. Click <strong>+ Add</strong>.</p>
                 ) : !addingTerm ? (
@@ -311,7 +311,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                   </select>
                 ) : null}
                 {addingTerm && selectedAcademicYearId && (
-                  <form onSubmit={handleQuickAddTerm} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2">
+                  <form onSubmit={handleQuickAddTerm} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2">
                     <input className="input-field w-full text-xs" placeholder="e.g. Term 1" value={qTerm.name} onChange={e => setQTerm(p => ({ ...p, name: e.target.value }))} />
                     <div className="flex gap-2">
                       <input type="date" className="input-field flex-1 text-xs" value={qTerm.start_date} onChange={e => setQTerm(p => ({ ...p, start_date: e.target.value }))} />
@@ -326,7 +326,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Grade + Stream */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Grade *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Grade *</label>
                 {grades.length === 0 ? (
                   <p className="text-xs text-orange-400">No grades found.</p>
                 ) : (
@@ -338,13 +338,13 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-[var(--color-text-muted)]">Stream (optional)</label>
+                  <label className="text-xs text-muted-foreground">Stream (optional)</label>
                   {selectedGradeId && (
-                    <button type="button" className="text-xs text-[var(--color-accent)] hover:underline" onClick={() => setAddingStream(!addingStream)}>{addingStream ? '✕ Cancel' : '+ Add'}</button>
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingStream(!addingStream)}>{addingStream ? '✕ Cancel' : '+ Add'}</button>
                   )}
                 </div>
                 {!selectedGradeId ? (
-                  <p className="text-xs text-[var(--color-text-muted)]">Select a grade first.</p>
+                  <p className="text-xs text-muted-foreground">Select a grade first.</p>
                 ) : addingStream ? null : filteredStreams.length === 0 ? (
                   <select className="input-field w-full" disabled><option>No streams — click + Add</option></select>
                 ) : (
@@ -354,7 +354,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                   </select>
                 )}
                 {addingStream && selectedGradeId && (
-                  <form onSubmit={handleQuickAddStream} className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-col gap-2 mt-1">
+                  <form onSubmit={handleQuickAddStream} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
                     <input className="input-field w-full text-xs" placeholder="Stream name, e.g. A" value={qStream.name} onChange={e => setQStream({ name: e.target.value })} />
                     <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qStream.name.trim()}>{quickSaving ? '...' : '✓ Save Stream'}</button>
                   </form>
@@ -365,11 +365,11 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Max Score + Date */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Max Score *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Max Score *</label>
                 <input type="number" className="input-field w-full" min={1} max={1000} value={maxScore} onChange={e => setMaxScore(Number(e.target.value))} />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Exam Date *</label>
+                <label className="block text-xs text-muted-foreground mb-1">Exam Date *</label>
                 <input type="date" className="input-field w-full" value={examDate} onChange={e => setExamDate(e.target.value)} />
               </div>
             </div>

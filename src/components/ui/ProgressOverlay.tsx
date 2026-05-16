@@ -23,13 +23,13 @@ export function ProgressOverlay({ message, current = 0, total = 0 }: ProgressOve
           </div>
         ) : (
           <div className="flex justify-center my-6">
-            <div className="w-8 h-8 rounded-full border-4 border-[var(--color-border)] border-t-blue-600 animate-spin"></div>
+            <div className="w-8 h-8 rounded-full border-4 border-border border-t-blue-600 animate-spin"></div>
           </div>
         )}
 
         <p className="text-sm font-medium mt-4">{message}</p>
         {total > 0 && (
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">{current} of {total} generated</p>
+          <p className="text-xs text-muted-foreground mt-1">{current} of {total} generated</p>
         )}
       </div>
     </div>

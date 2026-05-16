@@ -12,13 +12,11 @@ interface ModalOverlayProps {
 export function ModalOverlay({ children, onClose, maxWidth = 'max-w-lg', className = '' }: ModalOverlayProps) {
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className={`card w-full ${maxWidth} ${className}`}
-        style={{ animation: 'fadeIn .2s ease', maxHeight: '90vh', overflowY: 'auto' }}
+        className={`card w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-fade-in ${className}`}
         onClick={e => e.stopPropagation()}
       >
         {children}

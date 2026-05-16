@@ -41,7 +41,7 @@ export function LoadingScreen({ message = 'Loading...' }: { message?: string }) 
     return (
         <div className="flex flex-col items-center justify-center gap-4 py-12">
             <Spinner size="lg" />
-            <p className="text-[var(--color-text-muted)]">{message}</p>
+            <p className="text-muted-foreground">{message}</p>
         </div>
     );
 }
@@ -49,7 +49,7 @@ export function LoadingScreen({ message = 'Loading...' }: { message?: string }) 
 export function LoadingOverlay({ show }: { show?: boolean }) {
     if (!show) return null;
     return (
-        <div className="absolute inset-0 bg-[var(--color-surface)]/80 flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-card/80 flex items-center justify-center z-50">
             <Spinner size="lg" />
         </div>
     );

@@ -69,7 +69,7 @@ export default function ModulesSection() {
             <Link
               key={mod.slug}
               href={mod.featureHref}
-              className="group relative rounded-2xl border transition-all duration-500 hover:border-[var(--color-accent)] hover:shadow-lg"
+              className="group relative rounded-2xl border transition-all duration-500 hover:border-primary hover:shadow-lg"
               style={{
                 background: 'var(--color-surface)',
                 borderColor: 'var(--color-border-subtle)',
@@ -141,7 +141,7 @@ export default function ModulesSection() {
       <div style={{ textAlign: 'center' }}>
         <Link
           href="/features"
-          className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-[var(--color-accent)]"
+          className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
           style={{
             border: '1px solid var(--color-border)',
             color: 'var(--color-text-primary)',

@@ -38,20 +38,18 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
 
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
             onClick={onClose}
         >
             <div
-                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto`}
-                style={{ animation: 'fadeIn .2s ease' }}
+                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto animate-fade-in`}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">{title}</h2>
                     <button
                         onClick={onClose}
-                        className="p-1 rounded hover:bg-[var(--color-surface-raised)] transition-colors"
+                        className="p-1 rounded hover:bg-muted transition-colors"
                         aria-label="Close"
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -61,7 +59,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
                 </div>
                 {children}
                 {footer && (
-                    <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-[var(--color-border)]">
+                    <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-border">
                         {footer}
                     </div>
                 )}
@@ -101,7 +99,7 @@ export function ConfirmDialog({
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-            <p className="text-[var(--color-text-secondary)] mb-6">{message}</p>
+            <p className="text-muted-foreground mb-6">{message}</p>
             <div className="flex gap-3 justify-end">
                 <button className="btn-secondary" onClick={onClose} disabled={loading}>
                     {cancelText}

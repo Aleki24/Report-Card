@@ -163,9 +163,9 @@ export default function TeachersPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: '12px', marginBottom: '16px' }}>
         <StatCard label="Total Staff" value={teachers.length} sub={`${activeStaff} active`} icon={Users} />
-        <StatCard label="Class Teachers" value={classTeachers} sub="Homeroom assigned" icon={UserCheck} iconBg="rgba(59,130,246,0.12)" iconColor="#3B82F6" />
-        <StatCard label="Subject Teachers" value={subjectTeachers} sub="Specialist roles" icon={BookOpen} iconBg="rgba(139,92,246,0.12)" iconColor="#8B5CF6" />
-        <StatCard label="Active Staff" value={activeStaff} sub={teachers.length > 0 ? `${Math.round(activeStaff / teachers.length * 100)}% of total` : ''} icon={GraduationCap} iconBg="rgba(16,185,129,0.12)" iconColor="#10B981" />
+        <StatCard label="Class Teachers" value={classTeachers} sub="Homeroom assigned" icon={UserCheck} iconClassName="bg-blue-500/10 text-blue-500" />
+        <StatCard label="Subject Teachers" value={subjectTeachers} sub="Specialist roles" icon={BookOpen} iconClassName="bg-violet-500/10 text-violet-500" />
+        <StatCard label="Active Staff" value={activeStaff} sub={teachers.length > 0 ? `${Math.round(activeStaff / teachers.length * 100)}% of total` : ''} icon={GraduationCap} iconClassName="bg-primary/10 text-primary" />
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center" style={{ gap: '8px', marginBottom: '12px' }}>
@@ -255,12 +255,12 @@ export default function TeachersPage() {
             <h2 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '16px' }}>Edit Teacher</h2>
             <div className="flex flex-col gap-3 mb-4">
               <div className="flex gap-3">
-                <div className="flex-1"><label className="block text-xs text-[var(--color-text-muted)] mb-1">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
-                <div className="flex-1"><label className="block text-xs text-[var(--color-text-muted)] mb-1">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
               </div>
-              <div><label className="block text-xs text-[var(--color-text-muted)] mb-1">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><label className="block text-xs text-muted-foreground mb-1">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
               <div>
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Photo</label>
+                <label className="block text-xs text-muted-foreground mb-1">Photo</label>
                 <div className="flex items-center gap-2">
                   {editData.avatar_url ? (
                     <div style={{ position: 'relative', width: 48, height: 48, flexShrink: 0 }}>

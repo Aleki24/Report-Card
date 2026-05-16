@@ -308,14 +308,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                 <div>
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Manual Entry</h3>
-                    <p className="text-[var(--color-text-muted)] text-sm">Select a class, then pick students from the dropdown · Max score: {maxScore}</p>
+                    <p className="text-muted-foreground text-sm">Select a class, then pick students from the dropdown · Max score: {maxScore}</p>
                 </div>
             </div>
 
             {/* ── Class / Stream Filter ─────────────────── */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 rounded-lg bg-[var(--color-surface-raised)] border border-[var(--color-border)]">
+            <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 rounded-lg bg-muted border border-border">
                 <div className="flex-1">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Class / Level</label>
+                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Class / Level</label>
                     <select
                         className="input-field w-full"
                         value={selectedGradeId}
@@ -328,7 +328,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-semibold uppercase tracking-wider">Stream</label>
+                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Stream</label>
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}
@@ -343,14 +343,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 </div>
                 {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
                     <div className="flex items-end">
-                        <div className="text-xs text-[var(--color-accent)] font-semibold py-2">
+                        <div className="text-xs text-primary font-semibold py-2">
                            Please select a stream
                         </div>
                     </div>
                 )}
                 {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && (
                     <div className="flex items-end">
-                        <div className="text-xs text-[var(--color-accent)] font-semibold py-2">
+                        <div className="text-xs text-primary font-semibold py-2">
                             {studentsLoading ? 'Loading…' : `${students.length} student${students.length !== 1 ? 's' : ''}`}
                         </div>
                     </div>
@@ -359,14 +359,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
 
             {/* No class selected hint */}
             {!selectedGradeId && (
-                <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
+                <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Class / Level</strong> above to load students
                 </div>
             )}
 
             {/* No stream selected hint */}
             {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
-                <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
+                <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Stream</strong> above to load students
                 </div>
             )}
@@ -399,7 +399,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                             <tbody>
                                 {rows.map((row, i) => (
                                     <tr key={i} className={row.error ? 'bg-red-500/5' : ''}>
-                                        <td data-label="#" className="text-[var(--color-text-muted)] text-xs">{i + 1}</td>
+                                        <td data-label="#" className="text-muted-foreground text-xs">{i + 1}</td>
                                         {/* Student dropdown */}
                                         <td data-label="Student">
                                             <select
@@ -422,7 +422,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         </td>
                                         {/* Admission number (auto-filled, read-only) */}
                                         <td data-label="Adm No">
-                                            <span className="text-sm text-[var(--color-text-muted)]">
+                                            <span className="text-sm text-muted-foreground">
                                                 {row.admissionNumber || '—'}
                                             </span>
                                         </td>
@@ -471,7 +471,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                         <td data-label="Action">
                                             <button
                                                 onClick={() => removeRow(i)}
-                                                className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] p-2 text-lg transition-colors cursor-pointer"
+                                                className="text-muted-foreground hover:text-destructive p-2 text-lg transition-colors cursor-pointer"
                                                 title="Remove row"
                                             >
                                                 ×
@@ -486,7 +486,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                     {rows.some(r => r.error) && (
                         <div className="mt-4 p-3 bg-red-500/10 rounded-md">
                             {rows.filter(r => r.error).map((r, i) => (
-                                <div key={i} className="text-xs text-[var(--color-danger)] mb-1">
+                                <div key={i} className="text-xs text-destructive mb-1">
                                     • Row {rows.indexOf(r) + 1}: {r.error}
                                 </div>
                             ))}
@@ -508,7 +508,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
 
             {/* Class/Stream selected but no students */}
             {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && !studentsLoading && students.length === 0 && (
-                <div className="text-center py-8 text-sm text-[var(--color-text-muted)]">
+                <div className="text-center py-8 text-sm text-muted-foreground">
                     No students found in this class. Add students in the <strong>Students</strong> page first.
                 </div>
             )}

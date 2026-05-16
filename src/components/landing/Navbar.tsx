@@ -62,13 +62,13 @@ export default function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden sm:flex items-center" style={{ gap: '4px' }}>
-          <Link href="/" className="rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)]" style={navLinkStyle}>Home</Link>
+          <Link href="/" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Home</Link>
 
           {/* Features Dropdown */}
           <div ref={dropdownRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setFeaturesOpen(!featuresOpen)}
-              className="rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)] cursor-pointer"
+              className="rounded-lg transition-all duration-200 hover:bg-muted cursor-pointer"
               style={{ ...navLinkStyle, background: featuresOpen ? 'var(--color-surface-raised)' : 'transparent', border: 'none' }}
             >
               Features
@@ -77,17 +77,17 @@ export default function Navbar() {
             <FeaturesDropdown isOpen={featuresOpen} onClose={() => setFeaturesOpen(false)} />
           </div>
 
-          <Link href="/contact" className="rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)]" style={navLinkStyle}>Contact</Link>
-          <Link href="/pricing" className="rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)]" style={navLinkStyle}>Pricing</Link>
+          <Link href="/contact" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Contact</Link>
+          <Link href="/pricing" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Pricing</Link>
 
           <div style={{ width: '1px', height: '20px', background: 'var(--color-border-subtle)', margin: '0 4px' }} />
 
-          <button onClick={toggleTheme} className="rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)]"
+          <button onClick={toggleTheme} className="rounded-lg transition-all duration-200 hover:bg-muted"
             style={{ color: 'var(--color-text-muted)', padding: '10px', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Toggle Theme">
             {theme === 'dark' ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
           </button>
 
-          <Link href="/login" className="inline-flex items-center rounded-lg transition-all duration-200 hover:bg-[var(--color-surface-raised)]"
+          <Link href="/login" className="inline-flex items-center rounded-lg transition-all duration-200 hover:bg-muted"
             style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 500, padding: '8px 16px', letterSpacing: '0.01em' }}>
             Sign In
           </Link>

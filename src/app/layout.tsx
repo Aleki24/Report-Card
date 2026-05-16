@@ -1,37 +1,23 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@/components/ThemeProvider';
-import localFont from 'next/font/local';
+import { Merriweather, Source_Serif_4, JetBrains_Mono } from "next/font/google";
+import { cn } from "@/lib/utils";
 
-const helveticaNeue = localFont({
-  src: [
-    {
-      path: '../../public/fonts/helvetica-neue/HelveticaNeueRoman.otf',
-      weight: '400',
-      style: 'normal',
-    },
-    {
-      path: '../../public/fonts/helvetica-neue/HelveticaNeueMedium.otf',
-      weight: '500',
-      style: 'normal',
-    },
-    {
-      path: '../../public/fonts/helvetica-neue/HelveticaNeueBold.otf',
-      weight: '700',
-      style: 'normal',
-    },
-    {
-      path: '../../public/fonts/helvetica-neue/HelveticaNeueHeavy.otf',
-      weight: '800',
-      style: 'normal',
-    },
-    {
-      path: '../../public/fonts/helvetica-neue/HelveticaNeueBlack.otf',
-      weight: '900',
-      style: 'normal',
-    }
-  ],
-  variable: '--font-helvetica-neue'
+const fontSans = Merriweather({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["300", "400", "700", "900"],
+});
+
+const fontSerif = Source_Serif_4({
+  subsets: ["latin"],
+  variable: "--font-serif",
+});
+
+const fontMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -45,8 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-theme="dark">
-      <body className={`overflow-x-hidden ${helveticaNeue.variable}`}>
+    <html lang="en" data-theme="dark" className={cn("font-sans", fontSans.variable, fontSerif.variable, fontMono.variable)}>
+      <body className={`overflow-x-hidden antialiased bg-background text-foreground`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

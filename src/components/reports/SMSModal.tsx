@@ -60,11 +60,11 @@ export function SMSModal({
         <div className="overflow-y-auto flex-1 mb-4" style={{ maxHeight: '40vh' }}>
           {loadingSMSStudents ? (
             <div className="text-center py-8">
-              <div className="w-6 h-6 rounded-full border-3 border-[var(--color-border)] border-t-blue-600 animate-spin mx-auto mb-2"></div>
-              <p className="text-sm text-[var(--color-text-muted)]">Loading students…</p>
+              <div className="w-6 h-6 rounded-full border-3 border-border border-t-blue-600 animate-spin mx-auto mb-2"></div>
+              <p className="text-sm text-muted-foreground">Loading students…</p>
             </div>
           ) : filteredSMSStudents.length === 0 ? (
-            <p className="text-center text-sm text-[var(--color-text-muted)] py-6">
+            <p className="text-center text-sm text-muted-foreground py-6">
               {smsSearch ? 'No students match your search.' : 'No students found in this class.'}
             </p>
           ) : (
@@ -73,17 +73,17 @@ export function SMSModal({
                 const name = `${s.users?.first_name || '—'} ${s.users?.last_name || ''}`;
                 const hasPhone = !!s.guardian_phone;
                 return (
-                  <label key={s.id} className={`flex items-center gap-3 px-4 py-3 rounded-md transition-colors cursor-pointer ${s.selected ? 'bg-blue-500/10' : 'hover:bg-[var(--color-surface-raised)]'} ${!hasPhone ? 'opacity-50' : ''}`}>
+                  <label key={s.id} className={`flex items-center gap-3 px-4 py-3 rounded-md transition-colors cursor-pointer ${s.selected ? 'bg-blue-500/10' : 'hover:bg-muted'} ${!hasPhone ? 'opacity-50' : ''}`}>
                     <input type="checkbox" checked={s.selected} disabled={!hasPhone} onChange={() => onToggle(s.id)} className="accent-blue-600 w-4 h-4" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{name}</div>
-                      <div className="text-xs text-[var(--color-text-muted)] font-mono">{s.admission_number}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{s.admission_number}</div>
                     </div>
                     <div className="text-right">
                       {hasPhone ? <span className="text-xs text-green-500 font-mono">{s.guardian_phone}</span> : <span className="text-xs text-red-400">No phone</span>}
                     </div>
                     {s.guardian_name && hasPhone && (
-                      <div className="text-xs text-[var(--color-text-muted)] hidden md:block" style={{ maxWidth: 100 }}>{s.guardian_name}</div>
+                      <div className="text-xs text-muted-foreground hidden md:block" style={{ maxWidth: 100 }}>{s.guardian_name}</div>
                     )}
                   </label>
                 );
@@ -94,7 +94,7 @@ export function SMSModal({
 
         {smsSelectedCount > 0 && (
           <div className="rounded-lg p-3 mb-4 text-xs font-mono" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', whiteSpace: 'pre-wrap' }}>
-            <div className="text-[var(--color-text-muted)] mb-1 font-sans text-xs font-semibold">Message Preview:</div>
+            <div className="text-muted-foreground mb-1 font-sans text-xs font-semibold">Message Preview:</div>
             {messagePreview}
           </div>
         )}
@@ -106,8 +106,8 @@ export function SMSModal({
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-4 border-t border-[var(--color-border)]">
-          <span className="text-sm text-[var(--color-text-muted)]">
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <span className="text-sm text-muted-foreground">
             {smsSelectedCount} student{smsSelectedCount !== 1 ? 's' : ''} selected
             {smsSelectedCount > 0 && <span className="text-xs ml-1">(~KES {(smsSelectedCount * 0.8).toFixed(1)} est.)</span>}
           </span>

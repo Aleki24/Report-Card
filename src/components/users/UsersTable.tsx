@@ -4,8 +4,11 @@ import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
 import { type UserRow } from '@/hooks/useUsersPage';
 
-const roleBadgeColors: Record<UserRole, string> = {
-  ADMIN: '#EF4444', CLASS_TEACHER: '#3B82F6', SUBJECT_TEACHER: '#8B5CF6', STUDENT: '#10B981',
+const roleBadgeClasses: Record<UserRole, { bg: string; text: string; border: string }> = {
+  ADMIN: { bg: 'bg-destructive/10', text: 'text-destructive', border: 'border-destructive/30' },
+  CLASS_TEACHER: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30' },
+  SUBJECT_TEACHER: { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/30' },
+  STUDENT: { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/30' },
 };
 
 interface UsersTableProps {
@@ -35,13 +38,13 @@ export function UsersTable({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">👥</span>
-          <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Active Users ({filteredUsers.length})</h3>
+          <h3 className="font-bold text-base font-sans">Active Users ({filteredUsers.length})</h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative">
             <input type="text" className="input-field w-full sm:w-64 pl-9" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">×</button>}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">×</button>}
           </div>
         </div>
       </div>
@@ -49,17 +52,17 @@ export function UsersTable({
       <div className="flex overflow-x-auto pb-2 mb-4 -mx-2 px-2 gap-1">
         {(['ALL', 'ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'] as const).map((role) => (
           <button key={role} onClick={() => setRoleFilter(role)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${roleFilter === role ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]'}`}>
+            className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${roleFilter === role ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
             {role === 'ALL' ? 'All' : role.replace('_', ' ')}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="p-12 text-center text-[var(--color-text-muted)]">Loading users...</div>
+        <div className="p-12 text-center text-muted-foreground">Loading users...</div>
       ) : users.length === 0 ? (
-        <div className="p-12 text-center text-[var(--color-text-muted)]">
-          <img src="https://em-content.zobj.net/source/apple/354/bust-in-silhouette_1f464.png" alt="User" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+        <div className="p-12 text-center text-muted-foreground">
+          <img src="https://em-content.zobj.net/source/apple/354/bust-in-silhouette_1f464.png" alt="User" className="w-12 h-12 object-contain mb-4 mx-auto" />
           <p>No users yet. Click &quot;Add User&quot; to add your first team member.</p>
         </div>
       ) : (
@@ -67,46 +70,49 @@ export function UsersTable({
           <table className="data-table w-full sm:whitespace-nowrap">
             <thead><tr><th>Name</th><th>Email</th><th>Username</th><th>Password</th><th>Role</th><th>Joined</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {paginatedUsers.map(u => (
+              {paginatedUsers.map(u => {
+                const roleStyle = roleBadgeClasses[u.role];
+                return (
                 <tr key={u.id}>
                   <td data-label="Name" className="font-medium">{u.first_name} {u.last_name}</td>
-                  <td data-label="Email" className="text-[var(--color-text-muted)] text-sm">{u.email || '—'}</td>
-                  <td data-label="Username" className="text-[var(--color-text-muted)] text-sm">{u.username || '—'}</td>
-                  <td data-label="Password" className="text-[var(--color-text-muted)] text-sm font-mono">{u.plain_password || '—'}</td>
+                  <td data-label="Email" className="text-muted-foreground text-sm">{u.email || '—'}</td>
+                  <td data-label="Username" className="text-muted-foreground text-sm">{u.username || '—'}</td>
+                  <td data-label="Password" className="text-muted-foreground text-sm font-mono">{u.plain_password || '—'}</td>
                   <td data-label="Role">
-                    <span className="badge" style={{ background: `${roleBadgeColors[u.role]}20`, color: roleBadgeColors[u.role], border: `1px solid ${roleBadgeColors[u.role]}40` }}>
+                    <span className={`badge ${roleStyle.bg} ${roleStyle.text} border ${roleStyle.border}`}>
                       {u.role.replace('_', ' ')}
                     </span>
                   </td>
-                  <td data-label="Joined" className="text-[var(--color-text-muted)] text-sm">{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td data-label="Joined" className="text-muted-foreground text-sm">{new Date(u.created_at).toLocaleDateString()}</td>
                   <td data-label="Status">
-                    <span className={`badge ${u.is_active ? 'badge-success' : ''}`} style={!u.is_active ? { background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' } : {}}>
+                    <span className={`badge ${u.is_active ? 'badge-success' : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'}`}>
                       {u.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td data-label="Actions">
                     <div className="flex gap-2">
                       <button onClick={() => onEdit(u)} className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 transition" title="Edit User">✏️</button>
-                      <button onClick={() => onResetPassword(u)} disabled={resettingPasswordId === u.id} className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition disabled:opacity-50" title="Reset Password">
+                      <button onClick={() => onResetPassword(u)} disabled={resettingPasswordId === u.id} className="text-xs px-2 py-1 rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition disabled:opacity-50" title="Reset Password">
                         {resettingPasswordId === u.id ? '...' : '🔑'}
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-4 border-t border-[var(--color-border)]">
-              <div className="text-sm text-[var(--color-text-muted)]">
+            <div className="flex items-center justify-between px-4 py-4 border-t border-border">
+              <div className="text-sm text-muted-foreground">
                 Showing {(currentPage - 1) * usersPerPage + 1} to {Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm rounded-lg border transition disabled:opacity-50" style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>← Prev</button>
+                <button onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-popover text-muted-foreground transition disabled:opacity-50 hover:bg-muted">← Prev</button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <button key={page} onClick={() => setCurrentPage(page)} className="px-3 py-1.5 text-sm rounded-lg border transition" style={{ backgroundColor: currentPage === page ? 'var(--color-accent)' : 'var(--color-surface-raised)', borderColor: currentPage === page ? 'var(--color-accent)' : 'var(--color-border)', color: currentPage === page ? '#fff' : 'var(--color-text-secondary)' }}>{page}</button>
+                  <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm rounded-lg border transition ${currentPage === page ? 'bg-primary text-primary-foreground border-primary font-bold' : 'border-border bg-popover text-muted-foreground hover:bg-muted'}`}>{page}</button>
                 ))}
-                <button onClick={() => setCurrentPage((p: number) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm rounded-lg border transition disabled:opacity-50" style={{ backgroundColor: 'var(--color-surface-raised)', borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>Next →</button>
+                <button onClick={() => setCurrentPage((p: number) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm rounded-lg border border-border bg-popover text-muted-foreground transition disabled:opacity-50 hover:bg-muted">Next →</button>
               </div>
             </div>
           )}

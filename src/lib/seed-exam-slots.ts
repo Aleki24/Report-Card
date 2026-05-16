@@ -22,13 +22,15 @@ export async function seedExamSlots(options: SeedOptions) {
   const types = examTypes || [...STANDARD_EXAM_TYPES];
   const supabase = createSupabaseAdmin();
 
-  // Get term name for exam naming
+  // Get term info for exam naming and dates
   const { data: term } = await supabase
     .from('terms')
-    .select('name')
+    .select('name, start_date, end_date')
     .eq('id', termId)
     .single();
   const termName = term?.name || 'Term';
+  const termStart = term?.start_date ? new Date(term.start_date) : new Date();
+  const termEnd = term?.end_date ? new Date(term.end_date) : new Date();
 
   // Get all grades for this school (via grade_streams)
   const { data: streams } = await supabase
@@ -69,11 +71,28 @@ export async function seedExamSlots(options: SeedOptions) {
   const slots: any[] = [];
   let skipped = 0;
 
+  // Helper: calculate exam date based on type within the term
+  const calcExamDate = (type: string): string => {
+    const duration = termEnd.getTime() - termStart.getTime();
+    let offset = 0.5; // default to midpoint
+    switch (type) {
+      case 'OPENER': offset = 0.1; break;      // ~week 1-2
+      case 'CAT': case 'TOPICAL': offset = 0.3; break;
+      case 'MIDTERM': offset = 0.5; break;      // midpoint
+      case 'PRE_MOCK': offset = 0.6; break;
+      case 'MOCK': offset = 0.7; break;
+      case 'POST_MOCK': offset = 0.8; break;
+      case 'ENDTERM': offset = 0.9; break;      // near end
+      default: offset = 0.5; break;
+    }
+    const date = new Date(termStart.getTime() + duration * offset);
+    return date.toISOString().split('T')[0];
+  };
+
   for (const gradeId of gradeIds) {
     const grade = gradeMap.get(gradeId);
     if (!grade) continue;
 
-    // Only match subjects to their academic level
     const gradeSubjects = subjects.filter(s => s.academic_level_id === grade.academic_level_id);
 
     for (const subject of gradeSubjects) {
@@ -85,7 +104,7 @@ export async function seedExamSlots(options: SeedOptions) {
         }
 
         slots.push({
-          name: `${termName} ${examType.charAt(0) + examType.slice(1).toLowerCase()} - ${subject.name}`,
+          name: `${termName} ${examType.charAt(0) + examType.slice(1).toLowerCase().replace('_', '-')} - ${subject.name}`,
           exam_type: examType,
           subject_id: subject.id,
           grade_id: gradeId,
@@ -94,7 +113,7 @@ export async function seedExamSlots(options: SeedOptions) {
           term_id: termId,
           school_id: schoolId,
           max_score: 100,
-          exam_date: null,
+          exam_date: calcExamDate(examType),
           created_by_teacher_id: null,
         });
       }

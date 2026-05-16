@@ -5,6 +5,7 @@ import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
+import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
 
 interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
 interface ExamSlot {
@@ -39,8 +40,9 @@ export default function MarksPage() {
         const json = await res.json();
         const termList: Term[] = json.data || [];
         setTerms(termList);
-        const current = termList.find(t => t.is_current);
-        if (current) setSelectedTermId(current.id);
+        // Auto-select active term based on Kenyan calendar (Jan-Apr=T1, May-Jul=T2, Aug-Nov=T3)
+        const activeId = findActiveTermId(termList);
+        if (activeId) setSelectedTermId(activeId);
         else if (termList.length > 0) setSelectedTermId(termList[0].id);
       } catch (err) { console.error('Failed to fetch terms:', err); }
       setLoadingTerms(false);
@@ -112,7 +114,9 @@ export default function MarksPage() {
     setSeeding(false);
   };
 
-  const activeTerm = terms.find(t => t.is_current);
+  // Determine active term by Kenyan calendar (Jan-Apr=T1, May-Jul=T2, Aug-Nov=T3)
+  const activeTermId = findActiveTermId(terms);
+  const activeTermObj = terms.find(t => t.id === activeTermId);
   const selectedTermName = terms.find(t => t.id === selectedTermId)?.name || '';
 
   return (
@@ -125,9 +129,9 @@ export default function MarksPage() {
             Select term → exam type → subject, then enter marks
           </p>
         </div>
-        {activeTerm && (
+        {activeTermObj && (
           <div className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: 'rgb(52,211,153)', border: '1px solid rgba(16,185,129,0.3)' }}>
-            🟢 Active: {activeTerm.name}
+            🟢 Active: {getCurrentTermName()} ({activeTermObj.name})
           </div>
         )}
       </div>
@@ -164,7 +168,7 @@ export default function MarksPage() {
                   }}
                 >
                   {t.name}
-                  {t.is_current && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(16,185,129,0.2)', color: 'rgb(52,211,153)' }}>ACTIVE</span>}
+                  {t.id === activeTermId && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(16,185,129,0.2)', color: 'rgb(52,211,153)' }}>ACTIVE</span>}
                 </button>
               ))}
             </div>
@@ -237,7 +241,7 @@ export default function MarksPage() {
                         key={et.code}
                         onClick={() => handleSeedExams([et.code])}
                         disabled={seeding}
-                        className="w-full text-left px-3 py-2 rounded text-xs hover:bg-[var(--color-surface)] transition-colors"
+                        className="w-full text-left px-3 py-2 rounded text-xs hover:bg-card transition-colors"
                         style={{ color: 'var(--color-text-secondary)' }}
                       >
                         {et.icon} {et.name}

@@ -145,7 +145,7 @@ export default function ClassesPage() {
             <div className="card">
               <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Manage Classes</h3>
               <div className="mb-4">
-                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Select Grade</label>
+                <label className="block text-xs text-muted-foreground mb-1">Select Grade</label>
                 {grades.length === 0 ? (
                   <p className="text-xs text-orange-400">No grades found. Run seed SQL first.</p>
                 ) : (
@@ -159,17 +159,17 @@ export default function ClassesPage() {
               </div>
               
               {selectedCalGradeId && (
-                <form onSubmit={handleAddStream} className="flex flex-wrap items-end gap-3 p-4 border border-[var(--color-border)] rounded-lg bg-[var(--color-surface-raised)]/30 mt-2">
+                <form onSubmit={handleAddStream} className="flex flex-wrap items-end gap-3 p-4 border border-border rounded-lg bg-muted/30 mt-2">
                   <div className="w-full mb-1">
                     <h4 className="text-sm font-bold">Add New Class</h4>
-                    <p className="text-xs text-[var(--color-text-muted)]">Leave stream name blank to just use the grade name as the class.</p>
+                    <p className="text-xs text-muted-foreground">Leave stream name blank to just use the grade name as the class.</p>
                   </div>
                   <div className="flex-1 min-w-[100px]">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Stream Name (Optional)</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Stream Name (Optional)</label>
                     <input className="input-field w-full" placeholder="e.g. East, A" value={newStream.name} onChange={e => setNewStream(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div className="flex-1 min-w-[160px]">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Full Name (Auto-filled if blank)</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Full Name (Auto-filled if blank)</label>
                     <input className="input-field w-full" placeholder="e.g. Grade 7A" value={newStream.full_name} onChange={e => setNewStream(p => ({ ...p, full_name: e.target.value }))} />
                   </div>
                   <div className="flex gap-2">
@@ -187,18 +187,18 @@ export default function ClassesPage() {
                   🏫 Added Classes for {grades.find(g => g.id === selectedCalGradeId)?.name_display}
                 </h3>
                 {calStreams.length > 0 ? (
-                  <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+                  <div className="overflow-x-auto border border-border rounded-lg">
                     <table className="data-table w-full text-left sm:whitespace-nowrap">
-                      <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                      <thead className="bg-muted border-b border-border">
                         <tr>
-                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Class/Stream</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Full Name</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                          <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Class/Stream</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Full Name</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border)]">
                         {calStreams.map(s => (
-                          <tr key={s.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                          <tr key={s.id} className="hover:bg-muted transition-colors">
                             <td className="px-4 py-3 font-bold">{s.name}</td>
                             <td className="px-4 py-3 text-sm">{s.full_name}</td>
                             <td className="px-4 py-3 text-right">
@@ -222,17 +222,17 @@ export default function ClassesPage() {
             <div className="card">
               <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📚 Subjects</h3>
               
-              <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-md p-3 flex flex-wrap gap-3 mb-4 items-end">
+              <div className="bg-muted border border-border rounded-md p-3 flex flex-wrap gap-3 mb-4 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Subject Name *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Subject Name *</label>
                   <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
                 </div>
                 <div className="w-24">
-                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Code *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Code *</label>
                   <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Level *</label>
+                  <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
                   <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
                     <option value="">-- Select --</option>
                     {academicLevels.map(al => (
@@ -248,22 +248,22 @@ export default function ClassesPage() {
                 </button>
               </div>
 
-              <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+              <div className="overflow-x-auto border border-border rounded-lg">
                 <table className="data-table w-full sm:whitespace-nowrap text-left">
-                  <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                  <thead className="bg-muted border-b border-border">
                     <tr>
-                      <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Code</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Subject Name</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Curriculum</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Code</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subject Name</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Curriculum</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-border)]">
                     {subjects.map(sub => (
-                      <tr key={sub.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                      <tr key={sub.id} className="hover:bg-muted transition-colors">
                         <td className="px-4 py-3 font-mono text-sm">{sub.code}</td>
                         <td className="px-4 py-3 font-medium">{sub.name}</td>
-                        <td className="px-4 py-3 text-[var(--color-text-muted)] text-sm">
+                        <td className="px-4 py-3 text-muted-foreground text-sm">
                           {academicLevels.find(l => l.id === sub.academic_level_id)?.code || '—'}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -273,7 +273,7 @@ export default function ClassesPage() {
                     ))}
                     {subjects.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-4 text-center text-[var(--color-text-muted)] text-sm">No subjects found.</td>
+                        <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground text-sm">No subjects found.</td>
                       </tr>
                     )}
                   </tbody>

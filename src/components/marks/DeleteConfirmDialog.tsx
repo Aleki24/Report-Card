@@ -21,7 +21,7 @@ export function DeleteConfirmDialog({ examName, deleting, onConfirm, onCancel }:
       >
         <div style={{ fontSize: 32, marginBottom: 'var(--space-3)', textAlign: 'center' }}>🗑️</div>
         <h3 className="text-center font-bold mb-2">Delete Exam?</h3>
-        <p className="text-sm text-center text-[var(--color-text-muted)] mb-6">
+        <p className="text-sm text-center text-muted-foreground mb-6">
           <strong>{examName}</strong> and all associated marks will be permanently deleted. This cannot be undone.
         </p>
         <div className="flex gap-3">

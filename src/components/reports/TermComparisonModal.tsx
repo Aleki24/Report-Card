@@ -100,10 +100,10 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-[var(--color-border)] flex justify-between items-center bg-[var(--color-surface-raised)]">
+            <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted">
                     <h2 className="text-xl font-bold font-[family-name:var(--font-display)]">Compare Terms</h2>
-                    <button onClick={onClose} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                    <button onClick={onClose} className="text-muted-foreground hover:text-[var(--color-text)]">
                         Close ✕
                     </button>
                 </div>
@@ -126,7 +126,7 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div className="p-4 border border-[var(--color-border)] rounded-md bg-[var(--color-surface-raised)]">
+                        <div className="p-4 border border-border rounded-md bg-muted">
                             <h4 className="font-semibold mb-3 text-sm">Base Term (Term 1)</h4>
                             <select className="input-field w-full mb-3 text-sm" value={term1Year} onChange={e => setTerm1Year(e.target.value)}>
                                 <option value="">Academic Year...</option>
@@ -138,7 +138,7 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
                             </select>
                         </div>
 
-                        <div className="p-4 border border-[var(--color-border)] rounded-md bg-[var(--color-surface-raised)]">
+                        <div className="p-4 border border-border rounded-md bg-muted">
                             <h4 className="font-semibold mb-3 text-sm">Comparison Term (Term 2)</h4>
                             <select className="input-field w-full mb-3 text-sm" value={term2Year} onChange={e => setTerm2Year(e.target.value)}>
                                 <option value="">Academic Year...</option>
@@ -161,14 +161,14 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
 
                     {results && (
                         <div className="mt-8">
-                            <h3 className="text-sm font-bold text-[var(--color-text-muted)] mb-3 uppercase tracking-wider">Results Overview</h3>
+                            <h3 className="text-sm font-bold text-muted-foreground mb-3 uppercase tracking-wider">Results Overview</h3>
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="stat-card p-4">
-                                    <div className="text-xs text-[var(--color-text-muted)] mb-1">Base Term</div>
+                                    <div className="text-xs text-muted-foreground mb-1">Base Term</div>
                                     <div className="text-xl font-bold">{results.term1Avg}%</div>
                                 </div>
                                 <div className="stat-card p-4">
-                                    <div className="text-xs text-[var(--color-text-muted)] mb-1">Comparison</div>
+                                    <div className="text-xs text-muted-foreground mb-1">Comparison</div>
                                     <div className="text-xl font-bold">{results.term2Avg}%</div>
                                 </div>
                                 <div className={`stat-card p-4 border ${results.improved ? 'border-green-200 bg-green-50 text-green-700' : results.decreased ? 'border-red-200 bg-red-50 text-red-700' : 'border-gray-200'}`}>

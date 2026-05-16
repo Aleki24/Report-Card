@@ -13,13 +13,13 @@ interface FormFieldProps {
 export function FormField({ label, required, error, hint, children }: FormFieldProps) {
     return (
         <div className="flex flex-col gap-1">
-            <label className="text-xs text-[var(--color-text-muted)]">
+            <label className="text-xs text-muted-foreground">
                 {label}
-                {required && <span className="text-[var(--color-danger)] ml-1">*</span>}
+                {required && <span className="text-destructive ml-1">*</span>}
             </label>
             {children}
-            {hint && !error && <p className="text-xs text-[var(--color-text-muted)]">{hint}</p>}
-            {error && <p className="text-xs text-[var(--color-danger)]">{error}</p>}
+            {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
+            {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
     );
 }

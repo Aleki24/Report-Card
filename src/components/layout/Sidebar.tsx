@@ -212,7 +212,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                 width: collapsed ? 44 : 56,
                                 height: collapsed ? 44 : 56,
                                 borderRadius: "var(--radius-md)",
-                                background: "linear-gradient(135deg, var(--color-accent), #1D4ED8)",
+                                background: "var(--primary)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -361,9 +361,9 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                                     ? "var(--space-1)"
                                                     : "8px 12px",
                                                 borderRadius: "var(--radius-md)",
-                                                color: isActive ? "#fff" : "var(--color-text-secondary)",
+                                                color: isActive ? "var(--primary-foreground)" : "var(--color-text-secondary)",
                                                 background: isActive
-                                                    ? "#1D4ED8"
+                                                    ? "var(--primary)"
                                                     : "transparent",
                                                 textDecoration: "none",
                                                 fontSize: 14,
@@ -476,9 +476,9 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                                     ? "var(--space-1)"
                                                     : "8px 12px",
                                                 borderRadius: "var(--radius-md)",
-                                                color: isActive ? "#fff" : "var(--color-text-secondary)",
+                                                color: isActive ? "var(--primary-foreground)" : "var(--color-text-secondary)",
                                                 background: isActive
-                                                    ? "#1D4ED8"
+                                                    ? "var(--primary)"
                                                     : "transparent",
                                                 textDecoration: "none",
                                                 fontSize: 14,
@@ -542,8 +542,8 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                 margin: '0 var(--space-4)',
                                 marginTop: 'auto',
                                 borderRadius: 'var(--radius-md)',
-                                color: isActive ? '#fff' : 'var(--color-text-secondary)',
-                                background: isActive ? '#1D4ED8' : 'transparent',
+                                color: isActive ? 'var(--primary-foreground)' : 'var(--color-text-secondary)',
+                                background: isActive ? 'var(--primary)' : 'transparent',
                                 textDecoration: 'none',
                                 fontSize: 14,
                                 fontWeight: isActive ? 600 : 500,
@@ -612,7 +612,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                 height: "100%",
                                 position: "relative",
                                 color: isActive
-                                    ? "var(--color-accent)"
+                                    ? "var(--primary)"
                                     : "var(--color-text-secondary)",
                                 textDecoration: "none",
                             }}
@@ -626,8 +626,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                         transform: "translateX(-50%)",
                                         width: "40%",
                                         height: 3,
-                                        background:
-                                            "linear-gradient(90deg, var(--color-accent), #8B5CF6)",
+                                        background: "var(--primary)",
                                         borderBottomLeftRadius: 3,
                                         borderBottomRightRadius: 3,
                                     }}
@@ -679,7 +678,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         border: "none",
                         cursor: "pointer",
                         color: showMoreMenu
-                            ? "var(--color-accent)"
+                            ? "var(--primary)"
                             : "var(--color-text-secondary)",
                     }}
                 >
@@ -692,8 +691,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                                 transform: "translateX(-50%)",
                                 width: "40%",
                                 height: 3,
-                                background:
-                                    "linear-gradient(90deg, var(--color-accent), #8B5CF6)",
+                                background: "var(--primary)",
                                 borderBottomLeftRadius: 3,
                                 borderBottomRightRadius: 3,
                             }}

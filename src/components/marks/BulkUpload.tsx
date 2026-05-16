@@ -179,7 +179,7 @@ export function BulkUpload({ examId }: Props) {
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
                         <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Upload Marks File</h3>
-                        <p className="text-[var(--color-text-muted)] text-sm max-w-md mx-auto">
+                        <p className="text-muted-foreground text-sm max-w-md mx-auto">
                             Upload a CSV file with columns for student name, admission number, and score. Columns will be auto-detected.
                         </p>
                     </div>
@@ -192,7 +192,7 @@ export function BulkUpload({ examId }: Props) {
                             className="hidden"
                         />
                     </label>
-                    {file && <p className="mt-3 text-sm text-[var(--color-text-muted)]">Selected: {file.name}</p>}
+                    {file && <p className="mt-3 text-sm text-muted-foreground">Selected: {file.name}</p>}
                 </div>
             )}
 
@@ -200,14 +200,14 @@ export function BulkUpload({ examId }: Props) {
             {step === 'map' && (
                 <div className="card">
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-4">Map Columns</h3>
-                    <p className="text-[var(--color-text-muted)] text-sm mb-6">
+                    <p className="text-muted-foreground text-sm mb-6">
                         We auto-detected your columns. Please verify or adjust the mapping below.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((field) => (
                             <div key={field}>
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1 capitalize">
+                                <label className="block text-xs text-muted-foreground mb-1 capitalize">
                                     {field.replace(/([A-Z])/g, ' $1')}
                                 </label>
                                 <select
@@ -231,14 +231,14 @@ export function BulkUpload({ examId }: Props) {
 
                     {errors.length > 0 && (
                         <div className="mt-6 p-4 bg-red-500/10 rounded-md border border-red-500/30">
-                            <div className="font-semibold text-[var(--color-danger)] mb-2 text-sm">
+                            <div className="font-semibold text-destructive mb-2 text-sm">
                                 Validation Errors ({errors.length})
                             </div>
                             {errors.slice(0, 10).map((err, i) => (
-                                <div key={i} className="text-xs text-[var(--color-text-secondary)] mb-[2px]">• {err}</div>
+                                <div key={i} className="text-xs text-muted-foreground mb-[2px]">• {err}</div>
                             ))}
                             {errors.length > 10 && (
-                                <div className="text-xs text-[var(--color-text-muted)] mt-2">
+                                <div className="text-xs text-muted-foreground mt-2">
                                     ...and {errors.length - 10} more errors
                                 </div>
                             )}
@@ -253,7 +253,7 @@ export function BulkUpload({ examId }: Props) {
                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
                         <div>
                             <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Preview ({parsedData.length} records)</h3>
-                            <p className="text-[var(--color-text-muted)] text-sm">Review the data before submitting</p>
+                            <p className="text-muted-foreground text-sm">Review the data before submitting</p>
                         </div>
                         <div className="flex flex-col sm:flex-row gap-3">
                             <button className="btn-secondary w-full sm:w-auto justify-center" onClick={() => setStep('map')} disabled={submitting}>Back</button>
@@ -286,7 +286,7 @@ export function BulkUpload({ examId }: Props) {
                             <tbody>
                                 {parsedData.slice(0, 20).map((row, i) => (
                                     <tr key={i}>
-                                        <td className="text-[var(--color-text-muted)]">{i + 1}</td>
+                                        <td className="text-muted-foreground">{i + 1}</td>
                                         <td className="font-medium">{row[mapping.studentName]}</td>
                                         <td>{row[mapping.admissionNumber]}</td>
                                         <td>{row[mapping.score]}</td>
@@ -297,7 +297,7 @@ export function BulkUpload({ examId }: Props) {
                         </table>
                     </div>
                     {parsedData.length > 20 && (
-                        <p className="text-center text-[var(--color-text-muted)] text-xs mt-4">
+                        <p className="text-center text-muted-foreground text-xs mt-4">
                             Showing 20 of {parsedData.length} records
                         </p>
                     )}

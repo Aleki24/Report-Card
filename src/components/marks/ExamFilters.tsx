@@ -40,14 +40,14 @@ export function ExamFilters({
     <>
       <div className="flex flex-col md:flex-row md:justify-between md:items-center" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         {/* Mode Toggle */}
-        <div className="flex bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md overflow-hidden w-full md:w-auto basis-full md:basis-auto">
-          <button onClick={() => setMode('bulk')} className={`flex-1 md:flex-none font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${mode === 'bulk' ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]'}`} style={{ padding: 'var(--space-4) var(--space-6)' }}>📄 Bulk Upload</button>
-          <button onClick={() => setMode('manual')} className={`flex-1 md:flex-none font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${mode === 'manual' ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]'}`} style={{ padding: 'var(--space-4) var(--space-6)' }}>✏️ Manual Entry</button>
+        <div className="flex bg-card border border-border rounded-md overflow-hidden w-full md:w-auto basis-full md:basis-auto">
+          <button onClick={() => setMode('bulk')} className={`flex-1 md:flex-none font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${mode === 'bulk' ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-muted-foreground hover:bg-muted'}`} style={{ padding: 'var(--space-4) var(--space-6)' }}>📄 Bulk Upload</button>
+          <button onClick={() => setMode('manual')} className={`flex-1 md:flex-none font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${mode === 'manual' ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-muted-foreground hover:bg-muted'}`} style={{ padding: 'var(--space-4) var(--space-6)' }}>✏️ Manual Entry</button>
         </div>
 
         {/* Filter Dropdowns */}
         <div className="flex items-center gap-3 w-full md:w-auto flex-wrap">
-          <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Filter:</label>
+          <label className="text-sm text-muted-foreground whitespace-nowrap">Filter:</label>
           <select className="input-field w-32" value={filterGradeId} onChange={e => { setFilterGradeId(e.target.value); setSelectedExamId(''); }}>
             <option value="">All Grades</option>
             {grades.map(g => <option key={g.id} value={g.id}>{g.name_display}</option>)}
@@ -65,7 +65,7 @@ export function ExamFilters({
 
       {/* Exam Selector */}
       <div className="flex items-center gap-3 w-full md:w-auto mb-4">
-        <label className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">Exam:</label>
+        <label className="text-sm text-muted-foreground whitespace-nowrap">Exam:</label>
         <select className="input-field flex-1 md:w-64" value={selectedExamId} onChange={e => setSelectedExamId(e.target.value)} disabled={loading || filteredExams.length === 0}>
           {loading ? <option value="">Loading...</option> : filteredExams.length === 0 ? <option value="">No matching exams</option> : filteredExams.map(exam => <option key={exam.id} value={exam.id}>{exam.name} — {exam.subject_name || 'N/A'} ({exam.grade_name || 'N/A'})</option>)}
         </select>

@@ -223,8 +223,8 @@ export default function AssignmentsPage() {
 
             <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
                 <StatCard label="Total" value={stats.total} sub="All assignments" icon={Briefcase} />
-                <StatCard label="Upcoming" value={stats.upcoming} sub="Not yet due" icon={Briefcase} iconBg="rgba(59,130,246,0.12)" iconColor="#3B82F6" />
-                <StatCard label="Overdue" value={stats.overdue} sub="Past due date" icon={Briefcase} iconBg="rgba(239,68,68,0.12)" iconColor="#EF4444" />
+                <StatCard label="Upcoming" value={stats.upcoming} sub="Not yet due" icon={Briefcase} iconClassName="bg-blue-500/10 text-blue-500" />
+                <StatCard label="Overdue" value={stats.overdue} sub="Past due date" icon={Briefcase} iconClassName="bg-destructive/10 text-destructive" />
                 <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
                     <button className="btn-secondary" onClick={openSubmissions} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Eye size={14} /> View Submissions ({submissions.length})

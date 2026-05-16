@@ -17,7 +17,7 @@ export default function Footer() {
           </div>
           <div className="flex flex-wrap items-center" style={{ gap: '24px' }}>
             {[{ label: 'Features', href: '/features' }, { label: 'Pricing', href: '/pricing' }, { label: 'Contact', href: '/contact' }, { label: 'Dashboard', href: '/dashboard' }].map((link) => (
-              <Link key={link.href} href={link.href} style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 500, textDecoration: 'none', transition: 'color 0.2s' }} className="hover:text-[var(--color-text-primary)]">{link.label}</Link>
+              <Link key={link.href} href={link.href} style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 500, textDecoration: 'none', transition: 'color 0.2s' }} className="hover:text-foreground">{link.label}</Link>
             ))}
           </div>
         </div>

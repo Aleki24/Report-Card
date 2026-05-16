@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { useSession } from 'next-auth/react';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import PageHeader from '@/components/dashboard/PageHeader';
+import { Card, CardContent, Button } from '@/components/ui';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
@@ -151,15 +153,15 @@ export default function SettingsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="mb-8">
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>School Settings</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>System configuration and academic setup</p>
-      </div>
+      <PageHeader 
+        title="School Settings" 
+        description="System configuration and academic setup" 
+      />
 
-      <div className="flex border-b border-[var(--color-border)] mb-8 overflow-x-auto">
+      <div className="flex border-b border-border mb-8 overflow-x-auto">
         {tabs.map(tab => (
           <button key={tab.key}
-            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-[var(--color-accent)] text-[var(--color-accent)]' : 'border-transparent text-[var(--color-text-secondary)] hover:text-white'}`}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-white'}`}
             onClick={() => setActiveTab(tab.key)}>
             {tab.label}
           </button>
@@ -167,7 +169,7 @@ export default function SettingsPage() {
       </div>
 
       {loading && activeTab !== 'profile' ? (
-        <div className="p-12 text-center text-[var(--color-text-muted)]">Loading configuration...</div>
+        <div className="p-12 text-center text-muted-foreground">Loading configuration...</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {activeTab === 'profile' && (
@@ -175,31 +177,35 @@ export default function SettingsPage() {
               {schoolLoading ? (
                 <ContentSkeleton message="Loading school profile..." />
               ) : !school.id ? (
-                <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
-                  <div className="text-center mb-6">
-                    <img src="https://em-content.zobj.net/source/apple/354/school_1f3eb.png" alt="School" className="mb-4" style={{ width: 64, height: 64, objectFit: 'contain' }} />
-                    <h2 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Setup Your School</h2>
-                    <p className="text-sm text-[var(--color-text-muted)]">Add your school details. This will appear in reports across the app.</p>
-                  </div>
-                  <form onSubmit={handleSaveSchool}>
-                    <SchoolForm school={school} setSchool={setSchool} />
-                    {saveMsg && <div className="mt-4 text-sm">{saveMsg}</div>}
-                    <button type="submit" className="btn-primary w-full mt-6" disabled={saving || !school.name.trim()}>
-                      {saving ? '⏳ Creating...' : '🚀 Create School'}
-                    </button>
-                  </form>
-                </div>
+                <Card className="max-w-[560px] mx-auto">
+                  <CardContent className="p-8">
+                    <div className="text-center mb-6">
+                      <img src="https://em-content.zobj.net/source/apple/354/school_1f3eb.png" alt="School" className="w-16 h-16 object-contain mx-auto mb-4" />
+                      <h2 className="text-xl font-bold font-display mb-2">Setup Your School</h2>
+                      <p className="text-sm text-muted-foreground">Add your school details. This will appear in reports across the app.</p>
+                    </div>
+                    <form onSubmit={handleSaveSchool}>
+                      <SchoolForm school={school} setSchool={setSchool} />
+                      {saveMsg && <div className="mt-4 text-sm font-medium">{saveMsg}</div>}
+                      <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
+                        {saving ? '⏳ Creating...' : '🚀 Create School'}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
               ) : (
-                <div className="card" style={{ maxWidth: 560, margin: '0 auto' }}>
-                  <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-6">School Profile</h3>
-                  <form onSubmit={handleSaveSchool}>
-                    <SchoolForm school={school} setSchool={setSchool} />
-                    {saveMsg && <div className="mt-4 text-sm">{saveMsg}</div>}
-                    <button type="submit" className="btn-primary w-full mt-6" disabled={saving || !school.name.trim()}>
-                      {saving ? '⏳ Saving...' : 'Save Changes'}
-                    </button>
-                  </form>
-                </div>
+                <Card className="max-w-[560px] mx-auto">
+                  <CardContent className="p-8">
+                    <h3 className="font-bold text-lg font-display mb-6">School Profile</h3>
+                    <form onSubmit={handleSaveSchool}>
+                      <SchoolForm school={school} setSchool={setSchool} />
+                      {saveMsg && <div className="mt-4 text-sm font-medium">{saveMsg}</div>}
+                      <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
+                        {saving ? '⏳ Saving...' : 'Save Changes'}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
               )}
             </div>
           )}

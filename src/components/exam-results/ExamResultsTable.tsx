@@ -266,7 +266,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
                                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                                         <button
                                             onClick={() => openEdit(mark)}
-                                            className="cursor-pointer hover:bg-[var(--color-surface-raised)] transition-colors"
+                                            className="cursor-pointer hover:bg-muted transition-colors"
                                             style={{
                                                 padding: '4px 8px',
                                                 borderRadius: 'var(--radius-md)',

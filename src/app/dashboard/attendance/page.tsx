@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { CalendarCheck, Save, CheckCircle } from 'lucide-react';
+import { CalendarCheck, Save, CheckCircle, Users } from 'lucide-react';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import PageHeader from '@/components/dashboard/PageHeader';
+import StatCard from '@/components/dashboard/StatCard';
+import { Card, CardContent, Input, Select, Button, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Badge } from '@/components/ui';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -151,152 +154,160 @@ export default function AttendancePage() {
   const percentage = markedStudents.length > 0 ? Math.round((presentCount / markedStudents.length) * 100) : 0;
 
   return (
-    <div>
-      <div style={{ marginBottom: 'var(--space-8)' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Attendance</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>{today}</p>
-      </div>
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
+      <PageHeader 
+        title="Attendance" 
+        description={today} 
+      />
 
       {/* Filters */}
-      <div className="card flex flex-col md:flex-row md:items-end" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)', padding: 'var(--space-5)' }}>
-        <div className="flex-1">
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Class / Stream</label>
-          <select
-            className="input-field w-full"
-            value={selectedStreamId}
-            onChange={e => setSelectedStreamId(e.target.value)}
-            disabled={loadingStreams}
-          >
-            <option value="">-- Select Class --</option>
-            {gradeStreams.map(s => (
-              <option key={s.id} value={s.id}>{s.full_name}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ minWidth: '180px' }}>
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Date</label>
-          <input
-            type="date"
-            className="input-field w-full"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-          />
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-5 flex flex-col md:flex-row md:items-end gap-4">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Class / Stream</label>
+            <Select
+              className="w-full text-sm h-10"
+              value={selectedStreamId}
+              onChange={e => setSelectedStreamId(e.target.value)}
+              disabled={loadingStreams}
+            >
+              <option value="">-- Select Class --</option>
+              {gradeStreams.map(s => (
+                <option key={s.id} value={s.id}>{s.full_name}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="md:min-w-[200px]">
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">Date</label>
+            <Input
+              type="date"
+              className="w-full text-sm h-10"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       {selectedStreamId && !loading && students.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-5" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
-          {[
-            { label: 'Present', value: presentCount.toString(), sub: 'Students', color: '#10B981' },
-            { label: 'Absent', value: absentCount.toString(), sub: 'Students', color: '#EF4444' },
-            { label: 'Late', value: lateCount.toString(), sub: 'Students', color: '#F59E0B' },
-            { label: 'Excused', value: excusedCount.toString(), sub: 'Students', color: '#3B82F6' },
-            { label: 'Attendance', value: `${percentage}%`, sub: "Today's rate", color: percentage >= 80 ? '#10B981' : '#F59E0B' },
-          ].map((s, i) => (
-            <div className="stat-card" key={i}>
-              <div className="stat-label">{s.label}</div>
-              <div className="stat-value" style={{ color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{s.sub}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard label="Present" value={presentCount.toString()} sub="Students" icon={Users} iconClassName="bg-primary/15 text-primary" />
+          <StatCard label="Absent" value={absentCount.toString()} sub="Students" icon={Users} iconClassName="bg-destructive/15 text-destructive" />
+          <StatCard label="Late" value={lateCount.toString()} sub="Students" icon={Users} iconClassName="bg-amber-500/15 text-amber-500" />
+          <StatCard label="Excused" value={excusedCount.toString()} sub="Students" icon={Users} iconClassName="bg-blue-500/15 text-blue-500" />
+          <StatCard label="Attendance" value={`${percentage}%`} sub="Today's rate" icon={CalendarCheck} iconClassName={percentage >= 80 ? 'bg-primary/15 text-primary' : 'bg-amber-500/15 text-amber-500'} />
         </div>
       )}
 
       {/* Table */}
       {!selectedStreamId ? (
-        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
-          <CalendarCheck style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-          <p style={{ fontSize: 14 }}>Select a class to view and mark attendance.</p>
-        </div>
+        <Card>
+          <CardContent className="text-center py-16 text-muted-foreground">
+            <CalendarCheck className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="text-sm">Select a class to view and mark attendance.</p>
+          </CardContent>
+        </Card>
       ) : loading ? (
-        <div className="card">
-          <InlineLoadingSkeleton rows={6} />
-        </div>
+        <Card>
+          <CardContent className="p-6">
+            <InlineLoadingSkeleton rows={6} />
+          </CardContent>
+        </Card>
       ) : students.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
-          <CalendarCheck style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-          <p style={{ fontSize: 14 }}>No active students found in this class.</p>
-        </div>
+        <Card>
+          <CardContent className="text-center py-16 text-muted-foreground">
+            <CalendarCheck className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="text-sm">No active students found in this class.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="card" style={{ padding: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{students.length} students</span>
-            <button className="btn-secondary text-sm" onClick={markAllPresent} style={{ marginLeft: 'auto' }}>
-              <CheckCircle style={{ width: 14, height: 14 }} /> Mark All Present
-            </button>
-          </div>
+        <Card>
+          <CardContent className="p-0 sm:p-6">
+            <div className="flex items-center justify-between gap-4 mb-4 p-4 sm:p-0">
+              <span className="text-sm text-muted-foreground font-medium">{students.length} students</span>
+              <Button variant="secondary" size="sm" onClick={markAllPresent}>
+                <CheckCircle className="w-4 h-4 mr-1.5" /> Mark All Present
+              </Button>
+            </div>
 
-          {/* Table */}
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-              <thead><tr><th>Student</th><th>Adm No.</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody>
-                {students.map(s => {
-                  const st = s.status ? statusColors[s.status] : null;
-                  return (
-                    <tr key={s.id}>
-                      <td data-label="Student" style={{ fontWeight: 600 }}>{s.name}</td>
-                      <td data-label="Adm No." style={{ fontFamily: 'monospace', fontSize: 13 }}>{s.admission_number}</td>
-                      <td data-label="Status">
-                        {st ? (
-                          <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: 12, fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span>
-                        ) : (
-                          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Not marked</span>
-                        )}
-                      </td>
-                      <td data-label="Actions">
-                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                          {(['present', 'absent', 'late', 'excused'] as AttendanceStatus[]).map(status => {
-                            const sc = statusColors[status];
-                            const isActive = s.status === status;
-                            return (
-                              <button
-                                key={status}
-                                onClick={() => updateStatus(s.id, status)}
-                                style={{
-                                  padding: '4px 10px', borderRadius: '6px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', transition: 'all 0.15s',
-                                  background: isActive ? sc.bg : 'var(--color-surface-raised)',
-                                  color: isActive ? sc.color : 'var(--color-text-muted)',
-                                  outline: isActive ? `1px solid ${sc.color}` : '1px solid transparent',
-                                }}
-                              >
-                                {sc.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Adm No.</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {students.map(s => {
+                    const st = s.status ? statusColors[s.status] : null;
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-semibold text-sm">{s.name}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{s.admission_number}</TableCell>
+                        <TableCell>
+                          {st ? (
+                            <span className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Not marked</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {(['present', 'absent', 'late', 'excused'] as AttendanceStatus[]).map(status => {
+                              const sc = statusColors[status];
+                              const isActive = s.status === status;
+                              return (
+                                <button
+                                  key={status}
+                                  onClick={() => updateStatus(s.id, status)}
+                                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-all ${isActive ? '' : 'hover:bg-[var(--color-surface-hover)]'}`}
+                                  style={{
+                                    background: isActive ? sc.bg : 'var(--color-surface-raised)',
+                                    color: isActive ? sc.color : 'var(--color-text-muted)',
+                                    outline: isActive ? `1px solid ${sc.color}` : '1px solid transparent',
+                                  }}
+                                >
+                                  {sc.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
 
-          {/* Save Button */}
-          <div style={{ marginTop: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-            <button
-              className="btn-primary disabled:opacity-50"
-              onClick={handleSave}
-              disabled={saving || students.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <Save style={{ width: 16, height: 16 }} />
-              {saving ? 'Saving…' : 'Save Attendance'}
-            </button>
-            {saveMsg && (
-              <div
-                className={`p-3 rounded-md text-sm ${saveMsg.type === 'success'
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-red-500/10 text-red-400 border border-red-500/30'
-                  }`}
+            {/* Save Button */}
+            <div className="mt-6 flex items-center gap-4 flex-wrap p-4 sm:p-0">
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={saving || students.length === 0}
               >
-                {saveMsg.text}
-              </div>
-            )}
-          </div>
-        </div>
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? 'Saving…' : 'Save Attendance'}
+              </Button>
+              {saveMsg && (
+                <div
+                  className={`px-4 py-2 rounded-md text-sm font-medium border ${saveMsg.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : 'bg-red-500/10 text-red-500 border-red-500/20'
+                    }`}
+                >
+                  {saveMsg.text}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -26,23 +26,23 @@ export function StudentPickerModal({ students, filteredStudents, loading, search
         <input className="input-field w-full mb-4" placeholder="Search by name or admission number..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
         <div className="overflow-y-auto flex-1" style={{ maxHeight: '50vh' }}>
           {loading ? (
-            <p className="text-center text-[var(--color-text-muted)] py-6 text-sm">Loading students...</p>
+            <p className="text-center text-muted-foreground py-6 text-sm">Loading students...</p>
           ) : filteredStudents.length > 0 ? (
             <div className="flex flex-col gap-1">
               {filteredStudents.map(s => (
-                <button key={s.id} className="w-full text-left px-4 py-3 rounded-md hover:bg-[var(--color-surface-raised)] transition-colors cursor-pointer" style={{ border: 'none', background: 'transparent', color: 'inherit' }} onClick={() => onSelect(s.id)}>
+                <button key={s.id} className="w-full text-left px-4 py-3 rounded-md hover:bg-muted transition-colors cursor-pointer" style={{ border: 'none', background: 'transparent', color: 'inherit' }} onClick={() => onSelect(s.id)}>
                   <div className="font-medium text-sm">{s.users?.first_name || '—'} {s.users?.last_name || ''}</div>
-                  <div className="text-xs text-[var(--color-text-muted)] font-mono">{s.admission_number}</div>
+                  <div className="text-xs text-muted-foreground font-mono">{s.admission_number}</div>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="text-center text-[var(--color-text-muted)] py-6 text-sm">
+            <p className="text-center text-muted-foreground py-6 text-sm">
               {search ? 'No searches matched.' : 'No students found.'}
             </p>
           )}
         </div>
-        <div className="flex justify-end mt-4 pt-4 border-t border-[var(--color-border)]">
+        <div className="flex justify-end mt-4 pt-4 border-t border-border">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
         </div>
       </div>

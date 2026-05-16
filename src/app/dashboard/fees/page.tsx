@@ -202,9 +202,9 @@ export default function FeesPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
                 <StatCard label="Total Records" value={stats.total} sub="All fee records" icon={DollarSign} />
-                <StatCard label="Pending" value={stats.pending} sub="No payments yet" icon={DollarSign} iconBg="rgba(245,158,11,0.12)" iconColor="#F59E0B" />
-                <StatCard label="Partial" value={stats.partial} sub="Partially paid" icon={DollarSign} iconBg="rgba(59,130,246,0.12)" iconColor="#3B82F6" />
-                <StatCard label="Paid" value={stats.paid} sub="Fully paid" icon={DollarSign} iconBg="rgba(16,185,129,0.12)" iconColor="#10B981" />
+                <StatCard label="Pending" value={stats.pending} sub="No payments yet" icon={DollarSign} iconClassName="bg-amber-500/10 text-amber-500" />
+                <StatCard label="Partial" value={stats.partial} sub="Partially paid" icon={DollarSign} iconClassName="bg-blue-500/10 text-blue-500" />
+                <StatCard label="Paid" value={stats.paid} sub="Fully paid" icon={DollarSign} iconClassName="bg-primary/10 text-primary" />
             </div>
 
             <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>

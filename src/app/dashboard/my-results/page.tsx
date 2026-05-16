@@ -152,25 +152,25 @@ export default function MyResultsPage() {
                                 : '—'}
                         </div>
                         {stats.streamPosition > 0 && (
-                            <div className="text-xs text-[var(--color-text-muted)] mt-1">Latest term ranking</div>
+                            <div className="text-xs text-muted-foreground mt-1">Latest term ranking</div>
                         )}
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Best Subject</div>
                         <div className="stat-value" style={{ fontSize: '1.25rem' }}>{stats.bestSubject}</div>
-                        <div className="text-xs text-[var(--color-success)] mt-1">{stats.bestScore}%</div>
+                        <div className="text-xs text-emerald-500 mt-1">{stats.bestScore}%</div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Weakest Subject</div>
                         <div className="stat-value" style={{ fontSize: '1.25rem' }}>{stats.weakestSubject}</div>
-                        <div className="text-xs text-[var(--color-warning)] mt-1">{stats.weakestScore}%</div>
+                        <div className="text-xs text-amber-500 mt-1">{stats.weakestScore}%</div>
                     </div>
                 </div>
             ) : (
                 <div className="card text-center p-8 mb-6">
                     <img src="https://em-content.zobj.net/source/apple/354/open-mailbox-with-lowered-flag_1f4ed.png" alt="Empty" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">No Results Yet</h3>
-                    <p className="text-sm text-[var(--color-text-muted)]">
+                    <p className="text-sm text-muted-foreground">
                         You don&apos;t have any published marks at the moment.
                     </p>
                 </div>
@@ -182,7 +182,7 @@ export default function MyResultsPage() {
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
                         <div>
                             <h3 className="text-base font-bold font-[family-name:var(--font-display)]">{term.term}</h3>
-                            <p className="text-xs text-[var(--color-text-muted)]">
+                            <p className="text-xs text-muted-foreground">
                                 Average: {term.average}%
                                 {term.position > 0 && ` · Position: ${term.position}/${term.totalStudents}`}
                             </p>
@@ -216,7 +216,7 @@ export default function MyResultsPage() {
                                             <td className="font-mono text-sm">{s.score}/{s.maxScore}</td>
                                             <td>{pct}%</td>
                                             <td><span className={`badge ${badgeClass}`}>{s.grade || '-'}</span></td>
-                                            <td className="text-[var(--color-text-muted)] text-sm">{s.comment}</td>
+                                            <td className="text-muted-foreground text-sm">{s.comment}</td>
                                         </tr>
                                     );
                                 })}
@@ -239,7 +239,7 @@ export default function MyResultsPage() {
                 <div className="card text-center p-8">
                     <img src="https://em-content.zobj.net/source/apple/354/chart-increasing_1f4c8.png" alt="Chart" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
                     <h3 className="text-base font-bold font-[family-name:var(--font-display)] mb-2">Performance Trend</h3>
-                    <p className="text-sm text-[var(--color-text-muted)]">
+                    <p className="text-sm text-muted-foreground">
                         Your trend chart will appear here once results for more than one term are available.
                     </p>
                 </div>

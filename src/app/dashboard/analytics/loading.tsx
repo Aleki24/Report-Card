@@ -1,8 +1,8 @@
 export default function AnalyticsLoading() {
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <div className="animate-pulse h-8 w-40 rounded-lg bg-[var(--color-surface-raised)] mb-3" />
-      <div className="animate-pulse h-4 w-64 rounded bg-[var(--color-surface-raised)] mb-8" />
+      <div className="animate-pulse h-8 w-40 rounded-lg bg-muted mb-3" />
+      <div className="animate-pulse h-4 w-64 rounded bg-muted mb-8" />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
         {[1,2,3,4].map(i => (
           <div key={i} className="stat-card animate-pulse">

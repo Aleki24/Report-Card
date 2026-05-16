@@ -3,8 +3,8 @@ export default function DashboardLoading() {
     <div className="w-full max-w-7xl mx-auto">
       {/* Header skeleton */}
       <div style={{ marginBottom: 'var(--space-8)' }}>
-        <div className="animate-pulse h-8 w-48 rounded-lg bg-[var(--color-surface-raised)] mb-3" />
-        <div className="animate-pulse h-4 w-72 rounded bg-[var(--color-surface-raised)]" />
+        <div className="animate-pulse h-8 w-48 rounded-lg bg-muted mb-3" />
+        <div className="animate-pulse h-4 w-72 rounded bg-muted" />
       </div>
       {/* KPI cards skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>

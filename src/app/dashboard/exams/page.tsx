@@ -8,6 +8,7 @@ import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ALL_EXAM_TYPES, getExamTypeLabel } from '@/lib/exam-types';
+import { findActiveTermId } from '@/lib/term-calendar';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_code: string; subject_id: string; grade_id: string; term_id: string; }
@@ -56,9 +57,9 @@ export default function ExamResultsPage() {
         setGradeStreams(sJson.data || []);
         setTerms(tJson.data || []);
         setAcademicYears(yJson.data || []);
-        // Auto-select current term
-        const current = (tJson.data || []).find((t: Term) => t.is_current);
-        if (current) setSelectedTermId(current.id);
+        // Auto-select current term based on Kenyan calendar
+        const activeId = findActiveTermId(tJson.data || []);
+        if (activeId) setSelectedTermId(activeId);
         else if (tJson.data?.length > 0) setSelectedTermId(tJson.data[0].id);
         if (yJson.data?.length > 0) setSelectedYearId(yJson.data[0].id);
       } catch (err) { console.error('Failed to fetch data:', err); }
@@ -182,7 +183,7 @@ export default function ExamResultsPage() {
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           {/* Term */}
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">① Term</label>
+            <label className="block text-xs text-muted-foreground mb-1 font-medium">① Term</label>
             <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)}>
               <option value="">-- Select Term --</option>
               {terms.map(t => (
@@ -193,7 +194,7 @@ export default function ExamResultsPage() {
 
           {/* Class */}
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">② Class</label>
+            <label className="block text-xs text-muted-foreground mb-1 font-medium">② Class</label>
             <select className="input-field w-full" value={selectedStreamId} onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('allsubjects'); }} disabled={loadingStreams}>
               <option value="">-- Select Class --</option>
               {gradeStreams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
@@ -202,7 +203,7 @@ export default function ExamResultsPage() {
 
           {/* Exam Type */}
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">③ Exam Type</label>
+            <label className="block text-xs text-muted-foreground mb-1 font-medium">③ Exam Type</label>
             {loadingExams ? (
               <div className="input-field w-full" style={{ color: 'var(--color-text-muted)' }}>Loading...</div>
             ) : (
@@ -217,7 +218,7 @@ export default function ExamResultsPage() {
 
           {/* Subject/Exam */}
           <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1 font-medium">④ Subject</label>
+            <label className="block text-xs text-muted-foreground mb-1 font-medium">④ Subject</label>
             <select className="input-field w-full" value={selectedExamId} onChange={e => { setSelectedExamId(e.target.value); setActiveTab('results'); }} disabled={!selectedExamType}>
               <option value="">{!selectedExamType ? 'Select exam type first' : '-- Select Subject --'}</option>
               {examsForType.map(e => (
@@ -237,7 +238,7 @@ export default function ExamResultsPage() {
           )}
 
           {/* Tabs */}
-          <div className="flex flex-wrap bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md overflow-hidden" style={{ marginBottom: 'var(--space-6)' }}>
+          <div className="flex flex-wrap bg-card border border-border rounded-md overflow-hidden" style={{ marginBottom: 'var(--space-6)' }}>
             {([
               { key: 'allsubjects', label: '📊 All Subjects' },
               { key: 'results', label: '📋 Single Exam' },
@@ -248,7 +249,7 @@ export default function ExamResultsPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${activeTab === tab.key ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]'}`}
+                className={`flex-1 font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${activeTab === tab.key ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-muted-foreground hover:bg-muted'}`}
                 style={{ padding: 'var(--space-3) var(--space-4)' }}
               >
                 {tab.label}
@@ -283,28 +284,28 @@ export default function ExamResultsPage() {
                     <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-4)' }}>Report Settings</h3>
                     <div className="flex flex-col md:flex-row" style={{ gap: 'var(--space-4)' }}>
                       <div className="flex-1">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Academic Year</label>
+                        <label className="block text-xs text-muted-foreground mb-1">Academic Year</label>
                         <select className="input-field w-full" value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)}>
                           <option value="">-- Select Year --</option>
                           {academicYears.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
                         </select>
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term</label>
+                        <label className="block text-xs text-muted-foreground mb-1">Term</label>
                         <select className="input-field w-full" value={selectedTermId} disabled>
                           {terms.filter(t => t.id === selectedTermId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                         </select>
                       </div>
                     </div>
                     <div className="mt-4">
-                      <label className="block text-xs text-[var(--color-text-muted)] mb-1">Custom Report Title (Optional)</label>
+                      <label className="block text-xs text-muted-foreground mb-1">Custom Report Title (Optional)</label>
                       <input className="input-field w-full" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
                     </div>
                   </div>
 
                   <div className="card" style={{ padding: 'var(--space-5)' }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-2)' }}>📥 Individual Student Reports (PDF)</h3>
-                    <p className="text-sm text-[var(--color-text-muted)]" style={{ marginBottom: 'var(--space-4)' }}>Click a student to download their PDF report card.</p>
+                    <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>Click a student to download their PDF report card.</p>
                     {marks.length === 0 ? (
                       <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students with marks to generate reports for.</p>
                     ) : (
@@ -321,7 +322,7 @@ export default function ExamResultsPage() {
 
                   <div className="card" style={{ padding: 'var(--space-5)' }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-2)' }}>📦 Bulk Report Generation</h3>
-                    <p className="text-sm text-[var(--color-text-muted)]" style={{ marginBottom: 'var(--space-4)' }}>Generate report cards for all students in the selected class and term.</p>
+                    <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>Generate report cards for all students in the selected class and term.</p>
                     <button className="btn-primary disabled:opacity-50" onClick={handleBulkReports} disabled={reportGenerating || !selectedTermId}>
                       {reportGenerating ? 'Generating…' : 'Generate All Reports'}
                     </button>

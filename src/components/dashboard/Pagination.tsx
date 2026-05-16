@@ -33,65 +33,30 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '10px',
-        padding: '12px 20px',
-        borderTop: '1px solid var(--color-border-subtle)',
-        fontSize: '0.6875rem',
-        color: 'var(--color-text-muted)',
-      }}
-    >
+    <div className="flex items-center justify-between flex-wrap gap-2.5 px-5 py-3 border-t border-border text-[11px] text-muted-foreground">
       <span>Showing {start} to {end} of {totalItems}</span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface)',
-            color: 'var(--color-text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-            opacity: currentPage === 1 ? 0.4 : 1,
-            transition: 'all 0.15s',
-          }}
+          className="w-7 h-7 rounded-sm border border-border bg-card text-muted-foreground flex items-center justify-center cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
         >
-          <ChevronLeft style={{ width: '14px', height: '14px' }} />
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
 
         {getPages().map((page, i) =>
           page === '...' ? (
-            <span key={`e-${i}`} style={{ padding: '0 4px' }}>…</span>
+            <span key={`e-${i}`} className="px-1">…</span>
           ) : (
             <button
               key={page}
               onClick={() => onPageChange(page)}
-              style={{
-                minWidth: '28px',
-                height: '28px',
-                borderRadius: 'var(--radius-sm)',
-                border: currentPage === page ? 'none' : '1px solid var(--color-border)',
-                background: currentPage === page ? 'var(--color-accent)' : 'var(--color-surface)',
-                color: currentPage === page ? '#fff' : 'var(--color-text-secondary)',
-                fontSize: '0.6875rem',
-                fontWeight: currentPage === page ? 700 : 500,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s',
-              }}
+              className={`min-w-7 h-7 rounded-sm text-[11px] flex items-center justify-center cursor-pointer transition-all ${
+                currentPage === page
+                  ? 'bg-primary text-primary-foreground border-none font-bold'
+                  : 'border border-border bg-card text-muted-foreground font-medium hover:bg-muted'
+              }`}
             >
               {page}
             </button>
@@ -101,22 +66,9 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface)',
-            color: 'var(--color-text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-            opacity: currentPage === totalPages ? 0.4 : 1,
-            transition: 'all 0.15s',
-          }}
+          className="w-7 h-7 rounded-sm border border-border bg-card text-muted-foreground flex items-center justify-center cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted"
         >
-          <ChevronRight style={{ width: '14px', height: '14px' }} />
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

@@ -98,7 +98,7 @@ export default function HeroSection() {
             </Link>
             <Link
               href="/features"
-              className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-[var(--color-accent)]"
+              className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
               style={{
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text-primary)',

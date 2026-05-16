@@ -49,20 +49,20 @@ export function AcademicCalendarTab({
             <div className="card">
                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📅 Academic Years</h3>
                 {academicYears.length > 0 ? (
-                    <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
+                    <div className="overflow-x-auto border border-border rounded-lg mb-4">
                         <table className="data-table w-full text-left sm:whitespace-nowrap">
-                            <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                            <thead className="bg-muted border-b border-border">
                                 <tr>
-                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Year</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Start</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">End</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Terms</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Year</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Start</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">End</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Terms</th>
+                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
                                 {academicYears.map(y => (
-                                    <tr key={y.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                                    <tr key={y.id} className="hover:bg-muted transition-colors">
                                         <td className="px-4 py-3 font-bold">{y.name}</td>
                                         <td className="px-4 py-3 text-sm font-mono">{y.start_date}</td>
                                         <td className="px-4 py-3 text-sm font-mono">{y.end_date}</td>
@@ -76,19 +76,19 @@ export function AcademicCalendarTab({
                         </table>
                     </div>
                 ) : (
-                    <p className="text-sm text-[var(--color-text-muted)] mb-4">No academic years yet. Add one below.</p>
+                    <p className="text-sm text-muted-foreground mb-4">No academic years yet. Add one below.</p>
                 )}
                 <form onSubmit={onAddYear} className="flex flex-wrap items-end gap-3">
                     <div className="flex-1 min-w-[120px]">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Year Name *</label>
+                        <label className="block text-xs text-muted-foreground mb-1">Year Name *</label>
                         <input className="input-field w-full" placeholder="e.g. 2026" value={newYear.name} onChange={e => setNewYear(p => ({ ...p, name: e.target.value }))} />
                     </div>
                     <div className="flex-1 min-w-[140px]">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Start Date *</label>
+                        <label className="block text-xs text-muted-foreground mb-1">Start Date *</label>
                         <input type="date" className="input-field w-full" value={newYear.start_date} onChange={e => setNewYear(p => ({ ...p, start_date: e.target.value }))} />
                     </div>
                     <div className="flex-1 min-w-[140px]">
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">End Date *</label>
+                        <label className="block text-xs text-muted-foreground mb-1">End Date *</label>
                         <input type="date" className="input-field w-full" value={newYear.end_date} onChange={e => setNewYear(p => ({ ...p, end_date: e.target.value }))} />
                     </div>
                     <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newYear.name.trim() || !newYear.start_date || !newYear.end_date}>
@@ -101,7 +101,7 @@ export function AcademicCalendarTab({
             <div className="card">
                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📋 Terms</h3>
                 <div className="mb-4">
-                    <label className="block text-xs text-[var(--color-text-muted)] mb-1">Select Academic Year</label>
+                    <label className="block text-xs text-muted-foreground mb-1">Select Academic Year</label>
                     {academicYears.length === 0 ? (
                         <p className="text-xs text-orange-400">Add an academic year first.</p>
                     ) : (
@@ -113,20 +113,20 @@ export function AcademicCalendarTab({
                 {selectedCalYearId && (
                     <>
                         {calTerms.length > 0 ? (
-                            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-4">
+                            <div className="overflow-x-auto border border-border rounded-lg mb-4">
                                 <table className="data-table w-full text-left sm:whitespace-nowrap">
-                                    <thead className="bg-[var(--color-surface-raised)] border-b border-[var(--color-border)]">
+                                    <thead className="bg-muted border-b border-border">
                                         <tr>
-                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Term</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Start</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">End</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]">Current</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-[var(--color-text-muted)]"></th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Term</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Start</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">End</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Current</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[var(--color-border)]">
                                         {calTerms.map(t => (
-                                            <tr key={t.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                                            <tr key={t.id} className="hover:bg-muted transition-colors">
                                                 <td className="px-4 py-3 font-medium">{t.name}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.start_date}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.end_date}</td>
@@ -140,19 +140,19 @@ export function AcademicCalendarTab({
                                 </table>
                             </div>
                         ) : (
-                            <p className="text-sm text-[var(--color-text-muted)] mb-4">No terms for this year. Add one below.</p>
+                            <p className="text-sm text-muted-foreground mb-4">No terms for this year. Add one below.</p>
                         )}
                         <form onSubmit={onAddTerm} className="flex flex-wrap items-end gap-3">
                             <div className="flex-1 min-w-[120px]">
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Term Name *</label>
+                                <label className="block text-xs text-muted-foreground mb-1">Term Name *</label>
                                 <input className="input-field w-full" placeholder="e.g. Term 1" value={newTerm.name} onChange={e => setNewTerm(p => ({ ...p, name: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">Start Date *</label>
+                                <label className="block text-xs text-muted-foreground mb-1">Start Date *</label>
                                 <input type="date" className="input-field w-full" value={newTerm.start_date} onChange={e => setNewTerm(p => ({ ...p, start_date: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-[var(--color-text-muted)] mb-1">End Date *</label>
+                                <label className="block text-xs text-muted-foreground mb-1">End Date *</label>
                                 <input type="date" className="input-field w-full" value={newTerm.end_date} onChange={e => setNewTerm(p => ({ ...p, end_date: e.target.value }))} />
                             </div>
                             <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date}>

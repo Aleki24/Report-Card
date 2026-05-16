@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import PageHeader from '@/components/dashboard/PageHeader';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { StudentCommentsSection } from '@/components/reports/StudentCommentsSection';
 import { SMSModal } from '@/components/reports/SMSModal';
@@ -8,6 +9,7 @@ import { StudentPickerModal } from '@/components/reports/StudentPickerModal';
 import { ReportActionCards } from '@/components/reports/ReportActionCards';
 import { ReportSettings } from '@/components/reports/ReportSettings';
 import { ProgressOverlay } from '@/components/ui/ProgressOverlay';
+import { Card, Button } from '@/components/ui';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
 import { pdf } from '@react-pdf/renderer';
@@ -215,17 +217,20 @@ export default function ReportsPage() {
   const smsMessagePreview = `MATOKEO Results: [Student Name]\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''} - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''}\nAvg: 78.5% | Grade: B+ | Rank: 5/40\nMath 85 | Eng 72 | Sci 80 | ...`;
 
   return (
-    <div className="w-full max-w-7xl mx-auto position-relative">
-      <div className="hero-panel">
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Academic Reports</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5, maxWidth: '42rem' }}>Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics.</p>
-      </div>
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
+      <PageHeader 
+          title="Academic Reports" 
+          description="Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics."
+      />
 
       {isAlsoSubjectTeacher && (
-        <a href="/dashboard/marks" className="mb-6 flex items-center gap-3 p-4 rounded-lg border transition-all hover:shadow-md" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.08))', borderColor: 'rgba(99,102,241,0.25)' }}>
-          <span className="text-2xl">📚</span>
-          <div className="flex-1"><span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Go to My Subjects</span><span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>Enter and manage marks for your assigned subjects</span></div>
-          <span className="text-lg" style={{ color: 'rgba(99,102,241,0.7)' }}>→</span>
+        <a href="/dashboard/marks" className="flex items-center gap-4 p-5 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-md hover:border-indigo-500/30">
+          <span className="text-3xl">📚</span>
+          <div className="flex-1">
+              <span className="font-semibold text-[15px] text-foreground">Go to My Subjects</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Enter and manage marks for your assigned subjects</span>
+          </div>
+          <span className="text-xl text-indigo-500/70">→</span>
         </a>
       )}
 
@@ -242,7 +247,7 @@ export default function ReportsPage() {
 
       {showSMSModal && <SMSModal onClose={() => { setShowSMSModal(false); setSmsSearch(''); }} smsStudents={smsStudents} filteredSMSStudents={filteredSMSStudents} loadingSMSStudents={loadingSMSStudents} smsSearch={smsSearch} setSmsSearch={setSmsSearch} smsSelectedCount={smsSelectedCount} smsMissingPhoneCount={smsMissingPhoneCount} sendingSMS={sendingSMS} smsResult={smsResult} onToggle={id => setSmsStudents(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s))} onSelectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: !!s.guardian_phone })))} onDeselectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: false })))} onSend={handleSendSMS} messagePreview={smsMessagePreview} />}
 
-      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', animation: 'fadeIn .25s ease' }}>{toast}</div>}
+      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
 
       <TermComparisonModal isOpen={showTermComparison} onClose={() => setShowTermComparison(false)} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
     </div>

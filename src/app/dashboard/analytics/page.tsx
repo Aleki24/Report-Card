@@ -264,10 +264,10 @@ export default function AnalyticsPage() {
                                     </thead>
                                     <tbody>
                                       {s.students.map((st, idx) => (
-                                        <tr key={idx} className="border-b border-[var(--color-border)]">
-                                          <td className="p-2 text-[var(--color-text-muted)]">{idx + 1}</td>
+                                        <tr key={idx} className="border-b border-border">
+                                          <td className="p-2 text-muted-foreground">{idx + 1}</td>
                                           <td className="p-2 font-medium">{st.studentName}</td>
-                                          <td className="p-2 text-[var(--color-text-muted)]">{st.admissionNumber}</td>
+                                          <td className="p-2 text-muted-foreground">{st.admissionNumber}</td>
                                           <td className="p-2 text-center font-semibold">{Math.round(st.percentage)}%</td>
                                           <td className="p-2 text-center">{st.gradeSymbol}</td>
                                         </tr>
@@ -288,7 +288,7 @@ export default function AnalyticsPage() {
           )}
         </>
       ) : (
-        <div className="card p-12 text-center text-[var(--color-text-muted)]">
+        <div className="card p-12 text-center text-muted-foreground">
           <img src="https://em-content.zobj.net/source/apple/354/bar-chart_1f4ca.png" alt="Analytics" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
           <p>No mark data available for this selection.</p>
           <p className="text-sm mt-2">Enter marks for exams to see performance analytics here.</p>

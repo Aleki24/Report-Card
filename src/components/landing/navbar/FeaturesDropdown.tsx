@@ -33,7 +33,7 @@ export function FeaturesDropdown({ isOpen, onClose }: FeaturesDropdownProps) {
                 return (
                     <Link
                         key={mod.slug} href={mod.featureHref} onClick={onClose}
-                        className="rounded-lg transition-all duration-150 hover:bg-[var(--color-surface-raised)]"
+                        className="rounded-lg transition-all duration-150 hover:bg-muted"
                         style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', textDecoration: 'none', color: 'var(--color-text-primary)' }}
                     >
                         <div style={{
@@ -54,7 +54,7 @@ export function FeaturesDropdown({ isOpen, onClose }: FeaturesDropdownProps) {
             <div style={{ borderTop: '1px solid var(--color-border-subtle)', marginTop: '4px', paddingTop: '4px' }}>
                 <Link
                     href="/features" onClick={onClose}
-                    className="rounded-lg transition-all duration-150 hover:bg-[var(--color-surface-raised)]"
+                    className="rounded-lg transition-all duration-150 hover:bg-muted"
                     style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '10px 12px', textDecoration: 'none', color: 'var(--color-accent)',

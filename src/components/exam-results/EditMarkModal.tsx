@@ -274,13 +274,13 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">Edit Result</h2>
-                        <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                             {mark.student_name} <span className="text-xs">({mark.admission_number})</span>
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] text-xl leading-none cursor-pointer"
+                        className="text-muted-foreground hover:text-[var(--color-text)] text-xl leading-none cursor-pointer"
                         title="Close"
                     >
                         ×
@@ -291,7 +291,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                 <div className="flex flex-col gap-4 mb-6">
                     {/* Score */}
                     <div>
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">
+                        <label className="block text-xs text-muted-foreground mb-1">
                             Score (max {maxScore}) *
                         </label>
                         <input
@@ -307,7 +307,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
                     {/* Grade */}
                     <div>
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">
+                        <label className="block text-xs text-muted-foreground mb-1">
                             Grade {isCBC ? '(EE1-BE)' : '*'}
                         </label>
                         <select
@@ -331,7 +331,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     {/* Rubric - only for CBC */}
                     {isCBC && (
                         <div>
-                            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Rubric (Points)</label>
+                            <label className="block text-xs text-muted-foreground mb-1">Rubric (Points)</label>
                             <select
                                 className="input-field w-full"
                                 value={rubric}
@@ -352,7 +352,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
                     {/* Remarks */}
                     <div>
-                        <label className="block text-xs text-[var(--color-text-muted)] mb-1">Remarks</label>
+                        <label className="block text-xs text-muted-foreground mb-1">Remarks</label>
                         <textarea
                             className="input-field w-full"
                             rows={2}
@@ -363,7 +363,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     </div>
 
                     {/* Current percentage preview */}
-                    <div className="text-xs text-[var(--color-text-muted)] bg-[var(--color-surface-raised)] p-2 rounded-md">
+                    <div className="text-xs text-muted-foreground bg-muted p-2 rounded-md">
                         Percentage: <strong>
                             {score && !isNaN(parseFloat(score)) && maxScore > 0
                                 ? ((parseFloat(score) / maxScore) * 100).toFixed(1)
@@ -372,7 +372,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     </div>
 
                     {/* Total Points */}
-                    <div className="text-xs text-[var(--color-accent)] bg-[var(--color-accent-glow)] p-2 rounded-md">
+                    <div className="text-xs text-primary bg-primary/10 p-2 rounded-md">
                         Total Points (all subjects): <strong>{totalPoints}</strong>
                     </div>
                 </div>
@@ -390,14 +390,14 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     <div>
                         {!confirmDelete ? (
                             <button
-                                className="text-sm text-[var(--color-danger)] hover:underline cursor-pointer"
+                                className="text-sm text-destructive hover:underline cursor-pointer"
                                 onClick={() => setConfirmDelete(true)}
                             >
                                 🗑 Delete
                             </button>
                         ) : (
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-[var(--color-danger)]">Are you sure?</span>
+                                <span className="text-xs text-destructive">Are you sure?</span>
                                 <button
                                     className="text-xs font-semibold text-red-400 hover:text-red-300 cursor-pointer"
                                     onClick={handleDelete}
@@ -406,7 +406,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                                     {deleting ? '...' : 'Yes, delete'}
                                 </button>
                                 <button
-                                    className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] cursor-pointer"
+                                    className="text-xs text-muted-foreground hover:text-[var(--color-text)] cursor-pointer"
                                     onClick={() => setConfirmDelete(false)}
                                 >
                                     Cancel

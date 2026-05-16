@@ -60,7 +60,7 @@ export function MobileNavMenu({ isOpen, onClose, mobileFeaturesOpen, setMobileFe
                             <Link
                                 key={mod.slug} href={mod.featureHref}
                                 onClick={() => { onClose(); setMobileFeaturesOpen(false); }}
-                                className="rounded-lg transition-all duration-150 hover:bg-[var(--color-surface-raised)]"
+                                className="rounded-lg transition-all duration-150 hover:bg-muted"
                                 style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', textDecoration: 'none', color: 'var(--color-text-secondary)', fontSize: '0.8125rem', fontWeight: 500 }}
                             >
                                 <IconComponent style={{ width: '16px', height: '16px', color: 'var(--color-accent)', flexShrink: 0 }} />

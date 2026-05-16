@@ -22,7 +22,7 @@ export function AcademicStructureTab({ academicLevels, grades }: AcademicStructu
 
             <div className="card col-span-1 lg:col-span-1">
                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Academic Levels</h3>
-                <p className="text-xs text-[var(--color-text-muted)] mb-4">Kenya&apos;s education curricula</p>
+                <p className="text-xs text-muted-foreground mb-4">Kenya&apos;s education curricula</p>
                 <div className="overflow-x-auto">
                     <table className="data-table w-full sm:whitespace-nowrap">
                         <thead><tr><th>Code</th><th>Name</th></tr></thead>
@@ -48,7 +48,7 @@ export function AcademicStructureTab({ academicLevels, grades }: AcademicStructu
                                 <tr key={gr.id}>
                                     <td className="font-mono text-sm">{gr.code}</td>
                                     <td className="font-medium">{gr.name_display}</td>
-                                    <td className="text-[var(--color-text-muted)] text-sm">
+                                    <td className="text-muted-foreground text-sm">
                                         {academicLevels.find(l => l.id === gr.academic_level_id)?.code || '—'}
                                     </td>
                                 </tr>
