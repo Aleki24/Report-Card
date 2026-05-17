@@ -1,6 +1,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Card } from '@/components/ui';
+import DashboardCard from './DashboardCard';
+import { cn } from '@/lib/utils';
 
 interface StatCardProps {
   label: string;
@@ -13,23 +14,26 @@ interface StatCardProps {
 
 export default function StatCard({ label, value, sub, icon: Icon, iconClassName, trend }: StatCardProps) {
   return (
-    <Card className="flex items-center gap-6 p-8 py-8 hover:border-primary transition-all duration-200 group h-full">
+    <DashboardCard hoverable className="flex h-full items-center gap-4">
       <div
-        className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 ${iconClassName || 'bg-primary/15 text-primary'}`}
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105 sm:h-11 sm:w-11',
+          iconClassName || 'bg-primary/15 text-primary'
+        )}
       >
-        <Icon className="w-7 h-7" />
+        <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
       </div>
-      <div className="min-w-0 flex-1 flex flex-col">
-        <div className="text-sm text-muted-foreground font-semibold mb-1">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-xs font-semibold tracking-tight text-muted-foreground">
           {label}
         </div>
-        <div className="font-sans text-3xl font-bold text-foreground leading-none">
+        <div className="mt-1 text-xl font-bold leading-none tracking-tight text-foreground sm:text-2xl">
           {value}
         </div>
         {(sub || trend) && (
-          <div className="text-[13px] mt-2 flex items-center gap-1.5 font-medium">
+          <div className="mt-2 flex items-center gap-1.5 text-xs font-medium leading-relaxed">
             {trend && (
-              <span className={`font-semibold ${trend.positive ? 'text-primary' : 'text-destructive'}`}>
+              <span className={cn('font-semibold', trend.positive ? 'text-primary' : 'text-destructive')}>
                 {trend.positive ? '↑' : '↓'} {trend.value}
               </span>
             )}
@@ -41,6 +45,6 @@ export default function StatCard({ label, value, sub, icon: Icon, iconClassName,
           </div>
         )}
       </div>
-    </Card>
+    </DashboardCard>
   );
 }

@@ -9,7 +9,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     const [collapsed, setCollapsed] = useState(true);
     const { schoolName, profile, role } = useAuth();
 
-    const sidebarWidth = 72; // Always use collapsed width — sidebar overlays on hover
+    const sidebarWidth = 80; // Match Sidebar.tsx collapsed width (80px)
     const displayName = schoolName || 'Matokeo';
 
     const needsSchoolSetup = role === 'ADMIN' && profile && !profile.school_id;
