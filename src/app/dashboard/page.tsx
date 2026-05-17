@@ -287,12 +287,9 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             />
           </div>
         </form>
-        <div className="flex items-center gap-2 xs:gap-4">
-          <Link href="/dashboard/announcements" className="h-8 w-8 xs:h-9 xs:w-9 flex items-center justify-center rounded-xl bg-teal-800 text-white shadow-sm hover:opacity-90 transition-opacity">
-            <Bell size={14} />
-          </Link>
-          <div className="text-[12px] xs:text-sm font-medium font-display flex items-center gap-1">
-            Good morning, {greetingName} <span className="hidden xs:inline text-lg">✨</span>
+        <div className="flex items-center">
+          <div className="text-[14px] xs:text-base sm:text-lg font-semibold font-display flex items-center gap-1.5">
+            {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {greetingName} <span>{new Date().getHours() < 12 ? '☀️' : new Date().getHours() < 17 ? '🌤️' : '🌙'}</span>
           </div>
         </div>
       </div>
