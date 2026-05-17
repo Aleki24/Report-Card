@@ -243,27 +243,32 @@ h4 {
 
 /* --- Utility Classes --- */
 .card {
-  @apply bg-card text-card-foreground border border-border rounded-xl transition-all shadow-sm;
+  @apply bg-card/90 text-card-foreground border border-border/70 rounded-2xl transition-all shadow-sm;
 }
 
 .card:hover {
-  @apply border-primary shadow-[0_0_0_1px_var(--color-accent-glow),0_8px_32px_rgba(0,0,0,0.3)];
+  @apply border-primary/40 shadow-md;
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground border-none rounded font-sans font-semibold text-sm cursor-pointer transition-all no-underline h-9;
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 font-sans text-sm font-medium tracking-tight text-primary-foreground no-underline transition-all duration-200;
 }
 
 .btn-primary:hover {
-  @apply bg-primary/90 -translate-y-[1px] shadow-[0_4px_12px_rgba(59,130,246,0.3)];
+  @apply -translate-y-px bg-primary/90 shadow-md;
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  @apply outline-none ring-2 ring-primary/40;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground border border-border rounded font-sans font-semibold text-sm cursor-pointer transition-all no-underline h-9;
+  @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border/70 bg-secondary px-4 py-2 font-sans text-sm font-medium tracking-tight text-secondary-foreground no-underline transition-all duration-200;
 }
 
 .btn-secondary:hover {
-  @apply bg-secondary/80 border-muted-foreground;
+  @apply -translate-y-px bg-secondary/80 shadow-sm;
 }
 
 .input-field {

@@ -1,15 +1,21 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import StatCard from '@/components/dashboard/StatCard';
-import { Card, CardHeader, CardTitle, CardContent, Button, Select, Badge } from '@/components/ui';
+import { Badge } from '@/components/ui';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
-  ArrowRight, Plus, BarChart3, Settings, ClipboardList, Activity, Wallet, Bell, User,
-  PanelRightOpen, PanelRightClose
+  ArrowRight, BarChart3, ClipboardList, Wallet, Bell, User,
+  BookOpen, Heart, ShieldCheck, Search
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+
+interface Announcement {
+  title: string;
+  time: string;
+  desc: string;
+  postedBy: string;
+}
 
 interface DashboardData {
   totalStudents: number;
@@ -21,11 +27,17 @@ interface DashboardData {
   recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
 }
 
-interface ActivityIconMap {
-  [key: string]: React.ReactNode;
-}
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import DashboardBanner from '@/components/dashboard/DashboardBanner';
+import DashboardCard from '@/components/dashboard/DashboardCard';
+import DashboardSection from '@/components/dashboard/DashboardSection';
+import PrimaryActionCard from '@/components/dashboard/PrimaryActionCard';
+import CompactNavCard from '@/components/dashboard/CompactNavCard';
+import AttentionItem from '@/components/dashboard/AttentionItem';
+import ListPanel from '@/components/dashboard/ListPanel';
+import EmptyState from '@/components/dashboard/EmptyState';
+import MobileStatGrid from '@/components/dashboard/MobileStatGrid';
 
 function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
   return (
@@ -48,43 +60,38 @@ function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
 }
 
 function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
+  const [now] = useState(() => Date.now());
+
   if (exams.length === 0) {
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle><Calendar size={16} /> Upcoming Exams</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[13px] text-muted-foreground">No upcoming exams scheduled.</p>
-        </CardContent>
-      </Card>
+      <ListPanel title="Upcoming Exams" actionLabel="Schedule" actionHref="/dashboard/exams" className="h-full">
+        <EmptyState title="No upcoming exams" description="Scheduled exams will appear here with clear date blocks." />
+      </ListPanel>
     );
   }
 
   const displayExams = exams.slice(0, 5);
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><Calendar size={16} /> Upcoming Exams</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
+    <ListPanel title="Upcoming Exams" actionLabel="View all" actionHref="/dashboard/exams" className="h-full">
+      <div className="flex flex-col gap-3">
         {displayExams.map(exam => {
           const date = new Date(exam.exam_date);
-          const formatted = date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-          const isSoon = (date.getTime() - Date.now()) < 3 * 24 * 60 * 60 * 1000;
+          const month = date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+          const day = date.toLocaleDateString('en-GB', { day: '2-digit' });
+          const isSoon = (date.getTime() - now) < 3 * 24 * 60 * 60 * 1000;
           return (
             <div
               key={exam.id}
-              className={`flex items-center gap-3 rounded-md border hover:bg-muted transition-colors ${isSoon ? 'bg-amber-500/10 border-amber-500/20' : 'bg-muted/60 border-border/50'}`}
-              style={{ padding: '5px' }}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-3 transition-colors hover:bg-muted/55 ${isSoon ? 'border-amber-500/25 bg-amber-500/10' : 'border-border/55 bg-muted/35'}`}
             >
-              <div className="min-w-[48px] text-center">
-                <div className={`text-[11px] font-semibold ${isSoon ? 'text-amber-500' : 'text-muted-foreground'}`}>{formatted}</div>
+              <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border bg-card/80 ${isSoon ? 'border-amber-500/30 text-amber-600' : 'border-border/60 text-muted-foreground'}`}>
+                <span className="text-[10px] font-bold leading-none tracking-[0.12em]">{month}</span>
+                <span className="text-base font-bold leading-none tracking-tight">{day}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-foreground">{exam.name}</div>
-                <div className="text-[11px] text-muted-foreground">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold tracking-tight text-foreground">{exam.name}</div>
+                <div className="truncate text-xs leading-relaxed text-muted-foreground">
                   {exam.subject_name} &middot; {exam.grade_name}
                 </div>
               </div>
@@ -92,77 +99,43 @@ function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] })
             </div>
           );
         })}
-        {exams.length > 5 && (
-          <div className="mt-4 pt-3 border-t border-border text-center">
-            <a href="/dashboard/exams" className="text-primary text-[13px] font-medium hover:underline">View all exams</a>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </ListPanel>
   );
 }
 
 function RecentActivitiesCard({ activities }: { activities: DashboardData['recentActivities'] }) {
-  const iconMap: ActivityIconMap = {
-    report: <FileText size={14} />,
-    student: <GraduationCap size={14} />,
-    mark: <ClipboardList size={14} />,
-  };
-  const colorMap: { [key: string]: string } = {
-    report: 'text-emerald-500',
-    student: 'text-amber-500',
-    mark: 'text-red-500',
-  };
-  const bgMap: { [key: string]: string } = {
-    report: 'bg-emerald-500/10',
-    student: 'bg-amber-500/10',
-    mark: 'bg-red-500/10',
-  };
-
   if (activities.length === 0) {
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle><Activity size={16} /> Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[13px] text-muted-foreground">No recent activity yet.</p>
-        </CardContent>
-      </Card>
+      <ListPanel title="Recent Activity" className="h-full">
+        <EmptyState title="No recent activity" description="Activity such as marks, students, and report cards will be listed here." />
+      </ListPanel>
     );
   }
 
   const displayActivities = activities.slice(0, 5);
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><Activity size={16} /> Recent Activity</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <ListPanel title="Recent Activity" actionLabel="View all" actionHref="/dashboard/reports" className="h-full">
+      <div className="flex flex-col gap-3">
         {displayActivities.map((act, i) => {
           const date = new Date(act.timestamp);
           const timeAgo = getTimeAgo(date);
-          const actColor = colorMap[act.type] || 'text-primary';
-          const actBg = bgMap[act.type] || 'bg-primary/10';
           return (
             <div
               key={i}
-              className="flex flex-col gap-1 bg-muted/60 rounded-md border border-border/50 hover:bg-muted transition-colors"
-              style={{ padding: '5px' }}
+              className="flex items-start justify-between gap-3 rounded-xl border border-border/55 bg-muted/35 px-3 py-3 transition-colors hover:bg-muted/55"
             >
-              <div className="text-[13px] font-medium text-foreground">{act.message}</div>
-              <div className="text-[11px] text-muted-foreground">{timeAgo}</div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium tracking-tight text-foreground">{act.message}</div>
+                <div className="text-xs leading-relaxed text-muted-foreground">School activity update</div>
+              </div>
+              <div className="shrink-0 text-xs font-medium text-muted-foreground">{timeAgo}</div>
             </div>
           );
         })}
-        {activities.length > 5 && (
-          <div className="mt-4 pt-3 border-t border-border text-center">
-            <button className="text-primary text-[13px] font-medium hover:underline bg-transparent border-none cursor-pointer">View all activity</button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </ListPanel>
   );
 }
 
@@ -180,279 +153,84 @@ function getTimeAgo(date: Date): string {
 
 function QuickAction({ label, desc, href, icon }: { label: string; desc: string; href: string; icon: React.ReactNode }) {
   return (
-    <a href={href} className="no-underline block group h-full">
-      <div className="flex items-center gap-6 px-8 py-8 h-full rounded-xl bg-muted border border-border cursor-pointer transition-all duration-200 hover:border-primary hover:-translate-y-[1px]">
-        <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
+    <a href={href} className="group block h-full no-underline">
+      <div className="flex h-full items-center gap-3 rounded-2xl border border-border/70 bg-card/90 px-4 py-3 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-primary/50 hover:shadow-md">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           {icon}
         </div>
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-          <div className="text-[15px] font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">{label}</div>
-          <div className="text-[13px] text-muted-foreground leading-snug">{desc}</div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="text-sm font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">{label}</div>
+          <div className="text-xs leading-relaxed text-muted-foreground">{desc}</div>
         </div>
-        <ArrowRight size={20} className="text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-1 transition-all ml-3" />
+        <ArrowRight size={16} className="shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
       </div>
     </a>
   );
 }
 
-// ── Chart Components ─────────────────────────────────────────
-function AttendanceChartCard({ data }: { data: any }) {
-  const attendanceData = data || [
-    { name: 'Present', value: 0, color: '#10B981' },
-    { name: 'Late', value: 0, color: '#F59E0B' },
-    { name: 'Absent', value: 0, color: '#EF4444' },
-  ];
-
-  const total = attendanceData.reduce((sum: number, item: any) => sum + item.value, 0);
-  const presentPct = total > 0 ? Math.round((attendanceData[0].value / total) * 100) : 0;
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-row justify-between items-center mb-4 space-y-0">
-        <CardTitle className="text-[16px]">Attendance Overview</CardTitle>
-        <Select className="py-1 px-2 text-[13px] h-auto min-h-0 w-auto">
-          <option>This Week</option>
-          <option>This Month</option>
-        </Select>
-      </CardHeader>
-      
-      <CardContent className="flex-1 flex flex-col justify-center">
-        <div className="flex flex-col md:flex-row items-center gap-6">
-          <div className="w-[140px] h-[140px] relative shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={attendanceData}
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={2}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {attendanceData.map((entry: any, index: any) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(val: any) => `${val}%`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-2xl font-bold">{presentPct}%</div>
-              <div className="text-[11px] text-muted-foreground">Overall</div>
-            </div>
-          </div>
-          
-          <div className="flex-1 flex flex-col gap-3 w-full">
-            {attendanceData.map((item: any) => (
-              <div key={item.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ background: item.color }} />
-                  <span className="text-[13px] font-medium">{item.name}</span>
-                </div>
-                <div className="text-[13px] text-muted-foreground">{item.value}%</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </CardContent>
-      
-      <div className="mt-4 pt-4 border-t border-border px-6 pb-6 flex justify-between items-center">
-        <a href="/dashboard/attendance" className="text-[13px] text-primary font-medium no-underline flex items-center gap-1 hover:underline">
-           View full attendance report
-        </a>
-        <ArrowRight size={14} className="text-muted-foreground" />
-      </div>
-    </Card>
-  );
-}
-
-function FeeCollectionOverviewCard({ collected = 0, total = 0, outstanding = 0, overdue = 0 }) {
-  const percent = total > 0 ? Math.min(100, Math.round((collected / total) * 100)) : 0;
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-row justify-between items-center mb-4 space-y-0">
-        <CardTitle className="text-[16px]">Fee Collection Overview</CardTitle>
-        <Select className="py-1 px-2 text-[13px] h-auto min-h-0 w-auto">
-          <option>This Month</option>
-        </Select>
-      </CardHeader>
-      
-      <CardContent className="flex-1 flex flex-col justify-center">
-        <div className="flex flex-col md:flex-row md:justify-between gap-4 mb-6">
-          <div>
-            <div className="text-[12px] text-emerald-500 font-semibold mb-1">Collected</div>
-            <div className="text-2xl font-bold">KES {collected.toLocaleString()}</div>
-            <div className="text-[12px] text-muted-foreground mt-1">{percent}% of total</div>
-          </div>
-          <div className="md:text-right">
-            <div className="text-[12px] text-muted-foreground font-semibold mb-1">Total Fees</div>
-            <div className="text-2xl font-bold">KES {total.toLocaleString()}</div>
-          </div>
-        </div>
-        
-        <div className="h-2.5 bg-muted rounded-full overflow-hidden flex">
-          <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${percent}%` }} />
-        </div>
-        
-        <div className="flex flex-col md:flex-row md:justify-between gap-4 mt-6">
-          <div>
-            <div className="text-[12px] text-foreground font-semibold mb-1">Outstanding</div>
-            <div className="text-lg font-bold">KES {outstanding.toLocaleString()}</div>
-          </div>
-          <div className="md:text-right">
-            <div className="text-[12px] text-red-500 font-semibold mb-1">Overdue</div>
-            <div className="text-lg font-bold text-red-500">KES {overdue.toLocaleString()}</div>
-          </div>
-        </div>
-      </CardContent>
-
-      <div className="mt-4 pt-4 border-t border-border px-6 pb-6 flex justify-between items-center">
-        <a href="/dashboard/finance" className="text-[13px] text-primary font-medium no-underline flex items-center gap-1 hover:underline">
-           View finance dashboard
-        </a>
-        <ArrowRight size={14} className="text-muted-foreground" />
-      </div>
-    </Card>
-  );
-}
-
 // ── Mock Insight Components ─────────────────────────────────
-function RecentAnnouncementsCard({ announcements = [] }: { announcements?: any[] }) {
+function RecentAnnouncementsCard({ announcements = [] }: { announcements?: Announcement[] }) {
   if (announcements.length === 0) {
     return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle><FileText size={16} /> Recent Announcements</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[13px] text-muted-foreground">No recent announcements.</p>
-        </CardContent>
-      </Card>
+      <ListPanel title="Announcements" actionLabel="Create" actionHref="/dashboard/announcements" className="h-full">
+        <EmptyState title="No announcements" description="Share updates with teachers, students, and parents from here." />
+      </ListPanel>
     );
   }
 
   const displayAnnouncements = announcements.slice(0, 5);
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><FileText size={16} /> Recent Announcements</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+    <ListPanel title="Announcements" actionLabel="View all" actionHref="/dashboard/announcements" className="h-full">
+      <div className="flex flex-col gap-3">
         {displayAnnouncements.map((ann, i) => (
-          <div key={i} className="flex flex-col gap-1 bg-muted/60 rounded-md border border-border/50 hover:bg-muted transition-colors" style={{ padding: '5px' }}>
-            <div className="flex justify-between items-center">
-              <div className="text-[13px] font-medium text-foreground">{ann.title}</div>
-              <div className="text-[11px] text-muted-foreground">{ann.time}</div>
+          <div key={i} className="rounded-xl border border-border/55 bg-muted/35 px-3 py-3 transition-colors hover:bg-muted/55">
+            <div className="flex justify-between gap-3">
+              <div className="min-w-0 truncate text-sm font-medium tracking-tight text-foreground">{ann.title}</div>
+              <div className="shrink-0 text-xs text-muted-foreground">{ann.time}</div>
             </div>
-            <div className="text-[12px] text-muted-foreground">{ann.desc}</div>
-            <div className="text-[11px] text-muted-foreground/80">Posted by {ann.postedBy}</div>
+            <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{ann.desc}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground/80">Posted by {ann.postedBy}</div>
           </div>
         ))}
-        {announcements.length > 5 && (
-          <div className="mt-4 pt-3 border-t border-border text-center">
-            <button className="text-primary text-[13px] font-medium hover:underline bg-transparent border-none cursor-pointer">View all</button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+    </ListPanel>
   );
 }
 
-function StudentsNeedingAttentionCard({ issues = [] }: { issues?: any[] }) {
-  if (issues.length === 0) {
-    return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle><Users size={16} /> Students Needing Attention</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[13px] text-muted-foreground">No students currently flagged.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+const primaryActions = [
+  { title: 'Mark Entry', description: 'Record student marks', href: '/dashboard/marks', icon: <ClipboardList size={20} />, badge: 'Daily' },
+  { title: 'Report Cards', description: 'Generate term reports', href: '/dashboard/reports', icon: <FileText size={20} />, badge: 'Core' },
+  { title: 'Attendance', description: 'Track attendance today', href: '/dashboard/attendance', icon: <CalendarCheck size={20} /> },
+  { title: 'Exam Results', description: 'Review broadsheets', href: '/dashboard/exam-results', icon: <BarChart3 size={20} /> },
+];
+
+const managementActions = [
+  { title: 'Students', subtitle: 'Enrollment and records', href: '/dashboard/students', icon: <Users size={18} /> },
+  { title: 'Teachers', subtitle: 'Staff management', href: '/dashboard/teachers', icon: <GraduationCap size={18} /> },
+  { title: 'Classes', subtitle: 'Grades and streams', href: '/dashboard/classes', icon: <Building2 size={18} /> },
+  { title: 'Subjects', subtitle: 'Curriculum setup', href: '/dashboard/subjects', icon: <BookOpen size={18} /> },
+  { title: 'Exams', subtitle: 'Exam schedules', href: '/dashboard/exams', icon: <ClipboardList size={18} /> },
+  { title: 'Parents', subtitle: 'Guardian directory', href: '/dashboard/parents', icon: <Heart size={18} /> },
+  { title: 'Analytics', subtitle: 'Performance insights', href: '/dashboard/analytics', icon: <BarChart3 size={18} /> },
+  { title: 'Users & Roles', subtitle: 'Access control', href: '/dashboard/users', icon: <ShieldCheck size={18} /> },
+];
+
+function TodayAttentionCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
+  const [now] = useState(() => Date.now());
+  const upcomingCount = exams.length;
+  const soonCount = exams.filter(exam => (new Date(exam.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
 
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><Users size={16} /> Students Needing Attention</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {issues.map((issue, i) => (
-          <div key={i} className="flex items-start gap-4 p-5 bg-muted rounded-xl border border-border">
-            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${issue.type === 'attendance' ? 'bg-amber-500' : issue.type === 'fees' ? 'bg-red-500' : 'bg-[var(--color-accent)]'}`} />
-            <div className="text-[14px] text-foreground">{issue.text}</div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function SystemSetupProgressCard({ progress = 0 }: { progress?: number }) {
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><Settings size={16} /> Setup Progress</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[13px] font-medium">Overall Progress</div>
-          <div className="text-[13px] font-semibold text-primary">{progress}%</div>
-        </div>
-        <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4 flex">
-          <div className="bg-[var(--color-accent)] transition-all duration-500" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="text-[13px] text-muted-foreground">No pending setup tasks.</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AcademicPerformanceCard({ stats = null }: { stats?: any }) {
-  if (!stats) {
-    return (
-      <Card className="h-full">
-        <CardHeader>
-          <CardTitle><BarChart3 size={16} /> Academic Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-[13px] text-muted-foreground">No academic data available yet.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle><BarChart3 size={16} /> Academic Summary</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex justify-between pb-2 border-b border-border">
-          <div className="text-[13px] text-muted-foreground">Average Performance</div>
-          <div className="text-[13px] font-semibold">72%</div>
-        </div>
-        <div className="flex justify-between pb-2 border-b border-border">
-          <div className="text-[13px] text-muted-foreground">Best Class</div>
-          <div className="text-[13px] font-semibold text-emerald-500">Grade 6</div>
-        </div>
-        <div className="flex justify-between pb-2 border-b border-border">
-          <div className="text-[13px] text-muted-foreground">Lowest Subject</div>
-          <div className="text-[13px] font-semibold text-red-500">Mathematics</div>
-        </div>
-        <div className="flex justify-between">
-          <div className="text-[13px] text-muted-foreground">Reports Generated</div>
-          <div className="text-[13px] font-semibold">120</div>
-        </div>
-        
-        <div className="mt-4 pt-3 border-t border-border text-center">
-          <a href="/dashboard/analytics" className="text-primary text-[13px] font-medium hover:underline">Analytics</a>
-        </div>
-      </CardContent>
-    </Card>
+    <ListPanel title="Today's Attention" actionLabel="Review" actionHref="/dashboard/analytics" className="h-full">
+      <div className="flex flex-col gap-3">
+        <AttentionItem label="Upcoming exams scheduled" count={upcomingCount} href="/dashboard/exams" tone={soonCount > 0 ? 'warning' : 'info'} />
+        <AttentionItem label="Mark entries pending review" count="—" href="/dashboard/marks" tone="warning" />
+        <AttentionItem label="Attendance to confirm today" count="—" href="/dashboard/attendance" tone="info" />
+        <AttentionItem label="Fee payments to follow up" count="—" href="/dashboard/fees" tone="danger" />
+        <AttentionItem label="Setup tasks remaining" count="0" href="/dashboard/settings" tone="success" />
+      </div>
+    </ListPanel>
   );
 }
 
@@ -460,7 +238,6 @@ function AcademicPerformanceCard({ stats = null }: { stats?: any }) {
 function AdminDashboard({ greeting, userName }: { greeting: string; userName: string }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activityCollapsed, setActivityCollapsed] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -479,147 +256,100 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
   if (loading) return <LoadingSkeleton />;
 
+  const greetingName = userName || 'Admin';
+
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6 items-start h-full ${activityCollapsed ? '' : ''}`}>
-      
-      {/* ─── Left Column (2/3 width) ─── */}
-      <div className="flex flex-col gap-6 min-w-0 w-full md:col-span-2 xl:col-span-3">
-        
-        {/* Header: Title + Controls */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold font-display text-foreground">
-              {greeting}
-            </h1>
-            <p className="text-muted-foreground text-[13px] mt-1 leading-relaxed">
-              {userName ? `Welcome back, ${userName}! 👋 Here's your school overview.` : 'Overview of student performance and key metrics'}
-            </p>
+    <div className="relative min-h-full overflow-hidden rounded-[2rem] bg-background/40 p-3 sm:p-4 lg:p-6">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.09] [background-image:linear-gradient(var(--border)_1px,transparent_1px),linear-gradient(90deg,var(--border)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <div className="pointer-events-none absolute left-8 top-10 text-3xl opacity-10">☀️</div>
+      <div className="pointer-events-none absolute bottom-12 right-10 text-4xl opacity-10">📐</div>
+
+      <div className="relative flex flex-col gap-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{greeting}</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">School command center</h1>
           </div>
-          <div className="hidden md:flex gap-3 items-center">
-            <div className="flex items-center justify-between gap-2 bg-muted border border-border rounded-md text-[13px] font-medium min-w-[140px]" style={{ padding: '5px' }}>
-              <span className="text-muted-foreground whitespace-nowrap">Year:</span>
-              <select className="bg-transparent border-none font-semibold outline-none cursor-pointer text-foreground text-right w-full">
-                <option>2024–2025</option>
-              </select>
+          <div className="hidden items-center gap-3 lg:flex">
+            <div className="flex h-10 min-w-[260px] items-center gap-2 rounded-xl border border-border/70 bg-card/90 px-3 text-sm text-muted-foreground shadow-sm">
+              <Search size={16} />
+              <span>Search students, reports, classes…</span>
             </div>
-            <div className="flex items-center justify-between gap-2 bg-muted border border-border rounded-md text-[13px] font-medium min-w-[140px]" style={{ padding: '5px' }}>
-              <span className="text-muted-foreground whitespace-nowrap">Term:</span>
-              <select className="bg-transparent border-none font-semibold outline-none cursor-pointer text-foreground text-right w-full">
-                <option>Term 1</option>
-                <option>Term 2</option>
-                <option>Term 3</option>
-              </select>
-            </div>
-            <button className="w-9 h-9 rounded-md border border-border bg-muted flex items-center justify-center relative cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+            <select className="h-10 rounded-xl border border-border/70 bg-card/90 px-3 text-sm font-medium tracking-tight text-foreground shadow-sm outline-none focus:ring-2 focus:ring-primary/40">
+              <option>2024–2025 • Term 1</option>
+              <option>2024–2025 • Term 2</option>
+              <option>2024–2025 • Term 3</option>
+            </select>
+            <button className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-card/90 text-muted-foreground shadow-sm transition-all hover:-translate-y-px hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               <Bell size={18} />
-              <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-[var(--color-surface)]" />
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-card bg-red-500" />
             </button>
-            <button className="w-9 h-9 rounded-md border border-border bg-muted flex items-center justify-center cursor-pointer text-foreground hover:bg-card transition-colors">
+            <button className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-card/90 text-foreground shadow-sm transition-all hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               <User size={18} />
             </button>
           </div>
         </div>
 
-        {/* Overview Section */}
-        <div>
-          <div className="mb-5">
-            <h2 className="text-[17px] font-semibold text-foreground font-body">Overview</h2>
-            <p className="text-[13px] text-muted-foreground mt-0.5">Key metrics and performance indicators</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard label="Total Students" value={data?.totalStudents ?? '—'} sub="" icon={Users} iconClassName="bg-violet-500/10 text-violet-500" />
+        <DashboardBanner
+          greeting={`Good morning, ${greetingName} 👋`}
+          summary="Here's what's happening in your school today. Review attention items first, then jump into the daily workflows your team uses most."
+          meta="Current year • Term 1"
+        />
+
+        <DashboardSection title="At a Glance" description="Fast metrics for the current school setup and daily operations.">
+          <MobileStatGrid>
+            <StatCard label="Total Students" value={data?.totalStudents ?? '—'} sub="Enrolled learners" icon={Users} iconClassName="bg-violet-500/10 text-violet-500" />
             <StatCard label="Total Teachers" value={data?.totalTeachers ?? '—'} sub="Active staff" icon={GraduationCap} iconClassName="bg-primary/10 text-primary" />
             <StatCard label="Total Classes" value={data?.totalClasses ?? '—'} sub="All streams" icon={Building2} iconClassName="bg-blue-500/10 text-blue-500" />
-          </div>
-        </div>
+            <StatCard label="Reports Generated" value={data?.totalReports ?? '—'} sub="This term" icon={FileText} iconClassName="bg-emerald-500/10 text-emerald-500" />
+          </MobileStatGrid>
+        </DashboardSection>
 
-        {/* Quick Actions */}
-        <div>
-          <h3 className="text-[15px] font-semibold flex items-center gap-2 font-body" style={{ marginBottom: '20px' }}>
-            <Activity size={16} /> Quick Actions
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <QuickAction label="Students" desc="Manage enrollment" href="/dashboard/students" icon={<Users size={18} />} />
-            <QuickAction label="Teachers" desc="Staff management" href="/dashboard/teachers" icon={<GraduationCap size={18} />} />
-            <QuickAction label="Classes" desc="Streams & grades" href="/dashboard/classes" icon={<Building2 size={18} />} />
-            <QuickAction label="Subjects" desc="Curriculum setup" href="/dashboard/subjects" icon={<FileText size={18} />} />
-            <QuickAction label="Exams" desc="Schedule exams" href="/dashboard/exams" icon={<ClipboardList size={18} />} />
-            <QuickAction label="Mark Entry" desc="Record scores" href="/dashboard/marks" icon={<ClipboardList size={18} />} />
-            <QuickAction label="Exam Results" desc="View broadsheet" href="/dashboard/exam-results" icon={<BarChart3 size={18} />} />
-            <QuickAction label="Report Cards" desc="Generate reports" href="/dashboard/reports" icon={<FileText size={18} />} />
-            <QuickAction label="Attendance" desc="Track daily" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
-            <QuickAction label="Parents" desc="Guardian info" href="/dashboard/parents" icon={<Users size={18} />} />
-            <QuickAction label="Analytics" desc="Performance trends" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
-            <QuickAction label="Users & Roles" desc="Manage access" href="/dashboard/users" icon={<Users size={18} />} />
-            {/* Setup Progress — spans remaining columns */}
-            <a href="/dashboard/settings" className="no-underline block group lg:col-span-2 xl:col-span-4">
-              <div className="flex items-center gap-6 px-8 py-8 rounded-xl bg-muted border border-border cursor-pointer transition-all hover:border-primary hover:-translate-y-[1px]">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
-                  <Settings size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <div className="text-[13px] font-semibold text-foreground">Setup Progress</div>
-                    <div className="text-[12px] font-semibold text-primary">0%</div>
-                  </div>
-                  <div className="h-1.5 bg-card rounded-full overflow-hidden">
-                    <div className="w-0 h-full bg-[var(--color-accent)] transition-all duration-300" />
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-1">Complete school setup in Settings</div>
-                </div>
-                <ArrowRight size={14} className="text-muted-foreground shrink-0 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+          <div className="flex flex-col gap-6">
+            <TodayAttentionCard exams={data?.upcomingExams ?? []} />
+
+            <DashboardSection title="Primary Quick Actions" description="Daily workflows for marks, reports, attendance, and results.">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+                {primaryActions.map(action => (
+                  <PrimaryActionCard key={action.title} {...action} />
+                ))}
               </div>
-            </a>
+            </DashboardSection>
+
+            <DashboardSection title="Manage School" description="Secondary navigation for people, academics, operations, and access.">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {managementActions.map(action => (
+                  <CompactNavCard key={action.title} {...action} />
+                ))}
+              </div>
+            </DashboardSection>
+
+            <DashboardSection title="Operations Overview" description="Lightweight finance and attendance entry points.">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <CompactNavCard title="Fee Collection" subtitle="Track payments and balances" href="/dashboard/fees" icon={<Wallet size={18} />} />
+                <CompactNavCard title="Attendance" subtitle="Daily class tracking" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
+              </div>
+            </DashboardSection>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
+            <RecentActivitiesCard activities={data?.recentActivities ?? []} />
+            <RecentAnnouncementsCard announcements={[]} />
+            <DashboardCard className="overflow-hidden p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-base font-semibold tracking-tight text-foreground">Setup Progress</h3>
+                <span className="text-sm font-bold text-primary">0%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full w-0 rounded-full bg-primary transition-all duration-500" />
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">Complete school profile, academic structure, and access settings when ready.</p>
+            </DashboardCard>
           </div>
         </div>
-
-        {/* School Activity Section */}
-        <div>
-          <div className="mb-5">
-            <h2 className="text-[17px] font-semibold text-foreground font-body">School Activity</h2>
-            <p className="text-[13px] text-muted-foreground mt-0.5">Attendance and fee collection overview</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <QuickAction label="Fee Collection" desc="Track payments" href="/dashboard/students" icon={<Wallet size={18} />} />
-            <QuickAction label="Attendance" desc="Daily tracking" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
-          </div>
-        </div>
-
-        {/* Extra margin at the bottom */}
-        <div className="pb-10"></div>
       </div>
-
-      {/* ─── Right Sidebar Column / Edge Tab ─── */}
-      {activityCollapsed ? (
-        /* Collapsed: thin vertical edge tab */
-        <div
-          className="flex flex-col items-center justify-center gap-2 p-3 bg-muted border border-border rounded-l-xl cursor-pointer hover:bg-primary/10 transition-colors h-[200px] sticky top-6 right-0 text-muted-foreground"
-          onClick={() => setActivityCollapsed(false)}
-          title="Open Recent Activity"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-        >
-          <PanelRightOpen size={16} className="rotate-90" />
-          <span className="text-[13px] font-medium tracking-wider">Recent Activity</span>
-        </div>
-      ) : (
-        /* Expanded: full sidebar */
-        <div className="flex flex-col gap-6 w-full md:col-span-1 shrink-0">
-          <div className="flex justify-between items-center">
-            <h2 className="text-[17px] font-semibold font-body">Recent Activity</h2>
-            <button
-              onClick={() => setActivityCollapsed(true)}
-              title="Collapse activity panel"
-              className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition-colors"
-            >
-              <PanelRightClose size={16} />
-            </button>
-          </div>
-          <RecentAnnouncementsCard announcements={[]} />
-          <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
-          <RecentActivitiesCard activities={data?.recentActivities ?? []} />
-        </div>
-      )}
-
     </div>
   );
 }
