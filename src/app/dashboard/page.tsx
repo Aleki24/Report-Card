@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import StatCard from '@/components/dashboard/StatCard';
 import { Badge } from '@/components/ui';
@@ -40,6 +41,8 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import MobileStatGrid from '@/components/dashboard/MobileStatGrid';
 import MiniCalendar from '@/components/dashboard/MiniCalendar';
 import QuickStatsChart from '@/components/dashboard/QuickStatsChart';
+import Link from 'next/link';
+import { getCurrentTermName } from '@/lib/term-calendar';
 
 function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
   return (
@@ -238,8 +241,10 @@ function TodayAttentionCard({ exams }: { exams: DashboardData['upcomingExams'] }
 
 // ── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard({ greeting, userName }: { greeting: string; userName: string }) {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -261,92 +266,97 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   const greetingName = userName || 'Admin';
 
   return (
-    <div className="relative min-h-full overflow-hidden p-3 sm:p-4 lg:p-6 bg-background text-foreground">
+    <div className="relative min-h-full overflow-hidden p-2 sm:p-3 lg:p-4 bg-background text-foreground">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-10">
-        <div className="text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
-          CURRENT YEAR • TERM 1
+      <div className="flex items-center justify-between mb-4 xs:mb-6">
+        <div className="text-[10px] xs:text-[12px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
+          {getCurrentTermName()} • {new Date().getFullYear()}
         </div>
-        <div className="hidden md:flex items-center flex-1 justify-center">
-          <div className="relative w-full max-w-md">
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/analytics?search=${encodeURIComponent(searchQuery.trim())}`); }}
+          className="hidden md:flex items-center flex-1 justify-center mx-6"
+        >
+          <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search" 
+            <input
+              type="text"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-muted/40 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button className="h-9 w-9 flex items-center justify-center rounded-xl bg-teal-800 text-white shadow-sm hover:opacity-90 transition-opacity">
-            <Bell size={16} />
-          </button>
-          <div className="text-sm font-medium font-display flex items-center gap-1">
-            Good morning, {greetingName} <span className="text-lg">✨</span>
+        </form>
+        <div className="flex items-center gap-2 xs:gap-4">
+          <Link href="/dashboard/announcements" className="h-8 w-8 xs:h-9 xs:w-9 flex items-center justify-center rounded-xl bg-teal-800 text-white shadow-sm hover:opacity-90 transition-opacity">
+            <Bell size={14} />
+          </Link>
+          <div className="text-[12px] xs:text-sm font-medium font-display flex items-center gap-1">
+            Good morning, {greetingName} <span className="hidden xs:inline text-lg">✨</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-8 md:gap-10">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-4 md:gap-6">
         {/* Main Content Area */}
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
           
           {/* Greeting */}
           <div>
-            <h1 className="text-[2rem] font-bold tracking-tight text-foreground font-display">
+            <h1 className="text-[1.5rem] xs:text-[1.75rem] sm:text-[2rem] font-bold tracking-tight text-foreground font-display">
               {greeting} dashboard
             </h1>
           </div>
 
           {/* At a Glance */}
           <div>
-            <h2 className="text-[15px] font-semibold mb-4 text-foreground/90">At a Glance</h2>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">At a Glance</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" />
-              <ColoredStatCard title="Total Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" />
-              <ColoredStatCard title="Total Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" />
-              <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" />
+              <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/students" />
+              <ColoredStatCard title="Total Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/teachers" />
+              <ColoredStatCard title="Total Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/classes" />
+              <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" href="/dashboard/reports" />
             </div>
           </div>
 
           {/* Today's Attention */}
           <div>
-            <h2 className="text-[15px] font-semibold mb-4 text-foreground/90">Today's Attention</h2>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Today's Attention</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-              <AttentionCard title="Upcoming Exams" icon={<Calendar size={20} />} color="bg-[#6D597A]" />
-              <AttentionCard title="Mark entries" icon={<ClipboardList size={20} />} color="bg-[#F07167]" />
-              <AttentionCard title="Fee payments" icon={<Wallet size={20} />} color="bg-[#F4A261]" />
-              <AttentionCard title="Setup Tasks" icon={<ShieldCheck size={20} />} color="bg-[#5C677D]" />
-              <AttentionCard title="Pending Review" icon={<Bell size={20} />} color="bg-[#3A5A40]" />
+              <AttentionCard title="Upcoming Exams" icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams" />
+              <AttentionCard title="Mark entries" icon={<ClipboardList size={20} />} color="bg-[#F07167]" href="/dashboard/marks" />
+              <AttentionCard title="Fee payments" icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" />
+              <AttentionCard title="Setup Tasks" icon={<ShieldCheck size={20} />} color="bg-[#5C677D]" href="/dashboard/settings" />
+              <AttentionCard title="Pending Review" icon={<Bell size={20} />} color="bg-[#3A5A40]" href="/dashboard/reports" />
             </div>
           </div>
 
           {/* Primary Quick Actions */}
           <div>
-            <h2 className="text-[15px] font-semibold mb-4 text-foreground/90">Primary Quick Actions</h2>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Primary Quick Actions</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-              <ColorfulActionCard title="Mark Entry" icon={<User size={20} />} color="bg-[#003E5C]" />
-              <ColorfulActionCard title="Attendance" icon={<CalendarCheck size={20} />} color="bg-[#004E64]" />
-              <ColorfulActionCard title="Report Cards" icon={<FileText size={20} />} color="bg-[#005F73]" />
-              <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" />
+              <ColorfulActionCard title="Mark Entry" icon={<User size={20} />} color="bg-[#003E5C]" href="/dashboard/marks" />
+              <ColorfulActionCard title="Attendance" icon={<CalendarCheck size={20} />} color="bg-[#004E64]" href="/dashboard/attendance" />
+              <ColorfulActionCard title="Report Cards" icon={<FileText size={20} />} color="bg-[#005F73]" href="/dashboard/reports" />
+              <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" href="/dashboard/exam-results" />
             </div>
           </div>
 
           {/* Manage School */}
           <div>
-            <h2 className="text-[15px] font-semibold mb-4 text-foreground/90">Manage School</h2>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Manage School</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <LightActionCard title="Students" icon={<Users size={20} />} bgClass="bg-blue-50 dark:bg-blue-900/20" textClass="text-blue-600 dark:text-blue-400" />
-              <LightActionCard title="Teachers" icon={<GraduationCap size={20} />} bgClass="bg-orange-50 dark:bg-orange-900/20" textClass="text-orange-600 dark:text-orange-400" />
-              <LightActionCard title="Classes" icon={<Building2 size={20} />} bgClass="bg-purple-50 dark:bg-purple-900/20" textClass="text-purple-600 dark:text-purple-400" />
-              <LightActionCard title="Subjects" icon={<BookOpen size={20} />} bgClass="bg-emerald-50 dark:bg-emerald-900/20" textClass="text-emerald-600 dark:text-emerald-400" />
+              <LightActionCard title="Students" icon={<Users size={20} />} bgClass="bg-blue-50 dark:bg-blue-900/20" textClass="text-blue-600 dark:text-blue-400" href="/dashboard/students" />
+              <LightActionCard title="Teachers" icon={<GraduationCap size={20} />} bgClass="bg-orange-50 dark:bg-orange-900/20" textClass="text-orange-600 dark:text-orange-400" href="/dashboard/teachers" />
+              <LightActionCard title="Classes" icon={<Building2 size={20} />} bgClass="bg-purple-50 dark:bg-purple-900/20" textClass="text-purple-600 dark:text-purple-400" href="/dashboard/classes" />
+              <LightActionCard title="Subjects" icon={<BookOpen size={20} />} bgClass="bg-emerald-50 dark:bg-emerald-900/20" textClass="text-emerald-600 dark:text-emerald-400" href="/dashboard/subjects" />
             </div>
           </div>
 
         </div>
 
         {/* Right Sidebar */}
-        <div className="flex flex-col gap-2.5 lg:border-l lg:border-black/10 lg:pl-7 p-2.5">
+        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-black/10 lg:pl-7 p-3 xs:p-4 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
@@ -354,7 +364,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <QuickStatsChart />
 
           {/* Recent Activity */}
-          <div className="rounded-2xl border border-black/10 p-5">
+          <div className="rounded-2xl border border-black/10 p-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800 text-[15px]">Recent Activity</h3>
               <a href="/dashboard/reports" className="text-teal-700 text-[13px] font-medium hover:underline">View all</a>
@@ -373,62 +383,60 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
           
           {/* Announcements */}
-          <div className="bg-white/60 rounded-full px-5 py-3 flex items-center gap-3 text-teal-800 font-medium cursor-pointer hover:bg-white/80 transition-colors shadow-sm mt-2 border border-white">
+          <Link href="/dashboard/announcements" className="bg-white/60 rounded-full px-5 py-3 flex items-center gap-3 text-teal-800 font-medium hover:bg-white/80 transition-colors shadow-sm mt-2 border border-white no-underline">
             <div className="text-teal-600">
               <Bell size={18} />
             </div>
             <span className="text-[14px]">Announcements</span>
-          </div>
+          </Link>
         </div>
       </div>
     </div>
   );
 }
 
-function ColoredStatCard({ title, value, icon, color }: { title: string, value: string | number, icon: React.ReactNode, color: string }) {
-  return (
-    <div className={`${color} text-white p-4 rounded-xl shadow-md flex min-h-[110px] flex-col items-center justify-center gap-2 text-center transition-transform hover:-translate-y-1`}>
-      <div className="opacity-80">
-        {icon}
-      </div>
-      <div className="text-[13px] font-semibold opacity-90">{title}</div>
-      <div className="text-[28px] font-display font-bold leading-none">{value}</div>
+function ColoredStatCard({ title, value, icon, color, href }: { title: string, value: string | number, icon: React.ReactNode, color: string, href?: string }) {
+  const card = (
+    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[100px] xs:h-[110px] sm:h-[120px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1`}>
+      <div className="opacity-80 scale-[0.8] xs:scale-100">{icon}</div>
+      <div className="text-[11px] xs:text-[12px] sm:text-[13px] font-semibold opacity-90">{title}</div>
+      <div className="text-[20px] xs:text-[24px] sm:text-[28px] font-display font-bold leading-none">{value}</div>
     </div>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function AttentionCard({ title, icon, color }: { title: string, icon: React.ReactNode, color: string }) {
-  return (
-    <div className={`${color} text-white p-4 rounded-xl shadow-md flex h-[105px] flex-col items-center justify-center gap-2 text-center transition-transform hover:-translate-y-1`}>
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
-        {icon}
-      </div>
-      <p className="text-[14px] font-semibold leading-tight">{title}</p>
+function AttentionCard({ title, icon, color, href }: { title: string, icon: React.ReactNode, color: string, href?: string }) {
+  const card = (
+    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[90px] xs:h-[95px] sm:h-[105px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1`}>
+      <div className="flex h-8 w-8 xs:h-9 xs:w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/20 [&>svg]:h-4 [&>svg]:w-4 xs:[&>svg]:h-[18px] xs:[&>svg]:w-[18px] sm:[&>svg]:h-5 sm:[&>svg]:w-5">{icon}</div>
+      <p className="text-[11px] xs:text-[12px] sm:text-[14px] font-semibold leading-tight">{title}</p>
     </div>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function ColorfulActionCard({ title, icon, color }: { title: string, icon: React.ReactNode, color: string }) {
-  return (
-    <div className={`${color} text-white p-4 rounded-xl shadow-md flex min-h-[120px] flex-col items-center justify-center gap-3 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
-      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center relative">
-         <div className="absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full border-2 border-[#003E5C]"></div>
+function ColorfulActionCard({ title, icon, color, href }: { title: string, icon: React.ReactNode, color: string, href?: string }) {
+  const card = (
+    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[100px] xs:h-[110px] sm:h-[120px] flex-col items-center justify-center gap-1.5 xs:gap-2 sm:gap-3 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
+      <div className="w-10 h-10 xs:w-11 xs:h-11 sm:w-12 sm:h-12 rounded-full bg-white/10 flex items-center justify-center relative">
+         <div className="absolute top-0 right-0 w-2.5 h-2.5 xs:w-3 xs:h-3 bg-rose-500 rounded-full border-2 border-[#003E5C]"></div>
         {icon}
       </div>
-      <div className="text-[15px] font-semibold font-display">{title}</div>
+      <div className="text-[12px] xs:text-[13px] sm:text-[15px] font-semibold font-display">{title}</div>
     </div>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function LightActionCard({ title, icon, bgClass, textClass }: { title: string, icon: React.ReactNode, bgClass: string, textClass: string }) {
-  return (
-    <div className={`${bgClass} p-4 rounded-xl shadow-md flex h-[105px] flex-col items-center justify-center gap-2 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
-      <div className={`${textClass} w-10 h-10 rounded-full bg-black/5 flex items-center justify-center`}>
-        {icon}
-      </div>
-      <div className="text-[14px] font-semibold font-display text-foreground">{title}</div>
+function LightActionCard({ title, icon, bgClass, textClass, href }: { title: string, icon: React.ReactNode, bgClass: string, textClass: string, href?: string }) {
+  const card = (
+    <div className={`${bgClass} p-3 xs:p-4 rounded-xl shadow-md flex h-[90px] xs:h-[95px] sm:h-[105px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
+      <div className={`${textClass} w-8 h-8 xs:w-9 xs:h-9 sm:w-10 sm:h-10 rounded-full bg-black/5 flex items-center justify-center [&>svg]:h-[14px] [&>svg]:w-[14px] xs:[&>svg]:h-4 xs:[&>svg]:w-4 sm:[&>svg]:h-[18px] sm:[&>svg]:w-[18px]`}>{icon}</div>
+      <div className="text-[11px] xs:text-[12px] sm:text-[14px] font-semibold font-display text-foreground">{title}</div>
     </div>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 // ── Class Teacher Dashboard ──────────────────────────────────

@@ -4,8 +4,7 @@ import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function MiniCalendar() {
-  // Static month for mockup purposes (May 2026 as in the image)
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 4, 1)); 
+  const [currentDate, setCurrentDate] = useState(new Date()); 
 
   const daysOfWeek = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -21,6 +20,9 @@ export default function MiniCalendar() {
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const today = new Date();
+  const isToday = (day: number) => day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
 
   const monthName = currentDate.toLocaleString('default', { month: 'long' });
 
@@ -46,7 +48,7 @@ export default function MiniCalendar() {
   }
 
   return (
-    <div className="rounded-2xl border border-black/10 p-5">
+    <div className="rounded-2xl border border-black/10 p-6">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-display font-semibold text-gray-800 text-[15px]">
           {monthName} {year}
@@ -76,7 +78,7 @@ export default function MiniCalendar() {
             className={`
               h-8 flex items-center justify-center text-xs rounded-full cursor-pointer transition-colors
               ${d.isCurrentMonth ? 'text-foreground hover:bg-primary/10 hover:text-primary font-medium' : 'text-muted-foreground/40 font-normal'}
-              ${d.day === 17 && d.isCurrentMonth ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}
+              ${d.isCurrentMonth && isToday(d.day) ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground' : ''}
             `}
           >
             {d.day}

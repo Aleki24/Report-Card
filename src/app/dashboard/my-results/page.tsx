@@ -126,11 +126,11 @@ export default function MyResultsPage() {
     return (
         <div className="w-full max-w-7xl mx-auto pb-10">
             {/* Page Header */}
-            <div style={{ marginBottom: 'var(--space-8)' }}>
-                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
+            <div className="mb-6">
+                <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">
                     My Results
                 </h1>
-                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                <p className="text-[11px] xs:text-[12px] text-muted-foreground leading-relaxed">
                     Welcome, {studentName}. View your exam results and download report cards.
                 </p>
             </div>

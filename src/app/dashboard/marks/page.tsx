@@ -124,7 +124,7 @@ export default function MarksPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Mark Entry</h1>
+          <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Mark Entry</h1>
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
             Select term → exam type → subject, then enter marks
           </p>
@@ -145,7 +145,7 @@ export default function MarksPage() {
       )}
 
       {/* ═══ STEP 1: Select Term ═══ */}
-      <div className="card mb-4" style={{ padding: 'var(--space-5)' }}>
+      <div className="card mb-4 p-5">
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold" style={{ minWidth: 70 }}>① Term</label>
           {loadingTerms ? (
@@ -178,7 +178,7 @@ export default function MarksPage() {
 
       {/* ═══ STEP 2: Select Exam Type ═══ */}
       {selectedTermId && (
-        <div className="card mb-4" style={{ padding: 'var(--space-5)' }}>
+        <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>② Exam</label>
             {loadingExams && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading...</span>}
@@ -264,7 +264,7 @@ export default function MarksPage() {
 
       {/* ═══ STEP 3: Select Subject ═══ */}
       {selectedExamType && (
-        <div className="card mb-4" style={{ padding: 'var(--space-5)' }}>
+        <div className="card mb-4 p-5">
           <div className="flex items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Subject</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>

@@ -213,12 +213,6 @@
   }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 html {
   scroll-behavior: smooth;
 }
@@ -399,7 +393,7 @@ select.input-field {
 
   .dashboard-main {
     margin-left: var(--sidebar-width, 260px);
-    padding: var(--space-8);
+    padding: var(--space-6);
     height: 100vh;
     min-height: 0;
     overflow-y: auto;

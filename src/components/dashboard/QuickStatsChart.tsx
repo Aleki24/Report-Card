@@ -13,7 +13,7 @@ export default function QuickStatsChart() {
   ];
 
   return (
-    <div className="rounded-2xl border border-black/10 p-5">
+    <div className="rounded-2xl border border-black/10 p-6">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-display font-semibold text-gray-800 text-[15px]">
           Quick Stats
@@ -23,7 +23,7 @@ export default function QuickStatsChart() {
         </button>
       </div>
       
-      <div className="flex items-end justify-between h-24 gap-2 px-1">
+      <div className="flex items-end justify-between h-24 gap-2 px-2">
         {chartData.map((data, i) => (
           <div key={i} className="flex flex-col items-center gap-2 flex-1 group">
             <div className="w-full relative h-full flex items-end justify-center rounded-sm bg-muted/20 hover:bg-muted/40 transition-colors">

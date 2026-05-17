@@ -244,19 +244,18 @@ export default function ExamResultsPage() {
     return (
         <div className="w-full max-w-7xl mx-auto">
             {/* Header */}
-            <div style={{ marginBottom: 'var(--space-8)' }}>
-                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>
+            <div className="mb-6">
+                <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">
                     Exam Results
                 </h1>
-                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                <p className="text-[11px] xs:text-[12px] text-muted-foreground leading-relaxed">
                     Select a class and exam to view results, analyze performance, and generate reports
                 </p>
             </div>
 
             {/* ── Cascading Filters ── */}
             <div
-                className="card flex flex-col md:flex-row md:items-end"
-                style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)', padding: 'var(--space-5)' }}
+                className="card flex flex-col md:flex-row md:items-end gap-4 mb-6 p-5"
             >
                 {/* Class / Stream */}
                 <div className="flex-1">
@@ -357,7 +356,7 @@ export default function ExamResultsPage() {
                                 />
                             )}
                             {activeTab === 'results' && !selectedExamId && (
-                                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
+                                <div className="card text-center py-16">
                                     <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Select an exam above to view individual results.</p>
                                 </div>
                             )}
@@ -377,8 +376,8 @@ export default function ExamResultsPage() {
                             {activeTab === 'reports' && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                                     {/* Year/Term Filters */}
-                                    <div className="card" style={{ padding: 'var(--space-5)' }}>
-                                        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-4)' }}>Report Settings</h3>
+                                    <div className="card p-5">
+                                        <h3 className="text-sm font-semibold mb-4">Report Settings</h3>
                                         <div className="flex flex-col md:flex-row" style={{ gap: 'var(--space-4)' }}>
                                             <div className="flex-1">
                                                 <label className="block text-xs text-muted-foreground mb-1">Academic Year</label>
@@ -407,8 +406,8 @@ export default function ExamResultsPage() {
                                     </div>
 
                                     {/* Individual Reports */}
-                                    <div className="card" style={{ padding: 'var(--space-5)' }}>
-                                        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-2)' }}>📥 Individual Student Reports (PDF)</h3>
+                                    <div className="card p-5">
+                                        <h3 className="text-sm font-semibold mb-2">📥 Individual Student Reports (PDF)</h3>
                                         <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
                                             Click a student to download their PDF report card.
                                         </p>
@@ -436,8 +435,8 @@ export default function ExamResultsPage() {
                                     </div>
 
                                     {/* Bulk Reports */}
-                                    <div className="card" style={{ padding: 'var(--space-5)' }}>
-                                        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 'var(--space-2)' }}>📦 Bulk Report Generation</h3>
+                                    <div className="card p-5">
+                                        <h3 className="text-sm font-semibold mb-2">📦 Bulk Report Generation</h3>
                                         <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
                                             Generate report cards for all students in the selected class and term.
                                         </p>

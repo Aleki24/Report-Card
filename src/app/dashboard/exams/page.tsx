@@ -172,14 +172,14 @@ export default function ExamResultsPage() {
   return (
     <div className="w-full max-w-7xl mx-auto">
       <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: '4px' }}>Exam Results</h1>
+        <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Exam Results</h1>
         <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
           Select term, class, and exam type to view results and generate reports
         </p>
       </div>
 
       {/* ══════ FILTERS: Term + Class + Exam Type ══════ */}
-      <div className="card mb-4" style={{ padding: 'var(--space-5)' }}>
+      <div className="card mb-4 p-5">
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           {/* Term */}
           <div>
