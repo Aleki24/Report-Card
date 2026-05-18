@@ -291,7 +291,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
                 <h3 className="text-sm font-semibold text-foreground">Attendance Today</h3>
                 <span className="text-xs text-muted-foreground">{totalAttendance(data)} total</span>
               </div>
-              <AttendanceBarChart present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} />
+              <AttendanceDonut present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} />
             </div>
 
             {/* Finance Snapshot */}
@@ -300,7 +300,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
                 <h3 className="text-sm font-semibold text-foreground">Finance Snapshot</h3>
                 <span className="text-xs text-muted-foreground">Current term</span>
               </div>
-              <FinanceBarChart collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
+              <FinanceSnapshot collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
             </div>
 
             {/* Academic Performance */}
@@ -323,19 +323,13 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
           </div>
 
-          {/* Quick Actions */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Quick Actions</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <ColorfulActionCard title="Mark Entry" icon={<ClipboardList size={20} />} color="bg-[#003E5C]" href="/dashboard/exams-marks" />
-              <ColorfulActionCard title="Attendance" icon={<CalendarCheck size={20} />} color="bg-[#004E64]" href="/dashboard/attendance" />
-              <ColorfulActionCard title="Report Cards" icon={<FileText size={20} />} color="bg-[#005F73]" href="/dashboard/reports" />
-              <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" href="/dashboard/exams-marks" />
-              <ColorfulActionCard title="Add Student" icon={<Plus size={20} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
-              <ColorfulActionCard title="Add Teacher" icon={<GraduationCap size={20} />} color="bg-[#E76F51]" href="/dashboard/people" />
-              <ColorfulActionCard title="Announcements" icon={<Megaphone size={20} />} color="bg-[#5C677D]" href="/dashboard/announcements" />
-              <ColorfulActionCard title="Fees" icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" />
-            </div>
+          {/* Quick Actions — unique items not covered above */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" />
+            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" />
+            <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" />
+            <QuickActionBtn icon={<Megaphone size={16} />} label="Post Announcement" href="/dashboard/announcements" />
+            <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" />
           </div>
 
         </div>
@@ -414,17 +408,13 @@ function ColoredStatCard({ title, value, icon, color, href }: { title: string, v
   return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function ColorfulActionCard({ title, icon, color, href }: { title: string, icon: React.ReactNode, color: string, href?: string }) {
-  const card = (
-    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[100px] xs:h-[110px] sm:h-[120px] flex-col items-center justify-center gap-1.5 xs:gap-2 sm:gap-3 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
-      <div className="w-10 h-10 xs:w-11 xs:h-11 sm:w-12 sm:h-12 rounded-full bg-white/10 flex items-center justify-center relative">
-         <div className="absolute top-0 right-0 w-2.5 h-2.5 xs:w-3 xs:h-3 bg-rose-500 rounded-full border-2 border-[#003E5C]"></div>
-        {icon}
-      </div>
-      <div className="text-[12px] xs:text-[13px] sm:text-[15px] font-semibold font-display">{title}</div>
-    </div>
+function QuickActionBtn({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
+  return (
+    <Link href={href} className="flex items-center gap-2.5 rounded-xl border border-border bg-card/80 px-4 py-3 no-underline transition-colors hover:bg-muted">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">{icon}</div>
+      <span className="text-sm font-medium text-foreground truncate">{label}</span>
+    </Link>
   );
-  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 function totalAttendance(data: DashboardData | null): string {
@@ -433,57 +423,73 @@ function totalAttendance(data: DashboardData | null): string {
   return String(a.present + a.absent + a.late);
 }
 
-function AttendanceBarChart({ present, absent, late }: { present: number; absent: number; late: number }) {
+function AttendanceDonut({ present, absent, late }: { present: number; absent: number; late: number }) {
   const total = present + absent + late || 1;
-  const pPct = (present / total) * 100;
-  const aPct = (absent / total) * 100;
-  const lPct = (late / total) * 100;
   const rate = Math.round((present / total) * 100);
+  const segments = [
+    { value: present, color: '#10b981', label: 'Present' },
+    { value: absent, color: '#ef4444', label: 'Absent' },
+    { value: late, color: '#f59e0b', label: 'Late' },
+  ];
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
   return (
-    <div>
-      <div className="flex items-baseline justify-center mb-4">
-        <span className="text-3xl font-bold text-foreground">{rate}%</span>
-        <span className="text-xs text-muted-foreground ml-2">attendance rate</span>
+    <div className="flex flex-col items-center">
+      <svg width="130" height="130" viewBox="0 0 100 100" className="-rotate-90">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--color-muted)" strokeWidth="10" />
+        {segments.map((seg) => {
+          const len = seg.value > 0 ? (seg.value / total) * c : 0;
+          const dashOffset = offset;
+          offset += len;
+          return seg.value > 0 ? (
+            <circle key={seg.label} cx="50" cy="50" r={r}
+              fill="none" stroke={seg.color} strokeWidth="10"
+              strokeDasharray={`${len} ${c - len}`}
+              strokeDashoffset={-dashOffset}
+              className="transition-all duration-500"
+            />
+          ) : null;
+        })}
+      </svg>
+      <div className="text-center -mt-[100px] pt-2">
+        <div className="text-2xl font-bold text-foreground">{rate}%</div>
+        <div className="text-[11px] text-muted-foreground">attendance</div>
       </div>
-      <div className="flex h-3 rounded-full overflow-hidden bg-muted mb-4">
-        <div className="bg-emerald-500 transition-all" style={{ width: `${pPct}%` }} />
-        <div className="bg-red-400 transition-all" style={{ width: `${aPct}%` }} />
-        <div className="bg-amber-400 transition-all" style={{ width: `${lPct}%` }} />
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        <div><div className="text-xs text-muted-foreground">Present</div><div className="text-sm font-semibold text-emerald-600">{present}</div></div>
-        <div><div className="text-xs text-muted-foreground">Absent</div><div className="text-sm font-semibold text-red-500">{absent}</div></div>
-        <div><div className="text-xs text-muted-foreground">Late</div><div className="text-sm font-semibold text-amber-500">{late}</div></div>
+      <div className="flex gap-5 mt-3">
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-muted-foreground">{present}</span><span className="text-xs text-muted-foreground/60">present</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /><span className="text-xs text-muted-foreground">{absent}</span><span className="text-xs text-muted-foreground/60">absent</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">{late}</span><span className="text-xs text-muted-foreground/60">late</span></div>
       </div>
     </div>
   );
 }
 
-function FinanceBarChart({ collected, unpaid, overdue }: { collected: number; unpaid: number; overdue: number }) {
-  const totalFees = collected + unpaid || 1;
-  const cPct = (collected / totalFees) * 100;
+function FinanceSnapshot({ collected, unpaid, overdue }: { collected: number; unpaid: number; overdue: number }) {
+  const total = collected + unpaid || 1;
+  const cPct = (collected / total) * 100;
   return (
     <div>
-      <div className="flex items-baseline justify-center mb-4 gap-4">
+      <div className="flex items-center justify-around mb-5">
         <div className="text-center">
-          <div className="text-xs text-muted-foreground">Collected</div>
           <div className="text-lg font-bold text-emerald-600">{formatCurrency(collected)}</div>
+          <div className="text-[11px] text-muted-foreground">Collected</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-muted-foreground">Outstanding</div>
           <div className="text-lg font-bold text-red-500">{formatCurrency(unpaid)}</div>
+          <div className="text-[11px] text-muted-foreground">Outstanding</div>
         </div>
         <div className="text-center">
-          <div className="text-xs text-muted-foreground">Overdue</div>
           <div className="text-lg font-bold text-amber-500">{overdue}</div>
+          <div className="text-[11px] text-muted-foreground">Overdue</div>
         </div>
       </div>
-      <div className="flex h-4 rounded-full overflow-hidden bg-muted">
+      <div className="flex h-6 rounded-full overflow-hidden bg-muted shadow-inner">
         <div className="bg-emerald-500 transition-all" style={{ width: `${cPct}%` }} />
         <div className="bg-red-400 transition-all" style={{ width: `${100 - cPct}%` }} />
       </div>
-      <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
-        <span>{Math.round(cPct)}% collected</span>
+      <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground">
+        <span>{Math.round(cPct)}% paid</span>
         <span>{Math.round(100 - cPct)}% unpaid</span>
       </div>
     </div>
@@ -491,23 +497,31 @@ function FinanceBarChart({ collected, unpaid, overdue }: { collected: number; un
 }
 
 function AcademicGauge({ avg }: { avg: number | null }) {
-  if (avg == null) return <div className="text-center py-6 text-sm text-muted-foreground italic">No exam data yet</div>;
-  const color = avg >= 80 ? 'text-emerald-500' : avg >= 60 ? 'text-amber-500' : 'text-red-500';
-  const barColor = avg >= 80 ? 'bg-emerald-500' : avg >= 60 ? 'bg-amber-500' : 'bg-red-500';
+  if (avg == null) return <div className="text-center py-8 text-sm text-muted-foreground italic">No exam data yet</div>;
+  const label = avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement';
+  const color = avg >= 80 ? '#10b981' : avg >= 60 ? '#f59e0b' : '#ef4444';
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  const filled = (avg / 100) * c;
   return (
-    <div>
-      <div className="flex items-baseline justify-center mb-4">
-        <span className={`text-3xl font-bold ${color}`}>{avg}%</span>
-        <span className="text-xs text-muted-foreground ml-2">exam average</span>
+    <div className="flex flex-col items-center">
+      <svg width="130" height="130" viewBox="0 0 100 100" className="-rotate-90">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--color-muted)" strokeWidth="10" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="10"
+          strokeDasharray={`${filled} ${c - filled}`}
+          strokeLinecap="round"
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="text-center -mt-[100px] pt-2">
+        <div className="text-2xl font-bold text-foreground">{avg}%</div>
+        <div className="text-[11px] text-muted-foreground">average</div>
       </div>
-      <div className="flex h-4 rounded-full overflow-hidden bg-muted">
-        <div className={`${barColor} transition-all`} style={{ width: `${avg}%` }} />
-      </div>
-      <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
-        <span>0%</span>
-        <span>{avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement'}</span>
-        <span>100%</span>
-      </div>
+      <div className={`mt-3 text-xs font-medium px-3 py-1 rounded-full ${
+        avg >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' :
+        avg >= 60 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' :
+        'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+      }`}>{label}</div>
     </div>
   );
 }
