@@ -328,6 +328,59 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
 
           </div>
+
+          {/* Mobile sidebar content — at bottom on small screens */}
+          <div className="lg:hidden flex flex-col gap-3 xs:gap-4 px-3 xs:px-4 sm:px-5 pb-3 xs:pb-4">
+            <MiniCalendar />
+
+            <div className="rounded-2xl border border-border p-4">
+              <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">This Week</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                  <span className="text-lg font-bold text-foreground">{data?.upcomingExams.length ?? 0}</span>
+                  <span className="text-[11px] text-muted-foreground">Exams</span>
+                </div>
+                <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                  <span className="text-lg font-bold text-foreground">{data?.overdueFeesCount ?? 0}</span>
+                  <span className="text-[11px] text-muted-foreground">Overdue Fees</span>
+                </div>
+                <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                  <span className="text-lg font-bold text-foreground">{data?.recentEnrollmentsLast7 ?? 0}</span>
+                  <span className="text-[11px] text-muted-foreground">Enrollments</span>
+                </div>
+                <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                  <span className="text-lg font-bold text-foreground">{data?.announcementsLast7Days ?? 0}</span>
+                  <span className="text-[11px] text-muted-foreground">Announcements</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-foreground text-[15px]">Recent Activity</h3>
+                <a href="/dashboard/reports" className="text-primary text-[13px] font-medium hover:underline">View all</a>
+              </div>
+              <div className="flex flex-col">
+                {(data?.recentActivities ?? []).slice(0, 3).map((act, i) => (
+                  <div key={i} className="flex justify-between items-start py-1.5 border-b border-border last:border-0">
+                    <span className="text-foreground/80 text-[13px] font-medium pr-4">{act.message}</span>
+                    <span className="text-muted-foreground text-[12px] whitespace-nowrap pt-0.5">{new Date(act.timestamp).toLocaleDateString('en-GB')}</span>
+                  </div>
+                ))}
+                {(!data?.recentActivities || data.recentActivities.length === 0) && (
+                  <div className="text-[13px] text-muted-foreground italic py-1.5">No recent activity.</div>
+                )}
+              </div>
+            </div>
+
+            <Link href="/dashboard/announcements" className="bg-primary text-primary-foreground rounded-xl px-4 py-3 flex items-center gap-3 font-semibold hover:opacity-90 transition-opacity shadow-sm no-underline">
+              <Bell size={18} />
+              <span className="text-sm">Announcements</span>
+              {(data?.announcementsLast7Days ?? 0) > 0 && (
+                <span className="ml-auto bg-white/25 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{data?.announcementsLast7Days}</span>
+              )}
+            </Link>
+          </div>
         </div>
 
         {/* Right Sidebar — hidden on mobile, visible from lg up */}
@@ -781,3 +834,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
