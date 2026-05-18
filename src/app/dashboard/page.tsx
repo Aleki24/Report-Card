@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
   ArrowRight, BarChart3, ClipboardList, Wallet, Bell, User,
-  BookOpen, Heart, ShieldCheck, Search
+  BookOpen, Heart, ShieldCheck, Search, CheckCircle2, XCircle,
+  Clock, DollarSign, TrendingUp, Plus, Megaphone, CreditCard
 } from 'lucide-react';
 
 interface Announcement {
@@ -23,12 +24,14 @@ interface DashboardData {
   totalTeachers: number;
   totalClasses: number;
   totalReports: number;
-  attendanceToday: null;
+  attendanceToday: { present: number; absent: number; late: number } | null;
   upcomingExams: { id: string; name: string; exam_type: string; exam_date: string; subject_name: string; grade_name: string }[];
   recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
   overdueFeesCount: number;
   announcementsLast7Days: number;
   recentEnrollmentsLast7: number;
+  financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
+  academicSummary: { recentAvg: number | null };
 }
 
 
@@ -307,17 +310,96 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           {/* At a Glance */}
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">At a Glance</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
-              <ColoredStatCard title="Total Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/people" />
-              <ColoredStatCard title="Total Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/academic-structure" />
+              <ColoredStatCard title="Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/people" />
+              <ColoredStatCard title="Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/academic-structure" />
               <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" href="/dashboard/reports" />
+              <ColoredStatCard title="Present Today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={22} />} color="bg-[#2A9D8F]" href="/dashboard/attendance" />
+              <ColoredStatCard title="Overdue Fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={22} />} color="bg-[#E76F51]" href="/dashboard/fees" />
             </div>
           </div>
 
-          {/* Today's Attention */}
+          {/* Attendance Overview */}
           <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Today's Attention</h2>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Attendance Today</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500"><CheckCircle2 size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.present ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Present</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/15 text-red-500"><XCircle size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.absent ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Absent</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500"><Clock size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.late ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Late</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Finance Snapshot */}
+          <div>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Finance Snapshot</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500"><DollarSign size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{formatCurrency(data?.financeSummary?.totalCollected ?? 0)}</div>
+                  <div className="text-xs text-muted-foreground">Collected this term</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/15 text-red-500"><TrendingUp size={24} className="rotate-180" /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{formatCurrency(data?.financeSummary?.unpaidBalance ?? 0)}</div>
+                  <div className="text-xs text-muted-foreground">Outstanding balance</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500"><CreditCard size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.financeSummary?.overdueCount ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Overdue payments</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Academic Performance */}
+          <div>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Academic Performance</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-500"><TrendingUp size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.academicSummary?.recentAvg != null ? `${data.academicSummary.recentAvg}%` : '—'}</div>
+                  <div className="text-xs text-muted-foreground">Recent exam average</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/15 text-blue-500"><BarChart3 size={24} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{data?.upcomingExams.length ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Upcoming exams</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Alerts & Action Items */}
+          <div>
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Alerts &amp; Action Items</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
               <AttentionStatCard title="Upcoming Exams" count={data?.upcomingExams.length ?? 0} icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams-marks" subtext={formatExamSubtext(data?.upcomingExams ?? [])} />
               <AttentionStatCard title="Overdue Fees" count={data?.overdueFeesCount ?? 0} icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" subtext={data?.overdueFeesCount ? 'payments overdue' : 'No overdue'} />
@@ -327,25 +409,18 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
           </div>
 
-          {/* Primary Quick Actions */}
+          {/* Quick Actions */}
           <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Primary Quick Actions</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-              <ColorfulActionCard title="Mark Entry" icon={<User size={20} />} color="bg-[#003E5C]" href="/dashboard/exams-marks" />
+            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Quick Actions</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <ColorfulActionCard title="Mark Entry" icon={<ClipboardList size={20} />} color="bg-[#003E5C]" href="/dashboard/exams-marks" />
               <ColorfulActionCard title="Attendance" icon={<CalendarCheck size={20} />} color="bg-[#004E64]" href="/dashboard/attendance" />
               <ColorfulActionCard title="Report Cards" icon={<FileText size={20} />} color="bg-[#005F73]" href="/dashboard/reports" />
               <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" href="/dashboard/exams-marks" />
-            </div>
-          </div>
-
-          {/* Manage School */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Manage School</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <LightActionCard title="Students" icon={<Users size={20} />} bgClass="bg-blue-50 dark:bg-blue-900/20" textClass="text-blue-600 dark:text-blue-400" href="/dashboard/people" />
-              <LightActionCard title="Teachers" icon={<GraduationCap size={20} />} bgClass="bg-orange-50 dark:bg-orange-900/20" textClass="text-orange-600 dark:text-orange-400" href="/dashboard/people" />
-              <LightActionCard title="Classes" icon={<Building2 size={20} />} bgClass="bg-purple-50 dark:bg-purple-900/20" textClass="text-purple-600 dark:text-purple-400" href="/dashboard/academic-structure" />
-              <LightActionCard title="Subjects" icon={<BookOpen size={20} />} bgClass="bg-emerald-50 dark:bg-emerald-900/20" textClass="text-emerald-600 dark:text-emerald-400" href="/dashboard/academic-structure" />
+              <ColorfulActionCard title="Add Student" icon={<Plus size={20} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
+              <ColorfulActionCard title="Add Teacher" icon={<GraduationCap size={20} />} color="bg-[#E76F51]" href="/dashboard/people" />
+              <ColorfulActionCard title="Announcements" icon={<Megaphone size={20} />} color="bg-[#5C677D]" href="/dashboard/announcements" />
+              <ColorfulActionCard title="Fees" icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" />
             </div>
           </div>
 
@@ -438,14 +513,8 @@ function ColorfulActionCard({ title, icon, color, href }: { title: string, icon:
   return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function LightActionCard({ title, icon, bgClass, textClass, href }: { title: string, icon: React.ReactNode, bgClass: string, textClass: string, href?: string }) {
-  const card = (
-    <div className={`${bgClass} p-3 xs:p-4 rounded-xl shadow-md flex h-[90px] xs:h-[95px] sm:h-[105px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1 cursor-pointer`}>
-      <div className={`${textClass} w-8 h-8 xs:w-9 xs:h-9 sm:w-10 sm:h-10 rounded-full bg-black/5 flex items-center justify-center [&>svg]:h-[14px] [&>svg]:w-[14px] xs:[&>svg]:h-4 xs:[&>svg]:w-4 sm:[&>svg]:h-[18px] sm:[&>svg]:w-[18px]`}>{icon}</div>
-      <div className="text-[11px] xs:text-[12px] sm:text-[14px] font-semibold font-display text-foreground">{title}</div>
-    </div>
-  );
-  return href ? <Link href={href}>{card}</Link> : card;
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 }
 
 // ── Class Teacher Dashboard ──────────────────────────────────

@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const [studentsRes, usersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes] = await Promise.all([
+    const [studentsRes, usersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, currentTermRes] = await Promise.all([
       supabase.from('students').select('id', { count: 'exact', head: true }).eq('users.school_id', schoolId),
       supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
@@ -40,9 +40,11 @@ export async function GET(_request: NextRequest) {
       supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).not('status', 'eq', 'PAID').lt('due_date', today),
       supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
       supabase.from('students').select('id, date_enrolled', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
+      supabase.from('terms').select('id, name').eq('school_id', schoolId).eq('is_current', true).maybeSingle(),
     ]);
 
     const currentYear = currentYearRes?.data;
+    const currentTerm = currentTermRes?.data;
     const totalStudents = studentsRes.count ?? 0;
     const totalTeachers = usersRes.data?.length ?? 0;
     const totalClasses = streamsRes.count ?? 0;
@@ -85,7 +87,7 @@ export async function GET(_request: NextRequest) {
       href?: string;
     }[] = [];
 
-    const [recentReports, recentStudents, recentMarks] = await Promise.all([
+    const [recentReports, recentStudents, recentMarks, attendanceRes, financeRes, academicMarksRes] = await Promise.all([
       currentYear
         ? supabase
             .from('report_cards')
@@ -108,6 +110,26 @@ export async function GET(_request: NextRequest) {
             .eq('exams.academic_year_id', currentYear.id)
             .order('created_at', { ascending: false })
             .limit(5)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from('daily_attendance')
+        .select('status')
+        .eq('school_id', schoolId)
+        .eq('date', today),
+      currentTerm
+        ? supabase
+            .from('student_fees')
+            .select('total_fee, paid_amount, status')
+            .eq('school_id', schoolId)
+            .eq('term_id', currentTerm.id)
+        : Promise.resolve({ data: [] }),
+      currentYear
+        ? supabase
+            .from('exam_marks')
+            .select('percentage, exams!inner(school_id, academic_year_id)')
+            .eq('exams.school_id', schoolId)
+            .eq('exams.academic_year_id', currentYear.id)
+            .limit(500)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -144,17 +166,37 @@ export async function GET(_request: NextRequest) {
     activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     const recentActivities = activities.slice(0, 10);
 
+    // ── Attendance Today ──
+    const attendanceRows = (attendanceRes.data || []) as { status: string }[];
+    const presentCount = attendanceRows.filter(r => r.status === 'present').length;
+    const absentCount = attendanceRows.filter(r => r.status === 'absent').length;
+    const lateCount = attendanceRows.filter(r => r.status === 'late').length;
+
+    // ── Finance Summary ──
+    const feeRows = (financeRes.data || []) as { total_fee: number; paid_amount: number; status: string }[];
+    const totalCollected = feeRows.reduce((s, r) => s + Number(r.paid_amount || 0), 0);
+    const totalFeeAmount = feeRows.reduce((s, r) => s + Number(r.total_fee || 0), 0);
+    const unpaidBalance = totalFeeAmount - totalCollected;
+
+    // ── Academic Performance ──
+    const markRows = (academicMarksRes.data || []) as { percentage: number }[];
+    const recentAvg = markRows.length > 0
+      ? Math.round(markRows.reduce((s, r) => s + Number(r.percentage || 0), 0) / markRows.length)
+      : null;
+
     return NextResponse.json({
       totalStudents,
       totalTeachers,
       totalClasses,
       totalReports,
-      attendanceToday: null,
+      attendanceToday: { present: presentCount, absent: absentCount, late: lateCount },
       upcomingExams,
       recentActivities,
       overdueFeesCount,
       announcementsLast7Days,
       recentEnrollmentsLast7,
+      financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
+      academicSummary: { recentAvg },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
