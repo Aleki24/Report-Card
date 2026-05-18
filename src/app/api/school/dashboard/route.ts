@@ -28,12 +28,18 @@ export async function GET(_request: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
-    const [studentsRes, usersRes, streamsRes, reportsRes, currentYearRes] = await Promise.all([
+    const today = new Date().toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const [studentsRes, usersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes] = await Promise.all([
       supabase.from('students').select('id', { count: 'exact', head: true }).eq('users.school_id', schoolId),
       supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('report_cards').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('academic_years').select('id').eq('school_id', schoolId).order('start_date', { ascending: false }).limit(1).single(),
+      supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).not('status', 'eq', 'PAID').lt('due_date', today),
+      supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
+      supabase.from('students').select('id, date_enrolled', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
     ]);
 
     const currentYear = currentYearRes?.data;
@@ -41,6 +47,9 @@ export async function GET(_request: NextRequest) {
     const totalTeachers = usersRes.data?.length ?? 0;
     const totalClasses = streamsRes.count ?? 0;
     const totalReports = reportsRes.count ?? 0;
+    const overdueFeesCount = overdueFeesRes.count ?? 0;
+    const announcementsLast7Days = announcementsRes.count ?? 0;
+    const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
 
     let upcomingExams: any[] = [];
     if (currentYear) {
@@ -143,6 +152,9 @@ export async function GET(_request: NextRequest) {
       attendanceToday: null,
       upcomingExams,
       recentActivities,
+      overdueFeesCount,
+      announcementsLast7Days,
+      recentEnrollmentsLast7,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

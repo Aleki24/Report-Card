@@ -26,6 +26,9 @@ interface DashboardData {
   attendanceToday: null;
   upcomingExams: { id: string; name: string; exam_type: string; exam_date: string; subject_name: string; grade_name: string }[];
   recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
+  overdueFeesCount: number;
+  announcementsLast7Days: number;
+  recentEnrollmentsLast7: number;
 }
 
 
@@ -35,7 +38,6 @@ import DashboardCard from '@/components/dashboard/DashboardCard';
 import DashboardSection from '@/components/dashboard/DashboardSection';
 import PrimaryActionCard from '@/components/dashboard/PrimaryActionCard';
 import CompactNavCard from '@/components/dashboard/CompactNavCard';
-import AttentionItem from '@/components/dashboard/AttentionItem';
 import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
 import MobileStatGrid from '@/components/dashboard/MobileStatGrid';
@@ -221,20 +223,24 @@ const managementActions = [
   { title: 'Users & Roles', subtitle: 'Access control', href: '/dashboard/users', icon: <ShieldCheck size={18} /> },
 ];
 
-function TodayAttentionCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
-  const [now] = useState(() => Date.now());
-  const upcomingCount = exams.length;
+function formatExamSubtext(exams: DashboardData['upcomingExams']): string {
+  if (exams.length === 0) return 'None scheduled';
+  const now = Date.now();
   const soonCount = exams.filter(exam => (new Date(exam.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
+  if (soonCount > 0) return `${soonCount} within 3 days`;
+  return `${exams.length} scheduled`;
+}
 
-  return (
-    <ListPanel title="Today's Attention" actionLabel="Review" actionHref="/dashboard/analytics" className="h-full">
-      <div className="flex flex-col gap-3">
-        <AttentionItem label="Upcoming exams scheduled" count={upcomingCount} href="/dashboard/exams-marks" tone={soonCount > 0 ? 'warning' : 'info'} />
-        <AttentionItem label="Mark entries pending review" count="—" href="/dashboard/exams-marks" tone="warning" />
-        <AttentionItem label="Setup tasks remaining" count="0" href="/dashboard/administration" tone="success" />
-      </div>
-    </ListPanel>
+function AttentionStatCard({ title, count, icon, color, href, subtext }: { title: string; count: number; icon: React.ReactNode; color: string; href?: string; subtext: string }) {
+  const card = (
+    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[105px] xs:h-[115px] sm:h-[125px] flex-col items-center justify-center gap-0.5 xs:gap-1 text-center transition-transform hover:-translate-y-1`}>
+      <div className="flex h-8 w-8 xs:h-9 xs:w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/20 [&>svg]:h-4 [&>svg]:w-4 xs:[&>svg]:h-[18px] xs:[&>svg]:w-[18px] sm:[&>svg]:h-5 sm:[&>svg]:w-5 mb-1">{icon}</div>
+      <div className="text-[18px] xs:text-[22px] sm:text-[26px] font-display font-bold leading-none">{count}</div>
+      <p className="text-[10px] xs:text-[11px] sm:text-[12px] font-semibold leading-tight opacity-90">{title}</p>
+      <p className="text-[9px] xs:text-[10px] leading-tight opacity-70">{subtext}</p>
+    </div>
   );
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 // ── Admin Dashboard ──────────────────────────────────────────
@@ -320,11 +326,11 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Today's Attention</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-              <AttentionCard title="Upcoming Exams" icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams-marks" />
-              <AttentionCard title="Mark entries" icon={<ClipboardList size={20} />} color="bg-[#F07167]" href="/dashboard/exams-marks" />
-              <AttentionCard title="Fee payments" icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" />
-              <AttentionCard title="Setup Tasks" icon={<ShieldCheck size={20} />} color="bg-[#5C677D]" href="/dashboard/administration" />
-              <AttentionCard title="Pending Review" icon={<Bell size={20} />} color="bg-[#3A5A40]" href="/dashboard/reports" />
+              <AttentionStatCard title="Upcoming Exams" count={data?.upcomingExams.length ?? 0} icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams-marks" subtext={formatExamSubtext(data?.upcomingExams ?? [])} />
+              <AttentionStatCard title="Overdue Fees" count={data?.overdueFeesCount ?? 0} icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" subtext={data?.overdueFeesCount ? 'payments overdue' : 'No overdue'} />
+              <AttentionStatCard title="New Enrollments" count={data?.recentEnrollmentsLast7 ?? 0} icon={<Users size={20} />} color="bg-[#3A5A40]" href="/dashboard/people" subtext="this week" />
+              <AttentionStatCard title="Announcements" icon={<Bell size={20} />} count={data?.announcementsLast7Days ?? 0} color="bg-[#5C677D]" href="/dashboard/announcements" subtext="this week" />
+              <AttentionStatCard title="Report Cards" icon={<FileText size={20} />} count={data?.totalReports ?? 0} color="bg-[#F07167]" href="/dashboard/reports" subtext="total generated" />
             </div>
           </div>
 
@@ -398,16 +404,6 @@ function ColoredStatCard({ title, value, icon, color, href }: { title: string, v
       <div className="opacity-80 scale-[0.8] xs:scale-100">{icon}</div>
       <div className="text-[11px] xs:text-[12px] sm:text-[13px] font-semibold opacity-90">{title}</div>
       <div className="text-[20px] xs:text-[24px] sm:text-[28px] font-display font-bold leading-none">{value}</div>
-    </div>
-  );
-  return href ? <Link href={href}>{card}</Link> : card;
-}
-
-function AttentionCard({ title, icon, color, href }: { title: string, icon: React.ReactNode, color: string, href?: string }) {
-  const card = (
-    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[90px] xs:h-[95px] sm:h-[105px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1`}>
-      <div className="flex h-8 w-8 xs:h-9 xs:w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/20 [&>svg]:h-4 [&>svg]:w-4 xs:[&>svg]:h-[18px] xs:[&>svg]:w-[18px] sm:[&>svg]:h-5 sm:[&>svg]:w-5">{icon}</div>
-      <p className="text-[11px] xs:text-[12px] sm:text-[14px] font-semibold leading-tight">{title}</p>
     </div>
   );
   return href ? <Link href={href}>{card}</Link> : card;
