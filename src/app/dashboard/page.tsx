@@ -779,7 +779,7 @@ export default function DashboardPage() {
   const isAdmin = role === 'ADMIN' || !role;
 
   return (
-    <div className="flex-1 min-h-0 h-full p-2 md:p-6 lg:p-8 pt-6">
+    <div className="flex-1 min-h-0 h-full p-2 md:p-6 lg:p-8 pt-1">
       {isAdmin && <AdminDashboard greeting={greeting} userName={userName} />}
       {role === 'CLASS_TEACHER' && <ClassTeacherDashboard />}
       {role === 'SUBJECT_TEACHER' && <SubjectTeacherDashboard />}
