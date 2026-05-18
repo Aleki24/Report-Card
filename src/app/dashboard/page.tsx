@@ -229,9 +229,9 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   const greetingName = userName || 'Admin';
 
   return (
-    <div className="relative h-full overflow-hidden p-2 sm:p-3 lg:p-4 bg-background text-foreground flex flex-col">
+    <div className="relative h-full overflow-hidden px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-4 xs:mb-6 shrink-0">
+      <div className="flex items-center justify-between mb-3 xs:mb-4 shrink-0">
         <div className="text-[10px] xs:text-[12px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
           {getCurrentTermName()} • {new Date().getFullYear()}
         </div>
