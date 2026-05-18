@@ -7,9 +7,8 @@ import StatCard from '@/components/dashboard/StatCard';
 import { Badge } from '@/components/ui';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
-  ArrowRight, BarChart3, ClipboardList, Wallet, Bell, User,
-  BookOpen, Heart, ShieldCheck, Search, CheckCircle2, XCircle,
-  Clock, DollarSign, TrendingUp, Plus, Megaphone, CreditCard
+  ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
+  BookOpen, Search, CheckCircle2, Plus, Megaphone
 } from 'lucide-react';
 
 interface Announcement {
@@ -201,43 +200,6 @@ function RecentAnnouncementsCard({ announcements = [] }: { announcements?: Annou
   );
 }
 
-const primaryActions = [
-  { title: 'Mark Entry', description: 'Record student marks', href: '/dashboard/marks', icon: <ClipboardList size={20} />, badge: 'Daily' },
-  { title: 'Report Cards', description: 'Generate term reports', href: '/dashboard/reports', icon: <FileText size={20} />, badge: 'Core' },
-  { title: 'Attendance', description: 'Track attendance today', href: '/dashboard/attendance', icon: <CalendarCheck size={20} /> },
-  { title: 'Exam Results', description: 'Review broadsheets', href: '/dashboard/exam-results', icon: <BarChart3 size={20} /> },
-];
-
-const managementActions = [
-  { title: 'Students', subtitle: 'Enrollment and records', href: '/dashboard/students', icon: <Users size={18} /> },
-  { title: 'Teachers', subtitle: 'Staff management', href: '/dashboard/teachers', icon: <GraduationCap size={18} /> },
-  { title: 'Classes', subtitle: 'Grades and streams', href: '/dashboard/classes', icon: <Building2 size={18} /> },
-  { title: 'Subjects', subtitle: 'Curriculum setup', href: '/dashboard/subjects', icon: <BookOpen size={18} /> },
-  { title: 'Exams', subtitle: 'Exam schedules', href: '/dashboard/exams', icon: <ClipboardList size={18} /> },
-  { title: 'Parents', subtitle: 'Guardian directory', href: '/dashboard/parents', icon: <Heart size={18} /> },
-  { title: 'Analytics', subtitle: 'Performance insights', href: '/dashboard/analytics', icon: <BarChart3 size={18} /> },
-  { title: 'Users & Roles', subtitle: 'Access control', href: '/dashboard/users', icon: <ShieldCheck size={18} /> },
-];
-
-function formatExamSubtext(exams: DashboardData['upcomingExams']): string {
-  if (exams.length === 0) return 'None scheduled';
-  const now = Date.now();
-  const soonCount = exams.filter(exam => (new Date(exam.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
-  if (soonCount > 0) return `${soonCount} within 3 days`;
-  return `${exams.length} scheduled`;
-}
-
-function AttentionStatCard({ title, count, icon, color, href, subtext }: { title: string; count: number; icon: React.ReactNode; color: string; href?: string; subtext: string }) {
-  const card = (
-    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[105px] xs:h-[115px] sm:h-[125px] flex-col items-center justify-center gap-0.5 xs:gap-1 text-center transition-transform hover:-translate-y-1`}>
-      <div className="flex h-8 w-8 xs:h-9 xs:w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full bg-white/20 [&>svg]:h-4 [&>svg]:w-4 xs:[&>svg]:h-[18px] xs:[&>svg]:w-[18px] sm:[&>svg]:h-5 sm:[&>svg]:w-5 mb-1">{icon}</div>
-      <div className="text-[18px] xs:text-[22px] sm:text-[26px] font-display font-bold leading-none">{count}</div>
-      <p className="text-[10px] xs:text-[11px] sm:text-[12px] font-semibold leading-tight opacity-90">{title}</p>
-      <p className="text-[9px] xs:text-[10px] leading-tight opacity-70">{subtext}</p>
-    </div>
-  );
-  return href ? <Link href={href}>{card}</Link> : card;
-}
 
 // ── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard({ greeting, userName }: { greeting: string; userName: string }) {
@@ -320,93 +282,45 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
           </div>
 
-          {/* Attendance Overview */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Attendance Today</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500"><CheckCircle2 size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.present ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">Present</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/15 text-red-500"><XCircle size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.absent ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">Absent</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500"><Clock size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.attendanceToday?.late ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">Late</div>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Analytics Row — 2 columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {/* Finance Snapshot */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Finance Snapshot</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500"><DollarSign size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{formatCurrency(data?.financeSummary?.totalCollected ?? 0)}</div>
-                  <div className="text-xs text-muted-foreground">Collected this term</div>
-                </div>
+            {/* Attendance Chart */}
+            <div className="rounded-2xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-foreground">Attendance Today</h3>
+                <span className="text-xs text-muted-foreground">{totalAttendance(data)} total</span>
               </div>
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/15 text-red-500"><TrendingUp size={24} className="rotate-180" /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{formatCurrency(data?.financeSummary?.unpaidBalance ?? 0)}</div>
-                  <div className="text-xs text-muted-foreground">Outstanding balance</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/15 text-amber-500"><CreditCard size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.financeSummary?.overdueCount ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">Overdue payments</div>
-                </div>
-              </div>
+              <AttendanceBarChart present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} />
             </div>
-          </div>
 
-          {/* Academic Performance */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Academic Performance</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-500"><TrendingUp size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.academicSummary?.recentAvg != null ? `${data.academicSummary.recentAvg}%` : '—'}</div>
-                  <div className="text-xs text-muted-foreground">Recent exam average</div>
-                </div>
+            {/* Finance Snapshot */}
+            <div className="rounded-2xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-foreground">Finance Snapshot</h3>
+                <span className="text-xs text-muted-foreground">Current term</span>
               </div>
-              <div className="flex items-center gap-4 rounded-2xl border border-border bg-card/70 p-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/15 text-blue-500"><BarChart3 size={24} /></div>
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{data?.upcomingExams.length ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">Upcoming exams</div>
-                </div>
-              </div>
+              <FinanceBarChart collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
             </div>
-          </div>
 
-          {/* Alerts & Action Items */}
-          <div>
-            <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Alerts &amp; Action Items</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-              <AttentionStatCard title="Upcoming Exams" count={data?.upcomingExams.length ?? 0} icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams-marks" subtext={formatExamSubtext(data?.upcomingExams ?? [])} />
-              <AttentionStatCard title="Overdue Fees" count={data?.overdueFeesCount ?? 0} icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" subtext={data?.overdueFeesCount ? 'payments overdue' : 'No overdue'} />
-              <AttentionStatCard title="New Enrollments" count={data?.recentEnrollmentsLast7 ?? 0} icon={<Users size={20} />} color="bg-[#3A5A40]" href="/dashboard/people" subtext="this week" />
-              <AttentionStatCard title="Announcements" icon={<Bell size={20} />} count={data?.announcementsLast7Days ?? 0} color="bg-[#5C677D]" href="/dashboard/announcements" subtext="this week" />
-              <AttentionStatCard title="Report Cards" icon={<FileText size={20} />} count={data?.totalReports ?? 0} color="bg-[#F07167]" href="/dashboard/reports" subtext="total generated" />
+            {/* Academic Performance */}
+            <div className="rounded-2xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-foreground">Academic Performance</h3>
+                <span className="text-xs text-muted-foreground">{data?.upcomingExams.length ?? 0} upcoming exams</span>
+              </div>
+              <AcademicGauge avg={data?.academicSummary?.recentAvg ?? null} />
             </div>
+
+            {/* Alerts compact */}
+            <div className="rounded-2xl border border-border p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-foreground">Alerts &amp; Action Items</h3>
+                <a href="/dashboard/analytics" className="text-xs text-primary font-medium hover:underline">Review all</a>
+              </div>
+              <AlertList upcomingExams={data?.upcomingExams ?? []} overdueFees={data?.overdueFeesCount ?? 0} enrollments={data?.recentEnrollmentsLast7 ?? 0} announcements={data?.announcementsLast7Days ?? 0} reports={data?.totalReports ?? 0} />
+            </div>
+
           </div>
 
           {/* Quick Actions */}
@@ -511,6 +425,119 @@ function ColorfulActionCard({ title, icon, color, href }: { title: string, icon:
     </div>
   );
   return href ? <Link href={href}>{card}</Link> : card;
+}
+
+function totalAttendance(data: DashboardData | null): string {
+  const a = data?.attendanceToday;
+  if (!a) return '0';
+  return String(a.present + a.absent + a.late);
+}
+
+function AttendanceBarChart({ present, absent, late }: { present: number; absent: number; late: number }) {
+  const total = present + absent + late || 1;
+  const pPct = (present / total) * 100;
+  const aPct = (absent / total) * 100;
+  const lPct = (late / total) * 100;
+  const rate = Math.round((present / total) * 100);
+  return (
+    <div>
+      <div className="flex items-baseline justify-center mb-4">
+        <span className="text-3xl font-bold text-foreground">{rate}%</span>
+        <span className="text-xs text-muted-foreground ml-2">attendance rate</span>
+      </div>
+      <div className="flex h-3 rounded-full overflow-hidden bg-muted mb-4">
+        <div className="bg-emerald-500 transition-all" style={{ width: `${pPct}%` }} />
+        <div className="bg-red-400 transition-all" style={{ width: `${aPct}%` }} />
+        <div className="bg-amber-400 transition-all" style={{ width: `${lPct}%` }} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div><div className="text-xs text-muted-foreground">Present</div><div className="text-sm font-semibold text-emerald-600">{present}</div></div>
+        <div><div className="text-xs text-muted-foreground">Absent</div><div className="text-sm font-semibold text-red-500">{absent}</div></div>
+        <div><div className="text-xs text-muted-foreground">Late</div><div className="text-sm font-semibold text-amber-500">{late}</div></div>
+      </div>
+    </div>
+  );
+}
+
+function FinanceBarChart({ collected, unpaid, overdue }: { collected: number; unpaid: number; overdue: number }) {
+  const totalFees = collected + unpaid || 1;
+  const cPct = (collected / totalFees) * 100;
+  return (
+    <div>
+      <div className="flex items-baseline justify-center mb-4 gap-4">
+        <div className="text-center">
+          <div className="text-xs text-muted-foreground">Collected</div>
+          <div className="text-lg font-bold text-emerald-600">{formatCurrency(collected)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-muted-foreground">Outstanding</div>
+          <div className="text-lg font-bold text-red-500">{formatCurrency(unpaid)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-xs text-muted-foreground">Overdue</div>
+          <div className="text-lg font-bold text-amber-500">{overdue}</div>
+        </div>
+      </div>
+      <div className="flex h-4 rounded-full overflow-hidden bg-muted">
+        <div className="bg-emerald-500 transition-all" style={{ width: `${cPct}%` }} />
+        <div className="bg-red-400 transition-all" style={{ width: `${100 - cPct}%` }} />
+      </div>
+      <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
+        <span>{Math.round(cPct)}% collected</span>
+        <span>{Math.round(100 - cPct)}% unpaid</span>
+      </div>
+    </div>
+  );
+}
+
+function AcademicGauge({ avg }: { avg: number | null }) {
+  if (avg == null) return <div className="text-center py-6 text-sm text-muted-foreground italic">No exam data yet</div>;
+  const color = avg >= 80 ? 'text-emerald-500' : avg >= 60 ? 'text-amber-500' : 'text-red-500';
+  const barColor = avg >= 80 ? 'bg-emerald-500' : avg >= 60 ? 'bg-amber-500' : 'bg-red-500';
+  return (
+    <div>
+      <div className="flex items-baseline justify-center mb-4">
+        <span className={`text-3xl font-bold ${color}`}>{avg}%</span>
+        <span className="text-xs text-muted-foreground ml-2">exam average</span>
+      </div>
+      <div className="flex h-4 rounded-full overflow-hidden bg-muted">
+        <div className={`${barColor} transition-all`} style={{ width: `${avg}%` }} />
+      </div>
+      <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
+        <span>0%</span>
+        <span>{avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement'}</span>
+        <span>100%</span>
+      </div>
+    </div>
+  );
+}
+
+function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports }: { upcomingExams: DashboardData['upcomingExams']; overdueFees: number; enrollments: number; announcements: number; reports: number }) {
+  const [now] = useState(() => Date.now());
+  const soonExams = upcomingExams.filter(e => (new Date(e.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
+  const items = [
+    { label: 'Upcoming exams', count: upcomingExams.length, sub: soonExams > 0 ? `${soonExams} soon` : null, href: '/dashboard/exams-marks', color: 'text-purple-600', bg: 'bg-purple-100 dark:bg-purple-900/30' },
+    { label: 'Overdue fees', count: overdueFees, sub: 'past due date', href: '/dashboard/fees', color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+    { label: 'New enrollments', count: enrollments, sub: 'this week', href: '/dashboard/people', color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+    { label: 'Announcements', count: announcements, sub: 'this week', href: '/dashboard/announcements', color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+    { label: 'Report cards', count: reports, sub: 'total generated', href: '/dashboard/reports', color: 'text-rose-600', bg: 'bg-rose-100 dark:bg-rose-900/30' },
+  ];
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => (
+        <Link key={i} href={item.href} className="flex items-center gap-3 rounded-xl px-3 py-2.5 no-underline transition-colors hover:bg-muted/60">
+          <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${item.bg}`}>
+            <span className={`text-xs font-bold ${item.color}`}>{item.count}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-foreground">{item.label}</div>
+            {item.sub && <div className="text-xs text-muted-foreground">{item.sub}</div>}
+          </div>
+          <ArrowRight size={14} className="shrink-0 text-muted-foreground" />
+        </Link>
+      ))}
+    </div>
+  );
 }
 
 function formatCurrency(amount: number): string {
