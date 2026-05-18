@@ -8,7 +8,18 @@ import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText
 type RoleTab = 'students' | 'teachers' | 'parents';
 
 export default function PeoplePage() {
+  const { role } = useAuth();
   const [tab, setTab] = useState<RoleTab>('students');
+
+  const tabs = [
+    { id: 'students' as const, label: 'Students', icon: <Users size={16} />, roles: ['ADMIN', 'CLASS_TEACHER'] as const },
+    { id: 'teachers' as const, label: 'Teachers', icon: <GraduationCap size={16} />, roles: ['ADMIN'] as const },
+    { id: 'parents' as const, label: 'Parents', icon: <Heart size={16} />, roles: ['ADMIN'] as const },
+  ].filter(t => t.roles.includes(role as any));
+
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find(t => t.id === tab)) setTab(tabs[0].id);
+  }, [role]);
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
@@ -18,9 +29,7 @@ export default function PeoplePage() {
       </div>
 
       <div className="flex gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
-        {([{ id: 'students' as const, label: 'Students', icon: <Users size={16} /> },
-          { id: 'teachers' as const, label: 'Teachers', icon: <GraduationCap size={16} /> },
-          { id: 'parents' as const, label: 'Parents', icon: <Heart size={16} /> }]).map(t => (
+        {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.icon} {t.label}
           </button>

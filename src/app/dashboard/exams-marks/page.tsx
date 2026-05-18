@@ -8,7 +8,18 @@ import { ClipboardList, PenTool, Trophy, Calendar, Search, Upload, Download, Plu
 type Tab = 'exams' | 'marks' | 'results';
 
 export default function ExamsMarksPage() {
+  const { role } = useAuth();
   const [tab, setTab] = useState<Tab>('exams');
+
+  const tabs = [
+    { id: 'exams' as const, label: 'Schedule', icon: <Calendar size={16} />, roles: ['ADMIN', 'SUBJECT_TEACHER'] as const },
+    { id: 'marks' as const, label: 'Mark Entry', icon: <PenTool size={16} />, roles: ['ADMIN', 'SUBJECT_TEACHER'] as const },
+    { id: 'results' as const, label: 'Results & Analysis', icon: <Trophy size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
+  ].filter(t => t.roles.includes(role as any));
+
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find(t => t.id === tab)) setTab(tabs[0].id);
+  }, [role]);
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
@@ -18,9 +29,7 @@ export default function ExamsMarksPage() {
       </div>
 
       <div className="flex gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
-        {([{ id: 'exams' as const, label: 'Schedule', icon: <Calendar size={16} /> },
-          { id: 'marks' as const, label: 'Mark Entry', icon: <PenTool size={16} /> },
-          { id: 'results' as const, label: 'Results & Analysis', icon: <Trophy size={16} /> }]).map(t => (
+        {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.icon} {t.label}
           </button>

@@ -19,6 +19,10 @@ import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeac
 type DataType =
   | 'students'
   | 'parents'
+  | 'teachers'
+  | 'exam_slots'
+  | 'exam_types'
+  | 'exam_marks'
   | 'grade_streams'
   | 'academic_years'
   | 'terms'
@@ -121,6 +125,71 @@ export async function GET(request: NextRequest) {
 
         const parents = Array.from(parentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
         return NextResponse.json({ data: parents });
+      }
+
+      case 'teachers': {
+        const [usersRes, ctRes, stRes] = await Promise.all([
+          supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER']).order('created_at', { ascending: false }),
+          supabase.from('class_teachers').select('user_id, current_grade_stream_id, grade_streams(full_name)'),
+          supabase.from('subject_teachers').select('id, user_id'),
+        ]);
+        if (usersRes.error) return NextResponse.json({ error: usersRes.error.message }, { status: 400 });
+
+        const teachers = usersRes.data || [];
+        const teacherIds = teachers.map(t => t.id);
+        const classTeachers = ctRes.data || [];
+        const subjectTeachers = stRes.data || [];
+        const stIds = subjectTeachers.map(st => st.id);
+
+        let assignments: any[] = [];
+        if (stIds.length > 0) {
+          const { data } = await supabase.from('subject_teacher_assignments').select('subject_teacher_id, subject_id, grade_id, subjects(name), grades(name_display)').in('subject_teacher_id', stIds);
+          assignments = data || [];
+        }
+
+        const result = teachers.map(t => {
+          const ct = classTeachers.filter(c => c.user_id === t.id);
+          const st = subjectTeachers.find(s => s.user_id === t.id);
+          const sa = st ? assignments.filter(a => a.subject_teacher_id === st.id) : [];
+          const subs = [...new Set(sa.map((a: any) => a.subjects?.name).filter(Boolean))] as string[];
+          const cls = [...new Set([...sa.map((a: any) => a.grades?.name_display).filter(Boolean), ...ct.map(c => (c.grade_streams as any)?.full_name).filter(Boolean)])] as string[];
+          return {
+            id: t.id, employee_id: `TCH-${String(teachers.indexOf(t)+1).padStart(4,'0')}`,
+            profile: { first_name: t.first_name, last_name: t.last_name, email: t.email, phone: t.phone || '', avatar_url: t.avatar_url, is_active: t.is_active, role: t.role },
+            subjects: subs.join(', '), classes: cls.join(', '),
+            stats: { subjectCount: subs.length, classCount: cls.length, examCount: 0, markCount: 0 },
+          };
+        });
+        return NextResponse.json({ data: result });
+      }
+
+      case 'exam_types': {
+        const { data, error } = await supabase.from('exam_types').select('id, name').eq('school_id', schoolId).order('name');
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ data: data ?? [] });
+      }
+
+      case 'exam_slots': {
+        let query = supabase.from('exams').select('id, name, subject_id, grade_stream_id, max_score, date, subjects(name)').eq('school_id', schoolId);
+        const gsId = searchParams.get('grade_stream_id');
+        const etId = searchParams.get('exam_type_id');
+        if (gsId) query = query.eq('grade_stream_id', gsId);
+        if (etId) query = query.eq('exam_type_id', etId);
+        const { data, error } = await query.order('date', { ascending: false });
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ data: (data ?? []).map((e: any) => ({ id: e.id, name: e.name, subject_name: e.subjects?.name, max_score: e.max_score, date: e.date })) });
+      }
+
+      case 'exam_marks': {
+        const examSlotId = searchParams.get('exam_slot_id');
+        if (!examSlotId) return NextResponse.json({ error: 'exam_slot_id required' }, { status: 400 });
+        const { data: schoolUsers } = await supabase.from('users').select('id').eq('school_id', schoolId).eq('role', 'STUDENT');
+        const studentIds = (schoolUsers || []).map(u => u.id);
+        if (studentIds.length === 0) return NextResponse.json({ data: [] });
+        const { data, error } = await supabase.from('exam_marks').select('id, student_id, raw_score, percentage, students!inner(admission_number, users(first_name, last_name))').eq('exam_slot_id', examSlotId);
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        const maxScore = searchParams.get('max_score') ? parseInt(searchParams.get('max_score')!) : 100;
+        return NextResponse.json({ data: (data ?? []).map((m: any) => ({ id: m.student_id, student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(), admission_number: m.students?.admission_number || '', score: m.raw_score, max_score: maxScore })) });
       }
 
       case 'grade_streams': {
