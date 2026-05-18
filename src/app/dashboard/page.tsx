@@ -325,7 +325,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
 
           {/* Quick Actions — unique items not covered above */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
             <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" color="bg-[#E76F51]" />
             <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
@@ -414,7 +414,7 @@ function QuickActionBtn({ icon, label, href, color }: { icon: React.ReactNode; l
   return (
     <Link href={href} className={`${color} text-white flex items-center gap-2.5 rounded-xl px-4 py-3 sm:py-3.5 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
       <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-white/20 shrink-0">{icon}</div>
-      <span className="text-sm sm:text-[15px] font-bold truncate">{label}</span>
+      <span className="text-sm sm:text-[15px] font-bold leading-tight text-pretty">{label}</span>
     </Link>
   );
 }
