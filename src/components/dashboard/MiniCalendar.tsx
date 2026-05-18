@@ -48,16 +48,16 @@ export default function MiniCalendar() {
   }
 
   return (
-    <div className="rounded-2xl border border-black/10 p-6">
+    <div className="rounded-2xl border border-border p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display font-semibold text-gray-800 text-[15px]">
+        <h3 className="font-display font-semibold text-foreground text-[15px]">
           {monthName} {year}
         </h3>
         <div className="flex items-center gap-1">
-          <button onClick={prevMonth} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors">
+          <button onClick={prevMonth} className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors">
             <ChevronLeft size={16} />
           </button>
-          <button onClick={nextMonth} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors">
+          <button onClick={nextMonth} className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -65,7 +65,7 @@ export default function MiniCalendar() {
       
       <div className="grid grid-cols-7 gap-x-2 gap-y-5 mb-4 mt-2">
         {daysOfWeek.map(d => (
-          <div key={d} className="text-center text-[12px] font-medium text-gray-400">
+          <div key={d} className="text-center text-[12px] font-medium text-muted-foreground">
             {d}
           </div>
         ))}

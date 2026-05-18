@@ -33,16 +33,9 @@ interface DashboardData {
 
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import DashboardBanner from '@/components/dashboard/DashboardBanner';
-import DashboardCard from '@/components/dashboard/DashboardCard';
-import DashboardSection from '@/components/dashboard/DashboardSection';
-import PrimaryActionCard from '@/components/dashboard/PrimaryActionCard';
-import CompactNavCard from '@/components/dashboard/CompactNavCard';
 import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
-import MobileStatGrid from '@/components/dashboard/MobileStatGrid';
 import MiniCalendar from '@/components/dashboard/MiniCalendar';
-import QuickStatsChart from '@/components/dashboard/QuickStatsChart';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
 
@@ -359,36 +352,59 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
 
         {/* Right Sidebar */}
-        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-black/10 lg:pl-7 p-3 xs:p-4 sm:p-5">
+        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
-          {/* Quick Stats */}
-          <QuickStatsChart />
+          {/* This Week Summary */}
+          <div className="rounded-2xl border border-border p-4">
+            <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">This Week</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                <span className="text-lg font-bold text-foreground">{data?.upcomingExams.length ?? 0}</span>
+                <span className="text-[11px] text-muted-foreground">Exams</span>
+              </div>
+              <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                <span className="text-lg font-bold text-foreground">{data?.overdueFeesCount ?? 0}</span>
+                <span className="text-[11px] text-muted-foreground">Overdue Fees</span>
+              </div>
+              <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                <span className="text-lg font-bold text-foreground">{data?.recentEnrollmentsLast7 ?? 0}</span>
+                <span className="text-[11px] text-muted-foreground">Enrollments</span>
+              </div>
+              <div className="flex flex-col items-center rounded-xl bg-muted/30 p-2.5">
+                <span className="text-lg font-bold text-foreground">{data?.announcementsLast7Days ?? 0}</span>
+                <span className="text-[11px] text-muted-foreground">Announcements</span>
+              </div>
+            </div>
+          </div>
 
           {/* Recent Activity */}
-          <div className="rounded-2xl border border-black/10 p-6">
+          <div className="rounded-2xl border border-border p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-800 text-[15px]">Recent Activity</h3>
-              <a href="/dashboard/reports" className="text-teal-700 text-[13px] font-medium hover:underline">View all</a>
+              <h3 className="font-semibold text-foreground text-[15px]">Recent Activity</h3>
+              <a href="/dashboard/reports" className="text-primary text-[13px] font-medium hover:underline">View all</a>
             </div>
             <div className="flex flex-col">
               {(data?.recentActivities ?? []).slice(0, 3).map((act, i) => (
-                <div key={i} className="flex justify-between items-start py-1.5 border-b border-black/5 last:border-0">
-                  <span className="text-gray-700 text-[13px] font-medium pr-4">{act.message}</span>
-                  <span className="text-gray-500 text-[12px] whitespace-nowrap pt-0.5">{new Date(act.timestamp).toLocaleDateString('en-GB')}</span>
+                <div key={i} className="flex justify-between items-start py-1.5 border-b border-border last:border-0">
+                  <span className="text-foreground/80 text-[13px] font-medium pr-4">{act.message}</span>
+                  <span className="text-muted-foreground text-[12px] whitespace-nowrap pt-0.5">{new Date(act.timestamp).toLocaleDateString('en-GB')}</span>
                 </div>
               ))}
               {(!data?.recentActivities || data.recentActivities.length === 0) && (
-                <div className="text-[13px] text-gray-500 italic py-1.5">No recent activity.</div>
+                <div className="text-[13px] text-muted-foreground italic py-1.5">No recent activity.</div>
               )}
             </div>
           </div>
           
           {/* Announcements */}
-          <Link href="/dashboard/announcements" className="bg-white/60 rounded-full px-5 py-3 flex items-center gap-3 text-teal-800 font-medium hover:bg-white/80 transition-colors shadow-sm mt-2 border border-white no-underline">
-            <div className="text-teal-600">
+          <Link href="/dashboard/announcements" className="bg-card/90 rounded-full px-5 py-3 flex items-center gap-3 text-foreground font-medium hover:bg-muted transition-colors shadow-sm border border-border no-underline">
+            <div className="text-primary relative">
               <Bell size={18} />
+              {(data?.announcementsLast7Days ?? 0) > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">{data?.announcementsLast7Days}</span>
+              )}
             </div>
             <span className="text-[14px]">Announcements</span>
           </Link>
