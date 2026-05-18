@@ -229,7 +229,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   const greetingName = userName || 'Admin';
 
   return (
-    <div className="relative min-h-full overflow-y-auto p-2 sm:p-3 lg:p-4 bg-background text-foreground">
+    <div className="relative h-full overflow-hidden p-2 sm:p-3 lg:p-4 bg-background text-foreground">
       {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-4 xs:mb-6">
         <div className="text-[10px] xs:text-[12px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
@@ -259,9 +259,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-4 md:gap-6">
-        {/* Main Content Area */}
-        <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
+      <div className="flex gap-4 md:gap-6 h-full min-h-0">
+        {/* Main Content Area — scrollable independently */}
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+          <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
           
           {/* Greeting */}
           <div>
@@ -329,14 +330,14 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
             <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" color="bg-[#E76F51]" />
             <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
-            <QuickActionBtn icon={<Megaphone size={16} />} label="Post Announcement" href="/dashboard/announcements" color="bg-[#5C677D]" />
             <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" color="bg-[#4361EE]" />
           </div>
 
+          </div>
         </div>
 
         {/* Right Sidebar */}
-        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
+        <div className="w-[280px] lg:w-[300px] shrink-0 flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
