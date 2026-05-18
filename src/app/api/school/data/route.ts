@@ -18,6 +18,7 @@ import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeac
 
 type DataType =
   | 'students'
+  | 'parents'
   | 'grade_streams'
   | 'academic_years'
   | 'terms'
@@ -88,6 +89,38 @@ export async function GET(request: NextRequest) {
         }
         
         return NextResponse.json({ data: filteredStudents });
+      }
+
+      case 'parents': {
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select(`
+            id, admission_number, guardian_name, guardian_phone, guardian_email,
+            status, current_grade_stream_id,
+            users!inner (first_name, last_name, school_id),
+            grade_streams (id, full_name)
+          `)
+          .eq('users.school_id', schoolId)
+          .not('guardian_name', 'is', null)
+          .order('guardian_name');
+
+        if (studentsError) return NextResponse.json({ error: studentsError.message }, { status: 400 });
+
+        const parentMap = new Map<string, { id: string; name: string; phone: string; email: string; students: any[] }>();
+        for (const s of studentsData ?? []) {
+          const key = s.guardian_phone || s.guardian_email || s.guardian_name || 'unknown';
+          if (!parentMap.has(key)) {
+            parentMap.set(key, { id: `parent_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, name: s.guardian_name || 'Unknown', phone: s.guardian_phone || '', email: s.guardian_email || '', students: [] });
+          }
+          parentMap.get(key)!.students.push({
+            id: s.id, admission_number: s.admission_number,
+            first_name: (s.users as any)?.first_name || '', last_name: (s.users as any)?.last_name || '',
+            status: s.status, grade_stream: s.grade_streams,
+          });
+        }
+
+        const parents = Array.from(parentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        return NextResponse.json({ data: parents });
       }
 
       case 'grade_streams': {
