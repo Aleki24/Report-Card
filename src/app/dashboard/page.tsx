@@ -329,8 +329,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
           </div>
 
-          {/* Mobile sidebar content — at bottom on small screens */}
-          <div className="lg:hidden flex flex-col gap-3 xs:gap-4 px-3 xs:px-4 sm:px-5 pb-3 xs:pb-4">
+          {/* Mobile sidebar content — at bottom below md */}
+          <div className="md:hidden flex flex-col gap-3 xs:gap-4 px-3 xs:px-4 sm:px-5 pb-3 xs:pb-4">
             <MiniCalendar />
 
             <div className="rounded-2xl border border-border p-4">
@@ -383,8 +383,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
         </div>
 
-        {/* Right Sidebar — hidden on mobile, visible from lg up */}
-        <div className="hidden lg:flex w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
+        {/* Right Sidebar — hidden below md, visible from md up */}
+        <div className="hidden md:flex w-[280px] lg:w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex-col gap-3 xs:gap-4 md:border-l md:border-border md:pl-7 p-2 xs:p-3 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
