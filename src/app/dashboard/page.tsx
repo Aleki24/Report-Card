@@ -231,8 +231,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   return (
     <div className="relative h-full overflow-hidden px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-3 xs:mb-4 shrink-0">
-        <div className="text-[10px] xs:text-[12px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
+      <div className="flex items-center justify-between mb-3 xs:mb-3 sm:mb-4 shrink-0">
+        <div className="text-[10px] xs:text-[11px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
           {getCurrentTermName()} • {new Date().getFullYear()}
         </div>
         <form
@@ -253,15 +253,16 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
         </form>
         <div className="flex items-center">
-          <div className="text-[14px] xs:text-base sm:text-lg font-semibold font-display flex items-center gap-1.5">
+          <div className="text-[13px] xs:text-[14px] sm:text-base lg:text-lg font-semibold font-display flex items-center gap-1.5">
             {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {greetingName} <span>{new Date().getHours() < 12 ? '☀️' : new Date().getHours() < 17 ? '🌤️' : '🌙'}</span>
           </div>
         </div>
       </div>
 
       <div className="flex gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
-        {/* Main Content Area — scrollable independently */}
-        <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-2">
+
+        {/* Main Content Area — scrollable independently, full width on mobile */}
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-4 xs:pb-6">
           <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
 
           {/* At a Glance */}
@@ -278,10 +279,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
 
           {/* Analytics Row — 2 columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 xs:gap-5">
 
             {/* Attendance Chart */}
-            <div className="rounded-2xl border border-border p-5">
+            <div className="rounded-2xl border border-border p-4 xs:p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-foreground">Attendance Today</h3>
                 <span className="text-xs text-muted-foreground">{totalAttendance(data)} total</span>
@@ -290,7 +291,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
 
             {/* Finance Snapshot */}
-            <div className="rounded-2xl border border-border p-5">
+            <div className="rounded-2xl border border-border p-4 xs:p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-foreground">Finance Snapshot</h3>
                 <span className="text-xs text-muted-foreground">Current term</span>
@@ -299,7 +300,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
 
             {/* Academic Performance */}
-            <div className="rounded-2xl border border-border p-5">
+            <div className="rounded-2xl border border-border p-4 xs:p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-foreground">Academic Performance</h3>
                 <span className="text-xs text-muted-foreground">{data?.upcomingExams.length ?? 0} upcoming exams</span>
@@ -308,7 +309,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
 
             {/* Alerts compact */}
-            <div className="rounded-2xl border border-border p-5">
+            <div className="rounded-2xl border border-border p-4 xs:p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-foreground">Alerts &amp; Action Items</h3>
                 <a href="/dashboard/analytics" className="text-xs text-primary font-medium hover:underline">Review all</a>
@@ -319,7 +320,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
 
           {/* Quick Actions — unique items not covered above */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 xs:gap-3">
             <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
             <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" color="bg-[#E76F51]" />
             <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
@@ -329,8 +330,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
         </div>
 
-        {/* Right Sidebar */}
-        <div className="w-[280px] lg:w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
+        {/* Right Sidebar — hidden on mobile, visible from lg up */}
+        <div className="hidden lg:flex w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
@@ -392,10 +393,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
 function ColoredStatCard({ title, value, icon, color, href }: { title: string, value: string | number, icon: React.ReactNode, color: string, href?: string }) {
   const card = (
-    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[100px] xs:h-[110px] sm:h-[120px] flex-col items-center justify-center gap-1.5 xs:gap-2 text-center transition-transform hover:-translate-y-1`}>
-      <div className="opacity-80 scale-[0.8] xs:scale-100">{icon}</div>
-      <div className="text-[11px] xs:text-[12px] sm:text-[13px] font-semibold opacity-90">{title}</div>
-      <div className="text-[20px] xs:text-[24px] sm:text-[28px] font-display font-bold leading-none">{value}</div>
+    <div className={`${color} text-white p-3 xs:p-4 rounded-xl shadow-md flex h-[90px] xs:h-[100px] sm:h-[120px] flex-col items-center justify-center gap-1 xs:gap-1.5 sm:gap-2 text-center transition-transform hover:-translate-y-1`}>
+      <div className="opacity-80 scale-[0.7] xs:scale-[0.8] sm:scale-100">{icon}</div>
+      <div className="text-[10px] xs:text-[11px] sm:text-[13px] font-semibold opacity-90">{title}</div>
+      <div className="text-[18px] xs:text-[20px] sm:text-[28px] font-display font-bold leading-none">{value}</div>
     </div>
   );
   return href ? <Link href={href}>{card}</Link> : card;
@@ -403,9 +404,9 @@ function ColoredStatCard({ title, value, icon, color, href }: { title: string, v
 
 function QuickActionBtn({ icon, label, href, color }: { icon: React.ReactNode; label: string; href: string; color: string }) {
   return (
-    <Link href={href} className={`${color} text-white flex items-center gap-2.5 rounded-xl px-4 py-3 sm:py-3.5 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
-      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-white/20 shrink-0">{icon}</div>
-      <span className="text-sm sm:text-[15px] font-bold leading-tight text-pretty">{label}</span>
+    <Link href={href} className={`${color} text-white flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3.5 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
+      <div className="flex h-6 w-6 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-white/20 shrink-0">{icon}</div>
+      <span className="text-xs sm:text-sm lg:text-[15px] font-bold leading-tight text-pretty">{label}</span>
     </Link>
   );
 }
@@ -427,22 +428,22 @@ function AttendanceDonut({ present, absent, late }: { present: number; absent: n
   return (
     <div className="flex flex-col items-center">
       <div className="relative">
-        <ResponsiveContainer width={140} height={140}>
+        <ResponsiveContainer width={120} height={120}>
           <PieChart>
-            <Pie data={data} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" paddingAngle={2} strokeWidth={0}>
+            <Pie data={data} cx="50%" cy="50%" innerRadius={28} outerRadius={46} dataKey="value" paddingAngle={2} strokeWidth={0}>
               {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="text-2xl font-bold text-foreground">{rate}%</div>
+          <div className="text-xl sm:text-2xl font-bold text-foreground">{rate}%</div>
           <div className="text-[11px] text-muted-foreground">attendance</div>
         </div>
       </div>
-      <div className="flex gap-5 mt-1">
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-muted-foreground">{present}</span><span className="text-xs text-muted-foreground/60">present</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /><span className="text-xs text-muted-foreground">{absent}</span><span className="text-xs text-muted-foreground/60">absent</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">{late}</span><span className="text-xs text-muted-foreground/60">late</span></div>
+      <div className="flex gap-3 sm:gap-5 mt-1">
+        <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-muted-foreground">{present}</span><span className="text-xs text-muted-foreground/60">present</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-red-400" /><span className="text-xs text-muted-foreground">{absent}</span><span className="text-xs text-muted-foreground/60">absent</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">{late}</span><span className="text-xs text-muted-foreground/60">late</span></div>
       </div>
     </div>
   );
@@ -457,19 +458,19 @@ function FinanceSnapshot({ collected, unpaid, overdue }: { collected: number; un
     <div>
       <div className="flex items-center justify-around mb-3">
         <div className="text-center">
-          <div className="text-lg font-bold text-emerald-600">{formatCurrency(collected)}</div>
+          <div className="text-base sm:text-lg font-bold text-emerald-600">{formatCurrency(collected)}</div>
           <div className="text-[11px] text-muted-foreground">Collected</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold text-red-500">{formatCurrency(unpaid)}</div>
+          <div className="text-base sm:text-lg font-bold text-red-500">{formatCurrency(unpaid)}</div>
           <div className="text-[11px] text-muted-foreground">Outstanding</div>
         </div>
         <div className="text-center">
-          <div className="text-lg font-bold text-amber-500">{overdue}</div>
+          <div className="text-base sm:text-lg font-bold text-amber-500">{overdue}</div>
           <div className="text-[11px] text-muted-foreground">Overdue</div>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={130}>
+      <ResponsiveContainer width="100%" height={100}>
         <ReBarChart data={data} barCategoryGap="30%">
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
@@ -492,16 +493,16 @@ function AcademicGauge({ avg }: { avg: number | null }) {
   return (
     <div className="flex flex-col items-center">
       <div className="relative">
-        <ResponsiveContainer width={140} height={140}>
+        <ResponsiveContainer width={120} height={120}>
           <PieChart>
-            <Pie data={[{ value: avg }, { value: 100 - avg }]} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
+            <Pie data={[{ value: avg }, { value: 100 - avg }]} cx="50%" cy="50%" innerRadius={28} outerRadius={46} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
               <Cell fill={color} />
               <Cell fill="var(--color-muted)" />
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <div className="text-2xl font-bold text-foreground">{avg}%</div>
+          <div className="text-xl sm:text-2xl font-bold text-foreground">{avg}%</div>
           <div className="text-[11px] text-muted-foreground">average</div>
         </div>
       </div>
