@@ -10,6 +10,7 @@ import {
   ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
   BookOpen, Search, CheckCircle2, Plus, Megaphone
 } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart as ReBarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface Announcement {
   title: string;
@@ -382,14 +383,12 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
           
           {/* Announcements */}
-          <Link href="/dashboard/announcements" className="bg-card/90 rounded-full px-5 py-3 flex items-center gap-3 text-foreground font-medium hover:bg-muted transition-colors shadow-sm border border-border no-underline shrink-0">
-            <div className="text-primary relative">
-              <Bell size={18} />
-              {(data?.announcementsLast7Days ?? 0) > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">{data?.announcementsLast7Days}</span>
-              )}
-            </div>
-            <span className="text-[14px]">Announcements</span>
+          <Link href="/dashboard/announcements" className="bg-primary text-primary-foreground rounded-xl px-4 py-3 flex items-center gap-3 font-semibold hover:opacity-90 transition-opacity shadow-sm no-underline shrink-0">
+            <Bell size={18} />
+            <span className="text-sm">Announcements</span>
+            {(data?.announcementsLast7Days ?? 0) > 0 && (
+              <span className="ml-auto bg-white/25 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{data?.announcementsLast7Days}</span>
+            )}
           </Link>
         </div>
       </div>
@@ -410,9 +409,9 @@ function ColoredStatCard({ title, value, icon, color, href }: { title: string, v
 
 function QuickActionBtn({ icon, label, href, color }: { icon: React.ReactNode; label: string; href: string; color: string }) {
   return (
-    <Link href={href} className={`${color} text-white flex items-center gap-2.5 rounded-xl px-4 py-2.5 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
+    <Link href={href} className={`${color} text-white flex items-center gap-2.5 rounded-xl px-4 py-3 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
       <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 shrink-0">{icon}</div>
-      <span className="text-xs font-semibold truncate">{label}</span>
+      <span className="text-sm font-bold truncate">{label}</span>
     </Link>
   );
 }
@@ -426,37 +425,27 @@ function totalAttendance(data: DashboardData | null): string {
 function AttendanceDonut({ present, absent, late }: { present: number; absent: number; late: number }) {
   const total = present + absent + late || 1;
   const rate = Math.round((present / total) * 100);
-  const segments = [
-    { value: present, color: '#10b981', label: 'Present' },
-    { value: absent, color: '#ef4444', label: 'Absent' },
-    { value: late, color: '#f59e0b', label: 'Late' },
-  ];
-  const r = 36;
-  const c = 2 * Math.PI * r;
-  let offset = 0;
+  const data = [
+    { name: 'Present', value: present, color: '#10b981' },
+    { name: 'Absent', value: absent, color: '#ef4444' },
+    { name: 'Late', value: late, color: '#f59e0b' },
+  ].filter(d => d.value > 0);
   return (
     <div className="flex flex-col items-center">
-      <svg width="130" height="130" viewBox="0 0 100 100" className="-rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--color-muted)" strokeWidth="10" />
-        {segments.map((seg) => {
-          const len = seg.value > 0 ? (seg.value / total) * c : 0;
-          const dashOffset = offset;
-          offset += len;
-          return seg.value > 0 ? (
-            <circle key={seg.label} cx="50" cy="50" r={r}
-              fill="none" stroke={seg.color} strokeWidth="10"
-              strokeDasharray={`${len} ${c - len}`}
-              strokeDashoffset={-dashOffset}
-              className="transition-all duration-500"
-            />
-          ) : null;
-        })}
-      </svg>
-      <div className="text-center -mt-[100px] pt-2">
-        <div className="text-2xl font-bold text-foreground">{rate}%</div>
-        <div className="text-[11px] text-muted-foreground">attendance</div>
+      <div className="relative">
+        <ResponsiveContainer width={140} height={140}>
+          <PieChart>
+            <Pie data={data} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" paddingAngle={2} strokeWidth={0}>
+              {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="text-2xl font-bold text-foreground">{rate}%</div>
+          <div className="text-[11px] text-muted-foreground">attendance</div>
+        </div>
       </div>
-      <div className="flex gap-5 mt-3">
+      <div className="flex gap-5 mt-1">
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-muted-foreground">{present}</span><span className="text-xs text-muted-foreground/60">present</span></div>
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /><span className="text-xs text-muted-foreground">{absent}</span><span className="text-xs text-muted-foreground/60">absent</span></div>
         <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">{late}</span><span className="text-xs text-muted-foreground/60">late</span></div>
@@ -466,11 +455,13 @@ function AttendanceDonut({ present, absent, late }: { present: number; absent: n
 }
 
 function FinanceSnapshot({ collected, unpaid, overdue }: { collected: number; unpaid: number; overdue: number }) {
-  const total = collected + unpaid || 1;
-  const cPct = (collected / total) * 100;
+  const data = [
+    { name: 'Collected', amount: collected, fill: '#10b981' },
+    { name: 'Outstanding', amount: unpaid, fill: '#f87171' },
+  ];
   return (
     <div>
-      <div className="flex items-center justify-around mb-5">
+      <div className="flex items-center justify-around mb-3">
         <div className="text-center">
           <div className="text-lg font-bold text-emerald-600">{formatCurrency(collected)}</div>
           <div className="text-[11px] text-muted-foreground">Collected</div>
@@ -484,40 +475,43 @@ function FinanceSnapshot({ collected, unpaid, overdue }: { collected: number; un
           <div className="text-[11px] text-muted-foreground">Overdue</div>
         </div>
       </div>
-      <div className="flex h-6 rounded-full overflow-hidden bg-muted shadow-inner">
-        <div className="bg-emerald-500 transition-all" style={{ width: `${cPct}%` }} />
-        <div className="bg-red-400 transition-all" style={{ width: `${100 - cPct}%` }} />
-      </div>
-      <div className="flex justify-between mt-1.5 text-[11px] text-muted-foreground">
-        <span>{Math.round(cPct)}% paid</span>
-        <span>{Math.round(100 - cPct)}% unpaid</span>
-      </div>
+      <ResponsiveContainer width="100%" height={130}>
+        <ReBarChart data={data} barCategoryGap="30%">
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-foreground)' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => formatCurrency(Number(v))} />
+          <Tooltip contentStyle={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} formatter={(v: any) => [formatCurrency(Number(v)), 'Amount']} />
+          <Bar dataKey="amount" radius={[4, 4, 0, 0]} maxBarSize={50}>
+            {data.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+          </Bar>
+        </ReBarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
 
 function AcademicGauge({ avg }: { avg: number | null }) {
   if (avg == null) return <div className="text-center py-8 text-sm text-muted-foreground italic">No exam data yet</div>;
-  const label = avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement';
   const color = avg >= 80 ? '#10b981' : avg >= 60 ? '#f59e0b' : '#ef4444';
-  const r = 36;
-  const c = 2 * Math.PI * r;
-  const filled = (avg / 100) * c;
+  const label = avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement';
+  const data = [{ value: avg, fill: color }];
   return (
     <div className="flex flex-col items-center">
-      <svg width="130" height="130" viewBox="0 0 100 100" className="-rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--color-muted)" strokeWidth="10" />
-        <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="10"
-          strokeDasharray={`${filled} ${c - filled}`}
-          strokeLinecap="round"
-          className="transition-all duration-700"
-        />
-      </svg>
-      <div className="text-center -mt-[100px] pt-2">
-        <div className="text-2xl font-bold text-foreground">{avg}%</div>
-        <div className="text-[11px] text-muted-foreground">average</div>
+      <div className="relative">
+        <ResponsiveContainer width={140} height={140}>
+          <PieChart>
+            <Pie data={[{ value: avg }, { value: 100 - avg }]} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
+              <Cell fill={color} />
+              <Cell fill="var(--color-muted)" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="text-2xl font-bold text-foreground">{avg}%</div>
+          <div className="text-[11px] text-muted-foreground">average</div>
+        </div>
       </div>
-      <div className={`mt-3 text-xs font-medium px-3 py-1 rounded-full ${
+      <div className={`mt-1 text-xs font-medium px-3 py-1 rounded-full ${
         avg >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' :
         avg >= 60 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' :
         'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
