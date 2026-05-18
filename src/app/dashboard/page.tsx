@@ -229,9 +229,9 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
   const greetingName = userName || 'Admin';
 
   return (
-    <div className="relative h-full overflow-hidden p-2 sm:p-3 lg:p-4 bg-background text-foreground">
+    <div className="relative h-full overflow-hidden p-2 sm:p-3 lg:p-4 bg-background text-foreground flex flex-col">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-4 xs:mb-6">
+      <div className="flex items-center justify-between mb-4 xs:mb-6 shrink-0">
         <div className="text-[10px] xs:text-[12px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">
           {getCurrentTermName()} • {new Date().getFullYear()}
         </div>
@@ -259,7 +259,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
       </div>
 
-      <div className="flex gap-4 md:gap-6 h-full min-h-0">
+      <div className="flex gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
         {/* Main Content Area — scrollable independently */}
         <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-2">
           <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
