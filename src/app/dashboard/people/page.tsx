@@ -1,0 +1,570 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/components/AuthProvider';
+import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
+
+type RoleTab = 'students' | 'teachers' | 'parents';
+
+export default function PeoplePage() {
+  const [tab, setTab] = useState<RoleTab>('students');
+
+  return (
+    <div className="w-full max-w-7xl mx-auto pb-10">
+      <div className="mb-6">
+        <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">People</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage students, teachers, and parent contacts</p>
+      </div>
+
+      <div className="flex gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
+        {([{ id: 'students' as const, label: 'Students', icon: <Users size={16} /> },
+          { id: 'teachers' as const, label: 'Teachers', icon: <GraduationCap size={16} /> },
+          { id: 'parents' as const, label: 'Parents', icon: <Heart size={16} /> }]).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'students' && <StudentsSection />}
+      {tab === 'teachers' && <TeachersSection />}
+      {tab === 'parents' && <ParentsSection />}
+    </div>
+  );
+}
+
+/* ───── Students Section ───── */
+interface StudentRow { id: string; first_name: string; last_name: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; }
+interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; }; grade_stream: { full_name: string } | null; academic_history: any[]; report_history: any[]; attendance_history: any[]; stats: { total_terms: number; average_score: number; best_grade: string; overall_position: number; attendance_rate: number; }; }
+
+function StudentsSection() {
+  const { profile } = useAuth();
+  const [data, setData] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [gradeStreamFilter, setGradeStreamFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string }[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({ first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '' });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [viewStudent, setViewStudent] = useState<StudentDetail | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewTab, setViewTab] = useState<'profile' | 'academic' | 'reports' | 'attendance'>('profile');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [academicLevels, setAcademicLevels] = useState<{ id: string; name: string }[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
+  const [page, setPage] = useState(1);
+  const perPage = 20;
+
+  const fetchStudents = useCallback(async (gs?: string) => {
+    setLoading(true); setError(null);
+    try {
+      let url = '/api/school/data?type=students';
+      const stream = gs ?? gradeStreamFilter;
+      if (stream) url += `&grade_stream_id=${stream}`;
+      const [sRes, gsRes] = await Promise.all([fetch(url), fetch('/api/school/data?type=grade_streams')]);
+      if (!sRes.ok) { setError('Failed to load students'); return; }
+      const [sJson, gsJson] = await Promise.all([sRes.json(), gsRes.json()]);
+      setData(sJson.data || []); setGradeStreams(gsJson.data || []);
+      const res = await fetch('/api/admin/academic-structure');
+      if (res.ok) { const j = await res.json(); setAcademicLevels(j.academic_levels || []); }
+    } catch { setError('Failed to load data'); }
+    finally { setLoading(false); }
+  }, [gradeStreamFilter]);
+
+  useEffect(() => { if (profile?.id) fetchStudents(); }, [profile?.id, fetchStudents]);
+
+  const filtered = data.filter(s => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || `${s.first_name} ${s.last_name} ${s.admission_number} ${s.guardian_phone||''}`.toLowerCase().includes(q);
+    const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    const matchStream = !gradeStreamFilter || s.current_grade_stream_id === gradeStreamFilter;
+    return matchSearch && matchStatus && matchStream;
+  });
+  const totalPages = Math.ceil(filtered.length / perPage);
+  const paginated = filtered.slice((page - 1) * perPage, page * perPage);
+  const stats = { total: data.length, active: data.filter(s => s.status !== 'INACTIVE').length, inactive: data.filter(s => s.status === 'INACTIVE').length, streams: gradeStreams.length };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const method = editing ? 'PATCH' : 'POST';
+      const url = editing ? `/api/admin/update-student?id=${editing}` : '/api/admin/add-student';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      showToast(editing ? '✅ Student updated' : '✅ Student added');
+      setShowModal(false); setEditing(null); await fetchStudents();
+    } catch (err: any) { showToast(`❌ ${err.message}`); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this student?')) return;
+    try {
+      const res = await fetch(`/api/admin/delete-student?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      showToast('✅ Deleted'); await fetchStudents();
+    } catch (err: any) { showToast(`❌ ${err.message}`); }
+  };
+
+  const handlePhoto = async (f: File, onUrl: (url: string) => void) => {
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const res = await fetch('/api/admin/upload-photo', { method: 'POST', body: fd });
+      const j = await res.json();
+      if (j.url) onUrl(j.url);
+    } finally { setUploadingPhoto(false); }
+  };
+
+  const viewStudentDetails = async (id: string) => {
+    setViewLoading(true); setViewStudent(null); setViewTab('profile');
+    try {
+      const res = await fetch(`/api/school/student-details?id=${id}`);
+      if (!res.ok) throw new Error();
+      setViewStudent(await res.json());
+    } catch { showToast('Failed to load details'); }
+    finally { setViewLoading(false); }
+  };
+
+  const openEdit = (s: StudentRow) => {
+    setFormData({ first_name: s.first_name, last_name: s.last_name, admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '' });
+    setEditing(s.id); setShowModal(true);
+  };
+
+  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  if (error) return <div className="text-center py-16 text-muted-foreground"><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">{error}</p></div>;
+
+  return (
+    <div>
+      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div className="stat-card"><div className="stat-label">Total Students</div><div className="stat-value">{stats.total}</div></div>
+        <div className="stat-card"><div className="stat-label">Active</div><div className="stat-value">{stats.active}</div></div>
+        <div className="stat-card"><div className="stat-label">Inactive</div><div className="stat-value">{stats.inactive}</div></div>
+        <div className="stat-card"><div className="stat-label">Streams</div><div className="stat-value">{stats.streams}</div></div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
+          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+        </div>
+        <select className="input-field text-xs" value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
+          <option value="">All Streams</option>
+          {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+        </select>
+        <select className="input-field text-xs" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+          <option value="ALL">All Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
+        <button className="btn-primary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '' }); setShowModal(true); }}>
+          <UserPlus size={14} /> Add Student
+        </button>
+      </div>
+
+      {loading ? <ContentSkeleton message="Loading students..." /> : (
+        <div className="card overflow-hidden">
+          {paginated.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground"><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No students found.</p></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table w-full text-left">
+                <thead><tr>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Student</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Admission No.</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Class</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Guardian</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
+                </tr></thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {paginated.map(s => (
+                    <tr key={s.id} className="hover:bg-muted transition-colors cursor-pointer" onClick={() => viewStudentDetails(s.id)}>
+                      <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{s.avatar_url ? <img src={s.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.first_name} ${s.last_name}`)}</div><div><div className="font-medium text-sm">{s.first_name} {s.last_name}</div><div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div></div></div></td>
+                      <td className="px-4 py-3 text-sm font-mono">{s.admission_number}</td>
+                      <td className="px-4 py-3 text-sm">{s.grade_stream?.full_name || '—'}</td>
+                      <td className="px-4 py-3 text-sm">{s.guardian_name || '—'}</td>
+                      <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{s.status}</span></td>
+                      <td className="px-4 py-3 text-right">
+                        <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); openEdit(s); }}><Edit3 size={14} /></button>
+                        <button className="btn-icon text-red-400 hover:text-red-300" onClick={e => { e.stopPropagation(); handleDelete(s.id); }}><Trash2 size={14} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button className="btn-secondary text-xs px-3 py-1" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+                <button className="btn-secondary text-xs px-3 py-1" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
+          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-sm font-bold font-display mb-4">{editing ? 'Edit Student' : 'Add Student'}</h2>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full text-xs" value={formData.first_name} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full text-xs" value={formData.last_name} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No. *</label><input className="input-field w-full text-xs" value={formData.admission_number} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Gender</label><select className="input-field w-full text-xs" value={formData.gender} onChange={e => setFormData(p => ({ ...p, gender: e.target.value }))}><option value="">—</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Date of Birth</label><input type="date" className="input-field w-full text-xs" value={formData.date_of_birth} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Name</label><input className="input-field w-full text-xs" value={formData.guardian_name} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancel</button>
+              <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name || !formData.admission_number}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Detail Panel */}
+      {viewStudent && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setViewStudent(null)}>
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-sm font-bold text-accent">{getInitials(`${viewStudent.profile.first_name} ${viewStudent.profile.last_name}`)}</div>
+                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewStudent.profile.admission_number} · {viewStudent.grade_stream?.full_name || '—'}</p></div>
+              </div>
+              <button onClick={() => setViewStudent(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
+            </div>
+            <div className="flex border-b border-border shrink-0 overflow-x-auto">
+              {(['profile', 'academic', 'reports', 'attendance'] as const).map(t => (
+                <button key={t} onClick={() => setViewTab(t)} className={`px-4 py-3 text-xs font-semibold whitespace-nowrap bg-none border-none cursor-pointer ${viewTab === t ? 'text-accent border-b-2 border-accent' : 'text-muted-foreground'}`}>{t === 'profile' ? 'Profile' : t === 'academic' ? 'Academic' : t === 'reports' ? 'Reports' : 'Attendance'}</button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {viewLoading ? <InlineLoadingSkeleton rows={4} /> : viewTab === 'profile' ? (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-3"><div><span className="text-xs text-muted-foreground">Gender</span><p>{viewStudent.profile.gender || '—'}</p></div><div><span className="text-xs text-muted-foreground">DOB</span><p>{viewStudent.profile.date_of_birth ? new Date(viewStudent.profile.date_of_birth).toLocaleDateString() : '—'}</p></div></div>
+                  <div><span className="text-xs text-muted-foreground">Guardian</span><p>{viewStudent.profile.guardian_name || '—'} {viewStudent.profile.guardian_phone ? `(${viewStudent.profile.guardian_phone})` : ''}</p></div>
+                  <div><span className="text-xs text-muted-foreground">Status</span><p><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${viewStudent.profile.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{viewStudent.profile.status}</span></p></div>
+                </div>
+              ) : viewTab === 'academic' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3"><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-accent">{viewStudent.stats.average_score.toFixed(1)}%</div><div className="text-xs text-muted-foreground">Average</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-blue-400">{viewStudent.stats.best_grade}</div><div className="text-xs text-muted-foreground">Best Grade</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-amber-400">#{viewStudent.stats.overall_position}</div><div className="text-xs text-muted-foreground">Position</div></div></div>
+                  {viewStudent.academic_history.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No academic history yet.</p>}
+                </div>
+              ) : viewTab === 'reports' ? (
+                <div>{viewStudent.report_history.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No report history yet.</p> : <p className="text-xs text-muted-foreground">{viewStudent.report_history.length} report(s) generated.</p>}</div>
+              ) : (
+                <div><div className="p-3 rounded-lg bg-surface-raised text-center mb-3"><div className="text-lg font-bold text-emerald-400">{viewStudent.stats.attendance_rate.toFixed(1)}%</div><div className="text-xs text-muted-foreground">Attendance Rate</div></div>{viewStudent.attendance_history.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No attendance history yet.</p>}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───── Teachers Section ───── */
+interface TeacherRow { id: string; employee_id: string; profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; }; subjects: string; classes: string; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; }
+interface TeacherDetail { profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; }; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; subjectAssignments: any[]; classAssignments: any[]; recentExams: any[]; }
+type TeacherTab = 'overview' | 'subjects' | 'classes' | 'exams';
+
+function TeachersSection() {
+  const [data, setData] = useState<TeacherRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null);
+  const [editData, setEditData] = useState({ first_name: '', last_name: '', phone: '', avatar_url: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [viewTeacher, setViewTeacher] = useState<TeacherDetail | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewTab, setViewTab] = useState<TeacherTab>('overview');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
+
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      try {
+        const res = await fetch('/api/school/data?type=teachers');
+        if (!res.ok) return;
+        const json = await res.json();
+        setData(json.data || []);
+      } catch (err) { console.error('Failed to fetch teachers:', err); }
+      finally { setLoading(false); }
+    };
+    fetchTeachers();
+  }, []);
+
+  const filtered = data.filter(t => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || `${t.profile.first_name} ${t.profile.last_name} ${t.profile.email || ''} ${t.employee_id||''}`.toLowerCase().includes(q);
+    const matchRole = roleFilter === 'ALL' || t.profile.role === roleFilter;
+    const matchStatus = statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? t.profile.is_active : !t.profile.is_active);
+    return matchSearch && matchRole && matchStatus;
+  });
+
+  const roleBadge = (role: string, isActive: boolean) => {
+    if (!isActive) return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400">Inactive</span>;
+    const colors: Record<string, string> = { CLASS_TEACHER: 'bg-blue-500/15 text-blue-400', SUBJECT_TEACHER: 'bg-purple-500/15 text-purple-400', ADMIN: 'bg-red-500/15 text-red-400' };
+    const labels: Record<string, string> = { CLASS_TEACHER: 'Class Teacher', SUBJECT_TEACHER: 'Subject Teacher', ADMIN: 'Admin' };
+    return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-500/15 text-gray-400'}`}>{labels[role] || role}</span>;
+  };
+
+  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  const handleSaveTeacher = async () => {
+    if (!editingTeacher) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/admin/update-teacher?id=${editingTeacher.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editData) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      showToast('✅ Teacher updated');
+      setEditingTeacher(null);
+      const fetchRes = await fetch('/api/school/data?type=teachers');
+      const fetchJson = await fetchRes.json();
+      setData(fetchJson.data || []);
+    } catch (err: any) { showToast(`❌ ${err.message}`); }
+    finally { setSavingEdit(false); }
+  };
+
+  const handlePhotoFileSelect = async (f: File, onUrl: (url: string) => void) => {
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const res = await fetch('/api/admin/upload-photo', { method: 'POST', body: fd });
+      const j = await res.json();
+      if (j.url) onUrl(j.url);
+    } finally { setUploadingPhoto(false); }
+  };
+
+  const viewTeacherDetails = async (t: TeacherRow) => {
+    setViewLoading(true); setViewTeacher(null); setViewTab('overview');
+    try {
+      const res = await fetch(`/api/school/teacher-details?id=${t.id}`);
+      if (!res.ok) throw new Error();
+      setViewTeacher(await res.json());
+    } catch { showToast('Failed to load details'); }
+    finally { setViewLoading(false); }
+  };
+
+  if (loading) return <ContentSkeleton message="Loading teachers..." />;
+
+  return (
+    <div>
+      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
+          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search teachers..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <select className="input-field text-xs" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+          <option value="ALL">All Roles</option>
+          <option value="CLASS_TEACHER">Class Teacher</option>
+          <option value="SUBJECT_TEACHER">Subject Teacher</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+        <select className="input-field text-xs" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="ALL">All Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground"><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No teachers found.</p></div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table w-full text-left">
+              <thead><tr>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Teacher</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Email</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Employee ID</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Role</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subjects</th>
+                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
+              </tr></thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {filtered.map(t => (
+                  <tr key={t.id} className="hover:bg-muted transition-colors cursor-pointer" onClick={() => viewTeacherDetails(t)}>
+                    <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{t.profile.avatar_url ? <img src={t.profile.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${t.profile.first_name} ${t.profile.last_name}`)}</div><span className="font-medium text-sm">{t.profile.first_name} {t.profile.last_name}</span></div></td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{t.profile.email || '—'}</td>
+                    <td className="px-4 py-3 text-sm font-mono">{t.employee_id || '—'}</td>
+                    <td className="px-4 py-3">{roleBadge(t.profile.role, t.profile.is_active)}</td>
+                    <td className="px-4 py-3 text-sm">{t.subjects || '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setEditingTeacher(t); setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' }); }}><Edit3 size={14} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {editingTeacher && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setEditingTeacher(null)}>
+          <div className="card w-full max-w-md" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-sm font-bold font-display mb-4">Edit Teacher</h2>
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex gap-3">
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
+              </div>
+              <div><label className="block text-xs text-muted-foreground mb-1">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Photo</label>
+                <div className="flex items-center gap-2">
+                  {editData.avatar_url ? (
+                    <div className="relative w-12 h-12 shrink-0"><img src={editData.avatar_url} className="w-12 h-12 rounded-full object-cover" /><button type="button" onClick={() => setEditData(p => ({ ...p, avatar_url: '' }))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white border-none text-xs flex items-center justify-center cursor-pointer">×</button></div>
+                  ) : null}
+                  <label className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-border bg-surface cursor-pointer text-xs text-muted-foreground"><Upload size={12} />{uploadingPhoto ? 'Uploading...' : 'Choose File'}<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" style={{ display: 'none' }} disabled={uploadingPhoto} onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoFileSelect(f, url => setEditData(p => ({ ...p, avatar_url: url }))); e.target.value = ''; }} /></label>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-xs" onClick={() => setEditingTeacher(null)} disabled={savingEdit}>Cancel</button>
+              <button className="btn-primary text-xs disabled:opacity-50" onClick={handleSaveTeacher} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save Changes'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewTeacher && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setViewTeacher(null)}>
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent">{getInitials(`${viewTeacher.profile.first_name} ${viewTeacher.profile.last_name}`)}</div>
+                <div><h2 className="text-sm font-bold">{viewTeacher.profile.first_name} {viewTeacher.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewTeacher.profile.email} · {viewTeacher.profile.phone}</p></div>
+              </div>
+              <button onClick={() => setViewTeacher(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
+            </div>
+            <div className="flex border-b border-border shrink-0 overflow-x-auto">
+              {(['overview', 'subjects', 'classes', 'exams'] as TeacherTab[]).map(tab => (
+                <button key={tab} onClick={() => setViewTab(tab)} className={`px-4 py-3 text-xs font-semibold whitespace-nowrap bg-none border-none cursor-pointer ${viewTab === tab ? 'text-accent border-b-2 border-accent' : 'text-muted-foreground'}`}>{tab === 'overview' ? 'Overview' : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              {viewLoading ? <InlineLoadingSkeleton rows={4} /> : viewTab === 'overview' ? (
+                <div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-accent">{viewTeacher.stats.subjectCount}</div><div className="text-xs text-muted-foreground">Subjects</div></div>
+                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-blue-400">{viewTeacher.stats.classCount}</div><div className="text-xs text-muted-foreground">Classes</div></div>
+                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-amber-400">{viewTeacher.stats.examCount}</div><div className="text-xs text-muted-foreground">Exams</div></div>
+                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-purple-400">{viewTeacher.stats.markCount}</div><div className="text-xs text-muted-foreground">Marks Entered</div></div>
+                  </div>
+                </div>
+              ) : viewTab === 'subjects' ? (
+                <div>{viewTeacher.subjectAssignments.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No subject assignments yet.</p> : <div className="space-y-2">{viewTeacher.subjectAssignments.map((sa: any, i: number) => <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><div><div className="text-sm font-semibold">{sa.subject}</div><div className="text-xs text-muted-foreground">{sa.category} · {sa.subject_code}</div></div><div className="text-right text-xs text-muted-foreground"><div>{sa.grade}</div><div className="text-xs">{sa.stream || 'All streams'}</div></div></div>)}</div>}</div>
+              ) : viewTab === 'classes' ? (
+                <div>{viewTeacher.classAssignments.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No homeroom class assigned.</p> : <div className="space-y-2">{viewTeacher.classAssignments.map((ca: any) => <div key={ca.id} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><span className="text-sm font-semibold">{ca.stream}</span><span className="text-xs text-muted-foreground">{ca.year}</span></div>)}</div>}</div>
+              ) : (
+                <div>{viewTeacher.recentExams.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No exams created yet.</p> : <div className="space-y-2">{viewTeacher.recentExams.map((ex: any) => <div key={ex.id} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><div><div className="text-sm font-semibold">{ex.name}</div><div className="text-xs text-muted-foreground">{ex.subject} · {ex.grade}</div></div><div className="text-xs text-muted-foreground">{ex.date ? new Date(ex.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</div></div>)}</div>}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───── Parents Section ───── */
+interface ParentStudent { id: string; admission_number: string; first_name: string; last_name: string; status: string; grade_stream: { full_name: string } | null; }
+interface Parent { id: string; name: string; phone: string; email: string; students: ParentStudent[]; }
+
+function ParentsSection() {
+  const [data, setData] = useState<Parent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const fetchParents = async () => {
+      try {
+        const res = await fetch('/api/school/data?type=parents');
+        if (!res.ok) { setError('Failed to load parents'); return; }
+        const json = await res.json();
+        setData(json.data || []);
+      } catch { setError('Failed to load'); }
+      finally { setLoading(false); }
+    };
+    fetchParents();
+  }, []);
+
+  const filtered = data.filter(p => {
+    const q = search.toLowerCase();
+    return !q || p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.email.toLowerCase().includes(q) || p.students.some(s => `${s.first_name} ${s.last_name}`.toLowerCase().includes(q));
+  });
+
+  const stats = { total: data.length, linkedStudents: data.reduce((a, p) => a + p.students.length, 0), phoneContacts: data.filter(p => p.phone).length, emailContacts: data.filter(p => p.email).length };
+
+  if (error) return <div className="text-center py-16 text-muted-foreground"><Heart size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">{error}</p></div>;
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div className="stat-card"><div className="stat-label">Total Parents</div><div className="stat-value">{stats.total}</div></div>
+        <div className="stat-card"><div className="stat-label">Linked Students</div><div className="stat-value">{stats.linkedStudents}</div></div>
+        <div className="stat-card"><div className="stat-label">Phone Contacts</div><div className="stat-value">{stats.phoneContacts}</div></div>
+        <div className="stat-card"><div className="stat-label">Email Contacts</div><div className="stat-value">{stats.emailContacts}</div></div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 mb-4">
+        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
+          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search parents..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      </div>
+
+      {loading ? <ContentSkeleton message="Loading parents..." /> : filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground"><Heart size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No parents found.</p></div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(p => (
+            <div key={p.id} className="card p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div><h3 className="font-semibold text-sm">{p.name}</h3><p className="text-xs text-muted-foreground">{p.phone} {p.email ? `· ${p.email}` : ''}</p></div>
+              </div>
+              {p.students.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground">Linked Children</p>
+                  {p.students.map(s => (
+                    <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-surface-raised">
+                      <div><span className="text-sm font-medium">{s.first_name} {s.last_name}</span><span className="text-xs text-muted-foreground ml-2">({s.admission_number})</span></div>
+                      <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{s.grade_stream?.full_name || '—'}</span><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{s.status}</span></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

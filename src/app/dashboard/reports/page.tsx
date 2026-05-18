@@ -224,7 +224,7 @@ export default function ReportsPage() {
       />
 
       {isAlsoSubjectTeacher && (
-        <a href="/dashboard/marks" className="flex items-center gap-4 p-5 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-md hover:border-indigo-500/30">
+        <a href="/dashboard/exams-marks" className="flex items-center gap-4 p-5 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-md hover:border-indigo-500/30">
           <span className="text-3xl">📚</span>
           <div className="flex-1">
               <span className="font-semibold text-[15px] text-foreground">Go to My Subjects</span>

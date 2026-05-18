@@ -84,7 +84,7 @@ export default function SubjectsPage() {
     return (
       <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
         <BookOpen style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-        <p style={{ fontSize: 14 }}>{error}</p>
+        <p style={{ fontSize: 13 }}>{error}</p>
       </div>
     );
   }
@@ -122,9 +122,11 @@ export default function SubjectsPage() {
       {/* Filters */}
       <div className="card" style={{ padding: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px', maxWidth: '400px' }}>
-            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--color-text-muted)' }} />
-            <input className="input-field" placeholder="Search subjects..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '36px' }} />
+          <div className="flex items-center input-field overflow-hidden px-0" style={{ flex: 1, minWidth: '200px', maxWidth: '400px' }}>
+            <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
+              <Search size={16} />
+            </span>
+            <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search subjects..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <select className="input-field" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
             <option value="ALL">All Categories</option>
@@ -135,7 +137,7 @@ export default function SubjectsPage() {
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-muted)' }}>
             <BookOpen style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-            <p style={{ fontSize: 14 }}>No subjects found.</p>
+            <p style={{ fontSize: 13 }}>No subjects found.</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

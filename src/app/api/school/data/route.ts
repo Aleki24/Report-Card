@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case 'students': {
-        const { data, error } = await supabase
+        let query = supabase
           .from('students')
           .select(`
             id, admission_number, status, academic_level_id, current_grade_stream_id,
@@ -70,8 +70,14 @@ export async function GET(request: NextRequest) {
             users!inner (first_name, last_name, email, school_id),
             grade_streams (id, full_name, grade_id)
           `)
-          .eq('users.school_id', schoolId)
-          .order('admission_number');
+          .eq('users.school_id', schoolId);
+
+        const gradeStreamId = searchParams.get('grade_stream_id');
+        if (gradeStreamId) {
+          query = query.eq('current_grade_stream_id', gradeStreamId);
+        }
+
+        const { data, error } = await query.order('admission_number');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         

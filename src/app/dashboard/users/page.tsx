@@ -21,7 +21,7 @@ export default function UsersPage() {
         <button className="btn-primary shrink-0" onClick={() => { h.resetForm(); h.setShowModal(true); }}>+ Add User</button>
       </div>
 
-      <InfoGuide title="How your users log in:" className="text-[var(--color-primary)]">
+      <InfoGuide title="How your users log in:">
         <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2 text-[var(--color-text)]">
           <li><strong>Admins &amp; Principals:</strong> Must log in using their <strong>Email Address</strong>.</li>
           <li><strong>Teachers &amp; Students:</strong> Must log in using their unique auto-generated <strong>Username</strong> (listed in the table below).</li>

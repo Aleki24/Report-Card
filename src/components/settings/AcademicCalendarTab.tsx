@@ -33,9 +33,10 @@ export function AcademicCalendarTab({
         <div className="col-span-1 lg:col-span-3 flex flex-col gap-6">
             <InfoGuide title="How to manage the Academic Calendar:">
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-                    <li><strong>Step 1:</strong> Add an Academic Year (e.g., 2026).</li>
-                    <li><strong>Step 2:</strong> Add Terms (e.g., Term 1, Term 2) and assign them to the academic year.</li>
-                    <li>Make sure term dates do not overlap to prevent issues with exam and report assignments.</li>
+                    <li><strong>Academic Years</strong> represent school years (e.g., 2026). Add one before creating terms.</li>
+                    <li><strong>Terms</strong> belong to a year. Set clear start and end dates — overlapping terms will cause issues with exam and report assignments.</li>
+                    <li>Mark one term as <strong>Current</strong> to indicate which term is active. Only one term should be current at a time.</li>
+                    <li>To delete a year or term, make sure it isn&apos;t referenced by any exams or reports first.</li>
                 </ul>
             </InfoGuide>
 

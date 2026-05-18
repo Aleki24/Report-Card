@@ -41,10 +41,10 @@ export function UsersTable({
           <h3 className="font-bold text-base font-sans">Active Users ({filteredUsers.length})</h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative">
-            <input type="text" className="input-field w-full sm:w-64 pl-9" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">×</button>}
+          <div className="flex items-center input-field overflow-hidden px-0 w-full sm:w-64">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-3 shrink-0 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" className="flex-1 border-none outline-none bg-transparent py-1.5 px-2 text-sm" placeholder="Search users..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            {searchQuery && <button onClick={() => setSearchQuery('')} className="mr-2 shrink-0 text-muted-foreground hover:text-foreground text-lg leading-none">×</button>}
           </div>
         </div>
       </div>

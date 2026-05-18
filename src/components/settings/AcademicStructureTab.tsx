@@ -14,9 +14,11 @@ interface AcademicStructureTabProps {
 export function AcademicStructureTab({ academicLevels, grades }: AcademicStructureTabProps) {
     return (
         <>
-            <InfoGuide title="How to setup Academic Structure:" className="col-span-1 lg:col-span-3">
+            <InfoGuide title="How academic structure works:" className="col-span-1 lg:col-span-3">
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-                    <li>Kenya&apos;s educational curricula and class grades are pre-configured for your convenience.</li>
+                    <li><strong>Academic Levels</strong> represent curricula (e.g., CBC PP, CBC Grade School, 8-4-4). They're pre-configured but can be renamed.</li>
+                    <li><strong>Grades</strong> are the classes/standards within each level (e.g., PP1, PP2, Grade 1, Form 1). Their numeric order determines promotion sequence.</li>
+                    <li>To add a grade, select an academic level and fill in the code, display name, and numeric order.</li>
                 </ul>
             </InfoGuide>
 

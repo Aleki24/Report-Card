@@ -50,27 +50,27 @@ const sidebarGroups = [
     },
     {
         title: "School",
-        labels: ["Students", "Teachers", "Classes", "Parents"],
+        labels: ["People", "Academic Structure"],
     },
     {
         title: "Academics",
-        labels: ["Attendance", "Timetable", "Exams", "Results", "Report Cards"],
+        labels: ["Attendance", "Exams & Marks", "Report Cards"],
     },
     {
         title: "Finance",
-        labels: ["Fees", "Payments", "Receipts"],
+        labels: ["Fees"],
     },
     {
         title: "Communication",
-        labels: ["Messages", "Announcements"],
+        labels: ["Announcements"],
     },
     {
         title: "Learning",
-        labels: ["Resources", "Assignments"],
+        labels: ["Assignments"],
     },
     {
         title: "Administration",
-        labels: ["Reports", "Users & Roles"],
+        labels: ["Administration", "Analytics"],
     },
 ];
 
@@ -525,7 +525,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
 
                 {/* Settings Link */}
                 {(() => {
-                    const settingsItem = visibleNavItems.find(item => item.label === 'Settings');
+                    const settingsItem = visibleNavItems.find(item => item.label === 'Administration');
                     if (!settingsItem) return null;
                     const isActive = pathname === settingsItem.href;
                     return (

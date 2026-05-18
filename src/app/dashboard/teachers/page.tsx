@@ -169,9 +169,11 @@ export default function TeachersPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center" style={{ gap: '8px', marginBottom: '12px' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: '320px' }}>
-          <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--color-text-muted)' }} />
-          <input className="input-field" placeholder="Search by name, ID or email..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '32px', height: '34px', fontSize: '0.75rem' }} />
+        <div className="flex items-center input-field overflow-hidden px-0" style={{ flex: 1, maxWidth: '320px', height: '34px' }}>
+          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
+            <Search size={16} />
+          </span>
+          <input className="flex-1 border-none outline-none bg-transparent py-1 pr-3 text-xs" placeholder="Search by name, ID or email..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select className="input-field" value={filterRole} onChange={e => setFilterRole(e.target.value)} style={{ width: 'auto', minWidth: '130px', height: '34px', fontSize: '0.75rem' }}>
           <option value="">All Roles</option>
@@ -252,7 +254,7 @@ export default function TeachersPage() {
       {editingTeacher && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setEditingTeacher(null)}>
           <div className="card w-full max-w-md" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '16px' }}>Edit Teacher</h2>
+            <h2 style={{ fontSize: '0.875rem', fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '16px' }}>Edit Teacher</h2>
             <div className="flex flex-col gap-3 mb-4">
               <div className="flex gap-3">
                 <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
@@ -290,11 +292,11 @@ export default function TeachersPage() {
           <div className="card w-full max-w-2xl" style={{ animation: 'fadeIn .2s ease', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: 'var(--space-5) var(--space-6)', borderBottom: '1px solid var(--color-border)', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-accent)' }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-accent)' }}>
                   {getInitials(`${viewTeacher.profile.first_name} ${viewTeacher.profile.last_name}`)}
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1.125rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                  <h2 style={{ fontSize: '0.875rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
                     {viewTeacher.profile.first_name} {viewTeacher.profile.last_name}
                   </h2>
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
@@ -318,31 +320,31 @@ export default function TeachersPage() {
                 <div>
                   <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
                     <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-accent)' }}>{viewTeacher.stats.subjectCount}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-accent)' }}>{viewTeacher.stats.subjectCount}</div>
                       <div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>Subjects</div>
                     </div>
                     <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#3B82F6' }}>{viewTeacher.stats.classCount}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#3B82F6' }}>{viewTeacher.stats.classCount}</div>
                       <div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>Classes</div>
                     </div>
                     <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#F59E0B' }}>{viewTeacher.stats.examCount}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#F59E0B' }}>{viewTeacher.stats.examCount}</div>
                       <div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>Exams</div>
                     </div>
                     <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#8B5CF6' }}>{viewTeacher.stats.markCount}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#8B5CF6' }}>{viewTeacher.stats.markCount}</div>
                       <div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>Marks Entered</div>
                     </div>
                   </div>
-                  <h3 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: 'var(--space-3)' }}>Related Tasks</h3>
+                  <h3 style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: 'var(--space-3)' }}>Related Tasks</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                    <a href="/dashboard/marks" style={{ textDecoration: 'none' }}>
+                    <a href="/dashboard/exams-marks" style={{ textDecoration: 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
                         <ClipboardList size={16} style={{ color: 'var(--color-accent)' }} />
                         <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Marks Entry — Record and manage student exam scores</span>
                       </div>
                     </a>
-                    <a href="/dashboard/exams" style={{ textDecoration: 'none' }}>
+                    <a href="/dashboard/exams-marks" style={{ textDecoration: 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
                         <Calendar size={16} style={{ color: '#3B82F6' }} />
                         <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Subject Allocation — Manage assigned subjects and classes</span>

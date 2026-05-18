@@ -80,7 +80,7 @@ export default function ParentsPage() {
     return (
       <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
         <Heart style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-        <p style={{ fontSize: 14 }}>{error}</p>
+        <p style={{ fontSize: 13 }}>{error}</p>
       </div>
     );
   }
@@ -119,17 +119,18 @@ export default function ParentsPage() {
           alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
-            <h2 style={{ fontSize: 18, marginBottom: 2 }}>Parent Directory</h2>
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>View and search parent contact details aggregated from student records.</p>
+            <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 2 }}>Parent Directory</h2>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>View and search parent contact details aggregated from student records.</p>
           </div>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '320px' }}>
-            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--color-text-muted)' }} />
+          <div className="flex items-center input-field overflow-hidden px-0" style={{ width: '100%', maxWidth: '320px' }}>
+            <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
+              <Search size={16} />
+            </span>
             <input
-              className="input-field"
+              className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm"
               placeholder="Search parent, student, phone..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: '36px' }}
             />
           </div>
         </div>
@@ -138,7 +139,7 @@ export default function ParentsPage() {
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
             <Heart style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-            <p style={{ fontSize: 14 }}>No parents found.</p>
+            <p style={{ fontSize: 13 }}>No parents found.</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto', padding: '0 var(--space-6) var(--space-6)' }}>

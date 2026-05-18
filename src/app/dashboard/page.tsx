@@ -229,11 +229,9 @@ function TodayAttentionCard({ exams }: { exams: DashboardData['upcomingExams'] }
   return (
     <ListPanel title="Today's Attention" actionLabel="Review" actionHref="/dashboard/analytics" className="h-full">
       <div className="flex flex-col gap-3">
-        <AttentionItem label="Upcoming exams scheduled" count={upcomingCount} href="/dashboard/exams" tone={soonCount > 0 ? 'warning' : 'info'} />
-        <AttentionItem label="Mark entries pending review" count="—" href="/dashboard/marks" tone="warning" />
-        <AttentionItem label="Attendance to confirm today" count="—" href="/dashboard/attendance" tone="info" />
-        <AttentionItem label="Fee payments to follow up" count="—" href="/dashboard/fees" tone="danger" />
-        <AttentionItem label="Setup tasks remaining" count="0" href="/dashboard/settings" tone="success" />
+        <AttentionItem label="Upcoming exams scheduled" count={upcomingCount} href="/dashboard/exams-marks" tone={soonCount > 0 ? 'warning' : 'info'} />
+        <AttentionItem label="Mark entries pending review" count="—" href="/dashboard/exams-marks" tone="warning" />
+        <AttentionItem label="Setup tasks remaining" count="0" href="/dashboard/administration" tone="success" />
       </div>
     </ListPanel>
   );
@@ -276,14 +274,16 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/analytics?search=${encodeURIComponent(searchQuery.trim())}`); }}
           className="hidden md:flex items-center flex-1 justify-center mx-6"
         >
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+          <div className="flex items-center w-full max-w-sm bg-muted/40 rounded-xl overflow-hidden px-0">
+            <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
+              <Search size={16} />
+            </span>
             <input
               type="text"
               placeholder="Search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-muted/40 border-none rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              className="flex-1 border-none outline-none bg-transparent py-2.5 pr-4 text-sm"
             />
           </div>
         </form>
@@ -309,9 +309,9 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">At a Glance</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/students" />
-              <ColoredStatCard title="Total Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/teachers" />
-              <ColoredStatCard title="Total Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/classes" />
+              <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
+              <ColoredStatCard title="Total Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/people" />
+              <ColoredStatCard title="Total Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/academic-structure" />
               <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" href="/dashboard/reports" />
             </div>
           </div>
@@ -320,10 +320,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Today's Attention</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-              <AttentionCard title="Upcoming Exams" icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams" />
-              <AttentionCard title="Mark entries" icon={<ClipboardList size={20} />} color="bg-[#F07167]" href="/dashboard/marks" />
+              <AttentionCard title="Upcoming Exams" icon={<Calendar size={20} />} color="bg-[#6D597A]" href="/dashboard/exams-marks" />
+              <AttentionCard title="Mark entries" icon={<ClipboardList size={20} />} color="bg-[#F07167]" href="/dashboard/exams-marks" />
               <AttentionCard title="Fee payments" icon={<Wallet size={20} />} color="bg-[#F4A261]" href="/dashboard/fees" />
-              <AttentionCard title="Setup Tasks" icon={<ShieldCheck size={20} />} color="bg-[#5C677D]" href="/dashboard/settings" />
+              <AttentionCard title="Setup Tasks" icon={<ShieldCheck size={20} />} color="bg-[#5C677D]" href="/dashboard/administration" />
               <AttentionCard title="Pending Review" icon={<Bell size={20} />} color="bg-[#3A5A40]" href="/dashboard/reports" />
             </div>
           </div>
@@ -332,10 +332,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Primary Quick Actions</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
-              <ColorfulActionCard title="Mark Entry" icon={<User size={20} />} color="bg-[#003E5C]" href="/dashboard/marks" />
+              <ColorfulActionCard title="Mark Entry" icon={<User size={20} />} color="bg-[#003E5C]" href="/dashboard/exams-marks" />
               <ColorfulActionCard title="Attendance" icon={<CalendarCheck size={20} />} color="bg-[#004E64]" href="/dashboard/attendance" />
               <ColorfulActionCard title="Report Cards" icon={<FileText size={20} />} color="bg-[#005F73]" href="/dashboard/reports" />
-              <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" href="/dashboard/exam-results" />
+              <ColorfulActionCard title="Exam Results" icon={<BarChart3 size={20} />} color="bg-[#0A9396]" href="/dashboard/exams-marks" />
             </div>
           </div>
 
@@ -343,10 +343,10 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           <div>
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">Manage School</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <LightActionCard title="Students" icon={<Users size={20} />} bgClass="bg-blue-50 dark:bg-blue-900/20" textClass="text-blue-600 dark:text-blue-400" href="/dashboard/students" />
-              <LightActionCard title="Teachers" icon={<GraduationCap size={20} />} bgClass="bg-orange-50 dark:bg-orange-900/20" textClass="text-orange-600 dark:text-orange-400" href="/dashboard/teachers" />
-              <LightActionCard title="Classes" icon={<Building2 size={20} />} bgClass="bg-purple-50 dark:bg-purple-900/20" textClass="text-purple-600 dark:text-purple-400" href="/dashboard/classes" />
-              <LightActionCard title="Subjects" icon={<BookOpen size={20} />} bgClass="bg-emerald-50 dark:bg-emerald-900/20" textClass="text-emerald-600 dark:text-emerald-400" href="/dashboard/subjects" />
+              <LightActionCard title="Students" icon={<Users size={20} />} bgClass="bg-blue-50 dark:bg-blue-900/20" textClass="text-blue-600 dark:text-blue-400" href="/dashboard/people" />
+              <LightActionCard title="Teachers" icon={<GraduationCap size={20} />} bgClass="bg-orange-50 dark:bg-orange-900/20" textClass="text-orange-600 dark:text-orange-400" href="/dashboard/people" />
+              <LightActionCard title="Classes" icon={<Building2 size={20} />} bgClass="bg-purple-50 dark:bg-purple-900/20" textClass="text-purple-600 dark:text-purple-400" href="/dashboard/academic-structure" />
+              <LightActionCard title="Subjects" icon={<BookOpen size={20} />} bgClass="bg-emerald-50 dark:bg-emerald-900/20" textClass="text-emerald-600 dark:text-emerald-400" href="/dashboard/academic-structure" />
             </div>
           </div>
 
@@ -505,7 +505,7 @@ function ClassTeacherDashboard() {
           <QuickAction label="Generate Reports" desc="Report cards for your class" href="/dashboard/reports" icon={<FileText size={18} />} />
           <QuickAction label="Class Analytics" desc="Performance trends" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
           <QuickAction label="Track Attendance" desc="Daily class attendance" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
-          <QuickAction label="My Students" desc="View class roster" href="/dashboard/students" icon={<GraduationCap size={18} />} />
+          <QuickAction label="My Students" desc="View class roster" href="/dashboard/people" icon={<GraduationCap size={18} />} />
         </div>
       </div>
     </>
@@ -578,10 +578,10 @@ function SubjectTeacherDashboard() {
         </div>
         <div className="flex flex-col gap-4">
           <h3 className="text-[15px] font-semibold mb-1 font-body">Quick Actions</h3>
-          <QuickAction label="Enter Marks" desc="Record exam scores" href="/dashboard/marks" icon={<ClipboardList size={18} />} />
+          <QuickAction label="Enter Marks" desc="Record exam scores" href="/dashboard/exams-marks" icon={<ClipboardList size={18} />} />
           <QuickAction label="Subject Analytics" desc="Subject performance" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
-          <QuickAction label="View Exams" desc="Manage assessments" href="/dashboard/exams" icon={<Calendar size={18} />} />
-          <QuickAction label="Exam Results" desc="View broadsheet" href="/dashboard/exam-results" icon={<FileText size={18} />} />
+          <QuickAction label="View Exams" desc="Manage assessments" href="/dashboard/exams-marks" icon={<Calendar size={18} />} />
+          <QuickAction label="Exam Results" desc="View broadsheet" href="/dashboard/exams-marks" icon={<FileText size={18} />} />
         </div>
       </div>
     </>

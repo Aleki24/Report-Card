@@ -16,10 +16,11 @@ interface GradingSystemsTabProps {
 export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScales }: GradingSystemsTabProps) {
     return (
         <div className="lg:col-span-3 flex flex-col gap-6">
-            <InfoGuide title="Understanding Grading Systems:">
+            <InfoGuide title="How grading works:">
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-                    <li>Grading systems and scales are pre-configured based on national standards (e.g., KNEC standard 12-point scale, CBC scale).</li>
-                    <li>These grading scales are automatically applied when teachers enter exam scores.</li>
+                    <li><strong>Grading Systems</strong> group scales by curriculum (e.g., KNEC 8-4-4, CBC). Each system belongs to an Academic Level.</li>
+                    <li><strong>Grading Scales</strong> define the grade boundaries — each row maps a percentage range to a symbol, label, and GPA points.</li>
+                    <li>These scales are automatically applied when teachers enter exam scores to calculate grades and points.</li>
                 </ul>
             </InfoGuide>
 

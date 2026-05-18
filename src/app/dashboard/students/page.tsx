@@ -121,9 +121,11 @@ export default function StudentsPage() {
             </div>
 
             <div className="flex flex-col md:flex-row gap-3 mb-4">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input className="pl-8 h-9 text-xs w-full" placeholder="Search by name, admission no., or phone..." value={search} onChange={e => setSearch(e.target.value)} />
+                <div className="flex items-center input-field overflow-hidden px-0 flex-1">
+                    <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
+                        <Search size={16} />
+                    </span>
+                    <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search by name, admission no., or phone..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <Select className="h-9 text-xs w-full md:w-auto md:min-w-[150px]" value={filterGradeStream} onChange={e => setFilterGradeStream(e.target.value)}>
                     <option value="">All Classes</option>

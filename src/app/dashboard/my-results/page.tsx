@@ -106,7 +106,7 @@ export default function MyResultsPage() {
         return (
             <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
                 <img src="https://em-content.zobj.net/source/apple/354/locked_1f512.png" alt="Locked" style={{ width: 48, height: 48, marginBottom: 'var(--space-4)', objectFit: 'contain' }} />
-                <h2 style={{ fontSize: 20, marginBottom: 'var(--space-2)' }}>Access Restricted</h2>
+                <h2 style={{ fontSize: 16, marginBottom: 'var(--space-2)' }}>Access Restricted</h2>
                 <p style={{ fontSize: 14 }}>This page is only available to students.</p>
             </div>
         );
@@ -157,12 +157,12 @@ export default function MyResultsPage() {
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Best Subject</div>
-                        <div className="stat-value" style={{ fontSize: '1.25rem' }}>{stats.bestSubject}</div>
+                        <div className="stat-value" style={{ fontSize: '0.875rem' }}>{stats.bestSubject}</div>
                         <div className="text-xs text-emerald-500 mt-1">{stats.bestScore}%</div>
                     </div>
                     <div className="stat-card">
                         <div className="stat-label">Weakest Subject</div>
-                        <div className="stat-value" style={{ fontSize: '1.25rem' }}>{stats.weakestSubject}</div>
+                        <div className="stat-value" style={{ fontSize: '0.875rem' }}>{stats.weakestSubject}</div>
                         <div className="text-xs text-amber-500 mt-1">{stats.weakestScore}%</div>
                     </div>
                 </div>

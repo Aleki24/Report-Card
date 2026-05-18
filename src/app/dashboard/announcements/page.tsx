@@ -104,17 +104,17 @@ export default function AnnouncementsPage() {
                 action={<button className="btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> New Announcement</button>}
             />
 
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                <div style={{ flex: 1, position: 'relative' }}>
-                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                    <input
-                        type="text"
-                        placeholder="Search announcements..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px 10px 36px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, outline: 'none' }}
-                    />
-                </div>
+            <div className="flex items-center input-field w-full overflow-hidden px-0 mb-4">
+                <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
+                    <Search size={16} />
+                </span>
+                <input
+                    type="text"
+                    placeholder="Search announcements..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm"
+                />
             </div>
 
             {loading ? (
@@ -141,7 +141,7 @@ export default function AnnouncementsPage() {
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 15, fontWeight: 700, color: '#1E293B' }}>{a.title}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{a.title}</span>
                                     {a.isImportant && (
                                         <span style={{
                                             background: '#FEF2F2', color: '#EF4444', padding: '2px 8px',
