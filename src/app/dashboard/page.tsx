@@ -261,7 +261,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
       <div className="flex gap-4 md:gap-6 h-full min-h-0">
         {/* Main Content Area — scrollable independently */}
-        <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+        <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-2">
           <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
           
           {/* Greeting */}
@@ -337,7 +337,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-[280px] lg:w-[300px] shrink-0 flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
+        <div className="w-[280px] lg:w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
           {/* Mini Calendar */}
           <MiniCalendar />
 
