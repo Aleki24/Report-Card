@@ -330,7 +330,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
 
           {/* Mobile sidebar content — at bottom below md */}
-          <div className="md:hidden flex flex-col gap-3 xs:gap-4 px-3 xs:px-4 sm:px-5 pb-3 xs:pb-4">
+          <div className="md:hidden flex flex-col gap-3 xs:gap-4 px-3 xs:px-4 sm:px-5 pb-3 xs:pb-4 mt-5">
             <MiniCalendar />
 
             <div className="rounded-2xl border border-border p-4">
