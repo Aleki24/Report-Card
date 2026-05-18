@@ -263,13 +263,6 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
         {/* Main Content Area — scrollable independently */}
         <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-2">
           <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
-          
-          {/* Greeting */}
-          <div>
-            <h1 className="text-[1.5rem] xs:text-[1.75rem] sm:text-[2rem] font-bold tracking-tight text-foreground font-display">
-              {greeting} dashboard
-            </h1>
-          </div>
 
           {/* At a Glance */}
           <div>
