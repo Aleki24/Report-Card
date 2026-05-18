@@ -325,17 +325,17 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
           {/* Quick Actions — unique items not covered above */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" />
-            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" />
-            <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" />
-            <QuickActionBtn icon={<Megaphone size={16} />} label="Post Announcement" href="/dashboard/announcements" />
-            <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" />
+            <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
+            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" color="bg-[#E76F51]" />
+            <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
+            <QuickActionBtn icon={<Megaphone size={16} />} label="Post Announcement" href="/dashboard/announcements" color="bg-[#5C677D]" />
+            <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" color="bg-[#4361EE]" />
           </div>
 
         </div>
 
         {/* Right Sidebar */}
-        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5">
+        <div className="flex flex-col gap-3 xs:gap-4 lg:border-l lg:border-border lg:pl-7 p-3 xs:p-4 sm:p-5 h-full">
           {/* Mini Calendar */}
           <MiniCalendar />
 
@@ -362,8 +362,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             </div>
           </div>
 
-          {/* Recent Activity */}
-          <div className="rounded-2xl border border-border p-4">
+          {/* Recent Activity — flex-1 fills remaining sidebar space */}
+          <div className="rounded-2xl border border-border p-4 flex-1 min-h-[120px]">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-foreground text-[15px]">Recent Activity</h3>
               <a href="/dashboard/reports" className="text-primary text-[13px] font-medium hover:underline">View all</a>
@@ -382,7 +382,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           </div>
           
           {/* Announcements */}
-          <Link href="/dashboard/announcements" className="bg-card/90 rounded-full px-5 py-3 flex items-center gap-3 text-foreground font-medium hover:bg-muted transition-colors shadow-sm border border-border no-underline">
+          <Link href="/dashboard/announcements" className="bg-card/90 rounded-full px-5 py-3 flex items-center gap-3 text-foreground font-medium hover:bg-muted transition-colors shadow-sm border border-border no-underline shrink-0">
             <div className="text-primary relative">
               <Bell size={18} />
               {(data?.announcementsLast7Days ?? 0) > 0 && (
@@ -408,11 +408,11 @@ function ColoredStatCard({ title, value, icon, color, href }: { title: string, v
   return href ? <Link href={href}>{card}</Link> : card;
 }
 
-function QuickActionBtn({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
+function QuickActionBtn({ icon, label, href, color }: { icon: React.ReactNode; label: string; href: string; color: string }) {
   return (
-    <Link href={href} className="flex items-center gap-2.5 rounded-xl border border-border bg-card/80 px-4 py-3 no-underline transition-colors hover:bg-muted">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">{icon}</div>
-      <span className="text-sm font-medium text-foreground truncate">{label}</span>
+    <Link href={href} className={`${color} text-white flex items-center gap-2.5 rounded-xl px-4 py-2.5 no-underline transition-transform hover:-translate-y-0.5 shadow-sm`}>
+      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 shrink-0">{icon}</div>
+      <span className="text-xs font-semibold truncate">{label}</span>
     </Link>
   );
 }
