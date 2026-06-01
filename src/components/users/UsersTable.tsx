@@ -9,6 +9,7 @@ const roleBadgeClasses: Record<UserRole, { bg: string; text: string; border: str
   CLASS_TEACHER: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30' },
   SUBJECT_TEACHER: { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/30' },
   STUDENT: { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/30' },
+  PENDING: { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/30' },
 };
 
 interface UsersTableProps {

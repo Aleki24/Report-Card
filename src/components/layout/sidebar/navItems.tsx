@@ -34,4 +34,5 @@ export const roleBadgeColors: Record<UserRole, string> = {
     CLASS_TEACHER: '#3B82F6',
     SUBJECT_TEACHER: '#8B5CF6',
     STUDENT: '#10B981',
+    PENDING: '#F59E0B',
 };

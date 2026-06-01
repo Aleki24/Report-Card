@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT']);
+export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING']);
 export type UserRole = z.infer<typeof UserRole>;
 
 export const ExamType = z.enum(['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER']);
