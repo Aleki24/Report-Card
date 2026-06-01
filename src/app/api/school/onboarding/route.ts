@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { auth } from '@clerk/nextjs/server';
+import { auth, createClerkClient } from '@clerk/nextjs/server';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,22 +10,57 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdmin();
 
-    // 1. Get the user's school
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
-      .select('school_id, role')
+      .select('school_id, role, first_name, email')
       .eq('id', userId)
       .single();
 
-    if (userError || !userData || userData.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized or not an admin' }, { status: 403 });
+    if (userError || !userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const schoolId = userData.school_id;
+    if (userData.role !== 'ADMIN' && userData.role !== 'PENDING') {
+      return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
+    }
 
     // Parse payload
     const body = await request.json();
-    const { academicYear, termName, curriculum, classes, subjects } = body;
+    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes, subjects } = body;
+
+    let schoolId = userData.school_id;
+
+    // If PENDING, create the school and upgrade to ADMIN
+    if (userData.role === 'PENDING' || !schoolId) {
+      if (!schoolName) {
+        return NextResponse.json({ error: 'School name is required' }, { status: 400 });
+      }
+
+      schoolId = crypto.randomUUID();
+      const { error: schoolError } = await supabaseAdmin.from('schools').insert({
+          id: schoolId,
+          name: schoolName.trim(),
+          email: schoolEmail?.trim() || null,
+          phone: schoolPhone?.trim() || null,
+          address: schoolAddress?.trim() || null,
+          onboarding_completed: false // Will be set to true below
+      });
+
+      if (schoolError) throw new Error('Failed to create school: ' + schoolError.message);
+
+      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+      await clerk.users.updateUser(userId, {
+          publicMetadata: { role: 'ADMIN', school_id: schoolId }
+      });
+
+      await supabaseAdmin.from('users').update({
+          role: 'ADMIN',
+          school_id: schoolId
+      }).eq('id', userId);
+      
+      // Optionally send welcome email
+      sendWelcomeEmail(userData.email, userData.first_name, schoolName.trim()).catch(() => {});
+    }
 
     // 2. Insert Academic Year (Global)
     let academicYearId;

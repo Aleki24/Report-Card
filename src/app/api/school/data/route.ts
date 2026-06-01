@@ -249,7 +249,7 @@ export async function GET(request: NextRequest) {
       case 'school_profile': {
         const { data, error } = await supabase
           .from('schools')
-          .select('id, name, address, phone, email, logo_url')
+          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code')
           .eq('id', schoolId)
           .single();
 

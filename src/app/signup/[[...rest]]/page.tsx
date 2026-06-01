@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { useSignIn } from '@clerk/nextjs';
+import { useSignIn } from '@clerk/nextjs/legacy';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,26 +19,9 @@ export default function SignupPage() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [schoolName, setSchoolName] = useState('');
-  const [schoolEmail, setSchoolEmail] = useState('');
-  const [schoolPhone, setSchoolPhone] = useState('');
-  const [schoolAddress, setSchoolAddress] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-
-  const handleNextStep = () => {
-    if (!firstName || !lastName || !email || !password) {
-      toast.error('Please fill in all fields.');
-      return;
-    }
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters.');
-      return;
-    }
-    setStep(2);
-  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,11 +35,7 @@ export default function SignupPage() {
           email, 
           password, 
           first_name: firstName, 
-          last_name: lastName, 
-          school_name: schoolName,
-          school_email: schoolEmail,
-          school_phone: schoolPhone,
-          school_address: schoolAddress
+          last_name: lastName 
         }),
       });
 
@@ -153,9 +132,7 @@ export default function SignupPage() {
               ? '0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)'
               : '0 20px 60px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}>
-          <form onSubmit={step === 1 ? (e) => { e.preventDefault(); handleNextStep(); } : handleSubmit} className="flex flex-col gap-5">
-            {step === 1 ? (
-              <>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Name row */}
             <div className="flex gap-4">
               <div className="flex flex-1 flex-col gap-1.5">
@@ -256,117 +233,7 @@ export default function SignupPage() {
               </div>
             </div>
 
-              </>
-            ) : (
-              <>
-                {/* School Name */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold"
-                    style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    School Name
-                  </label>
-                  <input
-                    value={schoolName}
-                    onChange={e => setSchoolName(e.target.value)}
-                    placeholder="e.g. Nairobi Primary School"
-                    required
-                    className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
-                    style={{
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                      color: isDark ? '#f1f5f9' : '#0f172a',
-                    }}
-                    onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
-                    onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-
-                {/* School Email */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold"
-                    style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    School Email (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={schoolEmail}
-                    onChange={e => setSchoolEmail(e.target.value)}
-                    placeholder="contact@school.edu"
-                    className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
-                    style={{
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                      color: isDark ? '#f1f5f9' : '#0f172a',
-                    }}
-                    onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
-                    onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-
-                {/* School Phone */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold"
-                    style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    School Phone (Optional)
-                  </label>
-                  <input
-                    type="tel"
-                    value={schoolPhone}
-                    onChange={e => setSchoolPhone(e.target.value)}
-                    placeholder="+254 700 000 000"
-                    className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
-                    style={{
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                      color: isDark ? '#f1f5f9' : '#0f172a',
-                    }}
-                    onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
-                    onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-
-                {/* School Address */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold"
-                    style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    School Address (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={schoolAddress}
-                    onChange={e => setSchoolAddress(e.target.value)}
-                    placeholder="P.O. Box 1234, Nairobi"
-                    className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
-                    style={{
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                      color: isDark ? '#f1f5f9' : '#0f172a',
-                    }}
-                    onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
-                    onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Actions */}
             <div className="flex gap-3">
-              {step === 2 && (
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  disabled={loading}
-                  className="flex h-[46px] cursor-pointer items-center justify-center gap-2 rounded-xl border px-6 text-[14px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                    color: isDark ? '#f1f5f9' : '#0f172a',
-                    background: 'transparent',
-                  }}
-                  onMouseEnter={e => { if (!loading) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'; }}
-                  onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'transparent'; }}>
-                  Back
-                </button>
-              )}
               <button
                 type="submit"
                 disabled={loading}
@@ -382,7 +249,7 @@ export default function SignupPage() {
                 ) : (
                   <>
                     <UserPlus className="h-4 w-4" />
-                    {step === 1 ? 'Continue' : 'Create Account'}
+                    Create Account
                   </>
                 )}
               </button>

@@ -15,7 +15,7 @@ interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; }
+interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; }
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
 
@@ -68,6 +68,8 @@ export default function SettingsPage() {
         setSchool({
           id: schoolData.data.id, name: schoolData.data.name || '', address: schoolData.data.address || '',
           phone: schoolData.data.phone || '', email: schoolData.data.email || '', logo_url: schoolData.data.logo_url || '',
+          teacher_invite_code: schoolData.data.teacher_invite_code || '',
+          student_invite_code: schoolData.data.student_invite_code || '',
         });
       }
     } catch (err) {

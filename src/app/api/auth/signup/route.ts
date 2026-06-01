@@ -6,11 +6,11 @@ import { sendWelcomeEmail } from '@/lib/email';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, password, first_name, last_name, school_name, school_email, school_phone, school_address } = body;
+        const { email, password, first_name, last_name } = body;
 
-        if (!email || !password || !first_name || !last_name || !school_name) {
+        if (!email || !password || !first_name || !last_name) {
             return NextResponse.json(
-                { error: 'All fields are required: email, password, first_name, last_name, school_name' },
+                { error: 'All fields are required: email, password, first_name, last_name' },
                 { status: 400 }
             );
         }
@@ -34,20 +34,6 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const schoolId = crypto.randomUUID();
-
-        const { error: schoolError } = await supabaseAdmin.from('schools').insert({
-            id: schoolId,
-            name: school_name.trim(),
-            email: school_email?.trim() || null,
-            phone: school_phone?.trim() || null,
-            address: school_address?.trim() || null,
-        });
-
-        if (schoolError) {
-            return NextResponse.json({ error: `School error: ${schoolError.message}` }, { status: 400 });
-        }
-
         const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
         let clerkUser;
         try {
@@ -56,11 +42,10 @@ export async function POST(request: NextRequest) {
                 password,
                 firstName: first_name,
                 lastName: last_name,
-                publicMetadata: { role: 'ADMIN', school_id: schoolId },
+                publicMetadata: { role: 'PENDING', school_id: null },
                 skipPasswordChecks: true,
             });
         } catch (clerkErr: any) {
-            await supabaseAdmin.from('schools').delete().eq('id', schoolId);
             const msg = clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || clerkErr.message || 'Failed to create user in Clerk';
             return NextResponse.json({ error: `Clerk error: ${msg}` }, { status: 400 });
         }
@@ -73,22 +58,19 @@ export async function POST(request: NextRequest) {
             last_name,
             email: email.trim(),
             username: email.trim().split('@')[0],
-            role: 'ADMIN',
+            role: 'PENDING',
             is_active: true,
-            school_id: schoolId,
+            school_id: null,
         });
 
         if (profileError) {
             await clerk.users.deleteUser(userId).catch(() => {});
-            await supabaseAdmin.from('schools').delete().eq('id', schoolId);
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
         }
 
-        sendWelcomeEmail(email.trim(), first_name, school_name.trim()).catch(() => {});
-
         return NextResponse.json({
             success: true,
-            message: 'Admin account created! You can now sign in.',
+            message: 'Account created! You can now sign in.',
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';
