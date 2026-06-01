@@ -16,7 +16,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     const sidebarWidth = 80; // Match Sidebar.tsx collapsed width (80px)
     const displayName = schoolName || 'Matokeo';
 
-    const needsSchoolSetup = role === 'ADMIN' && profile && schoolOnboardingCompleted === false;
+    const needsSchoolSetup = role === 'PENDING' || (role === 'ADMIN' && profile && schoolOnboardingCompleted === false);
 
     React.useEffect(() => {
         if (!loading && needsSchoolSetup && pathname !== '/dashboard/onboarding') {
