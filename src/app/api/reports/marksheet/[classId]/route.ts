@@ -46,15 +46,20 @@ export async function GET(
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
-        const { getServerSession } = await import('next-auth');
-        const { authOptions } = await import('@/lib/auth');
-        const session = await getServerSession(authOptions) as any;
+        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
+        const { userId } = await clerkAuth();
 
-        if (!session?.user) {
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userSchoolId = session.user.schoolId;
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', userId)
+            .single();
+
+        const userSchoolId = userProfile?.school_id;
         if (!userSchoolId || (targetSchoolId && targetSchoolId !== userSchoolId)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }

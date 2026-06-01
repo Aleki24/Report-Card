@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { useSession } from 'next-auth/react';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Card, CardContent, Button } from '@/components/ui';
@@ -10,6 +9,7 @@ import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
 import { SchoolForm } from '@/components/settings/SchoolForm';
+import { toast } from 'sonner';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -21,7 +21,6 @@ interface Term { id: string; academic_year_id: string; name: string; start_date:
 
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const { update: updateSession } = useSession();
   const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar'>('profile');
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
@@ -36,9 +35,7 @@ export default function SettingsPage() {
   const [school, setSchool] = useState<SchoolProfile>({ name: '', address: '', phone: '', email: '', logo_url: '' });
   const [schoolLoading, setSchoolLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState('');
 
-  const [calMsg, setCalMsg] = useState('');
   const [calSaving, setCalSaving] = useState(false);
   const [newYear, setNewYear] = useState({ name: '', start_date: '', end_date: '' });
   const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '' });
@@ -86,47 +83,46 @@ export default function SettingsPage() {
   const handleSaveSchool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!school.name.trim()) return;
-    setSaving(true); setSaveMsg('');
+    setSaving(true);
     try {
       const res = await fetch('/api/admin/school', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: school.name.trim(), address: school.address.trim() || null, phone: school.phone.trim() || null, email: school.email.trim() || null, logo_url: school.logo_url || null, school_id: school.id || null, user_id: profile?.id }),
       });
       const data = await res.json();
-      if (!res.ok) { setSaveMsg(`❌ ${data.error}`); }
+      if (!res.ok) { toast.error(data.error); }
       else if (data.school_id) {
         setSchool(prev => ({ ...prev, id: data.school_id }));
-        setSaveMsg(school.id ? '✅ School profile updated!' : '✅ School created!');
-        await updateSession({ schoolName: school.name });
-        window.location.reload();
+        toast.success(school.id ? 'School profile updated!' : 'School created!');
+        setTimeout(() => window.location.reload(), 1500);
       }
-    } catch (err) { setSaveMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
     finally { setSaving(false); }
   };
 
   const postStructure = async (type: string, payload: Record<string, unknown>) => {
-    setCalSaving(true); setCalMsg('');
+    setCalSaving(true);
     try {
       const res = await fetch('/api/admin/academic-structure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ...payload }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      setCalMsg(`✅ ${type.replace('_', ' ')} added successfully`);
+      toast.success(`${type.replace('_', ' ')} added successfully`);
       await fetchAllData();
       return data.data;
-    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); return null; }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); return null; }
     finally { setCalSaving(false); }
   };
 
   const deleteStructure = async (type: string, id: string) => {
     if (!confirm('Are you sure you want to delete this item?')) return;
-    setCalSaving(true); setCalMsg('');
+    setCalSaving(true);
     try {
       const res = await fetch(`/api/admin/academic-structure?type=${type}&id=${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      setCalMsg('✅ Deleted successfully');
+      toast.success('Deleted successfully');
       await fetchAllData();
-    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
     finally { setCalSaving(false); }
   };
 
@@ -140,8 +136,8 @@ export default function SettingsPage() {
   const handleAddTerm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCalYearId || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date) return;
-    await postStructure('term', { academic_year_id: selectedCalYearId, ...newTerm });
-    if (!calMsg.startsWith('❌')) setNewTerm({ name: '', start_date: '', end_date: '' });
+    const result = await postStructure('term', { academic_year_id: selectedCalYearId, ...newTerm });
+    if (result) setNewTerm({ name: '', start_date: '', end_date: '' });
   };
 
   const tabs = [
@@ -186,7 +182,6 @@ export default function SettingsPage() {
                     </div>
                     <form onSubmit={handleSaveSchool}>
                       <SchoolForm school={school} setSchool={setSchool} />
-                      {saveMsg && <div className="mt-4 text-sm font-medium">{saveMsg}</div>}
                       <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
                         {saving ? '⏳ Creating...' : '🚀 Create School'}
                       </Button>
@@ -199,7 +194,6 @@ export default function SettingsPage() {
                     <h3 className="font-bold text-lg font-display mb-6">School Profile</h3>
                     <form onSubmit={handleSaveSchool}>
                       <SchoolForm school={school} setSchool={setSchool} />
-                      {saveMsg && <div className="mt-4 text-sm font-medium">{saveMsg}</div>}
                       <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
                         {saving ? '⏳ Saving...' : 'Save Changes'}
                       </Button>
@@ -214,7 +208,7 @@ export default function SettingsPage() {
           {activeTab === 'calendar' && (
             <AcademicCalendarTab
               academicYears={academicYears} terms={terms} selectedCalYearId={selectedCalYearId}
-              setSelectedCalYearId={setSelectedCalYearId} calMsg={calMsg} calSaving={calSaving}
+              setSelectedCalYearId={setSelectedCalYearId} calMsg={''} calSaving={calSaving}
               newYear={newYear} setNewYear={setNewYear} newTerm={newTerm} setNewTerm={setNewTerm}
               onAddYear={handleAddYear} onAddTerm={handleAddTerm} onDelete={deleteStructure}
             />

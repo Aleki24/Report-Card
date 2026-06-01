@@ -52,15 +52,20 @@ export async function GET(
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
-        const { getServerSession } = await import('next-auth');
-        const { authOptions } = await import('@/lib/auth');
-        const session = await getServerSession(authOptions) as any;
+        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
+        const { userId } = await clerkAuth();
 
-        if (!session?.user) {
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userSchoolId = session.user.schoolId;
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id, role')
+            .eq('id', userId)
+            .single();
+
+        const userSchoolId = userProfile?.school_id;
         if (!userSchoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
@@ -69,10 +74,10 @@ export async function GET(
             return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
         }
 
-        const role = session.user.role;
+        const role = userProfile?.role;
         if (role !== 'ADMIN') {
             const { getTeacherPermissions } = await import('@/lib/teacher-utils');
-            const perms = await getTeacherPermissions(session.user.id);
+            const perms = await getTeacherPermissions(userId);
             if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(classId)) {
                 return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate class reports.' }, { status: 403 });
             }

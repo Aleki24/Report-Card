@@ -5,8 +5,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
 import { ZodError, ZodIssue } from 'zod';
@@ -23,19 +22,19 @@ import {
 
 type CreatePayload = Record<string, unknown>;
 
-// Get session and school_id from NextAuth (with DB lookup for freshness)
 async function getLatestSession() {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) return null;
+    const { userId } = await auth();
+    if (!userId) return null;
     
-    // Always fetch latest school_id to avoid stale session issues after admin creates a school
     const supabaseAdmin = createSupabaseAdmin();
-    const { data } = await supabaseAdmin.from('users').select('school_id').eq('id', session.user.id).single();
+    const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).single();
     
+    if (!data) return null;
+
     return {
-        userId: session.user.id,
-        schoolId: (data?.school_id || session.user.schoolId) as string | null,
-        role: session.user.role,
+        userId,
+        schoolId: data.school_id as string | null,
+        role: data.role,
     };
 }
 

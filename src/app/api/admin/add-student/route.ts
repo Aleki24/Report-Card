@@ -1,22 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 
-/**
- * Directly add a student to the system.
- * Generates a UUID, inserts into public.users and public.students.
- * Students don't need to log in — this just creates their record for marks/reports.
- */
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user_id = session.user.id;
+        const user_id = userId;
         const body = await request.json();
         const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth, avatar_url } = body;
 
@@ -93,11 +87,11 @@ export async function POST(request: NextRequest) {
         }
 
         // 1. Generate a UUID for the new student
-        const userId = crypto.randomUUID();
+        const studentUserId = crypto.randomUUID();
         // Keep admission number empty if not provided (no auto-generation)
         const finalAdmNo = admNo || null;
         // Use userId to ensure unique email even without admission number
-        const emailBase = (finalAdmNo || userId.substring(0, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const emailBase = (finalAdmNo || studentUserId.substring(0, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
         const sequenceMatch = finalAdmNo?.match(/\d+/);
@@ -144,7 +138,7 @@ export async function POST(request: NextRequest) {
 
         // 2. Insert into public.users (with generated credentials)
         const { error: userError } = await supabaseAdmin.from('users').insert({
-            id: userId,
+            id: studentUserId,
             first_name: first_name.trim(),
             last_name: last_name.trim(),
             email: placeholderEmail,
@@ -162,7 +156,7 @@ export async function POST(request: NextRequest) {
 
         // 3. Insert into public.students
         const studentInsert: Record<string, any> = {
-            id: userId,
+            id: studentUserId,
             admission_number: finalAdmNo,
             current_grade_stream_id: grade_stream_id || null,
             academic_level_id: academic_level_id,
@@ -178,13 +172,13 @@ export async function POST(request: NextRequest) {
 
         if (studentError) {
             // Cleanup: delete user row
-            await supabaseAdmin.from('users').delete().eq('id', userId);
+            await supabaseAdmin.from('users').delete().eq('id', studentUserId);
             return NextResponse.json({ error: `Student record creation failed: ${studentError.message}` }, { status: 400 });
         }
 
         return NextResponse.json({
             success: true,
-            student_id: userId,
+            student_id: studentUserId,
             admission_number: finalAdmNo,
             message: `Student ${first_name.trim()} ${last_name.trim()} added successfully.`,
         });

@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { schoolId, role, id: userId } = session.user;
-        if (!schoolId) return NextResponse.json({ data: [] });
-
         const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id, role')
+            .eq('id', userId)
+            .single();
+
+        const schoolId = userProfile?.school_id;
+        const role = userProfile?.role;
+        if (!schoolId) return NextResponse.json({ data: [] });
 
         let query = supabase
             .from('student_fees')
@@ -58,12 +63,23 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id || !['ADMIN', 'CLASS_TEACHER'].includes(session.user.role)) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        const { schoolId } = session.user;
+        const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('role, school_id')
+            .eq('id', userId)
+            .single();
+
+        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const schoolId = userProfile.school_id;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
 
         const body = await request.json();
@@ -73,7 +89,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'student_id, term_id, and total_fee are required' }, { status: 400 });
         }
 
-        const supabase = createSupabaseAdmin();
         const { data, error } = await supabase
             .from('student_fees')
             .upsert({

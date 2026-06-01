@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     
-    const schoolId = session.user.schoolId;
-    if (!schoolId) return NextResponse.json({ data: [] });
-
     const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id;
+    if (!schoolId) return NextResponse.json({ data: [] });
 
     // Fetch scales. Assuming grading systems are linked to the school.
     const { data, error } = await supabase

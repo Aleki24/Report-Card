@@ -1,23 +1,33 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
+import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Initialize Supabase admin client
 const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
 });
 
 export async function GET(request: Request) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id || session.user.role !== 'ADMIN') {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const schoolId = session.user.schoolId;
+
+        const supabaseAdmin = createSupabaseAdmin();
+        const { data: userProfile } = await supabaseAdmin
+            .from('users')
+            .select('role, school_id')
+            .eq('id', userId)
+            .single();
+
+        if (!userProfile || userProfile.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        const schoolId = userProfile.school_id;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }

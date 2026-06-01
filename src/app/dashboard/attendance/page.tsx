@@ -7,6 +7,7 @@ import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Card, CardContent, Input, Select, Button, Table, TableHeader, TableRow, TableHead, TableBody, TableCell, Badge } from '@/components/ui';
+import { toast } from 'sonner';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -39,7 +40,6 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(false);
   const [loadingStreams, setLoadingStreams] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -65,7 +65,6 @@ export default function AttendancePage() {
   const fetchAttendance = useCallback(async () => {
     if (!selectedStreamId) { setStudents([]); return; }
     setLoading(true);
-    setSaveMsg(null);
 
     try {
       const params = new URLSearchParams({
@@ -94,13 +93,11 @@ export default function AttendancePage() {
   // Update a student's local status
   const updateStatus = (id: string, status: AttendanceStatus) => {
     setStudents(prev => prev.map(s => s.id === id ? { ...s, status } : s));
-    setSaveMsg(null);
   };
 
   // Mark all as present
   const markAllPresent = () => {
     setStudents(prev => prev.map(s => ({ ...s, status: 'present' as AttendanceStatus })));
-    setSaveMsg(null);
   };
 
   // Save attendance
@@ -110,12 +107,11 @@ export default function AttendancePage() {
     // Ensure all students have a status
     const unmarked = students.filter(s => !s.status);
     if (unmarked.length > 0) {
-      setSaveMsg({ type: 'error', text: `${unmarked.length} student(s) not yet marked. Please mark all students.` });
+      toast.error(`${unmarked.length} student(s) not yet marked. Please mark all students.`);
       return;
     }
 
     setSaving(true);
-    setSaveMsg(null);
 
     try {
       const res = await fetch('/api/school/attendance', {
@@ -134,12 +130,12 @@ export default function AttendancePage() {
 
       const json = await res.json();
       if (!res.ok || json.error) {
-        setSaveMsg({ type: 'error', text: `Failed: ${json.error || 'Unknown error'}` });
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
       } else {
-        setSaveMsg({ type: 'success', text: `Attendance saved for ${json.count} students.` });
+        toast.success(`Attendance saved for ${json.count} students.`);
       }
     } catch (err) {
-      setSaveMsg({ type: 'error', text: `Failed: ${err instanceof Error ? err.message : 'Network error'}` });
+      toast.error(`Failed: ${err instanceof Error ? err.message : 'Network error'}`);
     } finally {
       setSaving(false);
     }
@@ -295,16 +291,6 @@ export default function AttendancePage() {
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? 'Saving…' : 'Save Attendance'}
               </Button>
-              {saveMsg && (
-                <div
-                  className={`px-4 py-2 rounded-md text-sm font-medium border ${saveMsg.type === 'success'
-                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-500 border-red-500/20'
-                    }`}
-                >
-                  {saveMsg.text}
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

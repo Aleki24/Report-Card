@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { role, id: userId } = session.user;
         const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        const role = userProfile?.role;
 
         let query = supabase
             .from('assignment_submissions')
@@ -54,8 +59,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id || session.user.role !== 'STUDENT') {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
+        }
+
+        const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        if (!userProfile || userProfile.role !== 'STUDENT') {
             return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
         }
 
@@ -64,12 +80,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'assignment_id is required' }, { status: 400 });
         }
 
-        const supabase = createSupabaseAdmin();
         const { data, error } = await supabase
             .from('assignment_submissions')
             .upsert({
                 assignment_id: body.assignment_id,
-                student_id: session.user.id,
+                student_id: userId,
                 file_url: body.file_url || null,
                 submission_text: body.submission_text || null,
             })

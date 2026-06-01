@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { toast } from 'sonner';
 
 interface SchoolFormProps {
   school: { name: string; address: string; phone: string; email: string; logo_url?: string };
@@ -11,7 +12,7 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert('Logo file MUST be less than 2MB.'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo file MUST be less than 2MB.'); return; }
     const reader = new FileReader();
     reader.onload = (event) => { setSchool((prev: any) => ({ ...prev, logo_url: event.target?.result as string })); };
     reader.readAsDataURL(file);

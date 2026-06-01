@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
-import { useSession, signOut as nextAuthSignOut, SessionProvider } from 'next-auth/react';
+import { useUser, useAuth as useClerkAuth, useSession } from '@clerk/nextjs';
 import type { UserRole } from '@/types';
 
 interface UserProfile {
@@ -22,6 +22,7 @@ interface AuthContextType {
     role: UserRole | null;
     availableRoles: UserRole[];
     schoolName: string | null;
+    schoolOnboardingCompleted: boolean | null;
     loading: boolean;
     signOut: () => Promise<void>;
     switchRole: (role: UserRole) => Promise<void>;
@@ -29,126 +30,112 @@ interface AuthContextType {
     setDevRoleOverride: (role: UserRole | null) => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
-    user: null,
-    profile: null,
-    role: null,
-    availableRoles: [],
-    schoolName: null,
-    loading: true,
-    signOut: async () => { },
-    switchRole: async () => { },
-    devRoleOverride: null,
-    setDevRoleOverride: () => { },
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth() {
-    return useContext(AuthContext);
+const DEFAULT_ROLES: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
+
+async function fetchRoles(): Promise<UserRole[]> {
+    try {
+        const res = await fetch('/api/auth/available-roles');
+        if (!res.ok) return DEFAULT_ROLES;
+        const data = await res.json();
+        if (!data.roles) return DEFAULT_ROLES;
+        const valid = data.roles.filter((r: string) => DEFAULT_ROLES.includes(r as UserRole));
+        return valid.length > 0 ? valid : DEFAULT_ROLES;
+    } catch {
+        return DEFAULT_ROLES;
+    }
 }
 
-function AuthProviderInner({ children }: { children: React.ReactNode }) {
-    const { data: session, status, update } = useSession();
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const { user: clerkUser, isLoaded: isUserLoaded } = useUser();
+    const clerkAuth = useClerkAuth();
+    const { session } = useSession();
+
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [schoolName, setSchoolName] = useState<string | null>(null);
+    const [schoolOnboardingCompleted, setSchoolOnboardingCompleted] = useState<boolean | null>(null);
+    const [availableRoles, setAvailableRoles] = useState<UserRole[]>(DEFAULT_ROLES);
     const [devRoleOverride, setDevRoleOverride] = useState<UserRole | null>(null);
-    const [availableRoles, setAvailableRoles] = useState<UserRole[]>([]);
 
-    const sessionUser = session?.user as any;
-
-    // Build user and profile entirely from the JWT session — no Supabase client-side queries
-    const user = useMemo(() => {
-        if (!sessionUser?.id) return null;
-        return { id: sessionUser.id, email: sessionUser.email || '' };
-    }, [sessionUser?.id, sessionUser?.email]);
-
-    const profile: UserProfile | null = useMemo(() => {
-        if (!sessionUser?.id) return null;
-        return {
-            id: sessionUser.id,
-            first_name: sessionUser.firstName || '',
-            last_name: sessionUser.lastName || '',
-            email: sessionUser.email || '',
-            role: sessionUser.role || 'ADMIN',
-            is_active: true,
-            school_id: sessionUser.schoolId || null,
-        };
-    }, [sessionUser?.id, sessionUser?.firstName, sessionUser?.lastName, sessionUser?.email, sessionUser?.role, sessionUser?.schoolId]);
-
-    const schoolName: string | null = sessionUser?.schoolName || null;
+    const { userId } = clerkAuth;
 
     useEffect(() => {
-        // Fetch available roles if user is a teacher
-        if (profile && (profile.role === 'CLASS_TEACHER' || profile.role === 'SUBJECT_TEACHER')) {
-            const fetchRoles = async () => {
-                try {
-                    const res = await fetch('/api/auth/available-roles');
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.roles && Array.isArray(data.roles)) {
-                            // Ensure current role is included even if not returned properly
-                            const roles = new Set(data.roles as UserRole[]);
-                            roles.add(profile.role);
-                            setAvailableRoles(Array.from(roles));
-                        }
-                    }
-                } catch (e) {
-                    console.error('Failed to fetch available roles', e);
-                }
-            };
-            fetchRoles();
-        } else if (profile?.role) {
-            setAvailableRoles([profile.role]);
+        if (!isUserLoaded) return;
+        if (!userId) {
+            setProfile(null);
+            return;
         }
-    }, [profile?.id]); // Only re-fetch if exactly user ID changes, don't re-fetch on role change loop
 
-    const signOut = useCallback(async () => {
-        await nextAuthSignOut({ callbackUrl: '/login' });
+        const clerkEmail = clerkUser?.emailAddresses?.[0]?.emailAddress || '';
+        const clerkFirstName = clerkUser?.firstName || '';
+        const clerkLastName = clerkUser?.lastName || '';
+        const clerkRole = ((clerkUser?.publicMetadata as any)?.role as UserRole) || 'ADMIN';
+
+        const fallback: UserProfile = {
+            id: userId,
+            first_name: clerkFirstName,
+            last_name: clerkLastName,
+            email: clerkEmail,
+            role: clerkRole,
+            is_active: true,
+            school_id: (clerkUser?.publicMetadata as any)?.schoolId || null,
+        };
+
+        setProfile(fallback);
+
+        fetch('/api/auth/me')
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (data.error) return;
+                const u = data.profile || data.user;
+                if (u) {
+                    setProfile({
+                        id: u.id || userId,
+                        first_name: u.first_name || clerkFirstName,
+                        last_name: u.last_name || clerkLastName,
+                        email: u.email || clerkEmail,
+                        role: u.role || clerkRole,
+                        is_active: u.is_active ?? true,
+                        school_id: u.school_id || null,
+                    });
+                }
+                if (data.schoolName) setSchoolName(data.schoolName);
+                if (data.schoolOnboardingCompleted !== undefined) setSchoolOnboardingCompleted(data.schoolOnboardingCompleted);
+            })
+            .catch(() => {});
+    }, [isUserLoaded, userId, clerkUser?.emailAddresses, clerkUser?.firstName, clerkUser?.lastName]);
+
+    useEffect(() => {
+        fetchRoles().then(setAvailableRoles);
     }, []);
 
-    const switchRole = useCallback(async (newRole: UserRole) => {
-        if (availableRoles.includes(newRole)) {
-            await update({ role: newRole });
-            window.location.reload(); // Reload to refresh all components and data bounds
-        }
-    }, [availableRoles, update]);
-
-    const getEffectiveRole = (): UserRole | null => {
-        if (process.env.NODE_ENV === 'development' && devRoleOverride) {
-            return devRoleOverride;
-        }
-        return profile?.role ?? null;
-    };
-
-    const getEffectiveProfile = (): UserProfile | null => {
-        if (process.env.NODE_ENV === 'development' && devRoleOverride) {
-            return {
-                id: profile?.id || 'dev-id',
-                first_name: 'Dev',
-                last_name: devRoleOverride.replace('_', ' '),
-                email: 'dev@localhost',
-                role: devRoleOverride,
-                is_active: true,
-                school_id: profile?.school_id || null,
-            };
-        }
-        return profile;
-    };
-
-    const loading = status === 'loading';
-    const effectiveRole = getEffectiveRole();
-    const effectiveProfile = getEffectiveProfile();
-
-    const value = useMemo(() => ({
-        user,
-        profile: effectiveProfile,
-        role: effectiveRole,
+    const value = useMemo<AuthContextType>(() => ({
+        user: userId && clerkUser
+            ? { id: userId, email: clerkUser.emailAddresses?.[0]?.emailAddress || '' }
+            : null,
+        profile,
+        role: devRoleOverride || profile?.role || null,
         availableRoles,
         schoolName,
-        loading,
-        signOut,
-        switchRole,
+        schoolOnboardingCompleted,
+        loading: !isUserLoaded,
+        signOut: () => clerkAuth.signOut(),
+        switchRole: async (role: UserRole) => {
+            if (!userId) return;
+            const res = await fetch('/api/auth/switch-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, userId }),
+            });
+            if (res.ok) window.location.reload();
+        },
         devRoleOverride,
         setDevRoleOverride,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [user, effectiveProfile, effectiveRole, availableRoles, schoolName, loading, devRoleOverride, signOut, switchRole]);
+    }), [userId, clerkUser, profile, devRoleOverride, isUserLoaded, clerkAuth.sessionId]);
 
     return (
         <AuthContext.Provider value={value}>
@@ -157,10 +144,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     );
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-    return (
-        <SessionProvider>
-            <AuthProviderInner>{children}</AuthProviderInner>
-        </SessionProvider>
-    );
+export function useAuth() {
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+    return ctx;
 }

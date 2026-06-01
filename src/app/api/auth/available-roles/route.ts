@@ -1,24 +1,29 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions);
-        if (!session?.user || !(session.user as any).id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createSupabaseAdmin();
         const availableRoles = new Set<string>();
 
-        // We only check for multiple roles if the user is a teacher
-        // (Admins and Students only have one role)
-        const sessionUser = session.user as any;
-        const currentRole = sessionUser.role;
-        const userId = sessionUser.id;
-        const schoolId = sessionUser.schoolId;
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('role, school_id')
+            .eq('id', userId)
+            .single();
+
+        if (!userProfile) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const currentRole = userProfile.role;
+        const schoolId = userProfile.school_id;
 
         // Get current academic year
         let currentYearId: string | null = null;

@@ -1,27 +1,26 @@
-// src/app/api/school/stats/route.ts
-// Powers the dashboard KPI cards — all queries are school-scoped
-// using the NextAuth session, never the browser Supabase client.
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id as string;
-    const schoolId = session.user.schoolId as string | null;
-    const role = session.user.role as string;
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id, role')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id as string | null;
+    const role = userProfile?.role as string;
 
     const { searchParams } = new URL(request.url);
     const queryRole = searchParams.get('role') || role.toLowerCase();
-
-    const supabase = createSupabaseAdmin();
 
     // ── ADMIN stats ──────────────────────────────────────────
     if (queryRole === 'admin' || role === 'ADMIN') {

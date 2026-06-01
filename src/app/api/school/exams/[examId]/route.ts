@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function DELETE(
@@ -8,8 +7,8 @@ export async function DELETE(
     { params }: { params: Promise<{ examId: string }> }
 ) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -20,11 +19,10 @@ export async function DELETE(
             return NextResponse.json({ error: 'Exam ID is required' }, { status: 400 });
         }
 
-        // Verify session user and get school
         const { data: userProfile } = await supabase
             .from('users')
             .select('role, school_id')
-            .eq('id', session.user.id)
+            .eq('id', userId)
             .single();
 
         if (!userProfile || !userProfile.school_id) {
@@ -43,7 +41,7 @@ export async function DELETE(
         }
 
         // Only admins or the teacher who created it can delete
-        if (userProfile.role !== 'ADMIN' && exam.created_by_teacher_id !== session.user.id) {
+        if (userProfile.role !== 'ADMIN' && exam.created_by_teacher_id !== userId) {
             return NextResponse.json({ error: 'You can only delete exams you created' }, { status: 403 });
         }
 

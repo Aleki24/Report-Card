@@ -2,29 +2,41 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/components/AuthProvider';
 
 export default function DashboardContent({ children }: { children: React.ReactNode }) {
+    const router = useRouter();
+    const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(true);
-    const { schoolName, profile, role } = useAuth();
+    const { schoolName, profile, role, schoolOnboardingCompleted, loading } = useAuth();
 
     const sidebarWidth = 80; // Match Sidebar.tsx collapsed width (80px)
     const displayName = schoolName || 'Matokeo';
 
-    const needsSchoolSetup = role === 'ADMIN' && profile && !profile.school_id;
+    const needsSchoolSetup = role === 'ADMIN' && profile && schoolOnboardingCompleted === false;
+
+    React.useEffect(() => {
+        if (!loading && needsSchoolSetup && pathname !== '/dashboard/onboarding') {
+            router.push('/dashboard/onboarding');
+        }
+    }, [loading, needsSchoolSetup, pathname, router]);
+
+    // Don't render sidebar and header if on onboarding page
+    if (pathname === '/dashboard/onboarding') {
+        return <main>{children}</main>;
+    }
 
     return (
         <div style={{ minHeight: '100vh' }}>
             {/* Mobile Top Bar */}
             <div className="mobile-topbar-container">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <div style={{
-                        width: 32, height: 32, borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: '#fff',
-                    }}>{displayName.substring(0, 2).toUpperCase()}</div>
+                    <Image src="/images/logo.jpg" alt="Matokeo Logo" width={32} height={32}
+                      style={{ borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
+                    />
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{displayName}</span>
                 </div>
             </div>
@@ -35,38 +47,6 @@ export default function DashboardContent({ children }: { children: React.ReactNo
                 '--sidebar-width': `${sidebarWidth}px`,
                 display: 'flex', flexDirection: 'column',
             } as React.CSSProperties}>
-                {/* Admin Setup Banner */}
-                {needsSchoolSetup && (
-                    <div style={{
-                        background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))',
-                        border: '1px solid rgba(99,102,241,0.4)',
-                        borderRadius: 'var(--radius-lg)',
-                        padding: 'var(--space-4) var(--space-6)',
-                        marginBottom: 'var(--space-6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 'var(--space-4)',
-                        flexWrap: 'wrap',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            <span style={{ fontSize: 24 }}>🏫</span>
-                            <div>
-                                <p style={{ fontWeight: 700, marginBottom: 2 }}>Welcome! Set up your school first</p>
-                                <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                                    Before adding students and users, create your school profile in Settings.
-                                </p>
-                            </div>
-                        </div>
-                        <Link
-                            href="/dashboard/settings"
-                            className="btn-primary"
-                            style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                        >
-                            Go to Settings →
-                        </Link>
-                    </div>
-                )}
                 {children}
             </main>
         </div>

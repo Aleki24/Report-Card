@@ -1,42 +1,48 @@
-import { getToken } from 'next-auth/jwt';
-import { NextResponse, type NextRequest } from 'next/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    const path = request.nextUrl.pathname;
+const isProtected = createRouteMatcher(['/dashboard(.*)', '/student(.*)']);
 
-    // If accessing a protected route without auth, redirect to login
-    if (!token && (path.startsWith('/dashboard') || path.startsWith('/student'))) {
-        const loginUrl = new URL('/login', request.url);
-        return NextResponse.redirect(loginUrl);
+export default clerkMiddleware(async (auth, request) => {
+  const { userId, sessionClaims } = await auth();
+
+  if (!userId && isProtected(request)) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('redirect_url', request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (userId) {
+    const role = (sessionClaims as any)?.role;
+
+    // Only redirect on the exact /login or /signup page, NOT on sub-paths
+    // like /login/factor-one or /login/sso-callback that Clerk needs
+    const pathname = request.nextUrl.pathname;
+    if (pathname === '/login' || pathname === '/signup') {
+      const dest = role === 'STUDENT'
+        ? '/student/dashboard'
+        : '/dashboard';
+      return NextResponse.redirect(new URL(dest, request.url));
     }
 
-    // If logged in and trying to access login page, redirect based on role
-    if (token && path === '/login') {
-        const role = (token as any).role;
-        const dest = role === 'STUDENT' ? '/student/dashboard' : '/dashboard';
-        return NextResponse.redirect(new URL(dest, request.url));
+    if (role === 'STUDENT' && pathname.startsWith('/dashboard')) {
+      return NextResponse.redirect(new URL('/student/dashboard', request.url));
     }
 
-    // Role-based route protection
-    if (token) {
-        const role = (token as any).role;
-
-        // Students accessing /dashboard → redirect to student portal
-        if (role === 'STUDENT' && path.startsWith('/dashboard')) {
-            return NextResponse.redirect(new URL('/student/dashboard', request.url));
-        }
-
-        // Non-students accessing /student/* → redirect to dashboard
-        if (role !== 'STUDENT' && path.startsWith('/student')) {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
-        }
+    if (role !== 'STUDENT' && pathname.startsWith('/student')) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
+  }
 
-    return NextResponse.next();
-}
+  return NextResponse.next();
+}, {
+  clockSkewInMs: 120000,
+});
 
 export const config = {
-    matcher: ['/dashboard/:path*', '/student/:path*', '/login'],
+  matcher: [
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/__clerk/(.*)',
+    '/(api|trpc)(.*)',
+  ],
 };
-

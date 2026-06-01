@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -16,7 +15,7 @@ export async function DELETE(request: NextRequest) {
         const { data: adminProfile } = await supabase
             .from('users')
             .select('role, school_id')
-            .eq('id', session.user.id)
+            .eq('id', userId)
             .single();
 
         if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
@@ -24,14 +23,14 @@ export async function DELETE(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('user_id');
+        const targetUserId = searchParams.get('user_id');
 
-        if (!userId) {
+        if (!targetUserId) {
             return NextResponse.json({ error: 'user_id query parameter is required' }, { status: 400 });
         }
 
         // Prevent admins from deleting themselves
-        if (userId === session.user.id) {
+        if (targetUserId === userId) {
             return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
         }
 
@@ -39,7 +38,7 @@ export async function DELETE(request: NextRequest) {
         const { data: targetUser } = await supabase
             .from('users')
             .select('id, school_id, role')
-            .eq('id', userId)
+            .eq('id', targetUserId)
             .single();
 
         if (!targetUser || targetUser.school_id !== adminProfile.school_id) {
@@ -48,27 +47,27 @@ export async function DELETE(request: NextRequest) {
 
         // Delete related records first (cascade manually)
         // Delete student record if exists
-        await supabase.from('students').delete().eq('id', userId);
+        await supabase.from('students').delete().eq('id', targetUserId);
         // Delete class teacher record if exists
-        await supabase.from('class_teachers').delete().eq('user_id', userId);
+        await supabase.from('class_teachers').delete().eq('user_id', targetUserId);
         // Delete subject teacher assignments + subject teacher record
         const { data: stRecord } = await supabase
             .from('subject_teachers')
             .select('id')
-            .eq('user_id', userId)
+            .eq('user_id', targetUserId)
             .maybeSingle();
         if (stRecord) {
             await supabase.from('subject_teacher_assignments').delete().eq('subject_teacher_id', stRecord.id);
             await supabase.from('subject_teachers').delete().eq('id', stRecord.id);
         }
         // Delete active_users record if exists
-        await supabase.from('active_users').delete().eq('user_id', userId);
+        await supabase.from('active_users').delete().eq('user_id', targetUserId);
 
         // Finally delete the user
         const { error } = await supabase
             .from('users')
             .delete()
-            .eq('id', userId);
+            .eq('id', targetUserId);
 
         if (error) {
             return NextResponse.json({ error: error.message }, { status: 400 });

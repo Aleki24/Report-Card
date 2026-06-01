@@ -22,6 +22,7 @@ interface Announcement {
 interface DashboardData {
   totalStudents: number;
   totalTeachers: number;
+  totalUsers: number;
   totalClasses: number;
   totalReports: number;
   attendanceToday: { present: number; absent: number; late: number } | null;
@@ -32,6 +33,7 @@ interface DashboardData {
   recentEnrollmentsLast7: number;
   financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
   academicSummary: { recentAvg: number | null };
+  hasLogo: boolean;
 }
 
 
@@ -41,6 +43,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import MiniCalendar from '@/components/dashboard/MiniCalendar';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
+import { SetupNotifier } from '@/components/dashboard/SetupNotifier';
 
 function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
   return (
@@ -230,6 +233,13 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
 
   return (
     <div className="relative h-full overflow-hidden px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
+      <SetupNotifier 
+        hasLogo={data?.hasLogo ?? false} 
+        totalTeachers={data?.totalTeachers ?? 0}
+        totalStudents={data?.totalStudents ?? 0}
+        totalUsers={data?.totalUsers ?? 0}
+        role="ADMIN"
+      />
       {/* Top Header Bar */}
       <div className="flex items-center justify-between mb-3 xs:mb-3 sm:mb-4 shrink-0">
         <div className="text-[10px] xs:text-[11px] sm:text-[13px] font-semibold text-foreground uppercase tracking-[0.15em]">

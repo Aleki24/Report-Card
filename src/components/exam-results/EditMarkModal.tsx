@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 
 interface GradeOption {
     symbol: string;
@@ -40,7 +41,6 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [error, setError] = useState('');
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
     const [totalPoints, setTotalPoints] = useState<number>(0);
     const [isCBC, setIsCBC] = useState(false);
@@ -171,7 +171,6 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
     const handleScoreChange = (val: string) => {
         setScore(val);
-        setError('');
         const num = parseFloat(val);
         if (val && !isNaN(num) && num >= 0 && num <= maxScore) {
             autoResolveGrade(num);
@@ -190,16 +189,15 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     const handleSave = async () => {
         const numScore = parseFloat(score);
         if (isNaN(numScore) || numScore < 0 || numScore > maxScore) {
-            setError(`Score must be between 0 and ${maxScore}`);
+            toast.error(`Score must be between 0 and ${maxScore}`);
             return;
         }
         if (!grade) {
-            setError('Please select a grade');
+            toast.error('Please select a grade');
             return;
         }
 
         setSaving(true);
-        setError('');
 
         const newPercentage = maxScore > 0 ? Math.round((numScore / maxScore) * 10000) / 100 : 0;
 
@@ -219,12 +217,13 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
             const data = await res.json();
             if (!res.ok) {
-                setError(`Failed to save: ${data.error}`);
+                toast.error(`Failed to save: ${data.error}`);
             } else {
+                toast.success('Saved successfully');
                 onSaved();
             }
         } catch (err: unknown) {
-            setError(`Failed to save: ${err instanceof Error ? err.message : 'Unknown Error'}`);
+            toast.error(`Failed to save: ${err instanceof Error ? err.message : 'Unknown Error'}`);
         } finally {
             setSaving(false);
         }
@@ -232,7 +231,6 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
     const handleDelete = async () => {
         setDeleting(true);
-        setError('');
 
         try {
             const res = await fetch(`/api/school/exam-marks?id=${mark.id}`, {
@@ -241,12 +239,13 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
             const data = await res.json();
             if (!res.ok) {
-                setError(`Failed to delete: ${data.error}`);
+                toast.error(`Failed to delete: ${data.error}`);
             } else {
+                toast.success('Deleted successfully');
                 onDeleted();
             }
         } catch (err: unknown) {
-            setError(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown Error'}`);
+            toast.error(`Failed to delete: ${err instanceof Error ? err.message : 'Unknown Error'}`);
         } finally {
             setDeleting(false);
         }
@@ -296,7 +295,7 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                         </label>
                         <input
                             type="number"
-                            className={`input-field w-full ${error && error.includes('Score') ? 'border-[var(--color-danger)]' : ''}`}
+                            className={`input-field w-full`}
                             value={score}
                             onChange={e => handleScoreChange(e.target.value)}
                             min={0}
@@ -376,13 +375,6 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                         Total Points (all subjects): <strong>{totalPoints}</strong>
                     </div>
                 </div>
-
-                {/* Error */}
-                {error && (
-                    <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">
-                        {error}
-                    </div>
-                )}
 
                 {/* Actions */}
                 <div className="flex items-center justify-between">

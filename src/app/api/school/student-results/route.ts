@@ -1,29 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const schoolId = session.user.schoolId;
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id, role')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id;
     if (!schoolId) return NextResponse.json({ data: [] });
 
     const { searchParams } = new URL(request.url);
     const examId = searchParams.get('exam_id');
-    const classId = searchParams.get('class_id'); // grade stream id
+    const classId = searchParams.get('class_id');
 
     if (!examId || !classId) {
       return NextResponse.json({ error: 'exam_id and class_id are required' }, { status: 400 });
     }
 
-    const authRole = session.user.role;
-    const userId = session.user.id;
-    const supabase = createSupabaseAdmin();
+    const authRole = userProfile?.role;
 
     if (authRole !== 'ADMIN') {
       const { getTeacherPermissions, isStreamVisibleToTeacher, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');

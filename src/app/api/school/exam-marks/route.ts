@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const schoolId = session.user.schoolId as string | null;
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ data: [] });
 
     const { searchParams } = new URL(request.url);
@@ -18,8 +24,6 @@ export async function GET(request: NextRequest) {
     if (!examId) {
       return NextResponse.json({ error: 'exam_id is required' }, { status: 400 });
     }
-
-    const supabase = createSupabaseAdmin();
 
     // Get student IDs for this school only
     const { data: schoolUsers } = await supabase
@@ -68,14 +72,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, school_id')
+      .eq('id', userId)
+      .single();
     
-    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+    if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const schoolId = session.user.schoolId;
+    const schoolId = userProfile.school_id;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
     const body = await request.json();
@@ -84,8 +95,6 @@ export async function POST(request: NextRequest) {
     if (!exam_id || !Array.isArray(marks)) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
-
-    const supabase = createSupabaseAdmin();
 
     // Get student IDs for this school only to validate
     const { data: schoolUsers } = await supabase
@@ -127,22 +136,27 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, school_id')
+      .eq('id', userId)
+      .single();
+
+    if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const schoolId = session.user.schoolId;
+    const schoolId = userProfile.school_id;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
     const body = await request.json();
     const { id, raw_score, percentage, grade_symbol, rubric, remarks } = body;
 
     if (!id) return NextResponse.json({ error: 'Mark ID required' }, { status: 400 });
-
-    const supabase = createSupabaseAdmin();
     
     // Verify mark ownership
     const { data: markCheck } = await supabase
@@ -176,22 +190,27 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { userId } = await auth();
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(session.user.role)) {
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role, school_id')
+      .eq('id', userId)
+      .single();
+
+    if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const schoolId = session.user.schoolId;
+    const schoolId = userProfile.school_id;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) return NextResponse.json({ error: 'Mark ID required' }, { status: 400 });
-
-    const supabase = createSupabaseAdmin();
 
     // Verify mark ownership
     const { data: markCheck } = await supabase

@@ -1,31 +1,25 @@
-// src/lib/student/get-current-student.ts
-// ============================================================
-// Server-side helper to resolve the current student from
-// NextAuth session. Used by all student API routes and queries.
-// ============================================================
-
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import type { CurrentStudent } from '@/types';
 
-/**
- * Resolves the currently logged-in student from the NextAuth session.
- * Returns null if the user is not authenticated, not a STUDENT, or has no student record.
- */
 export async function getCurrentStudent(): Promise<CurrentStudent | null> {
-    const session = await getServerSession(authOptions) as any;
+    const clerkAuth = await auth();
+    if (!clerkAuth?.userId) return null;
 
-    if (!session?.user?.id) return null;
-
-    const userId = session.user.id;
-    const role = session.user.role;
-    const schoolId = session.user.schoolId;
-
-    if (role !== 'STUDENT') return null;
-    if (!schoolId) return null;
+    const userId = clerkAuth.userId;
 
     const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+        .from('users')
+        .select('role, school_id')
+        .eq('id', userId)
+        .single();
+
+    if (!userProfile) return null;
+    if (userProfile.role !== 'STUDENT') return null;
+    if (!userProfile.school_id) return null;
+
+    const schoolId = userProfile.school_id;
 
     const { data, error } = await supabase
         .from('students')

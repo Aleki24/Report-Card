@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS schools (
     email TEXT,
     grading_system_cbc_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     grading_system_844_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
+    onboarding_completed BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

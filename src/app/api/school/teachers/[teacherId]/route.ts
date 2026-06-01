@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(
@@ -8,15 +7,15 @@ export async function GET(
   { params }: { params: Promise<{ teacherId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const teacherId = (await params).teacherId;
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id').eq('id', session.user.id).single();
-    const schoolId = (userData?.school_id || session.user.schoolId) as string | null;
+    const { data: userData } = await supabase.from('users').select('school_id').eq('id', userId).single();
+    const schoolId = userData?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 
     const { data: user } = await supabase

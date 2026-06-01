@@ -52,15 +52,20 @@ export async function GET(
         // Try getting school_id from the student's user relation first (if exists)
         const targetSchoolId = student.users?.school_id;
         
-        const { getServerSession } = await import('next-auth');
-        const { authOptions } = await import('@/lib/auth');
-        const session = await getServerSession(authOptions) as any;
+        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
+        const { userId } = await clerkAuth();
 
-        if (!session?.user?.id) {
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const userSchoolId = session.user.schoolId;
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id, role')
+            .eq('id', userId)
+            .single();
+
+        const userSchoolId = userProfile?.school_id;
         if (!userSchoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
@@ -69,8 +74,7 @@ export async function GET(
             return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
         }
 
-        const role = session.user.role;
-        const userId = session.user.id;
+        const role = userProfile?.role;
 
         if (role === 'STUDENT') {
             if (userId !== studentId) {

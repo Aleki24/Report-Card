@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { StudentCommentsSection } from '@/components/reports/StudentCommentsSection';
@@ -9,12 +10,12 @@ import { StudentPickerModal } from '@/components/reports/StudentPickerModal';
 import { ReportActionCards } from '@/components/reports/ReportActionCards';
 import { ReportSettings } from '@/components/reports/ReportSettings';
 import { ProgressOverlay } from '@/components/ui/ProgressOverlay';
-import { Card, Button } from '@/components/ui';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
 import { pdf } from '@react-pdf/renderer';
 import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
+import { BookOpen, ArrowRight } from 'lucide-react';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
@@ -101,8 +102,12 @@ export default function ReportsPage() {
     if (!isConfigured) { showToastMsg('Please select Academic Year, Term, and Grade Stream.'); return; }
     setGenerating(true); setProgress({ current: 0, total: 0, message: 'Step 1 of 3: Aggregating database grades...' });
     try {
-      const { error } = await supabase.rpc('generate_term_reports', { p_term_id: selectedTerm, p_grade_stream_id: selectedGradeStream });
-      if (error) throw new Error(`Grade aggregation failed: ${error.message}`);
+      try {
+        const { error } = await supabase.rpc('generate_term_reports', { p_academic_year_id: selectedAcademicYear, p_term_id: selectedTerm, p_grade_stream_id: selectedGradeStream });
+        if (error) console.warn('Grade aggregation RPC warning:', error.message);
+      } catch (aggErr) {
+        console.warn('Grade aggregation step skipped (non-blocking):', aggErr);
+      }
       setProgress({ current: 0, total: 0, message: 'Step 2 of 3: Fetching report data...' });
       const params = new URLSearchParams(); params.append('yearId', selectedAcademicYear); params.append('termId', selectedTerm);
       if (customReportTitle) params.append('customTitle', customReportTitle);
@@ -224,14 +229,16 @@ export default function ReportsPage() {
       />
 
       {isAlsoSubjectTeacher && (
-        <a href="/dashboard/exams-marks" className="flex items-center gap-4 p-5 rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-md hover:border-indigo-500/30">
-          <span className="text-3xl">📚</span>
-          <div className="flex-1">
-              <span className="font-semibold text-[15px] text-foreground">Go to My Subjects</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Enter and manage marks for your assigned subjects</span>
+        <Link href="/dashboard/exams-marks" className="flex items-center gap-4 p-4 rounded-lg border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-sm hover:border-indigo-500/30 no-underline">
+          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+            <BookOpen className="w-4 h-4 text-indigo-500" />
           </div>
-          <span className="text-xl text-indigo-500/70">→</span>
-        </a>
+          <div className="flex-1 min-w-0">
+            <span className="font-semibold text-sm text-foreground">Go to My Subjects</span>
+            <span className="block text-xs text-muted-foreground mt-0.5">Enter and manage marks for your assigned subjects</span>
+          </div>
+          <ArrowRight className="w-4 h-4 text-indigo-500/70 shrink-0" />
+        </Link>
       )}
 
       {/* Report Settings */}

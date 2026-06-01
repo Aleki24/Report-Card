@@ -1,19 +1,24 @@
-// src/app/api/school/exams/route.ts
-// GET: Returns exams scoped to the current user's school
-// POST: Creates a new exam OR seeds exam slots for a term
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 async function getSession() {
-  const session = await getServerSession(authOptions) as any;
-  if (!session?.user?.id) return null;
+  const { userId } = await auth();
+  if (!userId) return null;
+
+  const supabase = createSupabaseAdmin();
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('school_id, role')
+    .eq('id', userId)
+    .single();
+
+  if (!userProfile) return null;
+
   return {
-    userId: session.user.id as string,
-    schoolId: session.user.schoolId as string | null,
-    role: session.user.role as string,
+    userId,
+    schoolId: userProfile.school_id as string | null,
+    role: userProfile.role,
   };
 }
 

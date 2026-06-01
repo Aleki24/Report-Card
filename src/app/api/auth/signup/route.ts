@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { sendWelcomeEmail } from '@/lib/email';
 
-/**
- * Public signup endpoint — multi-school support.
- * Any new admin can sign up and create their own school.
- * Each admin then invites their own users via /dashboard/users.
- */
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, password, first_name, last_name, school_name } = body;
+        const { email, password, first_name, last_name, school_name, school_email, school_phone, school_address } = body;
 
         if (!email || !password || !first_name || !last_name || !school_name) {
             return NextResponse.json(
@@ -25,7 +21,6 @@ export async function POST(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Check if this email is already registered
         const { data: existingUser } = await supabaseAdmin
             .from('users')
             .select('id')
@@ -39,60 +34,57 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Hash the password
-        const passwordHash = await bcrypt.hash(password, 12);
-
-        // Generate a UUID for the new user
-        const userId = crypto.randomUUID();
-
-        // Generate a UUID for the new school
         const schoolId = crypto.randomUUID();
 
-        // 1. Create the school first
         const { error: schoolError } = await supabaseAdmin.from('schools').insert({
             id: schoolId,
             name: school_name.trim(),
+            email: school_email?.trim() || null,
+            phone: school_phone?.trim() || null,
+            address: school_address?.trim() || null,
         });
 
         if (schoolError) {
             return NextResponse.json({ error: `School error: ${schoolError.message}` }, { status: 400 });
         }
 
-        // 2. Create the auth.users entry first (required by FK on public.users)
-        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email: email.trim(),
-            password: password,
-            email_confirm: true,
-            user_metadata: { first_name, last_name, role: 'ADMIN' },
-        });
-
-        if (authError) {
-            // Rollback: delete the orphan school
+        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+        let clerkUser;
+        try {
+            clerkUser = await clerk.users.createUser({
+                emailAddress: [email.trim()],
+                password,
+                firstName: first_name,
+                lastName: last_name,
+                publicMetadata: { role: 'ADMIN', school_id: schoolId },
+                skipPasswordChecks: true,
+            });
+        } catch (clerkErr: any) {
             await supabaseAdmin.from('schools').delete().eq('id', schoolId);
-            return NextResponse.json({ error: `Auth error: ${authError.message}` }, { status: 400 });
+            const msg = clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || clerkErr.message || 'Failed to create user in Clerk';
+            return NextResponse.json({ error: `Clerk error: ${msg}` }, { status: 400 });
         }
 
-        const authUserId = authUser.user.id;
+        const userId = clerkUser.id;
 
-        // 3. Insert into public.users as ADMIN, using the auth user's ID
         const { error: profileError } = await supabaseAdmin.from('users').insert({
-            id: authUserId,
+            id: userId,
             first_name,
             last_name,
             email: email.trim(),
             username: email.trim().split('@')[0],
-            password_hash: passwordHash,
             role: 'ADMIN',
             is_active: true,
             school_id: schoolId,
         });
 
         if (profileError) {
-            // Rollback: delete auth user and orphan school
-            await supabaseAdmin.auth.admin.deleteUser(authUserId);
+            await clerk.users.deleteUser(userId).catch(() => {});
             await supabaseAdmin.from('schools').delete().eq('id', schoolId);
             return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
         }
+
+        sendWelcomeEmail(email.trim(), first_name, school_name.trim()).catch(() => {});
 
         return NextResponse.json({
             success: true,

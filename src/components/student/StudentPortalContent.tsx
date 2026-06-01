@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -22,7 +22,7 @@ const mobileNavItems = studentNavItems.slice(0, 4);
 
 export default function StudentPortalContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const { profile, signOut } = useAuth();
+    const { profile } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const [collapsed, setCollapsed] = useState(true);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -32,9 +32,10 @@ export default function StudentPortalContent({ children }: { children: React.Rea
         ? `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase()
         : 'ST';
 
-    const handleSignOut = async () => {
-        await signOut();
-        window.location.href = '/login';
+    const router = useRouter();
+
+    const handleSignOut = () => {
+        router.push('/logout');
     };
 
     return (

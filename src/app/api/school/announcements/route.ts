@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET() {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { schoolId } = session.user;
-        if (!schoolId) return NextResponse.json({ data: [] });
-
         const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', userId)
+            .single();
+
+        const schoolId = userProfile?.school_id;
+        if (!schoolId) return NextResponse.json({ data: [] });
 
         const { data, error } = await supabase
             .from('announcements')
@@ -45,15 +49,26 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { schoolId, role, id: userId } = session.user;
+        const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id, role')
+            .eq('id', userId)
+            .single();
+
+        if (!userProfile) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const schoolId = userProfile.school_id;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
 
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(role)) {
+        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -62,7 +77,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'title and content are required' }, { status: 400 });
         }
 
-        const supabase = createSupabaseAdmin();
         const { data, error } = await supabase
             .from('announcements')
             .insert({

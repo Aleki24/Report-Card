@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 
-/**
- * Create or update a school profile.
- * Uses the admin client to bypass RLS.
- * Verifies the caller is an authenticated ADMIN via their auth token.
- */
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         
-        const user_id = session.user.id;
+        const user_id = userId;
         const body = await request.json();
         const { name, address, phone, email, school_id, logo_url } = body;
 

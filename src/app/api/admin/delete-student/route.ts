@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
-/**
- * Delete a student from the system.
- * Removes from students → users (CASCADE handles related records).
- */
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const user_id = session.user.id;
+        const user_id = userId;
         const { searchParams } = new URL(request.url);
         const student_id = searchParams.get('student_id');
 

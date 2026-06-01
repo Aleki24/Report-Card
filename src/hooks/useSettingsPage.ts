@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { useSession } from 'next-auth/react';
+
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -14,8 +14,6 @@ interface Term { id: string; academic_year_id: string; name: string; start_date:
 
 export function useSettingsPage() {
   const { profile } = useAuth();
-  const { update: updateSession } = useSession();
-
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
@@ -79,7 +77,6 @@ export function useSettingsPage() {
       else if (data.school_id) {
         setSchool(prev => ({ ...prev, id: data.school_id }));
         setSaveMsg(school.id ? '✅ School profile updated!' : '✅ School created!');
-        await updateSession({ schoolName: school.name });
         window.location.reload();
       }
     } catch (err) { setSaveMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }

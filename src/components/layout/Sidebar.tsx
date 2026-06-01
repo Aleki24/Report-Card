@@ -2,7 +2,8 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
 import { navItems } from "./sidebar/navItems";
@@ -99,7 +100,6 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
         switchRole,
         schoolName,
         loading,
-        signOut,
     } = useAuth();
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -157,9 +157,10 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
         return visibleNavItems.filter((item) => !groupedLabels.has(item.label));
     }, [visibleNavItems]);
 
-    const handleSignOut = async () => {
-        await signOut();
-        window.location.href = "/login";
+    const router = useRouter();
+
+    const handleSignOut = () => {
+        router.push("/logout");
     };
 
     const maxBottomItems = 4;
@@ -207,25 +208,18 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             }}
                         />
                     ) : (
-                        <div
+                        <Image
+                            src="/images/logo.jpg"
+                            alt="Matokeo Logo"
+                            width={collapsed ? 44 : 56}
+                            height={collapsed ? 44 : 56}
                             style={{
-                                width: collapsed ? 44 : 56,
-                                height: collapsed ? 44 : 56,
                                 borderRadius: "var(--radius-md)",
-                                background: "var(--primary)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontFamily: "var(--font-display)",
-                                fontWeight: 800,
-                                fontSize: 13,
-                                color: "#fff",
+                                objectFit: "contain",
                                 flexShrink: 0,
                                 boxShadow: "0 8px 18px rgba(37, 99, 235, 0.18)",
                             }}
-                        >
-                            {schoolName ? schoolName.slice(0, 2).toUpperCase() : "RA"}
-                        </div>
+                        />
                     )}
 
                     {!collapsed && (

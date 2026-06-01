@@ -1,18 +1,5 @@
-// src/app/api/school/data/route.ts
-// ============================================================
-// SCHOOL-SCOPED DATA API
-//
-// Replaces all direct browser Supabase queries for school data.
-// Reads the NextAuth session server-side to get the real schoolId,
-// then uses the admin client with explicit school_id filters.
-//
-// Frontend components should call: GET /api/school/data?type=students
-// instead of querying Supabase directly from the browser.
-// ============================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
@@ -35,16 +22,18 @@ type DataType =
   | 'class_teacher_assignments';
 
 async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string; role: string } | null> {
-  const session = await getServerSession(authOptions) as any;
-  if (!session?.user?.id) return null;
+  const { userId } = await auth();
+  if (!userId) return null;
   
   const supabaseAdmin = createSupabaseAdmin();
-  const { data } = await supabaseAdmin.from('users').select('school_id').eq('id', session.user.id).single();
+  const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).single();
+
+  if (!data) return null;
 
   return {
-    schoolId: (data?.school_id || session.user.schoolId) as string,
-    userId: session.user.id,
-    role: session.user.role,
+    schoolId: data.school_id as string,
+    userId,
+    role: data.role,
   };
 }
 

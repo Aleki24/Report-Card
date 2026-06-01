@@ -169,7 +169,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
             <View style={s.footer}>
                 <Text style={s.footerLine}>Report generated on {today}</Text>
                 {data.openingDate && <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>}
-                <Text style={s.footerLine}>System developed by: Alex Otieno</Text>
+                <Text style={s.footerLine}>Matokeo</Text>
                 <Text>This document is electronically generated</Text>
             </View>
         </>

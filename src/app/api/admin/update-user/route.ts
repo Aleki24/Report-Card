@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function PUT(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -16,7 +15,7 @@ export async function PUT(request: NextRequest) {
         const { data: adminProfile } = await supabase
             .from('users')
             .select('role, school_id')
-            .eq('id', session.user.id)
+            .eq('id', userId)
             .single();
 
         if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {

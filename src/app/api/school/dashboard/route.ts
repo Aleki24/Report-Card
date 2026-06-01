@@ -1,38 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(_request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const schoolId = session.user.schoolId as string | null;
-    const userId = session.user.id as string;
-    const role = session.user.role as string;
+    const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id, role')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id as string | null;
+    const role = userProfile?.role as string;
 
     if (!schoolId) {
       return NextResponse.json({
         totalStudents: 0,
         totalTeachers: 0,
+        totalUsers: 0,
         totalClasses: 0,
         totalReports: 0,
         attendanceToday: null,
         upcomingExams: [],
         recentActivities: [],
+        hasLogo: false,
       });
     }
-
-    const supabase = createSupabaseAdmin();
 
     const today = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const [studentsRes, usersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, currentTermRes] = await Promise.all([
+    const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, currentTermRes, schoolRes] = await Promise.all([
       supabase.from('students').select('id', { count: 'exact', head: true }).eq('users.school_id', schoolId),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('report_cards').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
@@ -41,17 +47,20 @@ export async function GET(_request: NextRequest) {
       supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
       supabase.from('students').select('id, date_enrolled', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
       supabase.from('terms').select('id, name').eq('school_id', schoolId).eq('is_current', true).maybeSingle(),
+      supabase.from('schools').select('logo_url').eq('id', schoolId).single(),
     ]);
 
     const currentYear = currentYearRes?.data;
     const currentTerm = currentTermRes?.data;
     const totalStudents = studentsRes.count ?? 0;
-    const totalTeachers = usersRes.data?.length ?? 0;
+    const totalUsers = usersRes.count ?? 0;
+    const totalTeachers = teachersRes.data?.length ?? 0;
     const totalClasses = streamsRes.count ?? 0;
     const totalReports = reportsRes.count ?? 0;
     const overdueFeesCount = overdueFeesRes.count ?? 0;
     const announcementsLast7Days = announcementsRes.count ?? 0;
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
+    const hasLogo = Boolean(schoolRes.data?.logo_url);
 
     let upcomingExams: any[] = [];
     if (currentYear) {
@@ -187,6 +196,7 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({
       totalStudents,
       totalTeachers,
+      totalUsers,
       totalClasses,
       totalReports,
       attendanceToday: { present: presentCount, absent: absentCount, late: lateCount },
@@ -197,6 +207,7 @@ export async function GET(_request: NextRequest) {
       recentEnrollmentsLast7,
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
       academicSummary: { recentAvg },
+      hasLogo,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

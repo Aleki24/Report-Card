@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
 
-/**
- * GET — Fetch comments for all students in a class for a given term/year.
- * Query: ?grade_stream_id=...&term_id=...&academic_year_id=...
- */
 export async function GET(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const schoolId = session.user.schoolId;
+        const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', userId)
+            .single();
+
+        const schoolId = userProfile?.school_id;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
@@ -29,8 +31,6 @@ export async function GET(request: NextRequest) {
         if (!gradeStreamId || !termId || !academicYearId) {
             return NextResponse.json({ error: 'grade_stream_id, term_id, and academic_year_id are required' }, { status: 400 });
         }
-
-        const supabase = createSupabaseAdmin();
 
         // Fetch students in the class (scoped to school)
         const { data: students, error: studentsErr } = await supabase
@@ -84,18 +84,21 @@ export async function GET(request: NextRequest) {
     }
 }
 
-/**
- * POST — Save comments for a student's report card (upsert).
- * Body: { student_id, term_id, academic_year_id, grade_stream_id, comments_class_teacher?, comments_principal? }
- */
 export async function POST(request: NextRequest) {
     try {
-        const session = await getServerSession(authOptions) as any;
-        if (!session?.user?.id) {
+        const { userId } = await auth();
+        if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const schoolId = session.user.schoolId;
+        const supabase = createSupabaseAdmin();
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', userId)
+            .single();
+
+        const schoolId = userProfile?.school_id;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
@@ -106,8 +109,6 @@ export async function POST(request: NextRequest) {
         if (!student_id || !term_id || !academic_year_id || !grade_stream_id) {
             return NextResponse.json({ error: 'student_id, term_id, academic_year_id, and grade_stream_id are required' }, { status: 400 });
         }
-
-        const supabase = createSupabaseAdmin();
 
         // Verify student belongs to the caller's school
         const { data: student } = await supabase

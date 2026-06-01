@@ -1,27 +1,23 @@
-// src/app/api/school/my-results/route.ts
-// ============================================================
-// SERVER-SCOPED API: Returns exam results for the currently
-// logged-in student. Enforces school_id isolation via session.
-// Replaces all browser-side Supabase queries from my-results page.
-// ============================================================
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions) as any;
-    if (!session?.user?.id) {
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
-    const schoolId = session.user.schoolId;
-    if (!schoolId) return NextResponse.json({ data: null });
-
     const supabase = createSupabaseAdmin();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('school_id')
+      .eq('id', userId)
+      .single();
+
+    const schoolId = userProfile?.school_id;
+    if (!schoolId) return NextResponse.json({ data: null });
 
     // Step 1: Look up the student record, verified against school
     const { data: studentRecord } = await supabase

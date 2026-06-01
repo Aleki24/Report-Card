@@ -8,6 +8,7 @@ import StatusBadge from '@/components/dashboard/StatusBadge';
 import EmptyState from '@/components/dashboard/EmptyState';
 import Pagination from '@/components/dashboard/Pagination';
 import { GraduationCap, Users, BookOpen, UserCheck, Search, Eye, Pencil, Phone, Mail, X, BarChart3, FileText, Calendar, ClipboardList, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TeacherRow {
   id: string; name: string; email: string; phone: string;
@@ -60,10 +61,10 @@ export default function TeachersPage() {
       if (res.ok && data.url) {
         setUrl(data.url);
       } else {
-        alert(data.error || 'Photo upload failed');
+        toast.error(data.error || 'Photo upload failed');
       }
     } catch {
-      alert('Error uploading photo');
+      toast.error('Error uploading photo');
     }
     setUploadingPhoto(false);
   };
@@ -124,7 +125,7 @@ export default function TeachersPage() {
       });
       const r = await res.json();
       if (!res.ok) {
-        alert(r.error || 'Failed');
+        toast.error(r.error || 'Failed');
       } else {
         setTeachers(prev => prev.map(t => t.id !== editingTeacher.id ? t : {
           ...t,
@@ -132,9 +133,10 @@ export default function TeachersPage() {
           phone: editData.phone.trim() || '—',
         }));
         setEditingTeacher(null);
+        toast.success('Updated successfully');
       }
     } catch {
-      alert('Error updating.');
+      toast.error('Error updating.');
     }
     setSavingEdit(false);
   };
