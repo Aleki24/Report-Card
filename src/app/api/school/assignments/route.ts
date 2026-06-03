@@ -15,7 +15,7 @@ export async function GET() {
             .from('users')
             .select('school_id, role')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const schoolId = userProfile?.school_id;
         const role = userProfile?.role;

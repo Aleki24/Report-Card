@@ -78,7 +78,8 @@ export default function SettingsPage() {
       setLoading(false);
       setSchoolLoading(false);
     }
-  }, [selectedCalYearId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { if (profile?.id) fetchAllData(); }, [profile?.id, fetchAllData]);
 
@@ -159,7 +160,7 @@ export default function SettingsPage() {
       <div className="flex border-b border-border mb-8 overflow-x-auto">
         {tabs.map(tab => (
           <button key={tab.key}
-            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-white'}`}
+            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             onClick={() => setActiveTab(tab.key)}>
             {tab.label}
           </button>

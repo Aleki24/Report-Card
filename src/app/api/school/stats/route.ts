@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('school_id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role as string;
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         .eq('school_id', schoolId)
         .order('start_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       // ── Students ──
       const { data: schoolUsers } = await supabase
@@ -48,7 +48,8 @@ export async function GET(request: NextRequest) {
 
       const { count: activeStudents } = await supabase
         .from('students')
-        .select('id', { count: 'exact', head: true })
+        .select('id, users!inner(school_id)', { count: 'exact', head: true })
+        .eq('users.school_id', schoolId)
         .eq('status', 'ACTIVE');
 
       // ── Teachers ──
@@ -221,7 +222,7 @@ export async function GET(request: NextRequest) {
         ctQuery = ctQuery.eq('academic_year_id', currentYear.id);
       }
 
-      const { data: ctData } = await ctQuery.limit(1).single();
+      const { data: ctData } = await ctQuery.limit(1).maybeSingle();
 
       const streamId = ctData?.current_grade_stream_id;
       const streamName = (ctData?.grade_streams as any)?.full_name || '—';
@@ -290,7 +291,7 @@ export async function GET(request: NextRequest) {
         .eq('school_id', schoolId)
         .order('start_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       let examQuery = supabase
         .from('exams')
@@ -342,14 +343,14 @@ export async function GET(request: NextRequest) {
         .eq('school_id', schoolId)
         .order('start_date', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       // Find this student's record
       const { data: studentRecord } = await supabase
         .from('students')
         .select('id, current_grade_stream_id')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (!studentRecord) {
         return NextResponse.json({ avg: 0, markCount: 0, bestSubject: '—', bestScore: 0, position: '—', positionSub: 'N/A' });

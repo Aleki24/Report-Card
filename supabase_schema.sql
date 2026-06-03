@@ -33,7 +33,7 @@ DROP TABLE IF EXISTS academic_levels CASCADE;
 
 -- ENUMS
 DROP TYPE IF EXISTS user_role CASCADE;
-CREATE TYPE user_role AS ENUM ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT');
+CREATE TYPE user_role AS ENUM ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING');
 
 DROP TYPE IF EXISTS exam_type CASCADE;
 CREATE TYPE exam_type AS ENUM ('CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER');
@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS schools (
     grading_system_cbc_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     grading_system_844_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     onboarding_completed BOOLEAN DEFAULT false NOT NULL,
+    teacher_invite_code TEXT,
+    student_invite_code TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -131,10 +133,12 @@ CREATE TABLE IF NOT EXISTS students (
 -- 8. ACADEMIC YEARS & TERMS
 CREATE TABLE IF NOT EXISTS academic_years (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (school_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS terms (
@@ -144,6 +148,7 @@ CREATE TABLE IF NOT EXISTS terms (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     is_current BOOLEAN DEFAULT false NOT NULL,
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
     UNIQUE (academic_year_id, name)
 );
@@ -281,7 +286,23 @@ CREATE TABLE IF NOT EXISTS performance_history (
     UNIQUE (student_id, academic_year_id, term_id, subject_id)
 );
 
--- 19. PENDING INVITES (holds admin-created invitations before user registers)
+-- 19. STUDENT FEES
+CREATE TABLE IF NOT EXISTS student_fees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
+    student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
+    term_id UUID REFERENCES terms(id) ON DELETE CASCADE NOT NULL,
+    total_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+    paid_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+    due_date DATE,
+    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PARTIAL', 'PAID', 'OVERPAID')),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (student_id, term_id)
+);
+
+-- 20. PENDING INVITES (holds admin-created invitations before user registers)
 --     No FK to auth.users — the user doesn't exist yet at invite time.
 CREATE TABLE IF NOT EXISTS pending_invites (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

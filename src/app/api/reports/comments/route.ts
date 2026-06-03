@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
             .from('users')
             .select('school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const schoolId = userProfile?.school_id;
         if (!schoolId) {

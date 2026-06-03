@@ -14,15 +14,19 @@ export async function GET(
 
     const teacherId = (await params).teacherId;
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id').eq('id', userId).single();
+    const { data: userData } = await supabase.from('users').select('school_id, role').eq('id', userId).maybeSingle();
     const schoolId = userData?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+
+    if (userData?.role !== 'ADMIN' && userId !== teacherId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { data: user } = await supabase
       .from('users')
       .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id, avatar_url')
       .eq('id', teacherId)
-      .single();
+      .maybeSingle();
 
     if (!user || user.school_id !== schoolId) {
       return NextResponse.json({ error: 'Teacher not found' }, { status: 404 });
@@ -40,8 +44,8 @@ export async function GET(
       supabase
         .from('subject_teachers')
         .select('id')
-        .eq('user_id', teacherId)
-        .single(),
+      .eq('user_id', teacherId)
+      .maybeSingle(),
       supabase
         .from('exams')
         .select('id, name, exam_type, exam_date, max_score, grade_stream_id, grade_id, subjects(name), grades(name_display)')

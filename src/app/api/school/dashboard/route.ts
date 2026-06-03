@@ -14,7 +14,7 @@ export async function GET(_request: NextRequest) {
       .from('users')
       .select('school_id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role as string;
@@ -37,17 +37,17 @@ export async function GET(_request: NextRequest) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, currentTermRes, schoolRes] = await Promise.all([
-      supabase.from('students').select('id', { count: 'exact', head: true }).eq('users.school_id', schoolId),
+      supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId),
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
-      supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
+      supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER', 'TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('report_cards').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
-      supabase.from('academic_years').select('id').eq('school_id', schoolId).order('start_date', { ascending: false }).limit(1).single(),
+      supabase.from('academic_years').select('id').eq('school_id', schoolId).order('start_date', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).not('status', 'eq', 'PAID').lt('due_date', today),
       supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
-      supabase.from('students').select('id, date_enrolled', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
+      supabase.from('students').select('id, date_enrolled, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
       supabase.from('terms').select('id, name').eq('school_id', schoolId).eq('is_current', true).maybeSingle(),
-      supabase.from('schools').select('logo_url').eq('id', schoolId).single(),
+      supabase.from('schools').select('logo_url').eq('id', schoolId).maybeSingle(),
     ]);
 
     const currentYear = currentYearRes?.data;
@@ -180,6 +180,7 @@ export async function GET(_request: NextRequest) {
     const presentCount = attendanceRows.filter(r => r.status === 'present').length;
     const absentCount = attendanceRows.filter(r => r.status === 'absent').length;
     const lateCount = attendanceRows.filter(r => r.status === 'late').length;
+    const excusedCount = attendanceRows.filter(r => r.status === 'excused').length;
 
     // ── Finance Summary ──
     const feeRows = (financeRes.data || []) as { total_fee: number; paid_amount: number; status: string }[];
@@ -199,7 +200,7 @@ export async function GET(_request: NextRequest) {
       totalUsers,
       totalClasses,
       totalReports,
-      attendanceToday: { present: presentCount, absent: absentCount, late: lateCount },
+      attendanceToday: { present: presentCount, absent: absentCount, late: lateCount, excused: excusedCount },
       upcomingExams,
       recentActivities,
       overdueFeesCount,

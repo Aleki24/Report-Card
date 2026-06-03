@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getTeacherPermissions, isStudentVisibleToTeacher } from '@/lib/teacher-utils';
 
 export async function GET(
   _request: NextRequest,
@@ -14,10 +15,15 @@ export async function GET(
 
     const studentId = (await params).studentId;
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id').eq('id', userId).single();
+    const { data: userData } = await supabase.from('users').select('school_id, role').eq('id', userId).maybeSingle();
     const schoolId = userData?.school_id as string | null;
-    if (!schoolId) {
-      return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+    const role = userData?.role as string | null;
+    if (!schoolId || !role) {
+      return NextResponse.json({ error: 'No school associated or invalid role' }, { status: 403 });
+    }
+
+    if (role === 'STUDENT' && userId !== studentId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // 1. Student profile
@@ -31,7 +37,7 @@ export async function GET(
         academic_levels (id, name, code)
       `)
       .eq('id', studentId)
-      .single();
+      .maybeSingle();
 
     if (studentErr || !student) {
       return NextResponse.json({ error: 'Student not found' }, { status: 404 });
@@ -42,6 +48,13 @@ export async function GET(
       return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
     }
 
+    if (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER') {
+      const perms = await getTeacherPermissions(userId);
+      if (!isStudentVisibleToTeacher(student, perms)) {
+        return NextResponse.json({ error: 'Not authorized to view this student' }, { status: 403 });
+      }
+    }
+
     // 2. Academic history — marks grouped by term
     const { data: currentYear } = await supabase
       .from('academic_years')
@@ -49,7 +62,7 @@ export async function GET(
       .eq('school_id', schoolId)
       .order('start_date', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     let academicHistory: {
       term_id: string;

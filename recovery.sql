@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS schools (
     email TEXT,
     grading_system_cbc_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     grading_system_844_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
+    onboarding_completed BOOLEAN DEFAULT false NOT NULL,
+    teacher_invite_code TEXT,
+    student_invite_code TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -80,7 +83,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     phone TEXT,
-    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT')),
+    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING')),
     is_active BOOLEAN DEFAULT true NOT NULL,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     username TEXT UNIQUE,
@@ -254,7 +257,7 @@ CREATE TABLE IF NOT EXISTS pending_invites (
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     phone TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT')),
+    role TEXT NOT NULL CHECK (role IN ('ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING')),
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
     invite_code TEXT NOT NULL,
     admission_number TEXT,

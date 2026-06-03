@@ -59,7 +59,7 @@ export async function POST(request: Request) {
                 .from('students')
                 .select('academic_level_id')
                 .eq('id', studentIds[0])
-                .single();
+                .maybeSingle();
 
             if (firstStudent?.academic_level_id) {
                 const { data: gradingSystem } = await supabase
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
                     .select('id')
                     .eq('academic_level_id', firstStudent.academic_level_id)
                     .limit(1)
-                    .single();
+                    .maybeSingle();
 
                 if (gradingSystem) {
                     const { data: scales } = await supabase
@@ -82,9 +82,9 @@ export async function POST(request: Request) {
 
         // 3. Fetch term & year names
         const [{ data: termData }, { data: yearData }, { data: streamData }] = await Promise.all([
-            supabase.from('terms').select('name').eq('id', termId).single(),
-            supabase.from('academic_years').select('name').eq('id', academicYearId).single(),
-            supabase.from('grade_streams').select('full_name').eq('id', gradeStreamId).single(),
+            supabase.from('terms').select('name').eq('id', termId).maybeSingle(),
+            supabase.from('academic_years').select('name').eq('id', academicYearId).maybeSingle(),
+            supabase.from('grade_streams').select('full_name').eq('id', gradeStreamId).maybeSingle(),
         ]);
 
         const termName = termData?.name || 'Term';
@@ -96,10 +96,9 @@ export async function POST(request: Request) {
             .from('exam_marks')
             .select(`
                 student_id,
-                score,
-                grade,
-                exams!inner(term_id),
-                subjects(name)
+                raw_score,
+                grade_symbol,
+                exams!inner(term_id, subjects (name))
             `)
             .in('student_id', studentIds)
             .eq('exams.term_id', termId);
@@ -138,9 +137,9 @@ export async function POST(request: Request) {
             const studentMarks = (marks || []).filter((m: any) => m.student_id === student.id);
             const subjectLines = studentMarks
                 .map((m: any) => {
-                    const subjectName = (m as any).subjects?.name || '?';
-                    const score = m.score != null ? m.score : '-';
-                    const grade = m.grade || (m.score != null && gradingScales.length > 0 ? getGradeFromScales(Number(m.score), gradingScales) : '-');
+                    const subjectName = m.exams?.subjects?.name || '?';
+                    const score = m.raw_score != null ? m.raw_score : '-';
+                    const grade = m.grade_symbol || (m.raw_score != null && gradingScales.length > 0 ? getGradeFromScales(Number(m.raw_score), gradingScales) : '-');
                     return `${subjectName}: ${score}% (${grade})`;
                 })
                 .slice(0, 8); // Max 8 subjects to keep SMS short

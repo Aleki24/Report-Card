@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,17 +13,35 @@ export async function GET(request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
       .from('users')
-      .select('school_id')
+      .select('school_id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id as string | null;
-    if (!schoolId) return NextResponse.json({ data: [] });
+    const role = userProfile?.role as string | null;
+    if (!schoolId || !role) return NextResponse.json({ data: [] });
+
+    // Students shouldn't access the class marks list
+    if (role === 'STUDENT') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const examId = searchParams.get('exam_id');
     if (!examId) {
       return NextResponse.json({ error: 'exam_id is required' }, { status: 400 });
+    }
+
+    // If teacher, verify exam visibility
+    if (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER') {
+      const { data: exam } = await supabase.from('exams').select('*').eq('id', examId).maybeSingle();
+      if (!exam || exam.school_id !== schoolId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const perms = await getTeacherPermissions(userId);
+      if (!isExamVisibleToTeacher(exam, perms)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // Get student IDs for this school only
@@ -96,6 +115,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
+      const { data: exam } = await supabase.from('exams').select('*').eq('id', exam_id).maybeSingle();
+      if (!exam || exam.school_id !== schoolId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const perms = await getTeacherPermissions(userId);
+      if (!isExamVisibleToTeacher(exam, perms)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     // Get student IDs for this school only to validate
     const { data: schoolUsers } = await supabase
       .from('users')
@@ -161,12 +191,23 @@ export async function PATCH(request: NextRequest) {
     // Verify mark ownership
     const { data: markCheck } = await supabase
       .from('exam_marks')
-      .select('id, students!inner ( users!inner ( school_id ) )')
+      .select('id, exam_id, students!inner ( users!inner ( school_id ) )')
       .eq('id', id)
       .single();
 
     if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
+      const { data: exam } = await supabase.from('exams').select('*').eq('id', markCheck.exam_id).maybeSingle();
+      if (!exam || exam.school_id !== schoolId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const perms = await getTeacherPermissions(userId);
+      if (!isExamVisibleToTeacher(exam, perms)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
     
     const updateData: Record<string, any> = { raw_score, percentage, grade_symbol, remarks };
@@ -215,13 +256,25 @@ export async function DELETE(request: NextRequest) {
     // Verify mark ownership
     const { data: markCheck } = await supabase
       .from('exam_marks')
-      .select('id, students!inner ( users!inner ( school_id ) )')
+      .select('id, exam_id, students!inner ( users!inner ( school_id ) )')
       .eq('id', id)
       .single();
 
     if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
+      const { data: exam } = await supabase.from('exams').select('*').eq('id', markCheck.exam_id).maybeSingle();
+      if (!exam || exam.school_id !== schoolId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const perms = await getTeacherPermissions(userId);
+      if (!isExamVisibleToTeacher(exam, perms)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+    
     const { error } = await supabase.from('exam_marks').delete().eq('id', id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

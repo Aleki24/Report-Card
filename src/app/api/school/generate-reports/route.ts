@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       .from('users')
       .select('school_id')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id;
     if (!schoolId) {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       .from('grade_streams')
       .select('school_id')
       .eq('id', grade_stream_id)
-      .single();
+      .maybeSingle();
 
     if (streamError || stream?.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid grade stream' }, { status: 400 });

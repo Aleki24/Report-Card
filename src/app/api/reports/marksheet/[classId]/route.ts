@@ -57,7 +57,7 @@ export async function GET(
             .from('users')
             .select('school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const userSchoolId = userProfile?.school_id;
         if (!userSchoolId || (targetSchoolId && targetSchoolId !== userSchoolId)) {
@@ -65,7 +65,7 @@ export async function GET(
         }
 
         if (targetSchoolId) {
-            const { data: schoolData } = await supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).single();
+            const { data: schoolData } = await supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle();
             if (schoolData) {
                 schoolName = schoolData.name;
                 schoolLogoUrl = schoolData.logo_url || undefined;
@@ -86,7 +86,7 @@ export async function GET(
         // Fetch grade code from grades table
         let gradeLevelCode = '';
         if (gradeId) {
-            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).maybeSingle();
             if (gradeData) gradeLevelCode = gradeData.code || '';
         }
         
@@ -98,7 +98,7 @@ export async function GET(
                            /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
 
         if (firstAcademicLevelId) {
-            const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).single();
+            const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle();
             // Use grade code to determine KCSE vs CBC, fallback to academic level
             if (isKCSEGrade) {
                 gradingSystemType = 'KCSE';
@@ -119,8 +119,7 @@ export async function GET(
                     const { count } = await supabase
                         .from('grading_scales')
                         .select('id', { count: 'exact', head: true })
-                        .eq('grading_system_id', gs.id)
-                        .single();
+                        .eq('grading_system_id', gs.id);
                     
                     if (count && count > 0) {
                         gradingSystemId = gs.id;
@@ -155,14 +154,14 @@ export async function GET(
         let termTitle = 'Term Report';
         let academicYearName = 'Academic Year';
         if (termId) {
-            const { data: termData } = await supabase.from('terms').select('name').eq('id', termId).single();
+            const { data: termData } = await supabase.from('terms').select('name').eq('id', termId).maybeSingle();
             if (termData) termTitle = termData.name;
         }
         const customTitle = searchParams.get('customTitle');
         if (customTitle) termTitle = customTitle;
 
         if (yearId) {
-            const { data: yearData } = await supabase.from('academic_years').select('name').eq('id', yearId).single();
+            const { data: yearData } = await supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle();
             if (yearData) academicYearName = yearData.name;
         }
 
@@ -367,7 +366,7 @@ export async function GET(
 
         const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0);
         const meanPoints = studentsWithMarks.length > 0 ? Math.round(totalPointsSum / studentsWithMarks.length) : 0;
-        
+
         const meanGrade = gradingSystemType === 'KCSE' ? getGradeFromPercentageSimple(meanPoints) : '';
         
         const markSheetData = {

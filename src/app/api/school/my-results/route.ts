@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('school_id')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id;
     if (!schoolId) return NextResponse.json({ data: null });
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       .select('id, current_grade_stream_id, users!inner(school_id)')
       .eq('id', userId)
       .eq('users.school_id', schoolId)
-      .single();
+      .maybeSingle();
 
     if (!studentRecord) {
       return NextResponse.json({ data: null });

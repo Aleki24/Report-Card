@@ -12,16 +12,25 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('school_id')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id;
     if (!schoolId) return NextResponse.json({ data: [] });
 
-    // Fetch scales. Assuming grading systems are linked to the school.
+    const { data: schoolData } = await supabase
+      .from('schools')
+      .select('grading_system_cbc_id, grading_system_844_id')
+      .eq('id', schoolId)
+      .maybeSingle();
+
+    const systemIds = [schoolData?.grading_system_cbc_id, schoolData?.grading_system_844_id].filter(Boolean);
+    if (systemIds.length === 0) return NextResponse.json({ data: [] });
+
+    // Fetch scales for the school's configured grading systems
     const { data, error } = await supabase
         .from('grading_scales')
-        .select('symbol, label, min_percentage, max_percentage, points, grading_systems!inner(name, school_id)')
-        .eq('grading_systems.school_id', schoolId)
+        .select('symbol, label, min_percentage, max_percentage, points, grading_system_id')
+        .in('grading_system_id', systemIds)
         .order('order_index');
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

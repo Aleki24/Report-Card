@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', user_id)
-            .single();
+            .maybeSingle();
 
         // Allow admins and class teachers to create users
         if (!adminProfile || !adminProfile.school_id) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
                 .from('class_teachers')
                 .select('current_grade_stream_id')
                 .eq('user_id', user_id)
-                .single();
+                .maybeSingle();
             
             if (!teacherAssignment || teacherAssignment.current_grade_stream_id !== grade_stream_id) {
                 return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
             .from('schools')
             .select('name')
             .eq('id', school_id)
-            .single();
+            .maybeSingle();
 
         if (!school) {
             return NextResponse.json({ error: 'School not found.' }, { status: 404 });
@@ -111,8 +111,6 @@ export async function POST(request: NextRequest) {
         }
 
         // 1. GENERATE USERNAME
-        // Import must be added to top of file, we will assume it's there or add it
-        // Generate a clean username using the utility
         const { generateUsername } = await import('@/lib/generate-username');
         const { gradeToWord } = await import('@/lib/grade-to-word');
         const username = generateUsername(first_name, school.name, sequence_number);
@@ -134,19 +132,19 @@ export async function POST(request: NextRequest) {
 
         if (role === 'STUDENT') {
              // Find grade for the stream
-             const { data: stream } = await supabaseAdmin
-                .from('grade_streams')
-                .select('grade_id')
-                .eq('id', grade_stream_id)
-                .eq('school_id', school_id)
-                .single();
+              const { data: stream } = await supabaseAdmin
+                 .from('grade_streams')
+                 .select('grade_id')
+                 .eq('id', grade_stream_id)
+                 .eq('school_id', school_id)
+                 .maybeSingle();
 
              if (stream) {
                  const { data: grade } = await supabaseAdmin
                     .from('grades')
                     .select('numeric_order')
                     .eq('id', stream.grade_id)
-                    .single();
+                    .maybeSingle();
                  if (grade) {
                      rawPassword = gradeToWord(grade.numeric_order);
                  }
@@ -159,13 +157,13 @@ export async function POST(request: NextRequest) {
                     .select('grade_id')
                     .eq('id', class_teacher_grade_stream_id)
                     .eq('school_id', school_id)
-                    .single();
+                    .maybeSingle();
                  if (stream) {
                      const { data: grade } = await supabaseAdmin
                         .from('grades')
                         .select('numeric_order')
                         .eq('id', stream.grade_id)
-                        .single();
+                        .maybeSingle();
                      if (grade) {
                          rawPassword = gradeToWord(grade.numeric_order);
                      }
@@ -183,7 +181,7 @@ export async function POST(request: NextRequest) {
                     .select('name')
                     .eq('id', firstSubjectId)
                     .eq('school_id', school_id)
-                    .single();
+                    .maybeSingle();
                  if (subject) {
                      rawPassword = subject.name.toLowerCase().replace(/[^a-z0-9]/g, '');
                      passwordHint = `Subject name (e.g., "${rawPassword}")`;
@@ -201,7 +199,7 @@ export async function POST(request: NextRequest) {
         const password_hash = await bcrypt.hash(rawPassword, 10);
         const { randomUUID } = await import('crypto');
 
-        // 3. CREATE USER IN DB
+        // 3. CREATE USER IN DB (no plain_password stored for security)
         const { data: newUser, error: insertError } = await supabaseAdmin
             .from('users')
             .insert({
@@ -213,9 +211,7 @@ export async function POST(request: NextRequest) {
                 school_id,
                 username,
                 password_hash,
-                plain_password: rawPassword,
                 is_active: true,
-                // Email is required by schema, but they won't use it. Generate a dummy one.
                 email: `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`,
             })
             .select('id')
@@ -237,9 +233,6 @@ export async function POST(request: NextRequest) {
              });
         }
 
-        // (We would normally also create class_teachers or subject_teachers records here,
-        // but let's assume the frontend will chain those calls or we just want basics right now.
-        // I will add basic insertion if provided:)
         if (role === 'CLASS_TEACHER' && class_teacher_grade_stream_id) {
              // Need active academic year
              const { data: currentYear } = await supabaseAdmin
@@ -259,7 +252,7 @@ export async function POST(request: NextRequest) {
              }
         }
 
-if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
+        if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
               const { data: tRecord } = await supabaseAdmin.from('subject_teachers').insert({ user_id: newUser.id }).select('id').single();
               if (tRecord) {
                    const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).order('start_date', { ascending: false }).limit(1).single();

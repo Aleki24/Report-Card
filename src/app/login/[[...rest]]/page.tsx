@@ -60,9 +60,7 @@ export default function LoginPage() {
             toast.error('Account requires a second factor not supported here.');
           }
         } else {
-          console.log('Incomplete sign-in:', result);
-          (window as any).__debugResult = result;
-          toast.error(`Sign in incomplete: ${result.status}. Check console for details.`);
+          toast.error(`Sign in incomplete: ${result.status}. Please try again.`);
         }
       }
     } catch (err: any) {
@@ -235,12 +233,6 @@ export default function LoginPage() {
               </>
             )}
             
-            {/* Debug Info */}
-            {typeof window !== 'undefined' && (window as any).__debugResult && (
-              <pre className="text-xs overflow-auto p-2 bg-black/10 rounded">
-                {JSON.stringify((window as any).__debugResult, null, 2)}
-              </pre>
-            )}
 
             {/* Submit */}
             <button

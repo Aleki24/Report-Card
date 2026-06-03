@@ -16,7 +16,7 @@ export async function GET() {
       .from('users')
       .select('id, first_name, last_name, email, role, school_id, is_active')
       .eq('id', clerkAuth.userId)
-      .single();
+      .maybeSingle();
 
     // Auto-create user if they exist in Clerk but not in Supabase
     // (e.g. webhook didn't fire or wasn't configured)
@@ -25,11 +25,11 @@ export async function GET() {
       const firstName = user.firstName || '';
       const lastName = user.lastName || '';
       const metadata = (user.publicMetadata || {}) as Record<string, any>;
-      const role = metadata.role || 'ADMIN';
+      const role = metadata.role || 'PENDING';
       let schoolId = metadata.school_id || metadata.schoolId || null;
 
-      // If admin without school, create one
-      if (role === 'ADMIN' && !schoolId) {
+      // Only auto-create a school if the user explicitly has ADMIN role in Clerk metadata
+      if (metadata.role === 'ADMIN' && !schoolId) {
         const schoolIdNew = crypto.randomUUID();
         const { error: schoolErr } = await supabase.from('schools').insert({
           id: schoolIdNew,
@@ -73,7 +73,7 @@ export async function GET() {
         .from('schools')
         .select('name, onboarding_completed')
         .eq('id', dbUser.school_id)
-        .single();
+        .maybeSingle();
       schoolName = school?.name || null;
       schoolOnboardingCompleted = school?.onboarding_completed || false;
     }

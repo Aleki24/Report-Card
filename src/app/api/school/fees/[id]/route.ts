@@ -6,26 +6,48 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     try {
         const { userId } = await auth();
         if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const { id } = await params;
+        
+        // Verify ownership
+        const { data: currentFee } = await supabase
+            .from('student_fees')
+            .select('school_id')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (!currentFee || currentFee.school_id !== userProfile.school_id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         const body = await request.json();
 
         const updateData: Record<string, any> = {};
-        if (body.total_fee != null) updateData.total_fee = body.total_fee;
-        if (body.paid_amount != null) updateData.paid_amount = body.paid_amount;
+        if (body.total_fee != null) {
+            updateData.total_fee = Number(body.total_fee);
+            if (isNaN(updateData.total_fee)) {
+                return NextResponse.json({ error: 'total_fee must be a number' }, { status: 400 });
+            }
+        }
+        if (body.paid_amount != null) {
+            updateData.paid_amount = Number(body.paid_amount);
+            if (isNaN(updateData.paid_amount)) {
+                return NextResponse.json({ error: 'paid_amount must be a number' }, { status: 400 });
+            }
+        }
         if (body.due_date !== undefined) updateData.due_date = body.due_date;
         if (body.notes !== undefined) updateData.notes = body.notes;
         updateData.updated_at = new Date().toISOString();
@@ -38,8 +60,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
                 .single();
 
             if (current) {
-                const total = body.total_fee ?? Number(current.total_fee);
-                const paid = body.paid_amount ?? Number(current.paid_amount);
+                const total = body.total_fee != null ? Number(body.total_fee) : Number(current.total_fee);
+                const paid = body.paid_amount != null ? Number(body.paid_amount) : Number(current.paid_amount);
                 updateData.status = paid <= 0 ? 'PENDING' : paid >= total ? (paid > total ? 'OVERPAID' : 'PAID') : 'PARTIAL';
             }
         }
@@ -63,21 +85,32 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     try {
         const { userId } = await auth();
         if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const { id } = await params;
+
+        // Verify ownership
+        const { data: currentFee } = await supabase
+            .from('student_fees')
+            .select('school_id')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (!currentFee || currentFee.school_id !== userProfile.school_id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
         const { error } = await supabase.from('student_fees').delete().eq('id', id);
         if (error) throw error;

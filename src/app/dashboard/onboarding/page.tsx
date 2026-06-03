@@ -415,7 +415,7 @@ export default function OnboardingWizard() {
                         {classes.length > 1 && (
                           <button 
                             onClick={() => setClasses(classes.filter((_, i) => i !== idx))}
-                            className="h-11 px-3 text-red-500 hover:bg-red-50 rounded-lg text-sm font-medium"
+                            className="h-11 px-3 text-red-500 hover:bg-destructive/10 rounded-lg text-sm font-medium"
                           >
                             Remove
                           </button>

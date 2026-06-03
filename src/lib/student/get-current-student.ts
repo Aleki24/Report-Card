@@ -13,7 +13,7 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
         .from('users')
         .select('role, school_id')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
     if (!userProfile) return null;
     if (userProfile.role !== 'STUDENT') return null;
@@ -38,7 +38,7 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
         `)
         .eq('id', userId)
         .eq('users.school_id', schoolId)
-        .single();
+        .maybeSingle();
 
     if (error || !data) return null;
 

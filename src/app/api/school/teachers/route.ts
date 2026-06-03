@@ -10,7 +10,7 @@ export async function GET(_request: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id').eq('id', userId).single();
+    const { data: userData } = await supabase.from('users').select('school_id').eq('id', userId).maybeSingle();
     const schoolId = userData?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ data: [] });
 
@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest) {
         .from('users')
         .select('id, first_name, last_name, email, phone, role, is_active, created_at, avatar_url')
         .eq('school_id', schoolId)
-        .in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'])
+        .in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'TEACHER'])
         .order('created_at', { ascending: false }),
       supabase
         .from('academic_years')
@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest) {
         .eq('school_id', schoolId)
         .order('start_date', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
     ]);
 
     const currentYear = currentYearRes.data;
@@ -96,7 +96,8 @@ export async function GET(_request: NextRequest) {
       let displayRole = t.role === 'ADMIN' ? 'Admin' : '';
       if (t.role === 'CLASS_TEACHER') displayRole = 'Class Teacher';
       if (t.role === 'SUBJECT_TEACHER') displayRole = 'Subject Teacher';
-      if (t.role === 'CLASS_TEACHER' && t.role === 'SUBJECT_TEACHER') displayRole = 'Class Teacher';
+      // Check if teacher has both class and subject assignments
+      if (ctEntries.length > 0 && stAssignments.length > 0) displayRole = 'Class & Subject Teacher';
 
       const status = t.is_active ? 'Active' : 'Inactive';
 

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         // Only admins can view other users' assignments
         if (!userProfile || userProfile.role !== 'ADMIN') {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
             .from('subject_teachers')
             .select('id')
             .eq('user_id', targetUserId)
-            .single();
+            .maybeSingle();
 
         let subjectAssignments: any[] = [];
         if (subjectTeacherData) {

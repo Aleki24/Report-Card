@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       .from('users')
       .select('id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (userError || !userData || userData.role !== 'PENDING') {
       return NextResponse.json({ error: 'Invalid user state or already assigned a role' }, { status: 403 });
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       .from('schools')
       .select('id')
       .eq(inviteColumn, inviteCode.trim())
-      .single();
+      .maybeSingle();
 
     if (schoolError || !schoolData) {
       return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
@@ -60,35 +60,66 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Update User Role and School ID
+    // Map the generic 'TEACHER' role from onboarding to 'SUBJECT_TEACHER'
+    // The system expects CLASS_TEACHER or SUBJECT_TEACHER — admin can reassign later
+    const mappedRole = role === 'TEACHER' ? 'SUBJECT_TEACHER' : role;
+
+    // 4. Create specific role record FIRST (before updating role, so failure keeps user PENDING)
+    if (role === 'STUDENT') {
+      // Find a default grade stream and its academic level for this school
+      const { data: streamData } = await supabaseAdmin
+        .from('grade_streams')
+        .select(`
+          id,
+          grades!inner (
+            academic_level_id
+          )
+        `)
+        .eq('school_id', schoolId)
+        .limit(1)
+        .maybeSingle();
+
+      const academicLevelId = (streamData?.grades as any)?.academic_level_id;
+      const gradeStreamId = streamData?.id;
+
+      if (!academicLevelId || !gradeStreamId) {
+        return NextResponse.json({ 
+          error: 'School has no classes configured yet. Please ask the administrator to set up class streams first.' 
+        }, { status: 400 });
+      }
+
+      const { error: studentErr } = await supabaseAdmin.from('students').insert({
+        id: userId,
+        admission_number: admissionNumber.trim(),
+        status: 'ACTIVE',
+        current_grade_stream_id: gradeStreamId,
+        academic_level_id: academicLevelId
+      });
+
+      if (studentErr) throw new Error('Failed to create student profile: ' + studentErr.message);
+    } else if (role === 'TEACHER') {
+      // Create a basic subject_teacher record
+      const { error: teacherErr } = await supabaseAdmin.from('subject_teachers').insert({
+        user_id: userId
+      });
+      if (teacherErr) throw new Error('Failed to create teacher profile: ' + teacherErr.message);
+    }
+
+    // 5. Update User Role and School ID (only after role-specific record succeeded)
     const { error: updateError } = await supabaseAdmin
       .from('users')
       .update({
-        role: role,
+        role: mappedRole,
         school_id: schoolId
       })
       .eq('id', userId);
 
     if (updateError) throw new Error('Failed to update user profile: ' + updateError.message);
 
-    // 5. Create specific role record
-    if (role === 'STUDENT') {
-      await supabaseAdmin.from('students').insert({
-        id: userId,
-        admission_number: admissionNumber.trim(),
-        status: 'ACTIVE'
-        // Note: current_grade_stream_id and academic_level_id would need to be set by an admin later,
-        // or we could allow them to select their class during onboarding. For now, they are unassigned.
-      });
-    } else if (role === 'TEACHER') {
-      // Create a basic subject_teacher record (if they are a subject teacher)
-      // They will be unassigned initially. The admin can assign classes to them.
-    }
-
     // 6. Update Clerk Metadata
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
     await clerk.users.updateUser(userId, {
-        publicMetadata: { role: role, school_id: schoolId }
+        publicMetadata: { role: mappedRole, school_id: schoolId }
     });
 
     return NextResponse.json({ success: true, message: 'Successfully joined school' });
@@ -98,3 +129,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+

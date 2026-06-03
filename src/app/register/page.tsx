@@ -1,89 +1,67 @@
 "use client";
 
-import { useState } from 'react';
-import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from '@/components/ThemeProvider';
-import { Eye, EyeOff, Loader2, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Loader2, UserPlus, Phone, Key, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function SignupPage() {
+function RegisterContent() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const router = useRouter();
-  const { isLoaded: isSignUpLoaded, signUp } = useSignUp();
-  const { isLoaded: isSignInLoaded, signIn, setActive } = useSignIn();
-  const isLoaded = isSignUpLoaded && isSignInLoaded;
+  const searchParams = useSearchParams();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    const code = searchParams.get('code');
+    if (code) {
+      setInviteCode(code);
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!phone || !inviteCode || !email || !password) {
+      toast.error('All fields are required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/signup', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email, 
-          password, 
-          first_name: firstName, 
-          last_name: lastName 
+        body: JSON.stringify({
+          phone,
+          invite_code: inviteCode,
+          email,
+          password,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || 'Failed to create account.');
+        toast.error(data.error || 'Failed to complete registration.');
         return;
       }
 
-      if (!isLoaded || !signIn) {
-        // Account was created successfully on the backend, but we can't auto-login.
-        // Redirect them to the login page to complete the process.
-        router.push('/login?created=1');
-        return;
-      }
-
-      const result = await signIn.create({
-        identifier: email,
-        password,
-      });
-
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        router.push('/dashboard');
-      } else {
-        router.push(`/login?created=1&status=${result.status}`);
-      }
+      toast.success(data.message || 'Registration successful! Please sign in.');
+      router.push('/login?created=1');
     } catch (err: any) {
       toast.error(err?.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function signUpWithGoogle() {
-    if (!isLoaded || !signUp) return;
-    setGoogleLoading(true);
-    try {
-      await signUp.authenticateWithRedirect({
-        strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/dashboard/onboarding',
-      });
-    } catch {
-      setGoogleLoading(false);
     }
   }
 
@@ -117,11 +95,11 @@ export default function SignupPage() {
           />
           <h1 className="mb-2 text-[28px] font-extrabold tracking-tighter"
             style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}>
-            Create your account
+            Accept Invitation
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-            Get started with Matokeo today
+            Set up your account using your invite details
           </p>
         </div>
 
@@ -135,19 +113,20 @@ export default function SignupPage() {
               : '0 20px 60px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {/* Name row */}
-            <div className="flex gap-4">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label className="text-xs font-semibold"
-                  style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                  First Name
-                </label>
+            {/* Phone Number */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold"
+                style={{ color: isDark ? '#94a3b8' : '#475569' }}>
+                Phone Number
+              </label>
+              <div className="relative">
                 <input
-                  value={firstName}
-                  onChange={e => setFirstName(e.target.value)}
-                  placeholder="John"
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="e.g. +254700000000"
                   required
-                  className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
+                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -156,18 +135,25 @@ export default function SignupPage() {
                   onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
                   onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
                 />
+                <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+                  style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
               </div>
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label className="text-xs font-semibold"
-                  style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                  Last Name
-                </label>
+            </div>
+
+            {/* Invite Code */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold"
+                style={{ color: isDark ? '#94a3b8' : '#475569' }}>
+                Invite Code
+              </label>
+              <div className="relative">
                 <input
-                  value={lastName}
-                  onChange={e => setLastName(e.target.value)}
-                  placeholder="Doe"
+                  type="text"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value)}
+                  placeholder="Enter invite code"
                   required
-                  className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
+                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200 font-mono uppercase"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -176,6 +162,8 @@ export default function SignupPage() {
                   onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
                   onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
                 />
+                <Key className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+                  style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
               </div>
             </div>
 
@@ -183,30 +171,34 @@ export default function SignupPage() {
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                Email
+                Email Address
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="you@school.com"
-                required
-                className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
-                style={{
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                  color: isDark ? '#f1f5f9' : '#0f172a',
-                }}
-                onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
-                onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
-              />
+              <div className="relative">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@school.com"
+                  required
+                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200"
+                  style={{
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+                    color: isDark ? '#f1f5f9' : '#0f172a',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
+                  onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
+                />
+                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+                  style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
+              </div>
             </div>
 
             {/* Password */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                Password
+                Choose Password
               </label>
               <div className="relative">
                 <input
@@ -216,7 +208,7 @@ export default function SignupPage() {
                   placeholder="At least 6 characters"
                   required
                   minLength={6}
-                  className="input-field h-[46px] w-full rounded-xl px-4 text-sm transition-all duration-200"
+                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-10 text-sm transition-all duration-200"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -225,6 +217,8 @@ export default function SignupPage() {
                   onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'; }}
                   onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
                 />
+                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2"
+                  style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -235,7 +229,7 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-2">
               <button
                 type="submit"
                 disabled={loading}
@@ -251,49 +245,11 @@ export default function SignupPage() {
                 ) : (
                   <>
                     <UserPlus className="h-4 w-4" />
-                    Create Account
+                    Register Account
                   </>
                 )}
               </button>
             </div>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1"
-                style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }} />
-              <span className="text-xs font-medium"
-                style={{ color: isDark ? '#64748b' : '#94a3b8' }}>
-                or continue with
-              </span>
-              <div className="h-px flex-1"
-                style={{ background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }} />
-            </div>
-
-            {/* Google */}
-            <button
-              type="button"
-              onClick={signUpWithGoogle}
-              disabled={!isLoaded || googleLoading}
-              className="flex h-[46px] cursor-pointer items-center justify-center gap-3 rounded-xl border text-[14px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-                color: isDark ? '#e2e8f0' : '#1e293b',
-                background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-              }}
-              onMouseEnter={e => { if (!googleLoading) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'; }}
-              onMouseLeave={e => { if (!googleLoading) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'; }}>
-              {googleLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-              )}
-              Sign up with Google
-            </button>
           </form>
         </div>
 
@@ -308,15 +264,19 @@ export default function SignupPage() {
             </Link>
           </span>
         </div>
-
-        {/* Role info */}
-        <div className="mt-6 text-center text-xs leading-relaxed"
-          style={{ color: isDark ? '#475569' : '#94a3b8' }}>
-          <span style={{ opacity: 0.8 }}>
-            Your role will be assigned by your school administrator
-          </span>
-        </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
   );
 }

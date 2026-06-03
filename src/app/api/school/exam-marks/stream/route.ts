@@ -9,10 +9,10 @@ export async function GET(request: NextRequest) {
     
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
-      .from('users')
-      .select('school_id')
-      .eq('id', userId)
-      .single();
+        .from('users')
+        .select('school_id, role')
+        .eq('id', userId)
+        .maybeSingle();
 
     const schoolId = userProfile?.school_id;
     if (!schoolId) return NextResponse.json({ data: [] });

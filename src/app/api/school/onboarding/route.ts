@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       .from('users')
       .select('school_id, role, first_name, email')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (userError || !userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -37,13 +37,17 @@ export async function POST(request: NextRequest) {
       }
 
       schoolId = crypto.randomUUID();
+      const teacherInviteCode = crypto.randomUUID().substring(0, 6).toUpperCase();
+      const studentInviteCode = crypto.randomUUID().substring(0, 6).toUpperCase();
       const { error: schoolError } = await supabaseAdmin.from('schools').insert({
           id: schoolId,
           name: schoolName.trim(),
           email: schoolEmail?.trim() || null,
           phone: schoolPhone?.trim() || null,
           address: schoolAddress?.trim() || null,
-          onboarding_completed: false // Will be set to true below
+          onboarding_completed: false,
+          teacher_invite_code: teacherInviteCode,
+          student_invite_code: studentInviteCode,
       });
 
       if (schoolError) throw new Error('Failed to create school: ' + schoolError.message);
@@ -68,6 +72,7 @@ export async function POST(request: NextRequest) {
       .from('academic_years')
       .select('id')
       .eq('name', academicYear)
+      .eq('school_id', schoolId)
       .maybeSingle();
 
     if (existingYear) {
@@ -77,6 +82,7 @@ export async function POST(request: NextRequest) {
         .from('academic_years')
         .insert({
           name: academicYear,
+          school_id: schoolId,
           start_date: `${academicYear}-01-01`,
           end_date: `${academicYear}-12-31`
         })
@@ -94,6 +100,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('academic_year_id', academicYearId)
       .eq('name', termName)
+      .eq('school_id', schoolId)
       .maybeSingle();
 
     if (existingTerm) {
@@ -105,6 +112,7 @@ export async function POST(request: NextRequest) {
         .from('terms')
         .insert({
           academic_year_id: academicYearId,
+          school_id: schoolId,
           name: termName,
           start_date: `${academicYear}-01-01`,
           end_date: `${academicYear}-04-30`,
@@ -122,9 +130,9 @@ export async function POST(request: NextRequest) {
     // For now, we just update onboarding_completed.
     
     // 5. Insert Grades and Streams
-    const cbcLevelId = '00000000-0000-0000-0000-000000000000'; // Fallback if no level
     const { data: levels } = await supabaseAdmin.from('academic_levels').select('id, code');
     const getLevelId = (code: string) => levels?.find(l => l.code === code)?.id;
+    const fallbackLevelId = levels?.[0]?.id;
 
     for (const cls of classes) {
       if (!cls.grade) continue;
@@ -141,17 +149,25 @@ export async function POST(request: NextRequest) {
       if (existingGrade) {
         gradeId = existingGrade.id;
       } else {
-        const levelId = getLevelId('CBC') || cbcLevelId;
-        const { data: newGrade } = await supabaseAdmin
+        const levelId = getLevelId('CBC') || fallbackLevelId;
+        if (!levelId) continue;
+
+        const { count: existingCount } = await supabaseAdmin
+          .from('grades')
+          .select('*', { count: 'exact', head: true });
+
+        const { data: newGrade, error: grErr } = await supabaseAdmin
           .from('grades')
           .insert({
             academic_level_id: levelId,
             code: cls.grade.toUpperCase().replace(/\s+/g, '_'),
             name_display: cls.grade,
-            numeric_order: 1
+            numeric_order: (existingCount ?? 0) + 1
           })
           .select('id')
           .single();
+
+        if (grErr) continue;
         gradeId = newGrade?.id;
       }
 
@@ -180,9 +196,10 @@ export async function POST(request: NextRequest) {
       const subjectNames = subjects.split(',').map((s: string) => s.trim()).filter(Boolean);
       for (let i = 0; i < subjectNames.length; i++) {
         const sName = subjectNames[i];
-        const code = sName.substring(0, 3).toUpperCase() + i;
-        const levelId = getLevelId('CBC') || cbcLevelId;
-        
+        const code = sName.substring(0, 3).toUpperCase() + String(i + 1).padStart(2, '0');
+        const levelId = getLevelId('CBC') || fallbackLevelId;
+        if (!levelId) continue;
+
         await supabaseAdmin
           .from('subjects')
           .insert({

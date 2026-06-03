@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
             .from('users')
             .select('school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!profile?.school_id) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });

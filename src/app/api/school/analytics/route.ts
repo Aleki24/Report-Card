@@ -12,12 +12,14 @@ export async function GET(request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
       .from('users')
-      .select('school_id')
+      .select('school_id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id as string | null;
-    if (!schoolId) {
+    const role = userProfile?.role;
+
+    if (!schoolId || !role || role === 'STUDENT') {
       return NextResponse.json({ marks: [] });
     }
 
@@ -60,15 +62,15 @@ export async function GET(request: NextRequest) {
         student_id,
         percentage,
         grade_symbol,
-        exams (
+        exams!inner (
           id,
           name,
           exam_date,
           subjects ( name )
         ),
-        students (
+        students!inner (
           admission_number,
-          users ( first_name, last_name )
+          users!inner ( first_name, last_name )
         )
       `)
       .in('student_id', studentIds);

@@ -12,15 +12,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const { id } = await params;
+        
+        // Verify ownership
+        const { data: currentItem } = await supabase
+            .from('assignments')
+            .select('school_id')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         const body = await request.json();
 
         const updateData: Record<string, any> = {};
@@ -56,7 +68,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
             .single();
 
@@ -65,6 +77,17 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         }
 
         const { id } = await params;
+
+        // Verify ownership
+        const { data: currentItem } = await supabase
+            .from('assignments')
+            .select('school_id')
+            .eq('id', id)
+            .single();
+
+        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
         const { error } = await supabase.from('assignments').delete().eq('id', id);
         if (error) throw error;

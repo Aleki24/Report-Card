@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', user_id)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Only admins can manage schools' }, { status: 403 });

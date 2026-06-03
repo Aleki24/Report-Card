@@ -16,7 +16,7 @@ export async function GET() {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -34,7 +34,7 @@ export async function GET() {
                 .eq('school_id', schoolId)
                 .order('start_date', { ascending: false })
                 .limit(1)
-                .single();
+                .maybeSingle();
             currentYearId = currentYear?.id ?? null;
         }
         

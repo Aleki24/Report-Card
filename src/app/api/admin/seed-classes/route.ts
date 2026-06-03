@@ -22,7 +22,7 @@ export async function GET(request: Request) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

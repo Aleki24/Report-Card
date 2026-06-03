@@ -503,6 +503,6 @@ export const comingSoonModules: ComingSoonModule[] = [
 ];
 
 // ── Helper to find a module by slug ──────────────────────────
-export function getModuleBySlug(slug: string): Module | undefined {
-  return modules.find((m) => m.slug === slug);
+export function getModuleBySlug(slug: string): Module | ComingSoonModule | undefined {
+  return modules.find((m) => m.slug === slug) ?? comingSoonModules.find((m) => m.slug === slug);
 }

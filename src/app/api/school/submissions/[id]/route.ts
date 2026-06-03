@@ -12,9 +12,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -22,6 +22,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         const { id } = await params;
         const body = await request.json();
+
+        // Verify submission belongs to the grader's school
+        const { data: subCheck } = await supabase
+            .from('assignment_submissions')
+            .select(`
+                id,
+                students!inner (
+                    users!inner ( school_id )
+                )
+            `)
+            .eq('id', id)
+            .eq('students.users.school_id', userProfile.school_id)
+            .maybeSingle();
+
+        if (!subCheck) {
+            return NextResponse.json({ error: 'Submission not found in your school' }, { status: 404 });
+        }
 
         const updateData: Record<string, any> = {
             graded_by: userId,

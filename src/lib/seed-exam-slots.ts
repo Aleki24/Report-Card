@@ -44,7 +44,8 @@ export async function seedExamSlots(options: SeedOptions) {
   // Get all subjects
   const { data: subjects } = await supabase
     .from('subjects')
-    .select('id, name, code, academic_level_id');
+    .select('id, name, code, academic_level_id')
+    .eq('school_id', schoolId);
 
   if (!subjects?.length) return { created: 0, skipped: 0, error: 'No subjects found' };
 

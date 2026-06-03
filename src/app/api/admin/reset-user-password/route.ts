@@ -16,12 +16,31 @@ export async function POST(request: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
-    // Get the target user's role to determine password
+    // Verify the requester is an admin and get their school_id
+    const { data: adminUser } = await supabase
+      .from('users')
+      .select('role, school_id')
+      .eq('id', userId)
+      .single();
+
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Only admins can reset passwords' }, { status: 403 });
+    }
+
+    // Get the target user's role and verify same school
     const { data: targetUser, error: userError } = await supabase
       .from('users')
-      .select('role, first_name')
+      .select('role, first_name, school_id')
       .eq('id', user_id)
-      .single();
+      .maybeSingle();
+
+    if (userError || !targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (targetUser.school_id !== adminUser.school_id) {
+      return NextResponse.json({ error: 'User not found in your school' }, { status: 404 });
+    }
 
     if (userError || !targetUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

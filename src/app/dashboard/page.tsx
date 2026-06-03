@@ -25,7 +25,7 @@ interface DashboardData {
   totalUsers: number;
   totalClasses: number;
   totalReports: number;
-  attendanceToday: { present: number; absent: number; late: number } | null;
+  attendanceToday: { present: number; absent: number; late: number; excused: number } | null;
   upcomingExams: { id: string; name: string; exam_type: string; exam_date: string; subject_name: string; grade_name: string }[];
   recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
   overdueFeesCount: number;
@@ -297,7 +297,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
                 <h3 className="text-sm font-semibold text-foreground">Attendance Today</h3>
                 <span className="text-xs text-muted-foreground">{totalAttendance(data)} total</span>
               </div>
-              <AttendanceDonut present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} />
+              <AttendanceDonut present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} excused={data?.attendanceToday?.excused ?? 0} />
             </div>
 
             {/* Finance Snapshot */}
@@ -477,16 +477,17 @@ function QuickActionBtn({ icon, label, href, color }: { icon: React.ReactNode; l
 function totalAttendance(data: DashboardData | null): string {
   const a = data?.attendanceToday;
   if (!a) return '0';
-  return String(a.present + a.absent + a.late);
+  return String(a.present + a.absent + a.late + a.excused);
 }
 
-function AttendanceDonut({ present, absent, late }: { present: number; absent: number; late: number }) {
-  const total = present + absent + late || 1;
+function AttendanceDonut({ present, absent, late, excused }: { present: number; absent: number; late: number; excused: number }) {
+  const total = present + absent + late + excused || 1;
   const rate = Math.round((present / total) * 100);
   const data = [
     { name: 'Present', value: present, color: '#10b981' },
     { name: 'Absent', value: absent, color: '#ef4444' },
     { name: 'Late', value: late, color: '#f59e0b' },
+    { name: 'Excused', value: excused, color: '#8b5cf6' },
   ].filter(d => d.value > 0);
   return (
     <div className="flex flex-col items-center">
@@ -507,6 +508,7 @@ function AttendanceDonut({ present, absent, late }: { present: number; absent: n
         <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500" /><span className="text-xs text-muted-foreground">{present}</span><span className="text-xs text-muted-foreground/60">present</span></div>
         <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-red-400" /><span className="text-xs text-muted-foreground">{absent}</span><span className="text-xs text-muted-foreground/60">absent</span></div>
         <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-amber-400" /><span className="text-xs text-muted-foreground">{late}</span><span className="text-xs text-muted-foreground/60">late</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2 h-2.5 sm:w-2.5 sm:h-2.5 rounded-full bg-purple-400" /><span className="text-xs text-muted-foreground">{excused}</span><span className="text-xs text-muted-foreground/60">excused</span></div>
       </div>
     </div>
   );

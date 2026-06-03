@@ -16,7 +16,7 @@ export async function PUT(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
             return NextResponse.json({ error: 'Only admins can update users.' }, { status: 403 });
@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest) {
             .from('users')
             .select('id, school_id, role')
             .eq('id', user_id)
-            .single();
+            .maybeSingle();
 
         if (!targetUser || targetUser.school_id !== adminProfile.school_id) {
             return NextResponse.json({ error: 'User not found in your school' }, { status: 404 });
@@ -79,9 +79,38 @@ export async function PUT(request: NextRequest) {
             .eq('school_id', adminProfile.school_id)
             .order('start_date', { ascending: false })
             .limit(1)
-            .single();
+            .maybeSingle();
 
         const effectiveRole = role || targetUser.role;
+
+        // If role is changed to ADMIN or STUDENT, clear all teacher assignments
+        if (role && ['ADMIN', 'STUDENT'].includes(role)) {
+            // Delete class teacher assignment
+            await supabase
+                .from('class_teachers')
+                .delete()
+                .eq('user_id', user_id);
+
+            // Get subject teacher record
+            const { data: stRecord } = await supabase
+                .from('subject_teachers')
+                .select('id')
+                .eq('user_id', user_id)
+                .maybeSingle();
+
+            if (stRecord) {
+                // Delete all subject assignments
+                await supabase
+                    .from('subject_teacher_assignments')
+                    .delete()
+                    .eq('subject_teacher_id', stRecord.id);
+                // Delete subject teacher record
+                await supabase
+                    .from('subject_teachers')
+                    .delete()
+                    .eq('id', stRecord.id);
+            }
+        }
 
         // ── Handle Class Teacher assignment ──
         if (class_teacher_grade_stream_id !== undefined) {

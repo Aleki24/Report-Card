@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!profile || profile.role !== 'ADMIN' || !profile.school_id) {
             return NextResponse.json({ error: 'Only admins can update teachers.' }, { status: 403 });
@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest) {
             .select('id, school_id')
             .eq('id', teacher_id)
             .eq('school_id', profile.school_id)
-            .single();
+            .maybeSingle();
 
         if (!teacher) {
             return NextResponse.json({ error: 'Teacher not found in your school.' }, { status: 404 });

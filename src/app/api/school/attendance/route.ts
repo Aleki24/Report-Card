@@ -11,7 +11,7 @@ async function getSession() {
     .from('users')
     .select('school_id, role')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (!userProfile) return null;
 
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       .from('grade_streams')
       .select('id, school_id')
       .eq('id', streamId)
-      .single();
+      .maybeSingle();
 
     if (!stream || stream.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid stream for your school' }, { status: 403 });
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
       .from('grade_streams')
       .select('id, school_id')
       .eq('id', stream_id)
-      .single();
+      .maybeSingle();
 
     if (!stream || stream.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid stream for your school' }, { status: 403 });
@@ -169,6 +169,58 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, count: records.length });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await getSession();
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!['ADMIN', 'CLASS_TEACHER'].includes(auth.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { schoolId, userId } = auth;
+    if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+
+    const { searchParams } = new URL(request.url);
+    const studentId = searchParams.get('student_id');
+    const date = searchParams.get('date');
+
+    if (!studentId || !date) {
+      return NextResponse.json({ error: 'student_id and date are required' }, { status: 400 });
+    }
+
+    const supabase = createSupabaseAdmin();
+
+    // Verify the student belongs to this school
+    const { data: student } = await supabase
+      .from('students')
+      .select('id, users!inner(school_id)')
+      .eq('id', studentId)
+      .eq('users.school_id', schoolId)
+      .maybeSingle();
+
+    if (!student) {
+      return NextResponse.json({ error: 'Student not found in your school' }, { status: 404 });
+    }
+
+    const { error } = await supabase
+      .from('daily_attendance')
+      .delete()
+      .eq('student_id', studentId)
+      .eq('date', date)
+      .eq('school_id', schoolId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

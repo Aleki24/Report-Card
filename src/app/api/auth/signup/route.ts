@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendWelcomeEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
     try {

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', user_id)
-            .single();
+            .maybeSingle();
 
         if (!adminProfile || !adminProfile.school_id) {
             return NextResponse.json({ error: 'You must have a school to add students.' }, { status: 403 });
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
                 .from('class_teachers')
                 .select('current_grade_stream_id')
                 .eq('user_id', user_id)
-                .single();
+                .maybeSingle();
             
             if (!teacherAssignment || teacherAssignment.current_grade_stream_id !== grade_stream_id) {
                 return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             .from('schools')
             .select('name')
             .eq('id', effectiveSchoolId)
-            .single();
+            .maybeSingle();
 
         if (!school) {
             return NextResponse.json({ error: 'School not found.' }, { status: 404 });
@@ -119,14 +119,14 @@ export async function POST(request: NextRequest) {
                 .select('grade_id')
                 .eq('id', grade_stream_id)
                 .eq('school_id', effectiveSchoolId)
-                .single();
+                .maybeSingle();
 
              if (stream) {
                  const { data: grade } = await supabaseAdmin
                     .from('grades')
                     .select('numeric_order')
                     .eq('id', stream.grade_id)
-                    .single();
+                    .maybeSingle();
                  if (grade) {
                      rawPassword = gradeToWord(grade.numeric_order);
                  }
@@ -146,7 +146,6 @@ export async function POST(request: NextRequest) {
             school_id: effectiveSchoolId,
             username: uniqueUsername,
             password_hash,
-            plain_password: rawPassword,
             is_active: true
         });
 

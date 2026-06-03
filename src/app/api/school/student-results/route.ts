@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('school_id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     const schoolId = userProfile?.school_id;
     if (!schoolId) return NextResponse.json({ data: [] });
@@ -34,13 +34,13 @@ export async function GET(request: NextRequest) {
       const perms = await getTeacherPermissions(userId);
 
       // Verify exam access
-      const { data: examData } = await supabase.from('exams').select('*').eq('id', examId).single();
+      const { data: examData } = await supabase.from('exams').select('*').eq('id', examId).maybeSingle();
       if (!examData || !isExamVisibleToTeacher(examData, perms)) {
         return NextResponse.json({ error: 'Unauthorized to view this exam' }, { status: 403 });
       }
 
       // Verify stream access
-      const { data: streamData } = await supabase.from('grade_streams').select('*').eq('id', classId).single();
+      const { data: streamData } = await supabase.from('grade_streams').select('*').eq('id', classId).maybeSingle();
       if (!streamData || !isStreamVisibleToTeacher(streamData, perms)) {
         return NextResponse.json({ error: 'Unauthorized to view this stream' }, { status: 403 });
       }

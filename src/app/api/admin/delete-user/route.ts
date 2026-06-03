@@ -16,7 +16,7 @@ export async function DELETE(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
             return NextResponse.json({ error: 'Only admins can delete users.' }, { status: 403 });
@@ -39,18 +39,26 @@ export async function DELETE(request: NextRequest) {
             .from('users')
             .select('id, school_id, role')
             .eq('id', targetUserId)
-            .single();
+            .maybeSingle();
 
         if (!targetUser || targetUser.school_id !== adminProfile.school_id) {
             return NextResponse.json({ error: 'User not found in your school' }, { status: 404 });
         }
 
         // Delete related records first (cascade manually)
-        // Delete student record if exists
+        // 1. Delete exam marks
+        await supabase.from('exam_marks').delete().eq('student_id', targetUserId);
+        // 2. Delete daily attendance records
+        await supabase.from('daily_attendance').delete().eq('student_id', targetUserId);
+        // 3. Delete fee records
+        await supabase.from('student_fees').delete().eq('student_id', targetUserId);
+        // 4. Delete announcements posted by this user
+        await supabase.from('announcements').delete().eq('posted_by', targetUserId);
+        // 5. Delete student record if exists
         await supabase.from('students').delete().eq('id', targetUserId);
-        // Delete class teacher record if exists
+        // 6. Delete class teacher record if exists
         await supabase.from('class_teachers').delete().eq('user_id', targetUserId);
-        // Delete subject teacher assignments + subject teacher record
+        // 7. Delete subject teacher assignments + subject teacher record
         const { data: stRecord } = await supabase
             .from('subject_teachers')
             .select('id')
@@ -60,7 +68,7 @@ export async function DELETE(request: NextRequest) {
             await supabase.from('subject_teacher_assignments').delete().eq('subject_teacher_id', stRecord.id);
             await supabase.from('subject_teachers').delete().eq('id', stRecord.id);
         }
-        // Delete active_users record if exists
+        // 8. Delete active_users record if exists
         await supabase.from('active_users').delete().eq('user_id', targetUserId);
 
         // Finally delete the user

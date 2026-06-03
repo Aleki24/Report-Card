@@ -142,7 +142,7 @@ function ExamsTab() {
 }
 
 /* ───── Marks (Entry) Tab ───── */
-interface StudentMarkRow { id: string; student_name: string; admission_number: string; score: number | null; max_score: number; }
+interface StudentMarkRow { id: string; student_id: string; student_name: string; admission_number: string; score: number | null; max_score: number; }
 interface GradeStreamOption2 { id: string; full_name: string; }
 interface TermOption2 { id: string; name: string; }
 interface ExamTypeOption { id: string; name: string; }
@@ -194,7 +194,7 @@ function MarksTab() {
   const handleSaveMarks = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/marks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exam_slot_id: selectedExam, marks: marks.map(m => ({ student_id: m.id, score: m.score })) }) });
+      const res = await fetch('/api/school/exam-marks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exam_id: selectedExam, marks: marks.map(m => ({ student_id: m.student_id, raw_score: m.score ?? 0, percentage: m.max_score > 0 ? Math.round(((m.score ?? 0) / m.max_score) * 100) : 0 })) }) });
       if (!res.ok) throw new Error('Save failed');
       showToast('✅ Marks saved');
       await fetchMarks();

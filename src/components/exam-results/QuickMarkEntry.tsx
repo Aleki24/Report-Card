@@ -20,6 +20,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
     const [manualGrades, setManualGrades] = useState<Record<string, string>>({});
     const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; systemName: string; min_percentage: number; max_percentage: number }[]>([]);
     const [examAcademicLevelId, setExamAcademicLevelId] = useState<string | null>(null);
+    const [examMaxScore, setExamMaxScore] = useState<number>(100);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -83,6 +84,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                     academicLevelId = exam.grades.academic_level_id;
                 }
                 setExamAcademicLevelId(academicLevelId);
+                if (exam?.max_score) setExamMaxScore(exam.max_score);
 
                 // Fetch all grading systems and filter by academic level
                 const structureRes = await fetch('/api/admin/academic-structure');
@@ -291,7 +293,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                                         <select
                                             className="input-field"
                                             style={{ width: 100, padding: '4px 8px', fontSize: 13 }}
-                                            value={manualGrades[s.id] || autoResolveGrade(scores[s.id] || '', 100)}
+                                            value={manualGrades[s.id] || autoResolveGrade(scores[s.id] || '', examMaxScore)}
                                             onChange={e => handleGradeChange(s.id, e.target.value)}
                                         >
                                             <option value="">—</option>

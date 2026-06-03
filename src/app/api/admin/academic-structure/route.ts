@@ -27,7 +27,7 @@ async function getLatestSession() {
     if (!userId) return null;
     
     const supabaseAdmin = createSupabaseAdmin();
-    const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).single();
+    const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).maybeSingle();
     
     if (!data) return null;
 
@@ -67,12 +67,10 @@ export async function GET(request: NextRequest) {
         const schoolId = auth.schoolId;
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Global/shared data (curriculum) — no school filter needed
-        const [levelsRes, gradesRes, gsRes, gscRes] = await Promise.all([
+        // Global/shared data (curriculum)
+        const [levelsRes, gradesRes] = await Promise.all([
             supabaseAdmin.from('academic_levels').select('id, code, name').order('code'),
             supabaseAdmin.from('grades').select('id, name_display, code, academic_level_id, numeric_order').order('numeric_order'),
-            supabaseAdmin.from('grading_systems').select('*').order('name'),
-            supabaseAdmin.from('grading_scales').select('*').order('order_index'),
         ]);
 
         // School-scoped data — filter by school_id
@@ -80,18 +78,24 @@ export async function GET(request: NextRequest) {
         let termsData: any[] = [];
         let streamsData: any[] = [];
         let subjectsData: any[] = [];
+        let gsData: any[] = [];
+        let gscData: any[] = [];
 
         if (schoolId) {
-            const [yearsRes, termsRes, streamsRes, subjectsRes] = await Promise.all([
+            const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, gscRes] = await Promise.all([
                 supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id, category, is_compulsory').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from('grading_systems').select('*').eq('school_id', schoolId).order('name'),
+                supabaseAdmin.from('grading_scales').select('*, grading_systems!inner(school_id)').eq('grading_systems.school_id', schoolId).order('order_index'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
             streamsData = streamsRes.data ?? [];
             subjectsData = subjectsRes.data ?? [];
+            gsData = gsRes.data ?? [];
+            gscData = gscRes.data ?? [];
 
             if (auth.role !== 'ADMIN') {
                 const perms = await getTeacherPermissions(auth.userId);
@@ -99,7 +103,6 @@ export async function GET(request: NextRequest) {
                 subjectsData = subjectsData.filter(s => isSubjectVisibleToTeacher(s, perms));
             }
         } else {
-             // If no school ID, do not fetch subjects
              subjectsData = [];
         }
 
@@ -125,8 +128,8 @@ export async function GET(request: NextRequest) {
             grade_streams: streamsData,
             subjects: subjectsData,
             academic_levels: levelsRes.data || [],
-            grading_systems: gsRes.data || [],
-            grading_scales: gscRes.data || [],
+            grading_systems: gsData,
+            grading_scales: gscData,
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';
@@ -182,10 +185,11 @@ export async function POST(request: NextRequest) {
             },
 
             grading_system: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = gradingSystemSchema.parse(payload);
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_systems')
-                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id })
+                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'grading system');
                 return NextResponse.json({ success: true, data: result });
@@ -270,6 +274,125 @@ export async function POST(request: NextRequest) {
     }
 }
 
+export async function PATCH(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { type, id, ...payload } = body as { type: string; id: string } & Record<string, unknown>;
+
+        if (!type || !id) {
+            return NextResponse.json({ error: 'type and id are required' }, { status: 400 });
+        }
+
+        const auth = await getLatestSession();
+        if (!auth) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (auth.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only admins can update academic structure.' }, { status: 403 });
+        }
+
+        const { schoolId } = auth;
+        if (!schoolId) {
+            return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
+        }
+
+        const supabaseAdmin = createSupabaseAdmin();
+
+        // School-scoped tables that can be updated
+        const schoolScopedTables: Record<string, string> = {
+            academic_year: 'academic_years',
+            term: 'terms',
+            stream: 'grade_streams',
+            subject: 'subjects',
+            grading_system: 'grading_systems',
+            grading_scale: 'grading_scales',
+        };
+
+        const table = schoolScopedTables[type];
+        if (!table) {
+            return NextResponse.json({ error: `Cannot update type "${type}". Updatable types: ${Object.keys(schoolScopedTables).join(', ')}` }, { status: 400 });
+        }
+
+        // For grading_scales, verify via the parent grading_system
+        if (type === 'grading_scale') {
+            const { data: existing } = await supabaseAdmin
+                .from('grading_scales')
+                .select('id, grading_systems!inner(school_id)')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (!existing || (existing as any).grading_systems?.school_id !== schoolId) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+        } else {
+            // Verify this record belongs to the admin's school
+            const { data: existing } = await supabaseAdmin
+                .from(table)
+                .select('school_id')
+                .eq('id', id)
+                .maybeSingle();
+
+            if (!existing || existing.school_id !== schoolId) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+        }
+
+        // Build the update payload based on type
+        const updateData: Record<string, any> = {};
+
+        if (type === 'academic_year') {
+            if (payload.name !== undefined) updateData.name = payload.name;
+            if (payload.start_date !== undefined) updateData.start_date = payload.start_date;
+            if (payload.end_date !== undefined) updateData.end_date = payload.end_date;
+        } else if (type === 'term') {
+            if (payload.name !== undefined) updateData.name = payload.name;
+            if (payload.start_date !== undefined) updateData.start_date = payload.start_date;
+            if (payload.end_date !== undefined) updateData.end_date = payload.end_date;
+            if (payload.is_current !== undefined) updateData.is_current = payload.is_current;
+        } else if (type === 'stream') {
+            if (payload.name !== undefined) updateData.name = payload.name;
+            if (payload.full_name !== undefined) updateData.full_name = payload.full_name;
+        } else if (type === 'subject') {
+            if (payload.name !== undefined) updateData.name = payload.name;
+            if (payload.code !== undefined) updateData.code = payload.code;
+            if (payload.category !== undefined) updateData.category = payload.category;
+            if (payload.is_compulsory !== undefined) updateData.is_compulsory = payload.is_compulsory;
+            if (payload.display_order !== undefined) updateData.display_order = payload.display_order;
+            if (payload.grading_system_id !== undefined) updateData.grading_system_id = payload.grading_system_id;
+        } else if (type === 'grading_system') {
+            if (payload.name !== undefined) updateData.name = payload.name;
+            if (payload.description !== undefined) updateData.description = payload.description;
+        } else if (type === 'grading_scale') {
+            if (payload.symbol !== undefined) updateData.symbol = payload.symbol;
+            if (payload.label !== undefined) updateData.label = payload.label;
+            if (payload.min_percentage !== undefined) updateData.min_percentage = payload.min_percentage;
+            if (payload.max_percentage !== undefined) updateData.max_percentage = payload.max_percentage;
+            if (payload.points !== undefined) updateData.points = payload.points;
+            if (payload.order_index !== undefined) updateData.order_index = payload.order_index;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+        }
+
+        const { data: result, error } = await supabaseAdmin
+            .from(table)
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return handleDatabaseError(error, type.replace('_', ' '));
+
+        return NextResponse.json({ success: true, data: result });
+    } catch (err: unknown) {
+        if (err instanceof ZodError) return handleZodError(err);
+        const message = err instanceof Error ? err.message : 'An unknown error occurred';
+        return NextResponse.json({ error: message }, { status: 500 });
+    }
+}
+
 export async function DELETE(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -313,7 +436,7 @@ export async function DELETE(request: NextRequest) {
                 .from(table)
                 .select('school_id')
                 .eq('id', id)
-                .single();
+                .maybeSingle();
 
             if (!existing || existing.school_id !== schoolId) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });

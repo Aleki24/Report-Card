@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: clerkEmail,
             role: clerkRole,
             is_active: true,
-            school_id: (clerkUser?.publicMetadata as any)?.schoolId || null,
+            school_id: (clerkUser?.publicMetadata as any)?.school_id || (clerkUser?.publicMetadata as any)?.schoolId || null,
         };
 
         setProfile(fallback);

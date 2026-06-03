@@ -26,7 +26,7 @@ async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string;
   if (!userId) return null;
   
   const supabaseAdmin = createSupabaseAdmin();
-  const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).single();
+  const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).maybeSingle();
 
   if (!data) return null;
 
@@ -117,15 +117,17 @@ export async function GET(request: NextRequest) {
       }
 
       case 'teachers': {
-        const [usersRes, ctRes, stRes] = await Promise.all([
-          supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER']).order('created_at', { ascending: false }),
-          supabase.from('class_teachers').select('user_id, current_grade_stream_id, grade_streams(full_name)'),
-          supabase.from('subject_teachers').select('id, user_id'),
-        ]);
+        const usersRes = await supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'TEACHER']).order('created_at', { ascending: false });
         if (usersRes.error) return NextResponse.json({ error: usersRes.error.message }, { status: 400 });
 
         const teachers = usersRes.data || [];
         const teacherIds = teachers.map(t => t.id);
+
+        const [ctRes, stRes] = await Promise.all([
+          supabase.from('class_teachers').select('user_id, current_grade_stream_id, grade_streams(full_name)').in('user_id', teacherIds),
+          supabase.from('subject_teachers').select('id, user_id').in('user_id', teacherIds),
+        ]);
+
         const classTeachers = ctRes.data || [];
         const subjectTeachers = stRes.data || [];
         const stIds = subjectTeachers.map(st => st.id);
@@ -159,11 +161,11 @@ export async function GET(request: NextRequest) {
       }
 
       case 'exam_slots': {
-        let query = supabase.from('exams').select('id, name, subject_id, grade_stream_id, max_score, date, subjects(name)').eq('school_id', schoolId);
+        let query = supabase.from('exams').select('id, name, subject_id, grade_stream_id, grade_id, max_score, date, exam_type, subjects(name)').eq('school_id', schoolId);
         const gsId = searchParams.get('grade_stream_id');
-        const etId = searchParams.get('exam_type_id');
+        const examType = searchParams.get('exam_type_id');
         if (gsId) query = query.eq('grade_stream_id', gsId);
-        if (etId) query = query.eq('exam_type_id', etId);
+        if (examType) query = query.eq('exam_type', examType);
         const { data, error } = await query.order('date', { ascending: false });
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         return NextResponse.json({ data: (data ?? []).map((e: any) => ({ id: e.id, name: e.name, subject_name: e.subjects?.name, max_score: e.max_score, date: e.date })) });
@@ -175,10 +177,10 @@ export async function GET(request: NextRequest) {
         const { data: schoolUsers } = await supabase.from('users').select('id').eq('school_id', schoolId).eq('role', 'STUDENT');
         const studentIds = (schoolUsers || []).map(u => u.id);
         if (studentIds.length === 0) return NextResponse.json({ data: [] });
-        const { data, error } = await supabase.from('exam_marks').select('id, student_id, raw_score, percentage, students!inner(admission_number, users(first_name, last_name))').eq('exam_slot_id', examSlotId);
+        const { data, error } = await supabase.from('exam_marks').select('id, exam_id, student_id, raw_score, percentage, students!inner(admission_number, users(first_name, last_name))').in('exam_id', [examSlotId]).in('student_id', studentIds);
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         const maxScore = searchParams.get('max_score') ? parseInt(searchParams.get('max_score')!) : 100;
-        return NextResponse.json({ data: (data ?? []).map((m: any) => ({ id: m.student_id, student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(), admission_number: m.students?.admission_number || '', score: m.raw_score, max_score: maxScore })) });
+        return NextResponse.json({ data: (data ?? []).map((m: any) => ({ id: m.id, exam_id: m.exam_id, student_id: m.student_id, student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(), admission_number: m.students?.admission_number || '', score: m.raw_score, max_score: maxScore })) });
       }
 
       case 'grade_streams': {
@@ -224,12 +226,22 @@ export async function GET(request: NextRequest) {
       case 'users': {
         const { data, error } = await supabase
           .from('users')
-          .select('id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, plain_password')
+          .select(`
+            id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id,
+            students!left ( admission_number )
+          `)
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+
+        // Flatten nested students.admission_number
+        const mapped = (data ?? []).map((u: any) => ({
+          ...u,
+          admission_number: u.students?.admission_number ?? null,
+          students: undefined
+        }));
+        return NextResponse.json({ data: mapped });
       }
 
       case 'pending_invites': {
@@ -251,7 +263,7 @@ export async function GET(request: NextRequest) {
           .from('schools')
           .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code')
           .eq('id', schoolId)
-          .single();
+          .maybeSingle();
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         return NextResponse.json({ data });
@@ -262,7 +274,7 @@ export async function GET(request: NextRequest) {
           .from('schools')
           .select('grading_system_cbc_id, grading_system_844_id')
           .eq('id', schoolId)
-          .single();
+          .maybeSingle();
 
         const systemIds = [];
         if (school?.grading_system_cbc_id) systemIds.push(school.grading_system_cbc_id);
@@ -277,6 +289,9 @@ export async function GET(request: NextRequest) {
         
         if (systemIds.length > 0) {
           query = query.in('id', systemIds);
+        } else {
+          // No grading systems configured — return empty
+          return NextResponse.json({ data: [] });
         }
 
         const { data, error } = await query;
@@ -331,19 +346,20 @@ export async function GET(request: NextRequest) {
         // Get all class teacher assignments for the school (for filtering users)
         const { data: classTeachers, error } = await supabase
           .from('class_teachers')
-          .select('user_id, current_grade_stream_id, academic_year_id, grade_streams(full_name)')
+          .select('user_id, current_grade_stream_id, academic_year_id, grade_streams!inner(full_name, school_id)')
+          .eq('grade_streams.school_id', schoolId)
           .order('created_at', { ascending: false });
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         
         // Get current academic year to filter
-        const { data: currentYear } = await supabase
-          .from('academic_years')
-          .select('id')
-          .eq('school_id', schoolId)
-          .order('start_date', { ascending: false })
-          .limit(1)
-          .single();
+          const { data: currentYear } = await supabase
+            .from('academic_years')
+            .select('id')
+            .eq('school_id', schoolId)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
         
         // Filter to only current year assignments
         const filtered = currentYear 

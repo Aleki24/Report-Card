@@ -38,7 +38,7 @@ export async function GET(
                 grade_streams(full_name, grade_id)
             `)
             .eq('id', studentId)
-            .single();
+            .maybeSingle();
 
         if (studentErr || !student) {
             return NextResponse.json({ error: 'Student not found' }, { status: 404 });
@@ -63,7 +63,7 @@ export async function GET(
             .from('users')
             .select('school_id, role')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const userSchoolId = userProfile?.school_id;
         if (!userSchoolId) {
@@ -93,7 +93,7 @@ export async function GET(
                 .from('schools')
                 .select('name, logo_url, address')
                 .eq('id', targetSchoolId)
-                .single();
+                .maybeSingle();
             if (schoolData) {
                 schoolName = schoolData.name;
                 schoolLogoUrl = schoolData.logo_url || undefined;
@@ -113,7 +113,7 @@ export async function GET(
         // Fetch grade code from grades table
         let gradeLevelCode = '';
         if (gradeId) {
-            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).single();
+            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).maybeSingle();
             if (gradeData) gradeLevelCode = gradeData.code || '';
         }
         
@@ -130,7 +130,7 @@ export async function GET(
                 .from('academic_levels')
                 .select('code')
                 .eq('id', student.academic_level_id)
-                .single();
+                .maybeSingle();
 
             // Use grade code to determine KCSE vs CBC, fallback to academic level
             if (isKCSEGrade) {
@@ -251,7 +251,7 @@ export async function GET(
                 .from('grading_systems')
                 .select('id, academic_levels!inner(code)')
                 .eq('id', gsId)
-                .single();
+                .maybeSingle();
             
             if (gs) {
                 const levelCode = (gs.academic_levels as any)?.code;
@@ -412,7 +412,7 @@ export async function GET(
                 .eq('student_id', studentId)
                 .eq('term_id', termId)
                 .eq('academic_year_id', yearId)
-                .single();
+                .maybeSingle();
 
             if (reportCard?.comments_class_teacher) {
                 classTeacherComment = reportCard.comments_class_teacher;

@@ -35,6 +35,8 @@ export default function ModulePageLayout({ slug }: ModulePageLayoutProps) {
     );
   }
 
+  const isComingSoon = !('features' in module);
+
   return (
     <div
       className="min-h-screen relative overflow-hidden transition-colors duration-500"
@@ -61,11 +63,29 @@ export default function ModulePageLayout({ slug }: ModulePageLayoutProps) {
       <Navbar />
 
       <main className="relative z-10">
-        <ModuleHero module={module} />
-        <ModuleFeatureGrid features={module.features} />
-        <ModuleWorkflow steps={module.workflow} />
-        <ModuleBenefits benefits={module.benefits} />
-        <ModuleCTA module={module} />
+        {isComingSoon ? (
+          <div style={{ padding: '200px 24px', textAlign: 'center' }}>
+            <h1 style={{ color: 'var(--color-text-primary)', fontFamily: 'var(--font-display)', fontSize: '2rem' }}>
+              {module.title}
+            </h1>
+            <p style={{ color: 'var(--color-text-muted)', marginTop: '12px', maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
+              {module.description}
+            </p>
+            <div style={{ marginTop: 24 }}>
+              <span className="inline-block px-4 py-2 rounded-full text-sm font-semibold bg-amber-500/15 text-amber-400">
+                Coming Soon
+              </span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ModuleHero module={module as any} />
+            <ModuleFeatureGrid features={(module as any).features} />
+            <ModuleWorkflow steps={(module as any).workflow} />
+            <ModuleBenefits benefits={(module as any).benefits} />
+            <ModuleCTA module={module as any} />
+          </>
+        )}
       </main>
 
       <Footer />

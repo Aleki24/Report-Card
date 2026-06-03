@@ -54,14 +54,15 @@ export async function POST(req: Request) {
           .from('users')
           .select('id')
           .eq('id', clerkId)
-          .single();
+          .maybeSingle();
 
         if (existing) break;
 
-        const role = metadata.role || 'ADMIN';
+        const role = metadata.role || 'PENDING';
         let schoolId = metadata.school_id || null;
 
-        if (role === 'ADMIN' && !schoolId) {
+        // Only auto-create school if user explicitly has ADMIN role in metadata
+        if (metadata.role === 'ADMIN' && !schoolId) {
           const schoolIdNew = crypto.randomUUID();
           const { error: schoolErr } = await supabase.from('schools').insert({
             id: schoolIdNew,
@@ -81,23 +82,15 @@ export async function POST(req: Request) {
           school_id: schoolId,
         });
 
-        // Sync role and schoolId back to Clerk publicMetadata for session claims
-        const clerkSecretKey = process.env.CLERK_SECRET_KEY;
-        if (clerkSecretKey) {
-          try {
-            await fetch(`https://api.clerk.com/v1/users/${clerkId}/metadata`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${clerkSecretKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                public_metadata: { role, schoolId },
-              }),
-            });
-          } catch (metaErr) {
-            console.error('[Clerk Webhook] Failed to sync metadata:', metaErr);
-          }
+        // Sync role and school_id back to Clerk publicMetadata for session claims
+        try {
+          const { createClerkClient } = await import('@clerk/nextjs/server');
+          const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+          await clerk.users.updateUser(clerkId, {
+            publicMetadata: { role, school_id: schoolId },
+          });
+        } catch (metaErr) {
+          console.error('[Clerk Webhook] Failed to sync metadata:', metaErr);
         }
         break;
       }
@@ -117,6 +110,20 @@ export async function POST(req: Request) {
 
       case 'user.deleted': {
         const clerkId = data.id;
+        if (!clerkId) break;
+        // Cascade delete related records to avoid FK constraint errors
+        await supabase.from('exam_marks').delete().eq('student_id', clerkId);
+        await supabase.from('daily_attendance').delete().eq('student_id', clerkId);
+        await supabase.from('student_fees').delete().eq('student_id', clerkId);
+        await supabase.from('announcements').delete().eq('posted_by', clerkId);
+        await supabase.from('students').delete().eq('id', clerkId);
+        await supabase.from('class_teachers').delete().eq('user_id', clerkId);
+        const { data: stRecord } = await supabase.from('subject_teachers').select('id').eq('user_id', clerkId).maybeSingle();
+        if (stRecord) {
+          await supabase.from('subject_teacher_assignments').delete().eq('subject_teacher_id', stRecord.id);
+          await supabase.from('subject_teachers').delete().eq('id', stRecord.id);
+        }
+        await supabase.from('active_users').delete().eq('user_id', clerkId);
         await supabase.from('users').delete().eq('id', clerkId);
         break;
       }

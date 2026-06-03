@@ -11,7 +11,7 @@ async function getSession() {
     .from('users')
     .select('school_id, role')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (!userProfile) return null;
 

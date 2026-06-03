@@ -158,21 +158,20 @@ export function isStreamVisibleToTeacher(stream: any, perms: TeacherPermissions)
 }
 
 export function isSubjectVisibleToTeacher(subject: any, perms: TeacherPermissions) {
-  if (perms.isClassTeacher) {
-    // Class teachers can maybe see all subjects so they know what their students take?
-    // The prompt: "class teachers should have the data for their exact classes alone, not from other classes too"
-    // "subject teachers should have data of their subjects alone"
-    // If we only show subjects taught by class teacher, but class teachers don't have subjects assigned unless they are also subject teachers.
-    // Let's assume class teachers can see all subjects for their grade.
-    // But we don't know the grade's subjects easily here unless we check academic_level...
-    // Let's just return true for class teachers for now, or true for all?
-    // Actually, let's filter subjects only if they are STRICTLY a subject teacher.
-    // The prompt says: "subject teachers should have data of their subjects alone".
+  // Subject teachers: only see their assigned subjects
+  if (perms.isSubjectTeacher) {
+    if (perms.subjectTeacherAssignments.some(a => a.subject_id === subject.id)) {
+      return true;
+    }
   }
-  
-  if (perms.isSubjectTeacher && !perms.isClassTeacher) {
-    return perms.subjectTeacherAssignments.some(a => a.subject_id === subject.id);
+
+  // Class teachers (who are NOT also subject teachers): see all subjects
+  // since they need to view student performance across all subjects
+  if (perms.isClassTeacher && !perms.isSubjectTeacher) {
+    return true;
   }
-  
-  return true; // fallback
+
+  // If both class teacher and subject teacher, the subject teacher check above
+  // already handles filtering to assigned subjects
+  return false;
 }

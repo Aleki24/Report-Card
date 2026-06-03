@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!profile || !['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role) || !profile.school_id) {
             return NextResponse.json({ error: 'Only admins and teachers can update students.' }, { status: 403 });
@@ -86,24 +86,15 @@ export async function PATCH(request: NextRequest) {
             }
         }
 
-        // Update user record (name)
+        // Update user record (name) — student_id IS the user_id (same UUID)
         if (Object.keys(userUpdates).length > 0) {
-            // First get the user_id for this student
-            const { data: studentUser } = await supabaseAdmin
-                .from('students')
-                .select('users:id')
-                .eq('id', student_id)
-                .single();
+            const { error: userError } = await supabaseAdmin
+                .from('users')
+                .update(userUpdates)
+                .eq('id', student_id);
 
-            if (studentUser?.users) {
-                const { error: userError } = await supabaseAdmin
-                    .from('users')
-                    .update(userUpdates)
-                    .eq('id', studentUser.users);
-
-                if (userError) {
-                    return NextResponse.json({ error: `Update failed: ${userError.message}` }, { status: 400 });
-                }
+            if (userError) {
+                return NextResponse.json({ error: `Update failed: ${userError.message}` }, { status: 400 });
             }
         }
 

@@ -71,7 +71,7 @@ export async function getCurrentStudentProfile(student: CurrentStudent) {
                 )
             `)
             .eq('id', student.studentId)
-            .single(),
+            .maybeSingle(),
     ]);
 
     if (profileResult.error) throw profileResult.error;
@@ -419,6 +419,7 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
         .from('exams')
         .select('id, name, exam_date, subjects(name)')
         .eq('school_id', student.schoolId)
+        .eq('academic_level_id', student.academicLevelId)
         .gte('exam_date', today)
         .lte('exam_date', thirtyDays)
         .order('exam_date', { ascending: true })

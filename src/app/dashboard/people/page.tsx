@@ -44,8 +44,8 @@ export default function PeoplePage() {
 }
 
 /* ───── Students Section ───── */
-interface StudentRow { id: string; first_name: string; last_name: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; }
-interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; }; grade_stream: { full_name: string } | null; academic_history: any[]; report_history: any[]; attendance_history: any[]; stats: { total_terms: number; average_score: number; best_grade: string; overall_position: number; attendance_rate: number; }; }
+interface StudentRow { id: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; }
+interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
 
 function StudentsSection() {
   const { profile } = useAuth();
@@ -90,7 +90,7 @@ function StudentsSection() {
 
   const filtered = data.filter(s => {
     const q = search.toLowerCase();
-    const matchSearch = !q || `${s.first_name} ${s.last_name} ${s.admission_number} ${s.guardian_phone||''}`.toLowerCase().includes(q);
+    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number} ${s.guardian_phone||''}`.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
     const matchStream = !gradeStreamFilter || s.current_grade_stream_id === gradeStreamFilter;
     return matchSearch && matchStatus && matchStream;
@@ -103,8 +103,9 @@ function StudentsSection() {
     setSaving(true);
     try {
       const method = editing ? 'PATCH' : 'POST';
-      const url = editing ? `/api/admin/update-student?id=${editing}` : '/api/admin/add-student';
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+      const url = editing ? '/api/admin/update-student' : '/api/admin/add-student';
+      const body = editing ? { ...formData, student_id: editing } : formData;
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
       showToast(editing ? '✅ Student updated' : '✅ Student added');
@@ -116,7 +117,7 @@ function StudentsSection() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this student?')) return;
     try {
-      const res = await fetch(`/api/admin/delete-student?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/delete-student?student_id=${id}`, { method: 'DELETE' });
       if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
       showToast('✅ Deleted'); await fetchStudents();
     } catch (err: any) { showToast(`❌ ${err.message}`); }
@@ -135,7 +136,7 @@ function StudentsSection() {
   const viewStudentDetails = async (id: string) => {
     setViewLoading(true); setViewStudent(null); setViewTab('profile');
     try {
-      const res = await fetch(`/api/school/student-details?id=${id}`);
+      const res = await fetch(`/api/school/students/${id}`);
       if (!res.ok) throw new Error();
       setViewStudent(await res.json());
     } catch { showToast('Failed to load details'); }
@@ -143,7 +144,7 @@ function StudentsSection() {
   };
 
   const openEdit = (s: StudentRow) => {
-    setFormData({ first_name: s.first_name, last_name: s.last_name, admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '' });
+    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '' });
     setEditing(s.id); setShowModal(true);
   };
 
@@ -199,7 +200,7 @@ function StudentsSection() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {paginated.map(s => (
                     <tr key={s.id} className="hover:bg-muted transition-colors cursor-pointer" onClick={() => viewStudentDetails(s.id)}>
-                      <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{s.avatar_url ? <img src={s.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.first_name} ${s.last_name}`)}</div><div><div className="font-medium text-sm">{s.first_name} {s.last_name}</div><div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div></div></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{s.avatar_url ? <img src={s.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''}`)}</div><div><div className="font-medium text-sm">{s.users?.first_name ?? ''} {s.users?.last_name ?? ''}</div><div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div></div></div></td>
                       <td className="px-4 py-3 text-sm font-mono">{s.admission_number}</td>
                       <td className="px-4 py-3 text-sm">{s.grade_stream?.full_name || '—'}</td>
                       <td className="px-4 py-3 text-sm">{s.guardian_name || '—'}</td>
@@ -257,7 +258,7 @@ function StudentsSection() {
             <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-sm font-bold text-accent">{getInitials(`${viewStudent.profile.first_name} ${viewStudent.profile.last_name}`)}</div>
-                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewStudent.profile.admission_number} · {viewStudent.grade_stream?.full_name || '—'}</p></div>
+                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewStudent.profile.admission_number} · {viewStudent.profile.grade_stream?.full_name || '—'}</p></div>
               </div>
               <button onClick={() => setViewStudent(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
             </div>
@@ -275,13 +276,13 @@ function StudentsSection() {
                 </div>
               ) : viewTab === 'academic' ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-3"><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-accent">{viewStudent.stats.average_score.toFixed(1)}%</div><div className="text-xs text-muted-foreground">Average</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-blue-400">{viewStudent.stats.best_grade}</div><div className="text-xs text-muted-foreground">Best Grade</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-amber-400">#{viewStudent.stats.overall_position}</div><div className="text-xs text-muted-foreground">Position</div></div></div>
-                  {viewStudent.academic_history.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No academic history yet.</p>}
+                  <div className="grid grid-cols-3 gap-3"><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-accent">{viewStudent.academicHistory.length > 0 ? `${viewStudent.academicHistory[viewStudent.academicHistory.length - 1].average.toFixed(1)}%` : '—'}</div><div className="text-xs text-muted-foreground">Average</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-blue-400">—</div><div className="text-xs text-muted-foreground">Best Grade</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-amber-400">—</div><div className="text-xs text-muted-foreground">Position</div></div></div>
+                  {viewStudent.academicHistory.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No academic history yet.</p>}
                 </div>
               ) : viewTab === 'reports' ? (
-                <div>{viewStudent.report_history.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No report history yet.</p> : <p className="text-xs text-muted-foreground">{viewStudent.report_history.length} report(s) generated.</p>}</div>
+                <div>{viewStudent.reportHistory.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No report history yet.</p> : <p className="text-xs text-muted-foreground">{viewStudent.reportHistory.length} report(s) generated.</p>}</div>
               ) : (
-                <div><div className="p-3 rounded-lg bg-surface-raised text-center mb-3"><div className="text-lg font-bold text-emerald-400">{viewStudent.stats.attendance_rate.toFixed(1)}%</div><div className="text-xs text-muted-foreground">Attendance Rate</div></div>{viewStudent.attendance_history.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No attendance history yet.</p>}</div>
+                <div><div className="p-3 rounded-lg bg-surface-raised text-center mb-3"><div className="text-lg font-bold text-emerald-400">{viewStudent.attendanceHistory.length > 0 ? `${Math.round(viewStudent.attendanceHistory.reduce((s: number, a: any) => s + (a.percentage ?? 0), 0) / viewStudent.attendanceHistory.length)}%` : '—'}</div><div className="text-xs text-muted-foreground">Attendance Rate</div></div>{viewStudent.attendanceHistory.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No attendance history yet.</p>}</div>
               )}
             </div>
           </div>
@@ -346,7 +347,7 @@ function TeachersSection() {
     if (!editingTeacher) return;
     setSavingEdit(true);
     try {
-      const res = await fetch(`/api/admin/update-teacher?id=${editingTeacher.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editData) });
+      const res = await fetch('/api/admin/update-teacher', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editData, teacher_id: editingTeacher.id }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
       showToast('✅ Teacher updated');
@@ -371,7 +372,7 @@ function TeachersSection() {
   const viewTeacherDetails = async (t: TeacherRow) => {
     setViewLoading(true); setViewTeacher(null); setViewTab('overview');
     try {
-      const res = await fetch(`/api/school/teacher-details?id=${t.id}`);
+      const res = await fetch(`/api/school/teachers/${t.id}`);
       if (!res.ok) throw new Error();
       setViewTeacher(await res.json());
     } catch { showToast('Failed to load details'); }

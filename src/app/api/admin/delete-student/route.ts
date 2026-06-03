@@ -24,7 +24,7 @@ export async function DELETE(request: NextRequest) {
             .from('users')
             .select('role, school_id')
             .eq('id', user_id)
-            .single();
+            .maybeSingle();
 
         if (!adminProfile || !adminProfile.school_id) {
             return NextResponse.json({ error: 'You must have a school to delete students.' }, { status: 403 });
@@ -45,17 +45,24 @@ export async function DELETE(request: NextRequest) {
             .select('id, school_id')
             .eq('id', student_id)
             .eq('role', 'STUDENT')
-            .single();
+            .maybeSingle();
 
         if (!studentUser || studentUser.school_id !== school_id) {
             return NextResponse.json({ error: 'Student not found in your school.' }, { status: 404 });
         }
 
-        // Delete from students table first, then users
-        // Use supabaseAdmin and filter by ID.
-        // Even if we skip deleting from students table, deleting from users FIRST might fail due to FK if no CASCADE is set up properly,
-        // or cascade delete handles it. We'll do BOTH manually for safety.
+        // Cascade delete all related records before removing the student
+        // 1. Delete exam marks for this student
+        await supabaseAdmin.from('exam_marks').delete().eq('student_id', student_id);
+        // 2. Delete daily attendance records
+        await supabaseAdmin.from('daily_attendance').delete().eq('student_id', student_id);
+        // 3. Delete fee records
+        await supabaseAdmin.from('student_fees').delete().eq('student_id', student_id);
+        // 4. Delete active_users record if exists
+        await supabaseAdmin.from('active_users').delete().eq('user_id', student_id);
+        // 5. Delete from students table
         await supabaseAdmin.from('students').delete().eq('id', student_id);
+        // 6. Finally delete the user record
         await supabaseAdmin.from('users').delete().eq('id', student_id);
 
         return NextResponse.json({ success: true, message: 'Student deleted successfully.' });

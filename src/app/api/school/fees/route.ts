@@ -3,19 +3,22 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        const { searchParams } = new URL(request.url);
+        const termId = searchParams.get('term_id');
+
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
             .select('school_id, role')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const schoolId = userProfile?.school_id;
         const role = userProfile?.role;
@@ -26,13 +29,17 @@ export async function GET() {
             .select(`
                 id, total_fee, paid_amount, due_date, status, notes, created_at, updated_at,
                 terms ( id, name ),
-                students ( id, users ( first_name, last_name, admission_number ) )
+                students ( id, admission_number, users ( first_name, last_name ) )
             `)
             .eq('school_id', schoolId);
 
         // Students see only their own fees
         if (role === 'STUDENT') {
             query = query.eq('student_id', userId);
+        }
+
+        if (termId) {
+            query = query.eq('term_id', termId);
         }
 
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -49,7 +56,7 @@ export async function GET() {
             notes: f.notes,
             termName: f.terms?.name,
             studentName: f.students?.users ? `${f.students.users.first_name} ${f.students.users.last_name}` : null,
-            admissionNumber: f.students?.users?.admission_number,
+            admissionNumber: f.students?.admission_number,
             createdAt: f.created_at,
             updatedAt: f.updated_at,
         }));
@@ -65,7 +72,7 @@ export async function POST(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createSupabaseAdmin();
@@ -89,18 +96,25 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'student_id, term_id, and total_fee are required' }, { status: 400 });
         }
 
+        const total = Number(total_fee);
+        const paid = Number(paid_amount ?? 0);
+
+        if (isNaN(total) || isNaN(paid)) {
+            return NextResponse.json({ error: 'total_fee and paid_amount must be numbers' }, { status: 400 });
+        }
+
         const { data, error } = await supabase
             .from('student_fees')
             .upsert({
                 school_id: schoolId,
                 student_id,
                 term_id,
-                total_fee,
-                paid_amount: paid_amount ?? 0,
+                total_fee: total,
+                paid_amount: paid,
                 due_date: due_date || null,
                 notes: notes || null,
-                status: getFeeStatus(total_fee, paid_amount ?? 0),
-            })
+                status: getFeeStatus(total, paid),
+            }, { onConflict: 'student_id, term_id' })
             .select()
             .single();
 

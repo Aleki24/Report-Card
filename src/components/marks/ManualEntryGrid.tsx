@@ -129,7 +129,8 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 if (hasStreams) {
                     return s.current_grade_stream_id === selectedStreamId;
                 } else {
-                    return s.academic_level_id === selectedGradeId;
+                    const gradeObj = grades.find(g => g.id === selectedGradeId);
+                    return gradeObj ? s.academic_level_id === gradeObj.academic_level_id : false;
                 }
             });
 

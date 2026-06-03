@@ -12,23 +12,30 @@ export async function GET() {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         const role = userProfile?.role;
+        const schoolId = userProfile?.school_id;
 
         let query = supabase
             .from('assignment_submissions')
             .select(`
                 id, file_url, submission_text, submitted_at, grade, feedback, graded_at,
                 assignments ( id, title, due_date, subjects ( name ) ),
-                students ( id, users ( first_name, last_name, admission_number ) )
+                students!inner (
+                    id,
+                    users!inner ( school_id, first_name, last_name, admission_number )
+                )
             `);
 
         // Students see only their own submissions
         if (role === 'STUDENT') {
             query = query.eq('student_id', userId);
+        } else if (schoolId) {
+            // Non-students scope to their school
+            query = query.eq('students.users.school_id', schoolId);
         }
 
         const { data, error } = await query.order('submitted_at', { ascending: false });
@@ -67,9 +74,9 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role')
+            .select('role, school_id')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!userProfile || userProfile.role !== 'STUDENT') {
             return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
@@ -78,6 +85,18 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         if (!body.assignment_id) {
             return NextResponse.json({ error: 'assignment_id is required' }, { status: 400 });
+        }
+
+        // Verify assignment belongs to the student's school
+        const { data: assignment } = await supabase
+            .from('assignments')
+            .select('id')
+            .eq('id', body.assignment_id)
+            .eq('school_id', userProfile.school_id)
+            .maybeSingle();
+
+        if (!assignment) {
+            return NextResponse.json({ error: 'Assignment not found in your school' }, { status: 403 });
         }
 
         const { data, error } = await supabase

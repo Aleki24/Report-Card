@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { createClerkClient } from '@clerk/nextjs/server';
 
 /**
  * Self-registration endpoint for invited users.
@@ -59,9 +60,25 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 3. Hash password and generate UUID
+        // 3. Create user in Clerk
+        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+        let clerkUser;
+        try {
+            clerkUser = await clerk.users.createUser({
+                emailAddress: [email.trim()],
+                password,
+                firstName: invite.first_name,
+                lastName: invite.last_name,
+                publicMetadata: { role: invite.role, school_id: invite.school_id },
+                skipPasswordChecks: true,
+            });
+        } catch (clerkErr: any) {
+            const msg = clerkErr.errors?.[0]?.longMessage || clerkErr.errors?.[0]?.message || clerkErr.message || 'Failed to create user in Clerk';
+            return NextResponse.json({ error: `Clerk error: ${msg}` }, { status: 400 });
+        }
+
+        const userId = clerkUser.id;
         const passwordHash = await bcrypt.hash(password, 12);
-        const userId = crypto.randomUUID();
 
         // 4. Insert into public.users
         const { error: userInsertError } = await supabaseAdmin.from('users').insert({
@@ -77,16 +94,54 @@ export async function POST(request: NextRequest) {
         });
 
         if (userInsertError) {
+            await clerk.users.deleteUser(userId).catch(() => {});
             return NextResponse.json({ error: `Profile error: ${userInsertError.message}` }, { status: 400 });
         }
 
-        // 5. If the invite was for a STUDENT, insert into students table
-        if (invite.role === 'STUDENT' && invite.admission_number && invite.grade_stream_id && invite.academic_level_id) {
+        // 5. Create role-specific records
+        if (invite.role === 'STUDENT') {
+            let admissionNumber = invite.admission_number || `STUDENT-${userId.substring(0, 8)}`;
+            let gradeStreamId = invite.grade_stream_id;
+            let academicLevelId = invite.academic_level_id;
+
+            if (!gradeStreamId || !academicLevelId) {
+                // Find a default academic level and grade stream for this school so the NOT NULL constraints don't fail
+                const { data: levelData } = await supabaseAdmin
+                    .from('academic_levels')
+                    .select('id')
+                    .limit(1)
+                    .maybeSingle();
+
+                const { data: streamData } = await supabaseAdmin
+                    .from('grade_streams')
+                    .select(`
+                        id,
+                        grades!inner (
+                            academic_level_id
+                        )
+                    `)
+                    .eq('school_id', invite.school_id)
+                    .limit(1)
+                    .maybeSingle();
+
+                academicLevelId = academicLevelId || (streamData?.grades as any)?.academic_level_id || levelData?.id;
+                gradeStreamId = gradeStreamId || streamData?.id;
+            }
+
+            if (!academicLevelId || !gradeStreamId) {
+                // Rollback: delete users row and Clerk user
+                await supabaseAdmin.from('users').delete().eq('id', userId);
+                await clerk.users.deleteUser(userId).catch(() => {});
+                return NextResponse.json({ 
+                    error: 'School has no classes configured yet. Please ask the administrator to set up class streams first.' 
+                }, { status: 400 });
+            }
+
             const { error: studentError } = await supabaseAdmin.from('students').insert({
                 id: userId,
-                admission_number: invite.admission_number,
-                current_grade_stream_id: invite.grade_stream_id,
-                academic_level_id: invite.academic_level_id,
+                admission_number: admissionNumber.trim(),
+                current_grade_stream_id: gradeStreamId,
+                academic_level_id: academicLevelId,
             });
 
             if (studentError) {
@@ -94,6 +149,10 @@ export async function POST(request: NextRequest) {
                 await supabaseAdmin.from('users').delete().eq('id', userId);
                 return NextResponse.json({ error: `Student error: ${studentError.message}` }, { status: 400 });
             }
+        } else if (invite.role === 'SUBJECT_TEACHER') {
+            await supabaseAdmin.from('subject_teachers').insert({
+                user_id: userId
+            });
         }
 
         // 6. Delete the pending invite (it's been consumed)
