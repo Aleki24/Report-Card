@@ -6,7 +6,7 @@ interface GradeItem { id: string; name_display: string; code: string; academic_l
 interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; category?: string; }
 interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_id: string; subject_name: string; grade_id: string; grade_name: string; }
 
-const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'END TERM', 'OPENER'];
+import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 
 interface ExamFiltersProps {
   mode: 'bulk' | 'manual';
@@ -58,7 +58,7 @@ export function ExamFilters({
           </select>
           <select className="input-field w-28" value={filterExamType} onChange={e => { setFilterExamType(e.target.value); setSelectedExamId(''); }}>
             <option value="">All Types</option>
-            {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            {ALL_EXAM_TYPES.map(t => <option key={t.code} value={t.code}>{t.name}</option>)}
           </select>
         </div>
       </div>

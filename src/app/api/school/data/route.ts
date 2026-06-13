@@ -155,20 +155,34 @@ export async function GET(request: NextRequest) {
       }
 
       case 'exam_types': {
-        const { data, error } = await supabase.from('exam_types').select('id, name').eq('school_id', schoolId).order('name');
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+        const { ALL_EXAM_TYPES } = require('@/lib/exam-types');
+        const formattedTypes = ALL_EXAM_TYPES.map((et: any) => ({
+          id: et.code,
+          name: et.name
+        }));
+        return NextResponse.json({ data: formattedTypes });
       }
 
       case 'exam_slots': {
-        let query = supabase.from('exams').select('id, name, subject_id, grade_stream_id, grade_id, max_score, date, exam_type, subjects(name)').eq('school_id', schoolId);
+        let query = supabase.from('exams').select('id, name, subject_id, grade_stream_id, grade_id, max_score, exam_date, exam_type, subjects(name)').eq('school_id', schoolId);
         const gsId = searchParams.get('grade_stream_id');
         const examType = searchParams.get('exam_type_id');
-        if (gsId) query = query.eq('grade_stream_id', gsId);
+        
+        if (gsId) {
+          // Find the grade_id of the stream so we can include whole-grade exams
+          const { data: stream } = await supabase.from('grade_streams').select('grade_id').eq('id', gsId).single();
+          if (stream?.grade_id) {
+            query = query.or(`grade_stream_id.eq.${gsId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`);
+          } else {
+            query = query.eq('grade_stream_id', gsId);
+          }
+        }
+        
         if (examType) query = query.eq('exam_type', examType);
-        const { data, error } = await query.order('date', { ascending: false });
+        
+        const { data, error } = await query.order('exam_date', { ascending: false });
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: (data ?? []).map((e: any) => ({ id: e.id, name: e.name, subject_name: e.subjects?.name, max_score: e.max_score, date: e.date })) });
+        return NextResponse.json({ data: (data ?? []).map((e: any) => ({ id: e.id, name: e.name, subject_name: e.subjects?.name, max_score: e.max_score, date: e.exam_date })) });
       }
 
       case 'exam_marks': {
@@ -270,31 +284,12 @@ export async function GET(request: NextRequest) {
       }
 
       case 'grading_scales': {
-        const { data: school } = await supabase
-          .from('schools')
-          .select('grading_system_cbc_id, grading_system_844_id')
-          .eq('id', schoolId)
-          .maybeSingle();
-
-        const systemIds = [];
-        if (school?.grading_system_cbc_id) systemIds.push(school.grading_system_cbc_id);
-        if (school?.grading_system_844_id) systemIds.push(school.grading_system_844_id);
-
-        let query = supabase
+        const { data, error } = await supabase
           .from('grading_systems')
           .select(`
             id, name,
             grading_scales (id, symbol, min_percentage, max_percentage, points, label)
           `);
-        
-        if (systemIds.length > 0) {
-          query = query.in('id', systemIds);
-        } else {
-          // No grading systems configured — return empty
-          return NextResponse.json({ data: [] });
-        }
-
-        const { data, error } = await query;
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         return NextResponse.json({ data: data ?? [] });

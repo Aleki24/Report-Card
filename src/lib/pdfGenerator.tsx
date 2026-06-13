@@ -88,7 +88,7 @@ export async function generateStudentReportCardPDF(data: ReportCardData): Promis
 }
 
 /* ── Generate bulk PDF for entire class ──────────────────── */
-export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData[]): Promise<Buffer> {
+export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData[]): Promise<Uint8Array> {
     const pages: React.ReactElement[] = [];
 
     for (let i = 0; i < reportCardsData.length; i++) {
@@ -116,5 +116,5 @@ export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData
     const doc = <Document>{pages}</Document>;
     const blob = await pdf(doc).toBlob();
     const arrayBuffer = await blob.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    return new Uint8Array(arrayBuffer);
 }

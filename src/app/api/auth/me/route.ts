@@ -58,6 +58,17 @@ export async function GET() {
         return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 });
       }
 
+      // Sync role and school_id back to Clerk publicMetadata
+      try {
+        const { createClerkClient } = await import('@clerk/nextjs/server');
+        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+        await clerk.users.updateUser(clerkAuth.userId, {
+          publicMetadata: { role, school_id: schoolId },
+        });
+      } catch (metaErr) {
+        console.error('[/api/auth/me] Failed to sync metadata:', metaErr);
+      }
+
       dbUser = newUser;
     }
 

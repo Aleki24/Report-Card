@@ -87,8 +87,8 @@ export async function GET(request: NextRequest) {
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
                 supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id, category, is_compulsory').eq('school_id', schoolId).order('display_order'),
-                supabaseAdmin.from('grading_systems').select('*').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('grading_scales').select('*, grading_systems!inner(school_id)').eq('grading_systems.school_id', schoolId).order('order_index'),
+                supabaseAdmin.from('grading_systems').select('*').order('name'),
+                supabaseAdmin.from('grading_scales').select('*').order('order_index'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
@@ -185,11 +185,10 @@ export async function POST(request: NextRequest) {
             },
 
             grading_system: async () => {
-                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = gradingSystemSchema.parse(payload);
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_systems')
-                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId })
+                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'grading system');
                 return NextResponse.json({ success: true, data: result });
@@ -314,17 +313,9 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: `Cannot update type "${type}". Updatable types: ${Object.keys(schoolScopedTables).join(', ')}` }, { status: 400 });
         }
 
-        // For grading_scales, verify via the parent grading_system
-        if (type === 'grading_scale') {
-            const { data: existing } = await supabaseAdmin
-                .from('grading_scales')
-                .select('id, grading_systems!inner(school_id)')
-                .eq('id', id)
-                .maybeSingle();
-
-            if (!existing || (existing as any).grading_systems?.school_id !== schoolId) {
-                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
-            }
+        // Bypass school_id checks for global curriculum tables
+        if (['grading_system', 'grading_scale'].includes(type)) {
+            // Allow admins to update global tables
         } else {
             // Verify this record belongs to the admin's school
             const { data: existing } = await supabaseAdmin

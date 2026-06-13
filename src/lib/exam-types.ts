@@ -70,6 +70,36 @@ export const INTERNAL_EXAM_TYPES: ExamTypeDefinition[] = [
     icon: '🏷️',
     order: 5,
   },
+  {
+    code: 'CBC',
+    name: 'CBC Assessment',
+    shortName: 'CBC',
+    scope: 'SCHOOL',
+    isSummative: true,
+    description: 'Competency Based Curriculum Assessment',
+    icon: '📗',
+    order: 6,
+  },
+  {
+    code: '844',
+    name: '8-4-4 Exam',
+    shortName: '844',
+    scope: 'SCHOOL',
+    isSummative: true,
+    description: 'Standard 8-4-4 system exam',
+    icon: '📘',
+    order: 7,
+  },
+  {
+    code: 'END TERM',
+    name: 'End Term (Legacy)',
+    shortName: 'End Term',
+    scope: 'SCHOOL',
+    isSummative: true,
+    description: 'Legacy end term exam',
+    icon: '📊',
+    order: 8,
+  },
 ];
 
 // ── External / mock exams ────────────────────────────────

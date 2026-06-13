@@ -179,6 +179,9 @@ CREATE TABLE IF NOT EXISTS subjects (
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE CASCADE NOT NULL,
     is_compulsory BOOLEAN DEFAULT true NOT NULL,
     display_order INT DEFAULT 0 NOT NULL,
+    category TEXT DEFAULT 'TECHNICAL' NOT NULL,
+    grading_system_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

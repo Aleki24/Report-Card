@@ -15,7 +15,7 @@ interface Term { id: string; name: string; academic_year_id: string; }
 
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
 
-export default function ExamResultsPage() {
+export function ExamResultsTab() {
     const { user, profile } = useAuth();
 
     // ----- Cascading filters -----
@@ -243,15 +243,7 @@ export default function ExamResultsPage() {
     // ═══════════════════ Render ═══════════════════
     return (
         <div className="w-full max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">
-                    Exam Results
-                </h1>
-                <p className="text-[11px] xs:text-[12px] text-muted-foreground leading-relaxed">
-                    Select a class and exam to view results, analyze performance, and generate reports
-                </p>
-            </div>
+            {/* Header removed as it is now a tab */}
 
             {/* ── Cascading Filters ── */}
             <div

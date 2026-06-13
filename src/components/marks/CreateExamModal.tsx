@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 
-const EXAM_TYPES = ['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER'];
+import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 
 interface DropdownItem { id: string; name: string; }
 interface GradeItem { id: string; name_display: string; code: string; academic_level_id: string; }
@@ -217,7 +217,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
               <div className="flex-1">
                 <label className="block text-xs text-muted-foreground mb-1">Exam Type *</label>
                 <select className="input-field w-full" value={examType} onChange={e => setExamType(e.target.value)}>
-                  {EXAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {ALL_EXAM_TYPES.map(t => <option key={t.code} value={t.code}>{t.name}</option>)}
                 </select>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
+import { ReportCardData } from '@/lib/pdfGenerator';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -14,8 +14,6 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
-import JSZip from 'jszip';
-
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -38,7 +36,7 @@ export async function GET(
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
         const { data: students, error: studentsErr } = await supabase
             .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, users(first_name, last_name, school_id), grade_streams(full_name)')
+            .select('id, admission_number, academic_level_id, current_grade_stream_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id)')
             .eq('current_grade_stream_id', classId);
 
         if (studentsErr || !students || students.length === 0) {
@@ -183,9 +181,11 @@ export async function GET(
         // 5. Fetch term/year info
         let termTitle = 'Term Report';
         let academicYearName = 'Academic Year';
+        let openingDate: string | undefined;
         if (termId) {
-            const { data: termData } = await supabase.from('terms').select('name').eq('id', termId).maybeSingle();
+            const { data: termData } = await supabase.from('terms').select('name, opening_date').eq('id', termId).maybeSingle();
             if (termData) termTitle = termData.name;
+            openingDate = termData?.opening_date || undefined;
         }
         
         const customTitle = searchParams.get('customTitle');
@@ -328,7 +328,9 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-' };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+
+            const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 
             // Resolve overall grade from total points (KCSE) or percentage (CBC)
             const isKCSE = gradingSystemType === 'KCSE';
@@ -400,6 +402,7 @@ export async function GET(
                     teacherComment: m.remarks || '',
                     subjectRank: subjectRankMaps[subject.id]?.get(student.id) ?? undefined,
                     totalStudents: subjectStudentCounts[subject.id] ?? undefined,
+                    includedInPoints: selectedSubjectIds.has(subject.id),
                 });
             });
 
@@ -440,6 +443,7 @@ export async function GET(
                 resultUrl: `${baseUrl}/student/${student.id}`,
                 totalScore: computedTotalScore,
                 totalPossible: computedTotalPossible,
+                openingDate,
             };
 
             reportCardsData.push(reportData);

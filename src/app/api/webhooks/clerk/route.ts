@@ -100,10 +100,20 @@ export async function POST(req: Request) {
         const email = data.email_addresses?.[0]?.email_address || '';
         const firstName = data.first_name || '';
         const lastName = data.last_name || '';
+        const metadata = data.public_metadata || {};
+
+        const updateData: any = {
+          email,
+          first_name: firstName,
+          last_name: lastName,
+        };
+
+        if (metadata.role) updateData.role = metadata.role;
+        if (metadata.school_id) updateData.school_id = metadata.school_id;
 
         await supabase
           .from('users')
-          .update({ email, first_name: firstName, last_name: lastName })
+          .update(updateData)
           .eq('id', clerkId);
         break;
       }

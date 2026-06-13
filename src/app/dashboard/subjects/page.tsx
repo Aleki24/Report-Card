@@ -2,24 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import { BookOpen, Search, Plus } from 'lucide-react';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { Search, BookOpen, Plus } from 'lucide-react';
+import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
 
-interface Subject {
-  id: string;
-  name: string;
-  code: string;
-  category?: string;
-  academic_level_id?: string;
-  is_compulsory?: boolean;
-  grading_system_id?: string | null;
-}
-
-interface AcademicLevel {
-  id: string;
-  code: string;
-  name: string;
-}
+interface AcademicLevel { id: string; code: string; name: string; }
+interface Subject { id: string; name: string; code: string; category?: string; academic_level_id?: string; is_compulsory?: boolean; grading_system_id?: string | null; }
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
   LANGUAGE: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' },
@@ -37,35 +25,51 @@ export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [calSaving, setCalSaving] = useState(false);
+  const [calMsg, setCalMsg] = useState('');
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL' });
+  const [selectedLevelFilter, setSelectedLevelFilter] = useState<EducationLevel | ''>('');
+  const [selectedPredefinedSubject, setSelectedPredefinedSubject] = useState('');
 
-  // Fetch subjects from the school-scoped academic-structure API
-  useEffect(() => {
-    const fetchSubjects = async () => {
-      try {
-        const res = await fetch('/api/admin/academic-structure');
-        if (!res.ok) {
-          setError('Failed to load subjects');
-          setLoading(false);
-          return;
-        }
-        const json = await res.json();
+  const fetchSubjects = async () => {
+    try {
+      const res = await fetch('/api/admin/academic-structure');
+      const json = await res.json();
+      if (res.ok) {
         setSubjects(json.subjects || []);
         setAcademicLevels(json.academic_levels || []);
-      } catch (err) {
-        console.error('Failed to fetch subjects:', err);
-        setError('Failed to load subjects');
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchSubjects();
-  }, []);
-
-  const getLevelName = (levelId?: string) => {
-    if (!levelId) return '—';
-    return academicLevels.find(l => l.id === levelId)?.name || '—';
+    } catch (err) { console.error('Failed to fetch subjects:', err); }
+    finally { setLoading(false); }
   };
+
+  useEffect(() => { fetchSubjects(); }, []);
+
+  const postStructure = async (type: string, payload: Record<string, unknown>) => {
+    setCalSaving(true); setCalMsg('');
+    try {
+      const res = await fetch('/api/admin/academic-structure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ...payload }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setCalMsg('✅ Added successfully');
+      await fetchSubjects();
+    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    finally { setCalSaving(false); }
+  };
+
+  const deleteSubject = async (id: string) => {
+    if (!confirm('Delete this subject?')) return;
+    setCalSaving(true); setCalMsg('');
+    try {
+      const res = await fetch(`/api/admin/academic-structure?type=subject&id=${id}`, { method: 'DELETE' });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      setCalMsg('✅ Deleted');
+      await fetchSubjects();
+    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    finally { setCalSaving(false); }
+  };
+
+  const getLevelName = (levelId?: string) => levelId ? academicLevels.find(l => l.id === levelId)?.name || '—' : '—';
 
   const filtered = subjects.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
@@ -76,53 +80,118 @@ export default function SubjectsPage() {
   const compulsory = subjects.filter(s => s.is_compulsory).length;
   const categories = [...new Set(subjects.map(s => (s.category || 'TECHNICAL').toUpperCase()))];
 
-  if (loading) {
-    return <ContentSkeleton message="Loading subjects..." />;
-  }
-
-  if (error) {
-    return (
-      <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--color-text-muted)' }}>
-        <BookOpen style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-        <p style={{ fontSize: 13 }}>{error}</p>
-      </div>
-    );
-  }
+  if (loading) return <ContentSkeleton message="Loading subjects..." />;
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-        <div>
-          <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Subject Management</h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage subjects, assign teachers, and organize by curriculum.</p>
-        </div>
-        {role === 'ADMIN' && (
-          <button className="btn-primary" style={{ gap: '8px' }}>
-            <Plus style={{ width: 16, height: 16 }} /> Add Subject
-          </button>
-        )}
+    <div className="w-full max-w-7xl mx-auto pb-10">
+      <div className="mb-8">
+        <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Subject Management</h1>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage subjects, assign teachers, and organize by curriculum.</p>
       </div>
 
+      {calMsg && (
+        <div className={`mb-4 p-3 rounded-md text-sm ${calMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+          {calMsg}
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Subjects', value: subjects.length.toString(), sub: 'Registered' },
-          { label: 'Compulsory', value: compulsory.toString(), sub: 'Required for all' },
-          { label: 'Optional', value: (subjects.length - compulsory).toString(), sub: 'Elective subjects' },
-          { label: 'Departments', value: categories.length.toString(), sub: 'Subject categories' },
+          { label: 'Total Subjects', value: subjects.length.toString() },
+          { label: 'Compulsory', value: compulsory.toString() },
+          { label: 'Optional', value: (subjects.length - compulsory).toString() },
+          { label: 'Departments', value: categories.length.toString() },
         ].map((s, i) => (
           <div className="stat-card" key={i}>
             <div className="stat-label">{s.label}</div>
             <div className="stat-value">{s.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{s.sub}</div>
           </div>
         ))}
       </div>
 
+      {/* Add Subject Form */}
+      {role === 'ADMIN' && (
+        <div className="card mb-6">
+          <h3 className="font-bold text-sm font-[family-name:var(--font-display)] mb-3 flex items-center gap-2"><BookOpen size={16}/> Add Subject</h3>
+          
+          <div className="flex flex-wrap gap-3 mb-4 p-3 bg-muted/30 rounded-md border border-border/50">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-muted-foreground mb-1">Filter by System / Level</label>
+              <select 
+                className="input-field w-full text-sm" 
+                value={selectedLevelFilter} 
+                onChange={e => {
+                  setSelectedLevelFilter(e.target.value as EducationLevel);
+                  setSelectedPredefinedSubject('');
+                }}
+              >
+                <option value="">-- All Levels --</option>
+                <option value="CBC_LOWER_PRIMARY">CBC Lower Primary</option>
+                <option value="CBC_UPPER_PRIMARY">CBC Upper Primary</option>
+                <option value="CBC_JUNIOR_SCHOOL">CBC Junior School</option>
+                <option value="CBC_SENIOR_SCHOOL">CBC Senior School</option>
+                <option value="844_SECONDARY">8-4-4 Secondary</option>
+              </select>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs text-muted-foreground mb-1">Select Predefined Subject</label>
+              <select 
+                className="input-field w-full text-sm" 
+                value={selectedPredefinedSubject} 
+                onChange={e => {
+                  setSelectedPredefinedSubject(e.target.value);
+                  const subj = PREDEFINED_SUBJECTS.find(s => s.name === e.target.value);
+                  if (subj) {
+                    setNewSubject(p => ({ ...p, name: subj.name, code: subj.code, category: subj.category || 'TECHNICAL' }));
+                  }
+                }}
+              >
+                <option value="">-- Custom / Select --</option>
+                {PREDEFINED_SUBJECTS.filter(s => !selectedLevelFilter || s.level === selectedLevelFilter).map(s => (
+                  <option key={s.name + s.code} value={s.name}>{s.name} ({s.code})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-xs text-muted-foreground mb-1">Name *</label>
+              <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="w-24">
+              <label className="block text-xs text-muted-foreground mb-1">Code *</label>
+              <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+            </div>
+            <div className="w-32">
+              <label className="block text-xs text-muted-foreground mb-1">Category</label>
+              <select className="input-field w-full text-sm" value={newSubject.category || 'TECHNICAL'} onChange={e => setNewSubject(p => ({ ...p, category: e.target.value }))}>
+                {Object.keys(categoryColors).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
+              <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
+                <option value="">-- Select --</option>
+                {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+              </select>
+            </div>
+            <button type="button" onClick={async () => {
+              await postStructure('subject', newSubject);
+              setNewSubject({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL' });
+              setSelectedPredefinedSubject('');
+            }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
+              {calSaving ? 'Saving...' : '+ Add Subject'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="card" style={{ padding: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
-          <div className="flex items-center input-field overflow-hidden px-0" style={{ flex: 1, minWidth: '200px', maxWidth: '400px' }}>
+      <div className="card">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 mb-6">
+          <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
             <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
               <Search size={16} />
             </span>
@@ -135,25 +204,39 @@ export default function SubjectsPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--color-text-muted)' }}>
-            <BookOpen style={{ width: 48, height: 48, margin: '0 auto var(--space-4)', opacity: 0.3 }} />
-            <p style={{ fontSize: 13 }}>No subjects found.</p>
+          <div className="text-center py-10 text-muted-foreground">
+            <BookOpen size={48} className="mx-auto mb-4 opacity-30" />
+            <p className="text-sm">No subjects found.</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
-              <thead><tr><th>Subject</th><th>Code</th><th>Category</th><th>Type</th><th>Level</th></tr></thead>
-              <tbody>
+          <div className="overflow-x-auto">
+            <table className="data-table w-full text-left">
+              <thead>
+                <tr>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subject</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Code</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Category</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Type</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Level</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
                 {filtered.map(s => {
                   const catKey = (s.category || 'TECHNICAL').toUpperCase();
                   const cat = categoryColors[catKey] || { bg: 'rgba(100,100,100,0.15)', color: 'var(--color-text-muted)' };
                   return (
-                    <tr key={s.id}>
-                      <td data-label="Subject" style={{ fontWeight: 600 }}>{s.name}</td>
-                      <td data-label="Code" style={{ fontFamily: 'monospace', fontSize: 13 }}>{s.code}</td>
-                      <td data-label="Category"><span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', fontSize: 11, fontWeight: 600, background: cat.bg, color: cat.color }}>{catKey}</span></td>
-                      <td data-label="Type">{s.is_compulsory ? <span className="badge badge-success">Compulsory</span> : <span className="badge badge-warning">Optional</span>}</td>
-                      <td data-label="Level" style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{getLevelName(s.academic_level_id)}</td>
+                    <tr key={s.id} className="hover:bg-muted transition-colors">
+                      <td className="px-4 py-3 font-medium">{s.name}</td>
+                      <td className="px-4 py-3 font-mono text-sm">{s.code}</td>
+                      <td className="px-4 py-3"><span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: cat.bg, color: cat.color }}>{catKey}</span></td>
+                      <td className="px-4 py-3">{s.is_compulsory ? <span className="badge badge-success text-xs">Compulsory</span> : <span className="badge badge-warning text-xs">Optional</span>}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {role === 'ADMIN' && (
+                           <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

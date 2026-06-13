@@ -7,8 +7,7 @@ import { FileText, ArrowRight, PenTool, GraduationCap, LineChart } from 'lucide-
 export default function ReportCardsPage() {
   const links = [
     { title: 'Generate Reports', desc: 'Create, review, and download report cards for your students.', href: '/dashboard/reports', icon: FileText, primary: true },
-    { title: 'Mark Entry', desc: 'Enter exam marks that feed into report card generation.', href: '/dashboard/marks', icon: PenTool, primary: false },
-    { title: 'Exam Results', desc: 'View exam results and broadsheets before generating reports.', href: '/dashboard/exam-results', icon: GraduationCap, primary: false },
+    { title: 'Exams & Marks', desc: 'Create exams, enter marks, and view results.', href: '/dashboard/exams-marks', icon: PenTool, primary: false },
     { title: 'Analytics', desc: 'Analyze performance trends to inform report card comments.', href: '/dashboard/analytics', icon: LineChart, primary: false },
   ];
 

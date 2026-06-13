@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
+import { CreateExamModal } from '@/components/marks/CreateExamModal';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
@@ -14,7 +15,7 @@ interface ExamSlot {
   grade_id: string; grade_name: string; term_id: string;
 }
 
-export default function MarksPage() {
+export function MarksSetupTab() {
   const { profile, availableRoles } = useAuth();
   const isAlsoClassTeacher = profile?.role === 'SUBJECT_TEACHER' && availableRoles.includes('CLASS_TEACHER');
 
@@ -23,7 +24,9 @@ export default function MarksPage() {
   const [selectedTermId, setSelectedTermId] = useState('');
   const [exams, setExams] = useState<ExamSlot[]>([]);
   const [selectedExamType, setSelectedExamType] = useState('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedExamId, setSelectedExamId] = useState('');
   const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
 
@@ -123,11 +126,8 @@ export default function MarksPage() {
     <div className="w-full max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-        <div>
-          <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Mark Entry</h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-            Select term → exam type → subject, then enter marks
-          </p>
+        <div className="flex-1">
+          {/* Header removed as it is now a tab */}
         </div>
         {activeTermObj && (
           <div className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: 'rgb(52,211,153)', border: '1px solid rgba(16,185,129,0.3)' }}>
@@ -251,6 +251,15 @@ export default function MarksPage() {
                   </div>
                 </div>
               )}
+              
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-1 hover:text-white"
+                style={{ background: 'var(--color-surface-raised)', border: '1px dashed rgba(99,102,241,0.5)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                title="Manually create a single spontaneous exam (e.g. for a specific class)"
+              >
+                + Single Exam
+              </button>
             </div>
           ) : null}
 
@@ -353,6 +362,16 @@ export default function MarksPage() {
           <p className="text-2xl mb-2">📚</p>
           <p className="text-sm">Select a subject to enter marks</p>
         </div>
+      )}
+      
+      {showCreateModal && (
+        <CreateExamModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(newExamId) => {
+            setShowCreateModal(false);
+            refreshExams(selectedTermId);
+          }}
+        />
       )}
     </div>
   );

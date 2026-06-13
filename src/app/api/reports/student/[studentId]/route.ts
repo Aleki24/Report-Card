@@ -274,10 +274,16 @@ export async function GET(
 
         let termTitle = 'Term Report';
         let academicYear = 'Academic Year';
+        let openingDate: string | undefined;
         
         if (firstExam) {
             termTitle = (firstExam as any).terms?.name || 'Term Report';
             academicYear = (firstExam as any).academic_years?.name || 'Academic Year';
+        }
+
+        if (termId) {
+            const { data: termData } = await supabase.from('terms').select('opening_date').eq('id', termId).maybeSingle();
+            openingDate = termData?.opening_date || undefined;
         }
 
         const customTitle = searchParams.get('customTitle');
@@ -311,8 +317,7 @@ export async function GET(
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
         
-        // For display, use percentage based on whether 844 selection was applied
-        const displayPercentage = studentPerf.used844Selection ? studentPerf.percentage : studentPerf.rawAverage;
+        const displayPercentage = studentPerf.percentage;
 
         // 6. Calculate class ranking + per-subject ranks
         let classRank = 0;
@@ -576,6 +581,7 @@ export async function GET(
             resultUrl: `${baseUrl}/student/${studentId}`,
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
+            openingDate,
             subjectTrendData: subjectTrendData.length > 0 ? subjectTrendData : undefined,
         };
 

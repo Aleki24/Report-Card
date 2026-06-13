@@ -209,9 +209,14 @@ export default function ExamResultsPage() {
             ) : (
               <select className="input-field w-full" value={selectedExamType} onChange={e => { setSelectedExamType(e.target.value); setSelectedExamId(''); }} disabled={!selectedStreamId || !selectedTermId}>
                 <option value="">{!selectedStreamId || !selectedTermId ? 'Select term & class first' : '-- Select Exam Type --'}</option>
-                {examTypes.map(t => (
-                  <option key={t} value={t}>{getExamTypeLabel(t)} ({allExams.filter(e => e.exam_type === t).length} subjects)</option>
-                ))}
+                {ALL_EXAM_TYPES.map(t => {
+                  const count = allExams.filter(e => e.exam_type === t.code).length;
+                  return (
+                    <option key={t.code} value={t.code}>
+                      {t.icon} {t.shortName} {count > 0 ? `(${count} subjects)` : ''}
+                    </option>
+                  );
+                })}
               </select>
             )}
           </div>

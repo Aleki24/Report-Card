@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [schoolOnboardingCompleted, setSchoolOnboardingCompleted] = useState<boolean | null>(null);
     const [availableRoles, setAvailableRoles] = useState<UserRole[]>(DEFAULT_ROLES);
     const [devRoleOverride, setDevRoleOverride] = useState<UserRole | null>(null);
+    const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
 
     const { userId } = clerkAuth;
 
@@ -64,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!isUserLoaded) return;
         if (!userId) {
             setProfile(null);
+            setIsProfileLoading(false);
             return;
         }
 
@@ -106,7 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (data.schoolName) setSchoolName(data.schoolName);
                 if (data.schoolOnboardingCompleted !== undefined) setSchoolOnboardingCompleted(data.schoolOnboardingCompleted);
             })
-            .catch(() => {});
+            .catch(() => {})
+            .finally(() => {
+                setIsProfileLoading(false);
+            });
     }, [isUserLoaded, userId, clerkUser?.emailAddresses, clerkUser?.firstName, clerkUser?.lastName]);
 
     useEffect(() => {
@@ -122,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         availableRoles,
         schoolName,
         schoolOnboardingCompleted,
-        loading: !isUserLoaded,
+        loading: !isUserLoaded || (!!userId && isProfileLoading),
         signOut: () => clerkAuth.signOut(),
         switchRole: async (role: UserRole) => {
             if (!userId) return;
@@ -135,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         devRoleOverride,
         setDevRoleOverride,
-    }), [userId, clerkUser, profile, devRoleOverride, isUserLoaded, clerkAuth.sessionId]);
+    }), [userId, clerkUser, profile, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
 
     return (
         <AuthContext.Provider value={value}>
