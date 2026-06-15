@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { createInviteCode } from '@/lib/invite-codes';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Get the target user's role and verify same school
     const { data: targetUser, error: userError } = await supabase
       .from('users')
-      .select('role, first_name, school_id')
+      .select('id, role, first_name, school_id')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -42,41 +43,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found in your school' }, { status: 404 });
     }
 
-    if (userError || !targetUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Instead of setting a password, generate a new invite code
+    const inviteCode = await createInviteCode(supabase, targetUser.id, targetUser.school_id, targetUser.role);
 
-    // Generate new password based on role
-    let newPassword = 'password123';
-    if (targetUser.role === 'STUDENT') {
-      newPassword = 'student';
-    } else if (targetUser.role === 'CLASS_TEACHER' || targetUser.role === 'SUBJECT_TEACHER') {
-      newPassword = 'teacher';
-    } else if (targetUser.role === 'ADMIN') {
-      newPassword = 'admin123';
-    }
-
-    // Hash the new password
-    const bcrypt = await import('bcryptjs');
-    const password_hash = await bcrypt.hash(newPassword, 10);
-
-    // Update user with new password
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ 
-        password_hash,
-        plain_password: newPassword
-      })
-      .eq('id', user_id);
-
-    if (updateError) {
-      return NextResponse.json({ error: 'Failed to update password' }, { status: 500 });
-    }
+    // Optionally: We could delete their Clerk account here, forcing them to re-activate
+    // This depends on whether we want to force them to use the code immediately
+    // or just let them use the code to overwrite their password later.
+    // For now, generating a code is enough. The /activate endpoint will update their password.
 
     return NextResponse.json({ 
       success: true, 
-      password: newPassword,
-      message: `Password reset to: ${newPassword}`
+      password: inviteCode, // Keeping the key as "password" for now so the UI doesn't break entirely, but it's actually the code
+      message: `Generated new invite code: ${inviteCode}`
     });
 
   } catch (err: unknown) {

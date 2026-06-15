@@ -30,7 +30,7 @@ export function useUsersPage() {
   // Invite result state
   const [showInviteResult, setShowInviteResult] = useState(false);
   const [invitedUsername, setInvitedUsername] = useState('');
-  const [invitedPassword, setInvitedPassword] = useState('');
+  const [invitedCode, setInvitedCode] = useState('');
   const [invitedName, setInvitedName] = useState('');
 
   // Filter, search, pagination state
@@ -42,7 +42,7 @@ export function useUsersPage() {
   // Password reset
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [showResetResult, setShowResetResult] = useState(false);
-  const [resetResultPassword, setResetResultPassword] = useState('');
+  const [resetResultInviteCode, setResetResultInviteCode] = useState('');
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -130,7 +130,7 @@ export function useUsersPage() {
       const data = await res.json();
       if (!res.ok) { setFormError(data.error || 'Failed to add user'); }
       else {
-        setInvitedUsername(data.credentials?.username ?? ''); setInvitedPassword(data.credentials?.raw_password ?? '');
+        setInvitedUsername(data.credentials?.username ?? ''); setInvitedCode(data.credentials?.invite_code ?? '');
         setInvitedName(`${data.user?.first_name || ''} ${data.user?.last_name || ''}`);
         setShowModal(false); setShowInviteResult(true); fetchData(); resetForm();
       }
@@ -145,7 +145,7 @@ export function useUsersPage() {
       const res = await fetch('/api/admin/reset-user-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: user.id }) });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Failed to reset password'); }
-      else { setResetResultPassword(data.password); setShowResetResult(true); fetchData(); }
+      else { setResetResultInviteCode(data.password); setShowResetResult(true); fetchData(); }
     } catch { alert('Network error'); }
     finally { setResettingPasswordId(null); }
   };
@@ -223,9 +223,9 @@ export function useUsersPage() {
     editRole, setEditRole, editIsActive, setEditIsActive,
     editClassTeacherStreamId, setEditClassTeacherStreamId, editSubjectTeacherSubjects, setEditSubjectTeacherSubjects,
     // Invite result
-    showInviteResult, setShowInviteResult, invitedUsername, invitedPassword, invitedName,
+    showInviteResult, setShowInviteResult, invitedUsername, invitedCode, invitedName,
     // Password reset
-    resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultPassword,
+    resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultInviteCode,
     // Shared
     formError, submitting, gradeStreams, academicLevels, subjects, grades,
   };

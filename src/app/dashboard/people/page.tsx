@@ -75,6 +75,7 @@ function StudentsSection() {
   const [skippedData, setSkippedData] = useState<{ row: any; reason: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [importClassId, setImportClassId] = useState('');
+  const [createdCredentials, setCreatedCredentials] = useState<{first_name: string; last_name: string; username: string; invite_code: string}[] | null>(null);
 
   const fetchStudents = useCallback(async (gs?: string) => {
     setLoading(true); setError(null);
@@ -183,12 +184,18 @@ function StudentsSection() {
           showToast(`⚠️ Imported ${r.imported}, skipped ${r.skipped_rows.length}`);
           setSkippedData(r.skipped_rows);
           setImportData(r.skipped_rows.map((s: any) => s.row));
+          if (r.created_credentials && r.created_credentials.length > 0) {
+            setCreatedCredentials(r.created_credentials);
+          }
         } else {
           showToast(`✅ ${r.message || 'Students imported successfully'}`);
           setShowImportModal(false);
           setImportData([]);
           setSkippedData([]);
           setImportClassId('');
+          if (r.created_credentials && r.created_credentials.length > 0) {
+            setCreatedCredentials(r.created_credentials);
+          }
         }
         await fetchStudents();
       }
@@ -451,6 +458,42 @@ function StudentsSection() {
               ) : (
                 <div><div className="p-3 rounded-lg bg-surface-raised text-center mb-3"><div className="text-lg font-bold text-emerald-400">{viewStudent.attendanceHistory.length > 0 ? `${Math.round(viewStudent.attendanceHistory.reduce((s: number, a: any) => s + (a.percentage ?? 0), 0) / viewStudent.attendanceHistory.length)}%` : '—'}</div><div className="text-xs text-muted-foreground">Attendance Rate</div></div>{viewStudent.attendanceHistory.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No attendance history yet.</p>}</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Created Invite Codes Modal */}
+      {createdCredentials && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl" style={{ animation: 'fadeIn .2s ease' }}>
+            <div className="p-6 border-b border-border shrink-0 bg-surface-raised">
+              <h2 className="text-lg font-bold">Import Successful - Invite Codes</h2>
+              <p className="text-xs text-muted-foreground mt-1">Please copy these invite codes. Users will need them to activate their accounts at <strong>/activate</strong> and set their own passwords. <strong className="text-amber-500">They will not be shown again!</strong></p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface text-muted-foreground text-[10px] uppercase tracking-wider border-b border-border">
+                      <th className="px-4 py-3 font-semibold">Student Name</th>
+                      <th className="px-4 py-3 font-semibold">Username</th>
+                      <th className="px-4 py-3 font-semibold">Invite Code</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {createdCredentials.map((c, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-3 text-xs font-medium">{c.first_name} {c.last_name}</td>
+                        <td className="px-4 py-3 text-xs font-mono">{c.username}</td>
+                        <td className="px-4 py-3 text-xs font-mono tracking-widest uppercase">{c.invite_code}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="p-6 border-t border-border bg-surface-raised flex justify-end shrink-0">
+              <button className="btn-primary text-xs" onClick={() => setCreatedCredentials(null)}>I have copied the invite codes</button>
             </div>
           </div>
         </div>

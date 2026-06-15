@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import crypto from 'crypto';
+import { createInviteCode } from '@/lib/invite-codes';
 
 export async function POST(request: NextRequest) {
     try {
@@ -62,7 +64,6 @@ export async function POST(request: NextRequest) {
 
         // If class teacher, verify they're creating a student for their assigned stream
         if (adminProfile.role === 'CLASS_TEACHER' && role === 'STUDENT') {
-            // Get class teacher's assigned stream
             const { data: teacherAssignment } = await supabaseAdmin
                 .from('class_teachers')
                 .select('current_grade_stream_id')
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'School not found.' }, { status: 404 });
         }
 
-        // Check if phone or admission number is already registered in this school
+        // Check if phone is already registered in this school
         const { data: existingUserOptions } = await supabaseAdmin
             .from('users')
             .select('id, phone')
@@ -98,7 +99,6 @@ export async function POST(request: NextRequest) {
         }
 
         if (role === 'STUDENT') {
-             // Check admission number uniqueness WITHIN the same school
              const { data: existingStudent } = await supabaseAdmin
                 .from('users')
                 .select('id, students!inner(admission_number)')
@@ -112,10 +112,9 @@ export async function POST(request: NextRequest) {
 
         // 1. GENERATE USERNAME
         const { generateUsername } = await import('@/lib/generate-username');
-        const { gradeToWord } = await import('@/lib/grade-to-word');
         const username = generateUsername(first_name, school.name, sequence_number);
 
-        // Check uniqueness (just in case)
+        // Check uniqueness
         const { data: existingUsername } = await supabaseAdmin
             .from('users')
             .select('id')
@@ -126,103 +125,32 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Generated username already exists. Please use a different sequence number.' }, { status: 409 });
         }
 
-        // 2. GENERATE PASSWORD
-        let rawPassword = 'password'; // fallback
-        let passwordHint = '';
+        // 2. CREATE USER IN DB (no Clerk account — deferred to activation)
+        const newUserId = crypto.randomUUID();
+        const fakeEmail = `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`;
 
-        if (role === 'STUDENT') {
-             // Find grade for the stream
-              const { data: stream } = await supabaseAdmin
-                 .from('grade_streams')
-                 .select('grade_id')
-                 .eq('id', grade_stream_id)
-                 .eq('school_id', school_id)
-                 .maybeSingle();
-
-             if (stream) {
-                 const { data: grade } = await supabaseAdmin
-                    .from('grades')
-                    .select('numeric_order')
-                    .eq('id', stream.grade_id)
-                    .maybeSingle();
-                 if (grade) {
-                     rawPassword = gradeToWord(grade.numeric_order);
-                 }
-             }
-             passwordHint = `Grade word (e.g., "${rawPassword}")`;
-        } else if (role === 'CLASS_TEACHER') {
-             if (class_teacher_grade_stream_id) {
-                 const { data: stream } = await supabaseAdmin
-                    .from('grade_streams')
-                    .select('grade_id')
-                    .eq('id', class_teacher_grade_stream_id)
-                    .eq('school_id', school_id)
-                    .maybeSingle();
-                 if (stream) {
-                     const { data: grade } = await supabaseAdmin
-                        .from('grades')
-                        .select('numeric_order')
-                        .eq('id', stream.grade_id)
-                        .maybeSingle();
-                     if (grade) {
-                         rawPassword = gradeToWord(grade.numeric_order);
-                     }
-                 }
-                 passwordHint = `Grade word (e.g., "${rawPassword}")`;
-             } else {
-                 rawPassword = 'teacher';
-                 passwordHint = 'teacher';
-             }
-        } else if (role === 'SUBJECT_TEACHER') {
-            if (subject_teacher_subjects && subject_teacher_subjects.length > 0) {
-                 const firstSubjectId = subject_teacher_subjects[0].subject_id;
-                 const { data: subject } = await supabaseAdmin
-                    .from('subjects')
-                    .select('name')
-                    .eq('id', firstSubjectId)
-                    .eq('school_id', school_id)
-                    .maybeSingle();
-                 if (subject) {
-                     rawPassword = subject.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                     passwordHint = `Subject name (e.g., "${rawPassword}")`;
-                 } else {
-                     rawPassword = 'teacher';
-                     passwordHint = 'teacher';
-                 }
-            } else {
-                rawPassword = 'teacher';
-                passwordHint = 'teacher';
-            }
-        }
-
-        const bcrypt = await import('bcryptjs');
-        const password_hash = await bcrypt.hash(rawPassword, 10);
-        const { randomUUID } = await import('crypto');
-
-        // 3. CREATE USER IN DB (no plain_password stored for security)
         const { data: newUser, error: insertError } = await supabaseAdmin
             .from('users')
             .insert({
-                id: randomUUID(),
+                id: newUserId,
                 first_name: first_name.trim(),
                 last_name: last_name.trim(),
                 phone: phone.trim(),
                 role,
                 school_id,
                 username,
-                password_hash,
-                is_active: true,
-                email: `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`,
+                is_active: false, // Will be activated when user sets their password
+                email: fakeEmail,
             })
             .select('id')
             .single();
 
         if (insertError || !newUser) {
             console.error('Insert error:', insertError);
-            return NextResponse.json({ error: `User creation failed: ${insertError?.message || 'Unknown error'}` }, { status: 500 });
+            return NextResponse.json({ error: `Database user creation failed: ${insertError?.message || 'Unknown error'}` }, { status: 500 });
         }
 
-        // 4. CREATE ROLE-SPECIFIC RECORDS
+        // 3. CREATE ROLE-SPECIFIC RECORDS
         if (role === 'STUDENT') {
              await supabaseAdmin.from('students').insert({
                  id: newUser.id,
@@ -234,7 +162,6 @@ export async function POST(request: NextRequest) {
         }
 
         if (role === 'CLASS_TEACHER' && class_teacher_grade_stream_id) {
-             // Need active academic year
              const { data: currentYear } = await supabaseAdmin
                   .from('academic_years')
                   .select('id')
@@ -288,13 +215,15 @@ export async function POST(request: NextRequest) {
              }
         }
 
+        // 4. Generate invite code (NOT a password)
+        const inviteCode = await createInviteCode(supabaseAdmin, newUser.id, school_id, role);
+
         return NextResponse.json({
             success: true,
             user: { first_name, last_name, role, username },
             credentials: {
                 username,
-                password_hint: passwordHint,
-                raw_password: rawPassword // Only returned once for the admin to see/copy!
+                invite_code: inviteCode
             }
         });
     } catch (err: unknown) {

@@ -64,6 +64,7 @@ export default function StudentsPage() {
     const [showImportModal, setShowImportModal] = useState(false);
     const [importData, setImportData] = useState<any[]>([]);
     const [importing, setImporting] = useState(false);
+    const [createdCredentials, setCreatedCredentials] = useState<{first_name: string; last_name: string; username: string; invite_code: string}[] | null>(null);
 
     const fetchStudents = async () => { setFetchError(null); try { const res = await fetch('/api/school/data?type=students'); const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed'); setStudents(json.data || []); } catch (err: unknown) { setFetchError(err instanceof Error ? err.message : 'Unknown error'); } setLoading(false); };
     const fetchGradeStreams = async () => { try { const res = await fetch('/api/school/data?type=grade_streams'); const json = await res.json(); if (!res.ok) return; setGradeStreams((json.data || []).map((d: any) => ({ id: d.id, full_name: d.full_name, academic_level_id: d.grades?.academic_level_id || d.academic_level_id || null }))); } catch {} };
@@ -88,7 +89,52 @@ export default function StudentsPage() {
     const handleDeleteStudent = async (id: string, name: string) => { if (!confirm(`Delete ${name}? This removes all records.`)) return; setDeletingId(id); try { const res = await fetch(`/api/admin/delete-student?student_id=${id}`, { method: 'DELETE' }); const r = await res.json(); if (!res.ok) toast.error(r.error || 'Failed to delete student'); else { setStudents(p => p.filter(s => s.id !== id)); toast.success('Student deleted successfully'); } } catch { toast.error('Error deleting student.'); } setDeletingId(null); };
     const handleStartEdit = (s: StudentRow) => { setEditingStudent(s); setEditData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number || '', guardian_phone: s.guardian_phone || '', guardian_name: s.guardian_name || '', guardian_email: s.guardian_email || '', gender: s.gender || '', date_of_birth: s.date_of_birth || '', grade_stream_id: s.grade_streams?.id || '', status: s.status || 'ACTIVE', avatar_url: s.avatar_url || '' }); };
     const handleSaveStudent = async () => { if (!editingStudent) return; setSavingEdit(true); try { const res = await fetch('/api/admin/update-student', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: editingStudent.id, first_name: editData.first_name.trim(), last_name: editData.last_name.trim(), admission_number: editData.admission_number.trim(), guardian_phone: editData.guardian_phone.trim() || null, guardian_name: editData.guardian_name.trim() || null, guardian_email: editData.guardian_email.trim() || null, gender: editData.gender || null, date_of_birth: editData.date_of_birth || null, grade_stream_id: editData.grade_stream_id || null, status: editData.status, avatar_url: editData.avatar_url || null }) }); const r = await res.json(); if (!res.ok) toast.error(r.error || 'Failed to update student'); else { setStudents(p => p.map(s => s.id !== editingStudent.id ? s : { ...s, admission_number: editData.admission_number.trim(), guardian_phone: editData.guardian_phone.trim() || null, guardian_name: editData.guardian_name.trim() || null, guardian_email: editData.guardian_email.trim() || null, gender: editData.gender || null, date_of_birth: editData.date_of_birth || null, avatar_url: editData.avatar_url || null, status: editData.status, users: s.users ? { ...s.users, first_name: editData.first_name.trim(), last_name: editData.last_name.trim() } : null, grade_streams: editData.grade_stream_id ? gradeStreams.find(gs => gs.id === editData.grade_stream_id) || s.grade_streams : null })); setEditingStudent(null); toast.success('Student updated successfully'); } } catch { toast.error('Error updating student.'); } setSavingEdit(false); };
-    const handleAddStudent = async () => { if (!newStudent.first_name.trim() || !newStudent.last_name.trim()) { setSaveMessage({ type: 'error', text: 'Name required.' }); return; } if (!newStudent.academic_level_id) { setSaveMessage({ type: 'error', text: 'Select academic level.' }); return; } setSaving(true); setSaveMessage(null); try { const res = await fetch('/api/admin/add-student', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first_name: newStudent.first_name.trim(), last_name: newStudent.last_name.trim(), admission_number: newStudent.admission_number.trim() || null, grade_stream_id: newStudent.grade_stream_id || null, academic_level_id: newStudent.academic_level_id, guardian_phone: newStudent.guardian_phone.trim() || null, guardian_name: newStudent.guardian_name.trim() || null, guardian_email: newStudent.guardian_email.trim() || null, gender: newStudent.gender || null, date_of_birth: newStudent.date_of_birth || null, avatar_url: newStudent.avatar_url || null, admin_user_id: profile?.id }) }); const r = await res.json(); if (!res.ok) setSaveMessage({ type: 'error', text: r.error || 'Failed' }); else { setSaveMessage({ type: 'success', text: 'Student added!' }); setNewStudent({ first_name: '', last_name: '', admission_number: '', grade_stream_id: '', academic_level_id: '', guardian_phone: '', guardian_name: '', guardian_email: '', gender: '', date_of_birth: '', avatar_url: '' }); await fetchStudents(); setTimeout(() => { setShowAddModal(false); setSaveMessage(null); }, 1200); } } catch (e: unknown) { setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Error' }); } setSaving(false); };
+    const handleAddStudent = async () => {
+        if (!newStudent.first_name.trim() || !newStudent.last_name.trim()) { setSaveMessage({ type: 'error', text: 'Name required.' }); return; }
+        if (!newStudent.academic_level_id) { setSaveMessage({ type: 'error', text: 'Select academic level.' }); return; }
+        setSaving(true);
+        setSaveMessage(null);
+        try {
+            const res = await fetch('/api/admin/add-student', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    first_name: newStudent.first_name.trim(),
+                    last_name: newStudent.last_name.trim(),
+                    admission_number: newStudent.admission_number.trim() || null,
+                    grade_stream_id: newStudent.grade_stream_id || null,
+                    academic_level_id: newStudent.academic_level_id,
+                    guardian_phone: newStudent.guardian_phone.trim() || null,
+                    guardian_name: newStudent.guardian_name.trim() || null,
+                    guardian_email: newStudent.guardian_email.trim() || null,
+                    gender: newStudent.gender || null,
+                    date_of_birth: newStudent.date_of_birth || null,
+                    avatar_url: newStudent.avatar_url || null,
+                    admin_user_id: profile?.id
+                })
+            });
+            const r = await res.json();
+            if (!res.ok) {
+                setSaveMessage({ type: 'error', text: r.error || 'Failed' });
+            } else {
+                setSaveMessage({ type: 'success', text: 'Student added!' });
+                if (r.invite_code && r.username) {
+                    setCreatedCredentials([{
+                        first_name: newStudent.first_name.trim(),
+                        last_name: newStudent.last_name.trim(),
+                        username: r.username,
+                        invite_code: r.invite_code
+                    }]);
+                }
+                setNewStudent({ first_name: '', last_name: '', admission_number: '', grade_stream_id: '', academic_level_id: '', guardian_phone: '', guardian_name: '', guardian_email: '', gender: '', date_of_birth: '', avatar_url: '' });
+                await fetchStudents();
+                setTimeout(() => { setShowAddModal(false); setSaveMessage(null); }, 1200);
+            }
+        } catch (e: unknown) {
+            setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Error' });
+        }
+        setSaving(false);
+    };
 
     const handlePhotoFileSelect = async (file: File, setUrl: (url: string) => void) => {
         if (!file) return;
@@ -161,6 +207,9 @@ export default function StudentsPage() {
                 toast.success(r.message || 'Students imported successfully');
                 setShowImportModal(false);
                 setImportData([]);
+                if (r.created_credentials && r.created_credentials.length > 0) {
+                    setCreatedCredentials(r.created_credentials);
+                }
                 await fetchStudents();
             }
         } catch {
@@ -516,6 +565,42 @@ export default function StudentsPage() {
                                     )}
                                 </div>
                             )}
+                        </div>
+                    </Card>
+                </div>
+            )}
+            {/* Created Credentials Modal */}
+            {createdCredentials && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 shadow-2xl">
+                        <div className="p-6 border-b border-border shrink-0 bg-muted/30">
+                            <h3 className="font-semibold text-lg">Student Invite Codes</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Please copy the generated invite codes. Students will use these to activate their accounts at <strong>/activate</strong> and set their own passwords. <strong className="text-amber-500">They will not be shown again!</strong></p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="bg-card border border-border rounded-lg overflow-hidden">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Student Name</TableHead>
+                                            <TableHead>Username</TableHead>
+                                            <TableHead>Invite Code</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {createdCredentials.map((c, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell className="font-medium text-xs">{c.first_name} {c.last_name}</TableCell>
+                                                <TableCell className="text-xs font-mono">{c.username}</TableCell>
+                                                <TableCell className="text-xs font-mono tracking-widest uppercase">{c.invite_code}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-border bg-muted/30 flex justify-end shrink-0">
+                            <Button variant="primary" onClick={() => setCreatedCredentials(null)}>I have copied the invite codes</Button>
                         </div>
                     </Card>
                 </div>

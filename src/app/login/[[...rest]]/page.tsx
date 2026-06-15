@@ -16,7 +16,7 @@ export default function LoginPage() {
   const { isLoaded, signIn, setActive } = useSignIn();
   const [showSuccess] = useState(typeof window !== 'undefined' && window.location.search.includes('created=1'));
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [needsMfa, setNeedsMfa] = useState(false);
@@ -44,7 +44,7 @@ export default function LoginPage() {
         }
       } else {
         const result = await signIn.create({
-          identifier: email,
+          identifier: identifier,
           password,
         });
 
@@ -66,10 +66,10 @@ export default function LoginPage() {
     } catch (err: any) {
       const msg =
         err?.errors?.[0]?.code === 'form_identifier_not_found'
-          ? 'No account found with this email.'
+          ? 'No account found with this email or username.'
           : err?.errors?.[0]?.code === 'form_password_incorrect'
             ? 'Incorrect password.'
-            : err?.errors?.[0]?.longMessage || 'Invalid email, password, or code.';
+            : err?.errors?.[0]?.longMessage || 'Invalid credentials.';
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -176,17 +176,17 @@ export default function LoginPage() {
               </div>
             ) : (
               <>
-                {/* Email */}
+                {/* Identifier */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold"
                     style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    Email
+                    Email or Username
                   </label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    type="text"
+                    value={identifier}
+                    onChange={e => setIdentifier(e.target.value)}
+                    placeholder="Enter your email or username"
                     required
                     className="input-field h-[46px] rounded-xl px-4 text-sm transition-all duration-200"
                     style={{
@@ -303,6 +303,14 @@ export default function LoginPage() {
             <Link href="/signup" className="font-semibold no-underline"
               style={{ color: '#6366f1' }}>
               Create one
+            </Link>
+          </span>
+          <br />
+          <span style={{ opacity: 0.8 }}>
+            First time?{' '}
+            <Link href="/activate" className="font-semibold no-underline"
+              style={{ color: '#6366f1' }}>
+              Activate your account
             </Link>
           </span>
         </div>

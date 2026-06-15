@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
+import { createInviteCode } from '@/lib/invite-codes';
 
 export async function POST(request: NextRequest) {
     try {
@@ -56,13 +57,9 @@ export async function POST(request: NextRequest) {
 
         const effectiveSchoolId = adminProfile.school_id;
 
-        // Check if admission number already exists in students table
         // Check for duplicate admission number (only if provided)
         const admNo = admission_number?.trim() || null;
         if (admNo) {
-            // Must check if admission number already exists WITHIN THE SAME SCHOOL
-            // Wait, admission_number is globally unique? No, usually per school.
-            // But let's check the users table for the school and students table.
             const { data: existingStudent } = await supabaseAdmin
                 .from('users')
                 .select('id, students!inner(admission_number)')
@@ -86,11 +83,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'School not found.' }, { status: 404 });
         }
 
-        // 1. Generate a UUID for the new student
+        // 1. Generate a UUID for the new student (temporary until activation)
         const studentUserId = crypto.randomUUID();
-        // Keep admission number empty if not provided (no auto-generation)
         const finalAdmNo = admNo || null;
-        // Use userId to ensure unique email even without admission number
         const emailBase = (finalAdmNo || studentUserId.substring(0, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
@@ -98,7 +93,6 @@ export async function POST(request: NextRequest) {
         const sequence_number = sequenceMatch ? parseInt(sequenceMatch[0], 10) : Math.floor(Math.random() * 900) + 100;
 
         const { generateUsername } = await import('@/lib/generate-username');
-        const { gradeToWord } = await import('@/lib/grade-to-word');
         const username = generateUsername(first_name, school.name, sequence_number);
 
         let uniqueUsername = username;
@@ -112,31 +106,7 @@ export async function POST(request: NextRequest) {
              uniqueUsername = `${username}${Math.floor(Math.random() * 1000)}`;
         }
 
-        let rawPassword = 'password';
-        if (grade_stream_id) {
-             const { data: stream } = await supabaseAdmin
-                .from('grade_streams')
-                .select('grade_id')
-                .eq('id', grade_stream_id)
-                .eq('school_id', effectiveSchoolId)
-                .maybeSingle();
-
-             if (stream) {
-                 const { data: grade } = await supabaseAdmin
-                    .from('grades')
-                    .select('numeric_order')
-                    .eq('id', stream.grade_id)
-                    .maybeSingle();
-                 if (grade) {
-                     rawPassword = gradeToWord(grade.numeric_order);
-                 }
-             }
-        }
-
-        const bcrypt = await import('bcryptjs');
-        const password_hash = await bcrypt.hash(rawPassword, 10);
-
-        // 2. Insert into public.users (with generated credentials)
+        // 2. Insert into public.users (PENDING ACTIVATION — no Clerk account yet)
         const { error: userError } = await supabaseAdmin.from('users').insert({
             id: studentUserId,
             first_name: first_name.trim(),
@@ -145,8 +115,7 @@ export async function POST(request: NextRequest) {
             role: 'STUDENT',
             school_id: effectiveSchoolId,
             username: uniqueUsername,
-            password_hash,
-            is_active: true
+            is_active: false // Will be activated when user sets their password
         });
 
         if (userError) {
@@ -175,11 +144,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `Student record creation failed: ${studentError.message}` }, { status: 400 });
         }
 
+        // 4. Generate invite code (NOT a password)
+        const inviteCode = await createInviteCode(supabaseAdmin, studentUserId, effectiveSchoolId, 'STUDENT');
+
         return NextResponse.json({
             success: true,
             student_id: studentUserId,
+            username: uniqueUsername,
+            invite_code: inviteCode,
             admission_number: finalAdmNo,
-            message: `Student ${first_name.trim()} ${last_name.trim()} added successfully.`,
+            message: `Student ${first_name.trim()} ${last_name.trim()} added successfully. Share the invite code for them to activate their account.`,
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';

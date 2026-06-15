@@ -15,10 +15,10 @@ export default clerkMiddleware(async (auth, request) => {
   if (userId) {
     const role = (sessionClaims as any)?.role;
 
-    // Only redirect on the exact /login or /signup page, NOT on sub-paths
+    // Only redirect on the exact /login, /signup, or /activate page, NOT on sub-paths
     // like /login/factor-one or /login/sso-callback that Clerk needs
     const pathname = request.nextUrl.pathname;
-    if (pathname === '/login' || pathname === '/signup') {
+    if (pathname === '/login' || pathname === '/signup' || pathname === '/activate') {
       const dest = role === 'STUDENT'
         ? '/student/dashboard'
         : '/dashboard';

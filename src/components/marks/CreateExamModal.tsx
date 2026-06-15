@@ -54,7 +54,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const [qYear, setQYear] = useState({ name: '', start_date: '', end_date: '' });
   const [qTerm, setQTerm] = useState({ name: '', start_date: '', end_date: '' });
   const [qStream, setQStream] = useState({ name: '' });
-  const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '', grading_system_id: '' });
+  const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '', grading_system_id: '', is_compulsory: false });
 
   // Fetch dropdowns once on mount
   const fetchDropdowns = useCallback(async () => {
@@ -136,7 +136,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
     e.preventDefault();
     if (!qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id) return;
     const result = await quickAdd('subject', qSubject);
-    if (result) { setSelectedSubjectId(result.id); setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '' }); setAddingSubject(false); }
+    if (result) { setSelectedSubjectId(result.id); setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '', is_compulsory: false }); setAddingSubject(false); }
   };
 
   const handleCreateExam = async () => {

@@ -140,14 +140,14 @@ function UsersTab() {
         <InviteResultModal
           invitedName={h.invitedName}
           invitedUsername={h.invitedUsername}
-          invitedPassword={h.invitedPassword}
+          invitedCode={h.invitedCode}
           onClose={() => h.setShowInviteResult(false)}
         />
       )}
 
       {h.showResetResult && (
         <ResetPasswordResultModal
-          password={h.resetResultPassword}
+          inviteCode={h.resetResultInviteCode}
           onClose={() => h.setShowResetResult(false)}
         />
       )}
