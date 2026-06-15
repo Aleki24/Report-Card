@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 
 export default function ActivatePage() {
     const router = useRouter();
@@ -71,11 +70,8 @@ export default function ActivatePage() {
             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-3xl" />
             <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-3xl" />
 
-            <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="w-full max-w-md p-8 bg-card border border-border/50 rounded-2xl shadow-xl z-10"
+            <div 
+                className="w-full max-w-md p-8 bg-card border border-border/50 rounded-2xl shadow-xl z-10 animate-in fade-in slide-in-from-bottom-4 duration-500"
             >
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -174,7 +170,7 @@ export default function ActivatePage() {
                         Already have an account? Log in
                     </button>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 }
