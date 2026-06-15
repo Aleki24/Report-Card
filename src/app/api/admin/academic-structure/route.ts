@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
             if (auth.role !== 'ADMIN') {
                 const perms = await getTeacherPermissions(auth.userId);
                 streamsData = streamsData.filter(s => isStreamVisibleToTeacher(s, perms));
-                subjectsData = subjectsData.filter(s => isSubjectVisibleToTeacher(s, perms));
+                // We no longer filter subjects so teachers can see newly created subjects in dropdowns
             }
         } else {
              subjectsData = [];

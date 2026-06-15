@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('exams')
       .select(`
-        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id,
+        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
         subjects:subject_id ( name, code, category ),
         grades:grade_id ( name_display )
       `)
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     if (auth.role !== 'ADMIN') {
       const { getTeacherPermissions, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
       const perms = await getTeacherPermissions(auth.userId);
-      filteredExams = filteredExams.filter((exam: any) => isExamVisibleToTeacher(exam, perms));
+      filteredExams = filteredExams.filter((exam: any) => isExamVisibleToTeacher(exam, perms, auth.userId));
     }
 
     const mapped = (filteredExams).map((e: any) => ({

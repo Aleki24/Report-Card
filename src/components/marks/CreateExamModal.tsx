@@ -252,10 +252,16 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                     <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
                     <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                   </div>
-                  <select className="input-field w-full text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
-                    <option value="">-- Select Academic Level --</option>
-                    {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
-                  </select>
+                  <div className="flex gap-2">
+                    <select className="input-field flex-1 text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
+                      <option value="">-- Select Academic Level --</option>
+                      {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+                    </select>
+                    <select className="input-field w-28 text-xs" value={qSubject.is_compulsory ? 'true' : 'false'} onChange={e => setQSubject(p => ({ ...p, is_compulsory: e.target.value === 'true' }))}>
+                      <option value="true">Compulsory</option>
+                      <option value="false">Optional</option>
+                    </select>
+                  </div>
                   <select className="input-field w-full text-xs" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>
                     <option value="">-- Grading System (Optional) --</option>
                     {gradingSystems.filter(gs => gs.academic_level_id === qSubject.academic_level_id).map(gs => <option key={gs.id} value={gs.id}>{gs.name}</option>)}

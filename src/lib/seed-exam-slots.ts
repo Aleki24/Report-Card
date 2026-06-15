@@ -10,6 +10,108 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 export const STANDARD_EXAM_TYPES = ['OPENER', 'MIDTERM', 'ENDTERM'] as const;
 export type StandardExamType = typeof STANDARD_EXAM_TYPES[number];
 
+/**
+ * Maps subject codes to the CBC sub-level grade ranges they belong to.
+ * This prevents e.g. Junior School subjects appearing in Grade 10 exams.
+ * Key: subject code (as stored in DB). Value: array of allowed grade name patterns.
+ */
+const CBC_SUBJECT_GRADE_RANGES: Record<string, { minGrade: number; maxGrade: number }> = {
+  // Lower Primary codes (Grades 1-3)
+  'IND_LP': { minGrade: 1, maxGrade: 3 },
+  'KISW_LP': { minGrade: 1, maxGrade: 3 },
+  'KSL_LP': { minGrade: 1, maxGrade: 3 },
+  'ENG_LP': { minGrade: 1, maxGrade: 3 },
+  'MATH_LP': { minGrade: 1, maxGrade: 3 },
+  'RE_LP': { minGrade: 1, maxGrade: 3 },
+  'ENV_LP': { minGrade: 1, maxGrade: 3 },
+  'MCA_LP': { minGrade: 1, maxGrade: 3 },
+  // Legacy lower primary codes (from old definitions)
+  'IND': { minGrade: 1, maxGrade: 3 },
+  'ENV': { minGrade: 1, maxGrade: 3 },
+  'MCA': { minGrade: 1, maxGrade: 3 },
+
+  // Upper Primary codes (Grades 4-6)
+  'ENG_UP': { minGrade: 4, maxGrade: 6 },
+  'KISW_UP': { minGrade: 4, maxGrade: 6 },
+  'KSL_UP': { minGrade: 4, maxGrade: 6 },
+  'MATH_UP': { minGrade: 4, maxGrade: 6 },
+  'SCI_UP': { minGrade: 4, maxGrade: 6 },
+  'SS_UP': { minGrade: 4, maxGrade: 6 },
+  'RE_UP': { minGrade: 4, maxGrade: 6 },
+  'CMA_UP': { minGrade: 4, maxGrade: 6 },
+
+  // Junior School codes (Grades 7-9)
+  'ENG_JS': { minGrade: 7, maxGrade: 9 },
+  'KISW_JS': { minGrade: 7, maxGrade: 9 },
+  'KSL_JS': { minGrade: 7, maxGrade: 9 },
+  'MATH_JS': { minGrade: 7, maxGrade: 9 },
+  'RE_JS': { minGrade: 7, maxGrade: 9 },
+  'SS_JS': { minGrade: 7, maxGrade: 9 },
+  'SCI_JS': { minGrade: 7, maxGrade: 9 },
+  'PTS_JS': { minGrade: 7, maxGrade: 9 },
+  'AGRI_JS': { minGrade: 7, maxGrade: 9 },
+  'CAS_JS': { minGrade: 7, maxGrade: 9 },
+
+  // Senior School codes (Grades 10-12) — core
+  'ENG_SS': { minGrade: 10, maxGrade: 12 },
+  'KISW_SS': { minGrade: 10, maxGrade: 12 },
+  'KSL_SS': { minGrade: 10, maxGrade: 12 },
+  'CSL_SS': { minGrade: 10, maxGrade: 12 },
+  'PE_SS': { minGrade: 10, maxGrade: 12 },
+  'ICT_SS': { minGrade: 10, maxGrade: 12 },
+  // Senior School — STEM
+  'MATH_SS': { minGrade: 10, maxGrade: 12 },
+  'BIO_SS': { minGrade: 10, maxGrade: 12 },
+  'CHEM_SS': { minGrade: 10, maxGrade: 12 },
+  'PHY_SS': { minGrade: 10, maxGrade: 12 },
+  'GSCI_SS': { minGrade: 10, maxGrade: 12 },
+  'COMP_SS': { minGrade: 10, maxGrade: 12 },
+  'AGRI_SS': { minGrade: 10, maxGrade: 12 },
+  'HOME_SS': { minGrade: 10, maxGrade: 12 },
+  'DD_SS': { minGrade: 10, maxGrade: 12 },
+  'AVI_SS': { minGrade: 10, maxGrade: 12 },
+  'BC_SS': { minGrade: 10, maxGrade: 12 },
+  'ELEC_SS': { minGrade: 10, maxGrade: 12 },
+  'MET_SS': { minGrade: 10, maxGrade: 12 },
+  'PM_SS': { minGrade: 10, maxGrade: 12 },
+  'WOOD_SS': { minGrade: 10, maxGrade: 12 },
+  'MED_SS': { minGrade: 10, maxGrade: 12 },
+  'MAR_SS': { minGrade: 10, maxGrade: 12 },
+  // Senior School — Arts & Sports
+  'SR_SS': { minGrade: 10, maxGrade: 12 },
+  'MD_SS': { minGrade: 10, maxGrade: 12 },
+  'TF_SS': { minGrade: 10, maxGrade: 12 },
+  'FA_SS': { minGrade: 10, maxGrade: 12 },
+  // Senior School — Social Sciences
+  'AENG_SS': { minGrade: 10, maxGrade: 12 },
+  'LIT_SS': { minGrade: 10, maxGrade: 12 },
+  'IND_SS': { minGrade: 10, maxGrade: 12 },
+  'KK_SS': { minGrade: 10, maxGrade: 12 },
+  'FL_SS': { minGrade: 10, maxGrade: 12 },
+  'HC_SS': { minGrade: 10, maxGrade: 12 },
+  'GEO_SS': { minGrade: 10, maxGrade: 12 },
+  'BS_SS': { minGrade: 10, maxGrade: 12 },
+  'RE_SS': { minGrade: 10, maxGrade: 12 },
+};
+
+/**
+ * Subjects with generic codes (no suffix) that the user may have created.
+ * Map by subject NAME to the grade range where they belong.
+ * This handles DB entries like "Integrated Science (SCI)" which should only be for Junior School.
+ */
+const CBC_NAME_GRADE_RANGES: Record<string, { minGrade: number; maxGrade: number }> = {
+  'Integrated Science': { minGrade: 4, maxGrade: 9 },      // Upper Primary + Junior School only
+  'Social Studies': { minGrade: 4, maxGrade: 9 },           // Upper Primary + Junior School only
+  'Pre-Technical Studies': { minGrade: 7, maxGrade: 9 },    // Junior School only
+  'Creative Arts and Sports': { minGrade: 7, maxGrade: 9 }, // Junior School only
+  'Environmental Activities': { minGrade: 1, maxGrade: 3 }, // Lower Primary only
+  'Movement and Creative Activities': { minGrade: 1, maxGrade: 3 }, // Lower Primary only
+  'Creative and Movement Activities': { minGrade: 4, maxGrade: 6 }, // Upper Primary only
+  'Indigenous Language': { minGrade: 1, maxGrade: 3 },      // Lower Primary only
+  'Community Service Learning': { minGrade: 10, maxGrade: 12 }, // Senior School only
+  'ICT Skills': { minGrade: 10, maxGrade: 12 },             // Senior School only
+};
+
 interface SeedOptions {
   termId: string;
   schoolId: string;
@@ -90,6 +192,45 @@ export async function seedExamSlots(options: SeedOptions) {
     return date.toISOString().split('T')[0];
   };
 
+  /**
+   * Extract the grade number from a grade name like "Grade 7", "Grade 10", etc.
+   * Returns null for non-CBC grade names like "Form 1", "Standard 3", "Pre-Primary 1".
+   */
+  const extractGradeNumber = (gradeName: string): number | null => {
+    const n = (gradeName || '').toLowerCase().trim();
+    // Match "grade N" pattern
+    const m = n.match(/^grade\s+(\d+)$/);
+    if (m) return parseInt(m[1], 10);
+    // Pre-Primary = 0 (before Grade 1)
+    if (n.includes('pre-primary') || n.includes('pre primary')) return 0;
+    return null;
+  };
+
+  /**
+   * Check if a CBC subject is allowed for a specific grade.
+   * Uses the subject code first, then falls back to subject name matching.
+   */
+  const isCBCSubjectAllowedForGrade = (gradeName: string, subjectName: string, subjectCode: string): boolean => {
+    const gradeNum = extractGradeNumber(gradeName);
+    if (gradeNum === null) return true; // Not a CBC "Grade N" format, allow (e.g. 8-4-4 forms)
+
+    // 1. Check by exact subject code
+    const codeRange = CBC_SUBJECT_GRADE_RANGES[subjectCode];
+    if (codeRange) {
+      return gradeNum >= codeRange.minGrade && gradeNum <= codeRange.maxGrade;
+    }
+
+    // 2. Check by subject name (for generic codes like "SCI", "MATH", "ENG" without suffix)
+    const nameRange = CBC_NAME_GRADE_RANGES[subjectName];
+    if (nameRange) {
+      return gradeNum >= nameRange.minGrade && gradeNum <= nameRange.maxGrade;
+    }
+
+    // 3. Generic subjects (e.g. English, Kiswahili, Mathematics, Agriculture, Religious Education)
+    //    with non-suffixed codes: allow for all CBC grades by default
+    return true;
+  };
+
   for (const gradeId of gradeIds) {
     const grade = gradeMap.get(gradeId);
     if (!grade) continue;
@@ -97,6 +238,11 @@ export async function seedExamSlots(options: SeedOptions) {
     const gradeSubjects = subjects.filter(s => s.academic_level_id === grade.academic_level_id);
 
     for (const subject of gradeSubjects) {
+      // Filter out mismatched grades for CBC subjects
+      if (!isCBCSubjectAllowedForGrade(grade.name_display, subject.name, subject.code)) {
+        continue;
+      }
+
       for (const examType of types) {
         const key = `${subject.id}|${gradeId}|${examType}`;
         if (existingSet.has(key)) {

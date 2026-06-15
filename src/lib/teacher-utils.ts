@@ -117,7 +117,9 @@ export function isStudentVisibleToTeacher(student: any, perms: TeacherPermission
 }
 
 // Utility to check if an exam is visible to a teacher
-export function isExamVisibleToTeacher(exam: any, perms: TeacherPermissions) {
+export function isExamVisibleToTeacher(exam: any, perms: TeacherPermissions, userId?: string) {
+  if (userId && exam.created_by_teacher_id === userId) return true;
+
   if (perms.isClassTeacher) {
     // Class teacher sees exams for their stream OR exams for their grade (all streams)
     if (exam.grade_stream_id && perms.classTeacherStreams.includes(exam.grade_stream_id)) return true;

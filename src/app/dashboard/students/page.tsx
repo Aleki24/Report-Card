@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Papa from 'papaparse';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
@@ -60,6 +61,9 @@ export default function StudentsPage() {
     const [viewLoading, setViewLoading] = useState(false);
     const [viewTab, setViewTab] = useState<'profile' | 'academic' | 'reports' | 'attendance'>('profile');
     const [viewPhotoError, setViewPhotoError] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importData, setImportData] = useState<any[]>([]);
+    const [importing, setImporting] = useState(false);
 
     const fetchStudents = async () => { setFetchError(null); try { const res = await fetch('/api/school/data?type=students'); const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed'); setStudents(json.data || []); } catch (err: unknown) { setFetchError(err instanceof Error ? err.message : 'Unknown error'); } setLoading(false); };
     const fetchGradeStreams = async () => { try { const res = await fetch('/api/school/data?type=grade_streams'); const json = await res.json(); if (!res.ok) return; setGradeStreams((json.data || []).map((d: any) => ({ id: d.id, full_name: d.full_name, academic_level_id: d.grades?.academic_level_id || d.academic_level_id || null }))); } catch {} };
@@ -105,13 +109,73 @@ export default function StudentsPage() {
         setUploadingPhoto(false);
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) => header.toLowerCase().replace(/[^a-z0-9]/g, ''),
+            complete: (results) => {
+                const parsed = results.data.map((row: any) => {
+                    let first = row.firstname || row.first || '';
+                    let last = row.lastname || row.last || row.surname || '';
+                    if (!first && !last && (row.name || row.fullname || row.studentname)) {
+                         const parts = (row.name || row.fullname || row.studentname).trim().split(' ');
+                         first = parts[0];
+                         last = parts.slice(1).join(' ');
+                    }
+                    return {
+                        first_name: first,
+                        last_name: last,
+                        admission_number: row.admissionnumber || row.admissionno || row.admno || row.adm || '',
+                        gender: row.gender || row.sex || '',
+                        date_of_birth: row.dateofbirth || row.dob || row.birthdate || '',
+                        guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
+                        guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
+                        guardian_email: row.guardianemail || row.parentemail || row.email || '',
+                        academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
+                    };
+                }).filter((r: any) => r.first_name || r.last_name);
+                setImportData(parsed);
+            },
+            error: () => {
+                toast.error('Failed to parse CSV file');
+            }
+        });
+        e.target.value = '';
+    };
+
+    const handleImportSubmit = async () => {
+        if (importData.length === 0) return;
+        setImporting(true);
+        try {
+            const res = await fetch('/api/admin/bulk-import-students', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ students: importData })
+            });
+            const r = await res.json();
+            if (!res.ok) toast.error(r.error || 'Failed to import students');
+            else {
+                toast.success(r.message || 'Students imported successfully');
+                setShowImportModal(false);
+                setImportData([]);
+                await fetchStudents();
+            }
+        } catch {
+            toast.error('Error importing students.');
+        }
+        setImporting(false);
+    };
+
     const getInitials = (s: StudentRow) => `${(s.users?.first_name || '?')[0]}${(s.users?.last_name || '?')[0]}`.toUpperCase();
     const activeCount = students.filter(s => s.status === 'ACTIVE').length;
     const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
     return (
         <div className="w-full max-w-7xl mx-auto">
-            <PageHeader title="Students" description="Manage student profiles, admission records, classes, and guardian contacts." breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Students' }]} action={<button className="btn-primary text-xs px-4 py-2" onClick={() => setShowAddModal(true)}><UserPlus style={{ width: 14, height: 14 }} /> Add Student</button>} />
+            <PageHeader title="Students" description="Manage student profiles, admission records, classes, and guardian contacts." breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Students' }]} action={<div className="flex gap-2"><button className="btn-secondary bg-white text-xs px-4 py-2" onClick={() => setShowImportModal(true)}><Upload style={{ width: 14, height: 14 }} /> Import</button><button className="btn-primary text-xs px-4 py-2" onClick={() => setShowAddModal(true)}><UserPlus style={{ width: 14, height: 14 }} /> Add Student</button></div>} />
 
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -152,8 +216,8 @@ export default function StudentsPage() {
                     <EmptyState icon={<Users style={{ width: 24, height: 24 }} />} title="No students found" description={search || filterGradeStream || filterStatus ? 'No students match your filters.' : 'Click "+ Add Student" to enroll your first student.'} action={!search && !filterGradeStream && !filterStatus ? <button className="btn-primary text-xs px-4 py-2" onClick={() => setShowAddModal(true)}>Add Student</button> : undefined} />
                 ) : (
                     <>
-                        {/* Desktop Table */}
-                        <div className="hidden md:block">
+                        {/* Table */}
+                        <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Admission No.</TableHead><TableHead>Class</TableHead><TableHead className="w-[100px]">Actions</TableHead></TableRow></TableHeader>
                                 <TableBody>
@@ -182,26 +246,6 @@ export default function StudentsPage() {
                                     ))}
                                 </TableBody>
                             </Table>
-                        </div>
-
-                        {/* Mobile Cards */}
-                        <div className="md:hidden space-y-2 p-2">
-                            {paginated.map(s => (
-                                <Card key={s.id} className="p-3 bg-muted border border-border/50">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary">{getInitials(s)}</div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-[14px] truncate">{s.users?.first_name} {s.users?.last_name}</div>
-                                            <div className="text-[11px] text-muted-foreground truncate">{s.admission_number || '—'} &middot; {s.grade_streams?.full_name || '—'}</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button variant="secondary" size="sm" onClick={() => openViewPanel(s.id)} className="flex-1 text-[11px] h-7">View</Button>
-                                        <Button variant="secondary" size="sm" onClick={() => handleStartEdit(s)} className="flex-1 text-[11px] h-7">Edit</Button>
-                                        <a href={`/api/reports/student/${s.id}`} target="_blank" className="flex-1 h-7 inline-flex items-center justify-center rounded-md border border-border bg-card text-[11px] font-medium text-foreground hover:bg-muted transition-colors text-center">Report</a>
-                                    </div>
-                                </Card>
-                            ))}
                         </div>
 
                         <Pagination currentPage={currentPage} totalPages={totalPages} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} />
@@ -243,6 +287,64 @@ export default function StudentsPage() {
                             <div className="flex gap-2 justify-end">
                                 <Button variant="secondary" onClick={() => { setShowAddModal(false); setSaveMessage(null); }} disabled={saving}>Cancel</Button>
                                 <Button variant="primary" onClick={handleAddStudent} disabled={saving}>{saving ? 'Saving...' : 'Add Student'}</Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Import Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)}>
+                    <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <CardContent className="p-6 flex flex-col h-full overflow-hidden">
+                            <h2 className="text-lg font-bold font-display mb-4">Bulk Import Students</h2>
+                            
+                            <div className="mb-4">
+                                <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to import multiple students at once. The first row must contain headers.</p>
+                                <p className="text-xs text-muted-foreground mb-4">Expected columns: <strong>first_name, last_name, admission_number, gender, date_of_birth, guardian_phone, guardian_name, guardian_email</strong></p>
+                                
+                                <div className="flex items-center gap-3">
+                                    <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card cursor-pointer text-sm font-medium hover:bg-muted transition-colors">
+                                        <Upload className="w-4 h-4" />
+                                        Select CSV File
+                                        <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                                    </label>
+                                    <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
+                                </div>
+                            </div>
+
+                            {importData.length > 0 && (
+                                <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md">
+                                    <Table>
+                                        <TableHeader className="bg-muted/50 sticky top-0">
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Admission No.</TableHead>
+                                                <TableHead>Gender</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {importData.slice(0, 10).map((row, i) => (
+                                                <TableRow key={i}>
+                                                    <TableCell className="text-xs">{row.first_name} {row.last_name}</TableCell>
+                                                    <TableCell className="text-xs">{row.admission_number || '—'}</TableCell>
+                                                    <TableCell className="text-xs">{row.gender || '—'}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                    {importData.length > 10 && (
+                                        <div className="p-2 text-center text-xs text-muted-foreground border-t border-border">
+                                            And {importData.length - 10} more rows...
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 justify-end shrink-0 pt-2">
+                                <Button variant="secondary" onClick={() => { setShowImportModal(false); setImportData([]); }} disabled={importing}>Cancel</Button>
+                                <Button variant="primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0}>{importing ? 'Importing...' : `Import ${importData.length} Students`}</Button>
                             </div>
                         </CardContent>
                     </Card>

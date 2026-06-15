@@ -9,6 +9,9 @@ import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDef
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
 
 interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
+interface AcademicLevel { id: string; code: string; name: string; }
+interface GradeItem { id: string; name_display: string; academic_level_id: string; }
+interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; }
 interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
@@ -25,6 +28,13 @@ export function MarksSetupTab() {
   const [exams, setExams] = useState<ExamSlot[]>([]);
   const [selectedExamType, setSelectedExamType] = useState('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [filterGradeId, setFilterGradeId] = useState('');
+
+  // Academic structure for level/grade filtering
+  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
+  const [allGrades, setAllGrades] = useState<GradeItem[]>([]);
+  const [allSubjects, setAllSubjects] = useState<SubjectItem[]>([]);
+  const [selectedLevelId, setSelectedLevelId] = useState('');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedExamId, setSelectedExamId] = useState('');
@@ -34,6 +44,22 @@ export function MarksSetupTab() {
   const [loadingExams, setLoadingExams] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Grade → academic level map (must be before derived state)
+  const gradeLevelMap = new Map(allGrades.map(g => [g.id, g.academic_level_id]));
+
+  // ── 0. Fetch academic structure (levels + grades) ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/academic-structure');
+        const data = await res.json();
+        if (data.academic_levels) setAcademicLevels(data.academic_levels);
+        if (data.grades) setAllGrades(data.grades);
+        if (data.subjects) setAllSubjects(data.subjects);
+      } catch (err) { console.error('Failed to fetch academic structure:', err); }
+    })();
+  }, []);
 
   // ── 1. Fetch terms & auto-select active ──
   useEffect(() => {
@@ -68,6 +94,8 @@ export function MarksSetupTab() {
     setSelectedExamType('');
     setSelectedSubjectId('');
     setSelectedExamId('');
+    setSelectedLevelId('');
+    setFilterGradeId('');
     refreshExams(selectedTermId);
   }, [selectedTermId, refreshExams]);
 
@@ -77,17 +105,53 @@ export function MarksSetupTab() {
     et => existingTypes.has(et.code)
   );
 
-  // Subjects for selected exam type
+  // Subjects for selected exam type, filtered by level and grade
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
+
+  // Available levels from the exams (for the level filter dropdown)
+  const examLevelIds = new Set(
+    examsByType.map(e => gradeLevelMap.get(e.grade_id)).filter(Boolean)
+  );
+  const availableLevelsForType = academicLevels.filter(l => examLevelIds.has(l.id));
+
+  // Available grades from the exams (for the grade filter dropdown), filtered by selected level
+  const examGradeIds = new Set(examsByType.map(e => e.grade_id));
+  const availableGradesForType = allGrades
+    .filter(g => examGradeIds.has(g.id))
+    .filter(g => !selectedLevelId || g.academic_level_id === selectedLevelId)
+    .sort((a, b) => a.name_display.localeCompare(b.name_display));
+
+  // Build subject list filtered by level + grade
+  const filteredExamsByType = examsByType
+    .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
+    .filter(e => !filterGradeId || e.grade_id === filterGradeId);
   const subjectMap = new Map<string, ExamSlot>();
-  examsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
+  filteredExamsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
   const subjects = [...subjectMap.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name));
 
-  // Find selected exam
-  const selectedExam = exams.find(e => e.exam_type === selectedExamType && e.subject_id === selectedSubjectId);
+
+
+  // Find selected exam manually from selectedExamId
+  const selectedExam = exams.find(e => e.id === selectedExamId);
+  const examsForSelectedSubject = exams
+    .filter(e => e.exam_type === selectedExamType && e.subject_id === selectedSubjectId)
+    .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
+    .filter(e => !filterGradeId || e.grade_id === filterGradeId)
+    .sort((a, b) => a.grade_name.localeCompare(b.grade_name));
+
+
+
   useEffect(() => {
-    setSelectedExamId(selectedExam?.id || '');
-  }, [selectedExam]);
+    // If the selected subject changes, auto-set level to match the subject's academic level and clear exam
+    setSelectedExamId('');
+    const subj = allSubjects.find(s => s.id === selectedSubjectId);
+    setSelectedLevelId(subj?.academic_level_id || '');
+  }, [selectedSubjectId, allSubjects]);
+
+  useEffect(() => {
+    // If the level changes, clear the selected exam ID
+    setSelectedExamId('');
+  }, [selectedLevelId]);
 
   // ── Seed exam slots (admin only) ──
   const handleSeedExams = async (examTypes?: string[]) => {
@@ -231,25 +295,36 @@ export function MarksSetupTab() {
 
               {/* Admin can add more exam types */}
               {profile?.role === 'ADMIN' && (
-                <div className="relative group">
-                  <button className="px-3 py-2.5 rounded-lg text-xs transition-all" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                    + Add Type
-                  </button>
-                  <div className="hidden group-hover:block absolute z-50 top-full left-0 mt-1 p-2 rounded-lg min-w-[200px]" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                    {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
-                      <button
-                        key={et.code}
-                        onClick={() => handleSeedExams([et.code])}
-                        disabled={seeding}
-                        className="w-full text-left px-3 py-2 rounded text-xs hover:bg-card transition-colors"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                      >
-                        {et.icon} {et.name}
-                        <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{et.description}</span>
-                      </button>
-                    ))}
+                <>
+                  <div className="relative group">
+                    <button className="px-3 py-2.5 rounded-lg text-xs transition-all" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+                      + Add Type
+                    </button>
+                    <div className="hidden group-hover:block absolute z-50 top-full left-0 mt-1 p-2 rounded-lg min-w-[200px]" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                      {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
+                        <button
+                          key={et.code}
+                          onClick={() => handleSeedExams([et.code])}
+                          disabled={seeding}
+                          className="w-full text-left px-3 py-2 rounded text-xs hover:bg-card transition-colors"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          {et.icon} {et.name}
+                          <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{et.description}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                  <button
+                    onClick={() => handleSeedExams(Array.from(existingTypes))}
+                    disabled={seeding}
+                    className="px-3 py-2.5 rounded-lg text-xs transition-all hover:bg-muted"
+                    style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                    title="Generate exams for newly added subjects"
+                  >
+                    {seeding ? 'Syncing...' : '🔄 Sync Missing'}
+                  </button>
+                </>
               )}
               
               <button
@@ -271,17 +346,64 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 3: Select Subject ═══ */}
+      {/* ═══ STEP 3: Filter by Level & Grade ═══ */}
       {selectedExamType && (
         <div className="card mb-4 p-5">
           <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Subject</label>
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Filter</label>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Narrow down by level and grade
+            </span>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Level filter */}
+            <div className="flex-1">
+              <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Level</label>
+              <select
+                className="input-field w-full text-sm"
+                value={selectedLevelId}
+                onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
+              >
+                <option value="">— All Levels —</option>
+                {availableLevelsForType.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+            {/* Grade filter */}
+            <div className="flex-1">
+              <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Grade / Class</label>
+              <select
+                className="input-field w-full text-sm"
+                value={filterGradeId}
+                onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
+              >
+                <option value="">— All Grades —</option>
+                {availableGradesForType.map(g => (
+                  <option key={g.id} value={g.id}>{g.name_display}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ STEP 4: Select Subject ═══ */}
+      {selectedExamType && (
+        <div className="card mb-4 p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               {subjects.length} subject{subjects.length !== 1 ? 's' : ''} available
+              {selectedLevelId || filterGradeId ? ' (filtered)' : ''}
             </span>
           </div>
           {subjects.length === 0 ? (
-            <p className="text-xs text-orange-400">No subjects found for this exam type.</p>
+            <p className="text-xs text-orange-400">
+              {selectedLevelId || filterGradeId
+                ? 'No subjects found for the selected level/grade. Try widening your filter.'
+                : 'No subjects found for this exam type.'}
+            </p>
           ) : (
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
               {subjects.map(s => {
@@ -304,7 +426,43 @@ export function MarksSetupTab() {
                     {s.subject_category && (
                       <span className="text-[10px] mt-1 block" style={{ color: 'var(--color-text-muted)' }}>{s.subject_category}</span>
                     )}
-                    <span className="text-[10px] block mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{s.grade_name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ STEP 5: Select Grade / Class for this subject ═══ */}
+      {selectedSubjectId && (
+        <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3 mb-3">
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>⑤ Class</label>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {examsForSelectedSubject.length} class{examsForSelectedSubject.length !== 1 ? 'es' : ''} available
+            </span>
+          </div>
+
+          {examsForSelectedSubject.length === 0 ? (
+            <p className="text-xs text-orange-400">No exam slots found for this subject{selectedLevelId || filterGradeId ? ' with the current filters' : ''}.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {examsForSelectedSubject.map(exam => {
+                const isActive = selectedExamId === exam.id;
+                return (
+                  <button
+                    key={exam.id}
+                    onClick={() => setSelectedExamId(exam.id)}
+                    className="px-4 py-2 text-sm font-medium rounded-lg transition-all"
+                    style={{
+                      background: isActive ? 'var(--color-primary)' : 'var(--color-surface-raised)',
+                      color: isActive ? '#fff' : 'var(--color-text)',
+                      border: isActive ? '1px solid transparent' : '1px solid var(--color-border)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {exam.grade_name}
                   </button>
                 );
               })}

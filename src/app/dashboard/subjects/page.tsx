@@ -27,8 +27,9 @@ export default function SubjectsPage() {
   const [loading, setLoading] = useState(true);
   const [calSaving, setCalSaving] = useState(false);
   const [calMsg, setCalMsg] = useState('');
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL' });
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL', is_compulsory: true });
   const [selectedLevelFilter, setSelectedLevelFilter] = useState<EducationLevel | ''>('');
+  const [tableLevelFilter, setTableLevelFilter] = useState('');
   const [selectedPredefinedSubject, setSelectedPredefinedSubject] = useState('');
 
   const fetchSubjects = async () => {
@@ -69,12 +70,28 @@ export default function SubjectsPage() {
     finally { setCalSaving(false); }
   };
 
+  const toggleSubjectType = async (id: string, currentStatus: boolean) => {
+    setCalSaving(true); setCalMsg('');
+    try {
+      const res = await fetch(`/api/admin/academic-structure`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'subject', id, is_compulsory: !currentStatus })
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      setCalMsg('✅ Updated successfully');
+      await fetchSubjects();
+    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    finally { setCalSaving(false); }
+  };
+
   const getLevelName = (levelId?: string) => levelId ? academicLevels.find(l => l.id === levelId)?.name || '—' : '—';
 
   const filtered = subjects.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'ALL' || (s.category || '').toUpperCase() === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchLevel = !tableLevelFilter || s.academic_level_id === tableLevelFilter;
+    return matchSearch && matchCategory && matchLevel;
   });
 
   const compulsory = subjects.filter(s => s.is_compulsory).length;
@@ -141,16 +158,30 @@ export default function SubjectsPage() {
                 value={selectedPredefinedSubject} 
                 onChange={e => {
                   setSelectedPredefinedSubject(e.target.value);
-                  const subj = PREDEFINED_SUBJECTS.find(s => s.name === e.target.value);
+                  if (!e.target.value) return;
+                  const [name, code] = e.target.value.split('|');
+                  const subj = PREDEFINED_SUBJECTS.find(s => s.name === name && s.code === code);
                   if (subj) {
-                    setNewSubject(p => ({ ...p, name: subj.name, code: subj.code, category: subj.category || 'TECHNICAL' }));
+                    // Auto-match the academic level from the predefined subject's education level
+                    const levelCode = subj.level.startsWith('CBC') ? 'CBC' : subj.level.startsWith('844') ? '844' : '';
+                    const matchedLevel = academicLevels.find(al => al.code === levelCode);
+                    setNewSubject(p => ({
+                      ...p,
+                      name: subj.name,
+                      code: subj.code,
+                      category: subj.category || 'TECHNICAL',
+                      academic_level_id: matchedLevel?.id || p.academic_level_id,
+                    }));
                   }
                 }}
               >
                 <option value="">-- Custom / Select --</option>
-                {PREDEFINED_SUBJECTS.filter(s => !selectedLevelFilter || s.level === selectedLevelFilter).map(s => (
-                  <option key={s.name + s.code} value={s.name}>{s.name} ({s.code})</option>
-                ))}
+                {PREDEFINED_SUBJECTS.filter(s => !selectedLevelFilter || s.level === selectedLevelFilter).map(s => {
+                  const pathwayLabel = s.pathway === 'STEM' ? ' — STEM' : s.pathway === 'ARTS_SPORTS' ? ' — Arts & Sports' : s.pathway === 'SOCIAL_SCIENCES' ? ' — Social Sciences' : s.isCore && s.level === 'CBC_SENIOR_SCHOOL' ? ' — Core' : '';
+                  return (
+                    <option key={s.name + s.code} value={`${s.name}|${s.code}`}>{s.name} ({s.code}){pathwayLabel}</option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -170,6 +201,13 @@ export default function SubjectsPage() {
                 {Object.keys(categoryColors).map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            <div className="w-32">
+              <label className="block text-xs text-muted-foreground mb-1">Type *</label>
+              <select className="input-field w-full text-sm" value={newSubject.is_compulsory ? 'true' : 'false'} onChange={e => setNewSubject(p => ({ ...p, is_compulsory: e.target.value === 'true' }))}>
+                <option value="true">Compulsory</option>
+                <option value="false">Optional</option>
+              </select>
+            </div>
             <div className="flex-1 min-w-[150px]">
               <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
               <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
@@ -179,7 +217,7 @@ export default function SubjectsPage() {
             </div>
             <button type="button" onClick={async () => {
               await postStructure('subject', newSubject);
-              setNewSubject({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL' });
+              setNewSubject({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL', is_compulsory: true });
               setSelectedPredefinedSubject('');
             }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
               {calSaving ? 'Saving...' : '+ Add Subject'}
@@ -197,6 +235,10 @@ export default function SubjectsPage() {
             </span>
             <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search subjects..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <select className="input-field" value={tableLevelFilter} onChange={e => setTableLevelFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
+            <option value="">All Levels</option>
+            {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+          </select>
           <select className="input-field" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
             <option value="ALL">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -218,7 +260,7 @@ export default function SubjectsPage() {
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Category</th>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Type</th>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Level</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -234,7 +276,12 @@ export default function SubjectsPage() {
                       <td className="px-4 py-3 text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
                       <td className="px-4 py-3 text-right">
                         {role === 'ADMIN' && (
-                           <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
+                          <div className="flex justify-end gap-3 items-center">
+                            <button className="text-xs text-blue-500 hover:text-blue-400 font-medium" onClick={() => toggleSubjectType(s.id, !!s.is_compulsory)} disabled={calSaving}>
+                              🔄 Make {s.is_compulsory ? 'Optional' : 'Compulsory'}
+                            </button>
+                            <button className="text-xs text-red-400 hover:text-red-300 font-medium" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
+                          </div>
                         )}
                       </td>
                     </tr>

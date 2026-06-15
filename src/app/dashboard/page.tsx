@@ -280,7 +280,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">At a Glance</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
-              <ColoredStatCard title="Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/people" />
+              <ColoredStatCard title="Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/teachers" />
               <ColoredStatCard title="Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/academic-structure" />
               <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" href="/dashboard/reports" />
               <ColoredStatCard title="Present Today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={22} />} color="bg-[#2A9D8F]" href="/dashboard/attendance" />
@@ -332,7 +332,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           {/* Quick Actions — unique items not covered above */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 xs:gap-3">
             <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
-            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people" color="bg-[#E76F51]" />
+            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/teachers" color="bg-[#E76F51]" />
             <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
             <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" color="bg-[#4361EE]" />
           </div>

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
       // Verify exam access
       const { data: examData } = await supabase.from('exams').select('*').eq('id', examId).maybeSingle();
-      if (!examData || !isExamVisibleToTeacher(examData, perms)) {
+      if (!examData || !isExamVisibleToTeacher(examData, perms, userId)) {
         return NextResponse.json({ error: 'Unauthorized to view this exam' }, { status: 403 });
       }
 

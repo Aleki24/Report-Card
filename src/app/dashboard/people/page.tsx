@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Papa from 'papaparse';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
@@ -69,6 +70,11 @@ function StudentsSection() {
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
   const [page, setPage] = useState(1);
   const perPage = 20;
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [skippedData, setSkippedData] = useState<{ row: any; reason: string }[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importClassId, setImportClassId] = useState('');
 
   const fetchStudents = useCallback(async (gs?: string) => {
     setLoading(true); setError(null);
@@ -121,6 +127,75 @@ function StudentsSection() {
       if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
       showToast('✅ Deleted'); await fetchStudents();
     } catch (err: any) { showToast(`❌ ${err.message}`); }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      complete: (results) => {
+        const parsed = results.data.map((row: any) => {
+          let first = row.firstname || row.first || '';
+          let last = row.lastname || row.last || row.surname || '';
+          if (!first && !last && (row.name || row.fullname || row.studentname)) {
+            const parts = (row.name || row.fullname || row.studentname).trim().split(' ');
+            first = parts[0];
+            last = parts.slice(1).join(' ');
+          }
+          return {
+            first_name: first,
+            last_name: last,
+            admission_number: row.admissionnumber || row.admissionno || row.admno || row.adm || '',
+            gender: row.gender || row.sex || '',
+            date_of_birth: row.dateofbirth || row.dob || row.birthdate || '',
+            guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
+            guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
+            guardian_email: row.guardianemail || row.parentemail || row.email || '',
+            class: row.class || row.grade || row.form || row.level || '',
+            stream: row.stream || row.section || '',
+            academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
+          };
+        }).filter((r: any) => r.first_name || r.last_name);
+        setImportData(parsed);
+        setSkippedData([]); // Reset skipped data on new file upload
+      },
+      error: () => { showToast('❌ Failed to parse CSV file'); }
+    });
+    e.target.value = '';
+  };
+
+  const handleImportSubmit = async () => {
+    if (importData.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await fetch('/api/admin/bulk-import-students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ students: importData, default_grade_stream_id: importClassId || undefined })
+      });
+      const r = await res.json();
+      if (!res.ok) showToast(`❌ ${r.error || 'Failed to import students'}`);
+      else {
+        if (r.skipped_rows?.length > 0) {
+          showToast(`⚠️ Imported ${r.imported}, skipped ${r.skipped_rows.length}`);
+          setSkippedData(r.skipped_rows);
+          setImportData(r.skipped_rows.map((s: any) => s.row));
+        } else {
+          showToast(`✅ ${r.message || 'Students imported successfully'}`);
+          setShowImportModal(false);
+          setImportData([]);
+          setSkippedData([]);
+          setImportClassId('');
+        }
+        await fetchStudents();
+      }
+    } catch {
+      showToast('❌ Error importing students.');
+    }
+    setImporting(false);
   };
 
   const handlePhoto = async (f: File, onUrl: (url: string) => void) => {
@@ -177,6 +252,9 @@ function StudentsSection() {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
+          <Upload size={14} /> Import CSV
+        </button>
         <button className="btn-primary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '' }); setShowModal(true); }}>
           <UserPlus size={14} /> Add Student
         </button>
@@ -233,19 +311,108 @@ function StudentsSection() {
           <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-sm font-bold font-display mb-4">{editing ? 'Edit Student' : 'Add Student'}</h2>
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full text-xs" value={formData.first_name} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full text-xs" value={formData.last_name} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No. *</label><input className="input-field w-full text-xs" value={formData.admission_number} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Gender</label><select className="input-field w-full text-xs" value={formData.gender} onChange={e => setFormData(p => ({ ...p, gender: e.target.value }))}><option value="">—</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Date of Birth</label><input type="date" className="input-field w-full text-xs" value={formData.date_of_birth} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Name</label><input className="input-field w-full text-xs" value={formData.guardian_name} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full text-xs" value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full text-xs" value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No. *</label><input className="input-field w-full text-xs" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Gender</label><select className="input-field w-full text-xs" value={formData.gender || ''} onChange={e => setFormData(p => ({ ...p, gender: e.target.value }))}><option value="">—</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Date of Birth</label><input type="date" className="input-field w-full text-xs" value={formData.date_of_birth || ''} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Name</label><input className="input-field w-full text-xs" value={formData.guardian_name || ''} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone || ''} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id || ''} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id || ''} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
             </div>
             <div className="flex gap-2 justify-end">
               <button className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name || !formData.admission_number}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
+              <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowImportModal(false)}>
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-sm font-bold font-display mb-4">Bulk Import Students</h2>
+            <p className="text-xs text-muted-foreground mb-4">Select a class, upload a CSV file, and import. CSV columns: <strong>first_name, last_name, admission_number, gender</strong></p>
+
+            {/* Class selection */}
+            <div className="mb-4">
+              <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Assign to Class *</label>
+              <select className="input-field w-full text-xs" value={importClassId} onChange={e => setImportClassId(e.target.value)}>
+                <option value="">— Select Class —</option>
+                {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3 mb-4">
+              <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-surface cursor-pointer text-xs font-medium hover:bg-muted transition-colors">
+                <Upload size={14} /> Select CSV File
+                <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+              </label>
+              <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
+            </div>
+            
+            {skippedData.length > 0 && (
+              <div className="p-3 mb-4 rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-500 text-xs">
+                <strong>⚠️ {skippedData.length} students skipped.</strong> Please correct the errors below and try importing again.
+              </div>
+            )}
+
+            {importData.length > 0 && (
+              <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md">
+                <table className="data-table w-full">
+                  <thead><tr><th className="px-4 py-2 text-xs">First Name</th><th className="px-4 py-2 text-xs">Last Name</th><th className="px-4 py-2 text-xs">Admission No.</th><th className="px-4 py-2 text-xs">Gender</th></tr></thead>
+                  <tbody>
+                    {importData.slice(0, skippedData.length > 0 ? undefined : 10).map((row, i) => {
+                      const skippedReason = skippedData[i]?.reason;
+                      return (
+                        <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
+                          <td className="px-4 py-2 text-xs">
+                            {skippedData.length > 0 ? (
+                              <input className="input-field py-1 px-2 w-full text-xs" value={row.first_name} onChange={e => {
+                                const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
+                              }} />
+                            ) : row.first_name}
+                            {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
+                          </td>
+                          <td className="px-4 py-2 text-xs">
+                            {skippedData.length > 0 ? (
+                              <input className="input-field py-1 px-2 w-full text-xs" value={row.last_name} onChange={e => {
+                                const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
+                              }} />
+                            ) : row.last_name}
+                          </td>
+                          <td className="px-4 py-2 text-xs">
+                            {skippedData.length > 0 ? (
+                              <input className="input-field py-1 px-2 w-full text-xs" value={row.admission_number || ''} onChange={e => {
+                                const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
+                              }} />
+                            ) : (row.admission_number || '\u2014')}
+                          </td>
+                          <td className="px-4 py-2 text-xs">
+                            {skippedData.length > 0 ? (
+                              <select className="input-field py-1 px-2 w-full text-xs" value={row.gender || ''} onChange={e => {
+                                const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
+                              }}>
+                                <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
+                              </select>
+                            ) : (row.gender || '\u2014')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {importData.length > 10 && skippedData.length === 0 && <div className="p-2 text-center text-xs text-muted-foreground border-t border-border">And {importData.length - 10} more rows...</div>}
+              </div>
+            )}
+            {!importClassId && importData.length > 0 && (
+              <p className="text-xs text-amber-500 mb-3">⚠️ Please select a class above before importing.</p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-xs" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</button>
+              <button className="btn-primary text-xs" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing...' : skippedData.length > 0 ? `Retry Import (${importData.length})` : `Import ${importData.length} Students`}</button>
             </div>
           </div>
         </div>

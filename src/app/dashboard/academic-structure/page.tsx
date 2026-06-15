@@ -198,7 +198,8 @@ function SubjectsTab() {
   const [loading, setLoading] = useState(true);
   const [calSaving, setCalSaving] = useState(false);
   const [calMsg, setCalMsg] = useState('');
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '' });
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', is_compulsory: true });
+  const [tableLevelFilter, setTableLevelFilter] = useState('');
 
   const fetchSubjects = async () => {
     try {
@@ -238,12 +239,28 @@ function SubjectsTab() {
     finally { setCalSaving(false); }
   };
 
+  const toggleSubjectType = async (id: string, currentStatus: boolean) => {
+    setCalSaving(true); setCalMsg('');
+    try {
+      const res = await fetch(`/api/admin/academic-structure`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'subject', id, is_compulsory: !currentStatus })
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+      setCalMsg('✅ Updated successfully');
+      await fetchSubjects();
+    } catch (err) { setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`); }
+    finally { setCalSaving(false); }
+  };
+
   const getLevelName = (levelId?: string) => levelId ? academicLevels.find(l => l.id === levelId)?.name || '—' : '—';
 
   const filtered = subjects.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'ALL' || (s.category || '').toUpperCase() === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchLevel = !tableLevelFilter || s.academic_level_id === tableLevelFilter;
+    return matchSearch && matchCategory && matchLevel;
   });
 
   const compulsory = subjects.filter(s => s.is_compulsory).length;
@@ -278,7 +295,7 @@ function SubjectsTab() {
       <div className="card mb-6">
         <h3 className="font-bold text-sm font-[family-name:var(--font-display)] mb-3">📚 Add Subject</h3>
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[150px]">
             <label className="block text-xs text-muted-foreground mb-1">Name *</label>
             <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
           </div>
@@ -286,16 +303,23 @@ function SubjectsTab() {
             <label className="block text-xs text-muted-foreground mb-1">Code *</label>
             <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-[150px]">
             <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
             <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
               <option value="">-- Select --</option>
               {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
             </select>
           </div>
+          <div className="w-32">
+            <label className="block text-xs text-muted-foreground mb-1">Type *</label>
+            <select className="input-field w-full text-sm" value={newSubject.is_compulsory ? 'true' : 'false'} onChange={e => setNewSubject(p => ({ ...p, is_compulsory: e.target.value === 'true' }))}>
+              <option value="true">Compulsory</option>
+              <option value="false">Optional</option>
+            </select>
+          </div>
           <button type="button" onClick={async () => {
             await postStructure('subject', newSubject);
-            setNewSubject({ name: '', code: '', academic_level_id: '' });
+            setNewSubject({ name: '', code: '', academic_level_id: '', is_compulsory: true });
           }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
             {calSaving ? '...' : '+ Add Subject'}
           </button>
@@ -311,6 +335,10 @@ function SubjectsTab() {
             </span>
             <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search subjects..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <select className="input-field" value={tableLevelFilter} onChange={e => setTableLevelFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
+            <option value="">All Levels</option>
+            {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+          </select>
           <select className="input-field" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
             <option value="ALL">All Categories</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -332,7 +360,7 @@ function SubjectsTab() {
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Category</th>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Type</th>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Level</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -347,7 +375,12 @@ function SubjectsTab() {
                       <td className="px-4 py-3">{s.is_compulsory ? <span className="badge badge-success text-xs">Compulsory</span> : <span className="badge badge-warning text-xs">Optional</span>}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
                       <td className="px-4 py-3 text-right">
-                        <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
+                        <div className="flex justify-end gap-3 items-center">
+                          <button className="text-xs text-blue-500 hover:text-blue-400 font-medium" onClick={() => toggleSubjectType(s.id, !!s.is_compulsory)} disabled={calSaving}>
+                            🔄 Make {s.is_compulsory ? 'Optional' : 'Compulsory'}
+                          </button>
+                          <button className="text-xs text-red-400 hover:text-red-300 font-medium" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
+                        </div>
                       </td>
                     </tr>
                   );

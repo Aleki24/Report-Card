@@ -198,7 +198,7 @@ export default function TeachersPage() {
           <EmptyState icon={<GraduationCap style={{ width: 24, height: 24 }} />} title="No teachers found" description={search || filterRole || filterStatus ? 'No teachers match your filters.' : 'No teachers have been added yet.'} />
         ) : (
           <>
-            <div className="hidden md:block overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="data-table w-full">
                 <thead><tr><th>Name</th><th>Teacher ID</th><th>Contact</th><th style={{ width: '90px' }}>Actions</th></tr></thead>
                 <tbody>
@@ -230,22 +230,6 @@ export default function TeachersPage() {
               </table>
             </div>
 
-            <div className="md:hidden" style={{ padding: '8px' }}>
-              {paginated.map(t => (
-                <div key={t.id} style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px', marginBottom: '8px' }}>
-                  <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
-                    <div className="flex items-center gap-2">
-                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--color-accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.625rem', fontWeight: 700, color: 'var(--color-accent)' }}>{getInitials(t.name)}</div>
-                      <div><div style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{t.name}</div><div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted)' }}>{t.employeeId}</div></div>
-                    </div>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => openViewPanel(t.id)} className="btn-secondary" style={{ fontSize: '0.625rem', padding: '4px 8px', flex: 1 }}>View</button>
-                    <button onClick={() => handleStartEdit(t)} className="btn-secondary" style={{ fontSize: '0.625rem', padding: '4px 8px', flex: 1 }}>Edit</button>
-                  </div>
-                </div>
-              ))}
-            </div>
 
             <Pagination currentPage={currentPage} totalPages={totalPages} totalItems={filtered.length} pageSize={pageSize} onPageChange={setCurrentPage} />
           </>

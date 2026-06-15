@@ -14,6 +14,7 @@ interface StudentOption {
     admission_number: string;
 }
 
+interface AcademicLevel { id: string; code: string; name: string; }
 interface GradeItem { id: string; name_display: string; academic_level_id: string; }
 interface StreamItem { id: string; full_name: string; grade_id: string; }
 
@@ -39,6 +40,8 @@ const emptyRow = (): MarkRow => ({
 
 export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     // Class/stream filter
+    const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
+    const [selectedLevelId, setSelectedLevelId] = useState('');
     const [grades, setGrades] = useState<GradeItem[]>([]);
     const [allStreams, setAllStreams] = useState<StreamItem[]>([]);
     const [selectedGradeId, setSelectedGradeId] = useState('');
@@ -65,6 +68,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             try {
                 const res = await fetch('/api/admin/academic-structure');
                 const data = await res.json();
+                if (data.academic_levels) setAcademicLevels(data.academic_levels);
                 if (data.grades) setGrades(data.grades);
                 if (data.grade_streams) setAllStreams(data.grade_streams);
             } catch (err) {
@@ -103,6 +107,9 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         fetchGrades();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // ── Reset grade & stream when level changes ──────────
+    useEffect(() => { setSelectedGradeId(''); setSelectedStreamId(''); }, [selectedLevelId]);
 
     // ── Reset stream when grade changes ──────────────────
     useEffect(() => { setSelectedStreamId(''); }, [selectedGradeId]);
@@ -152,6 +159,11 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     }, [selectedGradeId, selectedStreamId, allStreams]);
 
     useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+    // ── Filtered grades by level ─────────────────────────
+    const filteredGrades = selectedLevelId
+        ? grades.filter(g => g.academic_level_id === selectedLevelId)
+        : grades;
 
     // ── Filtered streams ─────────────────────────────────
     const filteredStreams = allStreams.filter(s => s.grade_id === selectedGradeId);
@@ -313,17 +325,31 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 </div>
             </div>
 
-            {/* ── Class / Stream Filter ─────────────────── */}
+            {/* ── Level / Grade / Stream Filter ─────────── */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 rounded-lg bg-muted border border-border">
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Class / Level</label>
+                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Level</label>
+                    <select
+                        className="input-field w-full"
+                        value={selectedLevelId}
+                        onChange={e => setSelectedLevelId(e.target.value)}
+                    >
+                        <option value="">— All Levels —</option>
+                        {academicLevels.map(l => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="flex-1">
+                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Grade / Class</label>
                     <select
                         className="input-field w-full"
                         value={selectedGradeId}
                         onChange={e => setSelectedGradeId(e.target.value)}
+                        disabled={!selectedLevelId && academicLevels.length > 0}
                     >
-                        <option value="">— Select Class —</option>
-                        {grades.map(g => (
+                        <option value="">{!selectedLevelId && academicLevels.length > 0 ? 'Select level first' : '— Select Grade —'}</option>
+                        {filteredGrades.map(g => (
                             <option key={g.id} value={g.id}>{g.name_display}</option>
                         ))}
                     </select>
@@ -336,19 +362,12 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                         onChange={e => setSelectedStreamId(e.target.value)}
                         disabled={!selectedGradeId || filteredStreams.length === 0}
                     >
-                        <option value="">{!selectedGradeId ? 'Select class/level first' : filteredStreams.length === 0 ? 'No stream' : '— Select Stream —'}</option>
+                        <option value="">{!selectedGradeId ? 'Select grade first' : filteredStreams.length === 0 ? 'No stream' : '— Select Stream —'}</option>
                         {filteredStreams.map(s => (
                             <option key={s.id} value={s.id}>{s.full_name}</option>
                         ))}
                     </select>
                 </div>
-                {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
-                    <div className="flex items-end">
-                        <div className="text-xs text-primary font-semibold py-2">
-                           Please select a stream
-                        </div>
-                    </div>
-                )}
                 {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && (
                     <div className="flex items-end">
                         <div className="text-xs text-primary font-semibold py-2">
@@ -358,10 +377,24 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 )}
             </div>
 
-            {/* No class selected hint */}
-            {!selectedGradeId && (
+            {/* No level selected hint */}
+            {!selectedLevelId && academicLevels.length > 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
-                    👆 Select a <strong>Class / Level</strong> above to load students
+                    👆 Select a <strong>Level</strong> above to load grades
+                </div>
+            )}
+
+            {/* No grade selected hint */}
+            {selectedLevelId && !selectedGradeId && filteredGrades.length > 0 && (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                    👆 Select a <strong>Grade / Class</strong> above to load students
+                </div>
+            )}
+
+            {/* Level selected but no grades for it */}
+            {selectedLevelId && filteredGrades.length === 0 && (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                    No grades found for this level.
                 </div>
             )}
 
