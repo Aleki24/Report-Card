@@ -16,7 +16,7 @@ export default clerkMiddleware(async (auth, request) => {
     const role = (sessionClaims as any)?.role;
 
     // Only redirect on the exact /login, /signup, or /activate page, NOT on sub-paths
-    // like /login/factor-one or /login/sso-callback that Clerk needs
+    // like /login/factor-one, /login/sso-callback, /activate/callback, or /activate/process that need processing
     const pathname = request.nextUrl.pathname;
     if (pathname === '/login' || pathname === '/signup' || pathname === '/activate') {
       const dest = role === 'STUDENT'

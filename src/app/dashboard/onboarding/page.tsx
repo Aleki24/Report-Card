@@ -100,10 +100,6 @@ export default function OnboardingWizard() {
       toast.error('Invite code is required');
       return;
     }
-    if (selectedRole === 'STUDENT' && !admissionNumber) {
-      toast.error('Admission number is required');
-      return;
-    }
 
     setLoading(true);
     try {
@@ -111,9 +107,7 @@ export default function OnboardingWizard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          role: selectedRole,
-          inviteCode,
-          admissionNumber: selectedRole === 'STUDENT' ? admissionNumber : null
+          inviteCode
         }),
       });
 
@@ -475,21 +469,6 @@ export default function OnboardingWizard() {
                       required
                     />
                   </div>
-
-                  {selectedRole === 'STUDENT' && (
-                     <div className="space-y-2">
-                      <label className="text-sm font-semibold">Your Admission Number <span className="text-red-500">*</span></label>
-                      <input 
-                        type="text" 
-                        value={admissionNumber}
-                        onChange={(e) => setAdmissionNumber(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
-                        placeholder="e.g. ADM/2026/001"
-                        required
-                      />
-                      <p className="text-xs text-muted-foreground">Ask your teacher or administrator if you don't know your admission number.</p>
-                    </div>
-                  )}
                 </div>
             </div>
           )}

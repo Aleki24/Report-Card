@@ -8,121 +8,103 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { role, inviteCode, admissionNumber } = body;
+    const { inviteCode } = body;
 
-    if (!role || !inviteCode) {
-      return NextResponse.json({ error: 'Role and invite code are required' }, { status: 400 });
-    }
-
-    if (role === 'STUDENT' && !admissionNumber) {
-      return NextResponse.json({ error: 'Admission number is required for students' }, { status: 400 });
+    if (!inviteCode) {
+      return NextResponse.json({ error: 'Invite code is required' }, { status: 400 });
     }
 
     const supabaseAdmin = createSupabaseAdmin();
 
-    // 1. Verify user exists and is PENDING
-    const { data: userData, error: userError } = await supabaseAdmin
+    // 1. Verify current user exists and is PENDING
+    const { data: currentUser, error: currentUserError } = await supabaseAdmin
       .from('users')
       .select('id, role')
       .eq('id', userId)
       .maybeSingle();
 
-    if (userError || !userData || userData.role !== 'PENDING') {
+    if (currentUserError || !currentUser || currentUser.role !== 'PENDING') {
       return NextResponse.json({ error: 'Invalid user state or already assigned a role' }, { status: 403 });
     }
 
-    // 2. Find the school by invite code
-    const inviteColumn = role === 'TEACHER' ? 'teacher_invite_code' : 'student_invite_code';
-    
-    const { data: schoolData, error: schoolError } = await supabaseAdmin
-      .from('schools')
-      .select('id')
-      .eq(inviteColumn, inviteCode.trim())
-      .maybeSingle();
-
-    if (schoolError || !schoolData) {
-      return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
-    }
-
-    const schoolId = schoolData.id;
-
-    // 3. Verify admission number uniqueness for students
-    if (role === 'STUDENT') {
-      const { data: existingStudent } = await supabaseAdmin
-          .from('users')
-          .select('id, students!inner(admission_number)')
-          .eq('school_id', schoolId)
-          .eq('students.admission_number', admissionNumber.trim())
-          .maybeSingle();
-
-      if (existingStudent) {
-          return NextResponse.json({ error: 'A student with this admission number already exists in this school.' }, { status: 409 });
-      }
-    }
-
-    // Map the generic 'TEACHER' role from onboarding to 'SUBJECT_TEACHER'
-    // The system expects CLASS_TEACHER or SUBJECT_TEACHER — admin can reassign later
-    const mappedRole = role === 'TEACHER' ? 'SUBJECT_TEACHER' : role;
-
-    // 4. Create specific role record FIRST (before updating role, so failure keeps user PENDING)
-    if (role === 'STUDENT') {
-      // Find a default grade stream and its academic level for this school
-      const { data: streamData } = await supabaseAdmin
-        .from('grade_streams')
-        .select(`
-          id,
-          grades!inner (
-            academic_level_id
-          )
-        `)
-        .eq('school_id', schoolId)
-        .limit(1)
+    // 2. Look up the invite code in the new invite_codes table
+    const { data: invite, error: inviteError } = await supabaseAdmin
+        .from('invite_codes')
+        .select('*')
+        .eq('code', inviteCode.trim().toUpperCase())
         .maybeSingle();
 
-      const academicLevelId = (streamData?.grades as any)?.academic_level_id;
-      const gradeStreamId = streamData?.id;
-
-      if (!academicLevelId || !gradeStreamId) {
-        return NextResponse.json({ 
-          error: 'School has no classes configured yet. Please ask the administrator to set up class streams first.' 
-        }, { status: 400 });
-      }
-
-      const { error: studentErr } = await supabaseAdmin.from('students').insert({
-        id: userId,
-        admission_number: admissionNumber.trim(),
-        status: 'ACTIVE',
-        current_grade_stream_id: gradeStreamId,
-        academic_level_id: academicLevelId
-      });
-
-      if (studentErr) throw new Error('Failed to create student profile: ' + studentErr.message);
-    } else if (role === 'TEACHER') {
-      // Create a basic subject_teacher record
-      const { error: teacherErr } = await supabaseAdmin.from('subject_teachers').insert({
-        user_id: userId
-      });
-      if (teacherErr) throw new Error('Failed to create teacher profile: ' + teacherErr.message);
+    if (inviteError || !invite) {
+        return NextResponse.json({ error: 'Invalid invite code. Please check and try again.' }, { status: 404 });
     }
 
-    // 5. Update User Role and School ID (only after role-specific record succeeded)
-    const { error: updateError } = await supabaseAdmin
-      .from('users')
-      .update({
-        role: mappedRole,
-        school_id: schoolId
-      })
-      .eq('id', userId);
+    if (invite.is_used) {
+        return NextResponse.json({ error: 'This invite code has already been used.' }, { status: 400 });
+    }
 
-    if (updateError) throw new Error('Failed to update user profile: ' + updateError.message);
+    if (new Date(invite.expires_at) < new Date()) {
+        return NextResponse.json({ error: 'This invite code has expired.' }, { status: 400 });
+    }
 
-    // 6. Update Clerk Metadata
+    // 3. Get the pending user record created by the admin
+    const { data: pendingUser, error: pendingUserError } = await supabaseAdmin
+        .from('users')
+        .select('id, first_name, last_name, username, email, role, school_id')
+        .eq('id', invite.user_id)
+        .maybeSingle();
+
+    if (pendingUserError || !pendingUser) {
+        return NextResponse.json({ error: 'User account not found for this invite code.' }, { status: 404 });
+    }
+
+    // 4. Swap user IDs in database
+    const oldUserId = pendingUser.id;
+
+    if (pendingUser.role === 'STUDENT') {
+        await supabaseAdmin.from('students').update({ id: userId }).eq('id', oldUserId);
+    }
+    await supabaseAdmin.from('class_teachers').update({ user_id: userId }).eq('user_id', oldUserId);
+    await supabaseAdmin.from('subject_teachers').update({ user_id: userId }).eq('user_id', oldUserId);
+
+    // Update invite code
+    await supabaseAdmin.from('invite_codes').update({
+        user_id: userId,
+        is_used: true,
+        used_at: new Date().toISOString()
+    }).eq('id', invite.id);
+
+    // Delete the old pending user record
+    await supabaseAdmin.from('users').delete().eq('id', oldUserId);
+
+    // Update the current user record with the admin-provided details
+    const { error: updateErr } = await supabaseAdmin.from('users').update({
+        first_name: pendingUser.first_name,
+        last_name: pendingUser.last_name,
+        username: pendingUser.username,
+        role: pendingUser.role,
+        school_id: pendingUser.school_id,
+        is_active: true
+    }).eq('id', userId);
+
+    if (updateErr) {
+        console.error('Failed to update user record:', updateErr);
+        return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
+    }
+
+    // 5. Update Clerk Metadata
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-    await clerk.users.updateUser(userId, {
-        publicMetadata: { role: mappedRole, school_id: schoolId }
-    });
+    try {
+        await clerk.users.updateUser(userId, {
+            publicMetadata: {
+                role: pendingUser.role,
+                school_id: pendingUser.school_id
+            }
+        });
+    } catch (clerkErr) {
+        console.error('Failed to update Clerk metadata:', clerkErr);
+    }
 
-    return NextResponse.json({ success: true, message: 'Successfully joined school' });
+    return NextResponse.json({ success: true, message: 'Successfully joined school!' });
 
   } catch (err: any) {
     console.error('Join Error:', err);
