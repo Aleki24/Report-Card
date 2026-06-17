@@ -93,15 +93,21 @@ export function useUsersPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const fetchDropdowns = useCallback(async () => {
-    const [gsRes, structureRes] = await Promise.all([
-      fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
-      fetch('/api/admin/academic-structure', { cache: 'no-store' }),
-    ]);
-    const [gsJson, structureJson] = await Promise.all([gsRes.json(), structureRes.json()]);
-    setGradeStreams(gsJson.data || []);
-    setAcademicLevels(structureJson.academic_levels || []);
-    setSubjects(structureJson.subjects || []);
-    setGrades(structureJson.grades || []);
+    try {
+      const [gsRes, structureRes] = await Promise.all([
+        fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
+        fetch('/api/admin/academic-structure', { cache: 'no-store' }),
+      ]);
+      const [gsJson, structureJson] = await Promise.all([gsRes.json(), structureRes.json()]);
+      if (gsRes.ok) setGradeStreams(gsJson.data || []);
+      if (structureRes.ok) {
+        setAcademicLevels(structureJson.academic_levels || []);
+        setSubjects(structureJson.subjects || []);
+        setGrades(structureJson.grades || []);
+      }
+    } catch (err) {
+      console.error('Failed to load dropdown data', err);
+    }
   }, []);
 
   useEffect(() => { if (showModal) fetchDropdowns(); }, [showModal, fetchDropdowns]);
@@ -157,7 +163,7 @@ export function useUsersPage() {
     setEditingUser(user); setEditFirstName(user.first_name); setEditLastName(user.last_name);
     setEditPhone(user.phone || ''); setEditRole(user.role); setEditIsActive(user.is_active);
     setEditClassTeacherStreamId(''); setEditSubjectTeacherSubjects([]);
-    if (gradeStreams.length === 0) { try { await fetchDropdowns(); } catch (err) { console.error('Failed to load dropdowns', err); } }
+    try { await fetchDropdowns(); } catch (err) { console.error('Failed to load dropdowns', err); }
     setShowEditModal(true); setFormError('');
     if (user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER') {
       try {
@@ -166,7 +172,7 @@ export function useUsersPage() {
         if (res.ok) {
           if (data.class_teacher) setEditClassTeacherStreamId(data.class_teacher.grade_stream_id);
           if (data.subject_assignments?.length > 0) setEditSubjectTeacherSubjects(data.subject_assignments.map((a: any) => ({ subject_id: a.subject_id, grade_id: a.grade_id })));
-          else if (user.role === 'SUBJECT_TEACHER') setEditSubjectTeacherSubjects([{ subject_id: '', grade_id: '' }]);
+          else if (user.role === 'SUBJECT_TEACHER' || user.role === 'CLASS_TEACHER') setEditSubjectTeacherSubjects([{ subject_id: '', grade_id: '' }]);
         }
       } catch (err) { console.error('Failed to fetch assignments', err); }
     }
