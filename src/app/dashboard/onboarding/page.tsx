@@ -32,7 +32,7 @@ export default function OnboardingWizard() {
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear().toString());
   const [termName, setTermName] = useState('Term 1');
   const [curriculum, setCurriculum] = useState({ cbc: true, '844': false });
-  const [classes, setClasses] = useState([{ grade: 'Grade 1', streams: '1A, 1B' }]);
+  const [classes, setClasses] = useState([{ grade: '', streams: '' }]);
   const [subjects, setSubjects] = useState('Mathematics, English, Kiswahili, Science');
 
   // --- Teacher/Student Form State ---

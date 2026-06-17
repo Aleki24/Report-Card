@@ -117,6 +117,16 @@ function StudentsSection() {
       if (!res.ok) throw new Error(json.error || 'Failed');
       showToast(editing ? '✅ Student updated' : '✅ Student added');
       setShowModal(false); setEditing(null); await fetchStudents();
+      
+      // If adding a new student, show their invite code!
+      if (!editing && json.invite_code && json.username) {
+        setCreatedCredentials([{
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          username: json.username,
+          invite_code: json.invite_code
+        }]);
+      }
     } catch (err: any) { showToast(`❌ ${err.message}`); }
     finally { setSaving(false); }
   };

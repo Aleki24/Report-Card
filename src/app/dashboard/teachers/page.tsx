@@ -9,6 +9,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import Pagination from '@/components/dashboard/Pagination';
 import { GraduationCap, Users, BookOpen, UserCheck, Search, Eye, Pencil, Phone, Mail, X, BarChart3, FileText, Calendar, ClipboardList, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 interface TeacherRow {
   id: string; name: string; email: string; phone: string;
@@ -34,6 +35,7 @@ interface TeacherDetail {
 type TeacherTab = 'overview' | 'subjects' | 'classes' | 'exams';
 
 export default function TeachersPage() {
+  const router = useRouter();
   const { role } = useAuth();
   const [teachers, setTeachers] = useState<TeacherRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +163,7 @@ export default function TeachersPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <PageHeader title="Teacher Management" description="Manage teacher records, assigned subjects, classes, roles, and workload." breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Teachers' }]} action={role === 'ADMIN' ? <button className="btn-primary text-xs px-4 py-2"><Users style={{ width: 14, height: 14 }} /> Add Teacher</button> : undefined} />
+      <PageHeader title="Teacher Management" description="Manage teacher records, assigned subjects, classes, roles, and workload." breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Teachers' }]} action={role === 'ADMIN' ? <button onClick={() => router.push('/dashboard/users')} className="btn-primary text-xs px-4 py-2"><Users style={{ width: 14, height: 14 }} /> Add Teacher</button> : undefined} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4" style={{ gap: '12px', marginBottom: '16px' }}>
         <StatCard label="Total Staff" value={teachers.length} sub={`${activeStaff} active`} icon={Users} />
