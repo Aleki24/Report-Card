@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
              }
         }
 
-        if (role === 'SUBJECT_TEACHER' && subject_teacher_subjects?.length > 0) {
+        if ((role === 'SUBJECT_TEACHER' || role === 'CLASS_TEACHER') && subject_teacher_subjects?.length > 0) {
               const { data: tRecord } = await supabaseAdmin.from('subject_teachers').insert({ user_id: newUser.id }).select('id').single();
               if (tRecord) {
                    const currentYear = await supabaseAdmin.from('academic_years').select('id').eq('school_id', school_id).order('start_date', { ascending: false }).limit(1).single();

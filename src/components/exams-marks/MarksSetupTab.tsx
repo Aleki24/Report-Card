@@ -8,6 +8,8 @@ import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
 
+interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
+
 interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
 interface AcademicLevel { id: string; code: string; name: string; }
 interface GradeItem { id: string; name_display: string; academic_level_id: string; }
@@ -36,6 +38,9 @@ export function MarksSetupTab() {
   const [allSubjects, setAllSubjects] = useState<SubjectItem[]>([]);
   const [selectedLevelId, setSelectedLevelId] = useState('');
 
+  const [mySubjects, setMySubjects] = useState<MySubjectItem[]>([]);
+  const [loadingMySubjects, setLoadingMySubjects] = useState(true);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedExamId, setSelectedExamId] = useState('');
   const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
@@ -48,7 +53,7 @@ export function MarksSetupTab() {
   // Grade → academic level map (must be before derived state)
   const gradeLevelMap = new Map(allGrades.map(g => [g.id, g.academic_level_id]));
 
-  // ── 0. Fetch academic structure (levels + grades) ──
+  // ── 0a. Fetch academic structure (levels + grades) ──
   useEffect(() => {
     (async () => {
       try {
@@ -60,6 +65,19 @@ export function MarksSetupTab() {
       } catch (err) { console.error('Failed to fetch academic structure:', err); }
     })();
   }, []);
+
+  // ── 0b. Fetch teacher's assigned subjects (for non-admin) ──
+  useEffect(() => {
+    if (profile?.role === 'ADMIN') { setLoadingMySubjects(false); return; }
+    (async () => {
+      try {
+        const res = await fetch('/api/school/data?type=my_subjects');
+        const json = await res.json();
+        setMySubjects(json.data || []);
+      } catch (err) { console.error('Failed to fetch my subjects:', err); }
+      setLoadingMySubjects(false);
+    })();
+  }, [profile?.role]);
 
   // ── 1. Fetch terms & auto-select active ──
   useEffect(() => {
@@ -206,6 +224,50 @@ export function MarksSetupTab() {
           <div style={{ flex: 1 }}><span className="font-semibold text-sm" style={{ color: 'rgb(167,139,250)' }}>Go to My Class</span><span className="text-xs block" style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>Switch to class teacher dashboard for reports &amp; student management</span></div>
           <span style={{ fontSize: 18, opacity: 0.6 }}>→</span>
         </a>
+      )}
+
+      {/* ═══ MY SUBJECTS (for teachers with assigned subjects) ═══ */}
+      {!loadingMySubjects && mySubjects.length > 0 && profile?.role !== 'ADMIN' && (
+        <div className="card mb-4 p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-sm font-semibold">📚 My Subjects</h2>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {mySubjects.length} subject{mySubjects.length !== 1 ? 's' : ''} assigned
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {mySubjects.map(sub => {
+              const subExams = exams.filter(e => e.subject_id === sub.id);
+              return (
+                <button
+                  key={sub.id}
+                  onClick={() => {
+                    const examType = subExams.length > 0 ? subExams[0].exam_type : (availableExamTypes[0]?.code || '');
+                    if (examType) setSelectedExamType(examType);
+                    setSelectedSubjectId(sub.id);
+                    setSelectedLevelId(sub.academic_level_id || '');
+                    setFilterGradeId('');
+                  }}
+                  className="text-left p-3 rounded-lg transition-all"
+                  style={{
+                    background: selectedSubjectId === sub.id
+                      ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))'
+                      : 'var(--color-surface-raised)',
+                    border: selectedSubjectId === sub.id
+                      ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
+                    cursor: 'pointer',
+                    minWidth: 160,
+                  }}
+                >
+                  <div className="font-semibold text-sm">{sub.name}</div>
+                  <div className="text-[10px] font-mono mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    {sub.code} · {subExams.length} exam{subExams.length !== 1 ? 's' : ''}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ═══ STEP 1: Select Term ═══ */}

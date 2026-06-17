@@ -314,10 +314,10 @@ export async function GET(request: NextRequest) {
       }
 
       case 'my_subjects': {
-        // Returns subjects assigned to the current user (for subject teachers)
+        // Returns subjects assigned to the current user
         const perms = await getTeacherPermissions(auth.userId);
         
-        if (!perms.isSubjectTeacher) {
+        if (perms.subjectTeacherAssignments.length === 0) {
           return NextResponse.json({ data: [] });
         }
 

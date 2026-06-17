@@ -740,6 +740,9 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 theme={theme}
                 toggleTheme={toggleTheme}
                 onSignOut={handleSignOut}
+                role={role}
+                availableRoles={availableRoles}
+                switchRole={switchRole}
             />
         </>
     );
