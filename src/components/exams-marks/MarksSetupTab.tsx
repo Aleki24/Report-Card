@@ -42,6 +42,7 @@ export function MarksSetupTab() {
   const [loadingMySubjects, setLoadingMySubjects] = useState(true);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createSubjectId, setCreateSubjectId] = useState<string | undefined>(undefined);
   const [selectedExamId, setSelectedExamId] = useState('');
   const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
 
@@ -238,32 +239,48 @@ export function MarksSetupTab() {
           <div className="flex flex-wrap gap-2">
             {mySubjects.map(sub => {
               const subExams = exams.filter(e => e.subject_id === sub.id);
+              const hasExams = subExams.length > 0;
               return (
-                <button
+                <div
                   key={sub.id}
-                  onClick={() => {
-                    const examType = subExams.length > 0 ? subExams[0].exam_type : (availableExamTypes[0]?.code || '');
-                    if (examType) setSelectedExamType(examType);
-                    setSelectedSubjectId(sub.id);
-                    setSelectedLevelId(sub.academic_level_id || '');
-                    setFilterGradeId('');
-                  }}
-                  className="text-left p-3 rounded-lg transition-all"
+                  className="p-3 rounded-lg"
                   style={{
                     background: selectedSubjectId === sub.id
                       ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))'
                       : 'var(--color-surface-raised)',
                     border: selectedSubjectId === sub.id
                       ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                    minWidth: 160,
+                    minWidth: 180,
                   }}
                 >
                   <div className="font-semibold text-sm">{sub.name}</div>
-                  <div className="text-[10px] font-mono mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  <div className="text-[10px] font-mono mt-1 mb-2" style={{ color: 'var(--color-text-muted)' }}>
                     {sub.code} · {subExams.length} exam{subExams.length !== 1 ? 's' : ''}
                   </div>
-                </button>
+                  {hasExams ? (
+                    <button
+                      onClick={() => {
+                        setSelectedExamType(subExams[0].exam_type);
+                        setSelectedSubjectId(sub.id);
+                        setSelectedLevelId(sub.academic_level_id || '');
+                        setFilterGradeId('');
+                      }}
+                      className="btn-primary text-[10px] px-2 py-1"
+                    >
+                      Enter Marks
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setCreateSubjectId(sub.id);
+                        setShowCreateModal(true);
+                      }}
+                      className="btn-secondary text-[10px] px-2 py-1"
+                    >
+                      + Create Exam
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -586,11 +603,13 @@ export function MarksSetupTab() {
       
       {showCreateModal && (
         <CreateExamModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => { setShowCreateModal(false); setCreateSubjectId(undefined); }}
           onCreated={(newExamId) => {
             setShowCreateModal(false);
+            setCreateSubjectId(undefined);
             refreshExams(selectedTermId);
           }}
+          preselectedSubjectId={createSubjectId}
         />
       )}
     </div>
