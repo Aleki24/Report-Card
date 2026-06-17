@@ -374,20 +374,26 @@ export default function StudentsPage() {
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {importData.slice(0, 10).map((row, i) => (
+                                            {importData.map((row, i) => (
                                                 <TableRow key={i}>
-                                                    <TableCell className="text-xs">{row.first_name} {row.last_name}</TableCell>
-                                                    <TableCell className="text-xs">{row.admission_number || '—'}</TableCell>
-                                                    <TableCell className="text-xs">{row.gender || '—'}</TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <div className="flex gap-2">
+                                                            <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="First Name" value={row.first_name || ''} onChange={e => { const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData); }} />
+                                                            <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Last Name" value={row.last_name || ''} onChange={e => { const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData); }} />
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => { const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData); }} />
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <select className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" value={row.gender || ''} onChange={e => { const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData); }}>
+                                                            <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
+                                                        </select>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
                                     </Table>
-                                    {importData.length > 10 && (
-                                        <div className="p-2 text-center text-xs text-muted-foreground border-t border-border">
-                                            And {importData.length - 10} more rows...
-                                        </div>
-                                    )}
                                 </div>
                             )}
 

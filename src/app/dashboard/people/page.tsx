@@ -381,47 +381,38 @@ function StudentsSection() {
                 <table className="data-table w-full">
                   <thead><tr><th className="px-4 py-2 text-xs">First Name</th><th className="px-4 py-2 text-xs">Last Name</th><th className="px-4 py-2 text-xs">Admission No.</th><th className="px-4 py-2 text-xs">Gender</th></tr></thead>
                   <tbody>
-                    {importData.slice(0, skippedData.length > 0 ? undefined : 10).map((row, i) => {
+                    {importData.map((row, i) => {
                       const skippedReason = skippedData[i]?.reason;
                       return (
                         <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
                           <td className="px-4 py-2 text-xs">
-                            {skippedData.length > 0 ? (
-                              <input className="input-field py-1 px-2 w-full text-xs" value={row.first_name} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.first_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
-                              }} />
-                            ) : row.first_name}
+                            }} />
                             {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            {skippedData.length > 0 ? (
-                              <input className="input-field py-1 px-2 w-full text-xs" value={row.last_name} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.last_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
-                              }} />
-                            ) : row.last_name}
+                            }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            {skippedData.length > 0 ? (
-                              <input className="input-field py-1 px-2 w-full text-xs" value={row.admission_number || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
-                              }} />
-                            ) : (row.admission_number || '\u2014')}
+                            }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            {skippedData.length > 0 ? (
-                              <select className="input-field py-1 px-2 w-full text-xs" value={row.gender || ''} onChange={e => {
+                            <select className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.gender || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
-                              }}>
+                            }}>
                                 <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
-                              </select>
-                            ) : (row.gender || '\u2014')}
+                            </select>
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-                {importData.length > 10 && skippedData.length === 0 && <div className="p-2 text-center text-xs text-muted-foreground border-t border-border">And {importData.length - 10} more rows...</div>}
               </div>
             )}
             {!importClassId && importData.length > 0 && (
