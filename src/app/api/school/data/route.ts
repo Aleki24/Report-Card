@@ -329,7 +329,7 @@ export async function GET(request: NextRequest) {
 
         const { data, error } = await supabase
           .from('subjects')
-          .select('id, code, name, academic_level_id, category, subject_type, display_order')
+          .select('id, code, name, academic_level_id, category, display_order')
           .in('id', subjectIds)
           .order('display_order');
 
