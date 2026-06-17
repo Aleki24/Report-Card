@@ -57,8 +57,13 @@ export async function POST(request: NextRequest) {
 
         const effectiveSchoolId = adminProfile.school_id;
 
-        // Check for duplicate admission number (only if provided)
-        const admNo = admission_number?.trim() || null;
+        // Check for duplicate admission number
+        let admNo = admission_number?.trim() || null;
+        if (!admNo) {
+            const randomSequence = Math.floor(Math.random() * 90000) + 10000;
+            admNo = `ADM-${new Date().getFullYear()}-${randomSequence}`;
+        }
+
         if (admNo) {
             const { data: existingStudent } = await supabaseAdmin
                 .from('users')
