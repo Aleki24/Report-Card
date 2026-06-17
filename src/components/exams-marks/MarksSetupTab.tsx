@@ -127,11 +127,13 @@ export function MarksSetupTab() {
   // Subjects for selected exam type, filtered by level and grade
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
 
-  // Available levels from the exams (for the level filter dropdown)
+  // Available levels from exams + teacher's assigned subjects (for the level filter dropdown)
   const examLevelIds = new Set(
     examsByType.map(e => gradeLevelMap.get(e.grade_id)).filter(Boolean)
   );
-  const availableLevelsForType = academicLevels.filter(l => examLevelIds.has(l.id));
+  const mySubjectLevelIds = new Set(mySubjects.map(s => s.academic_level_id).filter(Boolean));
+  const mergedLevelIds = new Set([...examLevelIds, ...mySubjectLevelIds]);
+  const availableLevelsForType = academicLevels.filter(l => mergedLevelIds.has(l.id));
 
   // Available grades from the exams (for the grade filter dropdown), filtered by selected level
   const examGradeIds = new Set(examsByType.map(e => e.grade_id));
@@ -140,12 +142,35 @@ export function MarksSetupTab() {
     .filter(g => !selectedLevelId || g.academic_level_id === selectedLevelId)
     .sort((a, b) => a.name_display.localeCompare(b.name_display));
 
-  // Build subject list filtered by level + grade
+  // Build subject list from exams filtered by level + grade
   const filteredExamsByType = examsByType
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
     .filter(e => !filterGradeId || e.grade_id === filterGradeId);
   const subjectMap = new Map<string, ExamSlot>();
   filteredExamsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
+
+  // Also add teacher's assigned subjects that match the selected level
+  const myFilteredSubjects = selectedLevelId
+    ? mySubjects.filter(s => s.academic_level_id === selectedLevelId)
+    : mySubjects;
+  for (const ms of myFilteredSubjects) {
+    if (!subjectMap.has(ms.id)) {
+      subjectMap.set(ms.id, {
+        id: '',
+        name: '',
+        exam_type: '',
+        max_score: 0,
+        subject_id: ms.id,
+        subject_name: ms.name,
+        subject_code: ms.code,
+        subject_category: ms.category || '',
+        grade_id: '',
+        grade_name: '',
+        term_id: '',
+      });
+    }
+  }
+
   const subjects = [...subjectMap.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name));
 
 
@@ -487,25 +512,39 @@ export function MarksSetupTab() {
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
               {subjects.map(s => {
                 const isActive = selectedSubjectId === s.subject_id;
+                const hasExams = examsByType.some(e => e.subject_id === s.subject_id);
                 return (
-                  <button
+                  <div
                     key={s.subject_id}
-                    onClick={() => setSelectedSubjectId(s.subject_id)}
-                    className="text-left p-3 rounded-lg transition-all"
+                    className="p-3 rounded-lg transition-all"
                     style={{
                       background: isActive ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))' : 'var(--color-surface-raised)',
                       border: isActive ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
-                      cursor: 'pointer',
                     }}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <span className="font-semibold text-sm">{s.subject_name}</span>
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>{s.subject_code}</span>
                     </div>
                     {s.subject_category && (
-                      <span className="text-[10px] mt-1 block" style={{ color: 'var(--color-text-muted)' }}>{s.subject_category}</span>
+                      <span className="text-[10px] block mb-2" style={{ color: 'var(--color-text-muted)' }}>{s.subject_category}</span>
                     )}
-                  </button>
+                    {hasExams ? (
+                      <button
+                        onClick={() => setSelectedSubjectId(s.subject_id)}
+                        className="btn-primary text-[10px] px-2 py-1"
+                      >
+                        Select & Enter Marks
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
+                        className="btn-secondary text-[10px] px-2 py-1"
+                      >
+                        + Create Exam
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
