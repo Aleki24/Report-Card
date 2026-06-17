@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
                 supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id, category, is_compulsory').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id, category, subject_type').eq('school_id', schoolId).order('display_order'),
                 supabaseAdmin.from('grading_systems').select('*').order('name'),
                 supabaseAdmin.from('grading_scales').select('*').order('order_index'),
             ]);
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
                         code: data.code,
                         name: data.name,
                         academic_level_id: data.academic_level_id,
-                        is_compulsory: data.is_compulsory ?? true,
+                        subject_type: data.subject_type ?? 'CORE',
                         display_order: data.display_order ?? 0,
                         category: data.category ?? 'TECHNICAL',
                         school_id: schoolId,
@@ -348,7 +348,7 @@ export async function PATCH(request: NextRequest) {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.code !== undefined) updateData.code = payload.code;
             if (payload.category !== undefined) updateData.category = payload.category;
-            if (payload.is_compulsory !== undefined) updateData.is_compulsory = payload.is_compulsory;
+            if (payload.subject_type !== undefined) updateData.subject_type = payload.subject_type;
             if (payload.display_order !== undefined) updateData.display_order = payload.display_order;
             if (payload.grading_system_id !== undefined) updateData.grading_system_id = payload.grading_system_id;
         } else if (type === 'grading_system') {

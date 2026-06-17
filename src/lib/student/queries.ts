@@ -85,7 +85,7 @@ export async function getStudentSubjects(student: CurrentStudent) {
 
     const { data, error } = await supabase
         .from('subjects')
-        .select('id, code, name, is_compulsory, display_order, category')
+        .select('id, code, name, subject_type, display_order, category')
         .eq('academic_level_id', student.academicLevelId)
         .order('display_order', { ascending: true });
 

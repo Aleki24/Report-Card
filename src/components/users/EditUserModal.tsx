@@ -70,7 +70,7 @@ export function EditUserModal(props: EditUserModalProps) {
           </div>
         )}
 
-        {props.editRole === 'SUBJECT_TEACHER' && (
+        {(props.editRole === 'SUBJECT_TEACHER' || props.editRole === 'CLASS_TEACHER') && (
           <SubjectTeacherFields subjects={props.subjects} grades={props.grades} gradeStreams={props.gradeStreams} entries={props.editSubjectTeacherSubjects} setEntries={props.setEditSubjectTeacherSubjects} />
         )}
 

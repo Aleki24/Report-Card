@@ -85,7 +85,7 @@ export interface Subject {
     code: string;
     name: string;
     academic_level_id: string;
-    is_compulsory: boolean;
+    subject_type: 'CORE' | 'ESSENTIAL' | 'OPTIONAL';
     display_order: number;
     category?: SubjectCategory;
 }

@@ -73,10 +73,10 @@ export default function StudentSubjectsPage() {
                                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
                                         <span style={{ 
                                             padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                                            background: s.is_compulsory ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                                            color: s.is_compulsory ? '#10B981' : '#3B82F6'
+                                            background: s.subject_type === 'CORE' ? 'rgba(16, 185, 129, 0.1)' : s.subject_type === 'ESSENTIAL' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                                            color: s.subject_type === 'CORE' ? '#10B981' : s.subject_type === 'ESSENTIAL' ? '#3B82F6' : '#F59E0B'
                                         }}>
-                                            {s.is_compulsory ? 'Compulsory' : 'Elective'}
+                                            {s.subject_type === 'CORE' ? 'Core' : s.subject_type === 'ESSENTIAL' ? 'Essential' : 'Optional'}
                                         </span>
                                         {s.category && (
                                             <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: '#F1F5F9', color: '#475569' }}>

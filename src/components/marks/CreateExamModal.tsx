@@ -54,7 +54,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const [qYear, setQYear] = useState({ name: '', start_date: '', end_date: '' });
   const [qTerm, setQTerm] = useState({ name: '', start_date: '', end_date: '' });
   const [qStream, setQStream] = useState({ name: '' });
-  const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '', grading_system_id: '', is_compulsory: false });
+  const [qSubject, setQSubject] = useState({ name: '', code: '', academic_level_id: '', grading_system_id: '', subject_type: 'CORE' });
 
   // Fetch dropdowns once on mount
   const fetchDropdowns = useCallback(async () => {
@@ -136,7 +136,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
     e.preventDefault();
     if (!qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id) return;
     const result = await quickAdd('subject', qSubject);
-    if (result) { setSelectedSubjectId(result.id); setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '', is_compulsory: false }); setAddingSubject(false); }
+    if (result) { setSelectedSubjectId(result.id); setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '', subject_type: 'CORE' }); setAddingSubject(false); }
   };
 
   const handleCreateExam = async () => {
@@ -257,9 +257,10 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                       <option value="">-- Select Academic Level --</option>
                       {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
                     </select>
-                    <select className="input-field w-28 text-xs" value={qSubject.is_compulsory ? 'true' : 'false'} onChange={e => setQSubject(p => ({ ...p, is_compulsory: e.target.value === 'true' }))}>
-                      <option value="true">Compulsory</option>
-                      <option value="false">Optional</option>
+                    <select className="input-field w-28 text-xs" value={qSubject.subject_type} onChange={e => setQSubject(p => ({ ...p, subject_type: e.target.value }))}>
+                      <option value="CORE">Core</option>
+                      <option value="ESSENTIAL">Essential</option>
+                      <option value="OPTIONAL">Optional</option>
                     </select>
                   </div>
                   <select className="input-field w-full text-xs" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>

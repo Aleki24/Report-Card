@@ -96,7 +96,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
           </div>
         )}
 
-        {props.formRole === 'SUBJECT_TEACHER' && (
+        {(props.formRole === 'SUBJECT_TEACHER' || props.formRole === 'CLASS_TEACHER') && (
           <SubjectTeacherFields subjects={props.subjects} grades={props.grades} gradeStreams={props.gradeStreams} entries={props.formSubjectTeacherSubjects} setEntries={props.setFormSubjectTeacherSubjects} />
         )}
 

@@ -76,10 +76,10 @@ export default function SubjectAnalysisPage() {
                         <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>{subject.code || 'No Code'}</span>
                         <span style={{ 
                             padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-                            background: subject.is_compulsory ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)',
-                            color: subject.is_compulsory ? '#10B981' : '#3B82F6'
+                            background: subject.subject_type === 'CORE' ? 'rgba(16, 185, 129, 0.1)' : subject.subject_type === 'ESSENTIAL' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                            color: subject.subject_type === 'CORE' ? '#10B981' : subject.subject_type === 'ESSENTIAL' ? '#3B82F6' : '#F59E0B'
                         }}>
-                            {subject.is_compulsory ? 'Compulsory' : 'Elective'}
+                            {subject.subject_type === 'CORE' ? 'Core' : subject.subject_type === 'ESSENTIAL' ? 'Essential' : 'Optional'}
                         </span>
                     </div>
                 </div>

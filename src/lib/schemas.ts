@@ -45,7 +45,7 @@ export const subjectSchema = z.object({
     code: z.string().min(1, 'Code is required').max(20),
     name: z.string().min(1, 'Name is required').max(100),
     academic_level_id: z.string().uuid('Invalid academic level ID'),
-    is_compulsory: z.boolean().optional().default(true),
+    subject_type: z.enum(['CORE', 'ESSENTIAL', 'OPTIONAL']).optional().default('CORE'),
     display_order: z.number().int().min(0).optional().default(0),
     category: z.enum(['LANGUAGE', 'MATHEMATICS', 'SCIENCE', 'HUMANITY', 'TECHNICAL', 'CREATIVE']).optional().default('TECHNICAL'),
     grading_system_id: z.string().uuid('Invalid grading system ID').optional().nullable(),

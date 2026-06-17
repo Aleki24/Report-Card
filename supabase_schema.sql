@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS subjects (
     code TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE CASCADE NOT NULL,
-    is_compulsory BOOLEAN DEFAULT true NOT NULL,
+    subject_type TEXT DEFAULT 'CORE' NOT NULL,
     display_order INT DEFAULT 0 NOT NULL,
     category TEXT DEFAULT 'TECHNICAL' NOT NULL,
     grading_system_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,

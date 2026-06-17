@@ -386,23 +386,23 @@ function StudentsSection() {
                       return (
                         <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.first_name || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.first_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
                             }} />
                             {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.last_name || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.last_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
                             }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
                             }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <select className="input-field py-1 px-2 w-full text-xs bg-surface border-transparent hover:border-border focus:border-primary transition-colors" value={row.gender || ''} onChange={e => {
+                            <select className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.gender || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
                             }}>
                                 <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>

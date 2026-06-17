@@ -63,6 +63,8 @@ export default function StudentsPage() {
     const [viewPhotoError, setViewPhotoError] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [importData, setImportData] = useState<any[]>([]);
+    const [importClassId, setImportClassId] = useState('');
+    const [skippedData, setSkippedData] = useState<any[]>([]);
     const [importing, setImporting] = useState(false);
     const [createdCredentials, setCreatedCredentials] = useState<{first_name: string; last_name: string; username: string; invite_code: string}[] | null>(null);
 
@@ -180,6 +182,8 @@ export default function StudentsPage() {
                         guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
                         guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
                         guardian_email: row.guardianemail || row.parentemail || row.email || '',
+                        class: row.class || row.grade || row.form || row.level || '',
+                        stream: row.stream || row.section || '',
                         academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
                     };
                 }).filter((r: any) => r.first_name || r.last_name);
@@ -199,18 +203,29 @@ export default function StudentsPage() {
             const res = await fetch('/api/admin/bulk-import-students', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ students: importData })
+                body: JSON.stringify({ students: importData, default_grade_stream_id: importClassId || undefined })
             });
             const r = await res.json();
             if (!res.ok) toast.error(r.error || 'Failed to import students');
             else {
-                toast.success(r.message || 'Students imported successfully');
-                setShowImportModal(false);
-                setImportData([]);
-                if (r.created_credentials && r.created_credentials.length > 0) {
-                    setCreatedCredentials(r.created_credentials);
+                    if (r.skipped_rows?.length > 0) {
+                    toast.warning(`Imported ${r.imported}, skipped ${r.skipped_rows.length}`);
+                    setSkippedData(r.skipped_rows);
+                    setImportData(r.skipped_rows.map((s: any) => s.row));
+                    if (r.created_credentials && r.created_credentials.length > 0) {
+                        setCreatedCredentials(prev => [...(prev || []), ...r.created_credentials]);
+                    }
+                } else {
+                    toast.success(r.message || 'Students imported successfully');
+                    setShowImportModal(false);
+                    setImportData([]);
+                    setSkippedData([]);
+                    setImportClassId('');
+                    if (r.created_credentials && r.created_credentials.length > 0) {
+                        setCreatedCredentials(prev => [...(prev || []), ...r.created_credentials]);
+                    }
+                    await fetchStudents();
                 }
-                await fetchStudents();
             }
         } catch {
             toast.error('Error importing students.');
@@ -349,57 +364,78 @@ export default function StudentsPage() {
                         <CardContent className="p-6 flex flex-col h-full overflow-hidden">
                             <h2 className="text-lg font-bold font-display mb-4">Bulk Import Students</h2>
                             
+                            <p className="text-xs text-muted-foreground mb-4">Select a class, upload a CSV file, and import. CSV columns: <strong>first_name, last_name, admission_number, gender, class, stream</strong></p>
+
+                            {/* Class selection */}
                             <div className="mb-4">
-                                <p className="text-sm text-muted-foreground mb-3">Upload a CSV file to import multiple students at once. The first row must contain headers.</p>
-                                <p className="text-xs text-muted-foreground mb-4">Expected columns: <strong>first_name, last_name, admission_number, gender, date_of_birth, guardian_phone, guardian_name, guardian_email</strong></p>
-                                
-                                <div className="flex items-center gap-3">
-                                    <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card cursor-pointer text-sm font-medium hover:bg-muted transition-colors">
-                                        <Upload className="w-4 h-4" />
-                                        Select CSV File
-                                        <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
-                                    </label>
-                                    <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
-                                </div>
+                                <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Assign to Class *</label>
+                                <select className="input-field w-full text-xs" value={importClassId} onChange={e => setImportClassId(e.target.value)}>
+                                    <option value="">— Select Class —</option>
+                                    {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                                </select>
                             </div>
+
+                            <div className="flex items-center gap-3 mb-4">
+                                <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-card cursor-pointer text-sm font-medium hover:bg-muted transition-colors">
+                                    <Upload className="w-4 h-4" />
+                                    Select CSV File
+                                    <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                                </label>
+                                <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
+                            </div>
+
+                            {skippedData.length > 0 && (
+                                <div className="p-3 mb-4 rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-500 text-xs">
+                                    <strong>⚠️ {skippedData.length} students skipped.</strong> Please correct the errors below and try importing again.
+                                </div>
+                            )}
 
                             {importData.length > 0 && (
                                 <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md">
                                     <Table>
                                         <TableHeader className="bg-muted/50 sticky top-0">
                                             <TableRow>
-                                                <TableHead>Name</TableHead>
+                                                <TableHead>First Name</TableHead>
+                                                <TableHead>Last Name</TableHead>
                                                 <TableHead>Admission No.</TableHead>
                                                 <TableHead>Gender</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {importData.map((row, i) => (
-                                                <TableRow key={i}>
+                                            {importData.map((row, i) => {
+                                                const skippedReason = skippedData[i]?.reason;
+                                                return (
+                                                <TableRow key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
                                                     <TableCell className="text-xs">
-                                                        <div className="flex gap-2">
-                                                            <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="First Name" value={row.first_name || ''} onChange={e => { const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData); }} />
-                                                            <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Last Name" value={row.last_name || ''} onChange={e => { const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData); }} />
-                                                        </div>
+                                                        <input className="input-field h-8 px-2 w-full text-xs border border-border rounded" placeholder="First Name" value={row.first_name || ''} onChange={e => { const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData); }} />
+                                                        {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
                                                     </TableCell>
                                                     <TableCell className="text-xs">
-                                                        <input className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => { const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData); }} />
+                                                        <input className="input-field h-8 px-2 w-full text-xs border border-border rounded" placeholder="Last Name" value={row.last_name || ''} onChange={e => { const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData); }} />
                                                     </TableCell>
                                                     <TableCell className="text-xs">
-                                                        <select className="input-field h-8 px-2 w-full text-xs bg-transparent border-transparent hover:border-border focus:border-primary transition-colors" value={row.gender || ''} onChange={e => { const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData); }}>
+                                                        <input className="input-field h-8 px-2 w-full text-xs border border-border rounded" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => { const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData); }} />
+                                                    </TableCell>
+                                                    <TableCell className="text-xs">
+                                                        <select className="input-field h-8 px-2 w-full text-xs border border-border rounded" value={row.gender || ''} onChange={e => { const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData); }}>
                                                             <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
                                                         </select>
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
+                                                );
+                                            })}
                                         </TableBody>
                                     </Table>
                                 </div>
                             )}
 
+                            {!importClassId && importData.length > 0 && (
+                                <p className="text-xs text-amber-500 mb-3">⚠️ Please select a class above before importing.</p>
+                            )}
+
                             <div className="flex gap-2 justify-end shrink-0 pt-2">
-                                <Button variant="secondary" onClick={() => { setShowImportModal(false); setImportData([]); }} disabled={importing}>Cancel</Button>
-                                <Button variant="primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0}>{importing ? 'Importing...' : `Import ${importData.length} Students`}</Button>
+                                <Button variant="secondary" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</Button>
+                                <Button variant="primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing...' : skippedData.length > 0 ? `Retry Import (${importData.length})` : `Import ${importData.length} Students`}</Button>
                             </div>
                         </CardContent>
                     </Card>

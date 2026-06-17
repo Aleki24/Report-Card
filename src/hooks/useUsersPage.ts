@@ -123,7 +123,10 @@ export function useUsersPage() {
       role: formRole, sequence_number: formSequenceNumber, school_id: profile?.school_id ?? undefined,
     };
     if (formRole === 'STUDENT') { payload.admission_number = formAdmissionNumber; payload.grade_stream_id = formGradeStreamId; payload.academic_level_id = formAcademicLevelId; }
-    else if (formRole === 'CLASS_TEACHER') { payload.class_teacher_grade_stream_id = formClassTeacherStreamId; }
+    else if (formRole === 'CLASS_TEACHER') { 
+      payload.class_teacher_grade_stream_id = formClassTeacherStreamId; 
+      payload.subject_teacher_subjects = formSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
+    }
     else if (formRole === 'SUBJECT_TEACHER') { payload.subject_teacher_subjects = formSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id); }
     try {
       const res = await fetch('/api/admin/create-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -174,7 +177,10 @@ export function useUsersPage() {
     if (!editingUser) return;
     setFormError(''); setSubmitting(true);
     const payload: Record<string, any> = { user_id: editingUser.id, first_name: editFirstName.trim(), last_name: editLastName.trim(), phone: editPhone.trim(), role: editRole, is_active: editIsActive };
-    if (editRole === 'CLASS_TEACHER') { payload.class_teacher_grade_stream_id = editClassTeacherStreamId; payload.subject_teacher_subjects = []; }
+    if (editRole === 'CLASS_TEACHER') { 
+      payload.class_teacher_grade_stream_id = editClassTeacherStreamId; 
+      payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
+    }
     else if (editRole === 'SUBJECT_TEACHER') { payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id); payload.class_teacher_grade_stream_id = null; }
     try {
       const res = await fetch('/api/admin/update-user', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

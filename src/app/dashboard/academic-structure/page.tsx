@@ -8,7 +8,7 @@ import { Search, BookOpen } from 'lucide-react';
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface Stream { id: string; grade_id: string; name: string; full_name: string; }
-interface Subject { id: string; name: string; code: string; category?: string; academic_level_id?: string; is_compulsory?: boolean; grading_system_id?: string | null; }
+interface Subject { id: string; name: string; code: string; category?: string; academic_level_id?: string; subject_type?: 'CORE' | 'ESSENTIAL' | 'OPTIONAL'; grading_system_id?: string | null; }
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
   LANGUAGE: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' },
@@ -198,7 +198,7 @@ function SubjectsTab() {
   const [loading, setLoading] = useState(true);
   const [calSaving, setCalSaving] = useState(false);
   const [calMsg, setCalMsg] = useState('');
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', is_compulsory: true });
+  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', subject_type: 'CORE' });
   const [tableLevelFilter, setTableLevelFilter] = useState('');
 
   const fetchSubjects = async () => {
@@ -239,13 +239,13 @@ function SubjectsTab() {
     finally { setCalSaving(false); }
   };
 
-  const toggleSubjectType = async (id: string, currentStatus: boolean) => {
+  const toggleSubjectType = async (id: string, newStatus: string) => {
     setCalSaving(true); setCalMsg('');
     try {
       const res = await fetch(`/api/admin/academic-structure`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'subject', id, is_compulsory: !currentStatus })
+        body: JSON.stringify({ type: 'subject', id, subject_type: newStatus })
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
       setCalMsg('✅ Updated successfully');
@@ -263,7 +263,7 @@ function SubjectsTab() {
     return matchSearch && matchCategory && matchLevel;
   });
 
-  const compulsory = subjects.filter(s => s.is_compulsory).length;
+  const compulsory = subjects.filter(s => s.subject_type === 'CORE' || s.subject_type === 'ESSENTIAL').length;
   const categories = [...new Set(subjects.map(s => (s.category || 'TECHNICAL').toUpperCase()))];
 
   if (loading) return <ContentSkeleton message="Loading subjects..." />;
@@ -312,14 +312,15 @@ function SubjectsTab() {
           </div>
           <div className="w-32">
             <label className="block text-xs text-muted-foreground mb-1">Type *</label>
-            <select className="input-field w-full text-sm" value={newSubject.is_compulsory ? 'true' : 'false'} onChange={e => setNewSubject(p => ({ ...p, is_compulsory: e.target.value === 'true' }))}>
-              <option value="true">Compulsory</option>
-              <option value="false">Optional</option>
+            <select className="input-field w-full text-sm" value={newSubject.subject_type} onChange={e => setNewSubject(p => ({ ...p, subject_type: e.target.value }))}>
+              <option value="CORE">Core</option>
+              <option value="ESSENTIAL">Essential</option>
+              <option value="OPTIONAL">Optional</option>
             </select>
           </div>
           <button type="button" onClick={async () => {
             await postStructure('subject', newSubject);
-            setNewSubject({ name: '', code: '', academic_level_id: '', is_compulsory: true });
+            setNewSubject({ name: '', code: '', academic_level_id: '', subject_type: 'CORE' });
           }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
             {calSaving ? '...' : '+ Add Subject'}
           </button>
@@ -372,13 +373,24 @@ function SubjectsTab() {
                       <td className="px-4 py-3 font-medium">{s.name}</td>
                       <td className="px-4 py-3 font-mono text-sm">{s.code}</td>
                       <td className="px-4 py-3"><span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: cat.bg, color: cat.color }}>{catKey}</span></td>
-                      <td className="px-4 py-3">{s.is_compulsory ? <span className="badge badge-success text-xs">Compulsory</span> : <span className="badge badge-warning text-xs">Optional</span>}</td>
+                      <td className="px-4 py-3">
+                        {s.subject_type === 'CORE' && <span className="badge badge-success text-xs">Core</span>}
+                        {s.subject_type === 'ESSENTIAL' && <span className="badge badge-info bg-blue-500/10 text-blue-500 text-xs">Essential</span>}
+                        {s.subject_type === 'OPTIONAL' && <span className="badge badge-warning text-xs">Optional</span>}
+                      </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-3 items-center">
-                          <button className="text-xs text-blue-500 hover:text-blue-400 font-medium" onClick={() => toggleSubjectType(s.id, !!s.is_compulsory)} disabled={calSaving}>
-                            🔄 Make {s.is_compulsory ? 'Optional' : 'Compulsory'}
-                          </button>
+                          <select
+                            className="text-xs bg-transparent border border-border rounded p-1 ml-2 outline-none"
+                            value={s.subject_type || 'CORE'}
+                            onChange={(e) => toggleSubjectType(s.id, e.target.value)}
+                            disabled={calSaving}
+                          >
+                            <option value="CORE">Make Core</option>
+                            <option value="ESSENTIAL">Make Essential</option>
+                            <option value="OPTIONAL">Make Optional</option>
+                          </select>
                           <button className="text-xs text-red-400 hover:text-red-300 font-medium" onClick={() => deleteSubject(s.id)} disabled={calSaving}>🗑 Delete</button>
                         </div>
                       </td>
