@@ -45,3 +45,5 @@ nul
 dev-server*.log
 # clerk configuration (can include secrets)
 /.clerk/
+
+fix-admin.js

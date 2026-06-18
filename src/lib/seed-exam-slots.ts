@@ -162,6 +162,16 @@ export async function seedExamSlots(options: SeedOptions) {
     (existing || []).map(e => `${e.subject_id}|${e.grade_id}|${e.exam_type}`)
   );
 
+  // Get explicit subject-to-grade assignments to allow cross-level seeding
+  const { data: assignments } = await supabase
+    .from('subject_teacher_assignments')
+    .select('subject_id, grade_id')
+    .eq('academic_year_id', academicYearId);
+
+  const assignedSubjectGrades = new Set(
+    (assignments || []).map(a => `${a.subject_id}|${a.grade_id}`)
+  );
+
   // Get grade info for naming
   const { data: grades } = await supabase
     .from('grades')
@@ -235,7 +245,10 @@ export async function seedExamSlots(options: SeedOptions) {
     const grade = gradeMap.get(gradeId);
     if (!grade) continue;
 
-    const gradeSubjects = subjects.filter(s => s.academic_level_id === grade.academic_level_id);
+    const gradeSubjects = subjects.filter(s => 
+      s.academic_level_id === grade.academic_level_id || 
+      assignedSubjectGrades.has(`${s.id}|${gradeId}`)
+    );
 
     for (const subject of gradeSubjects) {
       // Filter out mismatched grades for CBC subjects

@@ -128,18 +128,11 @@ export function MarksSetupTab() {
   // Subjects for selected exam type, filtered by level and grade
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
 
-  // Available levels from exams + teacher's assigned subjects (for the level filter dropdown)
-  const examLevelIds = new Set(
-    examsByType.map(e => gradeLevelMap.get(e.grade_id)).filter(Boolean)
-  );
-  const mySubjectLevelIds = new Set(mySubjects.map(s => s.academic_level_id).filter(Boolean));
-  const mergedLevelIds = new Set([...examLevelIds, ...mySubjectLevelIds]);
-  const availableLevelsForType = academicLevels.filter(l => mergedLevelIds.has(l.id));
+  // Available levels (show all levels to allow free navigation)
+  const availableLevelsForType = academicLevels;
 
-  // Available grades from the exams (for the grade filter dropdown), filtered by selected level
-  const examGradeIds = new Set(examsByType.map(e => e.grade_id));
+  // Available grades (show all grades for the selected level)
   const availableGradesForType = allGrades
-    .filter(g => examGradeIds.has(g.id))
     .filter(g => !selectedLevelId || g.academic_level_id === selectedLevelId)
     .sort((a, b) => a.name_display.localeCompare(b.name_display));
 
