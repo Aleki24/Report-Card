@@ -143,9 +143,13 @@ export function MarksSetupTab() {
   const subjectMap = new Map<string, ExamSlot>();
   filteredExamsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
 
-  // Always show all teacher's assigned subjects in "My Subjects" regardless of level filter
-  // since a subject's default level might not match the grade the teacher is assigned to teach
-  const myFilteredSubjects = mySubjects;
+  // Intelligently filter teacher's assigned subjects by the selected level/grade
+  const resolvedFilterLevelId = filterGradeId
+    ? gradeLevelMap.get(filterGradeId) || ''
+    : selectedLevelId;
+  const myFilteredSubjects = mySubjects.filter(ms =>
+    !resolvedFilterLevelId || ms.academic_level_id === resolvedFilterLevelId
+  );
   for (const ms of myFilteredSubjects) {
     if (!subjectMap.has(ms.id)) {
       subjectMap.set(ms.id, {
@@ -245,57 +249,7 @@ export function MarksSetupTab() {
         </a>
       )}
 
-      {/* ═══ MY SUBJECTS (for teachers with assigned subjects) ═══ */}
-      {!loadingMySubjects && mySubjects.length > 0 && profile?.role !== 'ADMIN' && (
-        <div className="card mb-4 p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-sm font-semibold">📚 My Subjects</h2>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {mySubjects.length} subject{mySubjects.length !== 1 ? 's' : ''} assigned
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {mySubjects.map(sub => {
-              const subExams = exams.filter(e => e.subject_id === sub.id);
-              const hasExams = subExams.length > 0;
-              return (
-                <div
-                  key={sub.id}
-                  className="p-3 rounded-lg"
-                  style={{
-                    background: selectedSubjectId === sub.id
-                      ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))'
-                      : 'var(--color-surface-raised)',
-                    border: selectedSubjectId === sub.id
-                      ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
-                    minWidth: 180,
-                  }}
-                >
-                  <div className="font-semibold text-sm">{sub.name}</div>
-                  <div className="text-[10px] font-mono mt-1 mb-2" style={{ color: 'var(--color-text-muted)' }}>
-                    {sub.code} · {subExams.length} exam{subExams.length !== 1 ? 's' : ''}
-                  </div>
-                  {hasExams ? (
-                    <button
-                      onClick={() => {
-                        setSelectedExamType(subExams[0].exam_type);
-                        setSelectedSubjectId(sub.id);
-                        setSelectedLevelId(sub.academic_level_id || '');
-                        setFilterGradeId('');
-                      }}
-                      className="btn-primary text-[10px] px-2 py-1"
-                    >
-                      Enter Marks
-                    </button>
-                  ) : (
-                    <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
 
       {/* ═══ STEP 1: Select Term ═══ */}
       <div className="card mb-4 p-5">

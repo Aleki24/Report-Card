@@ -7,6 +7,7 @@ import { Search, BookOpen, Plus } from 'lucide-react';
 import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
 
 interface AcademicLevel { id: string; code: string; name: string; }
+interface Grade { id: string; name_display: string; code: string; academic_level_id: string; numeric_order: number; }
 interface Subject { id: string; name: string; code: string; category?: string; academic_level_id?: string; subject_type?: 'CORE' | 'ESSENTIAL' | 'OPTIONAL'; grading_system_id?: string | null; }
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
@@ -24,6 +25,7 @@ export default function SubjectsPage() {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
   const [calSaving, setCalSaving] = useState(false);
   const [calMsg, setCalMsg] = useState('');
@@ -39,6 +41,7 @@ export default function SubjectsPage() {
       if (res.ok) {
         setSubjects(json.subjects || []);
         setAcademicLevels(json.academic_levels || []);
+        setGrades(json.grades || []);
       }
     } catch (err) { console.error('Failed to fetch subjects:', err); }
     finally { setLoading(false); }
@@ -87,14 +90,17 @@ export default function SubjectsPage() {
 
   const getLevelName = (levelId?: string) => levelId ? academicLevels.find(l => l.id === levelId)?.name || '—' : '—';
 
+  // Intelligent filtering: when a grade is selected, find its academic_level_id to filter subjects
+  const selectedGradeObj = tableLevelFilter ? grades.find(g => g.id === tableLevelFilter) : null;
+  const resolvedLevelId = selectedGradeObj ? selectedGradeObj.academic_level_id : tableLevelFilter;
+
   const filtered = subjects.filter(s => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'ALL' || (s.category || '').toUpperCase() === categoryFilter;
-    const matchLevel = !tableLevelFilter || s.academic_level_id === tableLevelFilter;
+    const matchLevel = !resolvedLevelId || s.academic_level_id === resolvedLevelId;
     return matchSearch && matchCategory && matchLevel;
   });
 
-  const compulsory = subjects.filter(s => s.subject_type === 'CORE' || s.subject_type === 'ESSENTIAL').length;
   const categories = [...new Set(subjects.map(s => (s.category || 'TECHNICAL').toUpperCase()))];
 
   if (loading) return <ContentSkeleton message="Loading subjects..." />;
@@ -112,20 +118,7 @@ export default function SubjectsPage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Total Subjects', value: subjects.length.toString() },
-          { label: 'Compulsory', value: compulsory.toString() },
-          { label: 'Optional', value: (subjects.length - compulsory).toString() },
-          { label: 'Departments', value: categories.length.toString() },
-        ].map((s, i) => (
-          <div className="stat-card" key={i}>
-            <div className="stat-label">{s.label}</div>
-            <div className="stat-value">{s.value}</div>
-          </div>
-        ))}
-      </div>
+
 
       {/* Add Subject Form */}
       {role === 'ADMIN' && (
@@ -237,9 +230,19 @@ export default function SubjectsPage() {
             </span>
             <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search subjects..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="input-field" value={tableLevelFilter} onChange={e => setTableLevelFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
-            <option value="">All Levels</option>
-            {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+          <select className="input-field" value={tableLevelFilter} onChange={e => setTableLevelFilter(e.target.value)} style={{ width: 'auto', minWidth: '200px' }}>
+            <option value="">All Levels & Grades</option>
+            {academicLevels.map(al => {
+              const levelGrades = grades.filter(g => g.academic_level_id === al.id).sort((a, b) => a.numeric_order - b.numeric_order);
+              return (
+                <optgroup key={al.id} label={al.name}>
+                  <option value={al.id}>All {al.name}</option>
+                  {levelGrades.map(g => (
+                    <option key={g.id} value={g.id}>{g.name_display}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
           <select className="input-field" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ width: 'auto', minWidth: '160px' }}>
             <option value="ALL">All Categories</option>
