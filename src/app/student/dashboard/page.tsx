@@ -328,7 +328,7 @@ export default function StudentDashboardPage() {
                     </div>
                     <div style={{ height: 180, width: '100%', marginTop: 16 }}>
                         {trendData.length > 1 ? (
-                            <PerformanceTrendChart data={trendData} subjects={['Average']} />
+                            <PerformanceTrendChart data={trendData.map((d: any) => ({ examName: d.examName, average: d.Average }))} />
                         ) : (
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: 20 }}>
                                 Need more than one term of data to show performance trend.

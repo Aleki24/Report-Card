@@ -96,7 +96,7 @@ export default function SubjectAnalysisPage() {
                     </div>
                     <div style={{ height: 300, width: '100%', marginTop: 16 }}>
                         {performance.length > 1 ? (
-                            <PerformanceTrendChart data={performance} subjects={[subject.name]} />
+                            <PerformanceTrendChart data={performance.map((d: any) => ({ examName: d.examName, average: d[subject.name] }))} />
                         ) : (
                             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 14, textAlign: 'center', padding: 20 }}>
                                 <TrendingUp size={48} style={{ opacity: 0.2, marginBottom: 16 }} />

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Plus, Search, Edit3, Trash2, DollarSign, Grid3X3, List, Save, RotateCcw } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Plus, Search, Edit3, Trash2, Grid3X3, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, Percent, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
@@ -18,6 +18,8 @@ interface FeeRecord {
     termName: string;
     studentName: string | null;
     admissionNumber: string | null;
+    createdAt: string;
+    updatedAt: string;
 }
 
 interface StudentOption {
@@ -36,6 +38,25 @@ interface StreamOption {
     full_name: string;
 }
 
+function timeAgo(dateStr: string): string {
+    if (!dateStr) return '';
+    const now = Date.now();
+    const then = new Date(dateStr).getTime();
+    const diff = Math.max(0, now - then);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString('en-GB');
+}
+
+function formatCurrency(n: number): string {
+    return `KSh ${n.toLocaleString()}`;
+}
+
 const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
         PENDING: '#F59E0B',
@@ -47,7 +68,7 @@ const statusBadge = (status: string) => {
         <span style={{
             background: `${colors[status] || '#94A3B8'}20`,
             color: colors[status] || '#64748B',
-            padding: '2px 8px',
+            padding: '3px 10px',
             borderRadius: 6,
             fontSize: 11,
             fontWeight: 600,
@@ -63,11 +84,16 @@ export default function FeesPage() {
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+    const [streamFilter, setStreamFilter] = useState('');
+    const [selectedTerm, setSelectedTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingFee, setEditingFee] = useState<FeeRecord | null>(null);
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [terms, setTerms] = useState<TermOption[]>([]);
     const [saving, setSaving] = useState(false);
+    const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+    const actionsRef = useRef<HTMLDivElement>(null);
 
     // Form state
     const [formStudent, setFormStudent] = useState('');
@@ -87,16 +113,29 @@ export default function FeesPage() {
     const [batchSaving, setBatchSaving] = useState(false);
     const [batchMsg, setBatchMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+                setShowActionsDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
+
     const fetchFees = useCallback(async () => {
         try {
-            const res = await fetch('/api/school/fees');
+            const params = new URLSearchParams();
+            if (selectedTerm) params.set('term_id', selectedTerm);
+            const res = await fetch(`/api/school/fees?${params}`);
             const json = await res.json();
             if (json.data) setFees(json.data);
         } catch (err) {
             console.error('Failed to load fees:', err);
         }
         setLoading(false);
-    }, []);
+    }, [selectedTerm]);
 
     useEffect(() => {
         Promise.all([
@@ -125,7 +164,12 @@ export default function FeesPage() {
                 })));
             }
             if (tData.data) {
-                setTerms(tData.data.map((t: any) => ({ id: t.id, name: t.name })));
+                const termsList = tData.data.map((t: any) => ({ id: t.id, name: t.name }));
+                setTerms(termsList);
+                // Auto-select first term
+                if (!selectedTerm && termsList.length > 0) {
+                    setSelectedTerm(termsList[0].id);
+                }
             }
             if (gsData.data) {
                 setGradeStreams(gsData.data);
@@ -133,26 +177,47 @@ export default function FeesPage() {
         })();
     }, []);
 
-    const filtered = fees.filter(f =>
-        !search || f.studentName?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filtered = useMemo(() => {
+        let result = fees;
+        if (search) {
+            const q = search.toLowerCase();
+            result = result.filter(f =>
+                f.studentName?.toLowerCase().includes(q) ||
+                f.admissionNumber?.toLowerCase().includes(q)
+            );
+        }
+        if (statusFilter) {
+            result = result.filter(f => f.status === statusFilter);
+        }
+        return result;
+    }, [fees, search, statusFilter]);
 
-    const stats = useMemo(() => ({
-        total: fees.length,
-        pending: fees.filter(f => f.status === 'PENDING').length,
-        paid: fees.filter(f => f.status === 'PAID' || f.status === 'OVERPAID').length,
-        partial: fees.filter(f => f.status === 'PARTIAL').length,
-    }), [fees]);
+    const kpi = useMemo(() => {
+        const expected = fees.reduce((s, f) => s + f.totalFee, 0);
+        const collected = fees.reduce((s, f) => s + f.paidAmount, 0);
+        const outstanding = fees.reduce((s, f) => s + f.balance, 0);
+        const now = new Date();
+        const overdue = fees.filter(f => f.balance > 0 && f.dueDate && new Date(f.dueDate) < now);
+        const overdueAmount = overdue.reduce((s, f) => s + f.balance, 0);
+        const collectionRate = expected > 0 ? Math.round((collected / expected) * 100) : 0;
+        return { expected, collected, outstanding, overdueCount: overdue.length, overdueAmount, collectionRate };
+    }, [fees]);
 
     const openAdd = () => {
         setEditingFee(null);
         setFormStudent('');
-        setFormTerm('');
+        setFormTerm(selectedTerm);
         setFormTotal('');
         setFormPaid('');
         setFormDueDate('');
         setFormNotes('');
         setShowAddModal(true);
+        setShowActionsDropdown(false);
+    };
+
+    const openBatch = () => {
+        setMode('batch');
+        setShowActionsDropdown(false);
     };
 
     const openEdit = (fee: FeeRecord) => {
@@ -227,7 +292,6 @@ export default function FeesPage() {
             }));
             setBatchStudents(mapped);
 
-            // Pre-fill existing fee records for this stream + term
             const feeRes = await fetch(`/api/school/fees?term_id=${batchTerm || ''}`);
             const feeJson = await feeRes.json();
             const existingFees: FeeRecord[] = feeJson.data || [];
@@ -314,36 +378,76 @@ export default function FeesPage() {
         setBatchTerm('');
     };
 
+    const switchToList = () => {
+        setMode('list');
+        clearBatch();
+    };
+
+    const totalRecords = fees.length;
+
     return (
         <div>
             <PageHeader
                 title="Fees Management"
-                description="Track student fee balances and payments"
+                description="Track student fee balances and payment collection"
                 breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Fees' }]}
                 action={
-                    <div className="flex gap-2">
-                        <button
-                            className={mode === 'batch' ? 'btn-primary' : 'btn-secondary'}
-                            onClick={() => setMode(mode === 'batch' ? 'list' : 'batch')}
+                    <div className="flex gap-2 items-center flex-wrap">
+                        <select
+                            className="input-field"
+                            style={{ width: 'auto', minWidth: 140, height: 36 }}
+                            value={selectedTerm}
+                            onChange={e => { setSelectedTerm(e.target.value); setLoading(true); }}
                         >
-                            {mode === 'batch' ? <List size={14} /> : <Grid3X3 size={14} />}
-                            {mode === 'batch' ? 'List View' : 'Batch Entry'}
-                        </button>
-                        {mode === 'list' && (
-                            <button className="btn-primary" onClick={openAdd}>
-                                <Plus size={14} /> Add Fee Record
+                            <option value="">All Terms</option>
+                            {terms.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+
+                        {mode === 'list' ? (
+                            <div className="relative" ref={actionsRef}>
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+                                >
+                                    <Plus size={14} /> Add Record <ChevronDown size={12} />
+                                </button>
+                                {showActionsDropdown && (
+                                    <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-xl shadow-lg z-50 py-1 animate-fade-in">
+                                        <button
+                                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
+                                            onClick={openAdd}
+                                        >
+                                            <FileText size={15} className="text-primary" />
+                                            Add Fee Record
+                                        </button>
+                                        <button
+                                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
+                                            onClick={openBatch}
+                                        >
+                                            <Upload size={15} className="text-blue-500" />
+                                            Batch Import
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <button className="btn-secondary" onClick={switchToList}>
+                                <List size={14} /> List View
                             </button>
                         )}
                     </div>
                 }
             />
 
-            {/* ── Stats ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-                <StatCard label="Total Records" value={stats.total} sub="All fee records" icon={DollarSign} />
-                <StatCard label="Pending" value={stats.pending} sub="No payments yet" icon={DollarSign} iconClassName="bg-amber-500/10 text-amber-500" />
-                <StatCard label="Partial" value={stats.partial} sub="Partially paid" icon={DollarSign} iconClassName="bg-blue-500/10 text-blue-500" />
-                <StatCard label="Paid" value={stats.paid} sub="Fully paid" icon={DollarSign} iconClassName="bg-primary/10 text-primary" />
+            {/* ── KPI Cards ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+                <StatCard label="Expected" value={formatCurrency(kpi.expected)} sub={`${totalRecords} record(s)`} icon={Wallet} iconClassName="bg-primary/15 text-primary" />
+                <StatCard label="Collected" value={formatCurrency(kpi.collected)} sub={`${kpi.collectionRate}% collection rate`} icon={ArrowUpRight} iconClassName="bg-emerald-500/15 text-emerald-500" />
+                <StatCard label="Outstanding" value={formatCurrency(kpi.outstanding)} sub="Total unpaid balance" icon={Clock} iconClassName="bg-amber-500/15 text-amber-500" />
+                <StatCard label="Overdue" value={formatCurrency(kpi.overdueAmount)} sub={`${kpi.overdueCount} overdue record(s)`} icon={AlertTriangle} iconClassName="bg-red-500/15 text-red-500" />
+                <StatCard label="Collection Rate" value={`${kpi.collectionRate}%`} sub={kpi.collectionRate >= 80 ? 'Healthy' : kpi.collectionRate >= 50 ? 'Moderate' : 'Needs attention'} icon={Percent} iconClassName="bg-purple-500/15 text-purple-500" />
             </div>
 
             {/* ════════════════════════════════════════════ */}
@@ -388,7 +492,6 @@ export default function FeesPage() {
                         )}
                     </div>
 
-                    {/* Batch entry grid */}
                     {batchStream && batchTerm && (
                         <>
                             {batchStudents.length === 0 ? (
@@ -481,24 +584,105 @@ export default function FeesPage() {
             {/* ════════════════════════════════════════════ */}
             {mode === 'list' && (
                 <>
-                    <div className="flex items-center input-field w-full overflow-hidden px-0 mb-4">
-                        <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
-                            <Search size={16} />
-                        </span>
-                        <input
-                            type="text"
-                            placeholder="Search by student name..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm"
-                        />
+                    {/* ── Smart Filters ── */}
+                    <div className="card p-4 mb-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="relative flex-1 min-w-[200px] max-w-xs">
+                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder="Search student or admission..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    className="input-field w-full pl-9"
+                                />
+                            </div>
+                            <div className="min-w-[140px]">
+                                <select
+                                    className="input-field w-full"
+                                    value={statusFilter}
+                                    onChange={e => setStatusFilter(e.target.value)}
+                                >
+                                    <option value="">All Statuses</option>
+                                    <option value="PENDING">Pending</option>
+                                    <option value="PARTIAL">Partial</option>
+                                    <option value="PAID">Paid</option>
+                                    <option value="OVERPAID">Overpaid</option>
+                                </select>
+                            </div>
+                            <div className="min-w-[180px]">
+                                <select
+                                    className="input-field w-full"
+                                    value={streamFilter}
+                                    onChange={e => setStreamFilter(e.target.value)}
+                                >
+                                    <option value="">All Classes</option>
+                                    {gradeStreams.map(s => (
+                                        <option key={s.id} value={s.id}>{s.full_name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                                {filtered.length} of {fees.length} record(s)
+                            </span>
+                        </div>
                     </div>
 
+                    {/* ── Empty State / Table ── */}
                     {loading ? (
                         <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Loading...</div>
+                    ) : fees.length === 0 ? (
+                        /* ── Guided Onboarding Empty State ── */
+                        <div className="card py-12 px-6 text-center">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
+                                <Wallet size={32} className="text-primary" />
+                            </div>
+                            <h3 className="text-lg font-bold mb-2">No Fee Records Yet</h3>
+                            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-8 leading-relaxed">
+                                Get started by setting up fee structures, adding individual records, or importing data in bulk for your classes.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+                                <button
+                                    className="card p-5 text-left hover:border-primary/60 transition-all cursor-pointer"
+                                    onClick={openAdd}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center mb-3">
+                                        <FileText size={20} />
+                                    </div>
+                                    <h4 className="font-bold text-sm mb-1">Add Fee Record</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Create a fee record for an individual student with amount, due date, and notes.
+                                    </p>
+                                </button>
+                                <button
+                                    className="card p-5 text-left hover:border-blue-500/60 transition-all cursor-pointer"
+                                    onClick={openBatch}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center mb-3">
+                                        <Upload size={20} />
+                                    </div>
+                                    <h4 className="font-bold text-sm mb-1">Batch Import</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Select a class and term, then bulk-enter fees for multiple students at once.
+                                    </p>
+                                </button>
+                                <button
+                                    className="card p-5 text-left hover:border-purple-500/60 transition-all cursor-pointer"
+                                    onClick={() => {}}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center mb-3">
+                                        <Grid3X3 size={20} />
+                                    </div>
+                                    <h4 className="font-bold text-sm mb-1">Set Fee Structure</h4>
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Define standard fee amounts per class, term, and category for faster entry.
+                                    </p>
+                                </button>
+                            </div>
+                        </div>
                     ) : filtered.length === 0 ? (
                         <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>
-                            {search ? 'No matching records.' : 'No fee records yet. Click "Add Fee Record" to create one.'}
+                            No matching records found for the current filters.
                         </div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
@@ -506,31 +690,37 @@ export default function FeesPage() {
                                 <thead>
                                     <tr>
                                         <th>Student</th>
-                                        <th>Admission</th>
-                                        <th>Term</th>
-                                        <th>Total (KShs)</th>
-                                        <th>Paid (KShs)</th>
-                                        <th>Balance (KShs)</th>
-                                        <th>Due Date</th>
+                                        <th>Expected Fee</th>
+                                        <th>Paid</th>
+                                        <th>Balance</th>
                                         <th>Status</th>
-                                        <th style={{ width: 100 }}>Actions</th>
+                                        <th>Last Payment Activity</th>
+                                        <th style={{ width: 90 }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filtered.map(fee => (
                                         <tr key={fee.id}>
-                                            <td data-label="Student" style={{ fontWeight: 600 }}>{fee.studentName || '—'}</td>
-                                            <td data-label="Admission" style={{ color: '#64748B' }}>{fee.admissionNumber || '—'}</td>
-                                            <td data-label="Term">{fee.termName || '—'}</td>
-                                            <td data-label="Total" style={{ fontFamily: 'monospace' }}>{fee.totalFee.toLocaleString()}</td>
-                                            <td data-label="Paid" style={{ fontFamily: 'monospace' }}>{fee.paidAmount.toLocaleString()}</td>
+                                            <td data-label="Student">
+                                                <div className="font-semibold text-sm">{fee.studentName || '—'}</div>
+                                                <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}</div>
+                                            </td>
+                                            <td data-label="Expected" style={{ fontFamily: 'monospace' }}>
+                                                {fee.totalFee.toLocaleString()}
+                                            </td>
+                                            <td data-label="Paid" style={{ fontFamily: 'monospace', color: fee.paidAmount > 0 ? '#10B981' : '#94A3B8' }}>
+                                                {fee.paidAmount.toLocaleString()}
+                                            </td>
                                             <td data-label="Balance" style={{ fontFamily: 'monospace', color: fee.balance > 0 ? '#EF4444' : '#10B981', fontWeight: 600 }}>
                                                 {fee.balance.toLocaleString()}
                                             </td>
-                                            <td data-label="Due Date" style={{ color: '#64748B', fontSize: 12 }}>
-                                                {fee.dueDate ? new Date(fee.dueDate).toLocaleDateString('en-GB') : '—'}
-                                            </td>
                                             <td data-label="Status">{statusBadge(fee.status)}</td>
+                                            <td data-label="Activity" style={{ fontSize: 12, color: '#64748B' }}>
+                                                <div>{fee.notes || '—'}</div>
+                                                <div className="text-[11px] text-muted-foreground mt-0.5">
+                                                    {fee.updatedAt ? timeAgo(fee.updatedAt) : ''}
+                                                </div>
+                                            </td>
                                             <td data-label="Actions">
                                                 <div style={{ display: 'flex', gap: 4 }}>
                                                     <button className="btn-icon" onClick={() => openEdit(fee)} title="Edit">

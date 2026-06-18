@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
-import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
+import { SubjectComparisonChart } from '@/components/charts/SubjectComparisonChart';
+import { InsightsPanel } from '@/components/charts/InsightsPanel';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
 interface StudentMark {
@@ -33,6 +34,58 @@ interface GradeStreamOption {
   full_name: string;
 }
 
+function KpiCard({
+  label,
+  value,
+  subtitle,
+  color,
+  icon,
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  color: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div style={{
+      background: 'var(--card)',
+      border: '1px solid var(--border)',
+      borderRadius: 12,
+      padding: '16px 18px',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 12,
+    }}>
+      <div style={{
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        background: `color-mix(in oklch, ${color} 10%, transparent)`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px' }}>
+          {label}
+        </p>
+        <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--foreground)', margin: 0, letterSpacing: '-0.03em' }}>
+          {value}
+        </p>
+        {subtitle && (
+          <p style={{ fontSize: 11, color: 'var(--muted-foreground)', margin: '1px 0 0' }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
   const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
   const [selectedStreamId, setSelectedStreamId] = useState('all');
@@ -45,7 +98,6 @@ export default function AnalyticsPage() {
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
 
-  // ── Fetch grade streams via school-scoped API ──────────────
   useEffect(() => {
     const fetchClasses = async () => {
       try {
@@ -59,7 +111,6 @@ export default function AnalyticsPage() {
     fetchClasses();
   }, []);
 
-  // ── Fetch analytics data via server API ────────────────────
   useEffect(() => {
     const fetchAnalytics = async () => {
       setLoading(true);
@@ -83,7 +134,6 @@ export default function AnalyticsPage() {
 
         const marks = json.marks;
 
-        // ── Grade Distribution ─────────────────────────────
         const gradeCounts: Record<string, number> = {};
         marks.forEach((m: any) => {
           const g = m.grade_symbol || 'F';
@@ -100,7 +150,6 @@ export default function AnalyticsPage() {
           .sort((a, b) => gradeOrder(a.grade) - gradeOrder(b.grade));
         setGradeData(dbGrades);
 
-        // ── Performance Trend ──────────────────────────────
         const examSubjAgg: Record<string, Record<string, { sum: number; count: number }>> = {};
         const examDates: Record<string, string> = {};
         const allSubjects = new Set<string>();
@@ -138,7 +187,6 @@ export default function AnalyticsPage() {
         const avg = allPcts.length > 0 ? allPcts.reduce((s: number, v: number) => s + v, 0) / allPcts.length : 0;
         setClassAverage(Math.round(avg));
 
-        // ── Subject Stats ──────────────────────────────────
         const subjAgg: Record<string, StudentMark[]> = {};
         marks.forEach((m: any) => {
           const sName = m.subject_name || 'Unknown Subject';
@@ -184,17 +232,81 @@ export default function AnalyticsPage() {
     fetchAnalytics();
   }, [selectedStreamId]);
 
+  const totalStudents = subjectStats.reduce((sum, s) => sum + s.studentCount, 0);
+
+  const examAverages = trendData.map(row => {
+    const scores = trendSubjects.map(s => row[s]).filter((v): v is number => v != null);
+    const avg = scores.length > 0
+      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      : 0;
+    return { examName: row.examName, average: avg };
+  });
+
+  const improvement = examAverages.length >= 2
+    ? examAverages[examAverages.length - 1].average - examAverages[0].average
+    : 0;
+
+  const bestSubject = subjectStats[0];
+  const weakestSubject = subjectStats[subjectStats.length - 1];
+  const atRiskSubjects = subjectStats.filter(s => s.passRate < 70);
+  const strongSubjects = subjectStats.filter(s => s.passRate >= 85);
+  const atRiskCount = atRiskSubjects.length;
+
+  const subjectBarData = subjectStats.map(s => ({
+    name: s.name,
+    mean: s.mean,
+    passRate: s.passRate,
+  }));
+
+  const statusColor = (mean: number) => {
+    if (mean >= 70) return 'var(--color-success)';
+    if (mean >= 50) return 'var(--color-warning)';
+    return 'var(--color-danger)';
+  };
+  const statusBg = (mean: number) => {
+    if (mean >= 70) return 'color-mix(in oklch, var(--color-success) 10%, transparent)';
+    if (mean >= 50) return 'color-mix(in oklch, var(--color-warning) 10%, transparent)';
+    return 'color-mix(in oklch, var(--color-danger) 10%, transparent)';
+  };
+  const statusLabel = (mean: number) => {
+    if (mean >= 70) return 'Strong';
+    if (mean >= 50) return 'Average';
+    return 'At Risk';
+  };
+
   return (
-    <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4" style={{ marginBottom: 'var(--space-8)' }}>
-        <div>
-          <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Analytics</h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-            Subject performance, grade distribution, and trend analysis
+    <div className="px-4 sm:px-6" style={{ maxWidth: 1120, margin: '0 auto', paddingBottom: 48 }}>
+      <style>{`
+        .chart-inner { height: 260px; }
+        @media (max-width: 480px) { .chart-inner { height: 220px; } }
+        @media (min-width: 481px) and (max-width: 768px) { .chart-inner { height: 240px; } }
+      `}</style>
+      <div className="flex flex-col gap-5 mb-6">
+        <div className="flex flex-col gap-1">
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--foreground)', margin: 0, letterSpacing: '-0.03em' }}>
+            Analytics
+          </h1>
+          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: 0 }}>
+            Class performance overview and subject insights
           </p>
         </div>
         <select
-          className="input-field w-full md:w-[240px]"
+          className="w-full md:max-w-[260px]"
+          style={{
+            height: 36,
+            padding: '0 32px 0 12px',
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--card)',
+            color: 'var(--foreground)',
+            fontSize: 13,
+            fontWeight: 500,
+            appearance: 'none',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394A3B8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 10px center',
+            cursor: 'pointer',
+          }}
           value={selectedStreamId}
           onChange={(e) => setSelectedStreamId(e.target.value)}
         >
@@ -209,67 +321,189 @@ export default function AnalyticsPage() {
         <ContentSkeleton message="Analyzing data..." />
       ) : (trendData.length > 0 || gradeData.length > 0) ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: 'var(--space-6)', marginBottom: 'var(--space-8)' }}>
-            <PerformanceTrendChart
-              data={trendData.length > 0 ? trendData : [{ examName: 'No Exams Yet' }]}
-              subjects={trendSubjects}
-              classAverage={classAverage}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+            <KpiCard
+              label="Overall Average"
+              value={`${classAverage}%`}
+              subtitle={totalStudents > 0 ? `${totalStudents} students` : undefined}
+              color="var(--primary)"
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
             />
-            <GradeDistributionChart data={gradeData.length > 0 ? gradeData : [{ grade: 'N/A', count: 0 }]} />
+            {bestSubject && (
+              <KpiCard
+                label="Best Subject"
+                value={bestSubject.name}
+                subtitle={`${bestSubject.mean}% mean`}
+                color="var(--color-success)"
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
+              />
+            )}
+            {weakestSubject && (
+              <KpiCard
+                label="Weakest Subject"
+                value={weakestSubject.name}
+                subtitle={`${weakestSubject.mean}% mean`}
+                color="var(--color-danger)"
+                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>}
+              />
+            )}
+            <KpiCard
+              label="At Risk"
+              value={`${atRiskCount}`}
+              subtitle={atRiskCount === 1 ? 'subject below threshold' : 'subjects below threshold'}
+              color={atRiskCount > 0 ? 'var(--color-danger)' : 'var(--color-success)'}
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={atRiskCount > 0 ? 'var(--color-danger)' : 'var(--color-success)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>}
+            />
+            <KpiCard
+              label="Improvement"
+              value={improvement >= 0 ? `+${improvement}%` : `${improvement}%`}
+              subtitle={examAverages.length >= 2 ? 'first to last exam' : 'need 2+ exams'}
+              color={improvement >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}
+              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={improvement >= 0 ? 'var(--color-success)' : 'var(--color-danger)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{improvement >= 0 ? <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></> : <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></>}</svg>}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="chart-card">
+              <PerformanceTrendChart
+                data={examAverages}
+                improvement={improvement}
+                classAverage={classAverage}
+              />
+            </div>
+            <div className="chart-card">
+              <SubjectComparisonChart data={subjectBarData} />
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <InsightsPanel
+              strongSubjects={strongSubjects}
+              atRiskSubjects={atRiskSubjects}
+              allSubjects={subjectStats}
+              classAverage={classAverage}
+              improvement={improvement}
+            />
           </div>
 
           {subjectStats.length > 0 && (
-            <div className="card">
-              <h3 style={{ fontSize: 16, marginBottom: 'var(--space-4)' }} className="font-bold font-[family-name:var(--font-display)]">Subject Performance Summary</h3>
-              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-                <table className="data-table w-full min-w-[600px] sm:min-w-[700px]">
+            <div style={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '18px 22px 12px',
+              }}>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
+                    Detailed Results
+                  </h3>
+                  <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>
+                    Click a row to expand student scores
+                  </p>
+                </div>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  minWidth: 700,
+                  fontSize: 13,
+                }}>
                   <thead>
-                    <tr>
-                      <th className="w-8"></th>
-                      <th>Subject</th><th>Mean</th><th>Median</th><th>Highest</th><th>Lowest</th><th>Pass Rate</th><th className="whitespace-nowrap">Students</th><th className="whitespace-nowrap">Status</th>
+                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                      <th style={{ width: 28, padding: '10px 8px' }}></th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Subject</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Mean</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Median</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Highest</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lowest</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pass Rate</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Students</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {subjectStats.map((s, i) => (
                       <React.Fragment key={i}>
-                        <tr style={{ cursor: 'pointer' }} onClick={() => setExpandedSubject(expandedSubject === s.name ? null : s.name)}>
-                          <td className="text-center">{expandedSubject === s.name ? '▼' : '▶'}</td>
-                          <td style={{ fontWeight: 500 }}>{s.name}</td>
-                          <td>{s.mean}%</td>
-                          <td>{s.median}%</td>
-                          <td style={{ color: 'var(--color-success)' }}>{s.highest}%</td>
-                          <td style={{ color: 'var(--color-danger)' }}>{s.lowest}%</td>
-                          <td>{s.passRate}%</td>
-                          <td>{s.studentCount}</td>
-                          <td>
-                            <span className={`badge ${s.passRate >= 85 ? 'badge-success' : s.passRate >= 70 ? 'badge-warning' : 'badge-danger'}`}>
-                              {s.passRate >= 85 ? 'Strong' : s.passRate >= 70 ? 'Average' : 'At Risk'}
+                        <tr
+                          onClick={() => setExpandedSubject(expandedSubject === s.name ? null : s.name)}
+                          style={{
+                            cursor: 'pointer',
+                            borderBottom: '1px solid var(--border)',
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in oklch, var(--foreground) 3%, transparent)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <td style={{ textAlign: 'center', padding: '10px 8px', fontSize: 10, color: 'var(--color-border-subtle)' }}>
+                            {expandedSubject === s.name ? '▼' : '▶'}
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>{s.name}</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 700, color: 'var(--foreground)' }}>{s.mean}%</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--muted-foreground)' }}>{s.median}%</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: 'var(--color-success)' }}>{s.highest}%</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: 'var(--color-danger)' }}>{s.lowest}%</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600 }}>{s.passRate}%</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--muted-foreground)' }}>{s.studentCount}</td>
+                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 10px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: statusBg(s.mean),
+                              color: statusColor(s.mean),
+                            }}>
+                              {statusLabel(s.mean)}
                             </span>
                           </td>
                         </tr>
                         {expandedSubject === s.name && (
                           <tr>
-                            <td colSpan={9} className="p-0">
-                              <div style={{ background: 'var(--color-surface-raised)', padding: 'var(--space-3)', borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
-                                <div className="overflow-x-auto -mx-3">
-                                  <table className="w-full min-w-[400px] text-sm" style={{ borderCollapse: 'collapse' }}>
+                            <td colSpan={9} style={{ padding: 0 }}>
+                              <div style={{
+                                background: 'color-mix(in oklch, var(--foreground) 3%, transparent)',
+                                padding: '14px 20px',
+                                borderBottom: '1px solid var(--border)',
+                              }}>
+                                <div style={{ overflowX: 'auto' }}>
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
-                                      <tr style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        <th className="text-left p-2">#</th>
-                                        <th className="text-left p-2">Student</th>
-                                        <th className="text-left p-2">Adm No</th>
-                                        <th className="text-center p-2">Score</th>
-                                        <th className="text-center p-2">Grade</th>
+                                      <tr style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>#</th>
+                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Student</th>
+                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Adm No</th>
+                                        <th style={{ textAlign: 'center', padding: '6px 10px' }}>Score</th>
+                                        <th style={{ textAlign: 'center', padding: '6px 10px' }}>Grade</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {s.students.map((st, idx) => (
-                                        <tr key={idx} className="border-b border-border">
-                                          <td className="p-2 text-muted-foreground">{idx + 1}</td>
-                                          <td className="p-2 font-medium">{st.studentName}</td>
-                                          <td className="p-2 text-muted-foreground">{st.admissionNumber}</td>
-                                          <td className="p-2 text-center font-semibold">{Math.round(st.percentage)}%</td>
-                                          <td className="p-2 text-center">{st.gradeSymbol}</td>
+                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                                          <td style={{ padding: '6px 10px', color: 'var(--muted-foreground)' }}>{idx + 1}</td>
+                                          <td style={{ padding: '6px 10px', fontWeight: 500, color: 'var(--foreground)' }}>{st.studentName}</td>
+                                          <td style={{ padding: '6px 10px', color: 'var(--muted-foreground)' }}>{st.admissionNumber}</td>
+                                          <td style={{ textAlign: 'center', padding: '6px 10px', fontWeight: 700, color: 'var(--foreground)' }}>{Math.round(st.percentage)}%</td>
+                                          <td style={{ textAlign: 'center', padding: '6px 10px' }}>
+                                            <span style={{
+                                              display: 'inline-block',
+                                              padding: '2px 8px',
+                                              borderRadius: 5,
+                                              fontSize: 12,
+                                              fontWeight: 700,
+                                              background: st.percentage >= 70 ? 'color-mix(in oklch, var(--color-success) 10%, transparent)' : st.percentage >= 50 ? 'color-mix(in oklch, var(--color-warning) 10%, transparent)' : 'color-mix(in oklch, var(--color-danger) 10%, transparent)',
+                                              color: st.percentage >= 70 ? 'var(--color-success)' : st.percentage >= 50 ? 'var(--color-warning)' : 'var(--color-danger)',
+                                            }}>
+                                              {st.gradeSymbol}
+                                            </span>
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>
@@ -288,10 +522,30 @@ export default function AnalyticsPage() {
           )}
         </>
       ) : (
-        <div className="card p-12 text-center text-muted-foreground">
-          <img src="https://em-content.zobj.net/source/apple/354/bar-chart_1f4ca.png" alt="Analytics" className="mb-4" style={{ width: 48, height: 48, objectFit: 'contain' }} />
-          <p>No mark data available for this selection.</p>
-          <p className="text-sm mt-2">Enter marks for exams to see performance analytics here.</p>
+        <div style={{
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          padding: '48px 24px',
+          textAlign: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <div style={{
+            width: 56,
+            height: 56,
+            borderRadius: 14,
+            background: 'color-mix(in oklch, var(--foreground) 5%, transparent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+          </div>
+          <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--foreground)', margin: 0 }}>No mark data available</p>
+          <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: 0 }}>Enter marks for exams to see performance analytics here.</p>
         </div>
       )}
     </div>

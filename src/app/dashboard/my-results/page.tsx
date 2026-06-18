@@ -229,8 +229,7 @@ export default function MyResultsPage() {
             {/* Performance Trend Chart */}
             {trendData.length > 1 && (
                 <PerformanceTrendChart
-                    data={trendData.map(d => ({ examName: d.examName, 'My Average': d.percentage }))}
-                    subjects={['My Average']}
+                    data={trendData.map(d => ({ examName: d.examName, average: d.percentage }))}
                 />
             )}
 

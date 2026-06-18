@@ -23,7 +23,7 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
               const newSubj = [...entries]; newSubj[i].subject_id = e.target.value; setEntries(newSubj);
             }}>
               <option value="">-- Subject --</option>
-              {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+              {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} {sub.code ? `(${sub.code})` : ''}</option>)}
             </select>
           </div>
           <div className="flex-1">

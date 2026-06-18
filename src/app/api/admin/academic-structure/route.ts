@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
 
         // Global/shared data (curriculum)
         const [levelsRes, gradesRes] = await Promise.all([
-            supabaseAdmin.from('academic_levels').select('id, code, name').order('code'),
-            supabaseAdmin.from('grades').select('id, name_display, code, academic_level_id, numeric_order').order('numeric_order'),
+            supabaseAdmin.from('academic_levels').select('*').order('code'),
+            supabaseAdmin.from('grades').select('*').order('numeric_order'),
         ]);
 
         // School-scoped data — filter by school_id
@@ -83,10 +83,10 @@ export async function GET(request: NextRequest) {
 
         if (schoolId) {
             const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, gscRes] = await Promise.all([
-                supabaseAdmin.from('academic_years').select('id, name, start_date, end_date').eq('school_id', schoolId).order('start_date', { ascending: false }),
-                supabaseAdmin.from('terms').select('id, name, academic_year_id, start_date, end_date, is_current').eq('school_id', schoolId).order('start_date'),
-                supabaseAdmin.from('grade_streams').select('id, name, full_name, grade_id, school_id').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('id, name, code, academic_level_id, grading_system_id, category, subject_type').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from('academic_years').select('*').eq('school_id', schoolId).order('start_date', { ascending: false }),
+                supabaseAdmin.from('terms').select('*').eq('school_id', schoolId).order('start_date'),
+                supabaseAdmin.from('grade_streams').select('*').eq('school_id', schoolId).order('name'),
+                supabaseAdmin.from('subjects').select('*').eq('school_id', schoolId).order('display_order'),
                 supabaseAdmin.from('grading_systems').select('*').order('name'),
                 supabaseAdmin.from('grading_scales').select('*').order('order_index'),
             ]);

@@ -19,7 +19,7 @@ export interface UserRow {
 
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
 export interface AcademicLevelOption { id: string; code: string; name: string; }
-export interface SubjectOption { id: string; name: string; }
+export interface SubjectOption { id: string; name: string; code: string; }
 export interface GradeOption { id: string; name_display: string; }
 
 export function useUsersPage() {
@@ -99,14 +99,17 @@ export function useUsersPage() {
         fetch('/api/admin/academic-structure', { cache: 'no-store' }),
       ]);
       const [gsJson, structureJson] = await Promise.all([gsRes.json(), structureRes.json()]);
-      if (gsRes.ok) setGradeStreams(gsJson.data || []);
-      if (structureRes.ok) {
-        setAcademicLevels(structureJson.academic_levels || []);
-        setSubjects(structureJson.subjects || []);
-        setGrades(structureJson.grades || []);
-      }
-    } catch (err) {
+      
+      if (!gsRes.ok) throw new Error(gsJson.error || 'Failed to fetch grade streams');
+      if (!structureRes.ok) throw new Error(structureJson.error || 'Failed to fetch academic structure');
+
+      setGradeStreams(gsJson.data || []);
+      setAcademicLevels(structureJson.academic_levels || []);
+      setSubjects(structureJson.subjects || []);
+      setGrades(structureJson.grades || []);
+    } catch (err: any) {
       console.error('Failed to load dropdown data', err);
+      setFormError(err.message || 'Failed to load dropdown data');
     }
   }, []);
 
@@ -163,8 +166,9 @@ export function useUsersPage() {
     setEditingUser(user); setEditFirstName(user.first_name); setEditLastName(user.last_name);
     setEditPhone(user.phone || ''); setEditRole(user.role); setEditIsActive(user.is_active);
     setEditClassTeacherStreamId(''); setEditSubjectTeacherSubjects([]);
+    setFormError('');
     try { await fetchDropdowns(); } catch (err) { console.error('Failed to load dropdowns', err); }
-    setShowEditModal(true); setFormError('');
+    setShowEditModal(true);
     if (user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER') {
       try {
         const res = await fetch(`/api/admin/user-assignments?user_id=${user.id}`, { cache: 'no-store' });
