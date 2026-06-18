@@ -106,9 +106,9 @@ export async function POST(request: NextRequest) {
 
     const { userId, schoolId, role } = auth;
 
-    // Only admins and teachers can create exams
-    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Only admins can create exams (teachers just enter marks)
+    if (role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden. Only administrators can create new exams.' }, { status: 403 });
     }
 
     if (!schoolId) {

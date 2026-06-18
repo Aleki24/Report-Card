@@ -317,42 +317,20 @@ export async function GET(request: NextRequest) {
         // Returns subjects assigned to the current user
         const perms = await getTeacherPermissions(auth.userId);
         
-        let subjectIds = new Set<string>();
-
-        // 1. Add subjects from subject teacher assignments
-        perms.subjectTeacherAssignments.forEach(a => {
-          if (a.subject_id) subjectIds.add(a.subject_id);
-        });
-
-        // 2. Add subjects for the class teacher's classes
-        if (perms.isClassTeacher) {
-          // If they are a class teacher, they should have access to ALL subjects for their class's academic level
-          const { data: grades } = await supabase
-            .from('grades')
-            .select('id, academic_level_id')
-            .in('id', perms.classTeacherGrades);
-            
-          if (grades && grades.length > 0) {
-            const levelIds = [...new Set(grades.map(g => g.academic_level_id))];
-            const { data: classSubjects } = await supabase
-              .from('subjects')
-              .select('id')
-              .in('academic_level_id', levelIds);
-              
-            if (classSubjects) {
-              classSubjects.forEach(s => subjectIds.add(s.id));
-            }
-          }
+        if (perms.subjectTeacherAssignments.length === 0) {
+          return NextResponse.json({ data: [] });
         }
 
-        if (subjectIds.size === 0) {
+        // Get subject IDs from assignments
+        const subjectIds = [...new Set(perms.subjectTeacherAssignments.map(a => a.subject_id))];
+        if (subjectIds.length === 0) {
           return NextResponse.json({ data: [] });
         }
 
         const { data, error } = await supabase
           .from('subjects')
           .select('id, code, name, academic_level_id, category, display_order')
-          .in('id', Array.from(subjectIds))
+          .in('id', subjectIds)
           .order('display_order');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });

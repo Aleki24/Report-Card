@@ -59,7 +59,7 @@ export function MarksSetupTab() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/admin/academic-structure');
+        const res = await fetch('/api/admin/academic-structure', { cache: 'no-store' });
         const data = await res.json();
         if (data.academic_levels) setAcademicLevels(data.academic_levels);
         if (data.grades) setAllGrades(data.grades);
@@ -73,7 +73,7 @@ export function MarksSetupTab() {
     if (profile?.role === 'ADMIN') { setLoadingMySubjects(false); return; }
     (async () => {
       try {
-        const res = await fetch('/api/school/data?type=my_subjects');
+        const res = await fetch('/api/school/data?type=my_subjects', { cache: 'no-store' });
         const json = await res.json();
         setMySubjects(json.data || []);
       } catch (err) { console.error('Failed to fetch my subjects:', err); }
@@ -85,7 +85,7 @@ export function MarksSetupTab() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/school/data?type=terms');
+        const res = await fetch('/api/school/data?type=terms', { cache: 'no-store' });
         const json = await res.json();
         const termList: Term[] = json.data || [];
         setTerms(termList);
@@ -103,7 +103,7 @@ export function MarksSetupTab() {
     if (!termId) { setExams([]); return; }
     setLoadingExams(true);
     try {
-      const res = await fetch(`/api/school/exams?term_id=${termId}`);
+      const res = await fetch(`/api/school/exams?term_id=${termId}`, { cache: 'no-store' });
       const json = await res.json();
       setExams(json.data || []);
     } catch (err) { console.error('Failed to fetch exams:', err); }
@@ -150,10 +150,9 @@ export function MarksSetupTab() {
   const subjectMap = new Map<string, ExamSlot>();
   filteredExamsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
 
-  // Also add teacher's assigned subjects that match the selected level
-  const myFilteredSubjects = selectedLevelId
-    ? mySubjects.filter(s => s.academic_level_id === selectedLevelId)
-    : mySubjects;
+  // Always show all teacher's assigned subjects in "My Subjects" regardless of level filter
+  // since a subject's default level might not match the grade the teacher is assigned to teach
+  const myFilteredSubjects = mySubjects;
   for (const ms of myFilteredSubjects) {
     if (!subjectMap.has(ms.id)) {
       subjectMap.set(ms.id, {
@@ -187,11 +186,11 @@ export function MarksSetupTab() {
 
 
   useEffect(() => {
-    // If the selected subject changes, auto-set level to match the subject's academic level and clear exam
+    // If the selected subject changes, clear the selected exam ID.
+    // We intentionally DO NOT auto-set the level here, because a subject might have a default
+    // level (e.g. Primary) but the teacher is assigned to teach it in a different level (e.g. Secondary).
     setSelectedExamId('');
-    const subj = allSubjects.find(s => s.id === selectedSubjectId);
-    setSelectedLevelId(subj?.academic_level_id || '');
-  }, [selectedSubjectId, allSubjects]);
+  }, [selectedSubjectId, allSubjects]); // allSubjects kept purely to prevent React hot-reload crash
 
   useEffect(() => {
     // If the level changes, clear the selected exam ID
@@ -296,15 +295,7 @@ export function MarksSetupTab() {
                       Enter Marks
                     </button>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setCreateSubjectId(sub.id);
-                        setShowCreateModal(true);
-                      }}
-                      className="btn-secondary text-[10px] px-2 py-1"
-                    >
-                      + Create Exam
-                    </button>
+                    <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
                   )}
                 </div>
               );
@@ -429,17 +420,17 @@ export function MarksSetupTab() {
                   >
                     {seeding ? 'Syncing...' : '🔄 Sync Missing'}
                   </button>
+
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-1 hover:text-white"
+                    style={{ background: 'var(--color-surface-raised)', border: '1px dashed rgba(99,102,241,0.5)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                    title="Manually create a single spontaneous exam (e.g. for a specific class)"
+                  >
+                    + Single Exam
+                  </button>
                 </>
               )}
-              
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-1 hover:text-white"
-                style={{ background: 'var(--color-surface-raised)', border: '1px dashed rgba(99,102,241,0.5)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-                title="Manually create a single spontaneous exam (e.g. for a specific class)"
-              >
-                + Single Exam
-              </button>
             </div>
           ) : null}
 
@@ -537,13 +528,15 @@ export function MarksSetupTab() {
                       >
                         Select & Enter Marks
                       </button>
-                    ) : (
+                    ) : profile?.role === 'ADMIN' ? (
                       <button
                         onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
                         className="btn-secondary text-[10px] px-2 py-1"
                       >
                         + Create Exam
                       </button>
+                    ) : (
+                      <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
                     )}
                   </div>
                 );

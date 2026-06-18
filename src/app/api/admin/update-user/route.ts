@@ -186,7 +186,11 @@ export async function PUT(request: NextRequest) {
                         academic_year_id: currentYear.id,
                     }));
 
-                    await supabase.from('subject_teacher_assignments').insert(assignments);
+                    const { error: insertError } = await supabase.from('subject_teacher_assignments').insert(assignments);
+                    if (insertError) {
+                        console.error('Failed to insert subject assignments:', insertError);
+                        return NextResponse.json({ error: 'Failed to assign subjects: ' + insertError.message }, { status: 400 });
+                    }
                 }
             } else if (stRecord && !is_also_subject_teacher) {
                 // No subjects left and not flagged as "also subject teacher" — clean up

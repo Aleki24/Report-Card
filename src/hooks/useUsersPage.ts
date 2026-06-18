@@ -83,7 +83,7 @@ export function useUsersPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/school/data?type=users');
+      const res = await fetch('/api/school/data?type=users', { cache: 'no-store' });
       const json = await res.json();
       setUsers(json.data || []);
     } catch (err) { console.error('Failed to fetch users data:', err); }
@@ -167,7 +167,7 @@ export function useUsersPage() {
     setShowEditModal(true); setFormError('');
     if (user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER') {
       try {
-        const res = await fetch(`/api/admin/user-assignments?user_id=${user.id}`);
+        const res = await fetch(`/api/admin/user-assignments?user_id=${user.id}`, { cache: 'no-store' });
         const data = await res.json();
         if (res.ok) {
           if (data.class_teacher) setEditClassTeacherStreamId(data.class_teacher.grade_stream_id);
