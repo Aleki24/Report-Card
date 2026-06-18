@@ -15,15 +15,19 @@ interface MobileMoreMenuProps {
     toggleTheme: () => void;
     onSignOut: () => void;
     role: UserRole | null;
+    baseRole: UserRole | null;
     availableRoles: UserRole[];
     switchRole: (role: UserRole) => Promise<void>;
 }
 
 export function MobileMoreMenu({
     showMoreMenu, setShowMoreMenu, overflowItems, pathname,
-    theme, toggleTheme, onSignOut, role, availableRoles, switchRole,
+    theme, toggleTheme, onSignOut, role, baseRole, availableRoles, switchRole,
 }: MobileMoreMenuProps) {
     if (!showMoreMenu) return null;
+
+    const showRoleSwitcher = availableRoles.length > 1 && 
+        (baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER');
 
     return (
         <div
@@ -72,7 +76,7 @@ export function MobileMoreMenu({
                     );
                 })}
 
-                {availableRoles.length > 1 && (
+                {showRoleSwitcher && (
                     <div style={{ padding: '8px 0' }}>
                         <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0 8px 0' }} />
                         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 16px', marginBottom: '8px' }}>

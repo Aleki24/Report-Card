@@ -10,7 +10,6 @@ export async function GET() {
         }
 
         const supabase = createSupabaseAdmin();
-        const availableRoles = new Set<string>();
 
         const { data: userProfile } = await supabase
             .from('users')
@@ -22,8 +21,17 @@ export async function GET() {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        const currentRole = userProfile.role;
+        const baseRole = userProfile.role;
         const schoolId = userProfile.school_id;
+
+        // Only CLASS_TEACHER and SUBJECT_TEACHER can switch roles
+        // ADMIN and STUDENT never see the role switcher
+        if (baseRole !== 'CLASS_TEACHER' && baseRole !== 'SUBJECT_TEACHER') {
+            return NextResponse.json({
+                roles: [baseRole],
+                baseRole,
+            });
+        }
 
         // Get current academic year
         let currentYearId: string | null = null;
@@ -37,45 +45,43 @@ export async function GET() {
                 .maybeSingle();
             currentYearId = currentYear?.id ?? null;
         }
+
+        const availableRoles = new Set<string>();
+
+        // Always include the user's base role so they can switch back
+        availableRoles.add(baseRole);
+
+        // Check if they are a class teacher (for current academic year)
+        let classQuery = supabase
+            .from('class_teachers')
+            .select('id')
+            .eq('user_id', userId);
         
-        if (currentRole === 'CLASS_TEACHER' || currentRole === 'SUBJECT_TEACHER') {
-            // Add current role
-            availableRoles.add(currentRole);
+        if (currentYearId) {
+            classQuery = classQuery.eq('academic_year_id', currentYearId);
+        }
 
-            // Check if they are a class teacher (for current academic year)
-            let classQuery = supabase
-                .from('class_teachers')
-                .select('id')
-                .eq('user_id', userId);
-            
-            if (currentYearId) {
-                classQuery = classQuery.eq('academic_year_id', currentYearId);
-            }
+        const { data: classAssigned } = await classQuery.limit(1).maybeSingle();
 
-            const { data: classAssigned } = await classQuery.limit(1).maybeSingle();
+        if (classAssigned) {
+            availableRoles.add('CLASS_TEACHER');
+        }
 
-            if (classAssigned) {
-                availableRoles.add('CLASS_TEACHER');
-            }
+        // Check if they are a subject teacher
+        const { data: subjectAssigned } = await supabase
+            .from('subject_teachers')
+            .select('id')
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
 
-            // Check if they are a subject teacher (they should have subject_teachers record)
-            const { data: subjectAssigned } = await supabase
-                .from('subject_teachers')
-                .select('id')
-                .eq('user_id', userId)
-                .limit(1)
-                .maybeSingle();
-
-            if (subjectAssigned) {
-                availableRoles.add('SUBJECT_TEACHER');
-            }
-        } else {
-            // Admins and students
-            availableRoles.add(currentRole);
+        if (subjectAssigned) {
+            availableRoles.add('SUBJECT_TEACHER');
         }
 
         return NextResponse.json({
-            roles: Array.from(availableRoles)
+            roles: Array.from(availableRoles),
+            baseRole,
         });
 
     } catch (error: any) {

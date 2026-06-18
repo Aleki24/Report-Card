@@ -160,6 +160,12 @@ export function isStreamVisibleToTeacher(stream: any, perms: TeacherPermissions)
 }
 
 export function isSubjectVisibleToTeacher(subject: any, perms: TeacherPermissions) {
+  // Class teachers (who are NOT also subject teachers): see all subjects
+  // since they need to view student performance across all subjects
+  if (perms.isClassTeacher) {
+    return true;
+  }
+
   // Subject teachers: only see their assigned subjects
   if (perms.isSubjectTeacher) {
     if (perms.subjectTeacherAssignments.some(a => a.subject_id === subject.id)) {
@@ -167,13 +173,5 @@ export function isSubjectVisibleToTeacher(subject: any, perms: TeacherPermission
     }
   }
 
-  // Class teachers (who are NOT also subject teachers): see all subjects
-  // since they need to view student performance across all subjects
-  if (perms.isClassTeacher && !perms.isSubjectTeacher) {
-    return true;
-  }
-
-  // If both class teacher and subject teacher, the subject teacher check above
-  // already handles filtering to assigned subjects
   return false;
 }

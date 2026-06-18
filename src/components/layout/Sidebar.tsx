@@ -96,6 +96,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const {
         profile,
         role,
+        baseRole,
         availableRoles,
         switchRole,
         schoolName,
@@ -559,6 +560,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     <DesktopUserMenu
                         profile={profile}
                         role={role}
+                        baseRole={baseRole}
                         availableRoles={availableRoles}
                         collapsed={collapsed}
                         showUserMenu={showUserMenu}
@@ -741,6 +743,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 toggleTheme={toggleTheme}
                 onSignOut={handleSignOut}
                 role={role}
+                baseRole={baseRole}
                 availableRoles={availableRoles}
                 switchRole={switchRole}
             />

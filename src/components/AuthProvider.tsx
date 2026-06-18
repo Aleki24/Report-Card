@@ -19,7 +19,10 @@ export type { UserRole };
 interface AuthContextType {
     user: { id: string; email: string } | null;
     profile: UserProfile | null;
+    /** The effective role (active_role if switching, otherwise base role) */
     role: UserRole | null;
+    /** The user's original/base role from the database (never changes on switch) */
+    baseRole: UserRole | null;
     availableRoles: UserRole[];
     schoolName: string | null;
     schoolOnboardingCompleted: boolean | null;
@@ -34,16 +37,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEFAULT_ROLES: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
 
-async function fetchRoles(): Promise<UserRole[]> {
+async function fetchRoles(): Promise<{ roles: UserRole[]; baseRole: UserRole | null }> {
     try {
         const res = await fetch('/api/auth/available-roles');
-        if (!res.ok) return DEFAULT_ROLES;
+        if (!res.ok) return { roles: DEFAULT_ROLES, baseRole: null };
         const data = await res.json();
-        if (!data.roles) return DEFAULT_ROLES;
+        if (!data.roles) return { roles: DEFAULT_ROLES, baseRole: null };
         const valid = data.roles.filter((r: string) => DEFAULT_ROLES.includes(r as UserRole));
-        return valid.length > 0 ? valid : DEFAULT_ROLES;
+        return {
+            roles: valid.length > 0 ? valid : DEFAULT_ROLES,
+            baseRole: data.baseRole || null,
+        };
     } catch {
-        return DEFAULT_ROLES;
+        return { roles: DEFAULT_ROLES, baseRole: null };
     }
 }
 
@@ -56,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [schoolName, setSchoolName] = useState<string | null>(null);
     const [schoolOnboardingCompleted, setSchoolOnboardingCompleted] = useState<boolean | null>(null);
     const [availableRoles, setAvailableRoles] = useState<UserRole[]>(DEFAULT_ROLES);
+    const [baseRole, setBaseRole] = useState<UserRole | null>(null);
     const [devRoleOverride, setDevRoleOverride] = useState<UserRole | null>(null);
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
 
@@ -72,19 +79,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const clerkEmail = clerkUser?.emailAddresses?.[0]?.emailAddress || '';
         const clerkFirstName = clerkUser?.firstName || '';
         const clerkLastName = clerkUser?.lastName || '';
-        const clerkRole = ((clerkUser?.publicMetadata as any)?.role as UserRole) || 'ADMIN';
+        const metadata = (clerkUser?.publicMetadata as any) || {};
+        // Base role from Clerk metadata (synced from DB)
+        const clerkBaseRole = (metadata.role as UserRole) || 'ADMIN';
+        // Active role from Clerk metadata (set by role switching)
+        const clerkActiveRole = (metadata.active_role as UserRole) || null;
+        // Effective role: active_role overrides base role when switching
+        const effectiveRole = clerkActiveRole || clerkBaseRole;
 
         const fallback: UserProfile = {
             id: userId,
             first_name: clerkFirstName,
             last_name: clerkLastName,
             email: clerkEmail,
-            role: clerkRole,
+            role: effectiveRole,
             is_active: true,
-            school_id: (clerkUser?.publicMetadata as any)?.school_id || (clerkUser?.publicMetadata as any)?.schoolId || null,
+            school_id: metadata.school_id || metadata.schoolId || null,
         };
 
         setProfile(fallback);
+        setBaseRole(clerkBaseRole);
 
         fetch('/api/auth/me')
             .then(res => {
@@ -95,15 +109,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (data.error) return;
                 const u = data.profile || data.user;
                 if (u) {
+                    // The DB role is the base role; effective role may differ if active_role is set
+                    const dbBaseRole = u.role || clerkBaseRole;
+                    const activeRole = data.activeRole || clerkActiveRole;
+                    const effective = activeRole || dbBaseRole;
+
                     setProfile({
                         id: u.id || userId,
                         first_name: u.first_name || clerkFirstName,
                         last_name: u.last_name || clerkLastName,
                         email: u.email || clerkEmail,
-                        role: u.role || clerkRole,
+                        role: effective,
                         is_active: u.is_active ?? true,
                         school_id: u.school_id || null,
                     });
+                    setBaseRole(dbBaseRole);
                 }
                 if (data.schoolName) setSchoolName(data.schoolName);
                 if (data.schoolOnboardingCompleted !== undefined) setSchoolOnboardingCompleted(data.schoolOnboardingCompleted);
@@ -115,7 +135,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [isUserLoaded, userId, clerkUser?.emailAddresses, clerkUser?.firstName, clerkUser?.lastName]);
 
     useEffect(() => {
-        fetchRoles().then(setAvailableRoles);
+        fetchRoles().then(({ roles, baseRole: br }) => {
+            setAvailableRoles(roles);
+            if (br) setBaseRole(br);
+        });
     }, []);
 
     const value = useMemo<AuthContextType>(() => ({
@@ -124,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : null,
         profile,
         role: devRoleOverride || profile?.role || null,
+        baseRole,
         availableRoles,
         schoolName,
         schoolOnboardingCompleted,
@@ -140,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         devRoleOverride,
         setDevRoleOverride,
-    }), [userId, clerkUser, profile, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
+    }), [userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
 
     return (
         <AuthContext.Provider value={value}>

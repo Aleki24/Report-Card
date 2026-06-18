@@ -89,12 +89,16 @@ export async function GET() {
       schoolOnboardingCompleted = school?.onboarding_completed || false;
     }
 
+    // Get active_role from Clerk metadata (set by role switching)
+    const activeRole = (user?.publicMetadata as any)?.active_role || null;
+
     return NextResponse.json({
       profile: dbUser,
       user: dbUser, // backwards compatibility
       schoolName,
       schoolOnboardingCompleted,
       email: user?.emailAddresses[0]?.emailAddress || dbUser.email,
+      activeRole,
     });
   } catch (err: any) {
     console.error('[/api/auth/me] Error:', err);

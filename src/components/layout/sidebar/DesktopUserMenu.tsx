@@ -7,6 +7,7 @@ import { roleBadgeColors } from './navItems';
 interface DesktopUserMenuProps {
     profile: { id: string; first_name: string; last_name: string; email?: string | null; role: UserRole };
     role: UserRole | null;
+    baseRole: UserRole | null;
     availableRoles: UserRole[];
     collapsed: boolean;
     showUserMenu: boolean;
@@ -16,9 +17,14 @@ interface DesktopUserMenuProps {
 }
 
 export function DesktopUserMenu({
-    profile, role, availableRoles, collapsed,
+    profile, role, baseRole, availableRoles, collapsed,
     showUserMenu, setShowUserMenu, switchRole, onSignOut
 }: DesktopUserMenuProps) {
+    // Only show role switcher for CLASS_TEACHER / SUBJECT_TEACHER base roles
+    // who have more than one available role
+    const showRoleSwitcher = availableRoles.length > 1 && 
+        (baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER');
+
     return (
         <div style={{ position: 'relative', padding: '0 var(--space-4)', marginBottom: 'var(--space-2)' }}>
             {/* Dropdown menu */}
@@ -53,8 +59,8 @@ export function DesktopUserMenu({
 
                         <div style={{ height: 1, background: 'var(--color-border)', margin: 'var(--space-2) 0' }} />
 
-                        {/* Role Switcher */}
-                        {availableRoles.length > 1 && (
+                        {/* Role Switcher — only for teachers with dual roles */}
+                        {showRoleSwitcher && (
                             <div style={{ padding: '0 0 var(--space-2) 0' }}>
                                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 var(--space-3)', marginBottom: 'var(--space-2)' }}>
                                     Switch Role
