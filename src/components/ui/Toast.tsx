@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -24,6 +25,20 @@ export function useToast() {
     return ctx;
 }
 
+const accentStyles: Record<ToastType, string> = {
+    success: 'border-emerald-500/40 [&_svg.toast-icon]:text-emerald-600 dark:[&_svg.toast-icon]:text-emerald-400',
+    error: 'border-red-500/40 [&_svg.toast-icon]:text-red-600 dark:[&_svg.toast-icon]:text-red-400',
+    warning: 'border-amber-500/40 [&_svg.toast-icon]:text-amber-600 dark:[&_svg.toast-icon]:text-amber-400',
+    info: 'border-blue-500/40 [&_svg.toast-icon]:text-blue-600 dark:[&_svg.toast-icon]:text-blue-400',
+};
+
+const typeIcons: Record<ToastType, React.ReactNode> = {
+    success: <CheckCircle2 className="toast-icon w-4.5 h-4.5 shrink-0 mt-0.5" aria-hidden="true" />,
+    error: <XCircle className="toast-icon w-4.5 h-4.5 shrink-0 mt-0.5" aria-hidden="true" />,
+    warning: <AlertTriangle className="toast-icon w-4.5 h-4.5 shrink-0 mt-0.5" aria-hidden="true" />,
+    info: <Info className="toast-icon w-4.5 h-4.5 shrink-0 mt-0.5" aria-hidden="true" />,
+};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
     const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -34,35 +49,35 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const showToast = useCallback((type: ToastType, message: string) => {
         const id = Math.random().toString(36).slice(2);
         setToasts(prev => [...prev, { id, type, message }]);
-        setTimeout(() => removeToast(id), 4000);
+        // Errors need more reading time than confirmations
+        setTimeout(() => removeToast(id), type === 'error' ? 7000 : 4000);
     }, [removeToast]);
 
     const showSuccess = useCallback((message: string) => showToast('success', message), [showToast]);
     const showError = useCallback((message: string) => showToast('error', message), [showToast]);
 
-    const typeStyles: Record<ToastType, string> = {
-        success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-        error: 'bg-red-500/10 text-red-400 border-red-500/30',
-        warning: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-        info: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-    };
-
     return (
         <ToastContext.Provider value={{ showToast, showSuccess, showError }}>
             {children}
-            <div className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 max-w-sm">
+            <div
+                className="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 w-[calc(100vw-2rem)] max-w-sm"
+                aria-live="polite"
+            >
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
-                        className={`p-4 rounded-md border text-sm ${typeStyles[toast.type]} animate-slide-in`}
+                        role={toast.type === 'error' ? 'alert' : 'status'}
+                        className={`p-3.5 rounded-lg border bg-card text-card-foreground text-sm shadow-lg ${accentStyles[toast.type]} animate-slide-in`}
                     >
                         <div className="flex items-start gap-3">
-                            <span>{toast.message}</span>
+                            {typeIcons[toast.type]}
+                            <span className="flex-1 leading-snug">{toast.message}</span>
                             <button
                                 onClick={() => removeToast(toast.id)}
-                                className="opacity-60 hover:opacity-100"
+                                className="shrink-0 p-0.5 rounded opacity-60 hover:opacity-100 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label="Dismiss notification"
                             >
-                                ×
+                                <X className="w-4 h-4" aria-hidden="true" />
                             </button>
                         </div>
                     </div>
@@ -79,19 +94,21 @@ interface AlertBannerProps {
 }
 
 export function AlertBanner({ type, message, onDismiss }: AlertBannerProps) {
-    const typeStyles: Record<ToastType, string> = {
-        success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-        error: 'bg-red-500/10 text-red-400 border-red-500/30',
-        warning: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-        info: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    const bannerStyles: Record<ToastType, string> = {
+        success: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+        error: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
+        warning: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
+        info: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
     };
 
     return (
-        <div className={`p-3 rounded-md border text-sm ${typeStyles[type]}`}>
+        <div role={type === 'error' ? 'alert' : 'status'} className={`p-3 rounded-md border text-sm ${bannerStyles[type]}`}>
             <div className="flex items-center justify-between gap-3">
                 <span>{message}</span>
                 {onDismiss && (
-                    <button onClick={onDismiss} className="opacity-60 hover:opacity-100">×</button>
+                    <button onClick={onDismiss} className="opacity-60 hover:opacity-100" aria-label="Dismiss">
+                        <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
                 )}
             </div>
         </div>

@@ -19,6 +19,7 @@ export function Spinner({ size = 'md', className = '' }: SpinnerProps) {
             className={`animate-spin ${sizeClasses[size]} ${className}`}
             viewBox="0 0 24 24"
             fill="none"
+            aria-hidden="true"
         >
             <circle
                 className="opacity-25"
@@ -39,8 +40,8 @@ export function Spinner({ size = 'md', className = '' }: SpinnerProps) {
 
 export function LoadingScreen({ message = 'Loading...' }: { message?: string }) {
     return (
-        <div className="flex flex-col items-center justify-center gap-4 py-12">
-            <Spinner size="lg" />
+        <div role="status" className="flex flex-col items-center justify-center gap-4 py-12">
+            <Spinner size="lg" className="text-primary" />
             <p className="text-muted-foreground">{message}</p>
         </div>
     );
@@ -49,8 +50,8 @@ export function LoadingScreen({ message = 'Loading...' }: { message?: string }) 
 export function LoadingOverlay({ show }: { show?: boolean }) {
     if (!show) return null;
     return (
-        <div className="absolute inset-0 bg-card/80 flex items-center justify-center z-50">
-            <Spinner size="lg" />
+        <div role="status" aria-label="Loading" className="absolute inset-0 bg-card/80 backdrop-blur-[2px] flex items-center justify-center z-50">
+            <Spinner size="lg" className="text-primary" />
         </div>
     );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef, useId } from 'react';
 
 interface ModalProps {
     isOpen: boolean;
@@ -18,39 +18,75 @@ const sizeClasses = {
     xl: 'max-w-4xl',
 };
 
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
-    const handleEscape = useCallback((e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
+    const panelRef = useRef<HTMLDivElement>(null);
+    const mouseDownOnBackdrop = useRef(false);
+    const titleId = useId();
+
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            onClose();
+            return;
+        }
+        if (e.key === 'Tab' && panelRef.current) {
+            const focusable = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = document.activeElement;
+            if (e.shiftKey && (active === first || active === panelRef.current)) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && active === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
     }, [onClose]);
 
     useEffect(() => {
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'hidden';
-        }
+        if (!isOpen) return;
+        const previouslyFocused = document.activeElement as HTMLElement | null;
+        document.addEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = 'hidden';
+        // Focus the first field in the modal, falling back to the panel itself
+        const focusable = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+        (focusable && focusable.length > 1 ? focusable[1] : panelRef.current)?.focus();
         return () => {
-            document.removeEventListener('keydown', handleEscape);
+            document.removeEventListener('keydown', handleKeyDown);
             document.body.style.overflow = '';
+            previouslyFocused?.focus?.();
         };
-    }, [isOpen, handleEscape]);
+    }, [isOpen, handleKeyDown]);
 
     if (!isOpen) return null;
 
     return (
         <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-backdrop-in"
+            onMouseDown={e => { mouseDownOnBackdrop.current = e.target === e.currentTarget; }}
+            onClick={e => {
+                // Only close when the click started AND ended on the backdrop,
+                // so drag-selecting text inside the modal never dismisses it
+                if (e.target === e.currentTarget && mouseDownOnBackdrop.current) onClose();
+            }}
         >
             <div
-                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto animate-fade-in`}
-                onClick={e => e.stopPropagation()}
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto animate-modal-in outline-none`}
             >
                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">{title}</h2>
+                    <h2 id={titleId} className="text-lg font-bold font-[family-name:var(--font-display)]">{title}</h2>
                     <button
                         onClick={onClose}
-                        className="p-1 rounded hover:bg-muted transition-colors"
-                        aria-label="Close"
+                        className="p-1 rounded hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Close dialog"
                     >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
@@ -104,7 +140,17 @@ export function ConfirmDialog({
                 <button className="btn-secondary" onClick={onClose} disabled={loading}>
                     {cancelText}
                 </button>
-                <button className={`${confirmButtonClass} disabled:opacity-50`} onClick={onConfirm} disabled={loading}>
+                <button
+                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all disabled:opacity-50 disabled:pointer-events-none ${confirmButtonClass}`}
+                    onClick={onConfirm}
+                    disabled={loading}
+                >
+                    {loading && (
+                        <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                    )}
                     {loading ? 'Processing...' : confirmText}
                 </button>
             </div>
