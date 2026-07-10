@@ -155,6 +155,18 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Order chronologically so the "latest term" (used for summary stats below) is
+    // deterministic. groups come out in marks-insertion order otherwise. Sort by
+    // year name, then by the term number parsed from the term name.
+    const termNumber = (s: string) => {
+      const m = s.match(/(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    };
+    resultsArray.sort((a, b) => {
+      if (a.yearName !== b.yearName) return a.yearName.localeCompare(b.yearName);
+      return termNumber(a.term) - termNumber(b.term);
+    });
+
     // Step 5: Calculate stream position for each term (school-scoped)
     if (gradeStreamId) {
       // Get all classmates in same school

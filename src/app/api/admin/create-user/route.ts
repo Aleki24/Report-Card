@@ -35,6 +35,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Validate role is one of the allowed values (prevents arbitrary role strings)
+        const ALLOWED_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
+        if (!ALLOWED_ROLES.includes(role)) {
+            return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
+        }
+
         // Validate student-specific fields
         if (role === 'STUDENT' && (!admission_number || !grade_stream_id || !academic_level_id)) {
             return NextResponse.json(
@@ -60,6 +66,12 @@ export async function POST(request: NextRequest) {
         const canCreateUsers = adminProfile.role === 'ADMIN' || adminProfile.role === 'CLASS_TEACHER';
         if (!canCreateUsers) {
             return NextResponse.json({ error: 'Only admins and class teachers can create users.' }, { status: 403 });
+        }
+
+        // Class teachers may only create STUDENT accounts — never teachers or admins.
+        // (Only ADMINs can create privileged accounts.) Prevents privilege escalation.
+        if (adminProfile.role === 'CLASS_TEACHER' && role !== 'STUDENT') {
+            return NextResponse.json({ error: 'Class teachers can only add students.' }, { status: 403 });
         }
 
         // If class teacher, verify they're creating a student for their assigned stream

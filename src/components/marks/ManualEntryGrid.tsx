@@ -54,8 +54,12 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     // Grade scale options
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
 
-    // Grading scales for auto-grade
-    const [gradingScales, setGradingScales] = useState<{ symbol: string; min_percentage: number; max_percentage: number }[]>([]);
+    // Grading scales for auto-grade (tagged with the owning grading system)
+    const [gradingScales, setGradingScales] = useState<{ symbol: string; min_percentage: number; max_percentage: number; systemId: string }[]>([]);
+
+    // The grading system that applies to the selected exam (via its subject).
+    // Used to scope auto-grade resolution so a KCSE exam can't pick up a CBC symbol.
+    const [activeGradingSystemId, setActiveGradingSystemId] = useState<string | null>(null);
 
     // Entry rows
     const [rows, setRows] = useState<MarkRow[]>([emptyRow(), emptyRow(), emptyRow()]);
@@ -92,6 +96,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                 symbol: sc.symbol,
                                 label: sc.label || '',
                                 systemName: sys.name,
+                                systemId: sys.id,
                                 min_percentage: sc.min_percentage,
                                 max_percentage: sc.max_percentage,
                             });
@@ -107,6 +112,27 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         fetchGrades();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // ── Resolve the grading system for the selected exam ─
+    // The exam's subject determines which grading system (KCSE/CBC/…) applies,
+    // so auto-grade only matches scales from that system.
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            if (!examId) { if (!cancelled) setActiveGradingSystemId(null); return; }
+            try {
+                const res = await fetch('/api/school/data?type=exams');
+                const { data } = await res.json();
+                const exam = (data || []).find((e: { id: string; subjects?: { grading_system_id?: string } }) => e.id === examId);
+                const systemId = exam?.subjects?.grading_system_id ?? null;
+                if (!cancelled) setActiveGradingSystemId(systemId);
+            } catch (err) {
+                console.error('Failed to resolve exam grading system:', err);
+                if (!cancelled) setActiveGradingSystemId(null);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [examId]);
 
     // ── Reset grade & stream when level changes ──────────
     useEffect(() => { setSelectedGradeId(''); setSelectedStreamId(''); }, [selectedLevelId]);
@@ -176,7 +202,13 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         const num = parseFloat(scoreStr);
         if (!scoreStr || isNaN(num) || maxScore <= 0) return '';
         const pct = (num / maxScore) * 100;
-        for (const scale of gradingScales) {
+        // Only match scales from the exam's grading system. If it can't be
+        // determined, fall back to all scales rather than blocking auto-grade.
+        const scoped = activeGradingSystemId
+            ? gradingScales.filter(s => s.systemId === activeGradingSystemId)
+            : gradingScales;
+        const pool = scoped.length > 0 ? scoped : gradingScales;
+        for (const scale of pool) {
             if (pct >= scale.min_percentage && pct <= scale.max_percentage) {
                 return scale.symbol;
             }

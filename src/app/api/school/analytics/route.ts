@@ -19,8 +19,15 @@ export async function GET(request: NextRequest) {
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role;
 
-    if (!schoolId || !role || role === 'STUDENT') {
+    if (!schoolId || !role) {
       return NextResponse.json({ marks: [] });
+    }
+
+    // School-wide analytics is admin-only. Teachers see marks scoped to their
+    // assignments through the exam-marks / student-results routes instead; this
+    // endpoint returns every mark in the school, so restrict it to admins.
+    if (role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

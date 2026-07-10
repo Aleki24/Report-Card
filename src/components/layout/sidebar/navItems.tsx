@@ -23,7 +23,7 @@ export const navItems: NavItem[] = [
     { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: <BookOpen size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Exams & Marks', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <ClipboardList size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], icon: <CalendarCheck size={18} style={{ flexShrink: 0 }} /> },
-    { label: 'Analytics', href: '/dashboard/analytics', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <LineChart size={18} style={{ flexShrink: 0 }} /> },
+    { label: 'Analytics', href: '/dashboard/analytics', roles: adminRoles, icon: <LineChart size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: <UserCircle size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Settings', href: '/dashboard/settings', roles: adminRoles, icon: <Settings size={18} style={{ flexShrink: 0 }} /> },
     { label: 'Announcements', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: <Bell size={18} style={{ flexShrink: 0 }} /> },
