@@ -112,7 +112,6 @@ export async function POST(request: NextRequest) {
 
     } catch (err: unknown) {
         console.error('Google activation error:', err);
-        const message = err instanceof Error ? err.message : 'An unknown error occurred';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return NextResponse.json({ error: 'Activation failed. Please try again or contact your administrator.' }, { status: 500 });
     }
 }

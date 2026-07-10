@@ -88,7 +88,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, role, baseRole, activeRole });
   } catch (err: unknown) {
     console.error('[switch-role] Error:', err);
-    const message = err instanceof Error ? err.message : 'An unknown error occurred';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to switch role. Please try again.' }, { status: 500 });
   }
 }
