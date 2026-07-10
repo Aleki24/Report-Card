@@ -98,6 +98,27 @@ export const createUserSchema = z.object({
     school_id: z.string().uuid('Invalid school ID').optional(),
 });
 
+export const inviteUserSchema = z.object({
+    first_name: z.string().trim().min(1, 'First name is required').max(100),
+    last_name: z.string().trim().min(1, 'Last name is required').max(100),
+    phone: z.string().trim().min(1, 'Phone is required').max(20),
+    role: z.enum(['STUDENT', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'ADMIN']),
+    sequence_number: z.number().int().min(1).max(99999),
+    admission_number: z.string().trim().max(50).optional(),
+    grade_stream_id: z.string().uuid('Invalid stream ID').optional(),
+    academic_level_id: z.string().uuid('Invalid academic level ID').optional(),
+    class_teacher_grade_stream_id: z.string().uuid('Invalid stream ID').optional().nullable(),
+    subject_teacher_subjects: z.array(z.object({
+        subject_id: z.string().uuid('Invalid subject ID'),
+        grade_id: z.string().uuid('Invalid grade ID'),
+        grade_stream_id: z.string().uuid('Invalid stream ID').optional().nullable(),
+    })).optional(),
+    is_class_teacher: z.boolean().optional(),
+}).refine(
+    data => data.role !== 'STUDENT' || (data.admission_number && data.grade_stream_id && data.academic_level_id),
+    { message: 'Students require: admission_number, grade_stream_id, academic_level_id' }
+);
+
 export const pendingInviteSchema = z.object({
     first_name: z.string().min(1, 'First name is required').max(100),
     last_name: z.string().min(1, 'Last name is required').max(100),
