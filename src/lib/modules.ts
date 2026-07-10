@@ -89,7 +89,7 @@ export const modules: Module[] = [
       'The Student Management module centralizes all student information — from enrollment and biodata to class assignments and academic records. Track every learner\'s journey through your school.',
     icon: Users,
     featureHref: '/features/students',
-    dashboardHref: '/dashboard/students',
+    dashboardHref: '/dashboard/people',
     status: 'active',
     audience: ['admin', 'teacher'],
     features: [
@@ -126,7 +126,7 @@ export const modules: Module[] = [
       'The Teacher Management module helps administrators organize their teaching staff efficiently. Assign subjects, designate class teachers, and maintain comprehensive teacher profiles.',
     icon: GraduationCap,
     featureHref: '/features/teachers',
-    dashboardHref: '/dashboard/teachers',
+    dashboardHref: '/dashboard/people?tab=teachers',
     status: 'active',
     audience: ['admin'],
     features: [
@@ -237,7 +237,7 @@ export const modules: Module[] = [
       'The Exams & Marks module is the academic heart of Matokeo. Create exams, enter student marks efficiently, auto-calculate grades using your school\'s grading system, and feed results directly into report cards and analytics.',
     icon: ClipboardList,
     featureHref: '/features/exams',
-    dashboardHref: '/dashboard/exams',
+    dashboardHref: '/dashboard/exams-marks',
     status: 'active',
     audience: ['admin', 'teacher'],
     features: [
@@ -311,7 +311,7 @@ export const modules: Module[] = [
       'The Parents & Guardians module manages parent and guardian information, linking them to their children\'s records. This lays the foundation for parent portals, SMS alerts, fee tracking, and direct report card access.',
     icon: Heart,
     featureHref: '/features/parents',
-    dashboardHref: '/dashboard/parents',
+    dashboardHref: '/dashboard/people?tab=parents',
     status: 'active',
     audience: ['admin'],
     features: [

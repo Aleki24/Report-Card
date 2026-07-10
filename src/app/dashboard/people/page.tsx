@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
@@ -9,8 +10,20 @@ import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText
 type RoleTab = 'students' | 'teachers' | 'parents';
 
 export default function PeoplePage() {
+  return (
+    <Suspense fallback={<ContentSkeleton />}>
+      <PeoplePageInner />
+    </Suspense>
+  );
+}
+
+function PeoplePageInner() {
   const { role } = useAuth();
-  const [tab, setTab] = useState<RoleTab>('students');
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab');
+  const [tab, setTab] = useState<RoleTab>(
+    initialTab === 'teachers' || initialTab === 'parents' ? initialTab : 'students'
+  );
 
   const tabs = [
     { id: 'students' as const, label: 'Students', icon: <Users size={16} />, roles: ['ADMIN', 'CLASS_TEACHER'] as const },

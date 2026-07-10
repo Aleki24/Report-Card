@@ -70,7 +70,7 @@ function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] })
 
   if (exams.length === 0) {
     return (
-      <ListPanel title="Upcoming Exams" actionLabel="Schedule" actionHref="/dashboard/exams" className="h-full">
+      <ListPanel title="Upcoming Exams" actionLabel="Schedule" actionHref="/dashboard/exams-marks" className="h-full">
         <EmptyState title="No upcoming exams" description="Scheduled exams will appear here with clear date blocks." />
       </ListPanel>
     );
@@ -79,7 +79,7 @@ function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] })
   const displayExams = exams.slice(0, 5);
 
   return (
-    <ListPanel title="Upcoming Exams" actionLabel="View all" actionHref="/dashboard/exams" className="h-full">
+    <ListPanel title="Upcoming Exams" actionLabel="View all" actionHref="/dashboard/exams-marks" className="h-full">
       <div className="flex flex-col gap-3">
         {displayExams.map(exam => {
           const date = new Date(exam.exam_date);
@@ -280,8 +280,8 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
             <h2 className="text-[13px] xs:text-[14px] sm:text-[15px] font-semibold mb-3 xs:mb-4 text-foreground/90">At a Glance</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <ColoredStatCard title="Total Students" value={data?.totalStudents ?? '0'} icon={<Users size={22} />} color="bg-[#2A9D8F]" href="/dashboard/people" />
-              <ColoredStatCard title="Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/teachers" />
-              <ColoredStatCard title="Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/academic-structure" />
+              <ColoredStatCard title="Teachers" value={data?.totalTeachers ?? '0'} icon={<GraduationCap size={22} />} color="bg-[#E76F51]" href="/dashboard/people?tab=teachers" />
+              <ColoredStatCard title="Classes" value={data?.totalClasses ?? '0'} icon={<BookOpen size={22} />} color="bg-[#4361EE]" href="/dashboard/classes" />
               <ColoredStatCard title="Reports" value={data?.totalReports ?? '0'} icon={<FileText size={22} />} color="bg-[#7209B7]" href="/dashboard/reports" />
               <ColoredStatCard title="Present Today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={22} />} color="bg-[#2A9D8F]" href="/dashboard/attendance" />
               <ColoredStatCard title="Overdue Fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={22} />} color="bg-[#E76F51]" href="/dashboard/fees" />
@@ -332,7 +332,7 @@ function AdminDashboard({ greeting, userName }: { greeting: string; userName: st
           {/* Quick Actions — unique items not covered above */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 xs:gap-3">
             <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" color="bg-[#2A9D8F]" />
-            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/teachers" color="bg-[#E76F51]" />
+            <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people?tab=teachers" color="bg-[#E76F51]" />
             <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" color="bg-[#F4A261]" />
             <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" color="bg-[#4361EE]" />
           </div>
@@ -814,7 +814,7 @@ function StudentDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <QuickAction label="View My Results" desc="View and download report cards" href="/dashboard/my-results" icon={<FileText size={18} />} />
+        <QuickAction label="View My Results" desc="View and download report cards" href="/student/results" icon={<FileText size={18} />} />
         <QuickAction label="My Analytics" desc="Subject performance breakdown" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
       </div>
     </>
