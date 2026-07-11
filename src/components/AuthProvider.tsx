@@ -101,12 +101,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBaseRole(clerkBaseRole);
 
         fetch('/api/auth/me')
-            .then(res => {
+            .then(async res => {
+                // Deactivated accounts are locked out: sign them out immediately.
+                // ClerkProvider's afterSignOutUrl sends them back to /login.
+                if (res.status === 403) {
+                    const body = await res.json().catch(() => ({}));
+                    if (body?.code === 'ACCOUNT_DEACTIVATED') {
+                        await clerkAuth.signOut();
+                        return null;
+                    }
+                }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 return res.json();
             })
             .then(data => {
-                if (data.error) return;
+                if (!data || data.error) return;
                 const u = data.profile || data.user;
                 if (u) {
                     // The DB role is the base role; effective role may differ if active_role is set

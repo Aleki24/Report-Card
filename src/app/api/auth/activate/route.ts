@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
     try {
+        // This endpoint is unauthenticated (the account doesn't exist yet), so the
+        // invite code is the only secret. Rate-limit per client IP to stop brute forcing.
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+            || request.headers.get('x-real-ip')
+            || 'unknown';
+        const rl = rateLimit(`activate:${ip}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!rl.allowed) {
+            return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
+        }
+
         const body = await request.json();
         const { code, password, email, username: customUsername, verify_only } = body;
 
