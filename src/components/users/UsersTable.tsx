@@ -69,7 +69,7 @@ export function UsersTable({
       ) : (
         <div className="overflow-x-auto">
           <table className="data-table w-full sm:whitespace-nowrap">
-            <thead><tr><th>Name</th><th>Email</th><th>Username</th><th>Password</th><th>Role</th><th>Joined</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Username</th><th>Role</th><th>Joined</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {paginatedUsers.map(u => {
                 const roleStyle = roleBadgeClasses[u.role];
@@ -78,7 +78,6 @@ export function UsersTable({
                   <td data-label="Name" className="font-medium">{u.first_name} {u.last_name}</td>
                   <td data-label="Email" className="text-muted-foreground text-sm">{u.email || '—'}</td>
                   <td data-label="Username" className="text-muted-foreground text-sm">{u.username || '—'}</td>
-                  <td data-label="Password" className="text-muted-foreground text-sm font-mono">{u.plain_password || '—'}</td>
                   <td data-label="Role">
                     <span className={`badge ${roleStyle.bg} ${roleStyle.text} border ${roleStyle.border}`}>
                       {u.role.replace('_', ' ')}

@@ -42,7 +42,7 @@ export function SetupNotifier({ hasLogo, totalTeachers, totalStudents, totalUser
           description: 'Your school currently has no teachers.',
           action: {
             label: 'Add Teachers',
-            onClick: () => router.push('/dashboard/teachers'),
+            onClick: () => router.push('/dashboard/people?tab=teachers'),
           },
           duration: 10000,
           id: 'setup-teachers'
@@ -64,7 +64,7 @@ export function SetupNotifier({ hasLogo, totalTeachers, totalStudents, totalUser
           description: 'Ready to bring in the students?',
           action: {
             label: 'Add Students',
-            onClick: () => router.push('/dashboard/students'),
+            onClick: () => router.push('/dashboard/people'),
           },
           duration: 10000,
           id: 'setup-students'

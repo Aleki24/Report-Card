@@ -25,7 +25,7 @@ export default function UsersPage() {
         <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2 text-[var(--color-text)]">
           <li><strong>Admins &amp; Principals:</strong> Must log in using their <strong>Email Address</strong>.</li>
           <li><strong>Teachers &amp; Students:</strong> Must log in using their unique auto-generated <strong>Username</strong> (listed in the table below).</li>
-          <li><strong>Default Passwords:</strong> Users created before the recent update have the default password <strong>password123</strong>. New users will be assigned an exact password shown to you at creation time.</li>
+          <li><strong>Passwords:</strong> Each new user is assigned a one-time password shown to you at creation. If a user forgets theirs, use the 🔑 reset button in the table below to issue a new one.</li>
           <li><strong>Creating Users:</strong> Click <strong>+ Add User</strong>. After providing their details, the system will instantly generate a username and password for them. Simply share those details so they can log in!</li>
         </ul>
       </InfoGuide>

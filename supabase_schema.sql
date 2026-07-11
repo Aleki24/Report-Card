@@ -107,7 +107,6 @@ CREATE TABLE users (
     phone TEXT,
     role user_role NOT NULL,
     is_active BOOLEAN DEFAULT true NOT NULL,
-    plain_password TEXT,
     username TEXT UNIQUE,
     password_hash TEXT,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE,

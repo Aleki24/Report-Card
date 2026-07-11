@@ -157,7 +157,7 @@ export async function GET(_request: NextRequest) {
         type: 'student',
         message: `${name} was enrolled`,
         timestamp: s.created_at,
-        href: '/dashboard/students',
+        href: '/dashboard/people',
       });
     }
 

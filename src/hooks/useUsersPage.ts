@@ -13,7 +13,6 @@ export interface UserRow {
   role: UserRole;
   is_active: boolean;
   created_at: string;
-  plain_password?: string | null;
   admission_number?: string | null;
 }
 

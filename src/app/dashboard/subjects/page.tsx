@@ -123,7 +123,7 @@ export default function SubjectsPage() {
             <PageHeader
                 title="Subject Management"
                 description="Manage subjects, assign categories, and organize by curriculum level."
-                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Academic Structure', href: '/dashboard/academic-structure' }, { label: 'Subjects' }]}
+                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Academic Structure', href: '/dashboard/settings' }, { label: 'Subjects' }]}
             />
 
             {calMsg && (

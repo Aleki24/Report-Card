@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 /**
  * Self-registration endpoint for invited users.
@@ -15,6 +16,16 @@ import { createClerkClient } from '@clerk/nextjs/server';
  */
 export async function POST(request: NextRequest) {
     try {
+        // Unauthenticated endpoint: throttle invite-code guessing per IP
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+        const limit = rateLimit(`register:${ip}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!limit.allowed) {
+            return NextResponse.json(
+                { error: 'Too many attempts. Please wait a minute and try again.' },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
         const { phone, invite_code, email, password } = body;
 
@@ -163,7 +174,7 @@ export async function POST(request: NextRequest) {
             message: `Welcome, ${invite.first_name}! Your account is ready. You can now sign in.`,
         });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An unknown error occurred';
-        return NextResponse.json({ error: message }, { status: 500 });
+        console.error('Registration error:', err);
+        return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 });
     }
 }

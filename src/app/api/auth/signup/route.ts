@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
             message: 'Account created! You can now sign in.',
         });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An unknown error occurred';
-        return NextResponse.json({ error: message }, { status: 500 });
+        console.error('Signup error:', err);
+        return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status: 500 });
     }
 }

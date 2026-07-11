@@ -34,6 +34,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // All caller-supplied IDs must belong to the caller's school
+    const [streamCheck, termCheck, yearCheck] = await Promise.all([
+      supabase.from('grade_streams').select('id').eq('id', grade_stream_id).eq('school_id', schoolId).maybeSingle(),
+      supabase.from('terms').select('id').eq('id', term_id).eq('school_id', schoolId).maybeSingle(),
+      supabase.from('academic_years').select('id').eq('id', academic_year_id).eq('school_id', schoolId).maybeSingle(),
+    ]);
+    if (!streamCheck.data || !termCheck.data || !yearCheck.data) {
+      return NextResponse.json({ error: 'Class, term, or academic year not found for this school' }, { status: 403 });
+    }
+
     const { error: rpcError } = await supabase.rpc('generate_term_reports', {
       p_academic_year_id: academic_year_id,
       p_term_id: term_id,
@@ -41,12 +51,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (rpcError) {
-      console.warn('generate_term_reports RPC warning:', rpcError.message);
+      console.error('generate_term_reports RPC failed:', rpcError.message);
+      return NextResponse.json({ error: 'Failed to generate reports. Please try again.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Bulk reports generated successfully!' });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('reports/generate error:', err);
+    return NextResponse.json({ error: 'Failed to generate reports' }, { status: 500 });
   }
 }
