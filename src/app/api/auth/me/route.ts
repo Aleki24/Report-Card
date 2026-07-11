@@ -76,6 +76,15 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // Enforce deactivation: an admin who marks a user Inactive should lock them out.
+    // The client (AuthProvider) signs the user out when it sees this code.
+    if (dbUser.is_active === false) {
+      return NextResponse.json(
+        { error: 'Your account has been deactivated. Please contact your administrator.', code: 'ACCOUNT_DEACTIVATED' },
+        { status: 403 }
+      );
+    }
+
     // Fetch school name and onboarding status
     let schoolName: string | null = null;
     let schoolOnboardingCompleted: boolean = false;

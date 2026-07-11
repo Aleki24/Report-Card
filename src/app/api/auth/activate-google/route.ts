@@ -1,14 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
     try {
+        // Must be the freshly-authenticated Google session, and the caller can
+        // only activate their OWN account — never bind an invite to someone else's ID.
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'You must be signed in with Google to activate.' }, { status: 401 });
+        }
+
+        // Rate-limit invite-code attempts per user to prevent brute forcing.
+        const rl = rateLimit(`activate-google:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!rl.allowed) {
+            return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
+        }
+
         const body = await request.json();
         const { code, clerk_user_id, username: customUsername } = body;
 
         if (!code?.trim() || !clerk_user_id) {
             return NextResponse.json({ error: 'Invite code and Clerk user ID are required.' }, { status: 400 });
+        }
+
+        if (clerk_user_id !== userId) {
+            return NextResponse.json({ error: 'You can only activate your own account.' }, { status: 403 });
         }
 
         const supabaseAdmin = createSupabaseAdmin();
