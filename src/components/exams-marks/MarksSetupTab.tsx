@@ -431,42 +431,51 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 3: Select Subject (with inline level/grade filter) ═══ */}
+      {/* ═══ STEP 3: Select Class (loads only that class's subjects) ═══ */}
       {selectedExamType && (
         <div className="card mb-4 p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Class</label>
+            <select
+              className="input-field text-sm"
+              style={{ padding: '8px 12px', maxWidth: 180 }}
+              value={selectedLevelId}
+              onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
+              title="Filter classes by level"
+            >
+              <option value="">— All Levels —</option>
+              {availableLevelsForType.map(l => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+            <select
+              className="input-field text-sm"
+              style={{ padding: '8px 12px', maxWidth: 200 }}
+              value={filterGradeId}
+              onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
+            >
+              <option value="">— Select Class —</option>
+              {availableGradesForType.map(g => (
+                <option key={g.id} value={g.id}>{g.name_display}</option>
+              ))}
+            </select>
+            {!filterGradeId && (
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                👈 Pick a class to load its subjects
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ STEP 4: Select Subject (only the chosen class's subjects) ═══ */}
+      {selectedExamType && filterGradeId && (
+        <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Subject</label>
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} available
-              {selectedLevelId || filterGradeId ? ' (filtered)' : ''}
+              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class
             </span>
-            {/* Inline filters — optional, no separate step */}
-            <div className="flex flex-wrap gap-2 sm:ml-auto">
-              <select
-                className="input-field text-xs"
-                style={{ padding: '6px 10px', maxWidth: 160 }}
-                value={selectedLevelId}
-                onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
-                title="Filter subjects by level"
-              >
-                <option value="">— All Levels —</option>
-                {availableLevelsForType.map(l => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-              <select
-                className="input-field text-xs"
-                style={{ padding: '6px 10px', maxWidth: 160 }}
-                value={filterGradeId}
-                onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
-                title="Filter subjects by grade/class"
-              >
-                <option value="">— All Grades —</option>
-                {availableGradesForType.map(g => (
-                  <option key={g.id} value={g.id}>{g.name_display}</option>
-                ))}
-              </select>
-            </div>
           </div>
           {subjects.length === 0 ? (
             <p className="text-xs text-orange-400">
@@ -478,7 +487,7 @@ export function MarksSetupTab() {
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
               {subjects.map(s => {
                 const isActive = selectedSubjectId === s.subject_id;
-                const hasExams = examsByType.some(e => e.subject_id === s.subject_id);
+                const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
                 return (
                   <div
                     key={s.subject_id}
@@ -520,40 +529,40 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 4: Select Grade / Class for this subject ═══ */}
-      {selectedSubjectId && (
+      {/* ═══ Extra: choose the exam slot (only when the subject has several for this class) ═══ */}
+      {selectedSubjectId && examsForSelectedSubject.length === 0 && (
+        <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs text-orange-400">No exam slots found for this subject in the selected class.</p>
+        </div>
+      )}
+      {selectedSubjectId && examsForSelectedSubject.length > 1 && (
         <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Class</label>
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>Slot</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {examsForSelectedSubject.length} class{examsForSelectedSubject.length !== 1 ? 'es' : ''} available
+              This subject has {examsForSelectedSubject.length} exam slots — choose one
             </span>
           </div>
-
-          {examsForSelectedSubject.length === 0 ? (
-            <p className="text-xs text-orange-400">No exam slots found for this subject{selectedLevelId || filterGradeId ? ' with the current filters' : ''}.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {examsForSelectedSubject.map(exam => {
-                const isActive = selectedExamId === exam.id;
-                return (
-                  <button
-                    key={exam.id}
-                    onClick={() => setSelectedExamId(exam.id)}
-                    className="px-4 py-2 text-sm font-medium rounded-lg transition-all"
-                    style={{
-                      background: isActive ? 'var(--color-primary)' : 'var(--color-surface-raised)',
-                      color: isActive ? '#fff' : 'var(--color-text)',
-                      border: isActive ? '1px solid transparent' : '1px solid var(--color-border)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {exam.grade_name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {examsForSelectedSubject.map(exam => {
+              const isActive = selectedExamId === exam.id;
+              return (
+                <button
+                  key={exam.id}
+                  onClick={() => setSelectedExamId(exam.id)}
+                  className="px-4 py-2 text-sm font-medium rounded-lg transition-all"
+                  style={{
+                    background: isActive ? 'var(--color-primary)' : 'var(--color-surface-raised)',
+                    color: isActive ? '#fff' : 'var(--color-text)',
+                    border: isActive ? '1px solid transparent' : '1px solid var(--color-border)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {exam.name || exam.grade_name}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -622,7 +631,13 @@ export function MarksSetupTab() {
           <p className="text-sm">Select an exam type to continue</p>
         </div>
       )}
-      {selectedExamType && !selectedSubjectId && subjects.length > 0 && (
+      {selectedExamType && !filterGradeId && (
+        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+          <p className="text-2xl mb-2">🏫</p>
+          <p className="text-sm">Select a <strong>class</strong> above to load its subjects</p>
+        </div>
+      )}
+      {selectedExamType && filterGradeId && !selectedSubjectId && subjects.length > 0 && (
         <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
           <p className="text-2xl mb-2">📚</p>
           <p className="text-sm">Select a subject to enter marks</p>
