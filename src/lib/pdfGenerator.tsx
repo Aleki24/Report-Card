@@ -2,7 +2,7 @@ import React from 'react';
 import { Document, Page, View, renderToBuffer, pdf } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { s } from './pdf/pdfStyles';
-import { ReportCardLayout } from './pdf/ReportCardLayout';
+import { getTemplateLayout, templateHasPageBars, type ReportTemplateId } from './pdf/templates';
 
 /* ── Data Interface ─────────────────────────────────────── */
 
@@ -51,28 +51,42 @@ export interface ReportCardData {
     }[];
 }
 
+export type { ReportTemplateId };
+
+/* ── One rendered report card page body ───────────────────── */
+function ReportCardPageBody({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
+    const Layout = getTemplateLayout(template);
+    const withBars = templateHasPageBars(template);
+    return (
+        <>
+            {withBars && <View style={s.navyBar} />}
+            <View style={{ flex: 1 }}>
+                <Layout data={data} qrCodeDataUri={qrCodeDataUri} />
+            </View>
+            {withBars && <View style={s.navyBarBottom} />}
+        </>
+    );
+}
+
 /* ── React-PDF Document (single student) ─────────────────── */
-export function ReportCardDocument({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
+export function ReportCardDocument({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     return (
         <Document>
             <Page size="A4" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
-                <View style={s.navyBar} />
-                <View style={{ flex: 1 }}>
-                    <ReportCardLayout data={data} qrCodeDataUri={qrCodeDataUri} />
-                </View>
-                <View style={s.navyBarBottom} />
+                <ReportCardPageBody data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
             </Page>
         </Document>
     );
 }
 
 /* ── Report Card Content (for bulk PDF pages) ─────────────── */
-export function ReportCardContent({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
-    return <ReportCardLayout data={data} qrCodeDataUri={qrCodeDataUri} />;
+export function ReportCardContent({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
+    const Layout = getTemplateLayout(template);
+    return <Layout data={data} qrCodeDataUri={qrCodeDataUri} />;
 }
 
 /* ── Generate single student PDF ─────────────────────────── */
-export async function generateStudentReportCardPDF(data: ReportCardData): Promise<Buffer> {
+export async function generateStudentReportCardPDF(data: ReportCardData, template?: ReportTemplateId): Promise<Buffer> {
     let qrCodeDataUri = undefined;
     if (data.resultUrl) {
         try {
@@ -82,13 +96,13 @@ export async function generateStudentReportCardPDF(data: ReportCardData): Promis
         }
     }
     const buffer = await renderToBuffer(
-        <ReportCardDocument data={data} qrCodeDataUri={qrCodeDataUri} />
+        <ReportCardDocument data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
     );
     return Buffer.from(buffer);
 }
 
 /* ── Generate bulk PDF for entire class ──────────────────── */
-export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData[]): Promise<Uint8Array> {
+export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData[], template?: ReportTemplateId): Promise<Uint8Array> {
     const pages: React.ReactElement[] = [];
 
     for (let i = 0; i < reportCardsData.length; i++) {
@@ -103,12 +117,8 @@ export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData
         }
 
         pages.push(
-            <Page key={`${data.enrollmentNumber || data.studentName}-${i}`} size="A4" orientation="portrait" style={s.page} fixed>
-                <View style={s.navyBar} />
-                <View style={{ flexGrow: 1 }}>
-                    <ReportCardContent data={data} qrCodeDataUri={qrCodeDataUri} />
-                </View>
-                <View style={s.navyBarBottom} />
+            <Page key={`${data.enrollmentNumber || data.studentName}-${i}`} size="A4" orientation="portrait" style={[s.page, { display: 'flex', flexDirection: 'column' }]} fixed>
+                <ReportCardPageBody data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
             </Page>
         );
     }

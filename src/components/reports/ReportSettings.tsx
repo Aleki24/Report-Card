@@ -3,12 +3,14 @@
 import React from 'react';
 import { Card, CardContent, Select, Input } from '@/components/ui';
 import { Filter, BookOpen, GraduationCap, CalendarDays } from 'lucide-react';
+import { REPORT_TEMPLATES, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
 interface ReportSettingsProps {
   selectedAcademicYear: string; setSelectedAcademicYear: (v: string) => void;
   selectedTerm: string; setSelectedTerm: (v: string) => void;
   selectedGradeStream: string; setSelectedGradeStream: (v: string) => void;
   customReportTitle: string; setCustomReportTitle: (v: string) => void;
+  selectedTemplate: ReportTemplateId; setSelectedTemplate: (v: ReportTemplateId) => void;
   academicYears: { id: string; name: string }[];
   terms: { id: string; name: string }[];
   gradeStreams: { id: string; full_name: string }[];
@@ -19,6 +21,7 @@ export function ReportSettings({
   selectedTerm, setSelectedTerm,
   selectedGradeStream, setSelectedGradeStream,
   customReportTitle, setCustomReportTitle,
+  selectedTemplate, setSelectedTemplate,
   academicYears, terms, gradeStreams,
 }: ReportSettingsProps) {
   return (
@@ -28,7 +31,7 @@ export function ReportSettings({
           <Filter className="w-4 h-4 text-primary" />
           <h3 className="text-[15px] font-semibold font-display">Report Settings</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Academic Year <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
@@ -53,6 +56,19 @@ export function ReportSettings({
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Custom Title (Optional)</label>
             <Input className="w-full h-9 text-sm" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Card Design</label>
+            <Select
+              className="w-full h-9 text-sm"
+              value={selectedTemplate}
+              onChange={e => { if (isReportTemplateId(e.target.value)) setSelectedTemplate(e.target.value); }}
+            >
+              {REPORT_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {REPORT_TEMPLATES.find(t => t.id === selectedTemplate)?.description}
+            </p>
           </div>
         </div>
       </CardContent>

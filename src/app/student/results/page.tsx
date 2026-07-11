@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Trophy, Download, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
+import { REPORT_TEMPLATES, DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
 export default function StudentCombinedResultsPage() {
     const [activeTab, setActiveTab] = useState<'marks' | 'reports'>('marks');
@@ -184,6 +185,7 @@ function ReportCardsTab() {
     const [reports, setReports] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState<string | null>(null);
+    const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
 
     useEffect(() => {
         fetch('/api/school/student/report-cards').then(r => r.json()).then(j => setReports(j.data || [])).catch(() => {}).finally(() => setLoading(false));
@@ -201,6 +203,17 @@ function ReportCardsTab() {
 
     return (
         <div style={{ display: 'grid', gap: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>PDF design:</label>
+                <select
+                    value={template}
+                    onChange={e => { if (isReportTemplateId(e.target.value)) setTemplate(e.target.value); }}
+                    style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 13, color: '#334155', fontWeight: 600 }}
+                >
+                    {REPORT_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <span style={{ fontSize: 12, color: '#94A3B8' }}>{REPORT_TEMPLATES.find(t => t.id === template)?.description}</span>
+            </div>
             {reports.map((rc: any) => {
                 const isOpen = expanded === rc.id;
                 const subjects = rc.report_card_subjects || [];
@@ -232,7 +245,7 @@ function ReportCardsTab() {
                                     {isOpen ? 'Collapse' : 'Details'}
                                 </button>
                                 <a 
-                                    href={`/api/reports/student/${rc.student_id || ''}?term=${rc.terms?.id || ''}&year=${rc.academic_years?.id || ''}`} 
+                                    href={`/api/reports/student/${rc.student_id || ''}?term=${rc.terms?.id || ''}&year=${rc.academic_years?.id || ''}${template !== DEFAULT_TEMPLATE ? `&template=${template}` : ''}`}
                                     target="_blank" 
                                     style={{ padding: '8px 16px', background: '#10B981', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
                                 >

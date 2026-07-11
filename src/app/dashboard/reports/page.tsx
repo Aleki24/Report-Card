@@ -14,6 +14,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
 import { pdf } from '@react-pdf/renderer';
 import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
+import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import { BookOpen, ArrowRight } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export default function ReportsPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
   const [customReportTitle, setCustomReportTitle] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
   const [generating, setGenerating] = useState(false);
   const [generatingMarkSheet, setGeneratingMarkSheet] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
@@ -94,6 +96,7 @@ export default function ReportsPage() {
     if (selectedAcademicYear) params.append('year', selectedAcademicYear);
     if (selectedTerm) params.append('term', selectedTerm);
     if (customReportTitle) params.append('customTitle', customReportTitle);
+    if (selectedTemplate !== DEFAULT_TEMPLATE) params.append('template', selectedTemplate);
     window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
   };
 
@@ -116,7 +119,7 @@ export default function ReportsPage() {
       const reportCardsData: ReportCardData[] = await response.json();
       if (!reportCardsData?.length) throw new Error('No students or grades found for this setup. Ensure marks are entered.');
       setProgress({ current: 0, total: reportCardsData.length, message: 'Step 3 of 3: Generating combined PDF...' });
-      const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData);
+      const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData, selectedTemplate);
       const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' });
       const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
       link.download = `${gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class'}_${terms.find(t => t.id === selectedTerm)?.name || 'Term'}_Reports.pdf`;
@@ -242,7 +245,7 @@ export default function ReportsPage() {
       )}
 
       {/* Report Settings */}
-      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
+      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
 
       <ReportActionCards isConfigured={!!isConfigured} generating={generating} generatingMarkSheet={generatingMarkSheet} onSelectStudent={() => setShowStudentPicker(true)} onBulkGenerate={handleGenerateAndDownload} onTermComparison={() => setShowTermComparison(true)} onMarkSheet={handleGenerateMarkSheet} onSMS={() => setShowSMSModal(true)} />
 
