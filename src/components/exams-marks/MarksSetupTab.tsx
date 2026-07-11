@@ -5,6 +5,8 @@ import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { CreateExamModal } from '@/components/marks/CreateExamModal';
 import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
+import { isMultiPaper } from '@/lib/multi-paper';
+import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
@@ -18,7 +20,7 @@ interface SubjectItem { id: string; name: string; code: string; academic_level_i
 interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
-  grade_id: string; grade_name: string; term_id: string;
+  grade_id: string; grade_name: string; term_id: string; grade_stream_id?: string | null;
 }
 
 export function MarksSetupTab() {
@@ -49,6 +51,7 @@ export function MarksSetupTab() {
   const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
   const [showPaperModal, setShowPaperModal] = useState(false);
   const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
+  const [examScheme, setExamScheme] = useState<ExamSubjectComponentScheme | null>(null);
 
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
@@ -196,6 +199,42 @@ export function MarksSetupTab() {
     // If the level changes, clear the selected exam ID
     setSelectedExamId('');
   }, [selectedLevelId]);
+
+  // ── Fewer clicks: auto-select when there's only one choice ──
+  // Only one exam type in the term → select it
+  useEffect(() => {
+    if (!loadingExams && !selectedExamType) {
+      const types = [...new Set(exams.map(e => e.exam_type))];
+      if (types.length === 1) setSelectedExamType(types[0]);
+    }
+  }, [loadingExams, exams, selectedExamType]);
+
+  // Only one class/exam slot for the chosen subject → select it
+  const soleExamId = examsForSelectedSubject.length === 1 ? examsForSelectedSubject[0].id : '';
+  useEffect(() => {
+    if (selectedSubjectId && !selectedExamId && soleExamId) {
+      setSelectedExamId(soleExamId);
+    }
+  }, [selectedSubjectId, selectedExamId, soleExamId]);
+
+  // ── Papers configuration status for the selected exam ──
+  useEffect(() => {
+    if (!selectedExamId) { setExamScheme(null); return; }
+    (async () => {
+      try {
+        const res = await fetch(`/api/school/exams/${selectedExamId}/components`, { cache: 'no-store' });
+        const json = await res.json();
+        setExamScheme(json.data || null);
+      } catch {
+        setExamScheme(null);
+      }
+    })();
+  }, [selectedExamId, schemeVersion]);
+
+  const examIsMultiPaper = isMultiPaper(examScheme);
+  const examPaperSummary = examIsMultiPaper
+    ? (examScheme?.components || []).map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')
+    : '';
 
   // ── Seed exam slots (admin only) ──
   const handleSeedExams = async (examTypes?: string[]) => {
@@ -392,37 +431,35 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 3: Filter by Level & Grade ═══ */}
+      {/* ═══ STEP 3: Select Subject (with inline level/grade filter) ═══ */}
       {selectedExamType && (
         <div className="card mb-4 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Filter</label>
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Subject</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Narrow down by level and grade
+              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} available
+              {selectedLevelId || filterGradeId ? ' (filtered)' : ''}
             </span>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Level filter */}
-            <div className="flex-1">
-              <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Level</label>
+            {/* Inline filters — optional, no separate step */}
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
               <select
-                className="input-field w-full text-sm"
+                className="input-field text-xs"
+                style={{ padding: '6px 10px', maxWidth: 160 }}
                 value={selectedLevelId}
                 onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
+                title="Filter subjects by level"
               >
                 <option value="">— All Levels —</option>
                 {availableLevelsForType.map(l => (
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
-            </div>
-            {/* Grade filter */}
-            <div className="flex-1">
-              <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Grade / Class</label>
               <select
-                className="input-field w-full text-sm"
+                className="input-field text-xs"
+                style={{ padding: '6px 10px', maxWidth: 160 }}
                 value={filterGradeId}
                 onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
+                title="Filter subjects by grade/class"
               >
                 <option value="">— All Grades —</option>
                 {availableGradesForType.map(g => (
@@ -430,19 +467,6 @@ export function MarksSetupTab() {
                 ))}
               </select>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ STEP 4: Select Subject ═══ */}
-      {selectedExamType && (
-        <div className="card mb-4 p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} available
-              {selectedLevelId || filterGradeId ? ' (filtered)' : ''}
-            </span>
           </div>
           {subjects.length === 0 ? (
             <p className="text-xs text-orange-400">
@@ -496,11 +520,11 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 5: Select Grade / Class for this subject ═══ */}
+      {/* ═══ STEP 4: Select Grade / Class for this subject ═══ */}
       {selectedSubjectId && (
         <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>⑤ Class</label>
+            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Class</label>
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               {examsForSelectedSubject.length} class{examsForSelectedSubject.length !== 1 ? 'es' : ''} available
             </span>
@@ -538,21 +562,23 @@ export function MarksSetupTab() {
         <div>
           <div className="card mb-4 flex flex-wrap items-center justify-between gap-3" style={{ padding: 'var(--space-3) var(--space-4)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))' }}>
             <div className="text-sm">
-              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · Max: {selectedExam.max_score}
+              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span style={{ color: 'var(--color-accent)' }}>Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPaperModal(true)}
                 className="px-3 py-1.5 rounded text-xs font-medium transition-all"
                 style={{
-                  background: 'transparent',
-                  color: 'var(--color-text-muted)',
-                  border: '1px dashed var(--color-border)',
+                  background: examIsMultiPaper ? 'rgba(99,102,241,0.12)' : 'transparent',
+                  color: examIsMultiPaper ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  border: examIsMultiPaper ? '1px solid rgba(99,102,241,0.4)' : '1px dashed var(--color-border)',
                   cursor: 'pointer',
                 }}
-                title="Configure multiple papers (P1/P2/P3) for this exam subject"
+                title="Some subjects are examined in several papers (e.g. Maths Paper 1 & Paper 2, Sciences with a practical). Set that up here — the papers automatically combine into one final subject score."
               >
-                📑 Papers
+                {examIsMultiPaper
+                  ? `📑 Papers: ${(examScheme?.components || []).map(c => c.component_code).join(' + ')} ✓`
+                  : '✂️ Split into Papers (P1, P2…)'}
               </button>
               {(['manual', 'bulk'] as const).map(m => (
                 <button
@@ -572,7 +598,13 @@ export function MarksSetupTab() {
             </div>
           </div>
           {mode === 'manual'
-            ? <ManualEntryGrid key={`${selectedExamId}-${schemeVersion}`} examId={selectedExamId} maxScore={selectedExam.max_score} />
+            ? <ManualEntryGrid
+                key={`${selectedExamId}-${schemeVersion}`}
+                examId={selectedExamId}
+                maxScore={selectedExam.max_score}
+                gradeId={selectedExam.grade_id}
+                gradeStreamId={selectedExam.grade_stream_id || null}
+              />
             : <BulkUpload examId={selectedExamId} />}
         </div>
       )}

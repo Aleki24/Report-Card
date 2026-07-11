@@ -35,13 +35,21 @@ interface MarkRow {
 interface Props {
     examId: string;
     maxScore?: number;
+    /** The exam's grade — when provided, students load automatically (no manual class re-selection) */
+    gradeId?: string;
+    /** The exam's stream, if it targets a single stream */
+    gradeStreamId?: string | null;
 }
 
 const emptyRow = (): MarkRow => ({
     studentId: '', studentName: '', admissionNumber: '', score: '', componentScores: {}, grade: '', remarks: '', error: '', isGradeManuallySet: false,
 });
 
-export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
+export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId }: Props) {
+    // When the exam's class is known, students load automatically and the
+    // manual Level/Grade/Stream re-selection is skipped entirely.
+    const examScoped = !!gradeId;
+
     // Class/stream filter
     const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
     const [selectedLevelId, setSelectedLevelId] = useState('');
@@ -158,15 +166,21 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
 
     // ── Fetch students when grade or stream changes ──────
     const fetchStudents = useCallback(async () => {
-        if (!selectedGradeId) {
-            setStudents([]);
-            return;
-        }
-
-        const hasStreams = allStreams.some(s => s.grade_id === selectedGradeId);
-        if (hasStreams && !selectedStreamId) {
-            setStudents([]);
-            return;
+        if (examScoped) {
+            // Exam already knows its class — wait for streams to load, then fetch
+            if (allStreams.length === 0) {
+                return;
+            }
+        } else {
+            if (!selectedGradeId) {
+                setStudents([]);
+                return;
+            }
+            const hasStreams = allStreams.some(s => s.grade_id === selectedGradeId);
+            if (hasStreams && !selectedStreamId) {
+                setStudents([]);
+                return;
+            }
         }
 
         setStudentsLoading(true);
@@ -175,6 +189,15 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             const { data } = await res.json();
 
             const filteredStudents = (data || []).filter((s: any) => {
+                if (examScoped) {
+                    // Exam targets one stream → that stream's students.
+                    // Exam covers the whole grade → every stream in the grade
+                    // (optionally narrowed by the stream filter).
+                    if (gradeStreamId) return s.current_grade_stream_id === gradeStreamId;
+                    if (selectedStreamId) return s.current_grade_stream_id === selectedStreamId;
+                    return allStreams.some(st => st.grade_id === gradeId && st.id === s.current_grade_stream_id);
+                }
+                const hasStreams = allStreams.some(st => st.grade_id === selectedGradeId);
                 if (hasStreams) {
                     return s.current_grade_stream_id === selectedStreamId;
                 } else {
@@ -198,7 +221,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             setStudentsLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedGradeId, selectedStreamId, allStreams]);
+    }, [examScoped, gradeId, gradeStreamId, selectedGradeId, selectedStreamId, allStreams]);
 
     useEffect(() => { fetchStudents(); }, [fetchStudents]);
 
@@ -209,6 +232,12 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
 
     // ── Filtered streams ─────────────────────────────────
     const filteredStreams = allStreams.filter(s => s.grade_id === selectedGradeId);
+
+    // Streams in the exam's grade (exam-scoped mode)
+    const examStreams = allStreams.filter(s => s.grade_id === gradeId);
+
+    // Whether the entry table can be shown
+    const entryReady = examScoped || ((filteredStreams.length === 0 && !!selectedGradeId) || !!selectedStreamId);
 
     // ── Already-selected student IDs (prevent duplicate selection) ──
     const selectedStudentIds = new Set(rows.map(r => r.studentId).filter(Boolean));
@@ -424,7 +453,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 <div>
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Manual Entry</h3>
                     <p className="text-muted-foreground text-sm">
-                        Select a class, then pick students from the dropdown
+                        {examScoped ? 'Pick students from the dropdown and enter their marks' : 'Select a class, then pick students from the dropdown'}
                         {multiPaper
                             ? <> · <span style={{ color: 'var(--color-accent)' }}>📑 Multi-paper: {schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}</span></>
                             : <> · Max score: {maxScore}</>}
@@ -432,7 +461,33 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                 </div>
             </div>
 
-            {/* ── Level / Grade / Stream Filter ─────────── */}
+            {/* ── Exam-scoped: students auto-load from the exam's class ── */}
+            {examScoped && (
+                <div className="flex flex-wrap items-center gap-4 mb-6 p-3 rounded-lg bg-muted border border-border">
+                    {!gradeStreamId && examStreams.length > 1 && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Stream</label>
+                            <select
+                                className="input-field text-sm"
+                                style={{ padding: '6px 10px' }}
+                                value={selectedStreamId}
+                                onChange={e => setSelectedStreamId(e.target.value)}
+                            >
+                                <option value="">All Streams</option>
+                                {examStreams.map(s => (
+                                    <option key={s.id} value={s.id}>{s.full_name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    <div className="text-xs text-primary font-semibold">
+                        {studentsLoading ? 'Loading students…' : `${students.length} student${students.length !== 1 ? 's' : ''} in this class`}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Level / Grade / Stream Filter (legacy: exam class unknown) ── */}
+            {!examScoped && (
             <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 rounded-lg bg-muted border border-border">
                 <div className="flex-1">
                     <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Level</label>
@@ -483,37 +538,38 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                     </div>
                 )}
             </div>
+            )}
 
             {/* No level selected hint */}
-            {!selectedLevelId && academicLevels.length > 0 && (
+            {!examScoped && !selectedLevelId && academicLevels.length > 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Level</strong> above to load grades
                 </div>
             )}
 
             {/* No grade selected hint */}
-            {selectedLevelId && !selectedGradeId && filteredGrades.length > 0 && (
+            {!examScoped && selectedLevelId && !selectedGradeId && filteredGrades.length > 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Grade / Class</strong> above to load students
                 </div>
             )}
 
             {/* Level selected but no grades for it */}
-            {selectedLevelId && filteredGrades.length === 0 && (
+            {!examScoped && selectedLevelId && filteredGrades.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     No grades found for this level.
                 </div>
             )}
 
             {/* No stream selected hint */}
-            {selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
+            {!examScoped && selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Stream</strong> above to load students
                 </div>
             )}
 
             {/* ── Entry Table ── */}
-            {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && students.length > 0 && (
+            {entryReady && students.length > 0 && (
                 <>
                     {saveMessage && (
                         <div className={`mb-6 p-3 rounded-md text-sm ${saveMessage.type === 'success'
@@ -688,7 +744,7 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             )}
 
             {/* Class/Stream selected but no students */}
-            {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && !studentsLoading && students.length === 0 && (
+            {entryReady && !studentsLoading && students.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     No students found in this class. Add students in the <strong>Students</strong> page first.
                 </div>
