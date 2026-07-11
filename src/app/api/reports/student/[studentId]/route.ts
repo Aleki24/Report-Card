@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
+import { isReportTemplateId } from '@/lib/pdf/templates';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -26,6 +27,8 @@ export async function GET(
         const baseUrl = new URL(request.url).origin;
         const termId = searchParams.get('termId') || searchParams.get('term');
         const yearId = searchParams.get('yearId') || searchParams.get('year');
+        const templateParam = searchParams.get('template');
+        const template = isReportTemplateId(templateParam) ? templateParam : undefined;
 
         const supabase = createSupabaseAdmin();
 
@@ -586,7 +589,7 @@ export async function GET(
         };
 
         // 12. Generate PDF Buffer
-        const pdfBuffer = await generateStudentReportCardPDF(reportData);
+        const pdfBuffer = await generateStudentReportCardPDF(reportData, template);
 
         return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,
