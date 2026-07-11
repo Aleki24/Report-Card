@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
+import type { ExamSubjectComponentScheme } from '@/types';
+import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
 
 interface GradeOption {
     symbol: string;
@@ -21,19 +23,49 @@ export interface EditMarkData {
     grade_symbol: string;
     rubric: string | null;
     remarks: string | null;
+    /** Per-paper raw scores keyed by component id (multi-paper exams) */
+    components?: Record<string, number>;
 }
 
 interface Props {
     mark: EditMarkData;
     maxScore: number;
     examId: string;
+    /** Multi-paper scheme for this exam (null/undefined = single paper) */
+    scheme?: ExamSubjectComponentScheme | null;
     onClose: () => void;
     onSaved: () => void;
     onDeleted: () => void;
 }
 
-export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDeleted }: Props) {
+export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved, onDeleted }: Props) {
+    const multiPaper = isMultiPaper(scheme);
+    const schemeComponents = multiPaper ? (scheme?.components || []) : [];
+
     const [score, setScore] = useState(String(mark.raw_score));
+    const [componentScores, setComponentScores] = useState<Record<string, string>>(() => {
+        const initial: Record<string, string> = {};
+        for (const c of schemeComponents) {
+            const v = mark.components?.[c.id];
+            initial[c.id] = v !== undefined && v !== null ? String(v) : '';
+        }
+        return initial;
+    });
+
+    const composite = multiPaper
+        ? calculateCompositeSubjectScore(
+            schemeComponents.map(c => ({
+                componentId: c.id,
+                code: c.component_code,
+                maxScore: Number(c.max_score),
+                score: componentScores[c.id] !== undefined && componentScores[c.id] !== ''
+                    ? parseFloat(componentScores[c.id])
+                    : null,
+                displayOrder: c.display_order,
+            })),
+            scheme!.aggregation_method
+        )
+        : null;
     const [grade, setGrade] = useState(mark.grade_symbol);
     const [rubric, setRubric] = useState(mark.rubric || '');
     const [gradeManuallySet, setGradeManuallySet] = useState(false);
@@ -177,6 +209,30 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
         }
     };
 
+    const handleComponentScoreChange = (componentId: string, val: string) => {
+        setComponentScores(prev => {
+            const next = { ...prev, [componentId]: val };
+            // Auto-resolve grade from the new final percentage
+            if (!gradeManuallySet && gradeOptions.length > 0) {
+                const result = calculateCompositeSubjectScore(
+                    schemeComponents.map(c => ({
+                        componentId: c.id,
+                        code: c.component_code,
+                        maxScore: Number(c.max_score),
+                        score: next[c.id] !== undefined && next[c.id] !== '' ? parseFloat(next[c.id]) : null,
+                        displayOrder: c.display_order,
+                    })),
+                    scheme!.aggregation_method
+                );
+                const matching = gradeOptions.find(o =>
+                    result.finalPercentage >= o.min_percentage && result.finalPercentage <= o.max_percentage
+                );
+                if (matching) setGrade(matching.symbol);
+            }
+            return next;
+        });
+    };
+
     const handleGradeChange = (val: string) => {
         setGrade(val);
         setGradeManuallySet(true); // Mark that teacher manually selected a grade
@@ -187,19 +243,47 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
     };
 
     const handleSave = async () => {
-        const numScore = parseFloat(score);
-        if (isNaN(numScore) || numScore < 0 || numScore > maxScore) {
-            toast.error(`Score must be between 0 and ${maxScore}`);
-            return;
+        let numScore: number;
+        let newPercentage: number;
+        let componentsPayload: Record<string, number> | undefined;
+
+        if (multiPaper && composite) {
+            // Validate each paper against its own max
+            for (const c of schemeComponents) {
+                const v = componentScores[c.id];
+                if (v === undefined || v === '') continue;
+                const num = parseFloat(v);
+                if (isNaN(num) || num < 0 || num > Number(c.max_score)) {
+                    toast.error(`${c.component_code} score must be between 0 and ${c.max_score}`);
+                    return;
+                }
+            }
+            if (composite.enteredCount === 0) {
+                toast.error('Enter at least one paper score');
+                return;
+            }
+            componentsPayload = {};
+            for (const c of schemeComponents) {
+                const v = componentScores[c.id];
+                if (v !== undefined && v !== '') componentsPayload[c.id] = parseFloat(v);
+            }
+            newPercentage = composite.finalPercentage;
+            numScore = maxScore > 0 ? Math.round((newPercentage / 100) * maxScore * 100) / 100 : 0;
+        } else {
+            numScore = parseFloat(score);
+            if (isNaN(numScore) || numScore < 0 || numScore > maxScore) {
+                toast.error(`Score must be between 0 and ${maxScore}`);
+                return;
+            }
+            newPercentage = maxScore > 0 ? Math.round((numScore / maxScore) * 10000) / 100 : 0;
         }
+
         if (!grade) {
             toast.error('Please select a grade');
             return;
         }
 
         setSaving(true);
-
-        const newPercentage = maxScore > 0 ? Math.round((numScore / maxScore) * 10000) / 100 : 0;
 
         try {
             const res = await fetch('/api/school/exam-marks', {
@@ -211,7 +295,8 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
                     percentage: newPercentage,
                     grade_symbol: grade,
                     rubric: isCBC ? (rubric || null) : null,
-                    remarks: remarks.trim() || null
+                    remarks: remarks.trim() || null,
+                    ...(componentsPayload ? { components: componentsPayload } : {}),
                 })
             });
 
@@ -288,21 +373,48 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
                 {/* Fields */}
                 <div className="flex flex-col gap-4 mb-6">
-                    {/* Score */}
-                    <div>
-                        <label className="block text-xs text-muted-foreground mb-1">
-                            Score (max {maxScore}) *
-                        </label>
-                        <input
-                            type="number"
-                            className={`input-field w-full`}
-                            value={score}
-                            onChange={e => handleScoreChange(e.target.value)}
-                            min={0}
-                            max={maxScore}
-                            autoFocus
-                        />
-                    </div>
+                    {/* Score — one input per paper for multi-paper subjects */}
+                    {multiPaper ? (
+                        <div>
+                            <label className="block text-xs text-muted-foreground mb-1">
+                                📑 Paper Scores *
+                            </label>
+                            <div className="flex flex-col gap-2">
+                                {schemeComponents.map((c, idx) => (
+                                    <div key={c.id} className="flex items-center gap-2">
+                                        <span className="text-xs font-mono w-8" style={{ color: 'var(--color-text-muted)' }}>{c.component_code}</span>
+                                        <input
+                                            type="number"
+                                            className="input-field flex-1"
+                                            style={{ padding: '6px 10px' }}
+                                            placeholder={c.component_name}
+                                            value={componentScores[c.id] || ''}
+                                            onChange={e => handleComponentScoreChange(c.id, e.target.value)}
+                                            min={0}
+                                            max={Number(c.max_score)}
+                                            autoFocus={idx === 0}
+                                        />
+                                        <span className="text-xs w-12" style={{ color: 'var(--color-text-muted)' }}>/ {Number(c.max_score)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-xs text-muted-foreground mb-1">
+                                Score (max {maxScore}) *
+                            </label>
+                            <input
+                                type="number"
+                                className={`input-field w-full`}
+                                value={score}
+                                onChange={e => handleScoreChange(e.target.value)}
+                                min={0}
+                                max={maxScore}
+                                autoFocus
+                            />
+                        </div>
+                    )}
 
                     {/* Grade */}
                     <div>
@@ -363,11 +475,22 @@ export function EditMarkModal({ mark, maxScore, examId, onClose, onSaved, onDele
 
                     {/* Current percentage preview */}
                     <div className="text-xs text-muted-foreground bg-muted p-2 rounded-md">
-                        Percentage: <strong>
-                            {score && !isNaN(parseFloat(score)) && maxScore > 0
-                                ? ((parseFloat(score) / maxScore) * 100).toFixed(1)
-                                : '—'}%
-                        </strong>
+                        {multiPaper && composite ? (
+                            <>
+                                Final score: <strong>{composite.enteredCount > 0 ? `${composite.finalPercentage.toFixed(1)}%` : '—'}</strong>
+                                {composite.enteredCount > 0 && !composite.isComplete && (
+                                    <span> (some papers missing — counted as 0)</span>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                Percentage: <strong>
+                                    {score && !isNaN(parseFloat(score)) && maxScore > 0
+                                        ? ((parseFloat(score) / maxScore) * 100).toFixed(1)
+                                        : '—'}%
+                                </strong>
+                            </>
+                        )}
                     </div>
 
                     {/* Total Points */}

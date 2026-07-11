@@ -130,6 +130,47 @@ export interface ExamMark {
     percentage: number;
     grade_symbol?: string;
     remarks?: string;
+    /** Per-paper raw scores keyed by component id (multi-paper exams only) */
+    components?: Record<string, number>;
+}
+
+// ── Multi-paper (multi-component) subject support ───────────
+
+export type AssessmentMode = 'single_paper' | 'multi_paper';
+
+export type AggregationMethod =
+    | 'sum_then_percentage'
+    | 'languages_average_percentages'
+    | 'science_70_plus_practical';
+
+export interface ExamSubjectComponent {
+    id: string;
+    scheme_id: string;
+    component_code: string;   // 'P1', 'P2', 'P3'
+    component_name: string;   // 'Paper 1'
+    max_score: number;
+    weight?: number | null;
+    display_order: number;
+}
+
+export interface ExamSubjectComponentScheme {
+    id: string;
+    exam_id: string;
+    subject_id: string;
+    school_id?: string;
+    assessment_mode: AssessmentMode;
+    aggregation_method: AggregationMethod;
+    is_enabled: boolean;
+    components?: ExamSubjectComponent[];
+}
+
+export interface ExamMarkComponent {
+    id: string;
+    exam_id: string;
+    subject_id?: string;
+    student_id: string;
+    component_id: string;
+    raw_score: number;
 }
 
 export interface ClassTeacher {

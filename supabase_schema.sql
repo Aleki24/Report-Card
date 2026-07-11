@@ -11,6 +11,9 @@ DROP FUNCTION IF EXISTS calculate_exam_mark_grade() CASCADE;
 DROP FUNCTION IF EXISTS generate_term_reports(UUID, UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS get_my_role() CASCADE;
 
+DROP TABLE IF EXISTS exam_mark_components CASCADE;
+DROP TABLE IF EXISTS exam_subject_components CASCADE;
+DROP TABLE IF EXISTS exam_subject_component_schemes CASCADE;
 DROP TABLE IF EXISTS performance_history CASCADE;
 DROP TABLE IF EXISTS report_card_subjects CASCADE;
 DROP TABLE IF EXISTS report_cards CASCADE;
@@ -543,3 +546,104 @@ CREATE POLICY "Class teachers manage reports for their streams" ON report_cards 
 CREATE POLICY "Admins can read pending invites" ON pending_invites FOR SELECT USING (get_my_role() = 'ADMIN');
 CREATE POLICY "Admins can create pending invites" ON pending_invites FOR INSERT WITH CHECK (get_my_role() = 'ADMIN');
 CREATE POLICY "Admins can delete pending invites" ON pending_invites FOR DELETE USING (get_my_role() = 'ADMIN');
+
+-- ==========================================
+-- MULTI-PAPER (MULTI-COMPONENT) SUBJECT SUPPORT
+-- Optional per-exam paper configuration (e.g. KCSE Maths P1+P2,
+-- English P1+P2+P3, Sciences theory + practical). The resolved final
+-- score is still stored in exam_marks (normalised to exams.max_score),
+-- so all existing grading/report/analytics logic keeps working.
+-- See supabase/migrations/20260711100000_add_multi_paper_subject_support.sql
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS exam_subject_component_schemes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    exam_id UUID REFERENCES exams(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE NOT NULL,
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    assessment_mode TEXT NOT NULL DEFAULT 'single_paper'
+        CHECK (assessment_mode IN ('single_paper', 'multi_paper')),
+    aggregation_method TEXT NOT NULL DEFAULT 'sum_then_percentage'
+        CHECK (aggregation_method IN (
+            'sum_then_percentage',
+            'languages_average_percentages',
+            'science_70_plus_practical'
+        )),
+    is_enabled BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (exam_id)
+);
+
+CREATE TABLE IF NOT EXISTS exam_subject_components (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheme_id UUID REFERENCES exam_subject_component_schemes(id) ON DELETE CASCADE NOT NULL,
+    component_code TEXT NOT NULL,
+    component_name TEXT NOT NULL,
+    max_score NUMERIC(6,2) NOT NULL CHECK (max_score > 0),
+    weight NUMERIC(5,2),
+    display_order INT DEFAULT 0 NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (scheme_id, component_code)
+);
+
+CREATE TABLE IF NOT EXISTS exam_mark_components (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    exam_id UUID REFERENCES exams(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
+    student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
+    component_id UUID REFERENCES exam_subject_components(id) ON DELETE CASCADE NOT NULL,
+    raw_score NUMERIC(6,2) NOT NULL CHECK (raw_score >= 0),
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (component_id, student_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_escs_exam_id ON exam_subject_component_schemes(exam_id);
+CREATE INDEX IF NOT EXISTS idx_esc_scheme_id ON exam_subject_components(scheme_id);
+CREATE INDEX IF NOT EXISTS idx_emc_exam_id ON exam_mark_components(exam_id);
+CREATE INDEX IF NOT EXISTS idx_emc_student_id ON exam_mark_components(student_id);
+
+ALTER TABLE exam_subject_component_schemes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_subject_components ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_mark_components ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated read component schemes" ON exam_subject_component_schemes
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins and exam creators manage component schemes" ON exam_subject_component_schemes
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM exams e
+            WHERE e.id = exam_subject_component_schemes.exam_id
+              AND e.created_by_teacher_id = auth.uid()
+        )
+        OR get_my_role() = 'ADMIN'
+    );
+
+CREATE POLICY "Authenticated read components" ON exam_subject_components
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins and exam creators manage components" ON exam_subject_components
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM exam_subject_component_schemes s
+            JOIN exams e ON e.id = s.exam_id
+            WHERE s.id = exam_subject_components.scheme_id
+              AND e.created_by_teacher_id = auth.uid()
+        )
+        OR get_my_role() = 'ADMIN'
+    );
+
+CREATE POLICY "Students view their own component marks" ON exam_mark_components
+    FOR SELECT USING (
+        student_id = auth.uid()
+        OR get_my_role() IN ('ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER')
+    );
+CREATE POLICY "Teachers manage component marks for their exams" ON exam_mark_components
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM exams e
+            WHERE e.id = exam_mark_components.exam_id
+              AND e.created_by_teacher_id = auth.uid()
+        )
+        OR get_my_role() = 'ADMIN'
+    );

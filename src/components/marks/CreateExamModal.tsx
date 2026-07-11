@@ -4,6 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
+import {
+  PaperSchemeEditor,
+  DEFAULT_SCHEME_DRAFT,
+  validateSchemeDraft,
+  schemeDraftToPayload,
+  type PaperSchemeDraft,
+} from '@/components/marks/PaperSchemeEditor';
 
 interface DropdownItem { id: string; name: string; }
 interface GradeItem { id: string; name_display: string; code: string; academic_level_id: string; }
@@ -33,6 +40,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const [selectedTermId, setSelectedTermId] = useState('');
   const [selectedGradeId, setSelectedGradeId] = useState('');
   const [selectedStreamId, setSelectedStreamId] = useState('');
+  const [schemeDraft, setSchemeDraft] = useState<PaperSchemeDraft>(DEFAULT_SCHEME_DRAFT);
 
   // Dropdown data
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
@@ -148,6 +156,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
     if (!selectedGradeId) return setSaveMessage({ type: 'error', text: 'Please select a grade.' });
     if (!examDate) return setSaveMessage({ type: 'error', text: 'Please set an exam date.' });
     if (maxScore <= 0) return setSaveMessage({ type: 'error', text: 'Max score must be greater than 0.' });
+    const schemeError = validateSchemeDraft(schemeDraft);
+    if (schemeError) return setSaveMessage({ type: 'error', text: schemeError });
 
     setCreating(true);
     const insertPayload: Record<string, unknown> = {
@@ -178,6 +188,23 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
 
     const respData = await res.json();
     const newExamId = respData?.data?.id;
+
+    // Save the multi-paper configuration for the new exam (if enabled)
+    if (newExamId && schemeDraft.enabled) {
+      const schemeRes = await fetch(`/api/school/exams/${newExamId}/components`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(schemeDraftToPayload(schemeDraft)),
+      });
+      if (!schemeRes.ok) {
+        const schemeErr = await schemeRes.json();
+        setSaveMessage({ type: 'error', text: `Exam created, but papers config failed: ${schemeErr.error || 'Unknown error'}. You can configure papers later via 📑 Papers.` });
+        setCreating(false);
+        setTimeout(() => { onCreated(newExamId); onClose(); }, 2500);
+        return;
+      }
+    }
+
     setSaveMessage({ type: 'success', text: 'Exam created successfully!' });
     setCreating(false);
     if (newExamId) {
@@ -379,6 +406,15 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 <label className="block text-xs text-muted-foreground mb-1">Exam Date *</label>
                 <input type="date" className="input-field w-full" value={examDate} onChange={e => setExamDate(e.target.value)} />
               </div>
+            </div>
+
+            {/* Optional multi-paper structure (KCSE Maths P1+P2, languages, sciences) */}
+            <div className="bg-muted border border-border rounded-md p-3">
+              <PaperSchemeEditor
+                value={schemeDraft}
+                onChange={setSchemeDraft}
+                subjectName={subjects.find(s => s.id === selectedSubjectId)?.name}
+              />
             </div>
           </div>
         )}

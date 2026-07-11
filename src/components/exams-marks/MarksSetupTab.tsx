@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { CreateExamModal } from '@/components/marks/CreateExamModal';
+import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
@@ -46,6 +47,8 @@ export function MarksSetupTab() {
   const [createSubjectId, setCreateSubjectId] = useState<string | undefined>(undefined);
   const [selectedExamId, setSelectedExamId] = useState('');
   const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
+  const [showPaperModal, setShowPaperModal] = useState(false);
+  const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
 
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
@@ -538,6 +541,19 @@ export function MarksSetupTab() {
               <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · Max: {selectedExam.max_score}
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => setShowPaperModal(true)}
+                className="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  border: '1px dashed var(--color-border)',
+                  cursor: 'pointer',
+                }}
+                title="Configure multiple papers (P1/P2/P3) for this exam subject"
+              >
+                📑 Papers
+              </button>
               {(['manual', 'bulk'] as const).map(m => (
                 <button
                   key={m}
@@ -556,7 +572,7 @@ export function MarksSetupTab() {
             </div>
           </div>
           {mode === 'manual'
-            ? <ManualEntryGrid examId={selectedExamId} maxScore={selectedExam.max_score} />
+            ? <ManualEntryGrid key={`${selectedExamId}-${schemeVersion}`} examId={selectedExamId} maxScore={selectedExam.max_score} />
             : <BulkUpload examId={selectedExamId} />}
         </div>
       )}
@@ -581,6 +597,15 @@ export function MarksSetupTab() {
         </div>
       )}
       
+      {showPaperModal && selectedExamId && (
+        <PaperSchemeModal
+          examId={selectedExamId}
+          subjectName={selectedExam?.subject_name}
+          onClose={() => setShowPaperModal(false)}
+          onSaved={() => setSchemeVersion(v => v + 1)}
+        />
+      )}
+
       {showCreateModal && (
         <CreateExamModal
           onClose={() => { setShowCreateModal(false); setCreateSubjectId(undefined); }}

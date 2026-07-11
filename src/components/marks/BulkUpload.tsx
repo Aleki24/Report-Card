@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Papa from 'papaparse';
+import { isMultiPaper } from '@/lib/multi-paper';
 
 interface ParsedRow {
     [key: string]: string;
@@ -32,6 +33,21 @@ export function BulkUpload({ examId }: Props) {
     const [errors, setErrors] = useState<string[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [multiPaperExam, setMultiPaperExam] = useState(false);
+
+    // Warn when this exam uses multiple papers — bulk upload takes final scores only
+    useEffect(() => {
+        if (!examId) { setMultiPaperExam(false); return; }
+        (async () => {
+            try {
+                const res = await fetch(`/api/school/exams/${examId}/components`, { cache: 'no-store' });
+                const json = await res.json();
+                setMultiPaperExam(isMultiPaper(json.data));
+            } catch {
+                setMultiPaperExam(false);
+            }
+        })();
+    }, [examId]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -171,6 +187,11 @@ export function BulkUpload({ examId }: Props) {
 
     return (
         <div className="w-full">
+            {multiPaperExam && (
+                <div className="mb-4 p-3 rounded-md text-sm" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: 'rgb(251,191,36)' }}>
+                    📑 This subject is configured with multiple papers. Bulk upload accepts <strong>final scores only</strong> (no per-paper breakdown). Use <strong>Manual Entry</strong> to record P1/P2/P3 scores per paper.
+                </div>
+            )}
             {/* Step 1: Upload */}
             {step === 'upload' && (
                 <div className="card text-center py-12 px-6">

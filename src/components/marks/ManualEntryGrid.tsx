@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { ExamSubjectComponentScheme } from '@/types';
+import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
 
 interface GradeOption {
     symbol: string;
@@ -23,6 +25,7 @@ interface MarkRow {
     studentName: string;     // Display name (auto-filled)
     admissionNumber: string; // Auto-filled from selection
     score: string;
+    componentScores: Record<string, string>; // per-paper scores keyed by component id (multi-paper exams)
     grade: string;
     remarks: string;
     error: string;
@@ -35,7 +38,7 @@ interface Props {
 }
 
 const emptyRow = (): MarkRow => ({
-    studentId: '', studentName: '', admissionNumber: '', score: '', grade: '', remarks: '', error: '', isGradeManuallySet: false,
+    studentId: '', studentName: '', admissionNumber: '', score: '', componentScores: {}, grade: '', remarks: '', error: '', isGradeManuallySet: false,
 });
 
 export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
@@ -61,6 +64,45 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     const [rows, setRows] = useState<MarkRow[]>([emptyRow(), emptyRow(), emptyRow()]);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Multi-paper scheme for this exam (null = normal single-paper flow)
+    const [scheme, setScheme] = useState<ExamSubjectComponentScheme | null>(null);
+    const multiPaper = isMultiPaper(scheme);
+    const schemeComponents = useMemo(
+        () => (multiPaper ? (scheme?.components || []) : []),
+        [multiPaper, scheme]
+    );
+
+    // ── Fetch paper configuration for this exam ──────────
+    useEffect(() => {
+        if (!examId) { setScheme(null); return; }
+        (async () => {
+            try {
+                const res = await fetch(`/api/school/exams/${examId}/components`, { cache: 'no-store' });
+                const json = await res.json();
+                setScheme(json.data || null);
+            } catch (err) {
+                console.error('Failed to load paper configuration:', err);
+                setScheme(null);
+            }
+        })();
+    }, [examId]);
+
+    // ── Live composite result for a multi-paper row ──────
+    const compositeForRow = useCallback((row: MarkRow) => {
+        return calculateCompositeSubjectScore(
+            schemeComponents.map(c => ({
+                componentId: c.id,
+                code: c.component_code,
+                maxScore: Number(c.max_score),
+                score: row.componentScores[c.id] !== undefined && row.componentScores[c.id] !== ''
+                    ? parseFloat(row.componentScores[c.id])
+                    : null,
+                displayOrder: c.display_order,
+            })),
+            scheme?.aggregation_method || 'sum_then_percentage'
+        );
+    }, [schemeComponents, scheme?.aggregation_method]);
 
     // ── Fetch grades + streams on mount ──────────────────
     useEffect(() => {
@@ -171,17 +213,53 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
     // ── Already-selected student IDs (prevent duplicate selection) ──
     const selectedStudentIds = new Set(rows.map(r => r.studentId).filter(Boolean));
 
-    // ── Auto-resolve grade from score ────────────────────
-    const autoResolveGrade = (scoreStr: string): string => {
-        const num = parseFloat(scoreStr);
-        if (!scoreStr || isNaN(num) || maxScore <= 0) return '';
-        const pct = (num / maxScore) * 100;
+    // ── Auto-resolve grade from percentage ───────────────
+    const resolveGradeFromPct = (pct: number): string => {
         for (const scale of gradingScales) {
             if (pct >= scale.min_percentage && pct <= scale.max_percentage) {
                 return scale.symbol;
             }
         }
         return '';
+    };
+
+    // ── Auto-resolve grade from score ────────────────────
+    const autoResolveGrade = (scoreStr: string): string => {
+        const num = parseFloat(scoreStr);
+        if (!scoreStr || isNaN(num) || maxScore <= 0) return '';
+        return resolveGradeFromPct((num / maxScore) * 100);
+    };
+
+    // ── Per-paper score update (multi-paper exams) ───────
+    const updateComponentScore = (index: number, componentId: string, value: string) => {
+        setRows(prev => {
+            const updated = [...prev];
+            const row = { ...updated[index], componentScores: { ...updated[index].componentScores, [componentId]: value }, error: '' };
+
+            // Validate each entered paper against its own max score
+            for (const c of schemeComponents) {
+                const v = row.componentScores[c.id];
+                if (v === undefined || v === '') continue;
+                const num = parseFloat(v);
+                if (isNaN(num)) { row.error = `${c.component_code} score must be a number`; break; }
+                if (num < 0 || num > Number(c.max_score)) {
+                    row.error = `${c.component_code} score must be between 0 and ${c.max_score}`;
+                    break;
+                }
+            }
+
+            // Live final score + auto grade (unless manually overridden)
+            if (!row.error && !row.isGradeManuallySet) {
+                const composite = compositeForRow(row);
+                if (composite.enteredCount > 0) {
+                    const resolved = resolveGradeFromPct(composite.finalPercentage);
+                    if (resolved) row.grade = resolved;
+                }
+            }
+
+            updated[index] = row;
+            return updated;
+        });
     };
 
     // ── Row helpers ──────────────────────────────────────
@@ -241,9 +319,14 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
         }
 
         // Filter to only rows that have at least a student selected and a score
-        const filledRows = rows.filter(r => r.studentId && r.score);
+        // (for multi-paper subjects: at least one paper score)
+        const filledRows = rows.filter(r => r.studentId && (
+            multiPaper
+                ? schemeComponents.some(c => r.componentScores[c.id] !== undefined && r.componentScores[c.id] !== '')
+                : r.score
+        ));
         if (filledRows.length === 0) {
-            setSaveMessage({ type: 'error', text: 'Please select at least one student and enter a score.' });
+            setSaveMessage({ type: 'error', text: multiPaper ? 'Please select at least one student and enter at least one paper score.' : 'Please select at least one student and enter a score.' });
             return;
         }
 
@@ -271,6 +354,25 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             const examMaxScore = examData?.max_score || maxScore;
 
             const insertRows = filledRows.map(r => {
+                if (multiPaper) {
+                    // Send per-paper scores; the server resolves the final
+                    // subject score using the configured aggregation method.
+                    const components: Record<string, number> = {};
+                    for (const c of schemeComponents) {
+                        const v = r.componentScores[c.id];
+                        if (v !== undefined && v !== '') components[c.id] = parseFloat(v);
+                    }
+                    const composite = compositeForRow(r);
+                    return {
+                        exam_id: examId,
+                        student_id: r.studentId,
+                        raw_score: examMaxScore > 0 ? Math.round((composite.finalPercentage / 100) * examMaxScore * 100) / 100 : 0,
+                        percentage: composite.finalPercentage,
+                        grade_symbol: r.grade,
+                        remarks: r.remarks || null,
+                        components,
+                    };
+                }
                 const score = parseFloat(r.score);
                 const percentage = examMaxScore > 0 ? Math.round((score / examMaxScore) * 10000) / 100 : 0;
                 return {
@@ -321,7 +423,12 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
                 <div>
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Manual Entry</h3>
-                    <p className="text-muted-foreground text-sm">Select a class, then pick students from the dropdown · Max score: {maxScore}</p>
+                    <p className="text-muted-foreground text-sm">
+                        Select a class, then pick students from the dropdown
+                        {multiPaper
+                            ? <> · <span style={{ color: 'var(--color-accent)' }}>📑 Multi-paper: {schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}</span></>
+                            : <> · Max score: {maxScore}</>}
+                    </p>
                 </div>
             </div>
 
@@ -424,7 +531,18 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                     <th className="w-10">#</th>
                                     <th>Student</th>
                                     <th>Adm No</th>
-                                    <th className="w-24">Score *</th>
+                                    {multiPaper ? (
+                                        <>
+                                            {schemeComponents.map(c => (
+                                                <th key={c.id} className="w-24" title={c.component_name}>
+                                                    {c.component_code} <span className="font-normal opacity-60">/{Number(c.max_score)}</span>
+                                                </th>
+                                            ))}
+                                            <th className="w-20">Final %</th>
+                                        </>
+                                    ) : (
+                                        <th className="w-24">Score *</th>
+                                    )}
                                     <th className="w-40">Grade *</th>
                                     <th>Remarks</th>
                                     <th className="w-10"></th>
@@ -460,17 +578,46 @@ export function ManualEntryGrid({ examId, maxScore = 100 }: Props) {
                                                 {row.admissionNumber || '—'}
                                             </span>
                                         </td>
-                                        {/* Score */}
-                                        <td data-label="Score">
-                                            <input
-                                                type="text"
-                                                className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
-                                                style={{ padding: '8px 12px' }}
-                                                placeholder={`0-${maxScore}`}
-                                                value={row.score}
-                                                onChange={e => updateRow(i, 'score', e.target.value)}
-                                            />
-                                        </td>
+                                        {/* Score — single input, or one input per paper */}
+                                        {multiPaper ? (
+                                            <>
+                                                {schemeComponents.map(c => (
+                                                    <td key={c.id} data-label={c.component_code}>
+                                                        <input
+                                                            type="text"
+                                                            className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
+                                                            style={{ padding: '8px 12px', minWidth: 64 }}
+                                                            placeholder={`0-${Number(c.max_score)}`}
+                                                            value={row.componentScores[c.id] || ''}
+                                                            onChange={e => updateComponentScore(i, c.id, e.target.value)}
+                                                        />
+                                                    </td>
+                                                ))}
+                                                <td data-label="Final %">
+                                                    {(() => {
+                                                        const composite = compositeForRow(row);
+                                                        return composite.enteredCount > 0 && !row.error ? (
+                                                            <span className="text-sm font-semibold" style={{ color: 'var(--color-accent)' }} title={composite.isComplete ? 'All papers entered' : 'Some papers missing (counted as 0)'}>
+                                                                {composite.finalPercentage.toFixed(1)}%{!composite.isComplete && <span className="opacity-60">*</span>}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-sm text-muted-foreground">—</span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <td data-label="Score">
+                                                <input
+                                                    type="text"
+                                                    className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
+                                                    style={{ padding: '8px 12px' }}
+                                                    placeholder={`0-${maxScore}`}
+                                                    value={row.score}
+                                                    onChange={e => updateRow(i, 'score', e.target.value)}
+                                                />
+                                            </td>
+                                        )}
                                         {/* Grade (auto-resolved but editable) */}
                                         <td data-label="Grade">
                                             <select
