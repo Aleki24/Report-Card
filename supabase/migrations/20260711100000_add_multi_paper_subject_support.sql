@@ -55,11 +55,15 @@ CREATE TABLE IF NOT EXISTS exam_subject_components (
 );
 
 -- 3. Per-student score for each paper/component
+--    NOTE: student_id is TEXT because the production database stores
+--    Clerk user IDs (users.id / students.id were converted to TEXT —
+--    see supabase/archive/fix-users-id-type.sql). supabase_schema.sql
+--    (fresh installs) still declares them UUID; adjust to UUID there.
 CREATE TABLE IF NOT EXISTS exam_mark_components (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     exam_id UUID REFERENCES exams(id) ON DELETE CASCADE NOT NULL,
     subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE NOT NULL,
     component_id UUID REFERENCES exam_subject_components(id) ON DELETE CASCADE NOT NULL,
     raw_score NUMERIC(6,2) NOT NULL CHECK (raw_score >= 0),
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
@@ -87,7 +91,7 @@ CREATE POLICY "Admins and exam creators manage component schemes" ON exam_subjec
         EXISTS (
             SELECT 1 FROM exams e
             WHERE e.id = exam_subject_component_schemes.exam_id
-              AND e.created_by_teacher_id = auth.uid()
+              AND e.created_by_teacher_id::text = auth.uid()::text
         )
         OR get_my_role() = 'ADMIN'
     );
@@ -103,7 +107,7 @@ CREATE POLICY "Admins and exam creators manage components" ON exam_subject_compo
             SELECT 1 FROM exam_subject_component_schemes s
             JOIN exams e ON e.id = s.exam_id
             WHERE s.id = exam_subject_components.scheme_id
-              AND e.created_by_teacher_id = auth.uid()
+              AND e.created_by_teacher_id::text = auth.uid()::text
         )
         OR get_my_role() = 'ADMIN'
     );
@@ -111,7 +115,7 @@ CREATE POLICY "Admins and exam creators manage components" ON exam_subject_compo
 DROP POLICY IF EXISTS "Students view their own component marks" ON exam_mark_components;
 CREATE POLICY "Students view their own component marks" ON exam_mark_components
     FOR SELECT USING (
-        student_id = auth.uid()
+        student_id = auth.uid()::text
         OR get_my_role() IN ('ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER')
     );
 
@@ -121,7 +125,7 @@ CREATE POLICY "Teachers manage component marks for their exams" ON exam_mark_com
         EXISTS (
             SELECT 1 FROM exams e
             WHERE e.id = exam_mark_components.exam_id
-              AND e.created_by_teacher_id = auth.uid()
+              AND e.created_by_teacher_id::text = auth.uid()::text
         )
         OR get_my_role() = 'ADMIN'
     );
