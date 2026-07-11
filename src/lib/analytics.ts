@@ -161,15 +161,12 @@ export function aggregateStudentPerformance(
             subjectName: subjectNames[m.subject_id] || ''
         }));
         
-        if (marksWithNames.length >= 8) {
-            const selectedMarks = select844Subjects(marksWithNames, scales || []);
-            marksToProcess = selectedMarks as ExamMarkWithDetails[];
-            selectedSubjectIds = selectedMarks.map(m => m.subject_id);
-            used844Selection = true;
-            console.log('[aggregateStudentPerformance] 844 Selection applied:', marksWithNames.length, '->', selectedMarks.length, 'subjects');
-        } else {
-            selectedSubjectIds = marks.map(m => m.subject_id);
-        }
+        // Fix: always run select844Subjects; the function handles <8 subjects internally
+        const selectedMarks = select844Subjects(marksWithNames, scales || []);
+        marksToProcess = selectedMarks as ExamMarkWithDetails[];
+        selectedSubjectIds = selectedMarks.map(m => m.subject_id);
+        used844Selection = true;
+        console.log('[aggregateStudentPerformance] 844 Selection applied:', marksWithNames.length, '->', selectedMarks.length, 'subjects');
     }
 
     const totalScore = marksToProcess.reduce((sum, mark) => sum + mark.raw_score, 0);
@@ -465,16 +462,16 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
         selected.push(sortedHumanities[0]);
     }
     
-    // Step 5: Technicals - only include best 1 if 8+ subjects total (SORT BEFORE SLICE)
-    if (technicals.length > 0 && numSubjects >= 8) {
+    // Fix: include best technical if present, without numSubjects >= 8 gate
+    if (technicals.length > 0) {
         const sortedTechnicals = sortByPointsDesc(technicals);
         selected.push(sortedTechnicals[0]);
     }
     
-    // If still under 7, fill with remaining best subjects by points
-    const remainingSorted = sortByPointsDesc([...sciences, ...humanities, ...technicals]);
+    // If still under 7, fill with extra technicals only (not dropped sciences/humanities)
+    const extraTechnicals = sortByPointsDesc(technicals).slice(1);
     
-    for (const m of remainingSorted) {
+    for (const m of extraTechnicals) {
         if (!selected.includes(m) && selected.length < 7) {
             selected.push(m);
         }
