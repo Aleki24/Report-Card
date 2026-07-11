@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { EditMarkModal, type EditMarkData } from './EditMarkModal';
+import type { ExamSubjectComponentScheme } from '@/types';
+import { isMultiPaper } from '@/lib/multi-paper';
 
 export interface MarkRow {
     id: string;
@@ -13,6 +15,8 @@ export interface MarkRow {
     grade_symbol: string;
     rubric: string | null;
     remarks: string | null;
+    /** Per-paper raw scores keyed by component id (multi-paper exams) */
+    components?: Record<string, number>;
 }
 
 interface Props {
@@ -20,6 +24,8 @@ interface Props {
     maxScore: number;
     examId: string;
     gradeStreamId?: string;
+    /** Multi-paper scheme for this exam (null/undefined = single paper) */
+    scheme?: ExamSubjectComponentScheme | null;
     onRefresh: () => void;
 }
 
@@ -46,7 +52,9 @@ const OVERALL_POINTS_GRADES = [
 
 type SortKey = 'student_name' | 'percentage' | 'grade_symbol';
 
-export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRefresh }: Props) {
+export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh }: Props) {
+    const multiPaper = isMultiPaper(scheme);
+    const schemeComponents = multiPaper ? (scheme?.components || []) : [];
     const [sortKey, setSortKey] = useState<SortKey>('student_name');
     const [sortAsc, setSortAsc] = useState(true);
     const [editingMark, setEditingMark] = useState<EditMarkData | null>(null);
@@ -136,7 +144,16 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
             grade_symbol: mark.grade_symbol,
             rubric: mark.rubric,
             remarks: mark.remarks,
+            components: mark.components,
         });
+    };
+
+    // Compact per-paper breakdown shown under the final score
+    const breakdownLabel = (mark: MarkRow): string => {
+        if (!multiPaper || !mark.components) return '';
+        return schemeComponents
+            .map(c => `${c.component_code}: ${mark.components?.[c.id] ?? '—'}/${Number(c.max_score)}`)
+            .join(' · ');
     };
 
     const exportCSV = () => {
@@ -228,6 +245,11 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{mark.admission_number}</td>
                                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
                                         {Math.round(mark.percentage)}%
+                                        {multiPaper && mark.components && (
+                                            <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                                                {breakdownLabel(mark)}
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                                         <span style={{
@@ -293,6 +315,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, onRef
                     mark={editingMark}
                     maxScore={maxScore}
                     examId={examId}
+                    scheme={scheme}
                     onClose={() => setEditingMark(null)}
                     onSaved={() => { setEditingMark(null); onRefresh(); }}
                     onDeleted={() => { setEditingMark(null); onRefresh(); }}

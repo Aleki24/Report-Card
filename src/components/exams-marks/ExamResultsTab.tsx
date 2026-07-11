@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
+import type { ExamSubjectComponentScheme } from '@/types';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
@@ -29,6 +30,7 @@ export function ExamResultsTab() {
     // ----- Tab + Data -----
     const [activeTab, setActiveTab] = useState<Tab>('allsubjects');
     const [marks, setMarks] = useState<MarkRow[]>([]);
+    const [markScheme, setMarkScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [loadingMarks, setLoadingMarks] = useState(false);
 
     // ----- Reports tab -----
@@ -125,14 +127,18 @@ export function ExamResultsTab() {
                     grade_symbol: m.grade_symbol || '-',
                     rubric: m.rubric,
                     remarks: m.remarks,
+                    components: m.components,
                 }));
                 setMarks(mapped);
+                setMarkScheme(json.scheme || null);
             } else {
                 setMarks([]);
+                setMarkScheme(null);
             }
         } catch (err) {
             console.error('Failed to fetch marks:', err);
             setMarks([]);
+            setMarkScheme(null);
         } finally {
             setLoadingMarks(false);
         }
@@ -344,6 +350,7 @@ export function ExamResultsTab() {
                                     maxScore={selectedExam?.max_score || 100}
                                     examId={selectedExamId}
                                     gradeStreamId={selectedStreamId}
+                                    scheme={markScheme}
                                     onRefresh={fetchMarks}
                                 />
                             )}

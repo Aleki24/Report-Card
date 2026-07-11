@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import type { ExamSubjectComponentScheme } from '@/types';
+import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
 
 interface StudentMissing {
     id: string;
@@ -17,6 +19,9 @@ interface Props {
 export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
     const [students, setStudents] = useState<StudentMissing[]>([]);
     const [scores, setScores] = useState<Record<string, string>>({});
+    // Per-paper scores: studentId -> componentId -> score (multi-paper exams)
+    const [componentScores, setComponentScores] = useState<Record<string, Record<string, string>>>({});
+    const [scheme, setScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [manualGrades, setManualGrades] = useState<Record<string, string>>({});
     const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; systemName: string; min_percentage: number; max_percentage: number }[]>([]);
     const [examAcademicLevelId, setExamAcademicLevelId] = useState<string | null>(null);
@@ -55,6 +60,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
 
                 setStudents(missing);
                 setScores({});
+                setComponentScores({});
             } catch (err) {
                 console.error('Failed to load missing students:', err);
                 setMessage({ type: 'error', text: 'Error loading students.' });
@@ -66,6 +72,44 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
         fetchMissing();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId, gradeStreamId]);
+
+    // Fetch multi-paper configuration for this exam (if any)
+    useEffect(() => {
+        if (!examId) { setScheme(null); return; }
+        (async () => {
+            try {
+                const res = await fetch(`/api/school/exams/${examId}/components`, { cache: 'no-store' });
+                const json = await res.json();
+                setScheme(json.data || null);
+            } catch {
+                setScheme(null);
+            }
+        })();
+    }, [examId]);
+
+    const multiPaper = isMultiPaper(scheme);
+    const schemeComponents = multiPaper ? (scheme?.components || []) : [];
+
+    const compositeForStudent = (studentId: string) => {
+        const entries = componentScores[studentId] || {};
+        return calculateCompositeSubjectScore(
+            schemeComponents.map(c => ({
+                componentId: c.id,
+                code: c.component_code,
+                maxScore: Number(c.max_score),
+                score: entries[c.id] !== undefined && entries[c.id] !== '' ? parseFloat(entries[c.id]) : null,
+                displayOrder: c.display_order,
+            })),
+            scheme?.aggregation_method || 'sum_then_percentage'
+        );
+    };
+
+    const handleComponentScoreChange = (studentId: string, componentId: string, value: string) => {
+        setComponentScores(prev => ({
+            ...prev,
+            [studentId]: { ...(prev[studentId] || {}), [componentId]: value },
+        }));
+    };
 
     // Fetch grading scales filtered by exam's subject level
     useEffect(() => {
@@ -148,6 +192,73 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
 
     const handleSubmit = async () => {
         setMessage(null);
+
+        // ── Multi-paper: submit per-paper scores, server resolves final ──
+        if (multiPaper) {
+            const studentIds = students
+                .map(s => s.id)
+                .filter(id => schemeComponents.some(c => {
+                    const v = componentScores[id]?.[c.id];
+                    return v !== undefined && v !== '' && !isNaN(Number(v));
+                }));
+
+            if (studentIds.length === 0) {
+                setMessage({ type: 'error', text: 'Enter at least one paper score before submitting.' });
+                return;
+            }
+
+            // Validate against each paper's max score
+            for (const id of studentIds) {
+                for (const c of schemeComponents) {
+                    const v = componentScores[id]?.[c.id];
+                    if (v === undefined || v === '') continue;
+                    const num = Number(v);
+                    if (isNaN(num) || num < 0 || num > Number(c.max_score)) {
+                        const student = students.find(s => s.id === id);
+                        setMessage({ type: 'error', text: `${student?.name || 'Student'}: ${c.component_code} must be between 0 and ${c.max_score}` });
+                        return;
+                    }
+                }
+            }
+
+            setSaving(true);
+            try {
+                const entries = studentIds.map(id => {
+                    const composite = compositeForStudent(id);
+                    const components: Record<string, number> = {};
+                    for (const c of schemeComponents) {
+                        const v = componentScores[id]?.[c.id];
+                        if (v !== undefined && v !== '') components[c.id] = Number(v);
+                    }
+                    return {
+                        student_id: id,
+                        raw_score: examMaxScore > 0 ? Math.round((composite.finalPercentage / 100) * examMaxScore * 100) / 100 : 0,
+                        percentage: composite.finalPercentage,
+                        grade_symbol: manualGrades[id] || autoResolveGrade(String(composite.finalPercentage), 100) || null,
+                        remarks: '',
+                        components,
+                    };
+                });
+
+                const res = await fetch('/api/school/exam-marks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exam_id: examId, marks: entries })
+                });
+                const result = await res.json();
+
+                if (!res.ok) {
+                    setMessage({ type: 'error', text: `Failed to save: ${result.error}` });
+                } else {
+                    setMessage({ type: 'success', text: `${entries.length} mark(s) saved successfully!` });
+                    onSaved();
+                }
+            } catch (err: unknown) {
+                setMessage({ type: 'error', text: `Error: ${err instanceof Error ? err.message : 'Unknown error'}` });
+            }
+            setSaving(false);
+            return;
+        }
 
         // Only submit rows that have a score entered
         const rawEntries = Object.entries(scores)
@@ -252,6 +363,11 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
         <div>
             <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
                 {students.length} student{students.length !== 1 ? 's' : ''} missing marks — enter scores below and submit.
+                {multiPaper && (
+                    <span style={{ display: 'block', marginTop: 4, color: 'var(--color-accent)' }}>
+                        📑 Multi-paper subject: enter each paper separately ({schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}). * = some papers still missing (counted as 0).
+                    </span>
+                )}
             </p>
 
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -262,7 +378,18 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                                 <th style={thStyle}>#</th>
                                 <th style={thStyle}>Student</th>
                                 <th style={thStyle}>Admission No</th>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Score</th>
+                                {multiPaper ? (
+                                    <>
+                                        {schemeComponents.map(c => (
+                                            <th key={c.id} style={{ ...thStyle, textAlign: 'center' }} title={c.component_name}>
+                                                {c.component_code} /{Number(c.max_score)}
+                                            </th>
+                                        ))}
+                                        <th style={{ ...thStyle, textAlign: 'center' }}>Final %</th>
+                                    </>
+                                ) : (
+                                    <th style={{ ...thStyle, textAlign: 'center' }}>Score</th>
+                                )}
                                 <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
                             </tr>
                         </thead>
@@ -278,22 +405,59 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{i + 1}</td>
                                     <td style={tdStyle}>{s.name}</td>
                                     <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admission_number}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <input
-                                            type="number"
-                                            className="input-field"
-                                            style={{ width: 80, textAlign: 'center', padding: '4px 8px', fontSize: 13 }}
-                                            placeholder="—"
-                                            min={0}
-                                            value={scores[s.id] || ''}
-                                            onChange={e => handleScoreChange(s.id, e.target.value)}
-                                        />
-                                    </td>
+                                    {multiPaper ? (
+                                        <>
+                                            {schemeComponents.map(c => {
+                                                const v = componentScores[s.id]?.[c.id] || '';
+                                                const num = Number(v);
+                                                const invalid = v !== '' && (isNaN(num) || num < 0 || num > Number(c.max_score));
+                                                return (
+                                                    <td key={c.id} style={{ ...tdStyle, textAlign: 'center' }}>
+                                                        <input
+                                                            type="number"
+                                                            className="input-field"
+                                                            style={{ width: 70, textAlign: 'center', padding: '4px 8px', fontSize: 13, borderColor: invalid ? 'var(--color-danger, #EF4444)' : undefined }}
+                                                            placeholder="—"
+                                                            min={0}
+                                                            max={Number(c.max_score)}
+                                                            value={v}
+                                                            onChange={e => handleComponentScoreChange(s.id, c.id, e.target.value)}
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
+                                                {(() => {
+                                                    const composite = compositeForStudent(s.id);
+                                                    return composite.enteredCount > 0
+                                                        ? `${composite.finalPercentage.toFixed(1)}%${composite.isComplete ? '' : '*'}`
+                                                        : '—';
+                                                })()}
+                                            </td>
+                                        </>
+                                    ) : (
+                                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                            <input
+                                                type="number"
+                                                className="input-field"
+                                                style={{ width: 80, textAlign: 'center', padding: '4px 8px', fontSize: 13 }}
+                                                placeholder="—"
+                                                min={0}
+                                                value={scores[s.id] || ''}
+                                                onChange={e => handleScoreChange(s.id, e.target.value)}
+                                            />
+                                        </td>
+                                    )}
                                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                                         <select
                                             className="input-field"
                                             style={{ width: 100, padding: '4px 8px', fontSize: 13 }}
-                                            value={manualGrades[s.id] || autoResolveGrade(scores[s.id] || '', examMaxScore)}
+                                            value={manualGrades[s.id] || (multiPaper
+                                                ? (() => {
+                                                    const composite = compositeForStudent(s.id);
+                                                    return composite.enteredCount > 0 ? autoResolveGrade(String(composite.finalPercentage), 100) : '';
+                                                })()
+                                                : autoResolveGrade(scores[s.id] || '', examMaxScore))}
                                             onChange={e => handleGradeChange(s.id, e.target.value)}
                                         >
                                             <option value="">—</option>
