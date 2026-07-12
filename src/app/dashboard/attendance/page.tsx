@@ -24,11 +24,13 @@ interface GradeStreamOption {
 
 const STATUS_ORDER: AttendanceStatus[] = ['present', 'absent', 'late', 'excused'];
 
+/* Status colors come from the CVD-validated --viz-* theme tokens (same
+   semantic mapping as the dashboard's attendance chart). */
 const STATUS_META: Record<AttendanceStatus, { label: string; color: string; bg: string }> = {
-  present: { label: 'P', color: '#059669', bg: 'rgba(5,150,105,0.12)' },
-  absent:  { label: 'A', color: '#DC2626', bg: 'rgba(220,38,38,0.12)' },
-  late:    { label: 'L', color: '#D97706', bg: 'rgba(217,119,6,0.12)' },
-  excused: { label: 'E', color: '#2563EB', bg: 'rgba(37,99,235,0.12)' },
+  present: { label: 'P', color: 'var(--viz-good)', bg: 'color-mix(in srgb, var(--viz-good) 14%, transparent)' },
+  absent:  { label: 'A', color: 'var(--viz-bad)', bg: 'color-mix(in srgb, var(--viz-bad) 14%, transparent)' },
+  late:    { label: 'L', color: 'var(--viz-warn)', bg: 'color-mix(in srgb, var(--viz-warn) 14%, transparent)' },
+  excused: { label: 'E', color: 'var(--viz-info)', bg: 'color-mix(in srgb, var(--viz-info) 14%, transparent)' },
 };
 
 const PDF_STYLES = StyleSheet.create({
@@ -197,7 +199,7 @@ function SummaryChip({
       gap: 6,
       padding: '5px 10px',
       borderRadius: 8,
-      background: `${color}0d`,
+      background: `color-mix(in srgb, ${color} 9%, transparent)`,
       fontSize: 12,
       fontWeight: 600,
       color,
@@ -511,24 +513,36 @@ export default function AttendancePage() {
             borderRadius: 10,
             alignItems: 'center',
           }}>
-            <SummaryChip label="Present" count={presentCount} color="#059669" icon={<CheckCircle size={13} />} />
-            <SummaryChip label="Absent" count={absentCount} color="#DC2626" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>} />
-            <SummaryChip label="Late" count={lateCount} color="#D97706" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>} />
-            <SummaryChip label="Excused" count={excusedCount} color="#2563EB" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
+            <SummaryChip label="Present" count={presentCount} color="var(--viz-good)" icon={<CheckCircle size={13} />} />
+            <SummaryChip label="Absent" count={absentCount} color="var(--viz-bad)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>} />
+            <SummaryChip label="Late" count={lateCount} color="var(--viz-warn)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>} />
+            <SummaryChip label="Excused" count={excusedCount} color="var(--viz-info)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
             <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
             {unmarkedCount > 0 && (
-              <SummaryChip label="Unmarked" count={unmarkedCount} color="#94A3B8" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>} />
+              <SummaryChip label="Unmarked" count={unmarkedCount} color="var(--muted-foreground)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>} />
             )}
             <SummaryChip
               label="Rate"
               count={attendanceRate}
-              color={attendanceRate >= 80 ? '#059669' : attendanceRate >= 60 ? '#D97706' : '#DC2626'}
+              color={attendanceRate >= 80 ? 'var(--viz-good)' : attendanceRate >= 60 ? 'var(--viz-warn)' : 'var(--viz-bad)'}
               icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
             />
             <div style={{ flex: 1 }} />
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)' }}>
               {students.length} student{students.length !== 1 ? 's' : ''}
             </span>
+            {/* Stacked status bar — same pattern as the dashboard attendance chart;
+                order keeps green and red non-adjacent for CVD readability */}
+            {students.length > 0 && (
+              <div className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full" style={{ flexBasis: '100%' }} role="img"
+                aria-label={`${presentCount} present, ${lateCount} late, ${excusedCount} excused, ${absentCount} absent, ${unmarkedCount} unmarked`}>
+                {presentCount > 0 && <div style={{ width: `${(presentCount / students.length) * 100}%`, background: 'var(--viz-good)' }} />}
+                {lateCount > 0 && <div style={{ width: `${(lateCount / students.length) * 100}%`, background: 'var(--viz-warn)' }} />}
+                {excusedCount > 0 && <div style={{ width: `${(excusedCount / students.length) * 100}%`, background: 'var(--viz-info)' }} />}
+                {absentCount > 0 && <div style={{ width: `${(absentCount / students.length) * 100}%`, background: 'var(--viz-bad)' }} />}
+                {unmarkedCount > 0 && <div style={{ width: `${(unmarkedCount / students.length) * 100}%`, background: 'var(--muted)' }} />}
+              </div>
+            )}
           </div>
 
           {/* ── Table ─────────────────────────────────── */}
@@ -539,11 +553,10 @@ export default function AttendancePage() {
             overflow: 'hidden',
           }}>
             <div ref={tableRef} style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
-              <table style={{
+              <table className="sm:min-w-[600px]" style={{
                 width: '100%',
                 borderCollapse: 'collapse',
                 fontSize: 13,
-                minWidth: 600,
               }}>
                 <thead>
                   <tr style={{
@@ -553,16 +566,16 @@ export default function AttendancePage() {
                     background: 'var(--card)',
                     borderBottom: '2px solid var(--border)',
                   }}>
-                    <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 40 }}>
+                    <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 40 }}>
                       #
                     </th>
                     <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Student
                     </th>
-                    <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Adm No
                     </th>
-                    <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 100 }}>
+                    <th className="hidden md:table-cell" style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 100 }}>
                       Status
                     </th>
                     <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 160 }}>
@@ -589,16 +602,17 @@ export default function AttendancePage() {
                           if (!isPending) e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <td style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontSize: 12 }}>
+                        <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontSize: 12 }}>
                           {idx + 1}
                         </td>
-                        <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--foreground)' }}>
-                          {s.name}
+                        <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>
+                          <div>{s.name}</div>
+                          <div className="sm:hidden" style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: 'var(--muted-foreground)' }}>{s.admission_number}</div>
                         </td>
-                        <td style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: 12 }}>
+                        <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: 12 }}>
                           {s.admission_number}
                         </td>
-                        <td style={{ textAlign: 'center', padding: '10px 16px' }}>
+                        <td className="hidden md:table-cell" style={{ textAlign: 'center', padding: '10px 16px' }}>
                           <StatusBadge status={s.status} />
                         </td>
                         <td style={{ textAlign: 'center', padding: '10px 16px' }}>
