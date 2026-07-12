@@ -20,12 +20,13 @@ interface AcademicCalendarTabProps {
     onAddYear: (e: React.FormEvent) => void;
     onAddTerm: (e: React.FormEvent) => void;
     onDelete: (type: string, id: string) => void;
+    onSetCurrentTerm: (term: Term) => void;
 }
 
 export function AcademicCalendarTab({
     academicYears, terms, selectedCalYearId, setSelectedCalYearId,
     calMsg, calSaving, newYear, setNewYear, newTerm, setNewTerm,
-    onAddYear, onAddTerm, onDelete,
+    onAddYear, onAddTerm, onDelete, onSetCurrentTerm,
 }: AcademicCalendarTabProps) {
     const calTerms = terms.filter(t => t.academic_year_id === selectedCalYearId);
 
@@ -41,7 +42,14 @@ export function AcademicCalendarTab({
             </InfoGuide>
 
             {calMsg && (
-                <div className={`p-3 rounded-md text-sm ${calMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                <div
+                    className="p-3 rounded-md text-sm border"
+                    style={{
+                        color: calMsg.startsWith('✅') ? 'var(--viz-good)' : 'var(--viz-bad)',
+                        background: `color-mix(in srgb, ${calMsg.startsWith('✅') ? 'var(--viz-good)' : 'var(--viz-bad)'} 10%, transparent)`,
+                        borderColor: `color-mix(in srgb, ${calMsg.startsWith('✅') ? 'var(--viz-good)' : 'var(--viz-bad)'} 30%, transparent)`,
+                    }}
+                >
                     {calMsg}
                 </div>
             )}
@@ -69,7 +77,7 @@ export function AcademicCalendarTab({
                                         <td className="px-4 py-3 text-sm font-mono">{y.end_date}</td>
                                         <td className="px-4 py-3 text-sm">{terms.filter(t => t.academic_year_id === y.id).length}</td>
                                         <td className="px-4 py-3">
-                                            <button className="text-xs text-red-400 hover:text-red-300" onClick={() => onDelete('academic_year', y.id)} disabled={calSaving}>🗑</button>
+                                            <button className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--viz-bad)' }} onClick={() => onDelete('academic_year', y.id)} disabled={calSaving}>Delete</button>
                                         </td>
                                     </tr>
                                 ))}
@@ -104,7 +112,7 @@ export function AcademicCalendarTab({
                 <div className="mb-4">
                     <label className="block text-xs text-muted-foreground mb-1">Select Academic Year</label>
                     {academicYears.length === 0 ? (
-                        <p className="text-xs text-orange-400">Add an academic year first.</p>
+                        <p className="text-xs" style={{ color: 'var(--viz-warn)' }}>Add an academic year first.</p>
                     ) : (
                         <select className="input-field w-full md:w-64" value={selectedCalYearId} onChange={e => setSelectedCalYearId(e.target.value)}>
                             {academicYears.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
@@ -131,9 +139,26 @@ export function AcademicCalendarTab({
                                                 <td className="px-4 py-3 font-medium">{t.name}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.start_date}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.end_date}</td>
-                                                <td className="px-4 py-3 text-sm">{t.is_current ? '✅' : ''}</td>
+                                                <td className="px-4 py-3 text-sm">
+                                                    {t.is_current ? (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                                                            style={{ color: 'var(--viz-good)', background: 'color-mix(in srgb, var(--viz-good) 14%, transparent)' }}
+                                                        >
+                                                            ● Current
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            className="text-xs font-medium text-muted-foreground hover:text-foreground underline decoration-dotted underline-offset-2"
+                                                            onClick={() => onSetCurrentTerm(t)}
+                                                            disabled={calSaving}
+                                                        >
+                                                            Set current
+                                                        </button>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3">
-                                                    <button className="text-xs text-red-400 hover:text-red-300" onClick={() => onDelete('term', t.id)} disabled={calSaving}>🗑</button>
+                                                    <button className="text-xs font-medium hover:opacity-80" style={{ color: 'var(--viz-bad)' }} onClick={() => onDelete('term', t.id)} disabled={calSaving}>Delete</button>
                                                 </td>
                                             </tr>
                                         ))}
