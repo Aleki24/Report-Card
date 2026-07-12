@@ -2,6 +2,7 @@ import React from 'react';
 import { ReportCardLayout } from './ReportCardLayout';
 import { ReportCardLayoutModern } from './ReportCardLayoutModern';
 import { ReportCardLayoutMinimal } from './ReportCardLayoutMinimal';
+import { ReportCardLayoutProgress } from './ReportCardLayoutProgress';
 import { DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from './templateMeta';
 import type { ReportCardData } from '../pdfGenerator';
 
@@ -13,6 +14,7 @@ const layouts: Record<ReportTemplateId, React.ComponentType<LayoutProps>> = {
     classic: ReportCardLayout,
     modern: ReportCardLayoutModern,
     minimal: ReportCardLayoutMinimal,
+    progress: ReportCardLayoutProgress,
 };
 
 export function getTemplateLayout(template?: string): React.ComponentType<LayoutProps> {
