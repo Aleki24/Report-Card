@@ -218,7 +218,7 @@ function AdminDashboard({ userName }: { userName: string }) {
           </p>
         </div>
         <form
-          onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/analytics?search=${encodeURIComponent(searchQuery.trim())}`); }}
+          onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
           className="hidden md:block"
         >
           <div className="flex w-64 items-center rounded-xl border border-border/60 bg-card/80 transition-colors focus-within:border-primary/50 lg:w-72">
@@ -227,7 +227,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             </span>
             <input
               type="text"
-              placeholder="Search students, analytics…"
+              placeholder="Search students…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm outline-none placeholder:text-muted-foreground/80"
@@ -621,7 +621,6 @@ function SubjectTeacherDashboard() {
             { label: 'My Exams', value: (json.examCount || 0).toString(), sub: (json.examCount || 0) > 0 ? 'Created' : 'No exams yet' },
             { label: 'Subject Average', value: json.avg || '—', sub: json.markCount > 0 ? `From ${json.markCount} marks` : 'Enter marks to see' },
             { label: 'Students Assessed', value: (json.markCount || 0).toString(), sub: json.markCount > 0 ? 'Total mark entries' : 'No data yet' },
-            { label: 'Pending Entry', value: '—', sub: 'Create exams to track' },
           ]);
         }
       } catch {
@@ -629,7 +628,6 @@ function SubjectTeacherDashboard() {
           { label: 'My Exams', value: '—', sub: 'No exams yet' },
           { label: 'Subject Average', value: '—', sub: 'Enter marks to see' },
           { label: 'Students Assessed', value: '0', sub: 'No data yet' },
-          { label: 'Pending Entry', value: '—', sub: 'Create exams to track' },
         ]);
       }
       setLoading(false);
@@ -649,9 +647,9 @@ function SubjectTeacherDashboard() {
         ]}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {kpis.map((k, i) => (
-          <StatCard key={i} label={k.label} value={k.value} sub={k.sub} icon={i === 0 ? Calendar : i === 1 ? BarChart3 : i === 2 ? GraduationCap : ClipboardList} />
+          <StatCard key={i} label={k.label} value={k.value} sub={k.sub} icon={i === 0 ? Calendar : i === 1 ? BarChart3 : GraduationCap} />
         ))}
       </div>
 

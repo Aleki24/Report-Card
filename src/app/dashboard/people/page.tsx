@@ -21,6 +21,7 @@ function PeoplePageInner() {
   const { role } = useAuth();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
+  const initialSearch = searchParams.get('search') ?? '';
   const [tab, setTab] = useState<RoleTab>(
     initialTab === 'teachers' || initialTab === 'parents' ? initialTab : 'students'
   );
@@ -50,7 +51,7 @@ function PeoplePageInner() {
         ))}
       </div>
 
-      {tab === 'students' && <StudentsSection />}
+      {tab === 'students' && <StudentsSection initialSearch={initialSearch} />}
       {tab === 'teachers' && <TeachersSection />}
       {tab === 'parents' && <ParentsSection />}
     </div>
@@ -61,12 +62,12 @@ function PeoplePageInner() {
 interface StudentRow { id: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; }
 interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
 
-function StudentsSection() {
+function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const { profile } = useAuth();
   const [data, setData] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [gradeStreamFilter, setGradeStreamFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string }[]>([]);
