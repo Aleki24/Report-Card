@@ -186,6 +186,18 @@ export async function POST(request: NextRequest) {
     if (err instanceof Anthropic.RateLimitError) {
       return NextResponse.json({ error: 'Scanning is busy right now — try again in a minute.' }, { status: 429 });
     }
+    if (err instanceof Anthropic.AuthenticationError) {
+      return NextResponse.json(
+        { error: 'The scanning API key is invalid. Ask your administrator to check ANTHROPIC_API_KEY.' },
+        { status: 503 }
+      );
+    }
+    if (err instanceof Anthropic.BadRequestError && err.message.toLowerCase().includes('credit balance')) {
+      return NextResponse.json(
+        { error: 'The scanning account is out of API credits. Ask your administrator to top up at console.anthropic.com → Plans & Billing.' },
+        { status: 503 }
+      );
+    }
     if (err instanceof Anthropic.APIError) {
       console.error('Scan API error:', err.status, err.message);
       return NextResponse.json({ error: 'Scanning service error. Try again shortly.' }, { status: 502 });
