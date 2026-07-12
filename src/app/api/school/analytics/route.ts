@@ -51,7 +51,6 @@ export async function GET(request: NextRequest) {
         student_id,
         exam_id,
         subject_id,
-        subjects ( name ),
         students ( admission_number, users ( first_name, last_name ) ),
         exams!inner (
           id,
@@ -60,7 +59,8 @@ export async function GET(request: NextRequest) {
           school_id,
           academic_year_id,
           term_id,
-          grade_stream_id
+          grade_stream_id,
+          subjects ( name )
         )
       `)
       .eq('exams.school_id', schoolId);
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
 
     const flat = (marks || []).map((m: Record<string, unknown>) => {
       const exam = one(m.exams);
-      const subject = one(m.subjects);
+      const subject = one(exam.subjects);
       const student = one(m.students);
       const user = one(student.users);
       const first = (user.first_name as string) || '';
