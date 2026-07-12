@@ -37,31 +37,33 @@ export async function GET(request: NextRequest) {
     const yearId = searchParams.get('year_id');
     const termId = searchParams.get('term_id');
 
+    // Scope by exams.school_id directly. Filtering through academic_years with
+    // inner joins on grades/academic_years silently drops every mark whose exam
+    // has a null grade/year link, which is why the page showed "no marks" while
+    // marks existed. exams carries its own school_id, so use it.
     let query = supabaseAdmin
       .from('exam_marks')
       .select(`
         id,
         raw_score,
+        percentage,
         grade_symbol,
         student_id,
         exam_id,
         subject_id,
-        exams!inner(
+        subjects ( name ),
+        students ( admission_number, users ( first_name, last_name ) ),
+        exams!inner (
           id,
           name,
-          max_score,
           exam_date,
+          school_id,
           academic_year_id,
           term_id,
-          grade_id,
-          grade_stream_id,
-          subject_id,
-          grades!inner(id, name, academic_level_id),
-          academic_years!inner(id, name, school_id),
-          terms(id, name)
+          grade_stream_id
         )
       `)
-      .eq('exams.academic_years.school_id', schoolId);
+      .eq('exams.school_id', schoolId);
 
     if (streamId) query = query.eq('exams.grade_stream_id', streamId);
     if (examId) query = query.eq('exam_id', examId);
@@ -76,7 +78,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
     }
 
-    return NextResponse.json({ marks: marks || [] });
+    // Supabase returns to-one relations as either an object or a single-element
+    // array depending on inference; normalise both. Flatten into the shape the
+    // Analytics page consumes (subject_name / student_name / exam_name / etc.).
+    const one = (rel: unknown): Record<string, unknown> => {
+      const v = Array.isArray(rel) ? rel[0] : rel;
+      return (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+    };
+
+    const flat = (marks || []).map((m: Record<string, unknown>) => {
+      const exam = one(m.exams);
+      const subject = one(m.subjects);
+      const student = one(m.students);
+      const user = one(student.users);
+      const first = (user.first_name as string) || '';
+      const last = (user.last_name as string) || '';
+      const fullName = `${first} ${last}`.trim();
+      return {
+        id: m.id,
+        raw_score: m.raw_score,
+        percentage: m.percentage,
+        grade_symbol: m.grade_symbol,
+        subject_id: m.subject_id,
+        exam_id: m.exam_id,
+        student_id: m.student_id,
+        subject_name: (subject.name as string) || 'Unknown',
+        exam_name: (exam.name as string) || 'Unknown Exam',
+        exam_date: (exam.exam_date as string) || null,
+        student_name: fullName || 'Unknown',
+        admission_number: (student.admission_number as string) || '',
+      };
+    });
+
+    return NextResponse.json({ marks: flat });
   } catch (err) {
     console.error('Analytics route error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
