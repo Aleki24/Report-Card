@@ -439,10 +439,15 @@ export async function GET(
             points: s.points,
         }));
 
+        // 9.5 Per-paper scores for multi-paper subjects (keyed examId|studentId)
+        const { fetchPaperScores } = await import('@/lib/pdf/paperScores');
+        const markExamIds = [...new Set(safeMarks.map((m: any) => m.exams?.id).filter(Boolean))] as string[];
+        const paperScoreMap = await fetchPaperScores(supabase, markExamIds, [studentId]);
+
         // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
         // Use subject-specific grading when available, otherwise use academic level grading
         const subjMarksMap = new Map<string, any>();
-        
+
         safeMarks.forEach((m: any) => {
             const subject = m.exams.subjects;
             if (!subject) return;
@@ -491,6 +496,7 @@ export async function GET(
                 subjectRank: subjectRanksMap.get(subject.id) ?? undefined,
                 totalStudents: subjectStudentCountMap.get(subject.id) ?? undefined,
                 includedInPoints: selectedSubjectIds.has(subject.id),
+                paperScores: paperScoreMap.get(`${m.exams.id}|${studentId}`),
             });
         });
 

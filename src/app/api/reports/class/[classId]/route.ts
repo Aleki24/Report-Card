@@ -14,6 +14,7 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { fetchPaperScores } from '@/lib/pdf/paperScores';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -248,6 +249,10 @@ export async function GET(
             }
         }
 
+        // 6.5 Per-paper scores for multi-paper subjects (keyed examId|studentId)
+        const markExamIds = [...new Set((allMarks || []).map((m: any) => m.exams?.id).filter(Boolean))] as string[];
+        const paperScoreMap = await fetchPaperScores(supabase, markExamIds, studentIds);
+
         // 7. Group marks by student and calculate ranks + per-subject ranks
         const marksByStudent: Record<string, any[]> = {};
         // Per-subject aggregation: subjectId -> { studentId -> pct }[]
@@ -403,6 +408,7 @@ export async function GET(
                     subjectRank: subjectRankMaps[subject.id]?.get(student.id) ?? undefined,
                     totalStudents: subjectStudentCounts[subject.id] ?? undefined,
                     includedInPoints: selectedSubjectIds.has(subject.id),
+                    paperScores: paperScoreMap.get(`${m.exams.id}|${student.id}`),
                 });
             });
 

@@ -31,6 +31,8 @@ export interface ReportCardData {
         totalStudents?: number;
         instructorName?: string;
         includedInPoints?: boolean;
+        /** Per-paper scores for multi-paper subjects (display order). */
+        paperScores?: { code: string; score: number; maxScore: number }[];
     }[];
     overallPercentage: number;
     overallGrade: string;
