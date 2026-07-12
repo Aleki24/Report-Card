@@ -7,7 +7,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import { Badge } from '@/components/ui';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
-  ArrowRight, ArrowUpRight, BarChart3, ClipboardList, Wallet, Bell,
+  ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
   BookOpen, Search, CheckCircle2, Plus
 } from 'lucide-react';
 
@@ -33,6 +33,9 @@ import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/Loa
 import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
 import MiniCalendar from '@/components/dashboard/MiniCalendar';
+import KpiTile from '@/components/dashboard/KpiTile';
+import InsightCard from '@/components/dashboard/InsightCard';
+import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
 import { SetupNotifier } from '@/components/dashboard/SetupNotifier';
@@ -298,47 +301,6 @@ function AdminDashboard({ userName }: { userName: string }) {
           <SideRail data={data} />
         </div>
       </div>
-    </div>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-      {children}
-    </h2>
-  );
-}
-
-function KpiTile({ title, value, icon, href, alert = false }: { title: string; value: string | number; icon: React.ReactNode; href: string; alert?: boolean }) {
-  return (
-    <Link href={href} className="group block no-underline">
-      <div className="flex h-full flex-col rounded-2xl border border-border/60 bg-card/90 p-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md sm:p-4">
-        <div className="flex items-start justify-between">
-          <div className={`flex h-8 w-8 items-center justify-center rounded-lg sm:h-9 sm:w-9 ${alert ? 'bg-destructive/15 text-destructive' : 'bg-primary/12 text-primary'}`}>
-            {icon}
-          </div>
-          <ArrowUpRight size={14} className="text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-        </div>
-        <div className="mt-3 text-xl font-bold leading-none tracking-tight text-foreground sm:text-2xl">{value}</div>
-        <div className="mt-1.5 truncate text-[11px] font-medium text-muted-foreground sm:text-xs">{title}</div>
-      </div>
-    </Link>
-  );
-}
-
-function InsightCard({ title, meta, action, children }: { title: string; meta?: string; action?: { label: string; href: string }; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm xs:p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
-        {action ? (
-          <Link href={action.href} className="text-xs font-medium text-primary hover:underline">{action.label}</Link>
-        ) : meta ? (
-          <span className="text-xs text-muted-foreground">{meta}</span>
-        ) : null}
-      </div>
-      {children}
     </div>
   );
 }

@@ -8,7 +8,7 @@
 
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, [data-theme="dark"] *));
 
 @theme {
   --breakpoint-xs: 320px;
@@ -51,8 +51,8 @@
   --sidebar-accent-foreground: oklch(0.4265 0.0310 59.2153);
   --sidebar-border: oklch(0.9073 0.0170 88.0044);
   --sidebar-ring: oklch(0.7350 0.0564 130.8494);
-  --font-sans: Merriweather, serif;
-  --font-serif: Source Serif 4, serif;
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-serif: Lora, Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
   --radius: 0.425rem;
   --shadow-x: 3px;
@@ -93,8 +93,10 @@
 
   --color-purple-500: #F97316;
 
-  /* --- Typography --- */
-  --font-display: var(--font-sans);
+  /* --- Typography ---
+     Display (headings) keeps the warm serif identity; body/UI text, tables,
+     and figures use the sans for legibility at dashboard sizes. */
+  --font-display: Lora, Georgia, serif;
   --font-body: var(--font-sans);
 
   /* --- Spacing Rhythm --- */
@@ -1314,8 +1316,8 @@ select.input-field {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: Merriweather, serif;
+  --font-heading: Lora, Georgia, serif;
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -1355,7 +1357,7 @@ select.input-field {
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: JetBrains Mono, monospace;
-  --font-serif: Source Serif 4, serif;
+  --font-serif: Lora, Georgia, serif;
   --radius: 0.425rem;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
@@ -1380,61 +1382,6 @@ select.input-field {
   --shadow-opacity: var(--shadow-opacity);
   --color-shadow-color: var(--shadow-color);
   --color-destructive-foreground: var(--destructive-foreground);
-}
-
-.dark {
-  --background: oklch(0.3303 0.0214 88.0737);
-  --foreground: oklch(0.9217 0.0235 82.1191);
-  --card: oklch(0.3583 0.0165 82.3257);
-  --card-foreground: oklch(0.9217 0.0235 82.1191);
-  --popover: oklch(0.3583 0.0165 82.3257);
-  --popover-foreground: oklch(0.9217 0.0235 82.1191);
-  --primary: oklch(0.6762 0.0567 132.4479);
-  --primary-foreground: oklch(0.2686 0.0105 61.0213);
-  --secondary: oklch(0.4448 0.0239 84.5498);
-  --secondary-foreground: oklch(0.9217 0.0235 82.1191);
-  --muted: oklch(0.3892 0.0197 82.7084);
-  --muted-foreground: oklch(0.7096 0.0171 73.6179);
-  --accent: oklch(0.6540 0.0723 90.7629);
-  --accent-foreground: oklch(0.2686 0.0105 61.0213);
-  --destructive: oklch(0.6287 0.0821 31.2958);
-  --border: oklch(0.4448 0.0239 84.5498);
-  --input: oklch(0.4448 0.0239 84.5498);
-  --ring: oklch(0.6762 0.0567 132.4479);
-  --chart-1: oklch(0.6762 0.0567 132.4479);
-  --chart-2: oklch(0.7350 0.0564 130.8494);
-  --chart-3: oklch(0.5929 0.0464 137.6224);
-  --chart-4: oklch(0.6540 0.0723 90.7629);
-  --chart-5: oklch(0.5183 0.0390 137.1892);
-  --sidebar: oklch(0.3303 0.0214 88.0737);
-  --sidebar-foreground: oklch(0.9217 0.0235 82.1191);
-  --sidebar-primary: oklch(0.6762 0.0567 132.4479);
-  --sidebar-primary-foreground: oklch(0.2686 0.0105 61.0213);
-  --sidebar-accent: oklch(0.6540 0.0723 90.7629);
-  --sidebar-accent-foreground: oklch(0.2686 0.0105 61.0213);
-  --sidebar-border: oklch(0.4448 0.0239 84.5498);
-  --sidebar-ring: oklch(0.6762 0.0567 132.4479);
-  --destructive-foreground: oklch(0.9357 0.0201 84.5907);
-  --radius: 0.425rem;
-  --font-sans: Merriweather, serif;
-  --font-serif: Source Serif 4, serif;
-  --font-mono: JetBrains Mono, monospace;
-  --shadow-color: hsl(88 22% 35% / 0.15);
-  --shadow-opacity: 0.15;
-  --shadow-blur: 2px;
-  --shadow-spread: 0px;
-  --shadow-offset-x: 3px;
-  --shadow-offset-y: 3px;
-  --letter-spacing: 0em;
-  --spacing: 0.25rem;
-  --shadow-2xs: 3px 3px 2px 0px hsl(88 22% 35% / 0.07);
-  --shadow-xs: 3px 3px 2px 0px hsl(88 22% 35% / 0.07);
-  --shadow-sm: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 1px 2px -1px hsl(88 22% 35% / 0.15);
-  --shadow: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 1px 2px -1px hsl(88 22% 35% / 0.15);
-  --shadow-md: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 2px 4px -1px hsl(88 22% 35% / 0.15);
-  --shadow-lg: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 4px 6px -1px hsl(88 22% 35% / 0.15);
-  --shadow-xl: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 8px 10px -1px hsl(88 22% 35% / 0.15);
-  --shadow-2xl: 3px 3px 2px 0px hsl(88 22% 35% / 0.38);
 }
 
 @layer base {
