@@ -114,9 +114,22 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --spacing: 0.25rem;
+
+  /* Dashboard viz status colors — validated ≥3:1 against the card surface
+     per theme (see dataviz palette checks). Order in stacked marks must keep
+     good and bad non-adjacent (good → warn → info → bad). */
+  --viz-good: #4d7c0f;
+  --viz-warn: #b45309;
+  --viz-info: #1d4ed8;
+  --viz-bad: #b91c1c;
 }
 
 .dark, [data-theme="dark"] {
+  --viz-good: #65a30d;
+  --viz-warn: #d97706;
+  --viz-info: #4f8ef7;
+  --viz-bad: #ec5c58;
+
   --background: oklch(0.3303 0.0214 88.0737);
   --foreground: oklch(0.9217 0.0235 82.1191);
   --card: oklch(0.3583 0.0165 82.3257);
