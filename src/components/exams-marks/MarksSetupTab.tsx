@@ -278,17 +278,21 @@ export function MarksSetupTab() {
           {/* Header removed as it is now a tab */}
         </div>
         {activeTermObj && (
-          <div className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: 'rgb(52,211,153)', border: '1px solid rgba(16,185,129,0.3)' }}>
-            🟢 Active: {getCurrentTermName()} ({activeTermObj.name})
+          <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--viz-good)' }} />
+            Active: {getCurrentTermName()} ({activeTermObj.name})
           </div>
         )}
       </div>
 
       {isAlsoClassTeacher && (
-        <a href="/dashboard/reports" className="mb-6 flex items-center gap-3 p-4 rounded-lg border transition-all hover:scale-[1.01]" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.08))', border: '1px solid rgba(139,92,246,0.25)', textDecoration: 'none', color: 'inherit' }}>
-          <span style={{ fontSize: 22 }}>📋</span>
-          <div style={{ flex: 1 }}><span className="font-semibold text-sm" style={{ color: 'rgb(167,139,250)' }}>Go to My Class</span><span className="text-xs block" style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>Switch to class teacher dashboard for reports &amp; student management</span></div>
-          <span style={{ fontSize: 18, opacity: 0.6 }}>→</span>
+        <a href="/dashboard/reports" className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 no-underline text-inherit transition-all hover:border-primary/50 hover:bg-primary/10">
+          <span className="text-[22px]">📋</span>
+          <div className="flex-1">
+            <span className="block text-sm font-semibold text-primary">Go to My Class</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Switch to class teacher dashboard for reports &amp; student management</span>
+          </div>
+          <span className="text-lg text-muted-foreground">→</span>
         </a>
       )}
 
@@ -299,7 +303,7 @@ export function MarksSetupTab() {
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold" style={{ minWidth: 70 }}>① Term</label>
           {loadingTerms ? (
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading terms...</span>
+            <span className="text-xs text-muted-foreground">Loading terms...</span>
           ) : terms.length === 0 ? (
             <span className="text-xs text-orange-400">No terms found. Ask admin to set up terms.</span>
           ) : (
@@ -308,17 +312,12 @@ export function MarksSetupTab() {
                 <button
                   key={t.id}
                   onClick={() => setSelectedTermId(t.id)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                  style={{
-                    background: selectedTermId === t.id
-                      ? 'var(--color-accent)' : 'var(--color-surface-raised)',
-                    color: selectedTermId === t.id ? '#fff' : 'var(--color-text-secondary)',
-                    border: `1px solid ${selectedTermId === t.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                    cursor: 'pointer',
-                  }}
+                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${selectedTermId === t.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                 >
                   {t.name}
-                  {t.id === activeTermId && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(16,185,129,0.2)', color: 'rgb(52,211,153)' }}>ACTIVE</span>}
+                  {t.id === activeTermId && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-inherit opacity-90">ACTIVE</span>}
                 </button>
               ))}
             </div>
@@ -331,13 +330,13 @@ export function MarksSetupTab() {
         <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>② Exam</label>
-            {loadingExams && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading...</span>}
+            {loadingExams && <span className="text-xs text-muted-foreground">Loading...</span>}
           </div>
 
           {!loadingExams && availableExamTypes.length === 0 ? (
             // No exams yet — show initialization panel for admin
-            <div className="p-4 rounded-lg" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-              <p className="text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-4">
+              <p className="text-sm mb-3 text-muted-foreground">
                 No exams initialized for <strong>{selectedTermName}</strong>.
                 {profile?.role === 'ADMIN'
                   ? ' Select which exam types to create:'
@@ -364,14 +363,10 @@ export function MarksSetupTab() {
                   <button
                     key={et.code}
                     onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); }}
-                    className="px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
+                    className={`cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${isActive
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                     title={et.description}
-                    style={{
-                      background: isActive ? 'var(--color-accent)' : 'var(--color-surface-raised)',
-                      color: isActive ? '#fff' : 'var(--color-text-secondary)',
-                      border: `1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                      cursor: 'pointer',
-                    }}
                   >
                     {et.icon} {et.shortName}
                     <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
@@ -383,20 +378,19 @@ export function MarksSetupTab() {
               {profile?.role === 'ADMIN' && (
                 <>
                   <div className="relative group">
-                    <button className="px-3 py-2.5 rounded-lg text-xs transition-all" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
+                    <button className="cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
                       + Add Type
                     </button>
-                    <div className="hidden group-hover:block absolute z-50 top-full left-0 mt-1 p-2 rounded-lg min-w-[200px]" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                    <div className="absolute top-full left-0 z-50 mt-1 hidden min-w-[200px] rounded-xl border border-border bg-popover p-2 shadow-lg group-hover:block">
                       {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
                         <button
                           key={et.code}
                           onClick={() => handleSeedExams([et.code])}
                           disabled={seeding}
-                          className="w-full text-left px-3 py-2 rounded text-xs hover:bg-card transition-colors"
-                          style={{ color: 'var(--color-text-secondary)' }}
+                          className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
                           {et.icon} {et.name}
-                          <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{et.description}</span>
+                          <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
                         </button>
                       ))}
                     </div>
@@ -404,8 +398,7 @@ export function MarksSetupTab() {
                   <button
                     onClick={() => handleSeedExams(Array.from(existingTypes))}
                     disabled={seeding}
-                    className="px-3 py-2.5 rounded-lg text-xs transition-all hover:bg-muted"
-                    style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                    className="cursor-pointer rounded-xl border border-border/70 bg-card/70 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
                     title="Generate exams for newly added subjects"
                   >
                     {seeding ? 'Syncing...' : '🔄 Sync Missing'}
@@ -413,8 +406,7 @@ export function MarksSetupTab() {
 
                   <button
                     onClick={() => setShowCreateModal(true)}
-                    className="px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-1 hover:text-white"
-                    style={{ background: 'var(--color-surface-raised)', border: '1px dashed rgba(99,102,241,0.5)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                    className="flex cursor-pointer items-center gap-1 rounded-xl border border-dashed border-primary/40 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                     title="Manually create a single spontaneous exam (e.g. for a specific class)"
                   >
                     + Single Exam
@@ -461,7 +453,7 @@ export function MarksSetupTab() {
               ))}
             </select>
             {!filterGradeId && (
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="text-xs text-muted-foreground">
                 👈 Pick a class to load its subjects
               </span>
             )}
@@ -474,7 +466,7 @@ export function MarksSetupTab() {
         <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="text-xs text-muted-foreground">
               {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class
             </span>
           </div>
@@ -492,18 +484,16 @@ export function MarksSetupTab() {
                 return (
                   <div
                     key={s.subject_id}
-                    className="p-3 rounded-lg transition-all"
-                    style={{
-                      background: isActive ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))' : 'var(--color-surface-raised)',
-                      border: isActive ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
-                    }}
+                    className={`rounded-xl border p-3 transition-all ${isActive
+                      ? 'border-primary/60 bg-primary/10'
+                      : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-semibold text-sm">{s.subject_name}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>{s.subject_code}</span>
+                      <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
                     </div>
                     {s.subject_category && (
-                      <span className="text-[10px] block mb-2" style={{ color: 'var(--color-text-muted)' }}>{s.subject_category}</span>
+                      <span className="mb-2 block text-[10px] text-muted-foreground">{s.subject_category}</span>
                     )}
                     {hasExams ? (
                       <button
@@ -540,7 +530,7 @@ export function MarksSetupTab() {
         <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>Slot</label>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="text-xs text-muted-foreground">
               This subject has {examsForSelectedSubject.length} exam slots — choose one
             </span>
           </div>
@@ -551,13 +541,9 @@ export function MarksSetupTab() {
                 <button
                   key={exam.id}
                   onClick={() => setSelectedExamId(exam.id)}
-                  className="px-4 py-2 text-sm font-medium rounded-lg transition-all"
-                  style={{
-                    background: isActive ? 'var(--color-primary)' : 'var(--color-surface-raised)',
-                    color: isActive ? '#fff' : 'var(--color-text)',
-                    border: isActive ? '1px solid transparent' : '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                  }}
+                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isActive
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border/70 bg-card/70 text-foreground hover:border-primary/40'}`}
                 >
                   {exam.name || exam.grade_name}
                 </button>
@@ -570,20 +556,16 @@ export function MarksSetupTab() {
       {/* ═══ MARK ENTRY ═══ */}
       {selectedExamId && selectedExam && (
         <div>
-          <div className="card mb-4 flex flex-wrap items-center justify-between gap-3" style={{ padding: 'var(--space-3) var(--space-4)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))' }}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3">
             <div className="text-sm">
-              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span style={{ color: 'var(--color-accent)' }}>Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
+              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span className="text-primary">Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPaperModal(true)}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-all"
-                style={{
-                  background: examIsMultiPaper ? 'rgba(99,102,241,0.12)' : 'transparent',
-                  color: examIsMultiPaper ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                  border: examIsMultiPaper ? '1px solid rgba(99,102,241,0.4)' : '1px dashed var(--color-border)',
-                  cursor: 'pointer',
-                }}
+                className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${examIsMultiPaper
+                  ? 'border border-primary/40 bg-primary/10 text-primary'
+                  : 'border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                 title="Some subjects are examined in several papers (e.g. Maths Paper 1 & Paper 2, Sciences with a practical). Set that up here — the papers automatically combine into one final subject score."
               >
                 {examIsMultiPaper
@@ -594,14 +576,10 @@ export function MarksSetupTab() {
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${mode === m
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                   title={m === 'scan' ? 'Photograph a paper marksheet and let the app read the marks for review' : undefined}
-                  style={{
-                    background: mode === m ? 'var(--color-accent)' : 'transparent',
-                    color: mode === m ? '#fff' : 'var(--color-text-muted)',
-                    border: mode === m ? 'none' : '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                  }}
                 >
                   {m === 'manual' ? '✏️ Manual Entry' : m === 'bulk' ? '📤 Bulk Upload' : '📷 Scan Sheet'}
                 </button>
@@ -639,25 +617,25 @@ export function MarksSetupTab() {
 
       {/* Empty states */}
       {!selectedTermId && !loadingTerms && (
-        <div className="card text-center py-16" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-16 text-muted-foreground">
           <p className="text-4xl mb-3">📝</p>
           <p className="text-sm">Select a term above to start entering marks</p>
         </div>
       )}
       {selectedTermId && !selectedExamType && !loadingExams && availableExamTypes.length > 0 && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">📋</p>
           <p className="text-sm">Select an exam type to continue</p>
         </div>
       )}
       {selectedExamType && !filterGradeId && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">🏫</p>
           <p className="text-sm">Select a <strong>class</strong> above to load its subjects</p>
         </div>
       )}
       {selectedExamType && filterGradeId && !selectedSubjectId && subjects.length > 0 && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">📚</p>
           <p className="text-sm">Select a subject to enter marks</p>
         </div>

@@ -340,6 +340,32 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         setRows(prev => prev.filter((_, i) => i !== index));
     };
 
+    // ── Register mode: one row per student, ready for score entry ──
+    const loadAllStudents = () => {
+        setRows(prev => {
+            const existing = new Set(prev.map(r => r.studentId).filter(Boolean));
+            const newRows = students
+                .filter(s => !existing.has(s.id))
+                .map(s => ({ ...emptyRow(), studentId: s.id, studentName: s.name, admissionNumber: s.admission_number }));
+            // Keep rows the teacher already started; drop untouched empty ones
+            const kept = prev.filter(r => r.studentId || r.score || Object.values(r.componentScores).some(v => v !== ''));
+            return [...kept, ...newRows];
+        });
+    };
+
+    // ── Keyboard-first entry: Enter/arrows move down the score column ──
+    const handleScoreKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, col: string) => {
+        if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        const inputs = Array.from(
+            document.querySelectorAll<HTMLInputElement>(`input[data-score-col="${col}"]`)
+        );
+        const idx = inputs.indexOf(e.currentTarget);
+        const next = e.key === 'ArrowUp' ? inputs[idx - 1] : inputs[idx + 1];
+        next?.focus();
+        next?.select();
+    };
+
     // ── Submit ───────────────────────────────────────────
     const handleSubmit = async () => {
         if (!examId) {
@@ -453,7 +479,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 <div>
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Manual Entry</h3>
                     <p className="text-muted-foreground text-sm">
-                        {examScoped ? 'Pick students from the dropdown and enter their marks' : 'Select a class, then pick students from the dropdown'}
+                        {examScoped ? 'Load the whole class (or pick students) and type marks — Enter jumps to the next student' : 'Select a class, then pick students from the dropdown'}
                         {multiPaper
                             ? <> · <span style={{ color: 'var(--color-accent)' }}>📑 Multi-paper: {schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}</span></>
                             : <> · Max score: {maxScore}</>}
@@ -483,6 +509,15 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     <div className="text-xs text-primary font-semibold">
                         {studentsLoading ? 'Loading students…' : `${students.length} student${students.length !== 1 ? 's' : ''} in this class`}
                     </div>
+                    {!studentsLoading && students.length > 0 && (
+                        <button
+                            onClick={loadAllStudents}
+                            className="btn-secondary text-xs px-3 py-1.5"
+                            title="Add one row per student so you can type straight down the score column (Enter moves to the next student)"
+                        >
+                            ⚡ Load whole class
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -531,10 +566,15 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     </select>
                 </div>
                 {((filteredStreams.length === 0 && selectedGradeId) || selectedStreamId) && (
-                    <div className="flex items-end">
+                    <div className="flex items-end gap-3">
                         <div className="text-xs text-primary font-semibold py-2">
                             {studentsLoading ? 'Loading…' : `${students.length} student${students.length !== 1 ? 's' : ''}`}
                         </div>
+                        {!studentsLoading && students.length > 0 && (
+                            <button onClick={loadAllStudents} className="btn-secondary text-xs px-3 py-1.5" title="Add one row per student for straight-down score entry">
+                                ⚡ Load whole class
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -641,11 +681,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                                                     <td key={c.id} data-label={c.component_code}>
                                                         <input
                                                             type="text"
+                                                            inputMode="decimal"
+                                                            data-score-col={c.id}
                                                             className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
                                                             style={{ padding: '8px 12px', minWidth: 64 }}
                                                             placeholder={`0-${Number(c.max_score)}`}
                                                             value={row.componentScores[c.id] || ''}
                                                             onChange={e => updateComponentScore(i, c.id, e.target.value)}
+                                                            onKeyDown={e => handleScoreKeyDown(e, c.id)}
                                                         />
                                                     </td>
                                                 ))}
@@ -666,11 +709,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                                             <td data-label="Score">
                                                 <input
                                                     type="text"
+                                                    inputMode="decimal"
+                                                    data-score-col="score"
                                                     className={`input-field text-sm ${row.error ? 'border-[var(--color-danger)] focus:shadow-[0_0_0_3px_rgba(239,68,68,0.15)]' : ''}`}
                                                     style={{ padding: '8px 12px' }}
                                                     placeholder={`0-${maxScore}`}
                                                     value={row.score}
                                                     onChange={e => updateRow(i, 'score', e.target.value)}
+                                                    onKeyDown={e => handleScoreKeyDown(e, 'score')}
                                                 />
                                             </td>
                                         )}
