@@ -65,7 +65,32 @@ export async function GET(request: NextRequest) {
       `)
       .eq('exams.school_id', schoolId);
 
-    if (streamId) query = query.eq('exams.grade_stream_id', streamId);
+    // Class filter: a stream's exams include both stream-level exams AND
+    // whole-grade exams (grade_stream_id null but grade_id matching the
+    // stream's grade). Marks are entered at the grade level in many schools,
+    // so a plain grade_stream_id match would miss them. Resolve the matching
+    // exam ids first, mirroring /api/school/data's exam-list logic.
+    if (streamId) {
+      const { data: stream } = await supabaseAdmin
+        .from('grade_streams')
+        .select('grade_id')
+        .eq('id', streamId)
+        .maybeSingle();
+
+      let examQuery = supabaseAdmin.from('exams').select('id').eq('school_id', schoolId);
+      if (stream?.grade_id) {
+        examQuery = examQuery.or(`grade_stream_id.eq.${streamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`);
+      } else {
+        examQuery = examQuery.eq('grade_stream_id', streamId);
+      }
+      const { data: streamExams } = await examQuery;
+      const examIds = (streamExams || []).map((e: { id: string }) => e.id);
+      if (examIds.length === 0) {
+        return NextResponse.json({ marks: [] });
+      }
+      query = query.in('exam_id', examIds);
+    }
+
     if (examId) query = query.eq('exam_id', examId);
     if (subjectId) query = query.eq('subject_id', subjectId);
     if (yearId) query = query.eq('exams.academic_year_id', yearId);
