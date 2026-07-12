@@ -8,3 +8,6 @@ export { Input } from './Input';
 export { Select } from './Select';
 export { Badge } from './Badge';
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './Table';
+export { default as DataTable } from './DataTable';
+export type { DataTableColumn } from './DataTable';
+export { default as FilterBar, FilterField } from './FilterBar';

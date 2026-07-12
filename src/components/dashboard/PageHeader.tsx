@@ -33,7 +33,7 @@ export default function PageHeader({ title, description, breadcrumbs, action }: 
       {/* Title Row */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-sans text-[22px] font-bold text-foreground tracking-tight mb-1">
+          <h1 className="font-display text-[22px] font-bold text-foreground tracking-tight mb-1">
             {title}
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">

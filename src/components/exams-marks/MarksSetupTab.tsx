@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
+import { ScanSheet } from '@/components/marks/ScanSheet';
 import { CreateExamModal } from '@/components/marks/CreateExamModal';
 import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
 import { isMultiPaper } from '@/lib/multi-paper';
@@ -48,7 +49,7 @@ export function MarksSetupTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSubjectId, setCreateSubjectId] = useState<string | undefined>(undefined);
   const [selectedExamId, setSelectedExamId] = useState('');
-  const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
+  const [mode, setMode] = useState<'manual' | 'bulk' | 'scan'>('manual');
   const [showPaperModal, setShowPaperModal] = useState(false);
   const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
   const [examScheme, setExamScheme] = useState<ExamSubjectComponentScheme | null>(null);
@@ -589,11 +590,12 @@ export function MarksSetupTab() {
                   ? `📑 Papers: ${(examScheme?.components || []).map(c => c.component_code).join(' + ')} ✓`
                   : '✂️ Split into Papers (P1, P2…)'}
               </button>
-              {(['manual', 'bulk'] as const).map(m => (
+              {(['manual', 'bulk', 'scan'] as const).map(m => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
                   className="px-3 py-1.5 rounded text-xs font-medium transition-all"
+                  title={m === 'scan' ? 'Photograph a paper marksheet and let the app read the marks for review' : undefined}
                   style={{
                     background: mode === m ? 'var(--color-accent)' : 'transparent',
                     color: mode === m ? '#fff' : 'var(--color-text-muted)',
@@ -601,20 +603,37 @@ export function MarksSetupTab() {
                     cursor: 'pointer',
                   }}
                 >
-                  {m === 'manual' ? '✏️ Manual Entry' : '📤 Bulk Upload'}
+                  {m === 'manual' ? '✏️ Manual Entry' : m === 'bulk' ? '📤 Bulk Upload' : '📷 Scan Sheet'}
                 </button>
               ))}
             </div>
           </div>
-          {mode === 'manual'
-            ? <ManualEntryGrid
-                key={`${selectedExamId}-${schemeVersion}`}
+          {mode === 'manual' && (
+            <ManualEntryGrid
+              key={`${selectedExamId}-${schemeVersion}`}
+              examId={selectedExamId}
+              maxScore={selectedExam.max_score}
+              gradeId={selectedExam.grade_id}
+              gradeStreamId={selectedExam.grade_stream_id || null}
+            />
+          )}
+          {mode === 'bulk' && <BulkUpload examId={selectedExamId} />}
+          {mode === 'scan' && (
+            <>
+              {examIsMultiPaper && (
+                <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600">
+                  📑 This subject uses multiple papers. Scanning records <strong>final scores only</strong> — use Manual Entry for per-paper (P1/P2/P3) scores.
+                </div>
+              )}
+              <ScanSheet
+                key={`scan-${selectedExamId}`}
                 examId={selectedExamId}
                 maxScore={selectedExam.max_score}
                 gradeId={selectedExam.grade_id}
                 gradeStreamId={selectedExam.grade_stream_id || null}
               />
-            : <BulkUpload examId={selectedExamId} />}
+            </>
+          )}
         </div>
       )}
 
