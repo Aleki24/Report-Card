@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@base-ui/react": "^1.4.1",
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@clerk/nextjs": "^7.4.2",
