@@ -23,9 +23,9 @@ interface Props {
 }
 
 function getStatusColor(mean: number): string {
-    if (mean >= 70) return 'var(--color-success)';
-    if (mean >= 50) return 'var(--color-warning)';
-    return 'var(--color-danger)';
+    if (mean >= 70) return 'var(--viz-good)';
+    if (mean >= 50) return 'var(--viz-warn)';
+    return 'var(--viz-bad)';
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {

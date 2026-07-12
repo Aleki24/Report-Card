@@ -13,6 +13,14 @@ interface StudentMark {
   gradeSymbol: string;
 }
 
+interface MeritRow {
+  rank: number;
+  studentName: string;
+  admissionNumber: string;
+  average: number;
+  subjectCount: number;
+}
+
 interface SubjectStat {
   name: string;
   mean: number;
@@ -97,6 +105,8 @@ export default function AnalyticsPage() {
   const [gradeData, setGradeData] = useState<GradeData[]>([]);
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
+  const [meritList, setMeritList] = useState<MeritRow[]>([]);
+  const [showFullMerit, setShowFullMerit] = useState(false);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -222,6 +232,30 @@ export default function AnalyticsPage() {
         }).sort((a, b) => b.mean - a.mean);
 
         setSubjectStats(dbSubjStats);
+
+        // ── Merit list: rank students by mean % across their subjects ──
+        const perStudent: Record<string, { name: string; adm: string; sum: number; count: number }> = {};
+        marks.forEach((m: { admission_number?: string; student_name?: string; percentage: number }) => {
+          const key = m.admission_number || m.student_name || 'unknown';
+          if (!perStudent[key]) {
+            perStudent[key] = { name: m.student_name || 'Unknown', adm: m.admission_number || '', sum: 0, count: 0 };
+          }
+          perStudent[key].sum += Number(m.percentage);
+          perStudent[key].count += 1;
+        });
+        const ranked = Object.values(perStudent)
+          .map(s => ({ studentName: s.name, admissionNumber: s.adm, average: s.sum / s.count, subjectCount: s.count }))
+          .sort((a, b) => b.average - a.average);
+        // Standard competition ranking: ties share a rank
+        let lastAvg = Number.NaN;
+        let lastRank = 0;
+        setMeritList(ranked.map((s, i) => {
+          const rank = s.average === lastAvg ? lastRank : i + 1;
+          lastAvg = s.average;
+          lastRank = rank;
+          return { ...s, rank };
+        }));
+        setShowFullMerit(false);
       } catch (err) {
         console.error('Analytics fetch error:', err);
       }
@@ -259,19 +293,33 @@ export default function AnalyticsPage() {
   }));
 
   const statusColor = (mean: number) => {
-    if (mean >= 70) return 'var(--color-success)';
-    if (mean >= 50) return 'var(--color-warning)';
-    return 'var(--color-danger)';
+    if (mean >= 70) return 'var(--viz-good)';
+    if (mean >= 50) return 'var(--viz-warn)';
+    return 'var(--viz-bad)';
   };
-  const statusBg = (mean: number) => {
-    if (mean >= 70) return 'color-mix(in oklch, var(--color-success) 10%, transparent)';
-    if (mean >= 50) return 'color-mix(in oklch, var(--color-warning) 10%, transparent)';
-    return 'color-mix(in oklch, var(--color-danger) 10%, transparent)';
-  };
+  const statusBg = (mean: number) => `color-mix(in srgb, ${statusColor(mean)} 12%, transparent)`;
   const statusLabel = (mean: number) => {
     if (mean >= 70) return 'Strong';
     if (mean >= 50) return 'Average';
     return 'At Risk';
+  };
+
+  const downloadMeritCsv = () => {
+    const className = selectedStreamId === 'all'
+      ? 'All Classes'
+      : gradeStreams.find(g => g.id === selectedStreamId)?.full_name || 'Class';
+    const header = 'Rank,Student,Admission No,Average %,Subjects';
+    const rows = meritList.map(r =>
+      `${r.rank},"${r.studentName.replace(/"/g, '""')}",${r.admissionNumber},${r.average.toFixed(1)},${r.subjectCount}`
+    );
+    const blob = new Blob([`Merit List — ${className}\n${header}\n${rows.join('\n')}\n`], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Merit_List_${className.replace(/\s+/g, '_')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
 
   return (
@@ -385,6 +433,68 @@ export default function AnalyticsPage() {
               improvement={improvement}
             />
           </div>
+
+          {/* ── Merit List ── */}
+          {meritList.length > 0 && (
+            <div className="mb-5 overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 pt-4">
+                <div>
+                  <h3 className="text-[15px] font-bold text-foreground">Merit List</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Students ranked by mean score across their subjects
+                    {selectedStreamId !== 'all' && gradeStreams.find(g => g.id === selectedStreamId)
+                      ? ` — ${gradeStreams.find(g => g.id === selectedStreamId)?.full_name}` : ''}
+                  </p>
+                </div>
+                <button className="btn-secondary text-xs px-3 py-1.5" onClick={downloadMeritCsv}>
+                  ⬇ Export CSV
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-border">
+                      <th className="w-14 px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Rank</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Student</th>
+                      <th className="hidden px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground sm:table-cell">Adm No</th>
+                      <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Average</th>
+                      <th className="hidden px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground sm:table-cell">Subjects</th>
+                      <th className="px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(showFullMerit ? meritList : meritList.slice(0, 10)).map(r => (
+                      <tr key={`${r.admissionNumber}-${r.studentName}`} className={`border-b border-border/50 last:border-0 ${r.rank <= 3 ? 'bg-primary/5' : ''}`}>
+                        <td className="px-3 py-2.5 font-bold text-foreground">
+                          {r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : ''} {r.rank}
+                        </td>
+                        <td className="px-3 py-2.5 font-medium text-foreground">
+                          <div>{r.studentName}</div>
+                          <div className="font-mono text-[11px] font-normal text-muted-foreground sm:hidden">{r.admissionNumber}</div>
+                        </td>
+                        <td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground sm:table-cell">{r.admissionNumber}</td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-foreground">{r.average.toFixed(1)}%</td>
+                        <td className="hidden px-3 py-2.5 text-center text-muted-foreground sm:table-cell">{r.subjectCount}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className="inline-block rounded-md px-2.5 py-0.5 text-[11px] font-bold" style={{ background: statusBg(r.average), color: statusColor(r.average) }}>
+                            {statusLabel(r.average)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {meritList.length > 10 && (
+                <button
+                  className="w-full cursor-pointer border-t border-border/50 py-2.5 text-center text-xs font-semibold text-primary transition-colors hover:bg-muted/40"
+                  onClick={() => setShowFullMerit(v => !v)}
+                >
+                  {showFullMerit ? 'Show top 10 only' : `Show all ${meritList.length} students`}
+                </button>
+              )}
+            </div>
+          )}
 
           {subjectStats.length > 0 && (
             <div style={{
