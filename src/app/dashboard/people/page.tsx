@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Papa from 'papaparse';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { DataTable, type DataTableColumn } from '@/components/ui';
 import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
 
 type RoleTab = 'students' | 'teachers' | 'parents';
@@ -292,40 +293,44 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       </div>
 
       {loading ? <ContentSkeleton message="Loading students..." /> : (
-        <div className="card overflow-hidden">
-          {paginated.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground"><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No students found.</p></div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table w-full text-left">
-                <thead><tr>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Student</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Admission No.</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Class</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Guardian</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
-                </tr></thead>
-                <tbody className="divide-y divide-[var(--color-border)]">
-                  {paginated.map(s => (
-                    <tr key={s.id} className="hover:bg-muted transition-colors cursor-pointer" onClick={() => viewStudentDetails(s.id)}>
-                      <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{s.avatar_url ? <img src={s.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''}`)}</div><div><div className="font-medium text-sm">{s.users?.first_name ?? ''} {s.users?.last_name ?? ''}</div><div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div></div></div></td>
-                      <td className="px-4 py-3 text-sm font-mono">{s.admission_number}</td>
-                      <td className="px-4 py-3 text-sm">{s.grade_stream?.full_name || '—'}</td>
-                      <td className="px-4 py-3 text-sm">{s.guardian_name || '—'}</td>
-                      <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{s.status}</span></td>
-                      <td className="px-4 py-3 text-right">
-                        <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); openEdit(s); }}><Edit3 size={14} /></button>
-                        <button className="btn-icon text-red-400 hover:text-red-300" onClick={e => { e.stopPropagation(); handleDelete(s.id); }}><Trash2 size={14} /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <>
+          <DataTable<StudentRow>
+            columns={[
+              {
+                key: 'student', header: 'Student',
+                render: s => (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                      {s.avatar_url ? <img src={s.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''}`)}
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm">{s.users?.first_name ?? ''} {s.users?.last_name ?? ''}</div>
+                      <div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div>
+                    </div>
+                  </div>
+                ),
+              },
+              { key: 'admission_number', header: 'Admission No.', render: s => <span className="font-mono">{s.admission_number}</span> },
+              { key: 'class', header: 'Class', render: s => s.grade_stream?.full_name || '—' },
+              { key: 'guardian', header: 'Guardian', render: s => s.guardian_name || '—' },
+              {
+                key: 'status', header: 'Status',
+                render: s => <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span>,
+              },
+            ]}
+            rows={paginated}
+            rowKey={s => s.id}
+            onRowClick={s => viewStudentDetails(s.id)}
+            rowActions={s => (
+              <span className="whitespace-nowrap">
+                <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" onClick={() => openEdit(s)}><Edit3 size={14} /></button>
+                <button className="btn-icon text-destructive/80 hover:text-destructive" title="Delete" onClick={() => handleDelete(s.id)}><Trash2 size={14} /></button>
+              </span>
+            )}
+            emptyState={<><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No students found.</p></>}
+          />
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <div className="mt-3 flex items-center justify-between px-1">
               <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
               <div className="flex gap-2">
                 <button className="btn-secondary text-xs px-3 py-1" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
@@ -333,7 +338,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Add/Edit Modal */}
@@ -461,7 +466,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                 <div className="space-y-3 text-sm">
                   <div className="grid grid-cols-2 gap-3"><div><span className="text-xs text-muted-foreground">Gender</span><p>{viewStudent.profile.gender || '—'}</p></div><div><span className="text-xs text-muted-foreground">DOB</span><p>{viewStudent.profile.date_of_birth ? new Date(viewStudent.profile.date_of_birth).toLocaleDateString() : '—'}</p></div></div>
                   <div><span className="text-xs text-muted-foreground">Guardian</span><p>{viewStudent.profile.guardian_name || '—'} {viewStudent.profile.guardian_phone ? `(${viewStudent.profile.guardian_phone})` : ''}</p></div>
-                  <div><span className="text-xs text-muted-foreground">Status</span><p><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${viewStudent.profile.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{viewStudent.profile.status}</span></p></div>
+                  <div><span className="text-xs text-muted-foreground">Status</span><p><span className={`badge ${viewStudent.profile.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{viewStudent.profile.status}</span></p></div>
                 </div>
               ) : viewTab === 'academic' ? (
                 <div className="space-y-3">
@@ -627,38 +632,32 @@ function TeachersSection() {
         </select>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground"><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No teachers found.</p></div>
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="data-table w-full text-left">
-              <thead><tr>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Teacher</th>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Email</th>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Employee ID</th>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Role</th>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subjects</th>
-                <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
-              </tr></thead>
-              <tbody className="divide-y divide-[var(--color-border)]">
-                {filtered.map(t => (
-                  <tr key={t.id} className="hover:bg-muted transition-colors cursor-pointer" onClick={() => viewTeacherDetails(t)}>
-                    <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent shrink-0">{t.profile.avatar_url ? <img src={t.profile.avatar_url} className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${t.profile.first_name} ${t.profile.last_name}`)}</div><span className="font-medium text-sm">{t.profile.first_name} {t.profile.last_name}</span></div></td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{t.profile.email || '—'}</td>
-                    <td className="px-4 py-3 text-sm font-mono">{t.employee_id || '—'}</td>
-                    <td className="px-4 py-3">{roleBadge(t.profile.role, t.profile.is_active)}</td>
-                    <td className="px-4 py-3 text-sm">{t.subjects || '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={e => { e.stopPropagation(); setEditingTeacher(t); setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' }); }}><Edit3 size={14} /></button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <DataTable<TeacherRow>
+        columns={[
+          {
+            key: 'teacher', header: 'Teacher',
+            render: t => (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                  {t.profile.avatar_url ? <img src={t.profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${t.profile.first_name} ${t.profile.last_name}`)}
+                </div>
+                <span className="font-medium text-sm">{t.profile.first_name} {t.profile.last_name}</span>
+              </div>
+            ),
+          },
+          { key: 'email', header: 'Email', render: t => <span className="text-muted-foreground">{t.profile.email || '—'}</span> },
+          { key: 'employee_id', header: 'Employee ID', render: t => <span className="font-mono">{t.employee_id || '—'}</span>, hideOnMobile: true },
+          { key: 'role', header: 'Role', render: t => roleBadge(t.profile.role, t.profile.is_active) },
+          { key: 'subjects', header: 'Subjects', render: t => t.subjects || '—' },
+        ]}
+        rows={filtered}
+        rowKey={t => t.id}
+        onRowClick={t => viewTeacherDetails(t)}
+        rowActions={t => (
+          <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" onClick={() => { setEditingTeacher(t); setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' }); }}><Edit3 size={14} /></button>
+        )}
+        emptyState={<><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No teachers found.</p></>}
+      />
 
       {editingTeacher && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setEditingTeacher(null)}>
@@ -791,7 +790,7 @@ function ParentsSection() {
                   {p.students.map(s => (
                     <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-surface-raised">
                       <div><span className="text-sm font-medium">{s.first_name} {s.last_name}</span><span className="text-xs text-muted-foreground ml-2">({s.admission_number})</span></div>
-                      <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{s.grade_stream?.full_name || '—'}</span><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${s.status === 'ACTIVE' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>{s.status}</span></div>
+                      <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{s.grade_stream?.full_name || '—'}</span><span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span></div>
                     </div>
                   ))}
                 </div>
