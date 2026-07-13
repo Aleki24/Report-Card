@@ -451,52 +451,44 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     const mathematics = marksWithCategory.filter(m => m.category === 'MATHEMATICS');
     const sciences = marksWithCategory.filter(m => m.category === 'SCIENCE');
     const humanities = marksWithCategory.filter(m => m.category === 'HUMANITY');
-    const technicals = marksWithCategory.filter(m => m.category === 'TECHNICAL');
-    
+
+    // KCSE 8-4-4 cluster rule for the 7 subjects that earn points:
+    //   • Compulsory      → English, Kiswahili and Mathematics always count.
+    //   • Sciences        → the best 2 of Biology / Chemistry / Physics count;
+    //                        a 3rd (weakest) science is dropped.
+    //   • Humanities      → the best 1 (History / Geography / CRE / IRE / HRE).
+    //   • Free 7th slot   → the best-performing of ALL remaining subjects,
+    //                        regardless of category — this can be a 3rd
+    //                        science, a 2nd humanity, or a technical/applied
+    //                        subject, whichever scored highest.
+    // The previous implementation forced the free slot(s) to be TECHNICAL
+    // subjects and only filled with extra technicals, which silently counted
+    // just 6 subjects for any student who had no technical subject (their
+    // real best remaining subject — often a 2nd humanity — was dropped).
     const selected: MarkWithSubjectName[] = [];
-    
-    // Step 1: Always include all languages
+
+    // 1. Compulsory: all languages (English + Kiswahili) and Mathematics.
     selected.push(...languages);
-    
-    // Step 2: Always include mathematics
     selected.push(...mathematics);
-    
-    // Step 3: Sciences - if 2 or fewer, include all (sorted); if 3+, include best 2 (SORT BEFORE SLICE)
-    const sortedSciences = sortByPointsDesc(sciences);
-    if (sciences.length <= 2) {
-        selected.push(...sortedSciences); // FIX: use sorted array
-    } else {
-        selected.push(sortedSciences[0], sortedSciences[1]);
-    }
-    
-    // Step 4: Humanities - include best 1 (SORT BEFORE SLICE)
-    if (humanities.length > 0) {
-        const sortedHumanities = sortByPointsDesc(humanities);
-        selected.push(sortedHumanities[0]);
-    }
-    
-    // Fix: include best technical if present, without numSubjects >= 8 gate
-    if (technicals.length > 0) {
-        const sortedTechnicals = sortByPointsDesc(technicals);
-        selected.push(sortedTechnicals[0]);
-    }
-    
-    // If still under 7, fill with extra technicals only (not dropped sciences/humanities)
-    const extraTechnicals = sortByPointsDesc(technicals).slice(1);
 
-    for (const m of extraTechnicals) {
-        if (!selected.includes(m) && selected.length < 7) {
-            selected.push(m);
-        }
+    // 2. Sciences: best 2 (sorted before slicing).
+    selected.push(...sortByPointsDesc(sciences).slice(0, 2));
+
+    // 3. Humanities: best 1.
+    selected.push(...sortByPointsDesc(humanities).slice(0, 1));
+
+    // 4. Fill remaining slots up to 7 with the best of everything left over,
+    //    of ANY category (the KCSE "7th subject" is a free best-of-remaining).
+    const remaining = sortByPointsDesc(marksWithCategory.filter(m => !selected.includes(m)));
+    for (const m of remaining) {
+        if (selected.length >= 7) break;
+        selected.push(m);
     }
 
-    // Defensive cap: languages/mathematics are pushed unconditionally above
-    // (steps 1-2), so a student with e.g. 3 language subjects (not just the
-    // standard English/Kiswahili pair) can push the total past 7. The KCSE
-    // rule is exactly 7 graded subjects, never more, so if the compulsory
-    // categories alone already exceed 7, trim the lowest-scoring
-    // non-mathematics subjects (mathematics is single-subject and always
-    // compulsory; languages are trimmed before it) until exactly 7 remain.
+    // 5. Defensive cap: the compulsory pushes above are unconditional, so a
+    //    student taking 3+ languages could exceed 7. Trim the lowest-scoring
+    //    non-mathematics subjects until exactly 7 remain (Mathematics is
+    //    single and always compulsory; languages are trimmed before it).
     let finalSelected = selected;
     if (finalSelected.length > 7) {
         const excess = finalSelected.length - 7;
@@ -507,7 +499,7 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
         finalSelected = finalSelected.filter(m => !trimmable.includes(m));
     }
 
-    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', finalSelected.length, 'Categories:', finalSelected.map(s => `${s.subjectName}(${s.points})`).join(', '));
+    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', finalSelected.length, 'Categories:', finalSelected.map(s => `${s.subjectName}(${s.category},${s.points})`).join(', '));
 
     return finalSelected;
 }
