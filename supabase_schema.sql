@@ -113,6 +113,7 @@ CREATE TABLE users (
     username TEXT UNIQUE,
     password_hash TEXT,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS students (
     guardian_email TEXT,
     date_enrolled DATE DEFAULT CURRENT_DATE,
     status student_status DEFAULT 'ACTIVE' NOT NULL,
+    avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
