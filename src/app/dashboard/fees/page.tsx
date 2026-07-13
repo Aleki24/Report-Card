@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Grid3X3, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, Percent, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
+import { DataTable } from '@/components/ui';
+import { findActiveTermId } from '@/lib/term-calendar';
 
 interface FeeRecord {
     id: string;
@@ -26,6 +28,7 @@ interface StudentOption {
     id: string;
     name: string;
     admission: string;
+    gradeStreamId?: string | null;
 }
 
 interface TermOption {
@@ -58,26 +61,17 @@ function formatCurrency(n: number): string {
 }
 
 const statusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-        PENDING: '#F59E0B',
-        PARTIAL: '#3B82F6',
-        PAID: '#10B981',
-        OVERPAID: '#8B5CF6',
+    const classes: Record<string, string> = {
+        PENDING: 'badge-warning',
+        PARTIAL: 'badge-info',
+        PAID: 'badge-success',
+        OVERPAID: 'badge-info',
     };
-    return (
-        <span style={{
-            background: `${colors[status] || '#94A3B8'}20`,
-            color: colors[status] || '#64748B',
-            padding: '3px 10px',
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-        }}>
-            {status}
-        </span>
-    );
+    return <span className={`badge whitespace-nowrap ${classes[status] || 'badge-info'}`}>{status}</span>;
 };
+
+/** Balance figures: red when owing, green when settled (theme-aware viz tokens). */
+const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
 
 export default function FeesPage() {
     const { profile } = useAuth();
@@ -161,14 +155,14 @@ export default function FeesPage() {
                     id: s.id,
                     name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
                     admission: s.admission_number,
+                    gradeStreamId: s.current_grade_stream_id || null,
                 })));
             }
             if (tData.data) {
-                const termsList = tData.data.map((t: any) => ({ id: t.id, name: t.name }));
-                setTerms(termsList);
-                // Auto-select first term
-                if (!selectedTerm && termsList.length > 0) {
-                    setSelectedTerm(termsList[0].id);
+                setTerms(tData.data.map((t: any) => ({ id: t.id, name: t.name })));
+                // Auto-select the active term (Kenyan calendar), falling back to the first
+                if (!selectedTerm && tData.data.length > 0) {
+                    setSelectedTerm(findActiveTermId(tData.data) || tData.data[0].id);
                 }
             }
             if (gsData.data) {
@@ -189,8 +183,15 @@ export default function FeesPage() {
         if (statusFilter) {
             result = result.filter(f => f.status === statusFilter);
         }
+        if (streamFilter) {
+            // Fee records carry admission numbers; resolve class through the roster
+            const admissionsInStream = new Set(
+                students.filter(s => s.gradeStreamId === streamFilter).map(s => s.admission)
+            );
+            result = result.filter(f => f.admissionNumber && admissionsInStream.has(f.admissionNumber));
+        }
         return result;
-    }, [fees, search, statusFilter]);
+    }, [fees, search, statusFilter, streamFilter, students]);
 
     const kpi = useMemo(() => {
         const expected = fees.reduce((s, f) => s + f.totalFee, 0);
@@ -298,7 +299,8 @@ export default function FeesPage() {
 
             const entries: Record<string, { total: string; paid: string; dueDate: string; notes: string; existing: FeeRecord | null }> = {};
             for (const s of mapped) {
-                const existing = existingFees.find(f => f.studentName?.includes(s.name.split(' ')[0]));
+                // Match existing records by admission number — names are ambiguous
+                const existing = existingFees.find(f => f.admissionNumber && f.admissionNumber === s.admission);
                 entries[s.id] = {
                     total: existing ? String(existing.totalFee) : '',
                     paid: existing ? String(existing.paidAmount) : '0',
@@ -426,8 +428,8 @@ export default function FeesPage() {
                                             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
                                             onClick={openBatch}
                                         >
-                                            <Upload size={15} className="text-blue-500" />
-                                            Batch Import
+                                            <Upload size={15} className="text-primary" />
+                                            Batch Entry
                                         </button>
                                     </div>
                                 )}
@@ -442,12 +444,24 @@ export default function FeesPage() {
             />
 
             {/* ── KPI Cards ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+            <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <StatCard label="Expected" value={formatCurrency(kpi.expected)} sub={`${totalRecords} record(s)`} icon={Wallet} iconClassName="bg-primary/15 text-primary" />
-                <StatCard label="Collected" value={formatCurrency(kpi.collected)} sub={`${kpi.collectionRate}% collection rate`} icon={ArrowUpRight} iconClassName="bg-emerald-500/15 text-emerald-500" />
-                <StatCard label="Outstanding" value={formatCurrency(kpi.outstanding)} sub="Total unpaid balance" icon={Clock} iconClassName="bg-amber-500/15 text-amber-500" />
-                <StatCard label="Overdue" value={formatCurrency(kpi.overdueAmount)} sub={`${kpi.overdueCount} overdue record(s)`} icon={AlertTriangle} iconClassName="bg-red-500/15 text-red-500" />
-                <StatCard label="Collection Rate" value={`${kpi.collectionRate}%`} sub={kpi.collectionRate >= 80 ? 'Healthy' : kpi.collectionRate >= 50 ? 'Moderate' : 'Needs attention'} icon={Percent} iconClassName="bg-purple-500/15 text-purple-500" />
+                <StatCard label="Collected" value={formatCurrency(kpi.collected)} sub={`${kpi.collectionRate}% collection rate`} icon={ArrowUpRight} iconClassName="bg-primary/15 text-primary" />
+                <StatCard label="Outstanding" value={formatCurrency(kpi.outstanding)} sub="Total unpaid balance" icon={Clock} iconClassName="bg-amber-500/15 text-amber-600" />
+                <StatCard label="Overdue" value={formatCurrency(kpi.overdueAmount)} sub={`${kpi.overdueCount} overdue record(s)`} icon={AlertTriangle} iconClassName="bg-destructive/15 text-destructive" />
+            </div>
+
+            {/* ── Collection meter ── */}
+            <div className="mb-5 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-foreground">Term collection progress</span>
+                    <span className="text-muted-foreground">
+                        {kpi.collectionRate}% collected · {kpi.collectionRate >= 80 ? 'Healthy' : kpi.collectionRate >= 50 ? 'Moderate' : 'Needs attention'}
+                    </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-primary/15">
+                    <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, kpi.collectionRate)}%` }} />
+                </div>
             </div>
 
             {/* ════════════════════════════════════════════ */}
@@ -544,7 +558,7 @@ export default function FeesPage() {
                                                                 onChange={e => updateBatchEntry(s.id, 'paid', e.target.value)}
                                                             />
                                                         </td>
-                                                        <td data-label="Balance" style={{ fontFamily: 'monospace', color: balance > 0 ? '#EF4444' : '#10B981', fontWeight: 600 }}>
+                                                        <td data-label="Balance" style={{ fontFamily: 'monospace', color: balanceColor(balance), fontWeight: 600 }}>
                                                             {total > 0 ? balance.toLocaleString() : '—'}
                                                         </td>
                                                         <td data-label="Due Date">
@@ -630,7 +644,7 @@ export default function FeesPage() {
 
                     {/* ── Empty State / Table ── */}
                     {loading ? (
-                        <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Loading...</div>
+                        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
                     ) : fees.length === 0 ? (
                         /* ── Guided Onboarding Empty State ── */
                         <div className="card py-12 px-6 text-center">
@@ -641,7 +655,7 @@ export default function FeesPage() {
                             <p className="text-sm text-muted-foreground max-w-md mx-auto mb-8 leading-relaxed">
                                 Get started by setting up fee structures, adding individual records, or importing data in bulk for your classes.
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
                                 <button
                                     className="card p-5 text-left hover:border-primary/60 transition-all cursor-pointer"
                                     onClick={openAdd}
@@ -655,87 +669,69 @@ export default function FeesPage() {
                                     </p>
                                 </button>
                                 <button
-                                    className="card p-5 text-left hover:border-blue-500/60 transition-all cursor-pointer"
+                                    className="card p-5 text-left hover:border-primary/60 transition-all cursor-pointer"
                                     onClick={openBatch}
                                 >
-                                    <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center mb-3">
+                                    <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center mb-3">
                                         <Upload size={20} />
                                     </div>
-                                    <h4 className="font-bold text-sm mb-1">Batch Import</h4>
+                                    <h4 className="font-bold text-sm mb-1">Batch Entry</h4>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
                                         Select a class and term, then bulk-enter fees for multiple students at once.
                                     </p>
                                 </button>
-                                <button
-                                    className="card p-5 text-left hover:border-purple-500/60 transition-all cursor-pointer"
-                                    onClick={() => {}}
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center mb-3">
-                                        <Grid3X3 size={20} />
-                                    </div>
-                                    <h4 className="font-bold text-sm mb-1">Set Fee Structure</h4>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Define standard fee amounts per class, term, and category for faster entry.
-                                    </p>
-                                </button>
                             </div>
                         </div>
-                    ) : filtered.length === 0 ? (
-                        <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>
-                            No matching records found for the current filters.
-                        </div>
                     ) : (
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Student</th>
-                                        <th>Expected Fee</th>
-                                        <th>Paid</th>
-                                        <th>Balance</th>
-                                        <th>Status</th>
-                                        <th>Last Payment Activity</th>
-                                        <th style={{ width: 90 }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filtered.map(fee => (
-                                        <tr key={fee.id}>
-                                            <td data-label="Student">
-                                                <div className="font-semibold text-sm">{fee.studentName || '—'}</div>
-                                                <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}</div>
-                                            </td>
-                                            <td data-label="Expected" style={{ fontFamily: 'monospace' }}>
-                                                {fee.totalFee.toLocaleString()}
-                                            </td>
-                                            <td data-label="Paid" style={{ fontFamily: 'monospace', color: fee.paidAmount > 0 ? '#10B981' : '#94A3B8' }}>
-                                                {fee.paidAmount.toLocaleString()}
-                                            </td>
-                                            <td data-label="Balance" style={{ fontFamily: 'monospace', color: fee.balance > 0 ? '#EF4444' : '#10B981', fontWeight: 600 }}>
-                                                {fee.balance.toLocaleString()}
-                                            </td>
-                                            <td data-label="Status">{statusBadge(fee.status)}</td>
-                                            <td data-label="Activity" style={{ fontSize: 12, color: '#64748B' }}>
-                                                <div>{fee.notes || '—'}</div>
-                                                <div className="text-[11px] text-muted-foreground mt-0.5">
-                                                    {fee.updatedAt ? timeAgo(fee.updatedAt) : ''}
-                                                </div>
-                                            </td>
-                                            <td data-label="Actions">
-                                                <div style={{ display: 'flex', gap: 4 }}>
-                                                    <button className="btn-icon" onClick={() => openEdit(fee)} title="Edit">
-                                                        <Edit3 size={14} />
-                                                    </button>
-                                                    <button className="btn-icon" onClick={() => handleDelete(fee.id)} title="Delete" style={{ color: '#EF4444' }}>
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <DataTable<FeeRecord>
+                            columns={[
+                                {
+                                    key: 'student', header: 'Student',
+                                    render: fee => (
+                                        <div>
+                                            <div className="font-semibold text-sm">{fee.studentName || '—'}</div>
+                                            <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}</div>
+                                        </div>
+                                    ),
+                                },
+                                { key: 'expected', header: 'Expected Fee', numeric: true, render: fee => fee.totalFee.toLocaleString() },
+                                {
+                                    key: 'paid', header: 'Paid', numeric: true,
+                                    render: fee => (
+                                        <span style={{ color: fee.paidAmount > 0 ? 'var(--viz-good)' : undefined }} className={fee.paidAmount > 0 ? '' : 'text-muted-foreground'}>
+                                            {fee.paidAmount.toLocaleString()}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    key: 'balance', header: 'Balance', numeric: true,
+                                    render: fee => (
+                                        <span className="font-semibold" style={{ color: balanceColor(fee.balance) }}>
+                                            {fee.balance.toLocaleString()}
+                                        </span>
+                                    ),
+                                },
+                                { key: 'status', header: 'Status', render: fee => statusBadge(fee.status) },
+                                {
+                                    key: 'activity', header: 'Last Payment Activity', hideOnMobile: true,
+                                    render: fee => (
+                                        <div className="text-xs text-muted-foreground">
+                                            <div>{fee.notes || '—'}</div>
+                                            <div className="mt-0.5 text-[11px] opacity-80">{fee.updatedAt ? timeAgo(fee.updatedAt) : ''}</div>
+                                        </div>
+                                    ),
+                                },
+                            ]}
+                            rows={filtered}
+                            rowKey={fee => fee.id}
+                            rowActions={fee => (
+                                <span className="whitespace-nowrap">
+                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit"><Edit3 size={14} /></button>
+                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete"><Trash2 size={14} /></button>
+                                </span>
+                            )}
+                            emptyState={<p className="text-sm">No matching records found for the current filters.</p>}
+                        />
                     )}
 
                     <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={editingFee ? 'Edit Fee Record' : 'Add Fee Record'}>
@@ -743,7 +739,7 @@ export default function FeesPage() {
                             {!editingFee && (
                                 <>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Student *</label>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Student *</label>
                                         <select
                                             value={formStudent}
                                             onChange={e => setFormStudent(e.target.value)}
@@ -756,7 +752,7 @@ export default function FeesPage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Term *</label>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Term *</label>
                                         <select
                                             value={formTerm}
                                             onChange={e => setFormTerm(e.target.value)}
@@ -771,19 +767,19 @@ export default function FeesPage() {
                                 </>
                             )}
                             <div>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Total Fee (KShs) *</label>
+                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
                                 <input type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Paid Amount (KShs)</label>
+                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paid Amount (KShs)</label>
                                 <input type="number" value={formPaid} onChange={e => setFormPaid(e.target.value)} placeholder="e.g. 20000" className="input-field w-full" />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Due Date</label>
+                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due Date</label>
                                 <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Notes</label>
+                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Notes</label>
                                 <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={3} placeholder="Optional notes..." className="input-field w-full resize-y" />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>

@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Bell } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
-import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
 
 interface Announcement {
@@ -101,10 +100,14 @@ export default function AnnouncementsPage() {
                 title="Announcements"
                 description="Create and manage school-wide announcements"
                 breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Announcements' }]}
-                action={<button className="btn-primary" onClick={openAdd} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={14} /> New Announcement</button>}
+                action={
+                    <button className="btn-primary" onClick={openAdd}>
+                        <Plus size={14} /> New Announcement
+                    </button>
+                }
             />
 
-            <div className="flex items-center input-field w-full overflow-hidden px-0 mb-4">
+            <div className="flex items-center input-field w-full max-w-md overflow-hidden px-0 mb-6">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
                     <Search size={16} />
                 </span>
@@ -118,45 +121,49 @@ export default function AnnouncementsPage() {
             </div>
 
             {loading ? (
-                <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>Loading...</div>
+                <div className="py-16 text-center text-sm text-muted-foreground">Loading...</div>
             ) : filtered.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: '#94A3B8' }}>
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
+                    <Bell size={28} className="opacity-40" />
                     {search ? 'No matching announcements.' : 'No announcements yet. Click "New Announcement" to create one.'}
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="flex flex-col gap-3">
                     {filtered.map(a => (
-                        <div key={a.id} style={{
-                            display: 'flex', alignItems: 'flex-start', gap: 16,
-                            padding: 16, background: '#fff', borderRadius: 12,
-                            border: a.isImportant ? '2px solid #EF4444' : '1px solid #E2E8F0',
-                        }}>
-                            <div style={{
-                                width: 40, height: 40, borderRadius: 10,
-                                background: a.isImportant ? '#FEF2F2' : '#EFF6FF',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: a.isImportant ? '#EF4444' : '#3B82F6', flexShrink: 0,
-                            }}>
+                        <div
+                            key={a.id}
+                            className="card flex items-start gap-4 p-4"
+                            style={a.isImportant ? { borderColor: 'color-mix(in srgb, var(--viz-bad) 45%, transparent)' } : undefined}
+                        >
+                            <div
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                                style={{
+                                    background: `color-mix(in srgb, ${a.isImportant ? 'var(--viz-bad)' : 'var(--viz-info)'} 12%, transparent)`,
+                                    color: a.isImportant ? 'var(--viz-bad)' : 'var(--viz-info)',
+                                }}
+                            >
                                 <Bell size={18} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>{a.title}</span>
+                            <div className="min-w-0 flex-1">
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-bold text-foreground">{a.title}</span>
                                     {a.isImportant && (
-                                        <span style={{
-                                            background: '#FEF2F2', color: '#EF4444', padding: '2px 8px',
-                                            borderRadius: 4, fontSize: 10, fontWeight: 700,
-                                        }}>IMPORTANT</span>
+                                        <span
+                                            className="rounded px-2 py-0.5 text-[10px] font-bold"
+                                            style={{ background: 'color-mix(in srgb, var(--viz-bad) 12%, transparent)', color: 'var(--viz-bad)' }}
+                                        >
+                                            IMPORTANT
+                                        </span>
                                     )}
                                 </div>
-                                <p style={{ fontSize: 13, color: '#475569', margin: '0 0 6px', lineHeight: 1.5 }}>{a.content}</p>
-                                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                                <p className="mb-1.5 text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">{a.content}</p>
+                                <div className="text-[11px] text-muted-foreground">
                                     Posted by {a.postedBy} · {new Date(a.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                            <div className="flex shrink-0 gap-1">
                                 <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
-                                <button className="btn-icon" onClick={() => handleDelete(a.id)} title="Delete" style={{ color: '#EF4444' }}><Trash2 size={14} /></button>
+                                <button className="btn-icon" style={{ color: 'var(--viz-bad)' }} onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
                             </div>
                         </div>
                     ))}
@@ -164,37 +171,37 @@ export default function AnnouncementsPage() {
             )}
 
             <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Announcement' : 'New Announcement'}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="flex flex-col gap-4">
                     <div>
-                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Title *</label>
+                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
                         <input
                             type="text"
                             value={formTitle}
                             onChange={e => setFormTitle(e.target.value)}
                             placeholder="Announcement title"
-                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }}
+                            className="input-field w-full"
                         />
                     </div>
                     <div>
-                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>Content *</label>
+                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Content *</label>
                         <textarea
                             value={formContent}
                             onChange={e => setFormContent(e.target.value)}
                             rows={4}
                             placeholder="Announcement content..."
-                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, resize: 'vertical' }}
+                            className="input-field w-full resize-y"
                         />
                     </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground">
                         <input
                             type="checkbox"
                             checked={formImportant}
                             onChange={e => setFormImportant(e.target.checked)}
-                            style={{ width: 16, height: 16 }}
+                            className="h-4 w-4"
                         />
                         Mark as important
                     </label>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                    <div className="mt-2 flex justify-end gap-2">
                         <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
                         <button className="btn-primary" onClick={handleSave} disabled={saving}>
                             {saving ? 'Saving...' : editing ? 'Update' : 'Create'}

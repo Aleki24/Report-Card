@@ -139,10 +139,11 @@ export interface AggregateResult {
 }
 
 export function aggregateStudentPerformance(
-    marks: ExamMarkWithDetails[], 
-    scales?: GradingScale[], 
+    marks: ExamMarkWithDetails[],
+    scales?: GradingScale[],
     gradingSystemType?: 'KCSE' | 'CBC',
-    subjectNames?: Record<string, string>
+    subjectNames?: Record<string, string>,
+    subjectCategories?: Record<string, string>
 ): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
@@ -158,7 +159,8 @@ export function aggregateStudentPerformance(
     if (isKCSE && subjectNames && Object.keys(subjectNames).length > 0) {
         const marksWithNames: MarkWithSubjectName[] = marks.map(m => ({
             ...m,
-            subjectName: subjectNames[m.subject_id] || ''
+            subjectName: subjectNames[m.subject_id] || '',
+            category: (subjectCategories?.[m.subject_id] as SubjectCategory) || undefined
         }));
         
         // Fix: always run select844Subjects; the function handles <8 subjects internally
@@ -391,9 +393,16 @@ function sortByPointsDesc(arr: MarkWithSubjectName[]): MarkWithSubjectName[] {
     return [...arr].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 }
 
-function identifySubjectCategory(subjectName: string): SubjectCategory {
+// Returns the KCSE cluster category for a subject by name, or null when the
+// name isn't recognised (e.g. a subject stored under a bare KNEC code like
+// "565"). A confident name match is preferred over the DB category because a
+// school's stored category can be wrong — most notably Business Studies, which
+// is an applied/TECHNICAL subject for 8-4-4 clustering but is often seeded as
+// HUMANITY. Callers fall back to the DB category only when this returns null.
+function identifySubjectCategory(subjectName: string): SubjectCategory | null {
     const name = subjectName.toLowerCase().trim();
-    
+    if (!name) return null;
+
     if (name.includes('english')) return 'LANGUAGE';
     if (name.includes('kiswahili')) return 'LANGUAGE';
     if (name.includes('math')) return 'MATHEMATICS';
@@ -406,13 +415,15 @@ function identifySubjectCategory(subjectName: string): SubjectCategory {
     if (name.includes('islamic religious') || name === 'ire') return 'HUMANITY';
     if (name.includes('hindu religious') || name === 'hre') return 'HUMANITY';
     if (name.includes('religious')) return 'HUMANITY';
+    // Technical / applied subjects (the "technicals": agriculture, business,
+    // computer, home science, and any explicitly technical subject).
     if (name.includes('computer')) return 'TECHNICAL';
     if (name.includes('business')) return 'TECHNICAL';
     if (name.includes('agriculture')) return 'TECHNICAL';
     if (name.includes('home science')) return 'TECHNICAL';
     if (name.includes('technical')) return 'TECHNICAL';
-    
-    return 'TECHNICAL';
+
+    return null;
 }
 
 export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingScale[]): MarkWithSubjectName[] {
@@ -427,57 +438,81 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     const marksWithCategory = marks.map(m => {
         // Use user-selected grade_symbol for points, not percentage-based
         const pts = getPointsFromGrade((m as any).grade_symbol || '');
+        // Categorise by NAME first (a confident keyword match), then fall back
+        // to the school's stored subjects.category. Name wins because the DB
+        // category is frequently wrong for applied subjects — Business Studies
+        // is an applied/TECHNICAL subject for 8-4-4 clustering but is commonly
+        // seeded as HUMANITY. Name matching only returns null for subjects
+        // stored under a bare KNEC code (e.g. "565"), and only then do we trust
+        // the DB category. CREATIVE electives fold into TECHNICAL for
+        // clustering; anything still unknown defaults to TECHNICAL.
+        const nameCategory = identifySubjectCategory(m.subjectName || '');
+        const rawDb = m.category as string | undefined;
+        const dbCategory = rawDb === 'CREATIVE' ? 'TECHNICAL' : rawDb;
+        const category: SubjectCategory = nameCategory
+            ?? (dbCategory as SubjectCategory | undefined)
+            ?? 'TECHNICAL';
         return {
             ...m,
-            category: identifySubjectCategory(m.subjectName || ''),
+            category,
             points: pts,
         };
     });
-    
+
     const languages = marksWithCategory.filter(m => m.category === 'LANGUAGE');
     const mathematics = marksWithCategory.filter(m => m.category === 'MATHEMATICS');
     const sciences = marksWithCategory.filter(m => m.category === 'SCIENCE');
     const humanities = marksWithCategory.filter(m => m.category === 'HUMANITY');
     const technicals = marksWithCategory.filter(m => m.category === 'TECHNICAL');
-    
+
+    // KCSE 8-4-4 cluster rule for the 7 subjects that earn points:
+    //   • Compulsory  → English, Kiswahili and Mathematics always count.
+    //   • Sciences    → the best 2 of Biology / Chemistry / Physics count;
+    //                   a 3rd (weakest) science is dropped.
+    //   • Humanities  → the best 1 (History / Geography / CRE / IRE / HRE).
+    //   • Technicals  → the best 1 (Agriculture / Business / Computer / etc.).
+    // Those quotas total exactly 7 for the standard combination. If a student
+    // is short in some category (e.g. no technical), the remaining slots are
+    // filled up to 7 with the best of everything left over — so the graded
+    // set always reaches 7 when the student takes 8+ subjects.
     const selected: MarkWithSubjectName[] = [];
-    
-    // Step 1: Always include all languages
+
+    // 1. Compulsory: all languages (English + Kiswahili) and Mathematics.
     selected.push(...languages);
-    
-    // Step 2: Always include mathematics
     selected.push(...mathematics);
-    
-    // Step 3: Sciences - if 2 or fewer, include all (sorted); if 3+, include best 2 (SORT BEFORE SLICE)
-    const sortedSciences = sortByPointsDesc(sciences);
-    if (sciences.length <= 2) {
-        selected.push(...sortedSciences); // FIX: use sorted array
-    } else {
-        selected.push(sortedSciences[0], sortedSciences[1]);
+
+    // 2. Sciences: best 2 (sorted before slicing).
+    selected.push(...sortByPointsDesc(sciences).slice(0, 2));
+
+    // 3. Humanities: best 1.
+    selected.push(...sortByPointsDesc(humanities).slice(0, 1));
+
+    // 4. Technicals: best 1.
+    selected.push(...sortByPointsDesc(technicals).slice(0, 1));
+
+    // 5. Fill any still-empty slots up to 7 with the best of everything left
+    //    over (a 3rd science, a 2nd humanity/technical) so the total reaches 7.
+    const remaining = sortByPointsDesc(marksWithCategory.filter(m => !selected.includes(m)));
+    for (const m of remaining) {
+        if (selected.length >= 7) break;
+        selected.push(m);
     }
-    
-    // Step 4: Humanities - include best 1 (SORT BEFORE SLICE)
-    if (humanities.length > 0) {
-        const sortedHumanities = sortByPointsDesc(humanities);
-        selected.push(sortedHumanities[0]);
+
+    // 6. Defensive cap: the compulsory pushes above are unconditional, so a
+    //    student taking 3+ languages could exceed 7. Trim the lowest-scoring
+    //    non-mathematics subjects until exactly 7 remain (Mathematics is
+    //    single and always compulsory; languages are trimmed before it).
+    let finalSelected = selected;
+    if (finalSelected.length > 7) {
+        const excess = finalSelected.length - 7;
+        const trimmable = finalSelected
+            .filter(m => m.category !== 'MATHEMATICS')
+            .sort((a, b) => (a.points ?? 0) - (b.points ?? 0))
+            .slice(0, excess);
+        finalSelected = finalSelected.filter(m => !trimmable.includes(m));
     }
-    
-    // Fix: include best technical if present, without numSubjects >= 8 gate
-    if (technicals.length > 0) {
-        const sortedTechnicals = sortByPointsDesc(technicals);
-        selected.push(sortedTechnicals[0]);
-    }
-    
-    // If still under 7, fill with extra technicals only (not dropped sciences/humanities)
-    const extraTechnicals = sortByPointsDesc(technicals).slice(1);
-    
-    for (const m of extraTechnicals) {
-        if (!selected.includes(m) && selected.length < 7) {
-            selected.push(m);
-        }
-    }
-    
-    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', selected.length, 'Categories:', selected.map(s => `${s.subjectName}(${s.points})`).join(', '));
-    
-    return selected;
+
+    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', finalSelected.length, 'Categories:', finalSelected.map(s => `${s.subjectName}(${s.category},${s.points})`).join(', '));
+
+    return finalSelected;
 }

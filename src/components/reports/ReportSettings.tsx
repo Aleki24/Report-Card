@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Card, CardContent, Select, Input } from '@/components/ui';
-import { Filter, BookOpen, GraduationCap, CalendarDays } from 'lucide-react';
+import { Filter, CheckCircle2 } from 'lucide-react';
 import { REPORT_TEMPLATES, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
 interface ReportSettingsProps {
@@ -24,12 +24,22 @@ export function ReportSettings({
   selectedTemplate, setSelectedTemplate,
   academicYears, terms, gradeStreams,
 }: ReportSettingsProps) {
+  const isReady = !!(selectedAcademicYear && selectedTerm && selectedGradeStream);
   return (
     <Card className="mb-6">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="w-4 h-4 text-primary" />
-          <h3 className="text-[15px] font-semibold font-display">Report Settings</h3>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-primary" />
+            <h3 className="text-[15px] font-semibold font-display">① Report Scope</h3>
+          </div>
+          {isReady ? (
+            <span className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Ready — pick an action below
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Select year, term &amp; class to unlock actions</span>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>

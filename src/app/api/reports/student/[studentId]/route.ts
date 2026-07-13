@@ -296,11 +296,16 @@ export async function GET(
 
         // 5. Map to analytics interface and calculate performance
         const subjectNamesMap: Record<string, string> = {};
+        const subjectCategoriesMap: Record<string, string> = {};
         const mappedMarks: ExamMarkWithDetails[] = safeMarks.map((m: any) => {
             const subjId = m.exams.subjects?.id || '';
             const subjName = m.exams.subjects?.name || '';
+            const subjCategory = m.exams.subjects?.category || '';
             if (subjId && subjName) {
                 subjectNamesMap[subjId] = subjName;
+            }
+            if (subjId && subjCategory) {
+                subjectCategoriesMap[subjId] = subjCategory;
             }
             return {
                 id: m.id,
@@ -315,7 +320,7 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
@@ -439,10 +444,15 @@ export async function GET(
             points: s.points,
         }));
 
+        // 9.5 Per-paper scores for multi-paper subjects (keyed examId|studentId)
+        const { fetchPaperScores } = await import('@/lib/pdf/paperScores');
+        const markExamIds = [...new Set(safeMarks.map((m: any) => m.exams?.id).filter(Boolean))] as string[];
+        const paperScoreMap = await fetchPaperScores(supabase, markExamIds, [studentId]);
+
         // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
         // Use subject-specific grading when available, otherwise use academic level grading
         const subjMarksMap = new Map<string, any>();
-        
+
         safeMarks.forEach((m: any) => {
             const subject = m.exams.subjects;
             if (!subject) return;
@@ -491,6 +501,7 @@ export async function GET(
                 subjectRank: subjectRanksMap.get(subject.id) ?? undefined,
                 totalStudents: subjectStudentCountMap.get(subject.id) ?? undefined,
                 includedInPoints: selectedSubjectIds.has(subject.id),
+                paperScores: paperScoreMap.get(`${m.exams.id}|${studentId}`),
             });
         });
 

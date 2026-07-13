@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import PageHeader from '@/components/dashboard/PageHeader';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -112,24 +113,11 @@ export default function ClassesPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="mb-8">
-        <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Manage Classes</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Configure class designations and streams</p>
-      </div>
-
-      {/* Guide */}
-      <div className="my-8 bg-blue-500/10 border border-blue-500/20 text-blue-400 p-8 rounded-xl flex items-start gap-5 leading-relaxed tracking-wide">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-        <div className="text-sm">
-          <h3 className="font-semibold mb-2 text-base">How to manage classes:</h3>
-          <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-            <li><strong>Step 1:</strong> Select a Grade to view its classes (streams/sections).</li>
-            <li><strong>Step 2:</strong> Use the <strong>Add New Class</strong> form below. Leave the stream name blank to simply use the Grade name (e.g. &quot;Grade 5&quot; or &quot;Form 3&quot;).</li>
-            <li><strong>Step 3:</strong> Manage <strong>Subjects</strong> taught in your school below. Assign each subject to the correct Academic Level.</li>
-            <li><strong>Note:</strong> Grades and Academic Levels are managed by the initial school setup script.</li>
-          </ul>
-        </div>
-      </div>
+      <PageHeader
+        title="Manage Classes"
+        description="Select a grade to add or remove its class streams, and manage the subjects taught at your school."
+        breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Classes' }]}
+      />
 
       {loading ? (
         <ContentSkeleton message="Loading classes..." />

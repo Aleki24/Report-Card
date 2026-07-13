@@ -8,7 +8,7 @@
 
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, [data-theme="dark"] *));
 
 @theme {
   --breakpoint-xs: 320px;
@@ -51,8 +51,8 @@
   --sidebar-accent-foreground: oklch(0.4265 0.0310 59.2153);
   --sidebar-border: oklch(0.9073 0.0170 88.0044);
   --sidebar-ring: oklch(0.7350 0.0564 130.8494);
-  --font-sans: Merriweather, serif;
-  --font-serif: Source Serif 4, serif;
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-serif: Lora, Georgia, serif;
   --font-mono: JetBrains Mono, monospace;
   --radius: 0.425rem;
   --shadow-x: 3px;
@@ -93,8 +93,10 @@
 
   --color-purple-500: #F97316;
 
-  /* --- Typography --- */
-  --font-display: var(--font-sans);
+  /* --- Typography ---
+     Display (headings) keeps the warm serif identity; body/UI text, tables,
+     and figures use the sans for legibility at dashboard sizes. */
+  --font-display: Lora, Georgia, serif;
   --font-body: var(--font-sans);
 
   /* --- Spacing Rhythm --- */
@@ -114,9 +116,22 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --spacing: 0.25rem;
+
+  /* Dashboard viz status colors — validated ≥3:1 against the card surface
+     per theme (see dataviz palette checks). Order in stacked marks must keep
+     good and bad non-adjacent (good → warn → info → bad). */
+  --viz-good: #4d7c0f;
+  --viz-warn: #b45309;
+  --viz-info: #1d4ed8;
+  --viz-bad: #b91c1c;
 }
 
 .dark, [data-theme="dark"] {
+  --viz-good: #65a30d;
+  --viz-warn: #d97706;
+  --viz-info: #4f8ef7;
+  --viz-bad: #ec5c58;
+
   --background: oklch(0.3303 0.0214 88.0737);
   --foreground: oklch(0.9217 0.0235 82.1191);
   --card: oklch(0.3583 0.0165 82.3257);
@@ -1008,10 +1023,11 @@ select.input-field {
     }
 
     .student-main {
-        margin-left: 80px;
+        margin-left: var(--student-sidebar-width, 80px);
         padding: var(--space-8);
         min-height: 100vh;
         height: auto;
+        transition: margin-left 0.3s ease;
     }
 }
 
@@ -1020,8 +1036,8 @@ select.input-field {
 /* ============================================= */
 
 .student-welcome-card {
-    background: linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(5,150,105,0.04) 100%);
-    border: 1px solid rgba(16,185,129,0.2);
+    background: color-mix(in srgb, var(--primary) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
     border-radius: var(--radius-lg);
     padding: var(--space-6);
     margin-bottom: var(--space-6);
@@ -1036,7 +1052,7 @@ select.input-field {
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, #10B981, #059669);
+    background: var(--primary);
 }
 
 .student-kpi-grid {
@@ -1057,11 +1073,11 @@ select.input-field {
     gap: var(--space-2);
 }
 
-/* Attendance status indicators */
-.attendance-present { color: var(--color-success); background: rgba(16,185,129,0.12); }
-.attendance-absent { color: var(--color-danger); background: rgba(239,68,68,0.12); }
-.attendance-late { color: var(--color-warning); background: rgba(234,179,8,0.12); }
-.attendance-excused { color: #6366f1; background: rgba(99,102,241,0.12); }
+/* Attendance status indicators — matches the tokens used on the admin Attendance page */
+.attendance-present { color: var(--viz-good); background: color-mix(in srgb, var(--viz-good) 12%, transparent); }
+.attendance-absent { color: var(--viz-bad); background: color-mix(in srgb, var(--viz-bad) 12%, transparent); }
+.attendance-late { color: var(--viz-warn); background: color-mix(in srgb, var(--viz-warn) 12%, transparent); }
+.attendance-excused { color: var(--viz-info); background: color-mix(in srgb, var(--viz-info) 12%, transparent); }
 
 .attendance-dot {
     width: 8px;
@@ -1071,10 +1087,10 @@ select.input-field {
     flex-shrink: 0;
 }
 
-.attendance-dot-present { background: var(--color-success); }
-.attendance-dot-absent { background: var(--color-danger); }
-.attendance-dot-late { background: var(--color-warning); }
-.attendance-dot-excused { background: #6366f1; }
+.attendance-dot-present { background: var(--viz-good); }
+.attendance-dot-absent { background: var(--viz-bad); }
+.attendance-dot-late { background: var(--viz-warn); }
+.attendance-dot-excused { background: var(--viz-info); }
 
 /* Report card specific */
 .report-card-item {
@@ -1087,8 +1103,8 @@ select.input-field {
 }
 
 .report-card-item:hover {
-    border-color: #10B981;
-    box-shadow: 0 0 0 1px rgba(16,185,129,0.15), 0 4px 16px rgba(0,0,0,0.15);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent), 0 4px 16px rgba(0,0,0,0.15);
 }
 
 /* Subject cards */
@@ -1101,7 +1117,7 @@ select.input-field {
 }
 
 .subject-card:hover {
-    border-color: #10B981;
+    border-color: var(--primary);
     transform: translateY(-2px);
 }
 
@@ -1185,9 +1201,9 @@ select.input-field {
     border-radius: 999px;
     font-size: 11px;
     font-weight: 600;
-    background: rgba(16,185,129,0.1);
-    color: #10B981;
-    border: 1px solid rgba(16,185,129,0.2);
+    background: color-mix(in srgb, var(--viz-good) 10%, transparent);
+    color: var(--viz-good);
+    border: 1px solid color-mix(in srgb, var(--viz-good) 20%, transparent);
 }
 
 /* Skeleton specific for student portal */
@@ -1203,8 +1219,8 @@ select.input-field {
 /* ============================================= */
 
 .premium-card {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 20px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
     padding: var(--space-5);
@@ -1226,7 +1242,7 @@ select.input-field {
     font-family: var(--font-display);
     font-size: 15px;
     font-weight: 700;
-    color: #1E293B;
+    color: var(--color-text-primary);
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -1234,7 +1250,7 @@ select.input-field {
 
 .premium-card-action {
     font-size: 13px;
-    color: #3B82F6;
+    color: var(--primary);
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
@@ -1247,9 +1263,9 @@ select.input-field {
 }
 
 .pill-ongoing {
-    background: rgba(16, 185, 129, 0.1);
-    color: #10B981;
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: color-mix(in srgb, var(--viz-good) 10%, transparent);
+    color: var(--viz-good);
+    border: 1px solid color-mix(in srgb, var(--viz-good) 20%, transparent);
     padding: 4px 12px;
     border-radius: 999px;
     font-size: 11px;
@@ -1258,9 +1274,9 @@ select.input-field {
 }
 
 .pill-upcoming {
-    background: rgba(139, 92, 246, 0.1);
-    color: #8B5CF6;
-    border: 1px solid rgba(139, 92, 246, 0.2);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
     padding: 4px 12px;
     border-radius: 999px;
     font-size: 11px;
@@ -1269,9 +1285,9 @@ select.input-field {
 }
 
 .pill-progress {
-    background: rgba(59, 130, 246, 0.1);
-    color: #3B82F6;
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: color-mix(in srgb, var(--viz-info) 10%, transparent);
+    color: var(--viz-info);
+    border: 1px solid color-mix(in srgb, var(--viz-info) 20%, transparent);
     padding: 4px 12px;
     border-radius: 999px;
     font-size: 11px;
@@ -1284,7 +1300,7 @@ select.input-field {
     align-items: center;
     gap: var(--space-4);
     padding: var(--space-3) 0;
-    border-bottom: 1px solid rgba(0,0,0,0.04);
+    border-bottom: 1px solid var(--color-border);
 }
 .premium-list-item:last-child {
     border-bottom: none;
@@ -1301,8 +1317,8 @@ select.input-field {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: Merriweather, serif;
+  --font-heading: Lora, Georgia, serif;
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -1342,7 +1358,7 @@ select.input-field {
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: JetBrains Mono, monospace;
-  --font-serif: Source Serif 4, serif;
+  --font-serif: Lora, Georgia, serif;
   --radius: 0.425rem;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
@@ -1367,61 +1383,6 @@ select.input-field {
   --shadow-opacity: var(--shadow-opacity);
   --color-shadow-color: var(--shadow-color);
   --color-destructive-foreground: var(--destructive-foreground);
-}
-
-.dark {
-  --background: oklch(0.3303 0.0214 88.0737);
-  --foreground: oklch(0.9217 0.0235 82.1191);
-  --card: oklch(0.3583 0.0165 82.3257);
-  --card-foreground: oklch(0.9217 0.0235 82.1191);
-  --popover: oklch(0.3583 0.0165 82.3257);
-  --popover-foreground: oklch(0.9217 0.0235 82.1191);
-  --primary: oklch(0.6762 0.0567 132.4479);
-  --primary-foreground: oklch(0.2686 0.0105 61.0213);
-  --secondary: oklch(0.4448 0.0239 84.5498);
-  --secondary-foreground: oklch(0.9217 0.0235 82.1191);
-  --muted: oklch(0.3892 0.0197 82.7084);
-  --muted-foreground: oklch(0.7096 0.0171 73.6179);
-  --accent: oklch(0.6540 0.0723 90.7629);
-  --accent-foreground: oklch(0.2686 0.0105 61.0213);
-  --destructive: oklch(0.6287 0.0821 31.2958);
-  --border: oklch(0.4448 0.0239 84.5498);
-  --input: oklch(0.4448 0.0239 84.5498);
-  --ring: oklch(0.6762 0.0567 132.4479);
-  --chart-1: oklch(0.6762 0.0567 132.4479);
-  --chart-2: oklch(0.7350 0.0564 130.8494);
-  --chart-3: oklch(0.5929 0.0464 137.6224);
-  --chart-4: oklch(0.6540 0.0723 90.7629);
-  --chart-5: oklch(0.5183 0.0390 137.1892);
-  --sidebar: oklch(0.3303 0.0214 88.0737);
-  --sidebar-foreground: oklch(0.9217 0.0235 82.1191);
-  --sidebar-primary: oklch(0.6762 0.0567 132.4479);
-  --sidebar-primary-foreground: oklch(0.2686 0.0105 61.0213);
-  --sidebar-accent: oklch(0.6540 0.0723 90.7629);
-  --sidebar-accent-foreground: oklch(0.2686 0.0105 61.0213);
-  --sidebar-border: oklch(0.4448 0.0239 84.5498);
-  --sidebar-ring: oklch(0.6762 0.0567 132.4479);
-  --destructive-foreground: oklch(0.9357 0.0201 84.5907);
-  --radius: 0.425rem;
-  --font-sans: Merriweather, serif;
-  --font-serif: Source Serif 4, serif;
-  --font-mono: JetBrains Mono, monospace;
-  --shadow-color: hsl(88 22% 35% / 0.15);
-  --shadow-opacity: 0.15;
-  --shadow-blur: 2px;
-  --shadow-spread: 0px;
-  --shadow-offset-x: 3px;
-  --shadow-offset-y: 3px;
-  --letter-spacing: 0em;
-  --spacing: 0.25rem;
-  --shadow-2xs: 3px 3px 2px 0px hsl(88 22% 35% / 0.07);
-  --shadow-xs: 3px 3px 2px 0px hsl(88 22% 35% / 0.07);
-  --shadow-sm: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 1px 2px -1px hsl(88 22% 35% / 0.15);
-  --shadow: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 1px 2px -1px hsl(88 22% 35% / 0.15);
-  --shadow-md: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 2px 4px -1px hsl(88 22% 35% / 0.15);
-  --shadow-lg: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 4px 6px -1px hsl(88 22% 35% / 0.15);
-  --shadow-xl: 3px 3px 2px 0px hsl(88 22% 35% / 0.15), 3px 8px 10px -1px hsl(88 22% 35% / 0.15);
-  --shadow-2xl: 3px 3px 2px 0px hsl(88 22% 35% / 0.38);
 }
 
 @layer base {

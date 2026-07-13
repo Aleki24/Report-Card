@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
+import { ScanSheet } from '@/components/marks/ScanSheet';
 import { CreateExamModal } from '@/components/marks/CreateExamModal';
 import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
 import { isMultiPaper } from '@/lib/multi-paper';
@@ -48,7 +49,7 @@ export function MarksSetupTab() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSubjectId, setCreateSubjectId] = useState<string | undefined>(undefined);
   const [selectedExamId, setSelectedExamId] = useState('');
-  const [mode, setMode] = useState<'manual' | 'bulk'>('manual');
+  const [mode, setMode] = useState<'manual' | 'bulk' | 'scan'>('manual');
   const [showPaperModal, setShowPaperModal] = useState(false);
   const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
   const [examScheme, setExamScheme] = useState<ExamSubjectComponentScheme | null>(null);
@@ -315,17 +316,21 @@ export function MarksSetupTab() {
           {/* Header removed as it is now a tab */}
         </div>
         {activeTermObj && (
-          <div className="px-3 py-1.5 rounded-full text-xs font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: 'rgb(52,211,153)', border: '1px solid rgba(16,185,129,0.3)' }}>
-            🟢 Active: {getCurrentTermName()} ({activeTermObj.name})
+          <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--viz-good)' }} />
+            Active: {getCurrentTermName()} ({activeTermObj.name})
           </div>
         )}
       </div>
 
       {isAlsoClassTeacher && (
-        <a href="/dashboard/reports" className="mb-6 flex items-center gap-3 p-4 rounded-lg border transition-all hover:scale-[1.01]" style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.08))', border: '1px solid rgba(139,92,246,0.25)', textDecoration: 'none', color: 'inherit' }}>
-          <span style={{ fontSize: 22 }}>📋</span>
-          <div style={{ flex: 1 }}><span className="font-semibold text-sm" style={{ color: 'rgb(167,139,250)' }}>Go to My Class</span><span className="text-xs block" style={{ color: 'var(--color-text-muted)', marginTop: 2 }}>Switch to class teacher dashboard for reports &amp; student management</span></div>
-          <span style={{ fontSize: 18, opacity: 0.6 }}>→</span>
+        <a href="/dashboard/reports" className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 no-underline text-inherit transition-all hover:border-primary/50 hover:bg-primary/10">
+          <span className="text-[22px]">📋</span>
+          <div className="flex-1">
+            <span className="block text-sm font-semibold text-primary">Go to My Class</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">Switch to class teacher dashboard for reports &amp; student management</span>
+          </div>
+          <span className="text-lg text-muted-foreground">→</span>
         </a>
       )}
 
@@ -336,7 +341,7 @@ export function MarksSetupTab() {
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold" style={{ minWidth: 70 }}>① Term</label>
           {loadingTerms ? (
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading terms...</span>
+            <span className="text-xs text-muted-foreground">Loading terms...</span>
           ) : terms.length === 0 ? (
             <span className="text-xs text-orange-400">No terms found. Ask admin to set up terms.</span>
           ) : (
@@ -345,17 +350,12 @@ export function MarksSetupTab() {
                 <button
                   key={t.id}
                   onClick={() => setSelectedTermId(t.id)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-                  style={{
-                    background: selectedTermId === t.id
-                      ? 'var(--color-accent)' : 'var(--color-surface-raised)',
-                    color: selectedTermId === t.id ? '#fff' : 'var(--color-text-secondary)',
-                    border: `1px solid ${selectedTermId === t.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                    cursor: 'pointer',
-                  }}
+                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${selectedTermId === t.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                 >
                   {t.name}
-                  {t.id === activeTermId && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px]" style={{ background: 'rgba(16,185,129,0.2)', color: 'rgb(52,211,153)' }}>ACTIVE</span>}
+                  {t.id === activeTermId && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-inherit opacity-90">ACTIVE</span>}
                 </button>
               ))}
             </div>
@@ -368,32 +368,30 @@ export function MarksSetupTab() {
         <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>② Exam</label>
-            {loadingExams && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading...</span>}
+            {loadingExams && <span className="text-xs text-muted-foreground">Loading...</span>}
           </div>
 
           {!loadingExams && availableExamTypes.length === 0 ? (
-            // No exams yet — show initialization panel for admin
-            <div className="p-4 rounded-lg" style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-              <p className="text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
-                No exams initialized for <strong>{selectedTermName}</strong>.
-                {profile?.role === 'ADMIN'
-                  ? ' Select which exam types to create:'
-                  : ' Ask your admin to initialize exams for this term.'}
+            // No exams yet — one clear primary action for admin
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-4">
+              <p className="text-sm mb-3 text-muted-foreground">
+                No exams set up yet for <strong>{selectedTermName}</strong>.
+                {profile?.role !== 'ADMIN' && ' Ask your admin to set up exams for this term.'}
               </p>
               {profile?.role === 'ADMIN' && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-3">
                   <button onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary text-xs px-4 py-2">
-                    {seeding ? 'Creating...' : '🔧 Create Standard (Opener + Midterm + Endterm)'}
+                    {seeding ? 'Setting up...' : '🔧 Set Up This Term’s Exams'}
                   </button>
-                  <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="btn-secondary text-xs px-4 py-2">
-                    {seeding ? 'Creating...' : '📦 Create All Types'}
+                  <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="text-xs text-primary hover:underline">
+                    Need every exam type instead?
                   </button>
                 </div>
               )}
             </div>
           ) : !loadingExams ? (
             // Show available exam types as clickable buttons
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {availableExamTypes.map(et => {
                 const count = exams.filter(e => e.exam_type === et.code).length;
                 const isActive = selectedExamType === et.code;
@@ -401,14 +399,10 @@ export function MarksSetupTab() {
                   <button
                     key={et.code}
                     onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); }}
-                    className="px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
+                    className={`cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${isActive
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                     title={et.description}
-                    style={{
-                      background: isActive ? 'var(--color-accent)' : 'var(--color-surface-raised)',
-                      color: isActive ? '#fff' : 'var(--color-text-secondary)',
-                      border: `1px solid ${isActive ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                      cursor: 'pointer',
-                    }}
                   >
                     {et.icon} {et.shortName}
                     <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
@@ -416,47 +410,42 @@ export function MarksSetupTab() {
                 );
               })}
 
-              {/* Admin can add more exam types */}
+              {/* Admin: one compact menu for the less-common exam-setup actions */}
               {profile?.role === 'ADMIN' && (
-                <>
-                  <div className="relative group">
-                    <button className="px-3 py-2.5 rounded-lg text-xs transition-all" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                      + Add Type
+                <div className="relative group">
+                  <button
+                    className="cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    title="More exam setup options"
+                  >
+                    ⚙️ More
+                  </button>
+                  <div className="absolute top-full left-0 z-50 mt-1 hidden min-w-[220px] rounded-xl border border-border bg-popover p-2 shadow-lg group-hover:block">
+                    {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
+                      <button
+                        key={et.code}
+                        onClick={() => handleSeedExams([et.code])}
+                        disabled={seeding}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                      >
+                        + {et.icon} {et.name}
+                        <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => handleSeedExams(Array.from(existingTypes))}
+                      disabled={seeding}
+                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      {seeding ? 'Working...' : '🔄 Add exams for any new subjects'}
                     </button>
-                    <div className="hidden group-hover:block absolute z-50 top-full left-0 mt-1 p-2 rounded-lg min-w-[200px]" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                      {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
-                        <button
-                          key={et.code}
-                          onClick={() => handleSeedExams([et.code])}
-                          disabled={seeding}
-                          className="w-full text-left px-3 py-2 rounded text-xs hover:bg-card transition-colors"
-                          style={{ color: 'var(--color-text-secondary)' }}
-                        >
-                          {et.icon} {et.name}
-                          <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{et.description}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      + Create one exam manually
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleSeedExams(Array.from(existingTypes))}
-                    disabled={seeding}
-                    className="px-3 py-2.5 rounded-lg text-xs transition-all hover:bg-muted"
-                    style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}
-                    title="Generate exams for newly added subjects"
-                  >
-                    {seeding ? 'Syncing...' : '🔄 Sync Missing'}
-                  </button>
-
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-3 py-2.5 rounded-lg text-xs transition-all flex items-center gap-1 hover:text-white"
-                    style={{ background: 'var(--color-surface-raised)', border: '1px dashed rgba(99,102,241,0.5)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-                    title="Manually create a single spontaneous exam (e.g. for a specific class)"
-                  >
-                    + Single Exam
-                  </button>
-                </>
+                </div>
               )}
             </div>
           ) : null}
@@ -469,7 +458,7 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 3: Select Class (loads only that class's subjects) ═══ */}
+      {/* ═══ STEP 3: Class & Subject (one step — pick a class, its subjects load right below) ═══ */}
       {selectedExamType && (
         <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
@@ -498,114 +487,104 @@ export function MarksSetupTab() {
               ))}
             </select>
             {!filterGradeId && (
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="text-xs text-muted-foreground">
                 👈 Pick a class to load its subjects
               </span>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ═══ STEP 4: Select Subject — categories first, then subjects, then collapsed ═══ */}
-      {selectedExamType && filterGradeId && selectedSubjectSlot && (
-        /* A subject is chosen: show only it, with a way to change */
-        <div className="card mb-4 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
-            <span className="px-3 py-1.5 rounded-lg text-sm font-semibold" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))', border: '1px solid rgba(99,102,241,0.5)' }}>
-              {selectedSubjectSlot.subject_name}
-              <span className="ml-2 text-[10px] font-mono font-normal" style={{ color: 'var(--color-text-muted)' }}>{selectedSubjectSlot.subject_code}</span>
-            </span>
-            <button
-              onClick={() => { setSelectedSubjectId(''); setSelectedExamId(''); }}
-              className="text-xs px-3 py-1.5 rounded-lg transition-all hover:bg-muted"
-              style={{ border: '1px dashed var(--color-border)', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-            >
-              ↺ Change subject
-            </button>
-          </div>
-        </div>
-      )}
-      {selectedExamType && filterGradeId && !selectedSubjectSlot && (
-        <div className="card mb-4 p-5">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — tap a group, then pick the subject
-            </span>
-          </div>
-          {subjects.length === 0 ? (
-            <p className="text-xs text-orange-400">
-              {selectedLevelId || filterGradeId
-                ? 'No subjects found for the selected level/grade. Try widening your filter.'
-                : 'No subjects found for this exam type.'}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {subjectGroups.map(([category, groupSubjects]) => {
-                const isOpen = effectiveExpandedCategory === category;
-                return (
-                <div key={category}>
-                  <button
-                    onClick={() => setExpandedCategory(isOpen ? null : category)}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all"
-                    style={{
-                      background: isOpen ? 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))' : 'var(--color-surface-raised)',
-                      border: isOpen ? '1px solid rgba(99,102,241,0.4)' : '1px solid var(--color-border)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span className="text-sm font-semibold" style={{ color: isOpen ? 'var(--color-accent)' : 'var(--color-text)' }}>
-                      {CATEGORY_LABELS[category] || category}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
-                      {groupSubjects.length}
-                    </span>
-                    <span className="ml-auto text-xs" style={{ color: 'var(--color-text-muted)' }}>{isOpen ? '▲' : '▼'}</span>
-                  </button>
-                  {isOpen && (
-                  <div className="grid gap-2 mt-2 mb-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                    {groupSubjects.map(s => {
-                      const isActive = selectedSubjectId === s.subject_id;
-                      const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
-                      return (
-                        <div
-                          key={s.subject_id}
-                          className="p-3 rounded-lg transition-all"
-                          style={{
-                            background: isActive ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1))' : 'var(--color-surface-raised)',
-                            border: isActive ? '1px solid rgba(99,102,241,0.5)' : '1px solid var(--color-border)',
-                          }}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-semibold text-sm">{s.subject_name}</span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>{s.subject_code}</span>
-                          </div>
-                          {hasExams ? (
-                            <button
-                              onClick={() => setSelectedSubjectId(s.subject_id)}
-                              className="btn-primary text-[10px] px-2 py-1"
+          {filterGradeId && selectedSubjectSlot && (
+            /* A subject is chosen: collapse the picker to a single chip + change */
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-medium text-muted-foreground">④ Subject</span>
+                <span className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-1.5 text-sm font-semibold">
+                  {selectedSubjectSlot.subject_name}
+                  <span className="ml-2 font-mono text-[10px] font-normal text-muted-foreground">{selectedSubjectSlot.subject_code}</span>
+                </span>
+                <button
+                  onClick={() => { setSelectedSubjectId(''); setSelectedExamId(''); }}
+                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground transition-all hover:bg-muted"
+                >
+                  ↺ Change subject
+                </button>
+              </div>
+            </div>
+          )}
+          {filterGradeId && !selectedSubjectSlot && (
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — tap a group, then pick the subject
+                </span>
+              </div>
+              {subjects.length === 0 ? (
+                <p className="text-xs text-orange-400">
+                  No subjects found for the selected level/grade. Try widening your filter.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {subjectGroups.map(([category, groupSubjects]) => {
+                    const isOpen = effectiveExpandedCategory === category;
+                    return (
+                    <div key={category}>
+                      <button
+                        onClick={() => setExpandedCategory(isOpen ? null : category)}
+                        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 transition-all ${isOpen
+                          ? 'border-primary/50 bg-primary/10'
+                          : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
+                      >
+                        <span className={`text-sm font-semibold ${isOpen ? 'text-primary' : ''}`}>
+                          {CATEGORY_LABELS[category] || category}
+                        </span>
+                        <span className="rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {groupSubjects.length}
+                        </span>
+                        <span className="ml-auto text-xs text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
+                      </button>
+                      {isOpen && (
+                      <div className="grid gap-2 mt-2 mb-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                        {groupSubjects.map(s => {
+                          const isActive = selectedSubjectId === s.subject_id;
+                          const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
+                          return (
+                            <div
+                              key={s.subject_id}
+                              className={`rounded-xl border p-3 transition-all ${isActive
+                                ? 'border-primary/60 bg-primary/10'
+                                : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
                             >
-                              Select & Enter Marks
-                            </button>
-                          ) : profile?.role === 'ADMIN' ? (
-                            <button
-                              onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
-                              className="btn-secondary text-[10px] px-2 py-1"
-                            >
-                              + Create Exam
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  )}
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-semibold text-sm">{s.subject_name}</span>
+                                <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
+                              </div>
+                              {hasExams ? (
+                                <button
+                                  onClick={() => setSelectedSubjectId(s.subject_id)}
+                                  className="btn-primary text-[10px] px-2 py-1"
+                                >
+                                  Select & Enter Marks
+                                </button>
+                              ) : profile?.role === 'ADMIN' ? (
+                                <button
+                                  onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
+                                  className="btn-secondary text-[10px] px-2 py-1"
+                                >
+                                  + Create Exam
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      )}
+                    </div>
+                    );
+                  })}
                 </div>
-                );
-              })}
+              )}
             </div>
           )}
         </div>
@@ -621,7 +600,7 @@ export function MarksSetupTab() {
         <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3 mb-3">
             <label className="text-sm font-semibold" style={{ minWidth: 70 }}>Slot</label>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="text-xs text-muted-foreground">
               This subject has {examsForSelectedSubject.length} exam slots — choose one
             </span>
           </div>
@@ -632,13 +611,9 @@ export function MarksSetupTab() {
                 <button
                   key={exam.id}
                   onClick={() => setSelectedExamId(exam.id)}
-                  className="px-4 py-2 text-sm font-medium rounded-lg transition-all"
-                  style={{
-                    background: isActive ? 'var(--color-primary)' : 'var(--color-surface-raised)',
-                    color: isActive ? '#fff' : 'var(--color-text)',
-                    border: isActive ? '1px solid transparent' : '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                  }}
+                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isActive
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border/70 bg-card/70 text-foreground hover:border-primary/40'}`}
                 >
                   {exam.name || exam.grade_name}
                 </button>
@@ -651,76 +626,86 @@ export function MarksSetupTab() {
       {/* ═══ MARK ENTRY ═══ */}
       {selectedExamId && selectedExam && (
         <div>
-          <div className="card mb-4 flex flex-wrap items-center justify-between gap-3" style={{ padding: 'var(--space-3) var(--space-4)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))' }}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3">
             <div className="text-sm">
-              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span style={{ color: 'var(--color-accent)' }}>Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
+              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span className="text-primary">Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPaperModal(true)}
-                className="px-3 py-1.5 rounded text-xs font-medium transition-all"
-                style={{
-                  background: examIsMultiPaper ? 'rgba(99,102,241,0.12)' : 'transparent',
-                  color: examIsMultiPaper ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                  border: examIsMultiPaper ? '1px solid rgba(99,102,241,0.4)' : '1px dashed var(--color-border)',
-                  cursor: 'pointer',
-                }}
+                className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${examIsMultiPaper
+                  ? 'border border-primary/40 bg-primary/10 text-primary'
+                  : 'border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
                 title="Some subjects are examined in several papers (e.g. Maths Paper 1 & Paper 2, Sciences with a practical). Set that up here — the papers automatically combine into one final subject score."
               >
                 {examIsMultiPaper
                   ? `📑 Papers: ${(examScheme?.components || []).map(c => c.component_code).join(' + ')} ✓`
                   : '✂️ Split into Papers (P1, P2…)'}
               </button>
-              {(['manual', 'bulk'] as const).map(m => (
+              {(['manual', 'bulk', 'scan'] as const).map(m => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className="px-3 py-1.5 rounded text-xs font-medium transition-all"
-                  style={{
-                    background: mode === m ? 'var(--color-accent)' : 'transparent',
-                    color: mode === m ? '#fff' : 'var(--color-text-muted)',
-                    border: mode === m ? 'none' : '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                  }}
+                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${mode === m
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
+                  title={m === 'scan' ? 'Photograph a paper marksheet and let the app read the marks for review' : undefined}
                 >
-                  {m === 'manual' ? '✏️ Manual Entry' : '📤 Bulk Upload'}
+                  {m === 'manual' ? '✏️ Manual Entry' : m === 'bulk' ? '📤 Bulk Upload' : '📷 Scan Sheet'}
                 </button>
               ))}
             </div>
           </div>
-          {mode === 'manual'
-            ? <ManualEntryGrid
-                key={`${selectedExamId}-${schemeVersion}`}
+          {mode === 'manual' && (
+            <ManualEntryGrid
+              key={`${selectedExamId}-${schemeVersion}`}
+              examId={selectedExamId}
+              maxScore={selectedExam.max_score}
+              gradeId={selectedExam.grade_id}
+              gradeStreamId={selectedExam.grade_stream_id || null}
+            />
+          )}
+          {mode === 'bulk' && <BulkUpload examId={selectedExamId} />}
+          {mode === 'scan' && (
+            <>
+              {examIsMultiPaper && (
+                <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600">
+                  📑 This subject uses multiple papers. Scanning records <strong>final scores only</strong> — use Manual Entry for per-paper (P1/P2/P3) scores.
+                </div>
+              )}
+              <ScanSheet
+                key={`scan-${selectedExamId}`}
                 examId={selectedExamId}
                 maxScore={selectedExam.max_score}
                 gradeId={selectedExam.grade_id}
                 gradeStreamId={selectedExam.grade_stream_id || null}
               />
-            : <BulkUpload examId={selectedExamId} />}
+            </>
+          )}
         </div>
       )}
 
       {/* Empty states */}
       {!selectedTermId && !loadingTerms && (
-        <div className="card text-center py-16" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-16 text-muted-foreground">
           <p className="text-4xl mb-3">📝</p>
           <p className="text-sm">Select a term above to start entering marks</p>
         </div>
       )}
       {selectedTermId && !selectedExamType && !loadingExams && availableExamTypes.length > 0 && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">📋</p>
           <p className="text-sm">Select an exam type to continue</p>
         </div>
       )}
       {selectedExamType && !filterGradeId && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">🏫</p>
           <p className="text-sm">Select a <strong>class</strong> above to load its subjects</p>
         </div>
       )}
       {selectedExamType && filterGradeId && !selectedSubjectId && subjects.length > 0 && (
-        <div className="card text-center py-12" style={{ color: 'var(--color-text-muted)' }}>
+        <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">📚</p>
           <p className="text-sm">{effectiveExpandedCategory ? 'Select a subject to enter marks' : 'Tap a subject group above to see its subjects'}</p>
         </div>

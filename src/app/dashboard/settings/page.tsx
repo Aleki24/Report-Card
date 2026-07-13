@@ -143,6 +143,33 @@ export default function SettingsPage() {
     if (result) setNewTerm({ name: '', start_date: '', end_date: '' });
   };
 
+  const handleSetCurrentTerm = async (term: Term) => {
+    if (term.is_current) return;
+    setCalSaving(true);
+    try {
+      // Only one term should be current at a time — clear the others in the same year first.
+      const siblings = terms.filter(t => t.academic_year_id === term.academic_year_id && t.is_current && t.id !== term.id);
+      for (const s of siblings) {
+        await fetch('/api/admin/academic-structure', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'term', id: s.id, is_current: false }),
+        });
+      }
+      const res = await fetch('/api/admin/academic-structure', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'term', id: term.id, is_current: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update term');
+      toast.success(`${term.name} is now the current term`);
+      await fetchAllData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setCalSaving(false);
+    }
+  };
+
   const tabs = [
     { key: 'profile' as const, label: 'School Profile' },
     { key: 'academic' as const, label: 'Academic Structure' },
@@ -214,6 +241,7 @@ export default function SettingsPage() {
               setSelectedCalYearId={setSelectedCalYearId} calMsg={''} calSaving={calSaving}
               newYear={newYear} setNewYear={setNewYear} newTerm={newTerm} setNewTerm={setNewTerm}
               onAddYear={handleAddYear} onAddTerm={handleAddTerm} onDelete={deleteStructure}
+              onSetCurrentTerm={handleSetCurrentTerm}
             />
           )}
         </div>

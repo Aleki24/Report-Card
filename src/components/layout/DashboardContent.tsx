@@ -1,19 +1,32 @@
 "use client";
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/components/AuthProvider';
 
+const COLLAPSE_KEY = 'sidebar-collapsed';
+
 export default function DashboardContent({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const [collapsed, setCollapsed] = useState(true);
+    const [collapsed, setCollapsedState] = useState(true);
     const { schoolName, profile, role, schoolOnboardingCompleted, loading } = useAuth();
 
-    const sidebarWidth = 80; // Match Sidebar.tsx collapsed width (80px)
+    useEffect(() => {
+        // localStorage is client-only, so the persisted value can't seed
+        // useState without a hydration mismatch; one post-mount sync is fine.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCollapsedState(localStorage.getItem(COLLAPSE_KEY) !== 'false');
+    }, []);
+
+    const setCollapsed = (val: boolean) => {
+        setCollapsedState(val);
+        localStorage.setItem(COLLAPSE_KEY, String(val));
+    };
+
+    const sidebarWidth = collapsed ? 80 : 260;
     const displayName = schoolName || 'Matokeo';
 
     const needsSchoolSetup = role === 'PENDING' || (role === 'ADMIN' && profile && schoolOnboardingCompleted === false);

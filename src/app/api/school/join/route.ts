@@ -57,26 +57,58 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'User account not found for this invite code.' }, { status: 404 });
     }
 
-    // 4. Swap user IDs in database
+    // 4. Swap user IDs in database.
+    //
+    // IMPORTANT ORDERING: students/class_teachers/subject_teachers all have
+    // user_id (or id, for students) FOREIGN KEY ... REFERENCES users(id) ON
+    // DELETE CASCADE. If any of these swap updates silently fails (e.g. a
+    // constraint violation) and we still delete the old pending `users` row
+    // afterward, Postgres cascades that delete and permanently destroys the
+    // linked record — leaving a real, authenticated user with a `users` row
+    // but no matching students/class_teachers/subject_teachers row at all.
+    // So every swap must be verified BEFORE the old user row is deleted, and
+    // the whole join must abort (leaving the pending row intact and
+    // recoverable) if any swap doesn't affect the expected row.
     const oldUserId = pendingUser.id;
 
     if (pendingUser.role === 'STUDENT') {
-        await supabaseAdmin.from('students').update({ id: userId }).eq('id', oldUserId);
+        const { data: swapped, error: swapErr } = await supabaseAdmin
+            .from('students')
+            .update({ id: userId })
+            .eq('id', oldUserId)
+            .select('id');
+
+        if (swapErr || !swapped || swapped.length === 0) {
+            console.error('[join] students id-swap failed', { oldUserId, userId, swapErr });
+            return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+        }
+    } else if (pendingUser.role === 'CLASS_TEACHER') {
+        const { data: swapped, error: swapErr } = await supabaseAdmin
+            .from('class_teachers')
+            .update({ user_id: userId })
+            .eq('user_id', oldUserId)
+            .select('id');
+
+        if (swapErr || !swapped || swapped.length === 0) {
+            console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
+            return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+        }
+    } else if (pendingUser.role === 'SUBJECT_TEACHER') {
+        const { data: swapped, error: swapErr } = await supabaseAdmin
+            .from('subject_teachers')
+            .update({ user_id: userId })
+            .eq('user_id', oldUserId)
+            .select('id');
+
+        if (swapErr || !swapped || swapped.length === 0) {
+            console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
+            return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+        }
     }
-    await supabaseAdmin.from('class_teachers').update({ user_id: userId }).eq('user_id', oldUserId);
-    await supabaseAdmin.from('subject_teachers').update({ user_id: userId }).eq('user_id', oldUserId);
 
-    // Update invite code
-    await supabaseAdmin.from('invite_codes').update({
-        user_id: userId,
-        is_used: true,
-        used_at: new Date().toISOString()
-    }).eq('id', invite.id);
-
-    // Delete the old pending user record
-    await supabaseAdmin.from('users').delete().eq('id', oldUserId);
-
-    // Update the current user record with the admin-provided details
+    // Update the current (real) user record with the admin-provided details.
+    // Do this before deleting the old row, so if it fails we haven't
+    // destroyed the pending record yet either.
     const { error: updateErr } = await supabaseAdmin.from('users').update({
         first_name: pendingUser.first_name,
         last_name: pendingUser.last_name,
@@ -90,6 +122,17 @@ export async function POST(request: NextRequest) {
         console.error('Failed to update user record:', updateErr);
         return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
     }
+
+    // Mark the invite code used, then finally delete the old pending user
+    // record — only now that every swap above is confirmed to have
+    // succeeded, so this delete's cascade has nothing left to destroy.
+    await supabaseAdmin.from('invite_codes').update({
+        user_id: userId,
+        is_used: true,
+        used_at: new Date().toISOString()
+    }).eq('id', invite.id);
+
+    await supabaseAdmin.from('users').delete().eq('id', oldUserId);
 
     // 5. Update Clerk Metadata
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });

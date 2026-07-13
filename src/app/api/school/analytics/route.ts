@@ -37,35 +37,65 @@ export async function GET(request: NextRequest) {
     const yearId = searchParams.get('year_id');
     const termId = searchParams.get('term_id');
 
+    // Scope by exams.school_id directly. Filtering through academic_years with
+    // inner joins on grades/academic_years silently drops every mark whose exam
+    // has a null grade/year link, which is why the page showed "no marks" while
+    // marks existed. exams carries its own school_id, so use it.
+    // exam_marks has no subject_id column of its own — the subject is only
+    // reachable via exams.subject_id, confirmed against production
+    // ("column exam_marks.subject_id does not exist").
     let query = supabaseAdmin
       .from('exam_marks')
       .select(`
         id,
         raw_score,
+        percentage,
         grade_symbol,
         student_id,
         exam_id,
-        subject_id,
-        exams!inner(
+        students ( admission_number, users ( first_name, last_name ) ),
+        exams!inner (
           id,
           name,
-          max_score,
           exam_date,
+          school_id,
           academic_year_id,
           term_id,
-          grade_id,
           grade_stream_id,
           subject_id,
-          grades!inner(id, name, academic_level_id),
-          academic_years!inner(id, name, school_id),
-          terms(id, name)
+          subjects ( name )
         )
       `)
-      .eq('exams.academic_years.school_id', schoolId);
+      .eq('exams.school_id', schoolId);
 
-    if (streamId) query = query.eq('exams.grade_stream_id', streamId);
+    // Class filter: a stream's exams include both stream-level exams AND
+    // whole-grade exams (grade_stream_id null but grade_id matching the
+    // stream's grade). Marks are entered at the grade level in many schools,
+    // so a plain grade_stream_id match would miss them. Resolve the matching
+    // exam ids first, mirroring /api/school/data's exam-list logic.
+    if (streamId) {
+      const { data: stream } = await supabaseAdmin
+        .from('grade_streams')
+        .select('grade_id')
+        .eq('id', streamId)
+        .maybeSingle();
+
+      let examQuery = supabaseAdmin.from('exams').select('id').eq('school_id', schoolId);
+      if (stream?.grade_id) {
+        examQuery = examQuery.or(`grade_stream_id.eq.${streamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`);
+      } else {
+        examQuery = examQuery.eq('grade_stream_id', streamId);
+      }
+      const { data: streamExams } = await examQuery;
+      const examIds = (streamExams || []).map((e: { id: string }) => e.id);
+      if (examIds.length === 0) {
+        return NextResponse.json({ marks: [] });
+      }
+      query = query.in('exam_id', examIds);
+    }
+
     if (examId) query = query.eq('exam_id', examId);
-    if (subjectId) query = query.eq('subject_id', subjectId);
+    if (subjectId) query = query.eq('exams.subject_id', subjectId);
     if (yearId) query = query.eq('exams.academic_year_id', yearId);
     if (termId) query = query.eq('exams.term_id', termId);
 
@@ -76,7 +106,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
     }
 
-    return NextResponse.json({ marks: marks || [] });
+    // Supabase returns to-one relations as either an object or a single-element
+    // array depending on inference; normalise both. Flatten into the shape the
+    // Analytics page consumes (subject_name / student_name / exam_name / etc.).
+    const one = (rel: unknown): Record<string, unknown> => {
+      const v = Array.isArray(rel) ? rel[0] : rel;
+      return (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+    };
+
+    const flat = (marks || []).map((m: Record<string, unknown>) => {
+      const exam = one(m.exams);
+      const subject = one(exam.subjects);
+      const student = one(m.students);
+      const user = one(student.users);
+      const first = (user.first_name as string) || '';
+      const last = (user.last_name as string) || '';
+      const fullName = `${first} ${last}`.trim();
+      return {
+        id: m.id,
+        raw_score: m.raw_score,
+        percentage: m.percentage,
+        grade_symbol: m.grade_symbol,
+        subject_id: exam.subject_id,
+        exam_id: m.exam_id,
+        student_id: m.student_id,
+        subject_name: (subject.name as string) || 'Unknown',
+        exam_name: (exam.name as string) || 'Unknown Exam',
+        exam_date: (exam.exam_date as string) || null,
+        student_name: fullName || 'Unknown',
+        admission_number: (student.admission_number as string) || '',
+      };
+    });
+
+    return NextResponse.json({ marks: flat });
   } catch (err) {
     console.error('Analytics route error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

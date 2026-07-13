@@ -14,6 +14,7 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { fetchPaperScores } from '@/lib/pdf/paperScores';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -248,12 +249,17 @@ export async function GET(
             }
         }
 
+        // 6.5 Per-paper scores for multi-paper subjects (keyed examId|studentId)
+        const markExamIds = [...new Set((allMarks || []).map((m: any) => m.exams?.id).filter(Boolean))] as string[];
+        const paperScoreMap = await fetchPaperScores(supabase, markExamIds, studentIds);
+
         // 7. Group marks by student and calculate ranks + per-subject ranks
         const marksByStudent: Record<string, any[]> = {};
         // Per-subject aggregation: subjectId -> { studentId -> pct }[]
         const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
-        // Build subjectNamesMap for 8-4-4 selection logic
+        // Build subjectNamesMap/subjectCategoriesMap for 8-4-4 selection logic
         const subjectNamesMap: Record<string, string> = {};
+        const subjectCategoriesMap: Record<string, string> = {};
 
         for (const m of allMarks || []) {
             if (!marksByStudent[m.student_id]) marksByStudent[m.student_id] = [];
@@ -266,11 +272,14 @@ export async function GET(
                 const maxScore = Number((m as any).exams.max_score);
                 const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
                 subjectAggs[subjectId].push({ studentId: m.student_id, pct });
-                
-                // Build subjectNamesMap
-                const sname = (m as any).exams?.subjects?.name;
-                if (sname && !subjectNamesMap[subjectId]) {
-                    subjectNamesMap[subjectId] = sname;
+
+                // Build subjectNamesMap/subjectCategoriesMap
+                const msubj = (m as any).exams?.subjects;
+                if (msubj?.name && !subjectNamesMap[subjectId]) {
+                    subjectNamesMap[subjectId] = msubj.name;
+                }
+                if (msubj?.category && !subjectCategoriesMap[subjectId]) {
+                    subjectCategoriesMap[subjectId] = msubj.category;
                 }
             }
         }
@@ -291,7 +300,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
                 remarks: m.remarks,
             }));
-            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
+            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap);
             return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
@@ -328,7 +337,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
             const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 
@@ -403,6 +412,7 @@ export async function GET(
                     subjectRank: subjectRankMaps[subject.id]?.get(student.id) ?? undefined,
                     totalStudents: subjectStudentCounts[subject.id] ?? undefined,
                     includedInPoints: selectedSubjectIds.has(subject.id),
+                    paperScores: paperScoreMap.get(`${m.exams.id}|${student.id}`),
                 });
             });
 

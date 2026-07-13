@@ -25,13 +25,14 @@ export default clerkMiddleware(async (auth, request) => {
       return NextResponse.redirect(new URL(dest, request.url));
     }
 
-    if (role === 'STUDENT' && pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/student/dashboard', request.url));
-    }
-
-    if (role !== 'STUDENT' && pathname.startsWith('/student')) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
+    // No further role-based redirects here: sessionClaims.role comes from the
+    // Clerk JWT, which can lag behind the real role in the database (the same
+    // reason auth-server.ts refuses to trust session claims alone). Bouncing
+    // requests between /dashboard and /student based on a stale claim created
+    // an infinite redirect loop against DashboardPage's client-side redirect
+    // (which reads the DB-backed role and is authoritative). Each page/API
+    // route already enforces its own role check server-side, so this is safe
+    // to leave to the client.
   }
 
   return NextResponse.next();

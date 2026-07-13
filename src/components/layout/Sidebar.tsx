@@ -4,107 +4,71 @@ import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { Search, Sun, Moon, PanelLeftClose, PanelLeft, MoreHorizontal } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
-import { navItems } from "./sidebar/navItems";
+import { getNavGroups, getPinnedItems, getMobileNav, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
-
-function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
-    const { theme, toggleTheme } = useTheme();
-
-    return (
-        <button
-            className="hidden md:flex items-center justify-center cursor-pointer transition-colors"
-            style={{
-                padding: "var(--space-3) var(--space-4)",
-                marginBottom: "var(--space-2)",
-                marginLeft: "var(--space-4)",
-                marginRight: "var(--space-4)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--color-surface-raised)",
-                border: "1px solid var(--color-border)",
-                color: "var(--color-text-secondary)",
-                fontSize: 14,
-                fontWeight: 500,
-                gap: "var(--space-3)",
-            }}
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            suppressHydrationWarning
-        >
-            {theme === "dark" ? "☀️" : "🌙"}
-            {!collapsed && (theme === "dark" ? "Light Mode" : "Dark Mode")}
-        </button>
-    );
-}
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
     collapsed?: boolean;
     setCollapsed?: (val: boolean) => void;
 }
 
-const sidebarGroups = [
-    {
-        title: "Main",
-        labels: ["Dashboard"],
-    },
-    {
-        title: "School",
-        labels: ["People", "Academic Structure"],
-    },
-    {
-        title: "Academics",
-        labels: ["Attendance", "Exams & Marks", "Report Cards"],
-    },
-    {
-        title: "Finance",
-        labels: ["Fees"],
-    },
-    {
-        title: "Communication",
-        labels: ["Announcements"],
-    },
-    {
-        title: "Learning",
-        labels: ["Assignments"],
-    },
-    {
-        title: "Administration",
-        labels: ["Administration", "Analytics"],
-    },
-];
+function isActivePath(pathname: string, href: string) {
+    return pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+}
 
-function getItemCount(label: string) {
-    const counts: Record<string, string> = {
-        Students: "542",
-        Teachers: "48",
-        Classes: "36",
-        Parents: "612",
-        Payments: "12",
-        Messages: "5",
-        Announcements: "3",
-        Assignments: "7",
-    };
+function NavLink({ item, collapsed, pathname }: { item: NavItem; collapsed: boolean; pathname: string }) {
+    const isActive = isActivePath(pathname, item.href);
+    return (
+        <Link
+            href={item.href}
+            title={collapsed ? item.label : undefined}
+            className={cn(
+                "flex items-center gap-3 rounded-lg text-sm no-underline transition-colors",
+                collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
+                isActive
+                    ? "bg-primary font-semibold text-primary-foreground"
+                    : "font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            )}
+        >
+            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">{item.icon}</span>
+            {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+        </Link>
+    );
+}
 
-    return counts[label];
+function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
+    const { theme, toggleTheme } = useTheme();
+    return (
+        <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            suppressHydrationWarning
+            className={cn(
+                "mx-3 mb-3 flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card/60 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+                collapsed ? "justify-center px-0 py-2" : "px-3 py-2"
+            )}
+        >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            {!collapsed && (theme === "dark" ? "Light Mode" : "Dark Mode")}
+        </button>
+    );
 }
 
 export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const pathname = usePathname();
-
-    const {
-        profile,
-        role,
-        baseRole,
-        availableRoles,
-        switchRole,
-        schoolName,
-        loading,
-    } = useAuth();
+    const router = useRouter();
+    const { theme, toggleTheme } = useTheme();
+    const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading } = useAuth();
 
     const [searchQuery, setSearchQuery] = useState("");
     const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
 
     useEffect(() => {
         fetch("/api/school/data?type=school_profile")
@@ -115,445 +79,117 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
             .catch(() => {});
     }, []);
 
-    const { theme, toggleTheme } = useTheme();
-
-    const [showUserMenu, setShowUserMenu] = useState(false);
-    const [showMoreMenu, setShowMoreMenu] = useState(false);
-
-    const visibleNavItems = useMemo(() => {
-        const allowedItems = role
-            ? navItems.filter((item) => item.roles.includes(role))
-            : navItems.filter((item) => item.roles.includes("ADMIN"));
-
-        const filtered = allowedItems.filter(
-            (item) =>
-                item.label !== "Homepage" &&
-                item.label !== "Home" &&
-                item.href !== "/"
-        );
-
-        if (!searchQuery.trim()) return filtered;
+    const groups = useMemo(() => {
+        const base = getNavGroups(role);
+        if (!searchQuery.trim()) return base;
         const q = searchQuery.toLowerCase();
-        return filtered.filter((item) => item.label.toLowerCase().includes(q));
+        return base
+            .map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(q)) }))
+            .filter((g) => g.items.length > 0);
     }, [role, searchQuery]);
 
-    const groupedNavItems = useMemo(() => {
-        return sidebarGroups
-            .map((group) => {
-                const items = group.labels
-                    .map((label) => visibleNavItems.find((item) => item.label === label))
-                    .filter(Boolean) as typeof visibleNavItems;
+    const pinned = useMemo(() => getPinnedItems(role), [role]);
+    const mobileNav = useMemo(() => getMobileNav(role), [role]);
 
-                return {
-                    title: group.title,
-                    items,
-                };
-            })
-            .filter((group) => group.items.length > 0);
-    }, [visibleNavItems]);
-
-    const ungroupedItems = useMemo(() => {
-        const groupedLabels = new Set(sidebarGroups.flatMap((group) => group.labels));
-
-        return visibleNavItems.filter((item) => !groupedLabels.has(item.label));
-    }, [visibleNavItems]);
-
-    const router = useRouter();
-
-    const handleSignOut = () => {
-        router.push("/logout");
-    };
-
-    const maxBottomItems = 4;
-    const mainBottomItems = visibleNavItems.slice(0, maxBottomItems);
-    const overflowItems = visibleNavItems.slice(maxBottomItems);
+    const handleSignOut = () => router.push("/logout");
 
     return (
         <>
             {/* Desktop Sidebar */}
             <aside
-                className="hidden md:flex fixed top-0 left-0 z-50 flex-col h-screen bg-[var(--color-surface)] border-r border-[var(--color-border)] transition-all duration-300 ease-in-out"
-                style={{
-                    width: collapsed ? "80px" : "260px",
-                    boxShadow: collapsed ? "none" : "4px 0 24px rgba(0,0,0,0.08)",
-                }}
-                onMouseEnter={() => setCollapsed?.(false)}
-                onMouseLeave={() => setCollapsed?.(true)}
+                className={cn(
+                    "fixed top-0 left-0 z-50 hidden h-screen flex-col border-r border-border/70 bg-[var(--color-surface)] transition-[width] duration-300 ease-in-out md:flex",
+                    collapsed ? "w-20" : "w-[260px] shadow-[4px_0_24px_rgba(0,0,0,0.08)]"
+                )}
             >
-                {/* Logo */}
-                    <Link
-                        href="/"
-                        style={{
-                            padding: collapsed ? "var(--space-4)" : "var(--space-4) var(--space-4) var(--space-3) var(--space-4)",
-                            borderBottom: "none",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: collapsed ? "center" : "flex-start",
-                            gap: "var(--space-3)",
-                            textDecoration: "none",
-                            color: "inherit",
-                            transition: "opacity 0.15s ease",
-                            overflow: "hidden",
-                        }}
-                    >
-                    {schoolLogo ? (
-                        <img
-                            src={schoolLogo}
-                            alt={schoolName || "School"}
-                            style={{
-                                width: collapsed ? 44 : 56,
-                                height: collapsed ? 44 : 56,
-                                borderRadius: 0,
-                                objectFit: "contain",
-                                flexShrink: 0,
-                            }}
-                        />
-                    ) : (
-                        <Image
-                            src="/images/logo.jpg"
-                            alt="Matokeo Logo"
-                            width={collapsed ? 44 : 56}
-                            height={collapsed ? 44 : 56}
-                            style={{
-                                borderRadius: "var(--radius-md)",
-                                objectFit: "contain",
-                                flexShrink: 0,
-                                boxShadow: "0 8px 18px rgba(37, 99, 235, 0.18)",
-                            }}
-                        />
-                    )}
-
-                    {!collapsed && (
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                                style={{
-                                    fontFamily: "var(--font-display)",
-                                    fontWeight: 800,
-                                    fontSize: 13,
-                                    lineHeight: 1.3,
-                                    wordBreak: "break-word",
-                                    overflowWrap: "break-word",
-                                }}
-                            >
+                {/* Logo + collapse toggle */}
+                <div className={cn("flex items-center gap-3 p-4", collapsed && "justify-center")}>
+                    <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-3 no-underline text-inherit">
+                        {schoolLogo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={schoolLogo} alt={schoolName || "School"} className={cn("shrink-0 object-contain", collapsed ? "h-10 w-10" : "h-12 w-12")} />
+                        ) : (
+                            <Image
+                                src="/images/logo.jpg"
+                                alt="Matokeo Logo"
+                                width={collapsed ? 40 : 48}
+                                height={collapsed ? 40 : 48}
+                                className="shrink-0 rounded-lg object-contain"
+                            />
+                        )}
+                        {!collapsed && (
+                            <span className="min-w-0 break-words font-display text-[13px] font-bold leading-tight">
                                 {schoolName || "Matokeo"}
-                            </div>
-                        </div>
-                    )}
-                </Link>
-
-                {/* Search */}
-                {!collapsed && (
-                    <div style={{ padding: "var(--space-3) var(--space-4) var(--space-4)", marginTop: "var(--space-1)" }}>
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "var(--space-2)",
-                                padding: "8px 12px",
-                                borderRadius: "var(--radius-md)",
-                                border: "1px solid var(--color-border)",
-                                background: "var(--color-surface)",
-                            }}
+                            </span>
+                        )}
+                    </Link>
+                    {!collapsed && (
+                        <button
+                            onClick={() => setCollapsed?.(true)}
+                            title="Collapse sidebar"
+                            className="shrink-0 cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
-                            <SearchIcon />
+                            <PanelLeftClose size={16} />
+                        </button>
+                    )}
+                </div>
+                {collapsed && (
+                    <button
+                        onClick={() => setCollapsed?.(false)}
+                        title="Expand sidebar"
+                        className="mx-auto mb-2 cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                        <PanelLeft size={16} />
+                    </button>
+                )}
 
+                {/* Menu search */}
+                {!collapsed && (
+                    <div className="px-4 pb-3">
+                        <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50">
+                            <Search size={14} className="shrink-0 text-muted-foreground" />
                             <input
                                 type="text"
-                                placeholder="Search menu..."
+                                placeholder="Search menu…"
                                 aria-label="Search menu"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                style={{
-                                    width: "100%",
-                                    border: "none",
-                                    outline: "none",
-                                    background: "transparent",
-                                    color: "var(--color-text)",
-                                    fontSize: 13,
-                                }}
+                                className="w-full border-none bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/80"
                             />
-
-                            <span
-                                style={{
-                                    padding: "2px 6px",
-                                    borderRadius: "var(--radius-sm)",
-                                    background: "var(--color-surface)",
-                                    border: "1px solid var(--color-border)",
-                                    color: "var(--color-text-muted)",
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                ⌘K
-                            </span>
                         </div>
                     </div>
                 )}
 
                 {/* Navigation */}
-                <nav
-                    style={{
-                        minHeight: 0,
-                        overflowY: "auto",
-                        padding: collapsed
-                            ? "0 var(--space-3)"
-                            : "0 var(--space-4)",
-                        display: "flex",
-                        flexDirection: "column",
-                    }}
-                >
-                    {groupedNavItems.map((group, index) => (
-                        <div key={group.title} style={{
-                            paddingBottom: "var(--space-4)",
-                            marginBottom: index < groupedNavItems.length - 1 ? "var(--space-4)" : "0",
-                            borderBottom: index < groupedNavItems.length - 1 ? "1px solid var(--color-border)" : "none",
-                        }}>
-                            {!collapsed && group.title !== "Main" && (
-                                <div
-                                    style={{
-                                        marginBottom: "var(--space-2)",
-                                        padding: "0 var(--space-2)",
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: "var(--color-text-muted)",
-                                        }}
-                                    >
-                                        {group.title}
-                                    </span>
+                <nav className={cn("flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4", collapsed ? "px-3" : "px-4")}>
+                    {groups.map((group) => (
+                        <div key={group.title ?? "top"}>
+                            {!collapsed && group.title && (
+                                <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+                                    {group.title}
                                 </div>
                             )}
-
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "4px",
-                                }}
-                            >
-                                {group.items.map((item) => {
-                                    const isActive =
-                                        pathname === item.href ||
-                                        (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-                                    const count = getItemCount(item.label);
-
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            title={collapsed ? item.label : undefined}
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: collapsed ? "center" : "flex-start",
-                                                gap: "var(--space-3)",
-                                                minHeight: collapsed ? 34 : 40,
-                                                padding: collapsed
-                                                    ? "var(--space-1)"
-                                                    : "8px 12px",
-                                                borderRadius: "var(--radius-md)",
-                                                color: isActive ? "var(--primary-foreground)" : "var(--color-text-secondary)",
-                                                background: isActive
-                                                    ? "var(--primary)"
-                                                    : "transparent",
-                                                textDecoration: "none",
-                                                fontSize: 14,
-                                                fontWeight: isActive ? 600 : 500,
-                                                transition:
-                                                    "background 0.15s ease, color 0.15s ease",
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background =
-                                                        "var(--color-surface-hover)";
-                                                    e.currentTarget.style.color = "var(--color-text)";
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = "transparent";
-                                                    e.currentTarget.style.color =
-                                                        "var(--color-text-secondary)";
-                                                }
-                                            }}
-                                        >
-                                            <span
-                                                style={{
-                                                    width: 18,
-                                                    height: 18,
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    flexShrink: 0,
-                                                    transform: collapsed ? "scale(0.85)" : "scale(1)",
-                                                    transition: "transform 0.2s ease",
-                                                }}
-                                            >
-                                                {item.icon}
-                                            </span>
-
-                                            {!collapsed && (
-                                                <>
-                                                    <span
-                                                        style={{
-                                                            flex: 1,
-                                                            minWidth: 0,
-                                                            overflow: "hidden",
-                                                            whiteSpace: "nowrap",
-                                                            textOverflow: "ellipsis",
-                                                        }}
-                                                    >
-                                                        {item.label}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </Link>
-                                    );
-                                })}
+                            {collapsed && group.title && <div className="mx-2 mb-2 border-t border-border/60" />}
+                            <div className="flex flex-col gap-0.5">
+                                {group.items.map((item) => (
+                                    <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+                                ))}
                             </div>
                         </div>
                     ))}
-
-                    {ungroupedItems.length > 0 && (
-                        <div style={{
-                            paddingBottom: "var(--space-4)",
-                            marginBottom: "var(--space-4)",
-                            borderTop: "1px solid var(--color-border)",
-                            paddingTop: "var(--space-4)",
-                        }}>
-                            {!collapsed && (
-                                <div
-                                    style={{
-                                        marginBottom: "var(--space-2)",
-                                        padding: "0 var(--space-2)",
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: "var(--color-text-muted)",
-                                        }}
-                                    >
-                                        More
-                                    </span>
-                                </div>
-                            )}
-
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "4px",
-                                }}
-                            >
-                                {ungroupedItems.map((item) => {
-                                    const isActive =
-                                        pathname === item.href ||
-                                        (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            title={collapsed ? item.label : undefined}
-                                            style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: collapsed ? "center" : "flex-start",
-                                                gap: "var(--space-3)",
-                                                minHeight: collapsed ? 34 : 40,
-                                                padding: collapsed
-                                                    ? "var(--space-1)"
-                                                    : "8px 12px",
-                                                borderRadius: "var(--radius-md)",
-                                                color: isActive ? "var(--primary-foreground)" : "var(--color-text-secondary)",
-                                                background: isActive
-                                                    ? "var(--primary)"
-                                                    : "transparent",
-                                                textDecoration: "none",
-                                                fontSize: 14,
-                                                fontWeight: isActive ? 600 : 500,
-                                                transition:
-                                                    "background 0.15s ease, color 0.15s ease",
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = "var(--color-surface-hover)";
-                                                    e.currentTarget.style.color = "var(--color-text)";
-                                                }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                if (!isActive) {
-                                                    e.currentTarget.style.background = "transparent";
-                                                    e.currentTarget.style.color = "var(--color-text-secondary)";
-                                                }
-                                            }}
-                                        >
-                                            <span
-                                                style={{
-                                                    width: 18,
-                                                    height: 18,
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    flexShrink: 0,
-                                                    transform: collapsed ? "scale(0.85)" : "scale(1)",
-                                                    transition: "transform 0.2s ease",
-                                                }}
-                                            >
-                                                {item.icon}
-                                            </span>
-
-                                            {!collapsed && <span>{item.label}</span>}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                    {groups.length === 0 && !collapsed && (
+                        <div className="px-2 text-xs italic text-muted-foreground">No pages match “{searchQuery}”</div>
                     )}
                 </nav>
 
-                {/* Settings Link */}
-                {(() => {
-                    const settingsItem = visibleNavItems.find(item => item.label === 'Administration');
-                    if (!settingsItem) return null;
-                    const isActive = pathname === settingsItem.href;
-                    return (
-                        <Link
-                            href={settingsItem.href}
-                            title={collapsed ? settingsItem.label : undefined}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: collapsed ? 'center' : 'flex-start',
-                                gap: 'var(--space-3)',
-                                minHeight: collapsed ? 34 : 40,
-                                padding: collapsed ? 'var(--space-1)' : '8px 12px',
-                                margin: '0 var(--space-4)',
-                                marginTop: 'auto',
-                                borderRadius: 'var(--radius-md)',
-                                color: isActive ? 'var(--primary-foreground)' : 'var(--color-text-secondary)',
-                                background: isActive ? 'var(--primary)' : 'transparent',
-                                textDecoration: 'none',
-                                fontSize: 14,
-                                fontWeight: isActive ? 600 : 500,
-                                transition: 'background 0.15s ease, color 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'var(--color-surface-hover)'; e.currentTarget.style.color = 'var(--color-text)'; } }}
-                            onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; } }}
-                        >
-                            <span style={{ width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transform: collapsed ? 'scale(0.85)' : 'scale(1)', transition: 'transform 0.2s ease' }}>
-                                {settingsItem.icon}
-                            </span>
-                            {!collapsed && <span>{settingsItem.label}</span>}
-                        </Link>
-                    );
-                })()}
+                {/* Pinned bottom items (Settings, Users) */}
+                {pinned.length > 0 && (
+                    <div className={cn("flex flex-col gap-0.5 border-t border-border/60 py-2", collapsed ? "px-3" : "px-4")}>
+                        {pinned.map((item) => (
+                            <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+                        ))}
+                    </div>
+                )}
 
                 {/* User Profile */}
                 {!loading && profile && (
@@ -571,173 +207,66 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 )}
 
                 <ThemeToggleButton collapsed={collapsed} />
-
-
             </aside>
 
             {/* Mobile Bottom Navigation */}
             <nav
-                className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] flex items-center overflow-x-auto shadow-[0_-4px_24px_rgba(0,0,0,0.15)]"
+                className="fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-border/70 bg-[var(--color-surface)] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] md:hidden"
                 style={{
                     paddingBottom: "env(safe-area-inset-bottom)",
                     height: "calc(64px + env(safe-area-inset-bottom))",
-                    WebkitOverflowScrolling: "touch",
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
                 }}
             >
-                <style>{`nav::-webkit-scrollbar { display: none; }`}</style>
-
-                {mainBottomItems.map((item) => {
-                    const isActive =
-                        pathname === item.href ||
-                        (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
+                {mobileNav.primary.map((item) => {
+                    const isActive = isActivePath(pathname, item.href);
                     return (
                         <Link
                             key={item.href}
                             href={item.href}
                             onClick={() => setShowMoreMenu(false)}
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flex: 1,
-                                minWidth: "0",
-                                height: "100%",
-                                position: "relative",
-                                color: isActive
-                                    ? "var(--primary)"
-                                    : "var(--color-text-secondary)",
-                                textDecoration: "none",
-                            }}
+                            className={cn(
+                                "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center no-underline transition-colors",
+                                isActive ? "text-primary" : "text-muted-foreground"
+                            )}
                         >
                             {isActive && (
-                                <div
-                                    style={{
-                                        position: "absolute",
-                                        top: 0,
-                                        left: "50%",
-                                        transform: "translateX(-50%)",
-                                        width: "40%",
-                                        height: 3,
-                                        background: "var(--primary)",
-                                        borderBottomLeftRadius: 3,
-                                        borderBottomRightRadius: 3,
-                                    }}
-                                />
+                                <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
                             )}
-
-                            <div
-                                style={{
-                                    transform: isActive ? "translateY(-2px)" : "none",
-                                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                                    opacity: isActive ? 1 : 0.7,
-                                }}
-                            >
+                            <span className={cn("transition-transform", isActive ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
                                 {item.icon}
-                            </div>
-
-                            <span
-                                style={{
-                                    fontSize: 10,
-                                    fontWeight: isActive ? 600 : 500,
-                                    marginTop: 4,
-                                    opacity: isActive ? 1 : 0.7,
-                                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    maxWidth: "100%",
-                                }}
-                            >
+                            </span>
+                            <span className={cn("mt-1 max-w-full truncate text-[10px]", isActive ? "font-semibold opacity-100" : "font-medium opacity-70")}>
                                 {item.label}
                             </span>
                         </Link>
                     );
                 })}
 
-                {/* More Button */}
-                <button
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flex: 1,
-                        minWidth: "0",
-                        height: "100%",
-                        position: "relative",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: showMoreMenu
-                            ? "var(--primary)"
-                            : "var(--color-text-secondary)",
-                    }}
-                >
-                    {showMoreMenu && (
-                        <div
-                            style={{
-                                position: "absolute",
-                                top: 0,
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                width: "40%",
-                                height: 3,
-                                background: "var(--primary)",
-                                borderBottomLeftRadius: 3,
-                                borderBottomRightRadius: 3,
-                            }}
-                        />
-                    )}
-
-                    <div
-                        style={{
-                            transform: showMoreMenu ? "translateY(-2px)" : "none",
-                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                            opacity: showMoreMenu ? 1 : 0.7,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                        }}
+                {mobileNav.overflow.length > 0 && (
+                    <button
+                        onClick={() => setShowMoreMenu(!showMoreMenu)}
+                        className={cn(
+                            "relative flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center border-none bg-transparent transition-colors",
+                            showMoreMenu ? "text-primary" : "text-muted-foreground"
+                        )}
                     >
-                        <svg
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 16 16 12 12 8" />
-                            <line x1="8" y1="12" x2="16" y2="12" />
-                        </svg>
-                    </div>
-
-                    <span
-                        style={{
-                            fontSize: 10,
-                            fontWeight: showMoreMenu ? 600 : 500,
-                            marginTop: 4,
-                            opacity: showMoreMenu ? 1 : 0.7,
-                            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                        }}
-                    >
-                        More
-                    </span>
-                </button>
+                        {showMoreMenu && (
+                            <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
+                        )}
+                        <span className={cn("transition-transform", showMoreMenu ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
+                            <MoreHorizontal size={18} />
+                        </span>
+                        <span className={cn("mt-1 text-[10px]", showMoreMenu ? "font-semibold opacity-100" : "font-medium opacity-70")}>
+                            More
+                        </span>
+                    </button>
+                )}
             </nav>
 
             <MobileMoreMenu
                 showMoreMenu={showMoreMenu}
                 setShowMoreMenu={setShowMoreMenu}
-                overflowItems={overflowItems}
+                overflowItems={mobileNav.overflow}
                 pathname={pathname}
                 theme={theme}
                 toggleTheme={toggleTheme}
@@ -748,25 +277,5 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 switchRole={switchRole}
             />
         </>
-    );
-}
-
-function SearchIcon() {
-    return (
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--color-text-muted)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ flexShrink: 0 }}
-            aria-hidden="true"
-        >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
     );
 }

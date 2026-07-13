@@ -191,13 +191,16 @@ export async function GET(
         // Collect all distinct subject names and codes for the table columns
         const subjectsMap = new Map<string, { code: string; name: string }>();
         const subjectNamesMap: Record<string, string> = {};
+        const subjectCategoriesMap: Record<string, string> = {};
         allMarks.forEach((m: any) => {
             const sname = m.exams.subjects?.name;
             const scode = m.exams.subjects?.code;
             const sid = m.exams.subjects?.id;
+            const scategory = m.exams.subjects?.category;
             if (sname) {
                 subjectsMap.set(scode || sname, { code: scode || sname, name: sname });
                 if (sid) subjectNamesMap[sid] = sname;
+                if (sid && scategory) subjectCategoriesMap[sid] = scategory;
             }
         });
         const subjectsArray = Array.from(subjectsMap.values()).sort((a, b) => a.code.localeCompare(b.code));
@@ -221,7 +224,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
                 remarks: m.remarks,
             }));
-            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
+            const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap);
             
             // Calculate average percentage consistently: sum of percentages / number of subjects
             const subjectPercentages = mapped.map(m => calculatePercentage(m.raw_score, m.max_score));
@@ -299,7 +302,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
             }));
 
-            const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap);
+            const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap);
             const isKCSE = gradingSystemType === 'KCSE';
             
             const firstName = (student.users as any)?.first_name || 'Student';

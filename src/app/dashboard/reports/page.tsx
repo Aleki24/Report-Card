@@ -16,6 +16,7 @@ import { pdf } from '@react-pdf/renderer';
 import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
+import { findActiveTermId } from '@/lib/term-calendar';
 import { BookOpen, ArrowRight } from 'lucide-react';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
@@ -26,7 +27,7 @@ interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
 export default function ReportsPage() {
-  const { profile, availableRoles } = useAuth();
+  const { profile, availableRoles, schoolName } = useAuth();
   const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
 
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
@@ -68,11 +69,31 @@ export default function ReportsPage() {
       try {
         const [gsRes, ayRes, tRes] = await Promise.all([fetch('/api/school/data?type=grade_streams'), fetch('/api/school/data?type=academic_years'), fetch('/api/school/data?type=terms')]);
         const [gsJson, ayJson, tJson] = await Promise.all([gsRes.json(), ayRes.json(), tRes.json()]);
-        setGradeStreams(gsJson.data || []); setAcademicYears(ayJson.data || []); setTerms(tJson.data || []);
+        const termList: TermOption[] = tJson.data || [];
+        const yearList: AcademicYearOption[] = ayJson.data || [];
+        setGradeStreams(gsJson.data || []); setAcademicYears(yearList); setTerms(termList);
+        // Pre-select the current term (Kenyan calendar) and its year — fewer clicks
+        const activeId = findActiveTermId(termList);
+        if (activeId) {
+          setSelectedTerm(activeId);
+          const activeTerm = termList.find(t => t.id === activeId);
+          if (activeTerm?.academic_year_id) setSelectedAcademicYear(activeTerm.academic_year_id);
+        }
+        if (yearList.length === 1) setSelectedAcademicYear(yearList[0].id);
       } catch (err) { console.error('Failed to fetch dropdown data:', err); }
     };
     fetchDropdownData();
   }, []);
+
+  // Only offer terms that belong to the selected academic year
+  const termsForYear = useMemo(
+    () => terms.filter(t => !selectedAcademicYear || !t.academic_year_id || t.academic_year_id === selectedAcademicYear),
+    [terms, selectedAcademicYear]
+  );
+  useEffect(() => {
+    if (selectedTerm && !termsForYear.some(t => t.id === selectedTerm)) setSelectedTerm('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termsForYear]);
 
   const fetchStudents = async () => {
     setLoadingStudents(true);
@@ -222,7 +243,7 @@ export default function ReportsPage() {
     setSendingSMS(false);
   };
 
-  const smsMessagePreview = `MATOKEO Results: [Student Name]\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''} - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''}\nAvg: 78.5% | Grade: B+ | Rank: 5/40\nMath 85 | Eng 72 | Sci 80 | ...`;
+  const smsMessagePreview = `${schoolName || 'Your School'} Student Results\n[Student Name] - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || 'Class'}\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''}\nMath: 85% (A) | Eng: 72% (B+) | Sci: 80% (A-) | ...\nAvg: 78.5% | Grade: B+ | Rank: 5/40`;
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
@@ -232,20 +253,20 @@ export default function ReportsPage() {
       />
 
       {isAlsoSubjectTeacher && (
-        <Link href="/dashboard/exams-marks" className="flex items-center gap-4 p-4 rounded-lg border border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 transition-all hover:shadow-sm hover:border-indigo-500/30 no-underline">
-          <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-            <BookOpen className="w-4 h-4 text-indigo-500" />
+        <Link href="/dashboard/exams-marks" className="flex items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-4 no-underline transition-all hover:border-primary/50 hover:bg-primary/10">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12">
+            <BookOpen className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-semibold text-sm text-foreground">Go to My Subjects</span>
             <span className="block text-xs text-muted-foreground mt-0.5">Enter and manage marks for your assigned subjects</span>
           </div>
-          <ArrowRight className="w-4 h-4 text-indigo-500/70 shrink-0" />
+          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </Link>
       )}
 
       {/* Report Settings */}
-      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
+      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
 
       <ReportActionCards isConfigured={!!isConfigured} generating={generating} generatingMarkSheet={generatingMarkSheet} onSelectStudent={() => setShowStudentPicker(true)} onBulkGenerate={handleGenerateAndDownload} onTermComparison={() => setShowTermComparison(true)} onMarkSheet={handleGenerateMarkSheet} onSMS={() => setShowSMSModal(true)} />
 
