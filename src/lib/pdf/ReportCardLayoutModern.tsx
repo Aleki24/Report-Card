@@ -90,6 +90,11 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
     const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, mk) => sum + (mk.score || 0), 0);
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const overallGrade = data.overallPointsGrade || data.overallGrade;
+    // KCSE 8-4-4: only the best 7 subjects count toward points; flag surplus.
+    const anyExcluded = isKCSE && data.subjectMarks.some(mk => mk.includedInPoints === false);
+    const anyIncluded = data.subjectMarks.some(mk => mk.includedInPoints === true);
+    const showExclusions = anyExcluded && anyIncluded;
+    const includedCount = data.subjectMarks.filter(mk => mk.includedInPoints !== false).length;
 
     return (
         <>
@@ -151,10 +156,11 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                 {data.subjectMarks.map((sm, idx) => {
                     const pct = sm.percentage ?? 0;
                     const rankText = sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—';
+                    const excluded = showExclusions && sm.includedInPoints === false;
                     return (
                         <View style={m.tr} key={`${sm.subjectName}-${idx}`}>
                             <Text style={[m.td, m.cNo]}>{idx + 1}</Text>
-                            <Text style={[m.tdBold, m.cSubject]}>{sm.subjectName}</Text>
+                            <Text style={[m.tdBold, m.cSubject, excluded ? { color: SLATE_400 } : {}]}>{sm.subjectName}{excluded ? ' *' : ''}</Text>
                             <View style={m.cScore}>
                                 <Text style={m.td}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                                 <View style={m.scoreBarTrack}>
@@ -166,7 +172,7 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                                     <Text style={m.gradePillText}>{sm.grade || '—'}</Text>
                                 </View>
                             </View>
-                            <Text style={[m.td, m.cPoints]}>{sm.points ?? '—'}</Text>
+                            <Text style={[m.td, m.cPoints, excluded ? { color: SLATE_400, textDecoration: 'line-through' } : {}]}>{sm.points ?? '—'}</Text>
                             <Text style={[m.td, m.cRank]}>{rankText}</Text>
                             <Text style={[m.tdMuted, m.cComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                         </View>
@@ -181,6 +187,11 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                     <Text style={[m.tdBold, m.cRank, { color: INDIGO_DARK }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                     <Text style={[m.tdBold, m.cComment]}></Text>
                 </View>
+                {showExclusions && (
+                    <Text style={{ fontSize: 6.5, color: SLATE_600, marginTop: 3, paddingHorizontal: 4, fontStyle: 'italic' }}>
+                        * Points total reflects the best {includedCount} of {data.subjectMarks.length} subjects (KCSE 8-4-4). Starred subjects are shown but not counted toward points.
+                    </Text>
+                )}
             </View>
 
             {/* Comments */}

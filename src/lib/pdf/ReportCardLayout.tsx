@@ -11,6 +11,15 @@ import type { ReportCardData } from '../pdfGenerator';
 export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
     const isKCSE = data.gradingSystemType === 'KCSE';
     const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, m) => sum + (m.score || 0), 0);
+    // KCSE 8-4-4: only the best 7 subjects count toward the points total. When
+    // a student takes more than 7, the surplus subjects are still listed (so
+    // the learner sees the mark) but must be visibly flagged as not counted —
+    // otherwise the printed points total looks wrong against the per-subject
+    // points shown. Only flag when selection actually dropped something.
+    const anyExcluded = isKCSE && data.subjectMarks.some(m => m.includedInPoints === false);
+    const anyIncluded = data.subjectMarks.some(m => m.includedInPoints === true);
+    const showExclusions = anyExcluded && anyIncluded;
+    const includedCount = data.subjectMarks.filter(m => m.includedInPoints !== false).length;
     let rowCounter = 0;
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -88,14 +97,15 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                     const comment = sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade);
 
                     if (isKCSE) {
+                        const excluded = showExclusions && sm.includedInPoints === false;
                         return (
                             <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
                                 <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
+                                <Text style={[s.tdText, s.colKcseSubject, excluded ? { color: GRAY_400 } : {}]}>{sm.subjectName}{excluded ? ' *' : ''}</Text>
                                 <Text style={[s.tdBold, s.colKcseScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                                 <Text style={[s.tdText, s.colKcseRank]}>{rankText}</Text>
                                 <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
-                                <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
+                                <Text style={[s.tdText, s.colKcsePoints, excluded ? { color: GRAY_400, textDecoration: 'line-through' } : {}]}>{sm.points ?? '—'}</Text>
                                 <Text style={[s.tdSmall, s.colKcseComment]}>{comment}</Text>
                             </View>
                         );
@@ -135,6 +145,13 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                         </>
                     )}
                 </View>
+
+                {/* KCSE best-7 footnote */}
+                {showExclusions && (
+                    <Text style={{ fontSize: 6.5, color: GRAY_700, marginTop: 3, paddingHorizontal: 4, fontStyle: 'italic' }}>
+                        * Points total reflects the best {includedCount} of {data.subjectMarks.length} subjects (KCSE 8-4-4). Starred subjects are shown but not counted toward points.
+                    </Text>
+                )}
             </View>
 
             {/* Average Badge + Performance Graph */}

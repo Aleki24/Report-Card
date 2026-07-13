@@ -78,6 +78,11 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const overallGrade = data.overallPointsGrade || data.overallGrade;
     const boundaries = (data.gradeBoundaries || []).slice(0, 8);
+    // KCSE 8-4-4: only the best 7 subjects count toward points; flag surplus.
+    const anyExcluded = isKCSE && data.subjectMarks.some(mk => mk.includedInPoints === false);
+    const anyIncluded = data.subjectMarks.some(mk => mk.includedInPoints === true);
+    const showExclusions = anyExcluded && anyIncluded;
+    const includedCount = data.subjectMarks.filter(mk => mk.includedInPoints !== false).length;
 
     return (
         <>
@@ -118,13 +123,14 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                 </View>
                 {data.subjectMarks.map((sm, idx) => {
                     const rankText = sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—';
+                    const excluded = showExclusions && sm.includedInPoints === false;
                     return (
                         <View style={t.tr} key={`${sm.subjectName}-${idx}`}>
                             <Text style={[t.td, t.cNo]}>{idx + 1}.</Text>
-                            <Text style={[t.td, t.cSubject]}>{sm.subjectName}</Text>
+                            <Text style={[t.td, t.cSubject, excluded ? { color: LIGHT } : {}]}>{sm.subjectName}{excluded ? ' *' : ''}</Text>
                             <Text style={[t.td, t.cScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                             <Text style={[t.tdBold, t.cGrade]}>{sm.grade || '—'}</Text>
-                            <Text style={[t.td, t.cPoints]}>{sm.points ?? '—'}</Text>
+                            <Text style={[t.td, t.cPoints, excluded ? { color: LIGHT, textDecoration: 'line-through' } : {}]}>{sm.points ?? '—'}</Text>
                             <Text style={[t.td, t.cRank]}>{rankText}</Text>
                             <Text style={[t.tdItalic, t.cComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                         </View>
@@ -139,6 +145,12 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                     <Text style={[t.tdBold, t.cRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
                     <Text style={[t.tdBold, t.cComment]}></Text>
                 </View>
+
+                {showExclusions && (
+                    <Text style={{ fontSize: 6.5, color: GRAY, marginTop: 3, fontStyle: 'italic' }}>
+                        * Points total reflects the best {includedCount} of {data.subjectMarks.length} subjects (KCSE 8-4-4). Starred subjects are shown but not counted toward points.
+                    </Text>
+                )}
 
                 {/* Summary line */}
                 <View style={t.summaryRow}>
