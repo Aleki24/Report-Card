@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useAuth } from '@/components/AuthProvider';
 import {
-    LayoutDashboard, User, BookOpen, Trophy, FileText,
-    CalendarCheck, TrendingUp, Bell, ChevronRight, LogOut, Moon, Sun
+    LayoutDashboard, User, BookOpen, Trophy,
+    CalendarCheck, LogOut, Moon, Sun, MoreHorizontal
 } from 'lucide-react';
 
 const studentNavItems = [
@@ -39,15 +39,15 @@ export default function StudentPortalContent({ children }: { children: React.Rea
     };
 
     return (
-        <div style={{ minHeight: '100vh' }}>
+        <div style={{ minHeight: '100vh', '--student-sidebar-width': collapsed ? '80px' : '260px' } as React.CSSProperties}>
             {/* Mobile Top Bar */}
             <div className="student-topbar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                     <div style={{
                         width: 36, height: 36, borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, #10B981, #059669)',
+                        background: 'var(--primary)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 700, fontSize: 13, color: '#fff',
+                        fontWeight: 700, fontSize: 13, color: 'var(--primary-foreground)',
                     }}>{initials}</div>
                     <div>
                         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>{displayName}</div>
@@ -84,10 +84,9 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                 }}>
                     <div style={{
                         width: 40, height: 40, borderRadius: 'var(--radius-md)',
-                        background: 'linear-gradient(135deg, #10B981, #059669)',
+                        background: 'var(--primary)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 800, fontSize: 14, color: '#fff', flexShrink: 0,
-                        boxShadow: '0 4px 12px rgba(16,185,129,0.25)',
+                        fontWeight: 800, fontSize: 14, color: 'var(--primary-foreground)', flexShrink: 0,
                     }}>{initials}</div>
                     {!collapsed && (
                         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -122,11 +121,10 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                                     minHeight: collapsed ? 38 : 42,
                                     padding: collapsed ? 'var(--space-2)' : '10px 14px',
                                     borderRadius: 'var(--radius-md)',
-                                    color: isActive ? '#fff' : 'var(--color-text-secondary)',
-                                    background: isActive ? 'linear-gradient(135deg, #10B981, #059669)' : 'transparent',
+                                    color: isActive ? 'var(--primary-foreground)' : 'var(--color-text-secondary)',
+                                    background: isActive ? 'var(--primary)' : 'transparent',
                                     textDecoration: 'none', fontSize: 14, fontWeight: isActive ? 600 : 500,
                                     transition: 'all 0.15s ease',
-                                    boxShadow: isActive ? '0 4px 12px rgba(16,185,129,0.25)' : 'none',
                                 }}
                                 onMouseEnter={(e) => {
                                     if (!isActive) {
@@ -203,14 +201,14 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                                 alignItems: 'center', justifyContent: 'center',
                                 flex: 1, minWidth: 0, height: '100%',
                                 position: 'relative', textDecoration: 'none',
-                                color: isActive ? '#10B981' : 'var(--color-text-secondary)',
+                                color: isActive ? 'var(--primary)' : 'var(--color-text-secondary)',
                             }}
                         >
                             {isActive && (
                                 <div style={{
                                     position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
                                     width: '40%', height: 3,
-                                    background: 'linear-gradient(90deg, #10B981, #059669)',
+                                    background: 'var(--primary)',
                                     borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
                                 }} />
                             )}
@@ -237,14 +235,14 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                         flex: 1, minWidth: 0, height: '100%',
                         position: 'relative', background: 'none', border: 'none',
                         cursor: 'pointer',
-                        color: showMoreMenu ? '#10B981' : 'var(--color-text-secondary)',
+                        color: showMoreMenu ? 'var(--primary)' : 'var(--color-text-secondary)',
                     }}
                 >
                     {showMoreMenu && (
                         <div style={{
                             position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
                             width: '40%', height: 3,
-                            background: 'linear-gradient(90deg, #10B981, #059669)',
+                            background: 'var(--primary)',
                             borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
                         }} />
                     )}
@@ -252,7 +250,7 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                         transform: showMoreMenu ? 'translateY(-2px)' : 'none',
                         transition: 'all 0.2s ease', opacity: showMoreMenu ? 1 : 0.7,
                     }}>
-                        <ChevronRight size={20} />
+                        <MoreHorizontal size={20} />
                     </div>
                     <span style={{
                         fontSize: 10, fontWeight: showMoreMenu ? 600 : 500, marginTop: 3,
@@ -291,8 +289,8 @@ export default function StudentPortalContent({ children }: { children: React.Rea
                                             display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
                                             padding: '12px 16px', borderRadius: 'var(--radius-md)',
                                             textDecoration: 'none', fontSize: 14, fontWeight: 500,
-                                            color: isActive ? '#fff' : 'var(--color-text-secondary)',
-                                            background: isActive ? 'linear-gradient(135deg, #10B981, #059669)' : 'transparent',
+                                            color: isActive ? 'var(--primary-foreground)' : 'var(--color-text-secondary)',
+                                            background: isActive ? 'var(--primary)' : 'transparent',
                                         }}
                                     >
                                         <Icon size={18} />
