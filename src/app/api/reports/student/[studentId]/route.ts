@@ -346,7 +346,7 @@ export async function GET(
 
                 let rankQuery = supabase
                     .from('exam_marks')
-                    .select('student_id, raw_score, exams!inner(max_score, term_id, academic_year_id, subjects(id))')
+                    .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, subjects(id, name, category))')
                     .in('student_id', classmateIds);
 
                 if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
@@ -355,16 +355,29 @@ export async function GET(
                 const { data: allMarks } = await rankQuery;
 
                 if (allMarks && allMarks.length > 0) {
-                    const studentAggs: Record<string, { totalScore: number; totalPossible: number }> = {};
+                    // Per-classmate marks (for overall points/percentage ranking)
+                    const marksByClassmate: Record<string, ExamMarkWithDetails[]> = {};
                     // Per-subject aggregation: subjectId -> { studentId -> percentage }
                     const subjectAggs: Record<string, { studentId: string; pct: number }[]> = {};
+                    // Names/categories for the 8-4-4 selection applied per classmate
+                    const rankSubjectNames: Record<string, string> = {};
+                    const rankSubjectCategories: Record<string, string> = {};
 
                     for (const m of allMarks as any[]) {
                         const sid = m.student_id;
-                        const subjectId = m.exams.subjects?.id;
-                        if (!studentAggs[sid]) studentAggs[sid] = { totalScore: 0, totalPossible: 0 };
-                        studentAggs[sid].totalScore += Number(m.raw_score);
-                        studentAggs[sid].totalPossible += Number(m.exams.max_score);
+                        const subj = m.exams.subjects;
+                        const subjectId = subj?.id;
+                        if (!marksByClassmate[sid]) marksByClassmate[sid] = [];
+                        marksByClassmate[sid].push({
+                            id: '',
+                            student_id: sid,
+                            exam_id: m.exams.id || '',
+                            subject_id: subjectId || '',
+                            raw_score: Number(m.raw_score),
+                            percentage: 0,
+                            max_score: Number(m.exams.max_score),
+                            grade_symbol: m.grade_symbol,
+                        });
 
                         // Accumulate per-subject scores
                         if (subjectId) {
@@ -372,18 +385,20 @@ export async function GET(
                             const maxScore = Number(m.exams.max_score);
                             const pct = maxScore > 0 ? (Number(m.raw_score) / maxScore) * 100 : 0;
                             subjectAggs[subjectId].push({ studentId: sid, pct });
+                            if (subj?.name) rankSubjectNames[subjectId] = subj.name;
+                            if (subj?.category) rankSubjectCategories[subjectId] = subj.category;
                         }
                     }
 
-                    // Overall class ranks
-                    const aggregates = Object.entries(studentAggs)
-                        .filter(([, v]) => v.totalPossible > 0)
-                        .map(([sid, v]) => ({
-                            studentId: sid,
-                            percentage: (v.totalScore / v.totalPossible) * 100,
-                        }));
+                    // Overall class ranks — for KCSE (8-4-4) rank by total points
+                    // (best-7 selection applied per classmate), for CBC rank by percentage.
+                    const aggregates = Object.entries(marksByClassmate)
+                        .map(([sid, marks]) => {
+                            const perf = aggregateStudentPerformance(marks, gradingScales, gradingSystemType, rankSubjectNames, rankSubjectCategories);
+                            return { studentId: sid, percentage: perf.percentage, totalPoints: perf.totalPoints };
+                        });
 
-                    const ranks = calculateClassRanks(aggregates);
+                    const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
                     classRank = ranks.get(studentId) || 0;
                     totalStudents = aggregates.length;
 

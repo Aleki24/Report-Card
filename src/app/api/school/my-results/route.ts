@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { aggregateStudentPerformance, type ExamMarkWithDetails } from '@/lib/analytics';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +33,19 @@ export async function GET(request: NextRequest) {
     }
 
     const gradeStreamId = studentRecord.current_grade_stream_id;
+
+    // Determine grading system from the grade code: Form 3-4 / Grade 7-8 & 11-12
+    // use KCSE (8-4-4) points; everything else is CBC percentage-based.
+    let isKCSE = false;
+    if (gradeStreamId) {
+      const { data: streamData } = await supabase
+        .from('grade_streams')
+        .select('grades ( code )')
+        .eq('id', gradeStreamId)
+        .maybeSingle();
+      const gradeCode = (streamData?.grades as any)?.code || '';
+      isKCSE = /^(G[78]|G1[12]|F[34])/i.test(gradeCode);
+    }
 
     // Step 2: Fetch all marks for this student (school-scoped via exam ownership)
     const { data: marksData, error: marksError } = await supabase
@@ -173,36 +187,45 @@ export async function GET(request: NextRequest) {
           // Get all marks for classmates for this term (school-scoped via exam.school_id)
           const { data: allMarks } = await supabase
             .from('exam_marks')
-            .select('student_id, raw_score, percentage, exams!inner(max_score, term_id, academic_year_id, school_id)')
+            .select('student_id, raw_score, percentage, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, school_id, subjects(id, name, category))')
             .in('student_id', classmateIds)
             .eq('exams.term_id', term.termId)
             .eq('exams.school_id', schoolId);
 
           if (allMarks && allMarks.length > 0) {
-            // Aggregate per student
-            const studentAggs: Record<string, { totalScore: number; totalPossible: number }> = {};
+            // Group marks per classmate; build name/category maps for 8-4-4 selection
+            const marksByClassmate: Record<string, ExamMarkWithDetails[]> = {};
+            const rankSubjectNames: Record<string, string> = {};
+            const rankSubjectCategories: Record<string, string> = {};
             for (const m of allMarks as any[]) {
               const sid = m.student_id;
-              if (!studentAggs[sid]) studentAggs[sid] = { totalScore: 0, totalPossible: 0 };
-              studentAggs[sid].totalScore += Number(m.raw_score);
-              studentAggs[sid].totalPossible += Number(m.exams.max_score);
+              const subj = m.exams.subjects;
+              const subjectId = subj?.id || '';
+              if (!marksByClassmate[sid]) marksByClassmate[sid] = [];
+              marksByClassmate[sid].push({
+                id: '', student_id: sid, exam_id: m.exams.id || '',
+                subject_id: subjectId, raw_score: Number(m.raw_score), percentage: 0,
+                max_score: Number(m.exams.max_score), grade_symbol: m.grade_symbol,
+              });
+              if (subjectId && subj?.name) rankSubjectNames[subjectId] = subj.name;
+              if (subjectId && subj?.category) rankSubjectCategories[subjectId] = subj.category;
             }
 
-            // Sort by percentage descending
-            const sorted = Object.entries(studentAggs)
-              .filter(([, v]) => v.totalPossible > 0)
-              .map(([sid, v]) => ({
-                sid,
-                pct: (v.totalScore / v.totalPossible) * 100,
-              }))
-              .sort((a, b) => b.pct - a.pct);
+            // KCSE (8-4-4) ranks by total points (best-7 selection); CBC by percentage.
+            const gradingSystemType = isKCSE ? 'KCSE' : 'CBC';
+            const sorted = Object.entries(marksByClassmate)
+              .map(([sid, marks]) => {
+                const perf = aggregateStudentPerformance(marks, [], gradingSystemType, rankSubjectNames, rankSubjectCategories);
+                return { sid, metric: isKCSE ? perf.totalPoints : perf.percentage };
+              })
+              .sort((a, b) => b.metric - a.metric);
 
             term.totalStudents = sorted.length;
 
             // Find this student's rank (handle ties)
             let rank = 1;
             for (let i = 0; i < sorted.length; i++) {
-              if (i > 0 && sorted[i].pct < sorted[i - 1].pct) {
+              if (i > 0 && sorted[i].metric < sorted[i - 1].metric) {
                 rank = i + 1;
               }
               if (sorted[i].sid === studentRecord.id) {

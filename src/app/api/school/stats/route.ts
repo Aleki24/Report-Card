@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { aggregateStudentPerformance, type ExamMarkWithDetails } from '@/lib/analytics';
 
 export async function GET(request: NextRequest) {
   try {
@@ -397,6 +398,15 @@ export async function GET(request: NextRequest) {
       let positionSub = 'N/A';
       const gradeStreamId = studentRecord.current_grade_stream_id;
       if (gradeStreamId && currentYear) {
+        // Grade code decides KCSE (8-4-4, points-ranked) vs CBC (percentage).
+        const { data: streamData } = await supabase
+          .from('grade_streams')
+          .select('grades ( code )')
+          .eq('id', gradeStreamId)
+          .maybeSingle();
+        const gradeCode = (streamData?.grades as any)?.code || '';
+        const isKCSE = /^(G[78]|G1[12]|F[34])/i.test(gradeCode);
+
         const { data: classmates } = await supabase
           .from('students')
           .select('id')
@@ -406,28 +416,42 @@ export async function GET(request: NextRequest) {
           const classmateIds = classmates.map(c => c.id);
           let marksQuery = supabase
             .from('exam_marks')
-            .select('student_id, raw_score, exams!inner(max_score)')
+            .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, subjects(id, name, category))')
             .in('student_id', classmateIds)
             .eq('exams.academic_year_id', currentYear.id);
 
           const { data: allMarks } = await marksQuery;
 
           if (allMarks && allMarks.length > 0) {
-            const aggs: Record<string, { score: number; possible: number }> = {};
+            const marksByClassmate: Record<string, ExamMarkWithDetails[]> = {};
+            const rankSubjectNames: Record<string, string> = {};
+            const rankSubjectCategories: Record<string, string> = {};
             for (const m of allMarks as any[]) {
               const sid = m.student_id;
-              if (!aggs[sid]) aggs[sid] = { score: 0, possible: 0 };
-              aggs[sid].score += Number(m.raw_score);
-              aggs[sid].possible += Number(m.exams.max_score);
+              const subj = m.exams.subjects;
+              const subjectId = subj?.id || '';
+              if (!marksByClassmate[sid]) marksByClassmate[sid] = [];
+              marksByClassmate[sid].push({
+                id: '', student_id: sid, exam_id: m.exams.id || '',
+                subject_id: subjectId, raw_score: Number(m.raw_score), percentage: 0,
+                max_score: Number(m.exams.max_score), grade_symbol: m.grade_symbol,
+              });
+              if (subjectId && subj?.name) rankSubjectNames[subjectId] = subj.name;
+              if (subjectId && subj?.category) rankSubjectCategories[subjectId] = subj.category;
             }
-            const sorted = Object.entries(aggs)
-              .filter(([, v]) => v.possible > 0)
-              .map(([sid, v]) => ({ sid, pct: (v.score / v.possible) * 100 }))
-              .sort((a, b) => b.pct - a.pct);
+
+            // KCSE ranks by total points (best-7 selection); CBC by percentage.
+            const gradingSystemType = isKCSE ? 'KCSE' : 'CBC';
+            const sorted = Object.entries(marksByClassmate)
+              .map(([sid, marks]) => {
+                const perf = aggregateStudentPerformance(marks, [], gradingSystemType, rankSubjectNames, rankSubjectCategories);
+                return { sid, metric: isKCSE ? perf.totalPoints : perf.percentage };
+              })
+              .sort((a, b) => b.metric - a.metric);
 
             let rank = 1;
             for (let i = 0; i < sorted.length; i++) {
-              if (i > 0 && sorted[i].pct < sorted[i - 1].pct) rank = i + 1;
+              if (i > 0 && sorted[i].metric < sorted[i - 1].metric) rank = i + 1;
               if (sorted[i].sid === studentRecord.id) {
                 position = `${rank} / ${sorted.length}`;
                 positionSub = rank <= 3 ? '🏆 Top performer!' : `Out of ${sorted.length} students`;
