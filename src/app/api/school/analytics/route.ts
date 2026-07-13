@@ -41,6 +41,9 @@ export async function GET(request: NextRequest) {
     // inner joins on grades/academic_years silently drops every mark whose exam
     // has a null grade/year link, which is why the page showed "no marks" while
     // marks existed. exams carries its own school_id, so use it.
+    // exam_marks has no subject_id column of its own — the subject is only
+    // reachable via exams.subject_id, confirmed against production
+    // ("column exam_marks.subject_id does not exist").
     let query = supabaseAdmin
       .from('exam_marks')
       .select(`
@@ -50,7 +53,6 @@ export async function GET(request: NextRequest) {
         grade_symbol,
         student_id,
         exam_id,
-        subject_id,
         students ( admission_number, users ( first_name, last_name ) ),
         exams!inner (
           id,
@@ -60,6 +62,7 @@ export async function GET(request: NextRequest) {
           academic_year_id,
           term_id,
           grade_stream_id,
+          subject_id,
           subjects ( name )
         )
       `)
@@ -92,7 +95,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (examId) query = query.eq('exam_id', examId);
-    if (subjectId) query = query.eq('subject_id', subjectId);
+    if (subjectId) query = query.eq('exams.subject_id', subjectId);
     if (yearId) query = query.eq('exams.academic_year_id', yearId);
     if (termId) query = query.eq('exams.term_id', termId);
 
@@ -124,7 +127,7 @@ export async function GET(request: NextRequest) {
         raw_score: m.raw_score,
         percentage: m.percentage,
         grade_symbol: m.grade_symbol,
-        subject_id: m.subject_id,
+        subject_id: exam.subject_id,
         exam_id: m.exam_id,
         student_id: m.student_id,
         subject_name: (subject.name as string) || 'Unknown',
