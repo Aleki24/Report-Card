@@ -7,6 +7,7 @@
 
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from './get-current-student';
+import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
 import type { CurrentStudent } from '@/types';
 
 // ── Profile ─────────────────────────────────────────────────
@@ -213,6 +214,16 @@ export async function getStudentAttendance(
 export async function getStudentPerformanceTrends(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
+    // KCSE (8-4-4) grades only the best 7 of a student's subjects; CBC has no
+    // such selection. Only apply the selection for KCSE-level students, same
+    // as the report card / marksheet generation.
+    const { data: academicLevel } = await supabase
+        .from('academic_levels')
+        .select('code')
+        .eq('id', student.academicLevelId)
+        .maybeSingle();
+    const isKCSE = academicLevel?.code !== 'CBC';
+
     // Derive trends from exam_marks grouped by term and subject
     const { data: marks, error } = await supabase
         .from('exam_marks')
@@ -225,7 +236,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
                 academic_year_id,
                 subject_id,
                 school_id,
-                subjects ( id, name ),
+                subjects ( id, name, category ),
                 terms ( id, name ),
                 academic_years ( id, name )
             )
@@ -242,7 +253,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
         yearName: string;
         termId: string;
         yearId: string;
-        subjects: Record<string, { name: string; totalPct: number; count: number }>;
+        subjects: Record<string, { name: string; category?: string; totalPct: number; count: number }>;
     }> = {};
 
     for (const mark of marks as any[]) {
@@ -253,6 +264,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
         const termName = ex.terms?.name || 'Unknown';
         const yearName = ex.academic_years?.name || '';
         const subjName = ex.subjects?.name || 'Unknown';
+        const subjCategory = ex.subjects?.category;
         const subjId = ex.subject_id;
 
         if (!termMap[termKey]) {
@@ -266,27 +278,49 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
         }
 
         if (!termMap[termKey].subjects[subjId]) {
-            termMap[termKey].subjects[subjId] = { name: subjName, totalPct: 0, count: 0 };
+            termMap[termKey].subjects[subjId] = { name: subjName, category: subjCategory, totalPct: 0, count: 0 };
         }
 
         termMap[termKey].subjects[subjId].totalPct += Number(mark.percentage);
         termMap[termKey].subjects[subjId].count += 1;
     }
 
-    // Convert to array and compute averages
+    // Convert to array and compute averages. `subjects` keeps every subject
+    // the student took that term (so per-subject trend views still show all
+    // of a student's own history), while `overallAverage` reflects only the
+    // KCSE-selected 7 subjects, matching the report card / marksheet.
     const trends = Object.values(termMap).map(term => {
-        const subjects = Object.values(term.subjects).map(s => ({
-            name: s.name,
-            average: Math.round((s.totalPct / s.count) * 10) / 10,
+        const subjectEntries = Object.entries(term.subjects).map(([subjId, s]) => {
+            const avgPct = s.totalPct / s.count;
+            return {
+                id: subjId,
+                exam_id: '',
+                student_id: student.studentId,
+                subject_id: subjId,
+                subjectName: s.name,
+                category: s.category as SubjectCategory | undefined,
+                raw_score: avgPct,
+                percentage: avgPct,
+                max_score: 100,
+                grade_symbol: getGradeFromPercentageSimple(avgPct),
+            };
+        });
+
+        const subjects = subjectEntries.map(s => ({
+            name: s.subjectName || '',
+            average: Math.round(s.raw_score * 10) / 10,
         }));
 
-        const overallAverage = subjects.length > 0
-            ? Math.round((subjects.reduce((sum, s) => sum + s.average, 0) / subjects.length) * 10) / 10
+        const selectedForOverall = isKCSE ? select844Subjects(subjectEntries, []) : subjectEntries;
+        const overallAverage = selectedForOverall.length > 0
+            ? Math.round((selectedForOverall.reduce((sum, s) => sum + s.raw_score, 0) / selectedForOverall.length) * 10) / 10
             : 0;
 
         return {
             termName: term.termName,
             yearName: term.yearName,
+            termId: term.termId,
+            yearId: term.yearId,
             subjects,
             overallAverage,
         };
@@ -382,7 +416,7 @@ export async function getStudentMaterials(student: CurrentStudent) {
 export async function getStudentDashboardSummary(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
-    const [profileRes, subjectsRes, resultsRes, reportsRes, attendanceRes, announcementsRes, assignmentsRes, materialsRes] = await Promise.allSettled([
+    const [profileRes, subjectsRes, resultsRes, reportsRes, attendanceRes, announcementsRes, assignmentsRes, materialsRes, trendsRes] = await Promise.allSettled([
         getCurrentStudentProfile(student),
         getStudentSubjects(student),
         getStudentResults(student),
@@ -391,6 +425,7 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
         getSchoolAnnouncements(student),
         getStudentAssignments(student),
         getStudentMaterials(student),
+        getStudentPerformanceTrends(student),
     ]);
 
     const profile = profileRes.status === 'fulfilled' ? profileRes.value : null;
@@ -401,6 +436,7 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
     const announcements = announcementsRes.status === 'fulfilled' ? announcementsRes.value : [];
     const assignments = assignmentsRes.status === 'fulfilled' ? assignmentsRes.value : [];
     const materials = materialsRes.status === 'fulfilled' ? materialsRes.value : [];
+    const trends = trendsRes.status === 'fulfilled' ? trendsRes.value : [];
 
     // Current term & year
     const { data: currentTerm } = await supabase
@@ -428,9 +464,19 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
     const latestResults = results.slice(0, 5);
     const latestReport = reports[0] ?? null;
 
-    const avgScore = results.length > 0
-        ? Math.round((results.reduce((sum: number, item: any) => sum + Number(item.percentage || 0), 0) / results.length) * 10) / 10
-        : 0;
+    // Prefer the current term's KCSE-selection-aware average (best 7
+    // subjects, matching the report card/marksheet) over a plain average of
+    // every mark ever entered. Fall back to the plain average when the
+    // current term has no marks yet (e.g. start of term).
+    const currentTermTrend = currentTerm
+        ? trends.find((t) => t.termId === currentTerm.id)
+        : null;
+
+    const avgScore = currentTermTrend
+        ? currentTermTrend.overallAverage
+        : results.length > 0
+            ? Math.round((results.reduce((sum: number, item: any) => sum + Number(item.percentage || 0), 0) / results.length) * 10) / 10
+            : 0;
 
     const attendancePresent = attendance.filter((a: any) => a.status === 'present').length;
     const attendanceRate = attendance.length > 0
