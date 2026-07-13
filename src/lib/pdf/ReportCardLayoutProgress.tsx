@@ -104,6 +104,11 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
     const isKCSE = data.gradingSystemType === 'KCSE';
     const overallGrade = data.overallPointsGrade || data.overallGrade;
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    // KCSE 8-4-4: only the best 7 subjects count toward points; flag surplus.
+    const anyExcluded = isKCSE && data.subjectMarks.some(mk => mk.includedInPoints === false);
+    const anyIncluded = data.subjectMarks.some(mk => mk.includedInPoints === true);
+    const showExclusions = anyExcluded && anyIncluded;
+    const includedCount = data.subjectMarks.filter(mk => mk.includedInPoints !== false).length;
 
     // Paper columns: as many as the widest subject uses (0 = single-score school)
     const paperCount = Math.min(4, Math.max(0, ...data.subjectMarks.map(sm => sm.paperScores?.length ?? 0)));
@@ -185,9 +190,10 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
                     </View>
                     {data.subjectMarks.map((sm, idx) => {
                         const pct = sm.percentage ?? 0;
+                        const excluded = showExclusions && sm.includedInPoints === false;
                         return (
                             <View style={idx % 2 === 0 ? p.tr : p.trAlt} key={`${sm.subjectName}-${idx}`}>
-                                <Text style={[p.tdBold, { width: `${subjectW}%` }]}>{sm.subjectName}</Text>
+                                <Text style={[p.tdBold, { width: `${subjectW}%` }, excluded ? { color: MUTED } : {}]}>{sm.subjectName}{excluded ? ' *' : ''}</Text>
                                 {paperCount > 0
                                     ? Array.from({ length: paperCount }, (_, i) => (
                                         <Text key={i} style={[p.td, { width: `${paperW}%`, textAlign: 'center' }]}>
@@ -206,6 +212,12 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
                         );
                     })}
                 </View>
+
+                {showExclusions && (
+                    <Text style={{ fontSize: 7, color: MUTED, marginTop: 4, fontFamily: 'Times-Italic' }}>
+                        * Points total reflects the best {includedCount} of {data.subjectMarks.length} subjects (KCSE 8-4-4). Starred subjects are shown but not counted toward points.
+                    </Text>
+                )}
 
                 {/* Category chart + stats */}
                 <View style={p.midRow}>
