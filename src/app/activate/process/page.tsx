@@ -78,6 +78,15 @@ export default function ActivateCallbackPage() {
                     return;
                 }
 
+                // Activate the Clerk session FIRST so the request to our API carries an
+                // authenticated session — /api/auth/activate-google verifies that the
+                // clerk_user_id in the body matches the signed-in user, and rejects the
+                // call otherwise. Setting the session after the call left the request
+                // unauthenticated and could bind the invite against the wrong account.
+                if (setActiveFn && activeSessionId) {
+                    await setActiveFn({ session: activeSessionId });
+                }
+
                 setStatus('Linking your account...');
 
                 // Call our API to link the Google Clerk account to the pending user
@@ -101,11 +110,6 @@ export default function ActivateCallbackPage() {
                 // Clean up sessionStorage
                 sessionStorage.removeItem('activate_invite_code');
                 sessionStorage.removeItem('activate_username');
-
-                // Set the active session
-                if (setActiveFn && activeSessionId) {
-                    await setActiveFn({ session: activeSessionId });
-                }
 
                 setStatus('Account activated! Redirecting...');
                 setTimeout(() => {
