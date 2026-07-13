@@ -670,68 +670,24 @@ function SubjectTeacherDashboard() {
   );
 }
 
-// ── Student Dashboard ────────────────────────────────────────
-function StudentDashboard() {
-  const { user } = useAuth();
-  const [kpis, setKpis] = useState<{ label: string; value: string; sub: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const res = await fetch('/api/school/stats?role=student');
-        const json = await res.json();
-        setKpis([
-          { label: 'My Average', value: json.avg ? `${json.avg}%` : '—', sub: json.markCount > 0 ? `From ${json.markCount} marks` : 'No marks yet' },
-          { label: 'Best Subject', value: json.bestSubject || '—', sub: json.bestScore ? `${json.bestScore}% average` : 'N/A' },
-          { label: 'Stream Position', value: json.position || '—', sub: json.positionSub || 'N/A' },
-          { label: 'Exams Taken', value: (json.markCount || 0).toString(), sub: 'Total entries' },
-        ]);
-      } catch {
-        setKpis([
-          { label: 'My Average', value: '—', sub: 'No marks yet' },
-          { label: 'Best Subject', value: '—', sub: 'N/A' },
-          { label: 'Stream Position', value: '—', sub: 'N/A' },
-          { label: 'Exams Taken', value: '0', sub: 'No data yet' },
-        ]);
-      }
-      setLoading(false);
-    })();
-  }, [user]);
-
-  if (loading) return <LoadingSkeleton />;
-
-  return (
-    <>
-      <WelcomeBanner
-        title="Student Guide"
-        items={[
-          'View your academic progress and track your performance.',
-          'Download your Report Cards from the My Results section.',
-          'Check Analytics for detailed subject breakdowns.',
-        ]}
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpis.map((k, i) => (
-          <StatCard key={i} label={k.label} value={k.value} sub={k.sub} icon={i === 0 ? BarChart3 : i === 1 ? GraduationCap : i === 2 ? Users : Calendar} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <QuickAction label="View My Results" desc="View and download report cards" href="/student/results" icon={<FileText size={18} />} />
-        <QuickAction label="My Analytics" desc="Subject performance breakdown" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
-      </div>
-    </>
-  );
-}
-
 export default function DashboardPage() {
   const { profile, role, loading } = useAuth();
+  const router = useRouter();
   const userName = profile ? `${profile.first_name}` : '';
 
-  if (loading) return <div style={{ padding: 'var(--space-6)' }}><LoadingSkeleton /></div>;
+  useEffect(() => {
+    // /student/dashboard is the canonical student home. Students can end up on this
+    // shared /dashboard route via the "Dashboard" nav link (which every role has) or
+    // a stale Clerk session-claim role that middleware's edge redirect misses — this
+    // client-side check reads the real role from AuthProvider (backed by Supabase, not
+    // the JWT), so it catches those cases and avoids ever rendering a student-facing
+    // dashboard here.
+    if (!loading && role === 'STUDENT') {
+      router.replace('/student/dashboard');
+    }
+  }, [loading, role, router]);
+
+  if (loading || role === 'STUDENT') return <div style={{ padding: 'var(--space-6)' }}><LoadingSkeleton /></div>;
 
   const isAdmin = role === 'ADMIN' || !role;
 
@@ -740,7 +696,6 @@ export default function DashboardPage() {
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <ClassTeacherDashboard />}
       {role === 'SUBJECT_TEACHER' && <SubjectTeacherDashboard />}
-      {role === 'STUDENT' && <StudentDashboard />}
     </div>
   );
 }
