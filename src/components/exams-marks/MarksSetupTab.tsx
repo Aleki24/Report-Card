@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -58,6 +58,31 @@ export function MarksSetupTab() {
   const [loadingExams, setLoadingExams] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  // Tap-to-open menu (not CSS :hover, which never fires on touch screens) —
+  // close on outside tap/click or Escape.
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMoreMenu(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMoreMenu]);
 
   // Grade → academic level map (must be before derived state)
   const gradeLevelMap = new Map(allGrades.map(g => [g.id, g.academic_level_id]));
@@ -374,39 +399,43 @@ export function MarksSetupTab() {
 
               {/* Admin: one compact menu for the less-common exam-setup actions */}
               {profile?.role === 'ADMIN' && (
-                <div className="relative group">
+                <div className="relative" ref={moreMenuRef}>
                   <button
-                    className="cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    onClick={() => setShowMoreMenu(v => !v)}
+                    aria-expanded={showMoreMenu}
+                    className={`cursor-pointer rounded-xl border border-dashed px-3 py-2.5 text-xs transition-colors ${showMoreMenu ? 'border-primary/50 text-foreground' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}
                     title="More exam setup options"
                   >
                     ⚙️ More
                   </button>
-                  <div className="absolute top-full left-0 z-50 mt-1 hidden min-w-[220px] rounded-xl border border-border bg-popover p-2 shadow-lg group-hover:block">
-                    {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
+                  {showMoreMenu && (
+                    <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] rounded-xl border border-border bg-popover p-2 shadow-lg">
+                      {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
+                        <button
+                          key={et.code}
+                          onClick={() => { handleSeedExams([et.code]); setShowMoreMenu(false); }}
+                          disabled={seeding}
+                          className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        >
+                          + {et.icon} {et.name}
+                          <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
+                        </button>
+                      ))}
                       <button
-                        key={et.code}
-                        onClick={() => handleSeedExams([et.code])}
+                        onClick={() => { handleSeedExams(Array.from(existingTypes)); setShowMoreMenu(false); }}
                         disabled={seeding}
                         className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                       >
-                        + {et.icon} {et.name}
-                        <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
+                        {seeding ? 'Working...' : '🔄 Add exams for any new subjects'}
                       </button>
-                    ))}
-                    <button
-                      onClick={() => handleSeedExams(Array.from(existingTypes))}
-                      disabled={seeding}
-                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                    >
-                      {seeding ? 'Working...' : '🔄 Add exams for any new subjects'}
-                    </button>
-                    <button
-                      onClick={() => setShowCreateModal(true)}
-                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                    >
-                      + Create one exam manually
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => { setShowCreateModal(true); setShowMoreMenu(false); }}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                      >
+                        + Create one exam manually
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
