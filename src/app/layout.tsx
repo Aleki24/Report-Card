@@ -33,7 +33,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider afterSignOutUrl="/login">
+    // signInUrl/signUpUrl keep every Clerk-initiated redirect (OAuth transfer,
+    // expired session, etc.) on our own pages instead of falling back to
+    // Clerk's hosted Account Portal — which is what makes a returning user land
+    // on a stray/"clerk" account instead of the real one they signed in with.
+    <ClerkProvider afterSignOutUrl="/login" signInUrl="/login" signUpUrl="/signup">
       <html lang="en" data-theme="dark" className={cn("font-sans", fontSans.variable, fontSerif.variable, fontMono.variable)}>
         <body className={`overflow-x-hidden antialiased bg-background text-foreground`}>
           <div id="clerk-captcha" />

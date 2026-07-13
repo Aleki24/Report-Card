@@ -14,6 +14,8 @@ export default function ActivateCallbackPage() {
         
         {/* This component handles the OAuth callback URL parameters and then redirects */}
         <AuthenticateWithRedirectCallback
+          signInUrl="/activate"
+          signUpUrl="/activate"
           signUpFallbackRedirectUrl="/activate/process"
           signInFallbackRedirectUrl="/activate/process"
         />
