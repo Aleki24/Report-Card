@@ -304,7 +304,8 @@ export async function GET(
             return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
-        const ranks = calculateClassRanks(aggregates);
+        // KCSE (8-4-4) ranks by total points; CBC ranks by percentage.
+        const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
         const rankedStudentCount = aggregates.length;
 
         // Build per-subject rank maps: subjectId -> Map<studentId, rank>
