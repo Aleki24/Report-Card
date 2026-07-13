@@ -81,7 +81,7 @@ function KpiCard({
         <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px' }}>
           {label}
         </p>
-        <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--foreground)', margin: 0, letterSpacing: '-0.03em' }}>
+        <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--foreground)', margin: 0, letterSpacing: '-0.03em', lineHeight: 1.25, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
           {value}
         </p>
         {subtitle && (
@@ -497,45 +497,24 @@ export default function AnalyticsPage() {
           )}
 
           {subjectStats.length > 0 && (
-            <div style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 14,
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '18px 22px 12px',
-              }}>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-                    Detailed Results
-                  </h3>
-                  <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>
-                    Click a row to expand student scores
-                  </p>
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm">
+              <div className="px-5 pb-3 pt-4">
+                <h3 className="text-[15px] font-bold text-foreground">Detailed Results</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">Tap a row to expand student scores</p>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  minWidth: 700,
-                  fontSize: 13,
-                }}>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                      <th style={{ width: 28, padding: '10px 8px' }}></th>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Subject</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Mean</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Median</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Highest</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Lowest</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pass Rate</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Students</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Status</th>
+                    <tr className="border-b-2 border-border">
+                      <th className="w-7 px-2 py-2.5"></th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Subject</th>
+                      <th className="w-16 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Mean</th>
+                      <th className="hidden w-16 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground sm:table-cell">Median</th>
+                      <th className="hidden w-16 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground md:table-cell">Highest</th>
+                      <th className="hidden w-16 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground md:table-cell">Lowest</th>
+                      <th className="hidden w-20 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground sm:table-cell">Pass Rate</th>
+                      <th className="hidden w-16 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground md:table-cell">Students</th>
+                      <th className="w-20 px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -543,74 +522,57 @@ export default function AnalyticsPage() {
                       <React.Fragment key={i}>
                         <tr
                           onClick={() => setExpandedSubject(expandedSubject === s.name ? null : s.name)}
-                          style={{
-                            cursor: 'pointer',
-                            borderBottom: '1px solid var(--border)',
-                            transition: 'background 0.1s',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in oklch, var(--foreground) 3%, transparent)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          className="cursor-pointer border-b border-border/50 transition-colors last:border-0 hover:bg-muted/40"
                         >
-                          <td style={{ textAlign: 'center', padding: '10px 8px', fontSize: 10, color: 'var(--color-border-subtle)' }}>
+                          <td className="px-2 py-2.5 text-center text-[10px] text-muted-foreground">
                             {expandedSubject === s.name ? '▼' : '▶'}
                           </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>{s.name}</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 700, color: 'var(--foreground)' }}>{s.mean}%</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--muted-foreground)' }}>{s.median}%</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: 'var(--color-success)' }}>{s.highest}%</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: 'var(--color-danger)' }}>{s.lowest}%</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600 }}>{s.passRate}%</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--muted-foreground)' }}>{s.studentCount}</td>
-                          <td style={{ textAlign: 'center', padding: '10px 12px' }}>
-                            <span style={{
-                              display: 'inline-block',
-                              padding: '2px 10px',
-                              borderRadius: 6,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              background: statusBg(s.mean),
-                              color: statusColor(s.mean),
-                            }}>
+                          <td className="px-3 py-2.5 font-semibold text-foreground">
+                            <div>{s.name}</div>
+                            <div className="truncate text-[11px] font-normal text-muted-foreground sm:hidden">Pass {s.passRate}%</div>
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-bold tabular-nums text-foreground">{s.mean}%</td>
+                          <td className="hidden px-3 py-2.5 text-center tabular-nums text-muted-foreground sm:table-cell">{s.median}%</td>
+                          <td className="hidden px-3 py-2.5 text-center font-semibold tabular-nums md:table-cell" style={{ color: 'var(--viz-good)' }}>{s.highest}%</td>
+                          <td className="hidden px-3 py-2.5 text-center font-semibold tabular-nums md:table-cell" style={{ color: 'var(--viz-bad)' }}>{s.lowest}%</td>
+                          <td className="hidden px-3 py-2.5 text-center font-semibold tabular-nums sm:table-cell">{s.passRate}%</td>
+                          <td className="hidden px-3 py-2.5 text-center tabular-nums text-muted-foreground md:table-cell">{s.studentCount}</td>
+                          <td className="px-3 py-2.5 text-center">
+                            <span className="inline-block rounded-md px-2.5 py-0.5 text-[11px] font-bold" style={{ background: statusBg(s.mean), color: statusColor(s.mean) }}>
                               {statusLabel(s.mean)}
                             </span>
                           </td>
                         </tr>
                         {expandedSubject === s.name && (
                           <tr>
-                            <td colSpan={9} style={{ padding: 0 }}>
-                              <div style={{
-                                background: 'color-mix(in oklch, var(--foreground) 3%, transparent)',
-                                padding: '14px 20px',
-                                borderBottom: '1px solid var(--border)',
-                              }}>
-                                <div style={{ overflowX: 'auto' }}>
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <td colSpan={9} className="p-0" style={{ width: 0 }}>
+                              <div className="border-b border-border bg-muted/40 px-4 py-3.5 sm:px-5" style={{ minWidth: '100%' }}>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full border-collapse text-sm">
                                     <thead>
-                                      <tr style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>#</th>
-                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Student</th>
-                                        <th style={{ textAlign: 'left', padding: '6px 10px' }}>Adm No</th>
-                                        <th style={{ textAlign: 'center', padding: '6px 10px' }}>Score</th>
-                                        <th style={{ textAlign: 'center', padding: '6px 10px' }}>Grade</th>
+                                      <tr className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <th className="w-6 px-2.5 py-1.5 text-left">#</th>
+                                        <th className="px-2.5 py-1.5 text-left">Student</th>
+                                        <th className="hidden w-24 px-2.5 py-1.5 text-left sm:table-cell">Adm No</th>
+                                        <th className="w-16 px-2.5 py-1.5 text-center">Score</th>
+                                        <th className="w-16 px-2.5 py-1.5 text-center">Grade</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {s.students.map((st, idx) => (
-                                        <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                                          <td style={{ padding: '6px 10px', color: 'var(--muted-foreground)' }}>{idx + 1}</td>
-                                          <td style={{ padding: '6px 10px', fontWeight: 500, color: 'var(--foreground)' }}>{st.studentName}</td>
-                                          <td style={{ padding: '6px 10px', color: 'var(--muted-foreground)' }}>{st.admissionNumber}</td>
-                                          <td style={{ textAlign: 'center', padding: '6px 10px', fontWeight: 700, color: 'var(--foreground)' }}>{Math.round(st.percentage)}%</td>
-                                          <td style={{ textAlign: 'center', padding: '6px 10px' }}>
-                                            <span style={{
-                                              display: 'inline-block',
-                                              padding: '2px 8px',
-                                              borderRadius: 5,
-                                              fontSize: 12,
-                                              fontWeight: 700,
-                                              background: st.percentage >= 70 ? 'color-mix(in oklch, var(--color-success) 10%, transparent)' : st.percentage >= 50 ? 'color-mix(in oklch, var(--color-warning) 10%, transparent)' : 'color-mix(in oklch, var(--color-danger) 10%, transparent)',
-                                              color: st.percentage >= 70 ? 'var(--color-success)' : st.percentage >= 50 ? 'var(--color-warning)' : 'var(--color-danger)',
-                                            }}>
+                                        <tr key={idx} className="border-b border-border/50 last:border-0">
+                                          <td className="px-2.5 py-1.5 text-muted-foreground">{idx + 1}</td>
+                                          <td className="px-2.5 py-1.5 font-medium text-foreground">
+                                            <div>{st.studentName}</div>
+                                            <div className="truncate font-mono text-[11px] font-normal text-muted-foreground sm:hidden">{st.admissionNumber}</div>
+                                          </td>
+                                          <td className="hidden px-2.5 py-1.5 text-muted-foreground sm:table-cell">{st.admissionNumber}</td>
+                                          <td className="px-2.5 py-1.5 text-center font-bold tabular-nums text-foreground">{Math.round(st.percentage)}%</td>
+                                          <td className="px-2.5 py-1.5 text-center">
+                                            <span
+                                              className="inline-block rounded px-2 py-0.5 text-xs font-bold"
+                                              style={{ background: statusBg(st.percentage), color: statusColor(st.percentage) }}
+                                            >
                                               {st.gradeSymbol}
                                             </span>
                                           </td>
