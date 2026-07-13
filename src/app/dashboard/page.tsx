@@ -684,10 +684,19 @@ export default function DashboardPage() {
     // dashboard here.
     if (!loading && role === 'STUDENT') {
       router.replace('/student/dashboard');
+      return;
+    }
+    // A user who signed up but never finished redeeming an invite code stays in role
+    // 'PENDING'. Nothing else routes them back to onboarding (e.g. "Sign in with
+    // Google" from the login page always completes to /dashboard), and 'PENDING'
+    // doesn't match isAdmin or any other branch below, so without this they'd land
+    // on a permanently blank page with no error and no way forward.
+    if (!loading && role === 'PENDING') {
+      router.replace('/dashboard/onboarding');
     }
   }, [loading, role, router]);
 
-  if (loading || role === 'STUDENT') return <div style={{ padding: 'var(--space-6)' }}><LoadingSkeleton /></div>;
+  if (loading || role === 'STUDENT' || role === 'PENDING') return <div style={{ padding: 'var(--space-6)' }}><LoadingSkeleton /></div>;
 
   const isAdmin = role === 'ADMIN' || !role;
 
