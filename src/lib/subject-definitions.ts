@@ -64,7 +64,7 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   { name: 'Arabic', code: '503', level: '844_SECONDARY', category: 'LANGUAGE' },
   { name: 'Kenya Sign Language', code: '504', level: '844_SECONDARY', category: 'LANGUAGE' },
   { name: 'Music', code: '511', level: '844_SECONDARY', category: 'CREATIVE' },
-  { name: 'Business Studies', code: '565', level: '844_SECONDARY', category: 'HUMANITY' },
+  { name: 'Business Studies', code: '565', level: '844_SECONDARY', category: 'TECHNICAL' },
 
 
   // ═══════════════════════════════════════════════════════════════

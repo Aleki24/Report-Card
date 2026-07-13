@@ -149,7 +149,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                 {/* KCSE best-7 footnote */}
                 {showExclusions && (
                     <Text style={{ fontSize: 6.5, color: GRAY_700, marginTop: 3, paddingHorizontal: 4, fontStyle: 'italic' }}>
-                        * Points count {includedCount} subjects (KCSE 8-4-4): English, Kiswahili &amp; Mathematics, the best 2 sciences, the best humanity, and the best of the remaining subjects. Starred subjects are shown but not counted toward points.
+                        * Points count {includedCount} subjects (KCSE 8-4-4): English, Kiswahili &amp; Mathematics, the best 2 sciences, the best humanity and the best technical. Starred subjects are shown but not counted toward points.
                     </Text>
                 )}
             </View>
