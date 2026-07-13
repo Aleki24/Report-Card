@@ -9,15 +9,24 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
     const userId = clerkAuth.userId;
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
+    const { data: userProfile, error: userError } = await supabase
         .from('users')
         .select('role, school_id')
         .eq('id', userId)
         .maybeSingle();
 
-    if (!userProfile) return null;
-    if (userProfile.role !== 'STUDENT') return null;
-    if (!userProfile.school_id) return null;
+    if (!userProfile) {
+        console.error('[getCurrentStudent] no users row for id', userId, userError);
+        return null;
+    }
+    if (userProfile.role !== 'STUDENT') {
+        console.error('[getCurrentStudent] role is not STUDENT', userId, userProfile.role);
+        return null;
+    }
+    if (!userProfile.school_id) {
+        console.error('[getCurrentStudent] users.school_id is null', userId);
+        return null;
+    }
 
     const schoolId = userProfile.school_id;
 
@@ -40,7 +49,10 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
         .eq('users.school_id', schoolId)
         .maybeSingle();
 
-    if (error || !data) return null;
+    if (error || !data) {
+        console.error('[getCurrentStudent] no students row for id', userId, 'schoolId', schoolId, error);
+        return null;
+    }
 
     const user = data.users as any;
 
