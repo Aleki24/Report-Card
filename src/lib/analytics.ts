@@ -139,10 +139,11 @@ export interface AggregateResult {
 }
 
 export function aggregateStudentPerformance(
-    marks: ExamMarkWithDetails[], 
-    scales?: GradingScale[], 
+    marks: ExamMarkWithDetails[],
+    scales?: GradingScale[],
     gradingSystemType?: 'KCSE' | 'CBC',
-    subjectNames?: Record<string, string>
+    subjectNames?: Record<string, string>,
+    subjectCategories?: Record<string, string>
 ): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
@@ -158,7 +159,8 @@ export function aggregateStudentPerformance(
     if (isKCSE && subjectNames && Object.keys(subjectNames).length > 0) {
         const marksWithNames: MarkWithSubjectName[] = marks.map(m => ({
             ...m,
-            subjectName: subjectNames[m.subject_id] || ''
+            subjectName: subjectNames[m.subject_id] || '',
+            category: (subjectCategories?.[m.subject_id] as SubjectCategory) || undefined
         }));
         
         // Fix: always run select844Subjects; the function handles <8 subjects internally
@@ -427,9 +429,20 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     const marksWithCategory = marks.map(m => {
         // Use user-selected grade_symbol for points, not percentage-based
         const pts = getPointsFromGrade((m as any).grade_symbol || '');
+        // Prefer the school's own subjects.category (set by the admin when the
+        // subject was created) over guessing from subjectName. Name-matching
+        // breaks whenever a subject is stored under a KNEC code or abbreviation
+        // (e.g. "312", "CHEM_SS") rather than a descriptive word, which silently
+        // defaults every such subject to TECHNICAL and defeats the compulsory-
+        // subject/best-2-sciences rules entirely. CREATIVE (elective) subjects
+        // fold into the TECHNICAL bucket for selection purposes, same as before.
+        const dbCategory = m.category as string | undefined;
+        const category: SubjectCategory = dbCategory === 'CREATIVE'
+            ? 'TECHNICAL'
+            : (dbCategory as SubjectCategory) || identifySubjectCategory(m.subjectName || '');
         return {
             ...m,
-            category: identifySubjectCategory(m.subjectName || ''),
+            category,
             points: pts,
         };
     });
@@ -470,14 +483,31 @@ export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingS
     
     // If still under 7, fill with extra technicals only (not dropped sciences/humanities)
     const extraTechnicals = sortByPointsDesc(technicals).slice(1);
-    
+
     for (const m of extraTechnicals) {
         if (!selected.includes(m) && selected.length < 7) {
             selected.push(m);
         }
     }
-    
-    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', selected.length, 'Categories:', selected.map(s => `${s.subjectName}(${s.points})`).join(', '));
-    
-    return selected;
+
+    // Defensive cap: languages/mathematics are pushed unconditionally above
+    // (steps 1-2), so a student with e.g. 3 language subjects (not just the
+    // standard English/Kiswahili pair) can push the total past 7. The KCSE
+    // rule is exactly 7 graded subjects, never more, so if the compulsory
+    // categories alone already exceed 7, trim the lowest-scoring
+    // non-mathematics subjects (mathematics is single-subject and always
+    // compulsory; languages are trimmed before it) until exactly 7 remain.
+    let finalSelected = selected;
+    if (finalSelected.length > 7) {
+        const excess = finalSelected.length - 7;
+        const trimmable = finalSelected
+            .filter(m => m.category !== 'MATHEMATICS')
+            .sort((a, b) => (a.points ?? 0) - (b.points ?? 0))
+            .slice(0, excess);
+        finalSelected = finalSelected.filter(m => !trimmable.includes(m));
+    }
+
+    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', finalSelected.length, 'Categories:', finalSelected.map(s => `${s.subjectName}(${s.points})`).join(', '));
+
+    return finalSelected;
 }

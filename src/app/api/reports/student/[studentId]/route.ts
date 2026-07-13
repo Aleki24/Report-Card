@@ -296,11 +296,16 @@ export async function GET(
 
         // 5. Map to analytics interface and calculate performance
         const subjectNamesMap: Record<string, string> = {};
+        const subjectCategoriesMap: Record<string, string> = {};
         const mappedMarks: ExamMarkWithDetails[] = safeMarks.map((m: any) => {
             const subjId = m.exams.subjects?.id || '';
             const subjName = m.exams.subjects?.name || '';
+            const subjCategory = m.exams.subjects?.category || '';
             if (subjId && subjName) {
                 subjectNamesMap[subjId] = subjName;
+            }
+            if (subjId && subjCategory) {
+                subjectCategoriesMap[subjId] = subjCategory;
             }
             return {
                 id: m.id,
@@ -315,7 +320,7 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
