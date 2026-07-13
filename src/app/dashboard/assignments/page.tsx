@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { Plus, Search, Edit3, Trash2, Briefcase, Eye, FileText, ClockAlert } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Plus, Search, Edit3, Trash2, Eye, FileText, ClockAlert, Paperclip, X } from 'lucide-react';
+import { toast } from 'sonner';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
@@ -68,6 +69,9 @@ export default function AssignmentsPage() {
     const [formDueDate, setFormDueDate] = useState('');
     const [formDesc, setFormDesc] = useState('');
     const [formFileUrl, setFormFileUrl] = useState('');
+    const [formFile, setFormFile] = useState<File | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const fetchAssignments = async () => {
         try {
@@ -125,6 +129,7 @@ export default function AssignmentsPage() {
         setFormDueDate('');
         setFormDesc('');
         setFormFileUrl('');
+        setFormFile(null);
         setShowModal(true);
     };
 
@@ -136,44 +141,60 @@ export default function AssignmentsPage() {
         setFormDueDate(a.dueDate.split('T')[0]);
         setFormDesc(a.description || '');
         setFormFileUrl(a.fileUrl || '');
+        setFormFile(null);
         setShowModal(true);
+    };
+
+    const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { toast.error('File must be less than 10MB.'); return; }
+        setFormFile(file);
     };
 
     const handleSave = async () => {
         if (!formTitle || !formSubject || !formDueDate) return;
         setSaving(true);
         try {
+            let fileUrl = formFileUrl;
+            if (formFile) {
+                setUploading(true);
+                const fd = new FormData();
+                fd.append('file', formFile);
+                const uploadRes = await fetch('/api/school/upload', { method: 'POST', body: fd });
+                const uploadJson = await uploadRes.json();
+                setUploading(false);
+                if (!uploadRes.ok || !uploadJson.url) {
+                    toast.error(uploadJson.error || 'File upload failed');
+                    setSaving(false);
+                    return;
+                }
+                fileUrl = uploadJson.url;
+            }
+
+            const payload = JSON.stringify({
+                title: formTitle,
+                subject_id: formSubject,
+                grade_stream_id: formStream || null,
+                due_date: formDueDate,
+                description: formDesc || null,
+                file_url: fileUrl || null,
+            });
+
             if (editing) {
                 await fetch(`/api/school/assignments/${editing.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: formTitle,
-                        subject_id: formSubject,
-                        grade_stream_id: formStream || null,
-                        due_date: formDueDate,
-                        description: formDesc || null,
-                        file_url: formFileUrl || null,
-                    }),
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: payload,
                 });
             } else {
                 await fetch('/api/school/assignments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: formTitle,
-                        subject_id: formSubject,
-                        grade_stream_id: formStream || null,
-                        due_date: formDueDate,
-                        description: formDesc || null,
-                        file_url: formFileUrl || null,
-                    }),
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
                 });
             }
             setShowModal(false);
             await fetchAssignments();
         } catch (err) {
             console.error('Save failed:', err);
+            toast.error('Failed to save assignment');
         }
         setSaving(false);
     };
@@ -233,7 +254,7 @@ export default function AssignmentsPage() {
             {/* Stats Grid */}
             <div className="mb-6 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 <StatCard label="Total" value={stats.total} sub="All assignments" icon={FileText} />
-                <StatCard label="Upcoming" value={stats.upcoming} sub="Not yet due" icon={ClockAlert} iconClassName="bg-blue-500/10 text-blue-500" />
+                <StatCard label="Upcoming" value={stats.upcoming} sub="Not yet due" icon={ClockAlert} iconClassName="bg-[color-mix(in_srgb,var(--viz-info)_10%,transparent)] text-[color:var(--viz-info)]" />
                 <StatCard label="Overdue" value={stats.overdue} sub="Past due date" icon={ClockAlert} iconClassName="bg-destructive/10 text-destructive" />
             </div>
 
@@ -277,7 +298,14 @@ export default function AssignmentsPage() {
                                 return (
                                     <tr key={a.id}>
                                         <td data-label="Title" className="font-semibold">
-                                            <div>{a.title}</div>
+                                            <div className="flex items-center gap-1.5">
+                                                {a.title}
+                                                {a.fileUrl && (
+                                                    <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" title="View attachment" className="text-muted-foreground hover:text-primary">
+                                                        <Paperclip size={12} />
+                                                    </a>
+                                                )}
+                                            </div>
                                             {a.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xs">{a.description}</div>}
                                         </td>
                                         <td data-label="Subject">{a.subject}</td>
@@ -330,13 +358,39 @@ export default function AssignmentsPage() {
                         <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={3} placeholder="Assignment description..." className="input-field w-full resize-y" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">File URL (optional)</label>
-                        <input type="url" value={formFileUrl} onChange={e => setFormFileUrl(e.target.value)} placeholder="https://..." className="input-field w-full" />
+                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Attachment (optional)</label>
+                        <input ref={fileInputRef} type="file" onChange={handleFilePick} className="hidden" />
+                        {formFile ? (
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
+                                <span className="flex min-w-0 items-center gap-2 truncate">
+                                    <Paperclip size={14} className="shrink-0 text-muted-foreground" />
+                                    <span className="truncate">{formFile.name}</span>
+                                </span>
+                                <button type="button" className="btn-icon shrink-0" onClick={() => { setFormFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} title="Remove">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ) : formFileUrl ? (
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
+                                <a href={formFileUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 truncate text-primary hover:underline">
+                                    <Paperclip size={14} className="shrink-0" />
+                                    <span className="truncate">Current attachment</span>
+                                </a>
+                                <button type="button" className="btn-icon shrink-0" onClick={() => setFormFileUrl('')} title="Remove">
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button type="button" className="btn-secondary w-full justify-center" onClick={() => fileInputRef.current?.click()}>
+                                <Paperclip size={14} /> Attach a file
+                            </button>
+                        )}
+                        <p className="mt-1 text-[11px] text-muted-foreground">PDF, image, or document, up to 10MB.</p>
                     </div>
                     <div className="mt-2 flex justify-end gap-2">
                         <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
                         <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                            {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                            {uploading ? 'Uploading...' : saving ? 'Saving...' : editing ? 'Update' : 'Create'}
                         </button>
                     </div>
                 </div>
@@ -368,7 +422,7 @@ export default function AssignmentsPage() {
                                     </a>
                                 )}
                                 {sub.grade != null ? (
-                                    <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm">
+                                    <div className="mt-2 rounded-lg px-3 py-2 text-sm" style={{ background: 'color-mix(in srgb, var(--viz-good) 10%, transparent)' }}>
                                         <strong>Grade:</strong> {sub.grade}%{sub.feedback && <span> &middot; Feedback: {sub.feedback}</span>}
                                     </div>
                                 ) : (
