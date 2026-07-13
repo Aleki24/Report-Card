@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest) {
         .from('users')
         .select('id, first_name, last_name, email, phone, role, is_active, created_at, avatar_url')
         .eq('school_id', schoolId)
-        .in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'TEACHER'])
+        .in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'])
         .order('created_at', { ascending: false }),
       supabase
         .from('academic_years')

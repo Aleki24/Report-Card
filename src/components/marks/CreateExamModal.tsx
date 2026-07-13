@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
+import { getCategoryLabel, getCategoryOrder } from '@/lib/analytics';
 import {
   PaperSchemeEditor,
   DEFAULT_SCHEME_DRAFT,
@@ -89,10 +90,26 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
 
   useEffect(() => { fetchDropdowns(); }, [fetchDropdowns]);
   useEffect(() => { setSelectedTermId(''); }, [selectedAcademicYearId]);
-  useEffect(() => { setSelectedStreamId(''); }, [selectedGradeId]);
+  useEffect(() => {
+    setSelectedStreamId('');
+    if (!preselectedSubjectId) setSelectedSubjectId('');
+  }, [selectedGradeId, preselectedSubjectId]);
 
   const filteredTerms = allTerms.filter(t => t.academic_year_id === selectedAcademicYearId);
   const filteredStreams = allStreams.filter(s => s.grade_id === selectedGradeId);
+
+  // Only show subjects that belong to the selected grade's curriculum (CBC vs 8-4-4 etc.),
+  // grouped by category so the picker isn't one long alphabetical scroll.
+  const selectedGrade = grades.find(g => g.id === selectedGradeId);
+  const subjectsForGrade = selectedGrade
+    ? subjects.filter(s => s.academic_level_id === selectedGrade.academic_level_id)
+    : subjects;
+  const subjectsByCategory = subjectsForGrade.reduce<Record<string, SubjectItem[]>>((acc, s) => {
+    const cat = s.category || 'TECHNICAL';
+    (acc[cat] ||= []).push(s);
+    return acc;
+  }, {});
+  const orderedCategories = Object.keys(subjectsByCategory).sort((a, b) => getCategoryOrder(a) - getCategoryOrder(b));
 
   const quickAdd = async (type: string, payload: Record<string, unknown>) => {
     setQuickSaving(true);
@@ -150,10 +167,10 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const handleCreateExam = async () => {
     setSaveMessage(null);
     if (!examName.trim()) return setSaveMessage({ type: 'error', text: 'Exam name is required.' });
-    if (!selectedSubjectId) return setSaveMessage({ type: 'error', text: 'Please select a subject.' });
     if (!selectedAcademicYearId) return setSaveMessage({ type: 'error', text: 'Please select an academic year.' });
     if (!selectedTermId) return setSaveMessage({ type: 'error', text: 'Please select a term.' });
     if (!selectedGradeId) return setSaveMessage({ type: 'error', text: 'Please select a grade.' });
+    if (!selectedSubjectId) return setSaveMessage({ type: 'error', text: 'Please select a subject.' });
     if (!examDate) return setSaveMessage({ type: 'error', text: 'Please set an exam date.' });
     if (maxScore <= 0) return setSaveMessage({ type: 'error', text: 'Max score must be greater than 0.' });
     const schemeError = validateSchemeDraft(schemeDraft);
@@ -249,58 +266,6 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
               </div>
             </div>
 
-            {/* Subject */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-muted-foreground">Subject *</label>
-                {!preselectedSubjectId && (
-                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
-                    {addingSubject ? '✕ Cancel' : '+ Add'}
-                  </button>
-                )}
-              </div>
-              {preselectedSubjectId && subjects.find(s => s.id === preselectedSubjectId) ? (
-                <div className="input-field w-full bg-muted cursor-not-allowed opacity-80">
-                  {subjects.find(s => s.id === preselectedSubjectId)?.name} ({subjects.find(s => s.id === preselectedSubjectId)?.code})
-                </div>
-              ) : !addingSubject ? (
-                subjects.length === 0 ? (
-                  <p className="text-xs text-orange-400">No subjects found. Click <strong>+ Add</strong> above.</p>
-                ) : (
-                  <select className="input-field w-full" value={selectedSubjectId} onChange={e => setSelectedSubjectId(e.target.value)}>
-                    <option value="">-- Select Subject --</option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                  </select>
-                )
-              ) : null}
-              {addingSubject && !preselectedSubjectId && (
-                <div className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
-                  <div className="flex gap-2">
-                    <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
-                    <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
-                  </div>
-                  <div className="flex gap-2">
-                    <select className="input-field flex-1 text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
-                      <option value="">-- Select Academic Level --</option>
-                      {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
-                    </select>
-                    <select className="input-field w-28 text-xs" value={qSubject.subject_type} onChange={e => setQSubject(p => ({ ...p, subject_type: e.target.value }))}>
-                      <option value="CORE">Core</option>
-                      <option value="ESSENTIAL">Essential</option>
-                      <option value="OPTIONAL">Optional</option>
-                    </select>
-                  </div>
-                  <select className="input-field w-full text-xs" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>
-                    <option value="">-- Grading System (Optional) --</option>
-                    {gradingSystems.filter(gs => gs.academic_level_id === qSubject.academic_level_id).map(gs => <option key={gs.id} value={gs.id}>{gs.name}</option>)}
-                  </select>
-                  <button type="button" onClick={handleQuickAddSubject} className="btn-primary text-xs py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
-                    {quickSaving ? '...' : '✓ Save Subject'}
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Academic Year + Term */}
             <div className="flex gap-4">
               <div className="flex-1">
@@ -394,6 +359,64 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                   </form>
                 )}
               </div>
+            </div>
+
+            {/* Subject — filtered to the selected grade's curriculum, grouped by category */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-muted-foreground">Subject *</label>
+                {!preselectedSubjectId && (
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setAddingSubject(!addingSubject)}>
+                    {addingSubject ? '✕ Cancel' : '+ Add'}
+                  </button>
+                )}
+              </div>
+              {preselectedSubjectId && subjects.find(s => s.id === preselectedSubjectId) ? (
+                <div className="input-field w-full bg-muted cursor-not-allowed opacity-80">
+                  {subjects.find(s => s.id === preselectedSubjectId)?.name} ({subjects.find(s => s.id === preselectedSubjectId)?.code})
+                </div>
+              ) : !addingSubject ? (
+                !selectedGradeId ? (
+                  <p className="text-xs text-muted-foreground">Select a grade first to load its subjects.</p>
+                ) : subjectsForGrade.length === 0 ? (
+                  <p className="text-xs text-orange-400">No subjects found for this grade. Click <strong>+ Add</strong> above.</p>
+                ) : (
+                  <select className="input-field w-full" value={selectedSubjectId} onChange={e => setSelectedSubjectId(e.target.value)}>
+                    <option value="">-- Select Subject --</option>
+                    {orderedCategories.map(cat => (
+                      <optgroup key={cat} label={getCategoryLabel(cat)}>
+                        {subjectsByCategory[cat].map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                )
+              ) : null}
+              {addingSubject && !preselectedSubjectId && (
+                <div className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
+                  <div className="flex gap-2">
+                    <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
+                    <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                  </div>
+                  <div className="flex gap-2">
+                    <select className="input-field flex-1 text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
+                      <option value="">-- Select Academic Level --</option>
+                      {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+                    </select>
+                    <select className="input-field w-28 text-xs" value={qSubject.subject_type} onChange={e => setQSubject(p => ({ ...p, subject_type: e.target.value }))}>
+                      <option value="CORE">Core</option>
+                      <option value="ESSENTIAL">Essential</option>
+                      <option value="OPTIONAL">Optional</option>
+                    </select>
+                  </div>
+                  <select className="input-field w-full text-xs" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>
+                    <option value="">-- Grading System (Optional) --</option>
+                    {gradingSystems.filter(gs => gs.academic_level_id === qSubject.academic_level_id).map(gs => <option key={gs.id} value={gs.id}>{gs.name}</option>)}
+                  </select>
+                  <button type="button" onClick={handleQuickAddSubject} className="btn-primary text-xs py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
+                    {quickSaving ? '...' : '✓ Save Subject'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Max Score + Date */}

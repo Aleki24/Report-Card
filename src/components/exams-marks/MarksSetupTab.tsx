@@ -334,28 +334,26 @@ export function MarksSetupTab() {
           </div>
 
           {!loadingExams && availableExamTypes.length === 0 ? (
-            // No exams yet — show initialization panel for admin
+            // No exams yet — one clear primary action for admin
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-4">
               <p className="text-sm mb-3 text-muted-foreground">
-                No exams initialized for <strong>{selectedTermName}</strong>.
-                {profile?.role === 'ADMIN'
-                  ? ' Select which exam types to create:'
-                  : ' Ask your admin to initialize exams for this term.'}
+                No exams set up yet for <strong>{selectedTermName}</strong>.
+                {profile?.role !== 'ADMIN' && ' Ask your admin to set up exams for this term.'}
               </p>
               {profile?.role === 'ADMIN' && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-3">
                   <button onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary text-xs px-4 py-2">
-                    {seeding ? 'Creating...' : '🔧 Create Standard (Opener + Midterm + Endterm)'}
+                    {seeding ? 'Setting up...' : '🔧 Set Up This Term’s Exams'}
                   </button>
-                  <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="btn-secondary text-xs px-4 py-2">
-                    {seeding ? 'Creating...' : '📦 Create All Types'}
+                  <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="text-xs text-primary hover:underline">
+                    Need every exam type instead?
                   </button>
                 </div>
               )}
             </div>
           ) : !loadingExams ? (
             // Show available exam types as clickable buttons
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {availableExamTypes.map(et => {
                 const count = exams.filter(e => e.exam_type === et.code).length;
                 const isActive = selectedExamType === et.code;
@@ -374,44 +372,42 @@ export function MarksSetupTab() {
                 );
               })}
 
-              {/* Admin can add more exam types */}
+              {/* Admin: one compact menu for the less-common exam-setup actions */}
               {profile?.role === 'ADMIN' && (
-                <>
-                  <div className="relative group">
-                    <button className="cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
-                      + Add Type
+                <div className="relative group">
+                  <button
+                    className="cursor-pointer rounded-xl border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                    title="More exam setup options"
+                  >
+                    ⚙️ More
+                  </button>
+                  <div className="absolute top-full left-0 z-50 mt-1 hidden min-w-[220px] rounded-xl border border-border bg-popover p-2 shadow-lg group-hover:block">
+                    {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
+                      <button
+                        key={et.code}
+                        onClick={() => handleSeedExams([et.code])}
+                        disabled={seeding}
+                        className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                      >
+                        + {et.icon} {et.name}
+                        <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => handleSeedExams(Array.from(existingTypes))}
+                      disabled={seeding}
+                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      {seeding ? 'Working...' : '🔄 Add exams for any new subjects'}
                     </button>
-                    <div className="absolute top-full left-0 z-50 mt-1 hidden min-w-[200px] rounded-xl border border-border bg-popover p-2 shadow-lg group-hover:block">
-                      {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
-                        <button
-                          key={et.code}
-                          onClick={() => handleSeedExams([et.code])}
-                          disabled={seeding}
-                          className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        >
-                          {et.icon} {et.name}
-                          <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
-                        </button>
-                      ))}
-                    </div>
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      + Create one exam manually
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleSeedExams(Array.from(existingTypes))}
-                    disabled={seeding}
-                    className="cursor-pointer rounded-xl border border-border/70 bg-card/70 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                    title="Generate exams for newly added subjects"
-                  >
-                    {seeding ? 'Syncing...' : '🔄 Sync Missing'}
-                  </button>
-
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex cursor-pointer items-center gap-1 rounded-xl border border-dashed border-primary/40 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                    title="Manually create a single spontaneous exam (e.g. for a specific class)"
-                  >
-                    + Single Exam
-                  </button>
-                </>
+                </div>
               )}
             </div>
           ) : null}
@@ -424,7 +420,7 @@ export function MarksSetupTab() {
         </div>
       )}
 
-      {/* ═══ STEP 3: Select Class (loads only that class's subjects) ═══ */}
+      {/* ═══ STEP 3: Class & Subject (one step — pick a class, its subjects load right below) ═══ */}
       {selectedExamType && (
         <div className="card mb-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
@@ -458,63 +454,59 @@ export function MarksSetupTab() {
               </span>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ═══ STEP 4: Select Subject (only the chosen class's subjects) ═══ */}
-      {selectedExamType && filterGradeId && (
-        <div className="card mb-4 p-5">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>④ Subject</label>
-            <span className="text-xs text-muted-foreground">
-              {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class
-            </span>
-          </div>
-          {subjects.length === 0 ? (
-            <p className="text-xs text-orange-400">
-              {selectedLevelId || filterGradeId
-                ? 'No subjects found for the selected level/grade. Try widening your filter.'
-                : 'No subjects found for this exam type.'}
-            </p>
-          ) : (
-            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-              {subjects.map(s => {
-                const isActive = selectedSubjectId === s.subject_id;
-                const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
-                return (
-                  <div
-                    key={s.subject_id}
-                    className={`rounded-xl border p-3 transition-all ${isActive
-                      ? 'border-primary/60 bg-primary/10'
-                      : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-sm">{s.subject_name}</span>
-                      <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
-                    </div>
-                    {s.subject_category && (
-                      <span className="mb-2 block text-[10px] text-muted-foreground">{s.subject_category}</span>
-                    )}
-                    {hasExams ? (
-                      <button
-                        onClick={() => setSelectedSubjectId(s.subject_id)}
-                        className="btn-primary text-[10px] px-2 py-1"
+          {filterGradeId && (
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — pick one to enter marks
+                </span>
+              </div>
+              {subjects.length === 0 ? (
+                <p className="text-xs text-orange-400">
+                  No subjects found for the selected level/grade. Try widening your filter.
+                </p>
+              ) : (
+                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                  {subjects.map(s => {
+                    const isActive = selectedSubjectId === s.subject_id;
+                    const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
+                    return (
+                      <div
+                        key={s.subject_id}
+                        className={`rounded-xl border p-3 transition-all ${isActive
+                          ? 'border-primary/60 bg-primary/10'
+                          : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
                       >
-                        Select & Enter Marks
-                      </button>
-                    ) : profile?.role === 'ADMIN' ? (
-                      <button
-                        onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
-                        className="btn-secondary text-[10px] px-2 py-1"
-                      >
-                        + Create Exam
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
-                    )}
-                  </div>
-                );
-              })}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-sm">{s.subject_name}</span>
+                          <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
+                        </div>
+                        {s.subject_category && (
+                          <span className="mb-2 block text-[10px] text-muted-foreground">{s.subject_category}</span>
+                        )}
+                        {hasExams ? (
+                          <button
+                            onClick={() => setSelectedSubjectId(s.subject_id)}
+                            className="btn-primary text-[10px] px-2 py-1"
+                          >
+                            Select & Enter Marks
+                          </button>
+                        ) : profile?.role === 'ADMIN' ? (
+                          <button
+                            onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
+                            className="btn-secondary text-[10px] px-2 py-1"
+                          >
+                            + Create Exam
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

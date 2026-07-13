@@ -80,16 +80,18 @@ export async function POST(request: Request) {
             }
         }
 
-        // 3. Fetch term & year names
-        const [{ data: termData }, { data: yearData }, { data: streamData }] = await Promise.all([
+        // 3. Fetch term, year, stream & school names
+        const [{ data: termData }, { data: yearData }, { data: streamData }, { data: schoolData }] = await Promise.all([
             supabase.from('terms').select('name').eq('id', termId).maybeSingle(),
             supabase.from('academic_years').select('name').eq('id', academicYearId).maybeSingle(),
             supabase.from('grade_streams').select('full_name').eq('id', gradeStreamId).maybeSingle(),
+            schoolId ? supabase.from('schools').select('name').eq('id', schoolId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
 
         const termName = termData?.name || 'Term';
         const yearName = yearData?.name || '';
         const streamName = streamData?.full_name || '';
+        const schoolName = schoolData?.name || 'School';
 
         // 4. Fetch exam marks for these students in this term
         const { data: marks } = await supabase
@@ -149,7 +151,7 @@ export async function POST(request: Request) {
             const rank = report?.rank || '-';
             const rankStr = totalInClass ? `${rank}/${totalInClass}` : `${rank}`;
 
-            let message = `Sathya Student Results`;
+            let message = `${schoolName} Student Results`;
             message += `\n${studentName} - ${streamName}`;
             message += `\n${termName} ${yearName}`;
             if (subjectLines.length > 0) {

@@ -27,7 +27,7 @@ interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
 export default function ReportsPage() {
-  const { profile, availableRoles } = useAuth();
+  const { profile, availableRoles, schoolName } = useAuth();
   const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
 
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
@@ -243,7 +243,7 @@ export default function ReportsPage() {
     setSendingSMS(false);
   };
 
-  const smsMessagePreview = `MATOKEO Results: [Student Name]\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''} - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''}\nAvg: 78.5% | Grade: B+ | Rank: 5/40\nMath 85 | Eng 72 | Sci 80 | ...`;
+  const smsMessagePreview = `${schoolName || 'Your School'} Student Results\n[Student Name] - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || 'Class'}\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''}\nMath: 85% (A) | Eng: 72% (B+) | Sci: 80% (A-) | ...\nAvg: 78.5% | Grade: B+ | Rank: 5/40`;
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">

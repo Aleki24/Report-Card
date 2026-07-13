@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'teachers': {
-        const usersRes = await supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'TEACHER']).order('created_at', { ascending: false });
+        const usersRes = await supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER']).order('created_at', { ascending: false });
         if (usersRes.error) return NextResponse.json({ error: usersRes.error.message }, { status: 400 });
 
         const teachers = usersRes.data || [];
