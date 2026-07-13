@@ -148,7 +148,7 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
 
                 {showExclusions && (
                     <Text style={{ fontSize: 6.5, color: GRAY, marginTop: 3, fontStyle: 'italic' }}>
-                        * Points count {includedCount} subjects (KCSE 8-4-4): English, Kiswahili &amp; Mathematics, the best 2 sciences, the best humanity, and the best of the remaining subjects. Starred subjects are shown but not counted toward points.
+                        * Points count {includedCount} subjects (KCSE 8-4-4): English, Kiswahili &amp; Mathematics, the best 2 sciences, the best humanity and the best technical. Starred subjects are shown but not counted toward points.
                     </Text>
                 )}
 
