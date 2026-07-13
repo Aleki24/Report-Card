@@ -386,7 +386,7 @@ export default function AttendancePage() {
     : 0;
 
   return (
-    <div style={{ maxWidth: 1120, margin: '0 auto', paddingBottom: 80 }}>
+    <div className="pb-24 md:pb-20" style={{ maxWidth: 1120, margin: '0 auto' }}>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--foreground)', margin: '0 0 2px', letterSpacing: '-0.03em' }}>
           Attendance
@@ -658,24 +658,28 @@ export default function AttendancePage() {
         </>
       )}
 
-      {/* ── Fixed Save Bar ────────────────────────────── */}
+      {/* ── Fixed Save Bar ─────────────────────────────
+          Sits above the mobile bottom nav (which is also fixed to the
+          viewport bottom) so the two don't stack on top of each other
+          and swallow the space needed to reach nav items below. */}
       {selectedStreamId && students.length > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 50,
-          background: 'var(--card)',
-          borderTop: '1px solid var(--border)',
-          padding: '10px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          boxShadow: hasPendingChanges ? '0 -4px 20px rgba(0,0,0,0.08)' : 'none',
-          transition: 'box-shadow 0.2s',
-        }}>
+        <div
+          className="bottom-[calc(64px+env(safe-area-inset-bottom))] md:bottom-0"
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            zIndex: 40,
+            background: 'var(--card)',
+            borderTop: '1px solid var(--border)',
+            padding: '10px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            boxShadow: hasPendingChanges ? '0 -4px 20px rgba(0,0,0,0.08)' : 'none',
+            transition: 'box-shadow 0.2s',
+          }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
               {students.length} student{students.length !== 1 ? 's' : ''}

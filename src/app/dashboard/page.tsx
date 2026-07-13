@@ -505,11 +505,13 @@ function SideRail({ data }: { data: DashboardData | null }) {
       </div>
 
       {/* Announcements */}
-      <Link href="/dashboard/announcements" className="bg-primary text-primary-foreground rounded-xl px-4 py-3 flex items-center gap-3 font-semibold hover:opacity-90 transition-opacity shadow-sm no-underline">
-        <Bell size={18} />
-        <span className="text-sm">Announcements</span>
+      <Link href="/dashboard/announcements" className="bg-primary text-primary-foreground rounded-2xl px-4 py-3.5 flex items-center gap-3 font-semibold hover:opacity-90 transition-opacity shadow-sm no-underline">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
+          <Bell size={16} />
+        </span>
+        <span className="text-sm leading-none">Announcements</span>
         {(data?.announcementsLast7Days ?? 0) > 0 && (
-          <span className="ml-auto bg-white/25 text-white text-[11px] font-bold rounded-full px-2 py-0.5">{data?.announcementsLast7Days}</span>
+          <span className="ml-auto shrink-0 bg-white/25 text-white text-[11px] font-bold rounded-full px-2 py-0.5 leading-none">{data?.announcementsLast7Days}</span>
         )}
       </Link>
     </>
