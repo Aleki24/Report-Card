@@ -53,6 +53,7 @@ export function MarksSetupTab() {
   const [showPaperModal, setShowPaperModal] = useState(false);
   const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
   const [examScheme, setExamScheme] = useState<ExamSubjectComponentScheme | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null); // subject group currently open
 
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
@@ -177,6 +178,38 @@ export function MarksSetupTab() {
 
   const subjects = [...subjectMap.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name));
 
+  // Group the (already class-filtered) subjects by category for display
+  const CATEGORY_ORDER: Record<string, number> = {
+    LANGUAGE: 1, MATHEMATICS: 2, SCIENCE: 3, HUMANITY: 4, TECHNICAL: 5, CREATIVE: 6,
+  };
+  const CATEGORY_LABELS: Record<string, string> = {
+    LANGUAGE: '🗣️ Languages',
+    MATHEMATICS: '🔢 Mathematics',
+    SCIENCE: '🔬 Sciences',
+    HUMANITY: '🌍 Humanities',
+    TECHNICAL: '🛠️ Technical & Applied',
+    CREATIVE: '🎨 Creative Arts & Sports',
+    OTHER: '📦 Other Subjects',
+  };
+  const subjectGroups: [string, ExamSlot[]][] = (() => {
+    const map = new Map<string, ExamSlot[]>();
+    for (const s of subjects) {
+      const cat = (s.subject_category || 'OTHER').toUpperCase();
+      const key = CATEGORY_ORDER[cat] ? cat : 'OTHER';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    return [...map.entries()].sort(
+      (a, b) => (CATEGORY_ORDER[a[0]] || 99) - (CATEGORY_ORDER[b[0]] || 99)
+    );
+  })();
+
+  // With a single group there's nothing to choose — open it directly
+  const effectiveExpandedCategory = subjectGroups.length === 1 ? subjectGroups[0][0] : expandedCategory;
+
+  // The chosen subject (collapses the picker once set)
+  const selectedSubjectSlot = subjects.find(s => s.subject_id === selectedSubjectId);
+
 
 
   // Find selected exam manually from selectedExamId
@@ -200,6 +233,11 @@ export function MarksSetupTab() {
     // If the level changes, clear the selected exam ID
     setSelectedExamId('');
   }, [selectedLevelId]);
+
+  // Close any open subject group when the exam type or class changes
+  useEffect(() => {
+    setExpandedCategory(null);
+  }, [selectedExamType, filterGradeId]);
 
   // ── Fewer clicks: auto-select when there's only one choice ──
   // Only one exam type in the term → select it
@@ -455,11 +493,29 @@ export function MarksSetupTab() {
             )}
           </div>
 
-          {filterGradeId && (
+          {filterGradeId && selectedSubjectSlot && (
+            /* A subject is chosen: collapse the picker to a single chip + change */
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-medium text-muted-foreground">④ Subject</span>
+                <span className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-1.5 text-sm font-semibold">
+                  {selectedSubjectSlot.subject_name}
+                  <span className="ml-2 font-mono text-[10px] font-normal text-muted-foreground">{selectedSubjectSlot.subject_code}</span>
+                </span>
+                <button
+                  onClick={() => { setSelectedSubjectId(''); setSelectedExamId(''); }}
+                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground transition-all hover:bg-muted"
+                >
+                  ↺ Change subject
+                </button>
+              </div>
+            </div>
+          )}
+          {filterGradeId && !selectedSubjectSlot && (
             <div className="mt-4 border-t border-border/60 pt-4">
               <div className="flex flex-wrap items-center gap-3 mb-3">
                 <span className="text-xs font-medium text-muted-foreground">
-                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — pick one to enter marks
+                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — tap a group, then pick the subject
                 </span>
               </div>
               {subjects.length === 0 ? (
@@ -467,42 +523,64 @@ export function MarksSetupTab() {
                   No subjects found for the selected level/grade. Try widening your filter.
                 </p>
               ) : (
-                <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                  {subjects.map(s => {
-                    const isActive = selectedSubjectId === s.subject_id;
-                    const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
+                <div className="flex flex-col gap-2">
+                  {subjectGroups.map(([category, groupSubjects]) => {
+                    const isOpen = effectiveExpandedCategory === category;
                     return (
-                      <div
-                        key={s.subject_id}
-                        className={`rounded-xl border p-3 transition-all ${isActive
-                          ? 'border-primary/60 bg-primary/10'
+                    <div key={category}>
+                      <button
+                        onClick={() => setExpandedCategory(isOpen ? null : category)}
+                        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 transition-all ${isOpen
+                          ? 'border-primary/50 bg-primary/10'
                           : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-sm">{s.subject_name}</span>
-                          <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
-                        </div>
-                        {s.subject_category && (
-                          <span className="mb-2 block text-[10px] text-muted-foreground">{s.subject_category}</span>
-                        )}
-                        {hasExams ? (
-                          <button
-                            onClick={() => setSelectedSubjectId(s.subject_id)}
-                            className="btn-primary text-[10px] px-2 py-1"
-                          >
-                            Select & Enter Marks
-                          </button>
-                        ) : profile?.role === 'ADMIN' ? (
-                          <button
-                            onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
-                            className="btn-secondary text-[10px] px-2 py-1"
-                          >
-                            + Create Exam
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
-                        )}
+                        <span className={`text-sm font-semibold ${isOpen ? 'text-primary' : ''}`}>
+                          {CATEGORY_LABELS[category] || category}
+                        </span>
+                        <span className="rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {groupSubjects.length}
+                        </span>
+                        <span className="ml-auto text-xs text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
+                      </button>
+                      {isOpen && (
+                      <div className="grid gap-2 mt-2 mb-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                        {groupSubjects.map(s => {
+                          const isActive = selectedSubjectId === s.subject_id;
+                          const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
+                          return (
+                            <div
+                              key={s.subject_id}
+                              className={`rounded-xl border p-3 transition-all ${isActive
+                                ? 'border-primary/60 bg-primary/10'
+                                : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-semibold text-sm">{s.subject_name}</span>
+                                <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
+                              </div>
+                              {hasExams ? (
+                                <button
+                                  onClick={() => setSelectedSubjectId(s.subject_id)}
+                                  className="btn-primary text-[10px] px-2 py-1"
+                                >
+                                  Select & Enter Marks
+                                </button>
+                              ) : profile?.role === 'ADMIN' ? (
+                                <button
+                                  onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
+                                  className="btn-secondary text-[10px] px-2 py-1"
+                                >
+                                  + Create Exam
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
+                      )}
+                    </div>
                     );
                   })}
                 </div>
@@ -629,7 +707,7 @@ export function MarksSetupTab() {
       {selectedExamType && filterGradeId && !selectedSubjectId && subjects.length > 0 && (
         <div className="card text-center py-12 text-muted-foreground">
           <p className="text-2xl mb-2">📚</p>
-          <p className="text-sm">Select a subject to enter marks</p>
+          <p className="text-sm">{effectiveExpandedCategory ? 'Select a subject to enter marks' : 'Tap a subject group above to see its subjects'}</p>
         </div>
       )}
       
