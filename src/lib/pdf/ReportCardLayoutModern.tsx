@@ -189,7 +189,7 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                 </View>
                 {showExclusions && (
                     <Text style={{ fontSize: 6.5, color: SLATE_600, marginTop: 3, paddingHorizontal: 4, fontStyle: 'italic' }}>
-                        * Points total reflects the best {includedCount} of {data.subjectMarks.length} subjects (KCSE 8-4-4). Starred subjects are shown but not counted toward points.
+                        * Points count {includedCount} subjects (KCSE 8-4-4): English, Kiswahili &amp; Mathematics, the best 2 sciences, the best humanity, and the best of the remaining subjects. Starred subjects are shown but not counted toward points.
                     </Text>
                 )}
             </View>
