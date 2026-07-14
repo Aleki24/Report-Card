@@ -98,7 +98,7 @@ export default function ReportsPage() {
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
-      const res = await fetch('/api/school/data?type=students'); const json = await res.json();
+      const res = await fetch('/api/school/data?type=students', { cache: 'no-store' }); const json = await res.json();
       const data = (json.data || []) as any[];
       setStudents(selectedGradeStream ? data.filter((s: any) => s.current_grade_stream_id === selectedGradeStream) : data);
     } catch (err) { console.error('Failed to fetch students:', err); }
@@ -216,7 +216,7 @@ export default function ReportsPage() {
     if (!selectedGradeStream) return;
     setLoadingSMSStudents(true);
     try {
-      const res = await fetch('/api/school/data?type=students'); const json = await res.json();
+      const res = await fetch('/api/school/data?type=students', { cache: 'no-store' }); const json = await res.json();
       setSmsStudents(((json.data || []) as any[]).filter((s: any) => s.current_grade_stream_id === selectedGradeStream).map((s: any) => ({
         id: s.id, admission_number: s.admission_number, guardian_phone: s.guardian_phone || null, guardian_name: s.guardian_name || null, users: s.users, selected: !!s.guardian_phone,
       })));
@@ -284,7 +284,7 @@ export default function ReportsPage() {
 
       {showStudentPicker && <StudentPickerModal students={students} filteredStudents={filteredStudents} loading={loadingStudents} search={studentSearch} setSearch={setStudentSearch} onSelect={handleStudentSelect} onClose={() => { setShowStudentPicker(false); setStudentSearch(''); }} />}
 
-      {showSMSModal && <SMSModal onClose={() => { setShowSMSModal(false); setSmsSearch(''); }} smsStudents={smsStudents} filteredSMSStudents={filteredSMSStudents} loadingSMSStudents={loadingSMSStudents} smsSearch={smsSearch} setSmsSearch={setSmsSearch} smsSelectedCount={smsSelectedCount} smsMissingPhoneCount={smsMissingPhoneCount} sendingSMS={sendingSMS} smsResult={smsResult} onToggle={id => setSmsStudents(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s))} onSelectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: !!s.guardian_phone })))} onDeselectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: false })))} onSend={handleSendSMS} messagePreview={smsMessagePreview} />}
+      {showSMSModal && <SMSModal onClose={() => { setShowSMSModal(false); setSmsSearch(''); }} streamLabel={gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''} smsStudents={smsStudents} filteredSMSStudents={filteredSMSStudents} loadingSMSStudents={loadingSMSStudents} smsSearch={smsSearch} setSmsSearch={setSmsSearch} smsSelectedCount={smsSelectedCount} smsMissingPhoneCount={smsMissingPhoneCount} sendingSMS={sendingSMS} smsResult={smsResult} onToggle={id => setSmsStudents(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s))} onSelectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: !!s.guardian_phone })))} onDeselectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: false })))} onSend={handleSendSMS} messagePreview={smsMessagePreview} />}
 
       {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
 
