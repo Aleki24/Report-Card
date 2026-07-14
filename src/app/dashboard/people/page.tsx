@@ -122,6 +122,24 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const stats = { total: data.length, active: data.filter(s => s.status !== 'INACTIVE').length, inactive: data.filter(s => s.status === 'INACTIVE').length, streams: gradeStreams.length };
 
   const handleSave = async () => {
+    // ── Pre-save sanity checks so bad data doesn't silently break SMS later ──
+    // Catch the common mistake of typing the phone number into Guardian Name.
+    const nameTrimmed = (formData.guardian_name || '').trim();
+    const nameLooksLikePhone = nameTrimmed.length > 0
+      && /^[\d\s\-+()]+$/.test(nameTrimmed)
+      && nameTrimmed.replace(/\D/g, '').length >= 7;
+    if (nameLooksLikePhone) {
+      showToast('❌ Guardian Name looks like a phone number — put the number in the Guardian Phone field instead.');
+      return;
+    }
+    // Validate the phone itself so an unusable number is caught at entry, not at SMS time.
+    if (formData.guardian_phone?.trim()) {
+      const digits = formData.guardian_phone.replace(/\D/g, '');
+      if (digits.length < 9 || digits.length > 12) {
+        showToast('❌ Guardian Phone doesn\'t look right. Use a format like 0712345678.');
+        return;
+      }
+    }
     setSaving(true);
     try {
       const method = editing ? 'PATCH' : 'POST';
@@ -312,7 +330,17 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               },
               { key: 'admission_number', header: 'Admission No.', render: s => <span className="font-mono">{s.admission_number}</span> },
               { key: 'class', header: 'Class', render: s => s.grade_stream?.full_name || '—' },
-              { key: 'guardian', header: 'Guardian', render: s => s.guardian_name || '—' },
+              {
+                key: 'guardian', header: 'Guardian',
+                render: s => (
+                  <div>
+                    <div>{s.guardian_name || '—'}</div>
+                    <div className={`text-[11px] ${s.guardian_phone ? 'text-muted-foreground' : 'text-amber-500'}`}>
+                      {s.guardian_phone || 'No phone'}
+                    </div>
+                  </div>
+                ),
+              },
               {
                 key: 'status', header: 'Status',
                 render: s => <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span>,
