@@ -65,6 +65,17 @@ export async function sendSMS(to: string, message: string): Promise<SMSResult> {
         return { success: false, to: phone, error: recipient?.status || 'Unknown error' };
     } catch (err: any) {
         console.error('[SMS] Exception sending to', phone, ':', err.message || err);
+        // A 401/403 from Africa's Talking means the API key/username are wrong,
+        // missing, or the account isn't authorised — not a per-number problem.
+        // Surface that plainly instead of the raw axios "status code 401".
+        const status = err?.response?.status ?? (typeof err?.message === 'string' && /\b40[13]\b/.test(err.message) ? 401 : undefined);
+        if (status === 401 || status === 403) {
+            return {
+                success: false,
+                to: phone,
+                error: 'SMS provider rejected the credentials (check AT_API_KEY / AT_USERNAME). No messages were sent.',
+            };
+        }
         return { success: false, to: phone, error: err.message || 'SMS send failed' };
     }
 }
