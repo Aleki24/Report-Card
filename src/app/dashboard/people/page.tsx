@@ -98,11 +98,11 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       let url = '/api/school/data?type=students';
       const stream = gs ?? gradeStreamFilter;
       if (stream) url += `&grade_stream_id=${stream}`;
-      const [sRes, gsRes] = await Promise.all([fetch(url), fetch('/api/school/data?type=grade_streams')]);
+      const [sRes, gsRes] = await Promise.all([fetch(url, { cache: 'no-store' }), fetch('/api/school/data?type=grade_streams', { cache: 'no-store' })]);
       if (!sRes.ok) { setError('Failed to load students'); return; }
       const [sJson, gsJson] = await Promise.all([sRes.json(), gsRes.json()]);
       setData(sJson.data || []); setGradeStreams(gsJson.data || []);
-      const res = await fetch('/api/admin/academic-structure');
+      const res = await fetch('/api/admin/academic-structure', { cache: 'no-store' });
       if (res.ok) { const j = await res.json(); setAcademicLevels(j.academic_levels || []); }
     } catch { setError('Failed to load data'); }
     finally { setLoading(false); }
@@ -243,7 +243,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const viewStudentDetails = async (id: string) => {
     setViewLoading(true); setViewStudent(null); setViewTab('profile');
     try {
-      const res = await fetch(`/api/school/students/${id}`);
+      const res = await fetch(`/api/school/students/${id}`, { cache: 'no-store' });
       if (!res.ok) throw new Error();
       setViewStudent(await res.json());
     } catch { showToast('Failed to load details'); }
