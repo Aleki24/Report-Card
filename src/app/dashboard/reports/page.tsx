@@ -98,7 +98,7 @@ export default function ReportsPage() {
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
-      const res = await fetch('/api/school/data?type=students'); const json = await res.json();
+      const res = await fetch('/api/school/data?type=students', { cache: 'no-store' }); const json = await res.json();
       const data = (json.data || []) as any[];
       setStudents(selectedGradeStream ? data.filter((s: any) => s.current_grade_stream_id === selectedGradeStream) : data);
     } catch (err) { console.error('Failed to fetch students:', err); }
@@ -216,7 +216,7 @@ export default function ReportsPage() {
     if (!selectedGradeStream) return;
     setLoadingSMSStudents(true);
     try {
-      const res = await fetch('/api/school/data?type=students'); const json = await res.json();
+      const res = await fetch('/api/school/data?type=students', { cache: 'no-store' }); const json = await res.json();
       setSmsStudents(((json.data || []) as any[]).filter((s: any) => s.current_grade_stream_id === selectedGradeStream).map((s: any) => ({
         id: s.id, admission_number: s.admission_number, guardian_phone: s.guardian_phone || null, guardian_name: s.guardian_name || null, users: s.users, selected: !!s.guardian_phone,
       })));
