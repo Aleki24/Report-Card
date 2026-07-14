@@ -447,7 +447,7 @@ export function MarksSetupTab() {
                     ⚙️ More
                   </button>
                   {showMoreMenu && (
-                    <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] rounded-xl border border-border bg-popover p-2 shadow-lg">
+                    <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] max-w-[90vw] max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg">
                       {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
                         <button
                           key={et.code}
