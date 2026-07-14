@@ -22,7 +22,12 @@ export interface SMSResult {
 
 function normalizeKenyanPhone(phone: string): string | null {
     if (!phone) return null;
-    let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+    // Strip everything but digits (and a leading '+') — real guardian_phone
+    // values arrive with all sorts of noise: spaces, dashes, dots, parens,
+    // and spreadsheet artifacts like a leading apostrophe used to keep the
+    // leading zero when pasted from Excel/Sheets.
+    const hasPlus = phone.trim().startsWith('+');
+    let cleaned = (hasPlus ? '+' : '') + phone.replace(/\D/g, '');
     if (cleaned.startsWith('+254')) {
     } else if (cleaned.startsWith('254')) {
         cleaned = '+' + cleaned;

@@ -23,7 +23,7 @@ interface SMSModalProps {
   smsSelectedCount: number;
   smsMissingPhoneCount: number;
   sendingSMS: boolean;
-  smsResult: { sent: number; failed: number; skipped: number } | null;
+  smsResult: { sent: number; failed: number; skipped: number; failureReasons: string[] } | null;
   onToggle: (id: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -120,6 +120,11 @@ export function SMSModal({
             <div className={`p-3 rounded-lg text-xs font-medium border ${smsResult.failed > 0 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
               <CheckCircle className="w-3 h-3 inline mr-1" /> Sent: <strong>{smsResult.sent}</strong> &nbsp;|&nbsp; <XCircle className="w-3 h-3 inline mr-1" /> Failed: <strong>{smsResult.failed}</strong>
               {smsResult.skipped > 0 && <> &nbsp;|&nbsp; <AlertTriangle className="w-3 h-3 inline mr-1" /> Skipped: <strong>{smsResult.skipped}</strong></>}
+              {smsResult.failureReasons.length > 0 && (
+                <ul className="mt-2 list-disc pl-4 font-normal opacity-90">
+                  {smsResult.failureReasons.map((reason, i) => <li key={i}>{reason}</li>)}
+                </ul>
+              )}
             </div>
           )}
 
