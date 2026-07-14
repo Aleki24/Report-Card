@@ -57,7 +57,7 @@ export default function ReportsPage() {
   const [loadingSMSStudents, setLoadingSMSStudents] = useState(false);
   const [smsSearch, setSmsSearch] = useState('');
   const [sendingSMS, setSendingSMS] = useState(false);
-  const [smsResult, setSmsResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
+  const [smsResult, setSmsResult] = useState<{ sent: number; failed: number; skipped: number; failureReasons: string[] } | null>(null);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
@@ -236,9 +236,17 @@ export default function ReportsPage() {
     setSendingSMS(true); setSmsResult(null);
     try {
       const res = await fetch('/api/sms/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentIds: selected.map(s => s.id), termId: selectedTerm, academicYearId: selectedAcademicYear, gradeStreamId: selectedGradeStream }) });
-      const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed to send SMS');
-      setSmsResult({ sent: json.sent || 0, failed: json.failed || 0, skipped: json.skipped?.length || 0 });
-      showToastMsg(`✅ SMS sent: ${json.sent} delivered, ${json.failed} failed`);
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || 'Failed to send SMS');
+      const failureReasons = [...new Set(((json.results || []) as { success: boolean; error?: string }[]).filter(r => !r.success && r.error).map(r => r.error as string))];
+      setSmsResult({ sent: json.sent || 0, failed: json.failed || 0, skipped: json.skipped?.length || 0, failureReasons });
+      if ((json.sent || 0) === 0) {
+        showToastMsg(`❌ SMS failed to send${failureReasons.length ? `: ${failureReasons[0]}` : ''}`);
+      } else if ((json.failed || 0) > 0) {
+        showToastMsg(`⚠️ SMS sent: ${json.sent} delivered, ${json.failed} failed`);
+      } else {
+        showToastMsg(`✅ SMS sent: ${json.sent} delivered`);
+      }
     } catch (err: any) { showToastMsg(`❌ ${err.message || 'SMS send failed'}`); }
     setSendingSMS(false);
   };
