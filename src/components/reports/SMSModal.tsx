@@ -15,6 +15,7 @@ interface SMSStudent {
 
 interface SMSModalProps {
   onClose: () => void;
+  streamLabel: string;
   smsStudents: SMSStudent[];
   filteredSMSStudents: SMSStudent[];
   loadingSMSStudents: boolean;
@@ -32,7 +33,7 @@ interface SMSModalProps {
 }
 
 export function SMSModal({
-  onClose, smsStudents, filteredSMSStudents, loadingSMSStudents,
+  onClose, streamLabel, smsStudents, filteredSMSStudents, loadingSMSStudents,
   smsSearch, setSmsSearch, smsSelectedCount, smsMissingPhoneCount,
   sendingSMS, smsResult, onToggle, onSelectAll, onDeselectAll, onSend, messagePreview,
 }: SMSModalProps) {
@@ -42,7 +43,12 @@ export function SMSModal({
         <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-primary" />
-            <h2 className="text-lg font-bold font-display">SMS Results to Parents</h2>
+            <div>
+              <h2 className="text-lg font-bold font-display leading-tight">SMS Results to Parents</h2>
+              <p className="text-xs text-muted-foreground leading-tight">
+                {streamLabel ? <>Class: <strong className="text-foreground">{streamLabel}</strong></> : 'No class selected — pick one in Report Settings above'}
+              </p>
+            </div>
           </div>
           <Button variant="secondary" size="xs" onClick={onClose}><XCircle className="w-3 h-3" /> Close</Button>
         </div>
