@@ -353,30 +353,30 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <div className="stat-card"><div className="stat-label">Streams</div><div className="stat-value">{stats.streams}</div></div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3 mb-4">
+      <div className="flex flex-col md:flex-row md:flex-wrap gap-3 mb-4">
         <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        <select className="input-field text-xs" value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
+        <select className="input-field text-xs" style={{ width: "auto", minWidth: "140px" }} value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
           <option value="">All Streams</option>
           {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
         </select>
-        <select className="input-field text-xs" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+        <select className="input-field text-xs" style={{ width: "auto", minWidth: "120px" }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
         {combinations.length > 0 && (
           <>
-            <select className="input-field text-xs" value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
+            <select className="input-field text-xs" style={{ width: "auto", minWidth: "140px" }} value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
               <option value="">All Pathways</option>
               <option value="STEM">STEM</option>
               <option value="SOCIAL_SCIENCES">Social Sciences</option>
               <option value="ARTS_SPORTS">Arts &amp; Sports Science</option>
               <option value="UNASSIGNED">Unassigned</option>
             </select>
-            <select className="input-field text-xs" value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
+            <select className="input-field text-xs" style={{ width: "auto", minWidth: "160px" }} value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
               <option value="">All Combinations</option>
               {combinations.filter(c => !pathwayFilter || pathwayFilter === 'UNASSIGNED' || c.pathway === pathwayFilter).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
@@ -525,7 +525,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <p className="text-xs text-muted-foreground mb-4">Reassign existing CBC Senior School students (Grades 10–12) to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
-              <select className="input-field text-xs" value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
+              <select className="input-field text-xs" style={{ width: "auto", minWidth: "150px" }} value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
                 <option value="">All Senior Streams</option>
                 {seniorStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
               </select>

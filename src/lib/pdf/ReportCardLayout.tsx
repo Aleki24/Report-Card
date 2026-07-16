@@ -20,7 +20,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
             <View style={s.headerBand}>
                 <View>
                     {data.schoolLogoUrl ? (
-                        <Image style={s.logo} src={data.schoolLogoUrl} />
+                        <View style={s.logoFrame}><Image style={s.logo} src={data.schoolLogoUrl} /></View>
                     ) : (
                         <View style={s.logoPlaceholder}><Text style={{ fontSize: 20, color: GRAY_400 }}>🏫</Text></View>
                     )}

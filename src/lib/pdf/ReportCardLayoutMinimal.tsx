@@ -15,7 +15,7 @@ const t = StyleSheet.create({
 
     /* Letterhead */
     letterhead: { alignItems: 'center', marginBottom: 6 },
-    logo: { width: 44, height: 44, borderRadius: 22, objectFit: 'contain', marginBottom: 6 },
+    logo: { width: 44, height: 44, objectFit: 'contain', marginBottom: 6 },
     schoolName: { fontSize: 17, fontFamily: 'Times-Bold', color: INK, textAlign: 'center', letterSpacing: 1 },
     schoolAddress: { fontSize: 8, fontFamily: 'Times-Roman', color: GRAY, marginTop: 3, textAlign: 'center' },
     docTitle: { fontSize: 9, fontFamily: 'Times-Roman', color: INK, textTransform: 'uppercase', letterSpacing: 3, marginTop: 8, textAlign: 'center' },

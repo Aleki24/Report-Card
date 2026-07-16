@@ -20,7 +20,8 @@ const m = StyleSheet.create({
         backgroundColor: INDIGO, paddingVertical: 18, paddingHorizontal: 28,
         flexDirection: 'row', alignItems: 'center', gap: 14,
     },
-    logo: { width: 52, height: 52, borderRadius: 26, backgroundColor: WHITE, objectFit: 'contain' },
+    logoFrame: { width: 52, height: 52, borderRadius: 10, backgroundColor: WHITE, padding: 4, alignItems: 'center' as const, justifyContent: 'center' as const },
+    logo: { width: 44, height: 44, objectFit: 'contain' },
     logoPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: INDIGO_DARK, alignItems: 'center', justifyContent: 'center' },
     logoInitial: { fontSize: 22, color: WHITE, fontFamily: 'Helvetica-Bold' },
     headerText: { flex: 1 },
@@ -96,7 +97,7 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
             {/* Header */}
             <View style={m.header}>
                 {data.schoolLogoUrl ? (
-                    <Image style={m.logo} src={data.schoolLogoUrl} />
+                    <View style={m.logoFrame}><Image style={m.logo} src={data.schoolLogoUrl} /></View>
                 ) : (
                     <View style={m.logoPlaceholder}><Text style={m.logoInitial}>{data.schoolName.charAt(0)}</Text></View>
                 )}

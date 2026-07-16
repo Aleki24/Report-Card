@@ -38,7 +38,8 @@ const p = StyleSheet.create({
         backgroundColor: TEAL_700, paddingVertical: 20, paddingHorizontal: 26,
         flexDirection: 'row', alignItems: 'center', gap: 16,
     },
-    crest: { width: 54, height: 54, borderRadius: 27, backgroundColor: WHITE, objectFit: 'contain', border: `2pt solid ${CREAM}` },
+    crestFrame: { width: 54, height: 54, borderRadius: 10, backgroundColor: WHITE, padding: 4, alignItems: 'center' as const, justifyContent: 'center' as const, border: `2pt solid ${CREAM}` },
+    crest: { width: 42, height: 42, objectFit: 'contain' },
     crestPlaceholder: {
         width: 54, height: 54, borderRadius: 27, backgroundColor: TEAL_900,
         border: `2pt solid ${CREAM}`, alignItems: 'center', justifyContent: 'center',
@@ -139,7 +140,7 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
             {/* Header banner */}
             <View style={p.header}>
                 {data.schoolLogoUrl ? (
-                    <Image style={p.crest} src={data.schoolLogoUrl} />
+                    <View style={p.crestFrame}><Image style={p.crest} src={data.schoolLogoUrl} /></View>
                 ) : (
                     <View style={p.crestPlaceholder}><Text style={p.crestInitial}>{data.schoolName.charAt(0)}</Text></View>
                 )}
