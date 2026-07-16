@@ -75,7 +75,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [search, setSearch] = useState(initialSearch);
   const [gradeStreamFilter, setGradeStreamFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string }[]>([]);
+  const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string; grade_id?: string }[]>([]);
+  const [grades, setGrades] = useState<{ id: string; academic_level_id: string; numeric_order: number }[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ ...emptyStudentForm });
   const [editing, setEditing] = useState<string | null>(null);
@@ -84,7 +85,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewTab, setViewTab] = useState<'profile' | 'academic' | 'reports' | 'attendance'>('profile');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [academicLevels, setAcademicLevels] = useState<{ id: string; name: string }[]>([]);
+  const [academicLevels, setAcademicLevels] = useState<{ id: string; name: string; code?: string }[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
   const [page, setPage] = useState(1);
@@ -121,7 +122,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       if (!sRes.ok) { setError('Failed to load students'); return; }
       const [sJson, gsJson] = await Promise.all([sRes.json(), gsRes.json()]);
       setData(sJson.data || []); setGradeStreams(gsJson.data || []);
-      if (structureRes.ok) { const j = await structureRes.json(); setAcademicLevels(j.academic_levels || []); }
+      if (structureRes.ok) { const j = await structureRes.json(); setAcademicLevels(j.academic_levels || []); setGrades(j.grades || []); }
       if (cRes.ok) { const cJson = await cRes.json(); setCombinations(cJson.data || []); }
     } catch { setError('Failed to load data'); }
     finally { setLoading(false); }
@@ -289,12 +290,21 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     finally { setViewLoading(false); }
   };
 
+  // Pathways/combinations only apply to CBC Senior School (Grades 10-12):
+  // streams whose grade is numeric_order 10-12 under the CBC level
+  const cbcLevelIds = new Set(academicLevels.filter(l => l.code === 'CBC').map(l => l.id));
+  const seniorGradeIds = new Set(grades.filter(g => g.numeric_order >= 10 && g.numeric_order <= 12 && cbcLevelIds.has(g.academic_level_id)).map(g => g.id));
+  const seniorStreamIds = new Set(gradeStreams.filter(gs => gs.grade_id && seniorGradeIds.has(gs.grade_id)).map(gs => gs.id));
+  const seniorStreams = gradeStreams.filter(gs => seniorStreamIds.has(gs.id));
+  const isSeniorStudent = (s: StudentRow) => !!s.current_grade_stream_id && seniorStreamIds.has(s.current_grade_stream_id);
+
   const openEdit = (s: StudentRow) => {
     setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
     setEditing(s.id); setShowModal(true);
   };
 
   const bulkFiltered = data.filter(s => {
+    if (!isSeniorStudent(s)) return false; // Grades 10-12 (CBC) only
     const q = bulkSearch.toLowerCase();
     const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number}`.toLowerCase().includes(q);
     const matchStream = !bulkStreamFilter || s.current_grade_stream_id === bulkStreamFilter;
@@ -376,7 +386,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           <Upload size={14} /> Import CSV
         </button>
         {combinations.length > 0 && (
-          <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(gradeStreamFilter); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
+          <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
             <ClipboardList size={14} /> Assign Pathways
           </button>
         )}
@@ -468,7 +478,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone || ''} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id || ''} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id || ''} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
-              {combinations.length > 0 && (
+              {combinations.length > 0 && seniorStreamIds.has(formData.grade_stream_id) && (
                 <>
                   <div className="col-span-2 border-t border-border pt-3 mt-1">
                     <p className="text-xs font-semibold text-muted-foreground">CBC Senior School Pathway (Grades 10–12)</p>
@@ -512,12 +522,12 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowBulkAssign(false)}>
           <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-sm font-bold font-display mb-1">Assign Pathways &amp; Subject Combinations</h2>
-            <p className="text-xs text-muted-foreground mb-4">Reassign existing students to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
+            <p className="text-xs text-muted-foreground mb-4">Reassign existing CBC Senior School students (Grades 10–12) to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
               <select className="input-field text-xs" value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
-                <option value="">All Streams</option>
-                {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                <option value="">All Senior Streams</option>
+                {seniorStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
               </select>
               <div className="flex items-center input-field overflow-hidden px-0 flex-1">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
@@ -540,7 +550,11 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
             <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md min-h-[180px]">
               {bulkFiltered.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-8">No students match.</p>
+                <p className="text-xs text-muted-foreground text-center py-8">
+                  {seniorStreamIds.size === 0
+                    ? 'No CBC Grade 10–12 streams found. Create senior-school classes first — pathways only apply to Senior School students.'
+                    : 'No senior-school students match.'}
+                </p>
               ) : bulkFiltered.map(s => (
                 <label key={s.id} className="flex items-center gap-3 px-3 py-2 border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-muted/40">
                   <input

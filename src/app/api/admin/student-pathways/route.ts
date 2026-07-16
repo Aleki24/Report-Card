@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         // Every student must belong to the caller's school
         const { data: schoolStudents, error: studentsError } = await supabase
             .from('students')
-            .select('id, users!inner(school_id)')
+            .select('id, users!inner(school_id), grade_streams ( grade_id, grades ( numeric_order, academic_level_id ) )')
             .in('id', data.student_ids)
             .eq('users.school_id', session.schoolId);
         if (studentsError) {
@@ -54,6 +54,32 @@ export async function POST(request: NextRequest) {
                 { error: `${missing.length} student(s) were not found in your school.`, missing_ids: missing },
                 { status: 400 }
             );
+        }
+
+        // Pathways only apply to CBC Senior School (Grades 10-12) — reject
+        // assignment attempts for 8-4-4 / junior / primary learners
+        // (clearing an assignment is always allowed)
+        const isAssigning = !!(data.subject_combination_id || data.pathway);
+        if (isAssigning) {
+            const { data: cbcLevel } = await supabase
+                .from('academic_levels')
+                .select('id')
+                .eq('code', 'CBC')
+                .maybeSingle();
+            const nonSenior = (schoolStudents ?? []).filter((s: any) => {
+                const grade = Array.isArray(s.grade_streams) ? s.grade_streams[0]?.grades : s.grade_streams?.grades;
+                const g = Array.isArray(grade) ? grade[0] : grade;
+                return !g || g.academic_level_id !== cbcLevel?.id || g.numeric_order < 10 || g.numeric_order > 12;
+            });
+            if (nonSenior.length > 0) {
+                return NextResponse.json(
+                    {
+                        error: `${nonSenior.length} selected student(s) are not in a CBC Grade 10-12 class. Pathways and subject combinations only apply to Senior School learners.`,
+                        invalid_ids: nonSenior.map((s: any) => s.id),
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         // Resolve the combination (if any) and derive pathway/track from
