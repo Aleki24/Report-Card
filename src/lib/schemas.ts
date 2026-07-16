@@ -9,6 +9,9 @@ export type ExamType = z.infer<typeof ExamType>;
 export const StudentStatus = z.enum(['ACTIVE', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED']);
 export type StudentStatus = z.infer<typeof StudentStatus>;
 
+export const CbcPathway = z.enum(['STEM', 'SOCIAL_SCIENCES', 'ARTS_SPORTS']);
+export type CbcPathway = z.infer<typeof CbcPathway>;
+
 export const academicYearSchema = z.object({
     name: z.string().min(1, 'Name is required').max(100),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
@@ -49,6 +52,32 @@ export const subjectSchema = z.object({
     display_order: z.number().int().min(0).optional().default(0),
     category: z.enum(['LANGUAGE', 'MATHEMATICS', 'SCIENCE', 'HUMANITY', 'TECHNICAL', 'CREATIVE']).optional().default('TECHNICAL'),
     grading_system_id: z.string().uuid('Invalid grading system ID').optional().nullable(),
+});
+
+export const subjectCombinationSchema = z.object({
+    code: z.string().trim().min(1, 'Code is required').max(20).toUpperCase(),
+    name: z.string().trim().min(1, 'Name is required').max(100),
+    pathway: CbcPathway,
+    track: z.string().max(100).optional().nullable(),
+    subject_ids: z.array(z.string().uuid('Invalid subject ID')).length(3, 'Exactly 3 elective subjects are required'),
+    is_active: z.boolean().optional().default(true),
+});
+
+export const subjectCombinationUpdateSchema = z.object({
+    code: z.string().trim().min(1).max(20).toUpperCase().optional(),
+    name: z.string().trim().min(1).max(100).optional(),
+    pathway: CbcPathway.optional(),
+    track: z.string().max(100).optional().nullable(),
+    subject_ids: z.array(z.string().uuid('Invalid subject ID')).length(3, 'Exactly 3 elective subjects are required').optional(),
+    is_active: z.boolean().optional(),
+});
+
+// student_ids are NOT validated as UUIDs: production stores TEXT Clerk IDs
+export const bulkPathwayAssignSchema = z.object({
+    student_ids: z.array(z.string().min(1)).min(1, 'Select at least one student').max(500),
+    pathway: CbcPathway.optional().nullable(),
+    track: z.string().max(100).optional().nullable(),
+    subject_combination_id: z.string().uuid('Invalid combination ID').optional().nullable(),
 });
 
 export const gradingSystemSchema = z.object({

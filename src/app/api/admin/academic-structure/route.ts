@@ -18,7 +18,10 @@ import {
     gradingSystemSchema,
     gradingScaleSchema,
     subjectSchema,
+    subjectCombinationSchema,
+    subjectCombinationUpdateSchema,
 } from '@/lib/schemas';
+import { syncCombinationStudents } from '@/lib/pathway/sync-student-subjects';
 
 type CreatePayload = Record<string, unknown>;
 
@@ -80,15 +83,20 @@ export async function GET(request: NextRequest) {
         let subjectsData: any[] = [];
         let gsData: any[] = [];
         let gscData: any[] = [];
+        let combinationsData: any[] = [];
 
         if (schoolId) {
-            const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, gscRes] = await Promise.all([
+            const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, gscRes, combosRes] = await Promise.all([
                 supabaseAdmin.from('academic_years').select('*').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('*').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('*').eq('school_id', schoolId).order('name'),
                 supabaseAdmin.from('subjects').select('*').eq('school_id', schoolId).order('display_order'),
                 supabaseAdmin.from('grading_systems').select('*').order('name'),
                 supabaseAdmin.from('grading_scales').select('*').order('order_index'),
+                supabaseAdmin.from('subject_combinations')
+                    .select('*, subject_combination_subjects ( subject_id, subjects ( id, name, code ) )')
+                    .eq('school_id', schoolId)
+                    .order('code'),
             ]);
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
@@ -96,6 +104,28 @@ export async function GET(request: NextRequest) {
             subjectsData = subjectsRes.data ?? [];
             gsData = gsRes.data ?? [];
             gscData = gscRes.data ?? [];
+
+            const combos = combosRes.data ?? [];
+            if (combos.length > 0) {
+                const { data: comboStudents } = await supabaseAdmin
+                    .from('students')
+                    .select('subject_combination_id')
+                    .in('subject_combination_id', combos.map(c => c.id));
+                const counts = new Map<string, number>();
+                (comboStudents ?? []).forEach(s => {
+                    if (s.subject_combination_id) {
+                        counts.set(s.subject_combination_id, (counts.get(s.subject_combination_id) ?? 0) + 1);
+                    }
+                });
+                combinationsData = combos.map(c => ({
+                    ...c,
+                    subjects: (c.subject_combination_subjects ?? [])
+                        .map((row: any) => row.subjects)
+                        .filter(Boolean),
+                    subject_combination_subjects: undefined,
+                    student_count: counts.get(c.id) ?? 0,
+                }));
+            }
 
             if (auth.role !== 'ADMIN') {
                 const perms = await getTeacherPermissions(auth.userId);
@@ -130,6 +160,7 @@ export async function GET(request: NextRequest) {
             academic_levels: levelsRes.data || [],
             grading_systems: gsData,
             grading_scales: gscData,
+            subject_combinations: combinationsData,
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';
@@ -258,6 +289,45 @@ export async function POST(request: NextRequest) {
                 if (error) return handleDatabaseError(error, 'stream');
                 return NextResponse.json({ success: true, data: result });
             },
+
+            subject_combination: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
+                const data = subjectCombinationSchema.parse(payload);
+
+                // Electives must be real subjects of this school
+                const { data: validSubjects } = await supabaseAdmin
+                    .from('subjects')
+                    .select('id')
+                    .eq('school_id', schoolId)
+                    .in('id', data.subject_ids);
+                if ((validSubjects ?? []).length !== 3) {
+                    return NextResponse.json({ error: 'All 3 elective subjects must belong to your school.' }, { status: 400 });
+                }
+
+                const { data: combination, error } = await supabaseAdmin
+                    .from('subject_combinations')
+                    .insert({
+                        school_id: schoolId,
+                        code: data.code,
+                        name: data.name,
+                        pathway: data.pathway,
+                        track: data.track ?? null,
+                        is_active: data.is_active ?? true,
+                    })
+                    .select().single();
+                if (error) return handleDatabaseError(error, 'subject combination');
+
+                const { error: junctionError } = await supabaseAdmin
+                    .from('subject_combination_subjects')
+                    .insert(data.subject_ids.map(subject_id => ({ combination_id: combination.id, subject_id })));
+                if (junctionError) {
+                    // Manual rollback — keep combination + electives atomic
+                    await supabaseAdmin.from('subject_combinations').delete().eq('id', combination.id);
+                    return handleDatabaseError(junctionError, 'subject combination');
+                }
+
+                return NextResponse.json({ success: true, data: combination });
+            },
         };
 
         const handler = handlers[type];
@@ -306,6 +376,7 @@ export async function PATCH(request: NextRequest) {
             subject: 'subjects',
             grading_system: 'grading_systems',
             grading_scale: 'grading_scales',
+            subject_combination: 'subject_combinations',
         };
 
         const table = schoolScopedTables[type];
@@ -327,6 +398,75 @@ export async function PATCH(request: NextRequest) {
             if (!existing || existing.school_id !== schoolId) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
             }
+        }
+
+        // Subject combinations need dedicated handling (junction table
+        // replacement + re-syncing every assigned student's enrollments)
+        if (type === 'subject_combination') {
+            const data = subjectCombinationUpdateSchema.parse(payload);
+            const comboUpdate: Record<string, any> = {};
+            if (data.code !== undefined) comboUpdate.code = data.code;
+            if (data.name !== undefined) comboUpdate.name = data.name;
+            if (data.pathway !== undefined) comboUpdate.pathway = data.pathway;
+            if (data.track !== undefined) comboUpdate.track = data.track;
+            if (data.is_active !== undefined) comboUpdate.is_active = data.is_active;
+
+            if (Object.keys(comboUpdate).length === 0 && !data.subject_ids) {
+                return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+            }
+
+            let combination: any = null;
+            if (Object.keys(comboUpdate).length > 0) {
+                const { data: updated, error } = await supabaseAdmin
+                    .from('subject_combinations')
+                    .update(comboUpdate)
+                    .eq('id', id)
+                    .select()
+                    .single();
+                if (error) return handleDatabaseError(error, 'subject combination');
+                combination = updated;
+
+                // Keep the denormalized copies on assigned students in step
+                if (comboUpdate.pathway !== undefined || comboUpdate.track !== undefined) {
+                    const studentSync: Record<string, any> = {};
+                    if (comboUpdate.pathway !== undefined) studentSync.pathway = comboUpdate.pathway;
+                    if (comboUpdate.track !== undefined) studentSync.track = comboUpdate.track;
+                    const { error: propagateError } = await supabaseAdmin
+                        .from('students')
+                        .update(studentSync)
+                        .eq('subject_combination_id', id);
+                    if (propagateError) {
+                        return NextResponse.json({ error: `Combination updated but student pathway sync failed: ${propagateError.message}` }, { status: 500 });
+                    }
+                }
+            }
+
+            if (data.subject_ids) {
+                const { data: validSubjects } = await supabaseAdmin
+                    .from('subjects')
+                    .select('id')
+                    .eq('school_id', schoolId)
+                    .in('id', data.subject_ids);
+                if ((validSubjects ?? []).length !== 3) {
+                    return NextResponse.json({ error: 'All 3 elective subjects must belong to your school.' }, { status: 400 });
+                }
+
+                const { error: deleteError } = await supabaseAdmin
+                    .from('subject_combination_subjects')
+                    .delete()
+                    .eq('combination_id', id);
+                if (deleteError) return handleDatabaseError(deleteError, 'subject combination');
+
+                const { error: insertError } = await supabaseAdmin
+                    .from('subject_combination_subjects')
+                    .insert(data.subject_ids.map(subject_id => ({ combination_id: id, subject_id })));
+                if (insertError) return handleDatabaseError(insertError, 'subject combination');
+
+                // Electives changed — re-sync enrollments of every assigned student
+                await syncCombinationStudents(supabaseAdmin, id, schoolId);
+            }
+
+            return NextResponse.json({ success: true, data: combination });
         }
 
         // Build the update payload based on type
@@ -408,6 +548,7 @@ export async function DELETE(request: NextRequest) {
             term: 'terms',
             stream: 'grade_streams',
             subject: 'subjects',
+            subject_combination: 'subject_combinations',
         };
 
         // Global/shared curriculum tables — deletion is blocked for individual school admins
@@ -431,6 +572,45 @@ export async function DELETE(request: NextRequest) {
 
             if (!existing || existing.school_id !== schoolId) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            if (type === 'subject_combination') {
+                // Deleting a combination detaches its students (FK SET NULL).
+                // Require an explicit force flag when students are assigned.
+                const force = searchParams.get('force') === 'true';
+                const { data: assignedStudents } = await supabaseAdmin
+                    .from('students')
+                    .select('id')
+                    .eq('subject_combination_id', id);
+                const assignedIds = (assignedStudents ?? []).map(s => s.id);
+                if (assignedIds.length > 0 && !force) {
+                    return NextResponse.json(
+                        {
+                            error: `${assignedIds.length} student(s) are assigned to this combination. Reassign them first, or pass force=true to detach them.`,
+                            student_count: assignedIds.length,
+                        },
+                        { status: 409 }
+                    );
+                }
+                if (assignedIds.length > 0) {
+                    // Fully detach: clear enrollments and the denormalized
+                    // pathway/track so students revert to default behaviour
+                    // (the FK only nulls subject_combination_id)
+                    const { error: enrollError } = await supabaseAdmin
+                        .from('student_subjects')
+                        .delete()
+                        .in('student_id', assignedIds);
+                    if (enrollError) {
+                        return NextResponse.json({ error: `Failed to clear student enrollments: ${enrollError.message}` }, { status: 400 });
+                    }
+                    const { error: detachError } = await supabaseAdmin
+                        .from('students')
+                        .update({ pathway: null, track: null, subject_combination_id: null })
+                        .in('id', assignedIds);
+                    if (detachError) {
+                        return NextResponse.json({ error: `Failed to detach students: ${detachError.message}` }, { status: 400 });
+                    }
+                }
             }
 
             const { error } = await supabaseAdmin.from(table).delete().eq('id', id);

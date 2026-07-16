@@ -164,10 +164,16 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
                         <View style={p.infoCell}><Text style={p.infoLabel}>Class</Text><Text style={p.infoValue}>{data.className}</Text></View>
                         <View style={p.infoCellLast}><Text style={p.infoLabel}>Academic Year</Text><Text style={p.infoValue}>{data.academicYear}</Text></View>
                     </View>
-                    <View style={p.infoRowLast}>
+                    <View style={data.pathwayName ? p.infoRow : p.infoRowLast}>
                         <View style={p.infoCell}><Text style={p.infoLabel}>Exam / Report</Text><Text style={p.infoValue}>{data.examTitle}</Text></View>
                         <View style={p.infoCellLast}><Text style={p.infoLabel}>Date Issued</Text><Text style={p.infoValue}>{today}</Text></View>
                     </View>
+                    {data.pathwayName && (
+                        <View style={p.infoRowLast}>
+                            <View style={p.infoCell}><Text style={p.infoLabel}>Pathway</Text><Text style={p.infoValue}>{data.pathwayName}{data.trackName ? ` — ${data.trackName}` : ''}</Text></View>
+                            <View style={p.infoCellLast}><Text style={p.infoLabel}>Subject Combination</Text><Text style={p.infoValue}>{data.combinationCode ? `${data.combinationCode}${data.combinationName ? ` — ${data.combinationName}` : ''}` : '—'}</Text></View>
+                        </View>
+                    )}
                 </View>
 
                 {/* Subjects table */}
@@ -243,6 +249,15 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
                             <Text style={p.statValue}>{data.classRank > 0 ? data.classRank : '—'}</Text>
                             <Text style={p.statLabel}>Class Rank{data.totalStudents ? ` of ${data.totalStudents}` : ''}</Text>
                         </View>
+                        {data.combinationRank !== undefined && (
+                            <>
+                                <View style={p.statDivider} />
+                                <View style={p.statCell}>
+                                    <Text style={p.statValue}>{data.combinationRank}</Text>
+                                    <Text style={p.statLabel}>Pathway Rank{data.combinationSize ? ` of ${data.combinationSize}` : ''}</Text>
+                                </View>
+                            </>
+                        )}
                     </View>
                 </View>
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 
 export async function PATCH(request: NextRequest) {
     try {
@@ -23,6 +24,9 @@ export async function PATCH(request: NextRequest) {
             grade_stream_id,
             status,
             avatar_url,
+            pathway,
+            track,
+            subject_combination_id,
         } = body;
 
         if (!student_id) {
@@ -64,6 +68,26 @@ export async function PATCH(request: NextRequest) {
         if (grade_stream_id !== undefined) studentUpdates.current_grade_stream_id = grade_stream_id || null;
         if (status !== undefined) studentUpdates.status = status;
         if (avatar_url !== undefined) studentUpdates.avatar_url = avatar_url || null;
+        if (pathway !== undefined) studentUpdates.pathway = pathway || null;
+        if (track !== undefined) studentUpdates.track = track?.trim() || null;
+        if (subject_combination_id !== undefined) {
+            if (subject_combination_id) {
+                // Combination must belong to the caller's school
+                const { data: combination } = await supabaseAdmin
+                    .from('subject_combinations')
+                    .select('id, pathway, track')
+                    .eq('id', subject_combination_id)
+                    .eq('school_id', profile.school_id)
+                    .maybeSingle();
+                if (!combination) {
+                    return NextResponse.json({ error: 'Subject combination not found in your school.' }, { status: 404 });
+                }
+                // Keep the three fields consistent when only the combination is sent
+                if (pathway === undefined) studentUpdates.pathway = combination.pathway;
+                if (track === undefined) studentUpdates.track = combination.track;
+            }
+            studentUpdates.subject_combination_id = subject_combination_id || null;
+        }
 
         // Build update object for users table
         const userUpdates: Record<string, any> = {};
@@ -72,6 +96,22 @@ export async function PATCH(request: NextRequest) {
         if (admission_number !== undefined) {
             // Need to update the students table admission_number
             studentUpdates.admission_number = admission_number?.trim() || null;
+        }
+
+        // Combination changed (or cleared) — re-sync subject enrollments
+        // BEFORE persisting the pointer, so a sync failure leaves the
+        // student untouched instead of half-assigned
+        if (subject_combination_id !== undefined) {
+            try {
+                await syncStudentSubjects(supabaseAdmin, {
+                    studentId: student_id,
+                    schoolId: profile.school_id,
+                    combinationId: subject_combination_id || null,
+                });
+            } catch (syncErr) {
+                const msg = syncErr instanceof Error ? syncErr.message : 'enrollment sync failed';
+                return NextResponse.json({ error: `Subject enrollment sync failed: ${msg}` }, { status: 500 });
+            }
         }
 
         // Update student record

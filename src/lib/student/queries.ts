@@ -84,6 +84,30 @@ export async function getCurrentStudentProfile(student: CurrentStudent) {
 export async function getStudentSubjects(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
+    // CBC senior pathway: students with subject enrollments see only
+    // their 7 subjects (4 compulsory cores + 3 combination electives)
+    const { data: enrollments, error: enrollError } = await supabase
+        .from('student_subjects')
+        .select('role, subjects ( id, code, name, subject_type, display_order, category )')
+        .eq('student_id', student.studentId);
+
+    if (!enrollError && enrollments && enrollments.length > 0) {
+        const enrolled = enrollments
+            .map((e: any) => {
+                const subject = Array.isArray(e.subjects) ? e.subjects[0] : e.subjects;
+                return subject ? { ...subject, enrollment_role: e.role as 'CORE' | 'ELECTIVE' } : null;
+            })
+            .filter(Boolean) as any[];
+        if (enrolled.length > 0) {
+            enrolled.sort((a, b) => {
+                if (a.enrollment_role !== b.enrollment_role) return a.enrollment_role === 'CORE' ? -1 : 1;
+                return (a.display_order ?? 0) - (b.display_order ?? 0);
+            });
+            return enrolled;
+        }
+    }
+
+    // Default: all subjects at the student's academic level (unchanged)
     const { data, error } = await supabase
         .from('subjects')
         .select('id, code, name, subject_type, display_order, category')

@@ -11,6 +11,9 @@ DROP FUNCTION IF EXISTS calculate_exam_mark_grade() CASCADE;
 DROP FUNCTION IF EXISTS generate_term_reports(UUID, UUID, UUID) CASCADE;
 DROP FUNCTION IF EXISTS get_my_role() CASCADE;
 
+DROP TABLE IF EXISTS student_subjects CASCADE;
+DROP TABLE IF EXISTS subject_combination_subjects CASCADE;
+DROP TABLE IF EXISTS subject_combinations CASCADE;
 DROP TABLE IF EXISTS exam_mark_components CASCADE;
 DROP TABLE IF EXISTS exam_subject_components CASCADE;
 DROP TABLE IF EXISTS exam_subject_component_schemes CASCADE;
@@ -44,6 +47,9 @@ CREATE TYPE exam_type AS ENUM ('CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER');
 DROP TYPE IF EXISTS student_status CASCADE;
 CREATE TYPE student_status AS ENUM ('ACTIVE', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED');
 
+DROP TYPE IF EXISTS cbc_pathway CASCADE;
+CREATE TYPE cbc_pathway AS ENUM ('STEM', 'SOCIAL_SCIENCES', 'ARTS_SPORTS');
+
 -- 1. ACADEMIC LEVELS (CBC, 8-4-4)
 CREATE TABLE IF NOT EXISTS academic_levels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,6 +81,7 @@ CREATE TABLE IF NOT EXISTS schools (
     onboarding_completed BOOLEAN DEFAULT false NOT NULL,
     teacher_invite_code TEXT,
     student_invite_code TEXT,
+    min_combination_group_size INT DEFAULT 15 NOT NULL, -- CBC ministry minimum learners per subject combination
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -649,3 +656,115 @@ CREATE POLICY "Teachers manage component marks for their exams" ON exam_mark_com
         )
         OR get_my_role() = 'ADMIN'
     );
+
+-- ==========================================
+-- CBC SENIOR SCHOOL PATHWAYS & SUBJECT COMBINATIONS (Grades 10-12)
+-- Every senior learner takes 7 subjects: 4 compulsory cores
+-- (English/KSL, Kiswahili, Community Service Learning, PE) + 3
+-- electives from the official pathways (STEM, Social Sciences,
+-- Arts & Sports Science). Ministry "subject combination" codes pin
+-- a track + exact 3 electives; min 15 learners run as a class group.
+-- Students with no combination assigned behave exactly as before.
+-- See supabase/migrations/20260715120000_add_cbc_pathways_and_subject_combinations.sql
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS subject_combinations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
+    code TEXT NOT NULL,                 -- ministry code, e.g. 'SPORTS'
+    name TEXT NOT NULL,
+    pathway cbc_pathway NOT NULL,
+    track TEXT,
+    is_active BOOLEAN DEFAULT true NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (school_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS subject_combination_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    combination_id UUID REFERENCES subject_combinations(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (combination_id, subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS student_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'ELECTIVE' CHECK (role IN ('CORE', 'ELECTIVE')),
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (student_id, subject_id)
+);
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS pathway cbc_pathway;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS track TEXT;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS subject_combination_id UUID
+    REFERENCES subject_combinations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_subject_combinations_school_id ON subject_combinations(school_id);
+CREATE INDEX IF NOT EXISTS idx_scs_combination_id ON subject_combination_subjects(combination_id);
+CREATE INDEX IF NOT EXISTS idx_scs_subject_id ON subject_combination_subjects(subject_id);
+CREATE INDEX IF NOT EXISTS idx_student_subjects_student_id ON student_subjects(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_subjects_subject_id ON student_subjects(subject_id);
+CREATE INDEX IF NOT EXISTS idx_student_subjects_school_id ON student_subjects(school_id);
+CREATE INDEX IF NOT EXISTS idx_students_subject_combination_id ON students(subject_combination_id);
+
+ALTER TABLE subject_combinations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subject_combination_subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_subjects ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated read subject combinations" ON subject_combinations
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins manage subject combinations" ON subject_combinations
+    FOR ALL USING (get_my_role() = 'ADMIN');
+
+CREATE POLICY "Authenticated read combination subjects" ON subject_combination_subjects
+    FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins manage combination subjects" ON subject_combination_subjects
+    FOR ALL USING (get_my_role() = 'ADMIN');
+
+CREATE POLICY "Students view their own subject enrollments" ON student_subjects
+    FOR SELECT USING (
+        student_id::text = auth.uid()::text
+        OR get_my_role() IN ('ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER')
+    );
+CREATE POLICY "Class teachers and admins manage subject enrollments" ON student_subjects
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM class_teachers ct
+            JOIN students s ON s.current_grade_stream_id = ct.current_grade_stream_id
+            WHERE ct.user_id::text = auth.uid()::text
+              AND s.id = student_subjects.student_id
+        )
+        OR get_my_role() = 'ADMIN'
+    );
+
+CREATE OR REPLACE FUNCTION touch_subject_combination()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_touch_subject_combination
+BEFORE UPDATE ON subject_combinations
+FOR EACH ROW
+EXECUTE FUNCTION touch_subject_combination();
+
+CREATE OR REPLACE FUNCTION touch_student_subject()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_touch_student_subject
+BEFORE UPDATE ON student_subjects
+FOR EACH ROW
+EXECUTE FUNCTION touch_student_subject();

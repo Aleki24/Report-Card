@@ -29,11 +29,20 @@ export async function GET(
 
         const supabase = createSupabaseAdmin();
 
+        // Optional CBC pathway filters — restrict the sheet (and therefore
+        // its positions) to one combination or pathway group
+        const combinationId = searchParams.get('combinationId');
+        const pathwayFilter = searchParams.get('pathway');
+
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
-        const { data: students, error: studentsErr } = await supabase
+        let studentsQuery = supabase
             .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, users(first_name, last_name, school_id), grade_streams(full_name)')
+            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name)')
             .eq('current_grade_stream_id', classId);
+        if (combinationId) studentsQuery = studentsQuery.eq('subject_combination_id', combinationId);
+        if (pathwayFilter) studentsQuery = studentsQuery.eq('pathway', pathwayFilter);
+
+        const { data: students, error: studentsErr } = await studentsQuery;
 
         if (studentsErr || !students || students.length === 0) {
             return NextResponse.json({ error: 'No students found in this class' }, { status: 404 });
@@ -372,13 +381,27 @@ export async function GET(
 
         const meanGrade = gradingSystemType === 'KCSE' ? getGradeFromPercentageSimple(meanPoints) : '';
         
+        // Label a filtered sheet with its combination code / pathway
+        let classNameLabel = (students[0].grade_streams as any)?.full_name || 'Class';
+        if (combinationId) {
+            const { data: combo } = await supabase
+                .from('subject_combinations')
+                .select('code')
+                .eq('id', combinationId)
+                .eq('school_id', targetSchoolId || userSchoolId)
+                .maybeSingle();
+            if (combo?.code) classNameLabel = `${classNameLabel} — ${combo.code}`;
+        } else if (pathwayFilter) {
+            classNameLabel = `${classNameLabel} — ${pathwayFilter.replace(/_/g, ' ')}`;
+        }
+
         const markSheetData = {
             schoolName,
             schoolLogoUrl,
             schoolAddress,
             examTitle: termTitle,
             academicYear: academicYearName,
-            className: (students[0].grade_streams as any)?.full_name || 'Class',
+            className: classNameLabel,
             gradingSystemType,
             subjects: subjectsArray,
             students: studentsData,

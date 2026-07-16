@@ -4,8 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
-import { Search, BookOpen, Plus, RotateCcw } from 'lucide-react';
+import { Search, BookOpen, Plus, RotateCcw, Layers } from 'lucide-react';
 import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
+import CombinationsManager from '@/components/subjects/CombinationsManager';
+import type { SubjectCombination } from '@/types';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; name_display: string; code: string; academic_level_id: string; numeric_order: number; }
@@ -34,6 +36,9 @@ export default function SubjectsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
     const [grades, setGrades] = useState<Grade[]>([]);
+    const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
+    const [minGroupSize, setMinGroupSize] = useState(15);
+    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations'>('subjects');
     const [loading, setLoading] = useState(true);
     const [calSaving, setCalSaving] = useState(false);
     const [calMsg, setCalMsg] = useState('');
@@ -50,12 +55,23 @@ export default function SubjectsPage() {
                 setSubjects(json.subjects || []);
                 setAcademicLevels(json.academic_levels || []);
                 setGrades(json.grades || []);
+                setCombinations(json.subject_combinations || []);
             }
         } catch (err) { console.error('Failed to fetch subjects:', err); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchSubjects(); }, []);
+    useEffect(() => {
+        fetchSubjects();
+        // Ministry minimum learners per combination (schools can override)
+        fetch('/api/school/data?type=school_profile')
+            .then(res => res.ok ? res.json() : null)
+            .then(json => {
+                const size = json?.data?.min_combination_group_size;
+                if (typeof size === 'number' && size > 0) setMinGroupSize(size);
+            })
+            .catch(() => { /* keep default */ });
+    }, []);
 
     const postStructure = async (type: string, payload: Record<string, unknown>) => {
         setCalSaving(true); setCalMsg('');
@@ -126,6 +142,34 @@ export default function SubjectsPage() {
                 breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Academic Structure', href: '/dashboard/settings' }, { label: 'Subjects' }]}
             />
 
+            {/* Tabs */}
+            <div className="flex gap-1 mb-5 border-b border-border">
+                <button
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'subjects' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('subjects')}
+                >
+                    <BookOpen size={15} /> Subjects
+                </button>
+                <button
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'combinations' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('combinations')}
+                >
+                    <Layers size={15} /> Subject Combinations
+                    {combinations.length > 0 && <span className="badge text-[11px]">{combinations.length}</span>}
+                </button>
+            </div>
+
+            {activeTab === 'combinations' ? (
+                <CombinationsManager
+                    combinations={combinations as any}
+                    subjects={subjects}
+                    cbcLevelId={academicLevels.find(l => l.code === 'CBC')?.id}
+                    minGroupSize={minGroupSize}
+                    isAdmin={role === 'ADMIN'}
+                    onChanged={fetchSubjects}
+                />
+            ) : (
+            <>
             {calMsg && (
                 <div className={`mb-4 p-3 rounded-md text-sm ${!calMsg.startsWith('Failed') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
                     {calMsg}
@@ -352,6 +396,8 @@ export default function SubjectsPage() {
                     )}
                 </div>
             </div>
+            </>
+            )}
         </div>
     );
 }

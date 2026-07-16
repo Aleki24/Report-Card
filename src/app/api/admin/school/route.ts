@@ -11,7 +11,17 @@ export async function POST(request: NextRequest) {
         
         const user_id = userId;
         const body = await request.json();
-        const { name, address, phone, email, school_id, logo_url } = body;
+        const { name, address, phone, email, school_id, logo_url, min_combination_group_size } = body;
+
+        // CBC ministry minimum learners per subject combination (optional)
+        let minGroupSize: number | undefined;
+        if (min_combination_group_size !== undefined && min_combination_group_size !== null) {
+            const parsed = Number(min_combination_group_size);
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 200) {
+                return NextResponse.json({ error: 'min_combination_group_size must be a whole number between 1 and 200' }, { status: 400 });
+            }
+            minGroupSize = parsed;
+        }
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: 'School name is required' }, { status: 400 });
@@ -43,6 +53,7 @@ export async function POST(request: NextRequest) {
                 phone: phone?.trim() || null,
                 email: email?.trim() || null,
                 logo_url: logo_url || null,
+                ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
             }).eq('id', school_id);
 
             if (error) {
@@ -58,6 +69,7 @@ export async function POST(request: NextRequest) {
                 phone: phone?.trim() || null,
                 email: email?.trim() || null,
                 logo_url: logo_url || null,
+                ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
             }).select('id').single();
 
             if (error) {

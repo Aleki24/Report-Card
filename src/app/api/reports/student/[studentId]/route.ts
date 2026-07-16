@@ -14,6 +14,8 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { pathwayLabel } from '@/lib/pathway-definitions';
+import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +40,8 @@ export async function GET(
             .select(`
                 *,
                 users(first_name, last_name, school_id),
-                grade_streams(full_name, grade_id)
+                grade_streams(full_name, grade_id),
+                subject_combinations(id, code, name, pathway, track)
             `)
             .eq('id', studentId)
             .maybeSingle();
@@ -421,6 +424,28 @@ export async function GET(
             }
         }
 
+        // 6.5 CBC senior pathway ranking: rank within the grade-wide
+        // subject-combination group (all streams of the same grade,
+        // same combination). 8-4-4 students are untouched.
+        let combinationRank: number | undefined;
+        let combinationSize: number | undefined;
+        const studentCombinationId = (student as any).subject_combination_id as string | null;
+
+        if (gradingSystemType === 'CBC' && studentCombinationId && gradeId && termId) {
+            const combinationRanks = await computeCombinationRanks(supabase, {
+                schoolId: targetSchoolId || userSchoolId,
+                gradeId,
+                fallbackStreamId: student.current_grade_stream_id,
+                combinationIds: [studentCombinationId],
+                termId,
+                yearId,
+                gradingScales,
+            });
+            const info = combinationRanks.get(studentId);
+            combinationRank = info?.rank;
+            combinationSize = info?.size;
+        }
+
         // 7. Resolve overall grade from total points (KCSE) or percentage (CBC)
         // Use same logic as marksheet: KCSE uses points-based grade, CBC uses percentage-based grade
         const isKCSE = gradingSystemType === 'KCSE';
@@ -604,6 +629,12 @@ export async function GET(
             overallPointsGrade: studentPerf.overallGrade,
             classRank,
             totalStudents,
+            pathwayName: (student as any).pathway ? pathwayLabel((student as any).pathway) : undefined,
+            trackName: (student as any).track || undefined,
+            combinationCode: ((student as any).subject_combinations as any)?.code || undefined,
+            combinationName: ((student as any).subject_combinations as any)?.name || undefined,
+            combinationRank,
+            combinationSize,
             classTeacherComment: classTeacherComment || undefined,
             principalComment: principalComment || undefined,
             gradeBoundaries,
