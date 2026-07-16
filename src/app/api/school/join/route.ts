@@ -83,26 +83,55 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
         }
     } else if (pendingUser.role === 'CLASS_TEACHER') {
-        const { data: swapped, error: swapErr } = await supabaseAdmin
+        // A class teacher may have been created as "Unassigned" (no class
+        // picked yet), in which case there's no class_teachers row to swap.
+        // Only treat a 0-row update as a failure if a row actually exists.
+        const { count: existingCount, error: existErr } = await supabaseAdmin
             .from('class_teachers')
-            .update({ user_id: userId })
-            .eq('user_id', oldUserId)
-            .select('id');
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', oldUserId);
 
-        if (swapErr || !swapped || swapped.length === 0) {
-            console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
+        if (existErr) {
+            console.error('[join] class_teachers existence check failed', { oldUserId, userId, existErr });
             return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
         }
-    } else if (pendingUser.role === 'SUBJECT_TEACHER') {
-        const { data: swapped, error: swapErr } = await supabaseAdmin
-            .from('subject_teachers')
-            .update({ user_id: userId })
-            .eq('user_id', oldUserId)
-            .select('id');
 
-        if (swapErr || !swapped || swapped.length === 0) {
-            console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
+        if (existingCount && existingCount > 0) {
+            const { data: swapped, error: swapErr } = await supabaseAdmin
+                .from('class_teachers')
+                .update({ user_id: userId })
+                .eq('user_id', oldUserId)
+                .select('id');
+
+            if (swapErr || !swapped || swapped.length === 0) {
+                console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
+                return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+            }
+        }
+    } else if (pendingUser.role === 'SUBJECT_TEACHER') {
+        // A subject teacher may have been created with no subjects assigned
+        // yet, in which case there's no subject_teachers row to swap.
+        const { count: existingCount, error: existErr } = await supabaseAdmin
+            .from('subject_teachers')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', oldUserId);
+
+        if (existErr) {
+            console.error('[join] subject_teachers existence check failed', { oldUserId, userId, existErr });
             return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+        }
+
+        if (existingCount && existingCount > 0) {
+            const { data: swapped, error: swapErr } = await supabaseAdmin
+                .from('subject_teachers')
+                .update({ user_id: userId })
+                .eq('user_id', oldUserId)
+                .select('id');
+
+            if (swapErr || !swapped || swapped.length === 0) {
+                console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
+                return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+            }
         }
     }
 
