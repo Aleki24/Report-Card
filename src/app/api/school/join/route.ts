@@ -72,37 +72,89 @@ export async function POST(request: NextRequest) {
     const oldUserId = pendingUser.id;
 
     if (pendingUser.role === 'STUDENT') {
-        const { data: swapped, error: swapErr } = await supabaseAdmin
-            .from('students')
-            .update({ id: userId })
-            .eq('id', oldUserId)
-            .select('id');
+        // Idempotency: if a previous attempt already swapped this row over
+        // (e.g. the request failed on a later step and got retried with the
+        // same code), the row now lives under the new userId, not oldUserId
+        // — re-running the swap would find 0 rows and wrongly report failure
+        // even though the student is already correctly linked.
+        const { data: alreadyLinked } = await supabaseAdmin
+            .from('students').select('id').eq('id', userId).maybeSingle();
 
-        if (swapErr || !swapped || swapped.length === 0) {
-            console.error('[join] students id-swap failed', { oldUserId, userId, swapErr });
-            return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+        if (!alreadyLinked) {
+            const { data: swapped, error: swapErr } = await supabaseAdmin
+                .from('students')
+                .update({ id: userId })
+                .eq('id', oldUserId)
+                .select('id');
+
+            if (swapErr || !swapped || swapped.length === 0) {
+                console.error('[join] students id-swap failed', { oldUserId, userId, swapErr });
+                return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+            }
         }
     } else if (pendingUser.role === 'CLASS_TEACHER') {
-        const { data: swapped, error: swapErr } = await supabaseAdmin
-            .from('class_teachers')
-            .update({ user_id: userId })
-            .eq('user_id', oldUserId)
-            .select('id');
+        // Same idempotency concern as students, plus: a class teacher may
+        // have been created as "Unassigned" (no class picked yet), in which
+        // case there's no class_teachers row at all. Only treat a 0-row
+        // update as a genuine failure if a row exists for oldUserId and
+        // isn't already linked to the new userId.
+        const { data: alreadyLinked } = await supabaseAdmin
+            .from('class_teachers').select('id').eq('user_id', userId).maybeSingle();
 
-        if (swapErr || !swapped || swapped.length === 0) {
-            console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
-            return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+        if (!alreadyLinked) {
+            const { count: existingCount, error: existErr } = await supabaseAdmin
+                .from('class_teachers')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', oldUserId);
+
+            if (existErr) {
+                console.error('[join] class_teachers existence check failed', { oldUserId, userId, existErr });
+                return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+            }
+
+            if (existingCount && existingCount > 0) {
+                const { data: swapped, error: swapErr } = await supabaseAdmin
+                    .from('class_teachers')
+                    .update({ user_id: userId })
+                    .eq('user_id', oldUserId)
+                    .select('id');
+
+                if (swapErr || !swapped || swapped.length === 0) {
+                    console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
+                    return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+                }
+            }
         }
     } else if (pendingUser.role === 'SUBJECT_TEACHER') {
-        const { data: swapped, error: swapErr } = await supabaseAdmin
-            .from('subject_teachers')
-            .update({ user_id: userId })
-            .eq('user_id', oldUserId)
-            .select('id');
+        // Same idempotency concern as above, plus: a subject teacher may
+        // have been created with no subjects assigned yet, in which case
+        // there's no subject_teachers row at all.
+        const { data: alreadyLinked } = await supabaseAdmin
+            .from('subject_teachers').select('id').eq('user_id', userId).maybeSingle();
 
-        if (swapErr || !swapped || swapped.length === 0) {
-            console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
-            return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+        if (!alreadyLinked) {
+            const { count: existingCount, error: existErr } = await supabaseAdmin
+                .from('subject_teachers')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', oldUserId);
+
+            if (existErr) {
+                console.error('[join] subject_teachers existence check failed', { oldUserId, userId, existErr });
+                return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+            }
+
+            if (existingCount && existingCount > 0) {
+                const { data: swapped, error: swapErr } = await supabaseAdmin
+                    .from('subject_teachers')
+                    .update({ user_id: userId })
+                    .eq('user_id', oldUserId)
+                    .select('id');
+
+                if (swapErr || !swapped || swapped.length === 0) {
+                    console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
+                    return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
+                }
+            }
         }
     }
 
