@@ -88,26 +88,34 @@ export async function POST(request: NextRequest) {
             clerkEmail = clerkUser.emailAddresses?.[0]?.emailAddress || user.email;
         } catch { /* use existing email */ }
 
-        // 5. Swap user IDs in database
+        // 5. Link the database records to the Google Clerk account.
+        //
+        // ORDERING MATTERS: students.id / class_teachers.user_id /
+        // subject_teachers.user_id all REFERENCE users(id) ON DELETE CASCADE.
+        // The new users row must exist BEFORE the id-swaps, every swap must be
+        // verified BEFORE the old pending row is deleted (or the delete
+        // cascades over the linked record), and the invite code is only burnt
+        // once the account is fully linked. Note that /api/auth/me may have
+        // ALREADY auto-created a users row for this Clerk ID with role
+        // 'PENDING' (AuthProvider fires it the moment the Google session goes
+        // active), so this must upsert — a plain insert hits a duplicate key,
+        // leaves the user stuck as PENDING, and sends them into the
+        // onboarding wizard asking for the (now-used) invite code again.
         const oldUserId = user.id;
 
-        if (user.role === 'STUDENT') {
-            await supabaseAdmin.from('students').update({ id: clerk_user_id }).eq('id', oldUserId);
+        // Free the unique email/username held by the pending row so the new
+        // row can be written while the old one still exists.
+        const { error: renameErr } = await supabaseAdmin.from('users').update({
+            email: `pending+${oldUserId}@migrating.local`,
+            username: null
+        }).eq('id', oldUserId);
+
+        if (renameErr) {
+            console.error('[activate-google] Failed to stage pending row:', renameErr);
+            return NextResponse.json({ error: 'Activation failed. Please try again or contact your administrator.' }, { status: 500 });
         }
-        await supabaseAdmin.from('class_teachers').update({ user_id: clerk_user_id }).eq('user_id', oldUserId);
-        await supabaseAdmin.from('subject_teachers').update({ user_id: clerk_user_id }).eq('user_id', oldUserId);
 
-        // Update invite code
-        await supabaseAdmin.from('invite_codes').update({
-            user_id: clerk_user_id,
-            is_used: true,
-            used_at: new Date().toISOString()
-        }).eq('id', invite.id);
-
-        // Delete old + insert new user
-        await supabaseAdmin.from('users').delete().eq('id', oldUserId);
-
-        const { error: insertErr } = await supabaseAdmin.from('users').insert({
+        const { error: upsertErr } = await supabaseAdmin.from('users').upsert({
             id: clerk_user_id,
             first_name: user.first_name,
             last_name: user.last_name,
@@ -116,12 +124,45 @@ export async function POST(request: NextRequest) {
             role: user.role,
             school_id: user.school_id,
             is_active: true
-        });
+        }, { onConflict: 'id' });
 
-        if (insertErr) {
-            console.error('Failed to insert new user record:', insertErr);
+        if (upsertErr) {
+            console.error('[activate-google] Failed to create user record:', upsertErr);
+            // Restore the pending row so the invite can be retried
+            await supabaseAdmin.from('users').update({ email: user.email, username: user.username }).eq('id', oldUserId);
             return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
         }
+
+        // Swap FK references over to the new users row, verifying each swap.
+        if (user.role === 'STUDENT') {
+            const { data: swapped, error: swapErr } = await supabaseAdmin
+                .from('students')
+                .update({ id: clerk_user_id })
+                .eq('id', oldUserId)
+                .select('id');
+
+            if (swapErr || !swapped || swapped.length === 0) {
+                console.error('[activate-google] students id-swap failed', { oldUserId, clerk_user_id, swapErr });
+                return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+            }
+        } else {
+            const { error: ctErr } = await supabaseAdmin.from('class_teachers').update({ user_id: clerk_user_id }).eq('user_id', oldUserId);
+            const { error: stErr } = await supabaseAdmin.from('subject_teachers').update({ user_id: clerk_user_id }).eq('user_id', oldUserId);
+            if (ctErr || stErr) {
+                console.error('[activate-google] teacher assignment swap failed', { oldUserId, clerk_user_id, ctErr, stErr });
+                return NextResponse.json({ error: 'Failed to link your teaching assignments. Please contact your school admin.' }, { status: 500 });
+            }
+        }
+
+        // Everything is linked — only now burn the invite code and drop the
+        // pending row (its cascade has nothing left to destroy).
+        await supabaseAdmin.from('invite_codes').update({
+            user_id: clerk_user_id,
+            is_used: true,
+            used_at: new Date().toISOString()
+        }).eq('id', invite.id);
+
+        await supabaseAdmin.from('users').delete().eq('id', oldUserId);
 
         return NextResponse.json({
             success: true,

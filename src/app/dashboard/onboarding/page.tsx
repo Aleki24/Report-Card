@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Layers, Users, Building, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -18,11 +18,24 @@ const ADMIN_STEPS = [
 
 export default function OnboardingWizard() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  
+  const { user, role, schoolOnboardingCompleted, loading: authLoading } = useAuth();
+
   const [selectedRole, setSelectedRole] = useState<OnboardingRole>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  // Onboarding is only for users who haven't joined a school yet: PENDING
+  // accounts, or admins whose school setup is unfinished. Anyone who already
+  // activated with an invite code has a real role — send them straight to
+  // their dashboard instead of asking for an invite code a second time.
+  const alreadyOnboarded = !authLoading && !!role && role !== 'PENDING' &&
+    !(role === 'ADMIN' && schoolOnboardingCompleted === false);
+
+  useEffect(() => {
+    if (alreadyOnboarded) {
+      router.replace(role === 'STUDENT' ? '/student/dashboard' : '/dashboard');
+    }
+  }, [alreadyOnboarded, role, router]);
 
   // --- Admin Form State ---
   const [schoolName, setSchoolName] = useState('');
@@ -38,6 +51,18 @@ export default function OnboardingWizard() {
   // --- Teacher/Student Form State ---
   const [inviteCode, setInviteCode] = useState('');
   const [admissionNumber, setAdmissionNumber] = useState('');
+
+  // Allow deep-linking with the invite code (e.g. /dashboard/onboarding?role=TEACHER&code=A7X3K9)
+  // so a code the user already provided elsewhere doesn't have to be retyped.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const codeParam = params.get('code');
+    const roleParam = params.get('role')?.toUpperCase();
+    if (codeParam) setInviteCode(codeParam.toUpperCase());
+    if (roleParam === 'ADMIN' || roleParam === 'TEACHER' || roleParam === 'STUDENT') {
+      setSelectedRole(roleParam);
+    }
+  }, []);
 
   const progress = selectedRole === 'ADMIN' ? (currentStep / ADMIN_STEPS.length) * 100 : 100;
 
@@ -122,7 +147,7 @@ export default function OnboardingWizard() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || alreadyOnboarded) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

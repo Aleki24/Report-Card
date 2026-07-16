@@ -128,27 +128,32 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: msg }, { status: 400 });
         }
 
-        // 5. Update the user's ID to the Clerk user ID and activate
+        // 5. Link the database records to the new Clerk account.
+        //
+        // ORDERING MATTERS: students.id / class_teachers.user_id /
+        // subject_teachers.user_id all REFERENCE users(id) ON DELETE CASCADE.
+        // The new users row must exist BEFORE the id-swaps (or the FK rejects
+        // them silently), every swap must be verified BEFORE the old pending
+        // row is deleted (or the delete cascades over the linked record), and
+        // the invite code is only burnt once the account is fully linked — so
+        // any failure leaves the code reusable instead of stranding the user.
         const oldUserId = user.id;
 
-        // Update tables that reference users.id
-        if (user.role === 'STUDENT') {
-            await supabaseAdmin.from('students').update({ id: clerkUserId }).eq('id', oldUserId);
+        // Free the unique email/username held by the pending row so the new
+        // row can be inserted while the old one still exists.
+        const { error: renameErr } = await supabaseAdmin.from('users').update({
+            email: `pending+${oldUserId}@migrating.local`,
+            username: null
+        }).eq('id', oldUserId);
+
+        if (renameErr) {
+            console.error('[activate] Failed to stage pending row:', renameErr);
+            return NextResponse.json({ error: 'Activation failed. Please try again or contact your administrator.' }, { status: 500 });
         }
-        await supabaseAdmin.from('class_teachers').update({ user_id: clerkUserId }).eq('user_id', oldUserId);
-        await supabaseAdmin.from('subject_teachers').update({ user_id: clerkUserId }).eq('user_id', oldUserId);
 
-        // Update the invite code to point to new ID
-        await supabaseAdmin.from('invite_codes').update({ 
-            user_id: clerkUserId,
-            is_used: true, 
-            used_at: new Date().toISOString() 
-        }).eq('id', invite.id);
-
-        // Delete old user record + insert new with Clerk ID
-        await supabaseAdmin.from('users').delete().eq('id', oldUserId);
-
-        const { error: insertNew } = await supabaseAdmin.from('users').insert({
+        // Upsert: a users row may already exist for this Clerk ID (e.g.
+        // auto-created by /api/auth/me) — overwrite it with the real details.
+        const { error: upsertErr } = await supabaseAdmin.from('users').upsert({
             id: clerkUserId,
             first_name: user.first_name,
             last_name: user.last_name,
@@ -157,12 +162,45 @@ export async function POST(request: NextRequest) {
             role: user.role,
             school_id: user.school_id,
             is_active: true
-        });
+        }, { onConflict: 'id' });
 
-        if (insertNew) {
-            console.error('Failed to insert new user record:', insertNew);
+        if (upsertErr) {
+            console.error('[activate] Failed to create user record:', upsertErr);
+            // Restore the pending row so the invite can be retried
+            await supabaseAdmin.from('users').update({ email: user.email, username: user.username }).eq('id', oldUserId);
             return NextResponse.json({ error: 'Account created but failed to update records. Contact your administrator.' }, { status: 500 });
         }
+
+        // Swap FK references over to the new users row, verifying each swap.
+        if (user.role === 'STUDENT') {
+            const { data: swapped, error: swapErr } = await supabaseAdmin
+                .from('students')
+                .update({ id: clerkUserId })
+                .eq('id', oldUserId)
+                .select('id');
+
+            if (swapErr || !swapped || swapped.length === 0) {
+                console.error('[activate] students id-swap failed', { oldUserId, clerkUserId, swapErr });
+                return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+            }
+        } else {
+            const { error: ctErr } = await supabaseAdmin.from('class_teachers').update({ user_id: clerkUserId }).eq('user_id', oldUserId);
+            const { error: stErr } = await supabaseAdmin.from('subject_teachers').update({ user_id: clerkUserId }).eq('user_id', oldUserId);
+            if (ctErr || stErr) {
+                console.error('[activate] teacher assignment swap failed', { oldUserId, clerkUserId, ctErr, stErr });
+                return NextResponse.json({ error: 'Failed to link your teaching assignments. Please contact your school admin.' }, { status: 500 });
+            }
+        }
+
+        // Everything is linked — only now burn the invite code and drop the
+        // pending row (its cascade has nothing left to destroy).
+        await supabaseAdmin.from('invite_codes').update({
+            user_id: clerkUserId,
+            is_used: true,
+            used_at: new Date().toISOString()
+        }).eq('id', invite.id);
+
+        await supabaseAdmin.from('users').delete().eq('id', oldUserId);
 
         return NextResponse.json({
             success: true,

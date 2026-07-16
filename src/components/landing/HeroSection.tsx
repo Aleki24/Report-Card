@@ -79,7 +79,7 @@ export default function HeroSection() {
           {/* CTA Group */}
           <div className="flex flex-col sm:flex-row" style={{ gap: '16px', paddingTop: '8px' }}>
             <Link
-              href="/dashboard"
+              href="/signup"
               className="group inline-flex items-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
@@ -93,11 +93,11 @@ export default function HeroSection() {
                 boxShadow: '0 4px 24px rgba(212, 168, 83, 0.3)',
               }}
             >
-              Open Dashboard
+              Get Started Free
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             <Link
-              href="/features"
+              href="/#how-to-join"
               className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
               style={{
                 border: '1px solid var(--color-border)',
@@ -111,10 +111,29 @@ export default function HeroSection() {
                 letterSpacing: '0.01em',
               }}
             >
-              Explore Features
+              How to Join
               <ChevronRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5" style={{ color: 'var(--color-text-muted)' }} />
             </Link>
           </div>
+
+          {/* Invite code hint */}
+          <p
+            style={{
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.8125rem',
+              letterSpacing: '0.01em',
+            }}
+          >
+            Have an invite code from your school?{' '}
+            <Link
+              href="/activate"
+              className="transition-opacity hover:opacity-80"
+              style={{ color: 'var(--color-accent)', fontWeight: 600, textDecoration: 'none' }}
+            >
+              Activate your account →
+            </Link>
+          </p>
         </div>
 
         {/* Right Column — Decorative Stats Panel */}

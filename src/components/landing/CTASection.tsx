@@ -98,7 +98,7 @@ export default function CTASection() {
 
             <div className="flex flex-col sm:flex-row justify-center" style={{ gap: '16px' }}>
               <Link
-                href="/dashboard"
+                href="/signup"
                 className="group inline-flex items-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
                 style={{
                   background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
@@ -112,11 +112,11 @@ export default function CTASection() {
                   boxShadow: '0 4px 30px rgba(212, 168, 83, 0.35)',
                 }}
               >
-                Go to Dashboard
+                Register Your School
                 <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
               <Link
-                href="/features"
+                href="/activate"
                 className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
                 style={{
                   border: '1px solid var(--color-border)',
@@ -129,7 +129,7 @@ export default function CTASection() {
                   background: 'transparent',
                 }}
               >
-                Explore Features
+                Join with Invite Code
                 <ChevronRight className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
               </Link>
             </div>
