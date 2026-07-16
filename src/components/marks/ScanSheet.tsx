@@ -35,6 +35,8 @@ interface Props {
     maxScore?: number;
     gradeId?: string;
     gradeStreamId?: string | null;
+    /** The exam's subject — scopes name matching to enrolled takers */
+    subjectId?: string;
 }
 
 /* ── Name matching ─────────────────────────────────────────── */
@@ -116,7 +118,7 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 /* ── Component ─────────────────────────────────────────────── */
 
-export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId }: Props) {
+export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; min_percentage: number; max_percentage: number }[]>([]);
     const [photo, setPhoto] = useState<string | null>(null);
@@ -131,7 +133,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId }: Pr
         (async () => {
             try {
                 const [studentsRes, structureRes] = await Promise.all([
-                    fetch('/api/school/data?type=students'),
+                    fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`),
                     fetch('/api/admin/academic-structure'),
                 ]);
                 const { data: allStudents } = await studentsRes.json();
@@ -153,7 +155,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId }: Pr
                 console.error('Failed to load students for scan:', err);
             }
         })();
-    }, [gradeId, gradeStreamId]);
+    }, [gradeId, gradeStreamId, subjectId]);
 
     /* Grading scales for auto-grade */
     useEffect(() => {

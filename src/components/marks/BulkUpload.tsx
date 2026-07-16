@@ -17,9 +17,11 @@ interface ColumnMapping {
 
 interface Props {
     examId: string;
+    /** The exam's subject — scopes admission-number matching to enrolled takers */
+    subjectId?: string;
 }
 
-export function BulkUpload({ examId }: Props) {
+export function BulkUpload({ examId, subjectId }: Props) {
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
@@ -111,7 +113,8 @@ export function BulkUpload({ examId }: Props) {
             const examMaxScore = examData?.max_score || 100;
 
             // 2. Resolve student IDs from admission numbers
-            const studentRes = await fetch('/api/school/data?type=students');
+            //    (subject-scoped so out-of-subject learners land in "missing")
+            const studentRes = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
             const studentJson = await studentRes.json();
             const studentsData = studentJson.data || [];
 

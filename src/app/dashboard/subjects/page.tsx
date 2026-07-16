@@ -7,6 +7,7 @@ import PageHeader from '@/components/dashboard/PageHeader';
 import { Search, BookOpen, Plus, RotateCcw, Layers } from 'lucide-react';
 import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
+import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
 import type { SubjectCombination } from '@/types';
 
 interface AcademicLevel { id: string; code: string; name: string; }
@@ -39,6 +40,7 @@ export default function SubjectsPage() {
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
     const [minGroupSize, setMinGroupSize] = useState(15);
     const [activeTab, setActiveTab] = useState<'subjects' | 'combinations'>('subjects');
+    const [enrollmentSubject, setEnrollmentSubject] = useState<Subject | null>(null);
     const [loading, setLoading] = useState(true);
     const [calSaving, setCalSaving] = useState(false);
     const [calMsg, setCalMsg] = useState('');
@@ -368,6 +370,14 @@ export default function SubjectsPage() {
                                             <td className="text-right">
                                                 {role === 'ADMIN' && (
                                                     <div className="flex justify-end gap-2 items-center">
+                                                        <button
+                                                            className="text-[11px] text-muted-foreground hover:text-foreground font-medium transition-colors"
+                                                            onClick={() => setEnrollmentSubject(s)}
+                                                            disabled={calSaving}
+                                                            title="Choose which learners take this subject (mark entry then lists only them)"
+                                                        >
+                                                            Learners
+                                                        </button>
                                                         <select
                                                             className="text-[11px] bg-transparent border border-border/60 rounded-md px-2 py-1 outline-none text-muted-foreground hover:border-primary/40 transition-colors cursor-pointer"
                                                             value={s.subject_type || 'CORE'}
@@ -397,6 +407,13 @@ export default function SubjectsPage() {
                 </div>
             </div>
             </>
+            )}
+
+            {enrollmentSubject && (
+                <SubjectEnrollmentManager
+                    subject={enrollmentSubject}
+                    onClose={() => setEnrollmentSubject(null)}
+                />
             )}
         </div>
     );

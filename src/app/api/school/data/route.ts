@@ -77,13 +77,31 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query.order('admission_number');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        
+
         let filteredStudents = data ?? [];
         if (auth.role !== 'ADMIN') {
           const perms = await getTeacherPermissions(auth.userId);
           filteredStudents = filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
         }
-        
+
+        // Optional subject roster filter (mark entry): when any of these
+        // students are explicitly enrolled in the subject (8-4-4 electives
+        // like CRE, or CBC pathway electives via student_subjects), return
+        // only the enrolled takers. Subjects with no enrollment data keep
+        // returning the whole class (backwards compatible).
+        const subjectId = searchParams.get('subject_id');
+        if (subjectId && filteredStudents.length > 0) {
+          const { data: enrollments } = await supabase
+            .from('student_subjects')
+            .select('student_id')
+            .eq('subject_id', subjectId)
+            .in('student_id', filteredStudents.map((s: any) => s.id));
+          const enrolledIds = new Set((enrollments ?? []).map(e => e.student_id));
+          if (enrolledIds.size > 0) {
+            filteredStudents = filteredStudents.filter((s: any) => enrolledIds.has(s.id));
+          }
+        }
+
         return NextResponse.json({ data: filteredStudents });
       }
 
