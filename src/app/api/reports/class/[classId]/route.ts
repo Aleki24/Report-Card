@@ -15,6 +15,8 @@ import {
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { fetchPaperScores } from '@/lib/pdf/paperScores';
+import { pathwayLabel } from '@/lib/pathway-definitions';
+import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -37,7 +39,7 @@ export async function GET(
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
         const { data: students, error: studentsErr } = await supabase
             .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id)')
+            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)')
             .eq('current_grade_stream_id', classId);
 
         if (studentsErr || !students || students.length === 0) {
@@ -308,6 +310,26 @@ export async function GET(
         const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
         const rankedStudentCount = aggregates.length;
 
+        // 7.5 CBC senior pathway ranking: rank each assigned student
+        // within their grade-wide subject-combination group (all streams
+        // of the same grade, same combination) — 8-4-4 is untouched.
+        let combinationRankInfo = new Map<string, { rank: number; size: number }>();
+        const streamCombinationIds = [...new Set(
+            students.map((s: any) => s.subject_combination_id).filter(Boolean)
+        )] as string[];
+
+        if (gradingSystemType === 'CBC' && streamCombinationIds.length > 0 && gradeId && termId) {
+            combinationRankInfo = await computeCombinationRanks(supabase, {
+                schoolId: targetSchoolId || userSchoolId,
+                gradeId,
+                fallbackStreamId: classId,
+                combinationIds: streamCombinationIds,
+                termId,
+                yearId,
+                gradingScales,
+            });
+        }
+
         // Build per-subject rank maps: subjectId -> Map<studentId, rank>
         const subjectRankMaps: Record<string, Map<string, number>> = {};
         const subjectStudentCounts = getSubjectStudentCounts(subjectAggs);
@@ -448,6 +470,12 @@ export async function GET(
                 overallPointsGrade: studentPerf.overallGrade,
                 classRank: ranks.get(student.id) || 0,
                 totalStudents: rankedStudentCount,
+                pathwayName: (student as any).pathway ? pathwayLabel((student as any).pathway) : undefined,
+                trackName: (student as any).track || undefined,
+                combinationCode: ((student as any).subject_combinations as any)?.code || undefined,
+                combinationName: ((student as any).subject_combinations as any)?.name || undefined,
+                combinationRank: combinationRankInfo.get(student.id)?.rank,
+                combinationSize: combinationRankInfo.get(student.id)?.size,
                 classTeacherComment: classTeacherComment || undefined,
                 principalComment: principalComment || undefined,
                 gradeBoundaries,

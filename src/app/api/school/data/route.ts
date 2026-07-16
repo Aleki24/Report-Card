@@ -19,7 +19,8 @@ type DataType =
   | 'grading_scales'
   | 'exams'
   | 'my_subjects'
-  | 'class_teacher_assignments';
+  | 'class_teacher_assignments'
+  | 'subject_combinations';
 
 async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string; role: string } | null> {
   const { userId } = await auth();
@@ -61,8 +62,10 @@ export async function GET(request: NextRequest) {
           .select(`
             id, admission_number, status, academic_level_id, current_grade_stream_id,
             guardian_phone, guardian_name, guardian_email, gender, date_of_birth, date_enrolled, avatar_url,
+            pathway, track, subject_combination_id,
             users!inner (first_name, last_name, email, school_id),
-            grade_streams (id, full_name, grade_id)
+            grade_streams (id, full_name, grade_id),
+            subject_combinations (id, code, name, pathway, track)
           `)
           .eq('users.school_id', schoolId);
 
@@ -275,7 +278,7 @@ export async function GET(request: NextRequest) {
       case 'school_profile': {
         const { data, error } = await supabase
           .from('schools')
-          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code')
+          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code, min_combination_group_size')
           .eq('id', schoolId)
           .maybeSingle();
 
@@ -362,6 +365,22 @@ export async function GET(request: NextRequest) {
           : classTeachers ?? [];
         
         return NextResponse.json({ data: filtered });
+      }
+
+      case 'subject_combinations': {
+        const { data, error } = await supabase
+          .from('subject_combinations')
+          .select('id, code, name, pathway, track, is_active, subject_combination_subjects ( subject_id, subjects ( id, name, code ) )')
+          .eq('school_id', schoolId)
+          .order('code');
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        const mapped = (data ?? []).map((c: any) => ({
+          ...c,
+          subjects: (c.subject_combination_subjects ?? []).map((row: any) => row.subjects).filter(Boolean),
+          subject_combination_subjects: undefined,
+        }));
+        return NextResponse.json({ data: mapped });
       }
 
       default:

@@ -58,6 +58,9 @@ export default function ReportsPage() {
   const [smsSearch, setSmsSearch] = useState('');
   const [sendingSMS, setSendingSMS] = useState(false);
   const [smsResult, setSmsResult] = useState<{ sent: number; failed: number; skipped: number; failureReasons: string[] } | null>(null);
+  const [hasCombinations, setHasCombinations] = useState(false);
+  const [splitByCombination, setSplitByCombination] = useState(false);
+  const [groupThreshold, setGroupThreshold] = useState(15);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
@@ -83,6 +86,26 @@ export default function ReportsPage() {
       } catch (err) { console.error('Failed to fetch dropdown data:', err); }
     };
     fetchDropdownData();
+
+    // CBC pathway support: split class reports per subject combination
+    const fetchPathwayConfig = async () => {
+      try {
+        const [comboRes, profileRes] = await Promise.all([
+          fetch('/api/school/data?type=subject_combinations'),
+          fetch('/api/school/data?type=school_profile'),
+        ]);
+        if (comboRes.ok) {
+          const comboJson = await comboRes.json();
+          setHasCombinations((comboJson.data || []).length > 0);
+        }
+        if (profileRes.ok) {
+          const profileJson = await profileRes.json();
+          const size = profileJson?.data?.min_combination_group_size;
+          if (typeof size === 'number' && size > 0) setGroupThreshold(size);
+        }
+      } catch { /* pathway extras are optional */ }
+    };
+    fetchPathwayConfig();
   }, []);
 
   // Only offer terms that belong to the selected academic year
@@ -139,13 +162,61 @@ export default function ReportsPage() {
       if (!response.ok) { const errJson = await response.json(); throw new Error(errJson.error || 'Failed to fetch report data'); }
       const reportCardsData: ReportCardData[] = await response.json();
       if (!reportCardsData?.length) throw new Error('No students or grades found for this setup. Ensure marks are entered.');
-      setProgress({ current: 0, total: reportCardsData.length, message: 'Step 3 of 3: Generating combined PDF...' });
-      const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData, selectedTemplate);
-      const blob = new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' });
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `${gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class'}_${terms.find(t => t.id === selectedTerm)?.name || 'Term'}_Reports.pdf`;
-      document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
-      showToastMsg('✅ Download complete!');
+
+      const className = gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class';
+      const termName = terms.find(t => t.id === selectedTerm)?.name || 'Term';
+      const downloadPdf = (buffer: ArrayBuffer | Uint8Array, filename: string) => {
+        const blob = new Blob([new Uint8Array(buffer)], { type: 'application/pdf' });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
+      };
+
+      if (splitByCombination && reportCardsData.some(r => r.combinationCode)) {
+        // Ministry rule: a combination with >= threshold learners runs
+        // as its own class group (own report document); smaller groups
+        // and unassigned students are combined into one document.
+        const groups = new Map<string, ReportCardData[]>();
+        for (const r of reportCardsData) {
+          const key = r.combinationCode || 'UNASSIGNED';
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(r);
+        }
+        const standalone: [string, ReportCardData[]][] = [];
+        const combined: ReportCardData[] = [];
+        for (const [code, members] of groups) {
+          if (code !== 'UNASSIGNED' && members.length >= groupThreshold) standalone.push([code, members]);
+          else combined.push(...members);
+        }
+        combined.sort((a, b) => (a.combinationCode || 'zzz').localeCompare(b.combinationCode || 'zzz') || a.studentName.localeCompare(b.studentName));
+
+        const totalDocs = standalone.length + (combined.length > 0 ? 1 : 0);
+        // Browsers may block multiple automatic downloads from one click —
+        // space them out and tell the user what to expect.
+        const pause = (ms: number) => new Promise(res => setTimeout(res, ms));
+        let doc = 0;
+        for (const [code, members] of standalone) {
+          doc += 1;
+          setProgress({ current: doc, total: totalDocs, message: `Step 3 of 3: Generating ${code} document (${members.length} learners)...` });
+          const buffer = await generateBulkReportCardsPDF(members, selectedTemplate);
+          downloadPdf(buffer, `${className}_${termName}_${code}_Reports.pdf`);
+          if (doc < totalDocs) await pause(500);
+        }
+        if (combined.length > 0) {
+          doc += 1;
+          setProgress({ current: doc, total: totalDocs, message: `Step 3 of 3: Generating combined document (${combined.length} learners)...` });
+          const buffer = await generateBulkReportCardsPDF(combined, selectedTemplate);
+          downloadPdf(buffer, `${className}_${termName}_Combined_Reports.pdf`);
+        }
+        showToastMsg(totalDocs > 1
+          ? `✅ ${totalDocs} documents downloaded (${standalone.length} combination group(s)${combined.length > 0 ? ' + 1 combined' : ''}). If your browser only saved the first file, allow multiple downloads for this site and retry.`
+          : '✅ Download complete!');
+      } else {
+        setProgress({ current: 0, total: reportCardsData.length, message: 'Step 3 of 3: Generating combined PDF...' });
+        const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData, selectedTemplate);
+        downloadPdf(pdfBuffer, `${className}_${termName}_Reports.pdf`);
+        showToastMsg('✅ Download complete!');
+      }
     } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
     finally { setGenerating(false); setProgress({ current: 0, total: 0, message: '' }); }
   };
@@ -275,6 +346,29 @@ export default function ReportsPage() {
 
       {/* Report Settings */}
       <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
+
+      {hasCombinations && (
+        <div className="card p-4 flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={splitByCombination} onChange={e => setSplitByCombination(e.target.checked)} />
+            <span className="font-medium">Split bulk reports by subject combination</span>
+          </label>
+          {splitByCombination && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Groups with at least</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                className="input-field w-16 text-xs text-center"
+                value={groupThreshold}
+                onChange={e => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v) && v > 0) setGroupThreshold(v); }}
+              />
+              <span>learners get their own document (ministry minimum is 15); smaller groups and unassigned students are combined into one document.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <ReportActionCards isConfigured={!!isConfigured} generating={generating} generatingMarkSheet={generatingMarkSheet} onSelectStudent={() => setShowStudentPicker(true)} onBulkGenerate={handleGenerateAndDownload} onTermComparison={() => setShowTermComparison(true)} onMarkSheet={handleGenerateMarkSheet} onSMS={() => setShowSMSModal(true)} />
 

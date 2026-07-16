@@ -40,6 +40,14 @@ export interface ReportCardData {
     overallPointsGrade?: string;
     classRank: number;
     totalStudents: number;
+    /** CBC senior pathway info (undefined for 8-4-4 / unassigned students) */
+    pathwayName?: string;
+    trackName?: string;
+    combinationCode?: string;
+    combinationName?: string;
+    /** Rank within the grade-wide subject-combination group */
+    combinationRank?: number;
+    combinationSize?: number;
     classTeacherComment?: string;
     principalComment?: string;
     gradeBoundaries: { symbol: string; label: string; min: number; max: number; points?: number }[];

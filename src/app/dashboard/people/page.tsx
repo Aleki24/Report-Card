@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { DataTable, type DataTableColumn } from '@/components/ui';
 import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { pathwayLabel } from '@/lib/pathway-definitions';
 
 type RoleTab = 'students' | 'teachers' | 'parents';
 
@@ -60,8 +61,11 @@ function PeoplePageInner() {
 }
 
 /* ───── Students Section ───── */
-interface StudentRow { id: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; }
-interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
+interface StudentRow { id: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; pathway: string | null; track: string | null; subject_combination_id: string | null; subject_combinations: { id: string; code: string; name: string } | null; }
+interface CombinationOption { id: string; code: string; name: string; pathway: string; track?: string | null; is_active: boolean; }
+
+const emptyStudentForm = { first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '', pathway: '', track: '', subject_combination_id: '' };
+interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
 
 function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const { profile } = useAuth();
@@ -73,7 +77,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string }[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '' });
+  const [formData, setFormData] = useState({ ...emptyStudentForm });
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [viewStudent, setViewStudent] = useState<StudentDetail | null>(null);
@@ -91,6 +95,16 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [importing, setImporting] = useState(false);
   const [importClassId, setImportClassId] = useState('');
   const [createdCredentials, setCreatedCredentials] = useState<{first_name: string; last_name: string; username: string; invite_code: string}[] | null>(null);
+  const [combinations, setCombinations] = useState<CombinationOption[]>([]);
+  const [pathwayFilter, setPathwayFilter] = useState('');
+  const [combinationFilter, setCombinationFilter] = useState('');
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkStreamFilter, setBulkStreamFilter] = useState('');
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [bulkCombination, setBulkCombination] = useState('');
+  const [bulkClear, setBulkClear] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   const fetchStudents = useCallback(async (gs?: string) => {
     setLoading(true); setError(null);
@@ -98,12 +112,17 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       let url = '/api/school/data?type=students';
       const stream = gs ?? gradeStreamFilter;
       if (stream) url += `&grade_stream_id=${stream}`;
-      const [sRes, gsRes] = await Promise.all([fetch(url, { cache: 'no-store' }), fetch('/api/school/data?type=grade_streams', { cache: 'no-store' })]);
+      const [sRes, gsRes, structureRes, cRes] = await Promise.all([
+        fetch(url, { cache: 'no-store' }),
+        fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
+        fetch('/api/admin/academic-structure', { cache: 'no-store' }),
+        fetch('/api/school/data?type=subject_combinations', { cache: 'no-store' }),
+      ]);
       if (!sRes.ok) { setError('Failed to load students'); return; }
       const [sJson, gsJson] = await Promise.all([sRes.json(), gsRes.json()]);
       setData(sJson.data || []); setGradeStreams(gsJson.data || []);
-      const res = await fetch('/api/admin/academic-structure', { cache: 'no-store' });
-      if (res.ok) { const j = await res.json(); setAcademicLevels(j.academic_levels || []); }
+      if (structureRes.ok) { const j = await structureRes.json(); setAcademicLevels(j.academic_levels || []); }
+      if (cRes.ok) { const cJson = await cRes.json(); setCombinations(cJson.data || []); }
     } catch { setError('Failed to load data'); }
     finally { setLoading(false); }
   }, [gradeStreamFilter]);
@@ -115,7 +134,9 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number} ${s.guardian_phone||''}`.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
     const matchStream = !gradeStreamFilter || s.current_grade_stream_id === gradeStreamFilter;
-    return matchSearch && matchStatus && matchStream;
+    const matchPathway = !pathwayFilter || (pathwayFilter === 'UNASSIGNED' ? !s.pathway : s.pathway === pathwayFilter);
+    const matchCombination = !combinationFilter || s.subject_combination_id === combinationFilter;
+    return matchSearch && matchStatus && matchStream && matchPathway && matchCombination;
   });
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
@@ -269,8 +290,42 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   };
 
   const openEdit = (s: StudentRow) => {
-    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '' });
+    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
     setEditing(s.id); setShowModal(true);
+  };
+
+  const bulkFiltered = data.filter(s => {
+    const q = bulkSearch.toLowerCase();
+    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number}`.toLowerCase().includes(q);
+    const matchStream = !bulkStreamFilter || s.current_grade_stream_id === bulkStreamFilter;
+    return matchSearch && matchStream;
+  });
+
+  const handleBulkAssign = async () => {
+    if (bulkSelected.size === 0) return;
+    if (!bulkClear && !bulkCombination) { showToast('❌ Pick a subject combination or choose "Clear assignment".'); return; }
+    setBulkSaving(true);
+    try {
+      const res = await fetch('/api/admin/student-pathways', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_ids: Array.from(bulkSelected),
+          subject_combination_id: bulkClear ? null : bulkCombination,
+          pathway: null,
+          track: null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      showToast(`✅ ${json.updated} student(s) ${bulkClear ? 'cleared' : 'assigned'}${json.warnings?.length ? ` (${json.warnings.length} sync warning(s))` : ''}`);
+      setShowBulkAssign(false);
+      setBulkSelected(new Set());
+      setBulkCombination('');
+      setBulkClear(false);
+      await fetchStudents();
+    } catch (err: any) { showToast(`❌ ${err.message}`); }
+    finally { setBulkSaving(false); }
   };
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -302,10 +357,30 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
+        {combinations.length > 0 && (
+          <>
+            <select className="input-field text-xs" value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
+              <option value="">All Pathways</option>
+              <option value="STEM">STEM</option>
+              <option value="SOCIAL_SCIENCES">Social Sciences</option>
+              <option value="ARTS_SPORTS">Arts &amp; Sports Science</option>
+              <option value="UNASSIGNED">Unassigned</option>
+            </select>
+            <select className="input-field text-xs" value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
+              <option value="">All Combinations</option>
+              {combinations.filter(c => !pathwayFilter || pathwayFilter === 'UNASSIGNED' || c.pathway === pathwayFilter).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+            </select>
+          </>
+        )}
         <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
           <Upload size={14} /> Import CSV
         </button>
-        <button className="btn-primary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '' }); setShowModal(true); }}>
+        {combinations.length > 0 && (
+          <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(gradeStreamFilter); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
+            <ClipboardList size={14} /> Assign Pathways
+          </button>
+        )}
+        <button className="btn-primary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ ...emptyStudentForm }); setShowModal(true); }}>
           <UserPlus size={14} /> Add Student
         </button>
       </div>
@@ -330,6 +405,15 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               },
               { key: 'admission_number', header: 'Admission No.', render: s => <span className="font-mono">{s.admission_number}</span> },
               { key: 'class', header: 'Class', render: s => s.grade_stream?.full_name || '—' },
+              ...(combinations.length > 0 ? [{
+                key: 'pathway', header: 'Pathway', hideOnMobile: true,
+                render: (s: StudentRow) => s.pathway ? (
+                  <span className="badge text-[11px]" title={`${s.track || ''}${s.subject_combinations ? ` · ${s.subject_combinations.name}` : ''}`}>
+                    {s.pathway === 'STEM' ? 'STEM' : s.pathway === 'SOCIAL_SCIENCES' ? 'Soc. Sci' : 'Arts/Sports'}
+                    {s.subject_combinations ? ` · ${s.subject_combinations.code}` : ''}
+                  </span>
+                ) : <span className="text-xs text-muted-foreground">—</span>,
+              } as DataTableColumn<StudentRow>] : []),
               {
                 key: 'guardian', header: 'Guardian',
                 render: s => (
@@ -384,10 +468,115 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone || ''} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id || ''} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id || ''} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
+              {combinations.length > 0 && (
+                <>
+                  <div className="col-span-2 border-t border-border pt-3 mt-1">
+                    <p className="text-xs font-semibold text-muted-foreground">CBC Senior School Pathway (Grades 10–12)</p>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-xs text-muted-foreground mb-1">Subject Combination</label>
+                    <select
+                      className="input-field w-full text-xs"
+                      value={formData.subject_combination_id || ''}
+                      onChange={e => {
+                        const combo = combinations.find(c => c.id === e.target.value);
+                        setFormData(p => ({
+                          ...p,
+                          subject_combination_id: e.target.value,
+                          pathway: combo ? combo.pathway : '',
+                          track: combo ? (combo.track || '') : '',
+                        }));
+                      }}
+                    >
+                      <option value="">— None —</option>
+                      {combinations.filter(c => c.is_active || c.id === formData.subject_combination_id).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-xs text-muted-foreground mb-1">Pathway / Track</label>
+                    <input className="input-field w-full text-xs" readOnly value={formData.pathway ? `${pathwayLabel(formData.pathway)}${formData.track ? ` — ${formData.track}` : ''}` : '—'} title="Set automatically from the chosen combination" />
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex gap-2 justify-end">
               <button className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Pathway Assignment Modal */}
+      {showBulkAssign && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowBulkAssign(false)}>
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-sm font-bold font-display mb-1">Assign Pathways &amp; Subject Combinations</h2>
+            <p className="text-xs text-muted-foreground mb-4">Reassign existing students to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
+
+            <div className="flex flex-col sm:flex-row gap-2 mb-3">
+              <select className="input-field text-xs" value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
+                <option value="">All Streams</option>
+                {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+              </select>
+              <div className="flex items-center input-field overflow-hidden px-0 flex-1">
+                <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
+                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
+              </div>
+              <button
+                className="btn-secondary text-xs px-3 py-1.5 shrink-0"
+                onClick={() => {
+                  const allSelected = bulkFiltered.every(s => bulkSelected.has(s.id));
+                  setBulkSelected(prev => {
+                    const next = new Set(prev);
+                    bulkFiltered.forEach(s => { if (allSelected) next.delete(s.id); else next.add(s.id); });
+                    return next;
+                  });
+                }}
+              >
+                {bulkFiltered.length > 0 && bulkFiltered.every(s => bulkSelected.has(s.id)) ? 'Unselect all' : `Select all (${bulkFiltered.length})`}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md min-h-[180px]">
+              {bulkFiltered.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-8">No students match.</p>
+              ) : bulkFiltered.map(s => (
+                <label key={s.id} className="flex items-center gap-3 px-3 py-2 border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-muted/40">
+                  <input
+                    type="checkbox"
+                    checked={bulkSelected.has(s.id)}
+                    onChange={() => setBulkSelected(prev => { const next = new Set(prev); if (next.has(s.id)) next.delete(s.id); else next.add(s.id); return next; })}
+                  />
+                  <span className="text-xs font-medium flex-1">{s.users?.first_name} {s.users?.last_name} <span className="font-mono text-muted-foreground">({s.admission_number})</span></span>
+                  <span className="text-[11px] text-muted-foreground">{s.grade_stream?.full_name || '—'}</span>
+                  <span className={`text-[11px] font-semibold ${s.subject_combinations ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+                    {s.subject_combinations?.code || 'Unassigned'}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-4">
+              <div className="flex-1 w-full">
+                <label className="block text-xs text-muted-foreground mb-1">Assign to combination</label>
+                <select className="input-field w-full text-xs" value={bulkCombination} disabled={bulkClear} onChange={e => setBulkCombination(e.target.value)}>
+                  <option value="">— Select combination —</option>
+                  {combinations.filter(c => c.is_active).map(c => (
+                    <option key={c.id} value={c.id}>{c.code} — {c.name} ({pathwayLabel(c.pathway)}{c.track ? ` / ${c.track}` : ''})</option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap pb-2">
+                <input type="checkbox" checked={bulkClear} onChange={e => setBulkClear(e.target.checked)} /> Clear assignment
+              </label>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button className="btn-secondary text-xs" onClick={() => setShowBulkAssign(false)} disabled={bulkSaving}>Cancel</button>
+              <button className="btn-primary text-xs" onClick={handleBulkAssign} disabled={bulkSaving || bulkSelected.size === 0 || (!bulkClear && !bulkCombination)}>
+                {bulkSaving ? 'Assigning...' : bulkClear ? `Clear ${bulkSelected.size} student(s)` : `Assign ${bulkSelected.size} student(s)`}
+              </button>
             </div>
           </div>
         </div>
@@ -495,6 +684,24 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                   <div className="grid grid-cols-2 gap-3"><div><span className="text-xs text-muted-foreground">Gender</span><p>{viewStudent.profile.gender || '—'}</p></div><div><span className="text-xs text-muted-foreground">DOB</span><p>{viewStudent.profile.date_of_birth ? new Date(viewStudent.profile.date_of_birth).toLocaleDateString() : '—'}</p></div></div>
                   <div><span className="text-xs text-muted-foreground">Guardian</span><p>{viewStudent.profile.guardian_name || '—'} {viewStudent.profile.guardian_phone ? `(${viewStudent.profile.guardian_phone})` : ''}</p></div>
                   <div><span className="text-xs text-muted-foreground">Status</span><p><span className={`badge ${viewStudent.profile.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{viewStudent.profile.status}</span></p></div>
+                  {viewStudent.profile.pathway && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Pathway</span>
+                      <p>{pathwayLabel(viewStudent.profile.pathway)}{viewStudent.profile.track ? ` — ${viewStudent.profile.track}` : ''}{viewStudent.profile.subject_combination ? ` (${viewStudent.profile.subject_combination.code} — ${viewStudent.profile.subject_combination.name})` : ''}</p>
+                    </div>
+                  )}
+                  {(viewStudent.profile.enrolled_subjects?.length ?? 0) > 0 && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Subjects ({viewStudent.profile.enrolled_subjects!.length})</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {viewStudent.profile.enrolled_subjects!.map(sub => (
+                          <span key={sub.id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${sub.role === 'CORE' ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary'}`}>
+                            {sub.name}{sub.role === 'ELECTIVE' ? ' •' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : viewTab === 'academic' ? (
                 <div className="space-y-3">

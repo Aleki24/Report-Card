@@ -13,6 +13,7 @@ interface SchoolShape {
   logo_url?: string;
   teacher_invite_code?: string;
   student_invite_code?: string;
+  min_combination_group_size?: number;
 }
 
 interface SchoolFormProps {
@@ -112,6 +113,18 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
           <label className="block text-xs text-muted-foreground mb-1">Email</label>
           <input className="input-field w-full" type="email" value={school.email} onChange={e => setSchool((prev) => ({ ...prev, email: e.target.value }))} placeholder="e.g. info@school.com" />
         </div>
+      </div>
+      <div>
+        <label className="block text-xs text-muted-foreground mb-1">Minimum learners per subject combination (CBC Senior School)</label>
+        <input
+          className="input-field w-full sm:w-40"
+          type="number"
+          min={1}
+          max={200}
+          value={school.min_combination_group_size ?? 15}
+          onChange={e => { const v = parseInt(e.target.value, 10); setSchool((prev) => ({ ...prev, min_combination_group_size: Number.isNaN(v) ? undefined : v })); }}
+        />
+        <p className="text-xs text-muted-foreground mt-1">Ministry default is 15 — combinations with at least this many learners get their own report document when splitting class reports by combination.</p>
       </div>
 
       {/* Invite Codes */}

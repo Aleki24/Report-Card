@@ -83,6 +83,11 @@ export default function StudentSubjectsPage() {
                                                 {s.category}
                                             </span>
                                         )}
+                                        {s.enrollment_role === 'ELECTIVE' && (
+                                            <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'color-mix(in srgb, var(--viz-info) 10%, transparent)', color: 'var(--viz-info)' }}>
+                                                My Elective
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </Link>

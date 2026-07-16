@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode } from '@/lib/invite-codes';
+import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
 
         const user_id = userId;
         const body = await request.json();
-        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth, avatar_url } = body;
+        const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth, avatar_url, pathway, track, subject_combination_id } = body;
 
         if (!first_name?.trim() || !last_name?.trim()) {
             return NextResponse.json({ error: 'First name and last name are required.' }, { status: 400 });
@@ -141,12 +142,48 @@ export async function POST(request: NextRequest) {
         };
         if (avatar_url) studentInsert.avatar_url = avatar_url;
 
+        // CBC senior pathway assignment (all optional)
+        let combinationForSync: string | null = null;
+        if (subject_combination_id) {
+            const { data: combination } = await supabaseAdmin
+                .from('subject_combinations')
+                .select('id, pathway, track')
+                .eq('id', subject_combination_id)
+                .eq('school_id', effectiveSchoolId)
+                .maybeSingle();
+            if (!combination) {
+                await supabaseAdmin.from('users').delete().eq('id', studentUserId);
+                return NextResponse.json({ error: 'Subject combination not found in your school.' }, { status: 404 });
+            }
+            studentInsert.subject_combination_id = combination.id;
+            studentInsert.pathway = pathway || combination.pathway;
+            studentInsert.track = track?.trim() || combination.track;
+            combinationForSync = combination.id;
+        } else {
+            if (pathway) studentInsert.pathway = pathway;
+            if (track?.trim()) studentInsert.track = track.trim();
+        }
+
         const { error: studentError } = await supabaseAdmin.from('students').insert(studentInsert);
 
         if (studentError) {
             // Cleanup: delete user row
             await supabaseAdmin.from('users').delete().eq('id', studentUserId);
             return NextResponse.json({ error: `Student record creation failed: ${studentError.message}` }, { status: 400 });
+        }
+
+        // 3b. Sync subject enrollments from the assigned combination
+        if (combinationForSync) {
+            try {
+                await syncStudentSubjects(supabaseAdmin, {
+                    studentId: studentUserId,
+                    schoolId: effectiveSchoolId,
+                    combinationId: combinationForSync,
+                });
+            } catch (syncErr) {
+                console.error('add-student enrollment sync failed:', syncErr);
+                // Student is created; enrollments can be re-synced by editing the student
+            }
         }
 
         // 4. Generate invite code (NOT a password)

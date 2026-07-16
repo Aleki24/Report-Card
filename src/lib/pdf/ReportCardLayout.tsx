@@ -51,10 +51,27 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                 <View style={[s.infoItem, { flex: 0.5 }]}><Text style={s.infoLabel}>Year</Text><Text style={s.infoValue}>{data.academicYear}</Text></View>
             </View>
 
+            {/* CBC Senior Pathway line */}
+            {data.pathwayName && (
+                <View style={[s.infoGrid, { marginTop: 2 }]}>
+                    <View style={s.infoItem}>
+                        <Text style={s.infoLabel}>Pathway</Text>
+                        <Text style={s.infoValue}>
+                            {data.pathwayName}
+                            {data.trackName ? ` — ${data.trackName}` : ''}
+                            {data.combinationCode ? ` (${data.combinationCode})` : ''}
+                        </Text>
+                    </View>
+                </View>
+            )}
+
             {/* Summary Strip */}
             <View style={s.summaryStrip}>
                 <View style={s.summaryLeft}><Text style={s.summaryLabel}>Exam</Text><Text style={s.summaryVal}>{data.examTitle}</Text></View>
                 <View style={s.summaryRight}>
+                    {data.combinationRank !== undefined && (
+                        <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Pathway Rank</Text><Text style={s.summaryVal}>{`${data.combinationRank}/${data.combinationSize}`}</Text></View>
+                    )}
                     <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Rank</Text><Text style={s.summaryVal}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text></View>
                     <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Total Marks</Text><Text style={s.summaryVal}>{totalScore}</Text></View>
                     {isKCSE && data.totalPoints !== undefined && (

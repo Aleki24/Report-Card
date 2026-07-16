@@ -98,11 +98,17 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                         <View style={t.detailLine}><Text style={t.detailLabel}>Name</Text><Text style={t.detailValue}>{data.studentName}</Text></View>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Class</Text><Text style={t.detailValue}>{data.className}</Text></View>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Adm No</Text><Text style={t.detailValue}>{data.enrollmentNumber || '—'}</Text></View>
+                        {data.pathwayName && (
+                            <View style={t.detailLine}><Text style={t.detailLabel}>Pathway</Text><Text style={t.detailValue}>{data.pathwayName}{data.combinationCode ? ` (${data.combinationCode})` : ''}</Text></View>
+                        )}
                     </View>
                     <View style={t.detailCol}>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Examination</Text><Text style={t.detailValue}>{data.examTitle}</Text></View>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Year</Text><Text style={t.detailValue}>{data.academicYear}</Text></View>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Class Rank</Text><Text style={t.detailValue}>{data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'}</Text></View>
+                        {data.combinationRank !== undefined && (
+                            <View style={t.detailLine}><Text style={t.detailLabel}>Pathway Rank</Text><Text style={t.detailValue}>{`${data.combinationRank} of ${data.combinationSize}`}</Text></View>
+                        )}
                     </View>
                 </View>
 

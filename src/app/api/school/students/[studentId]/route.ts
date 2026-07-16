@@ -32,9 +32,11 @@ export async function GET(
       .select(`
         id, admission_number, status, academic_level_id, current_grade_stream_id,
         guardian_phone, guardian_name, guardian_email, gender, date_of_birth, date_enrolled, created_at, avatar_url,
+        pathway, track, subject_combination_id,
         users!inner (first_name, last_name, email, phone, school_id),
         grade_streams (id, full_name, grade_id),
-        academic_levels (id, name, code)
+        academic_levels (id, name, code),
+        subject_combinations (id, code, name, pathway, track)
       `)
       .eq('id', studentId)
       .maybeSingle();
@@ -109,6 +111,16 @@ export async function GET(
       }
     }
 
+    // 2.5 Subject enrollments (CBC senior pathway feature)
+    const { data: enrollments } = await supabase
+      .from('student_subjects')
+      .select('role, subjects ( id, name, code )')
+      .eq('student_id', studentId);
+    const enrolledSubjects = (enrollments || [])
+      .map((e: any) => ({ role: e.role, ...((Array.isArray(e.subjects) ? e.subjects[0] : e.subjects) || {}) }))
+      .filter((s: any) => s.id)
+      .sort((a: any, b: any) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'CORE' ? -1 : 1));
+
     // 3. Report history
     const { data: reportCards } = await supabase
       .from('report_cards')
@@ -172,6 +184,10 @@ export async function GET(
         guardian_email: student.guardian_email,
         grade_stream: student.grade_streams,
         academic_level: student.academic_levels,
+        pathway: (student as any).pathway,
+        track: (student as any).track,
+        subject_combination: (student as any).subject_combinations,
+        enrolled_subjects: enrolledSubjects,
       },
       academicHistory,
       reportHistory,

@@ -113,6 +113,9 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                 <View>
                     <Text style={m.studentName}>{data.studentName}</Text>
                     <Text style={m.studentMeta}>{data.className}{data.enrollmentNumber ? `  •  Adm No ${data.enrollmentNumber}` : ''}</Text>
+                    {data.pathwayName && (
+                        <Text style={m.studentMeta}>{data.pathwayName}{data.trackName ? ` — ${data.trackName}` : ''}{data.combinationCode ? `  •  ${data.combinationCode}` : ''}</Text>
+                    )}
                 </View>
                 <View style={m.examChip}><Text style={m.examChipText}>{data.examTitle}</Text></View>
             </View>
@@ -127,6 +130,12 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                     <Text style={m.statLabel}>Grade</Text>
                     <Text style={[m.statValue, { color: gradeColor(overallGrade) }]}>{overallGrade || '—'}</Text>
                 </View>
+                {data.combinationRank !== undefined && (
+                    <View style={m.statTile}>
+                        <Text style={m.statLabel}>Pathway Rank</Text>
+                        <Text style={m.statValue}>{`${data.combinationRank}/${data.combinationSize}`}</Text>
+                    </View>
+                )}
                 <View style={m.statTile}>
                     <Text style={m.statLabel}>Class Rank</Text>
                     <Text style={m.statValue}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text>

@@ -2,6 +2,7 @@ export type UserRole = 'ADMIN' | 'CLASS_TEACHER' | 'SUBJECT_TEACHER' | 'STUDENT'
 export type ExamType = 'CBC' | '844' | 'MIDTERM' | 'ENDTERM' | 'OPENER';
 export type StudentStatus = 'ACTIVE' | 'TRANSFERRED' | 'GRADUATED' | 'DEACTIVATED';
 export type SubjectCategory = 'LANGUAGE' | 'MATHEMATICS' | 'SCIENCE' | 'HUMANITY' | 'TECHNICAL';
+export type CbcPathway = 'STEM' | 'SOCIAL_SCIENCES' | 'ARTS_SPORTS';
 
 export interface User {
     id: string;
@@ -62,6 +63,33 @@ export interface Student {
     guardian_email?: string;
     date_enrolled?: string;
     status: StudentStatus;
+    pathway?: CbcPathway | null;
+    track?: string | null;
+    subject_combination_id?: string | null;
+}
+
+// ── CBC Senior School pathways & subject combinations ────────
+
+export interface SubjectCombination {
+    id: string;
+    school_id: string;
+    code: string;
+    name: string;
+    pathway: CbcPathway;
+    track?: string | null;
+    is_active: boolean;
+    /** Joined electives (subject_combination_subjects -> subjects) */
+    subjects?: { id: string; name: string; code: string }[];
+    /** Aggregate from the admin GET endpoint */
+    student_count?: number;
+}
+
+export interface StudentSubject {
+    id: string;
+    student_id: string;
+    subject_id: string;
+    role: 'CORE' | 'ELECTIVE';
+    school_id?: string | null;
 }
 
 export interface AcademicYear {
