@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import { sendSMS } from './africastalking';
+import { sendEmail } from './email';
 
 /**
  * Generates a unique 6-character alphanumeric invite code.
@@ -55,4 +57,61 @@ export async function createInviteCode(
   }
 
   throw new Error('Failed to generate a unique invite code after multiple attempts');
+}
+
+export interface InviteNotifyResult {
+  sms: boolean;
+  email: boolean;
+}
+
+/**
+ * Best-effort delivery of a freshly generated invite code by SMS and/or
+ * email. Never throws — a missing provider credential or a failed send
+ * just leaves the corresponding flag false, since the code is always
+ * still shown to the admin in the UI as a fallback.
+ */
+export async function notifyInviteCode(params: {
+  phone?: string | null;
+  email?: string | null;
+  firstName: string;
+  schoolName: string;
+  code: string;
+}): Promise<InviteNotifyResult> {
+  const { phone, email, firstName, schoolName, code } = params;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const result: InviteNotifyResult = { sms: false, email: false };
+
+  if (phone) {
+    try {
+      const message = `Hi ${firstName}, your Matokeo invite code for ${schoolName} is ${code}. Activate your account at ${appUrl}/activate`;
+      const smsRes = await sendSMS(phone, message);
+      result.sms = smsRes.success;
+      if (!smsRes.success) console.error('[invite] SMS send failed:', smsRes.error);
+    } catch (err) {
+      console.error('[invite] SMS send threw:', err);
+    }
+  }
+
+  if (email) {
+    try {
+      await sendEmail({
+        to: email,
+        subject: `Your Matokeo invite code for ${schoolName}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #1a1a2e;">You're invited to ${schoolName}</h1>
+            <p>Hi ${firstName},</p>
+            <p>Your invite code is:</p>
+            <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px;">${code}</p>
+            <p>Activate your account at <a href="${appUrl}/activate">${appUrl}/activate</a>.</p>
+          </div>
+        `,
+      });
+      result.email = true;
+    } catch (err) {
+      console.error('[invite] Email send threw:', err);
+    }
+  }
+
+  return result;
 }

@@ -3,14 +3,34 @@
 import React from 'react';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 
+interface NotifyStatus { sms: boolean; email: boolean }
+
+function NotifyBanner({ notified }: { notified?: NotifyStatus | null }) {
+  if (!notified) return null;
+  if (notified.sms || notified.email) {
+    const channels = [notified.sms && 'SMS', notified.email && 'email'].filter(Boolean).join(' and ');
+    return (
+      <p className="text-xs text-emerald-600 mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-md p-2">
+        ✓ Invite code sent via {channels}.
+      </p>
+    );
+  }
+  return (
+    <p className="text-xs text-amber-600 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
+      Could not send the code automatically — please share it manually.
+    </p>
+  );
+}
+
 interface InviteResultModalProps {
   invitedName: string;
   invitedUsername: string;
   invitedCode: string; // Renamed from invitedPassword
+  notified?: NotifyStatus | null;
   onClose: () => void;
 }
 
-export function InviteResultModal({ invitedName, invitedUsername, invitedCode, onClose }: InviteResultModalProps) {
+export function InviteResultModal({ invitedName, invitedUsername, invitedCode, notified, onClose }: InviteResultModalProps) {
   return (
     <ModalOverlay onClose={onClose} maxWidth="max-w-md">
       <div className="text-center">
@@ -29,6 +49,7 @@ export function InviteResultModal({ invitedName, invitedUsername, invitedCode, o
             <div className="text-sm font-medium font-mono text-foreground uppercase tracking-widest">{invitedCode}</div>
           </div>
         </div>
+        <NotifyBanner notified={notified} />
         <p className="text-xs text-muted-foreground mb-6">
           The user must activate their account by going to <strong>/activate</strong> and setting their own password.
         </p>
@@ -40,10 +61,11 @@ export function InviteResultModal({ invitedName, invitedUsername, invitedCode, o
 
 interface ResetPasswordResultModalProps {
   inviteCode: string; // Renamed from password
+  notified?: NotifyStatus | null;
   onClose: () => void;
 }
 
-export function ResetPasswordResultModal({ inviteCode, onClose }: ResetPasswordResultModalProps) {
+export function ResetPasswordResultModal({ inviteCode, notified, onClose }: ResetPasswordResultModalProps) {
   return (
     <ModalOverlay onClose={onClose} maxWidth="max-w-sm">
       <div className="text-center">
@@ -55,6 +77,7 @@ export function ResetPasswordResultModal({ inviteCode, onClose }: ResetPasswordR
         <div className="bg-muted border rounded-lg p-4 mb-4">
           <code className="text-xl font-mono font-bold tracking-widest uppercase text-primary">{inviteCode}</code>
         </div>
+        <NotifyBanner notified={notified} />
         <p className="text-xs text-muted-foreground mb-4">Share this code with the user. They must go to <strong>/activate</strong> to set a new password.</p>
         <button onClick={onClose} className="btn-primary w-full">Done</button>
       </div>

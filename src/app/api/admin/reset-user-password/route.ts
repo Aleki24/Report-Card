@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { createInviteCode } from '@/lib/invite-codes';
+import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Get the target user's role and verify same school
     const { data: targetUser, error: userError } = await supabase
       .from('users')
-      .select('id, role, first_name, school_id')
+      .select('id, role, first_name, phone, school_id')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -51,10 +51,36 @@ export async function POST(request: NextRequest) {
     // or just let them use the code to overwrite their password later.
     // For now, generating a code is enough. The /activate endpoint will update their password.
 
-    return NextResponse.json({ 
-      success: true, 
+    // Best-effort delivery — the code is still shown to the admin below
+    // regardless of whether this succeeds. Students are contacted via their
+    // guardian's phone/email; everyone else via their own phone.
+    let notifyPhone = targetUser.phone;
+    let notifyEmail: string | null = null;
+    if (targetUser.role === 'STUDENT') {
+      const { data: student } = await supabase
+        .from('students')
+        .select('guardian_phone, guardian_email')
+        .eq('id', targetUser.id)
+        .maybeSingle();
+      notifyPhone = student?.guardian_phone || null;
+      notifyEmail = student?.guardian_email || null;
+    }
+
+    const { data: school } = await supabase.from('schools').select('name').eq('id', targetUser.school_id).maybeSingle();
+
+    const notified = await notifyInviteCode({
+      phone: notifyPhone,
+      email: notifyEmail,
+      firstName: targetUser.first_name,
+      schoolName: school?.name || 'your school',
+      code: inviteCode,
+    });
+
+    return NextResponse.json({
+      success: true,
       password: inviteCode, // Keeping the key as "password" for now so the UI doesn't break entirely, but it's actually the code
-      message: `Generated new invite code: ${inviteCode}`
+      message: `Generated new invite code: ${inviteCode}`,
+      notified,
     });
 
   } catch (err: unknown) {
