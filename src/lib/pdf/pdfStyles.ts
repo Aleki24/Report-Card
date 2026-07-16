@@ -27,7 +27,10 @@ export const s = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', backgroundColor: WHITE,
         paddingVertical: 12, paddingHorizontal: 24,
     },
-    logo: { width: 90, height: 90, borderRadius: 45, objectFit: 'contain', backgroundColor: WHITE },
+    // Rounded-square frame with padding: any logo shape renders whole
+    // (a circular mask clips the corners of square/rectangular logos)
+    logoFrame: { width: 90, height: 90, borderRadius: 10, backgroundColor: WHITE, padding: 7, alignItems: 'center' as const, justifyContent: 'center' as const },
+    logo: { width: 76, height: 76, objectFit: 'contain' },
     logoPlaceholder: { width: 90, height: 90, borderRadius: 45, backgroundColor: LIGHT_GRAY, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
     schoolName: { fontSize: 16, fontWeight: 'bold', color: BLACK, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },

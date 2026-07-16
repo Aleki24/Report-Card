@@ -125,7 +125,7 @@ export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: 
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                    <select className="input-field text-xs" value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
+                    <select className="input-field text-xs" style={{ width: "auto", minWidth: "150px" }} value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
                         <option value="">All Classes</option>
                         {streams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </select>
