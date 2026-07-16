@@ -5,6 +5,7 @@ import Navbar from '@/components/landing/Navbar';
 import HeroSection from '@/components/landing/HeroSection';
 import ModulesSection from '@/components/landing/ModulesSection';
 import WorkflowSection from '@/components/landing/WorkflowSection';
+import JoinGuideSection from '@/components/landing/JoinGuideSection';
 import RolesSection from '@/components/landing/RolesSection';
 import CTASection from '@/components/landing/CTASection';
 import Footer from '@/components/landing/Footer';
@@ -46,6 +47,7 @@ export default function Home() {
         <HeroSection />
         <ModulesSection />
         <WorkflowSection />
+        <JoinGuideSection />
         <RolesSection />
         <CTASection />
       </main>

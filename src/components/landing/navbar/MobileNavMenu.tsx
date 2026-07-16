@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs';
 import { modules } from '@/lib/modules';
 
 const featureModules = modules.filter(m => m.slug !== 'settings');
@@ -15,6 +16,7 @@ interface MobileNavMenuProps {
 }
 
 export function MobileNavMenu({ isOpen, onClose, mobileFeaturesOpen, setMobileFeaturesOpen }: MobileNavMenuProps) {
+    const { isSignedIn } = useAuth();
     if (!isOpen) return null;
 
     const mobileLinkStyle = {
@@ -85,8 +87,10 @@ export function MobileNavMenu({ isOpen, onClose, mobileFeaturesOpen, setMobileFe
             <div style={{ height: '1px', background: 'var(--color-border-subtle)', margin: '4px 0' }} />
 
             <Link href="/login" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Sign In</Link>
+            <Link href="/activate" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Activate with Invite Code</Link>
+            {/* Signed-out visitors get guided into joining; signed-in users keep their dashboard shortcut */}
             <Link
-                href="/dashboard" onClick={onClose}
+                href={isSignedIn ? '/dashboard' : '/signup'} onClick={onClose}
                 className="rounded-lg transition-all duration-200 text-center"
                 style={{
                     background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
@@ -94,7 +98,7 @@ export function MobileNavMenu({ isOpen, onClose, mobileFeaturesOpen, setMobileFe
                     fontWeight: 600, padding: '12px 16px', display: 'block', textDecoration: 'none',
                 }}
             >
-                Dashboard
+                {isSignedIn ? 'Dashboard' : 'Get Started'}
             </Link>
         </div>
     );

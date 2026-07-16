@@ -112,8 +112,15 @@ export default function ActivateCallbackPage() {
                 sessionStorage.removeItem('activate_username');
 
                 setStatus('Account activated! Redirecting...');
+                // Full page navigation (not router.push): AuthProvider fetched
+                // /api/auth/me while this account was still being linked and may
+                // have cached a stale 'PENDING' profile — a client-side route
+                // change would bounce the user into /dashboard/onboarding and
+                // ask for the invite code all over again. A hard reload
+                // re-fetches the profile with the real role.
+                const target = data.role === 'STUDENT' ? '/student/dashboard' : '/dashboard';
                 setTimeout(() => {
-                    router.push('/dashboard');
+                    window.location.href = target;
                 }, 1500);
 
             } catch (err: any) {

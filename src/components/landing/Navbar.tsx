@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Sun, Moon, Menu, X, ChevronDown } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs';
 import { useTheme } from '@/components/ThemeProvider';
 import { FeaturesDropdown } from './navbar/FeaturesDropdown';
 import { MobileNavMenu } from './navbar/MobileNavMenu';
 
 export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
+  const { isSignedIn } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileFeaturesOpen, setMobileFeaturesOpen] = useState(false);
@@ -92,13 +94,14 @@ export default function Navbar() {
             Sign In
           </Link>
 
-          <Link href="/dashboard" className="inline-flex items-center rounded-lg transition-all duration-200 hover:opacity-90"
+          {/* Signed-out visitors get guided into joining; signed-in users keep their dashboard shortcut */}
+          <Link href={isSignedIn ? '/dashboard' : '/signup'} className="inline-flex items-center rounded-lg transition-all duration-200 hover:opacity-90"
             style={{
               background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
               color: '#1A1816', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 600,
               padding: '8px 16px', gap: '8px', letterSpacing: '0.01em', boxShadow: '0 2px 12px rgba(212, 168, 83, 0.2)',
             }}>
-            Dashboard <ArrowRight className="w-4 h-4" />
+            {isSignedIn ? 'Dashboard' : 'Get Started'} <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
