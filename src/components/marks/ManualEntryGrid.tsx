@@ -39,13 +39,15 @@ interface Props {
     gradeId?: string;
     /** The exam's stream, if it targets a single stream */
     gradeStreamId?: string | null;
+    /** The exam's subject — filters the roster to enrolled takers (8-4-4 electives / CBC pathway subjects) */
+    subjectId?: string;
 }
 
 const emptyRow = (): MarkRow => ({
     studentId: '', studentName: '', admissionNumber: '', score: '', componentScores: {}, grade: '', remarks: '', error: '', isGradeManuallySet: false,
 });
 
-export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId }: Props) {
+export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
     // When the exam's class is known, students load automatically and the
     // manual Level/Grade/Stream re-selection is skipped entirely.
     const examScoped = !!gradeId;
@@ -185,7 +187,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
 
         setStudentsLoading(true);
         try {
-            const res = await fetch('/api/school/data?type=students');
+            const res = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
             const { data } = await res.json();
 
             const filteredStudents = (data || []).filter((s: any) => {
@@ -221,7 +223,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             setStudentsLoading(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [examScoped, gradeId, gradeStreamId, selectedGradeId, selectedStreamId, allStreams]);
+    }, [examScoped, gradeId, gradeStreamId, subjectId, selectedGradeId, selectedStreamId, allStreams]);
 
     useEffect(() => { fetchStudents(); }, [fetchStudents]);
 

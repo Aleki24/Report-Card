@@ -13,10 +13,12 @@ interface StudentMissing {
 interface Props {
     examId: string;
     gradeStreamId: string;
+    /** The exam's subject — limits "missing students" to enrolled takers */
+    subjectId?: string;
     onSaved: () => void;
 }
 
-export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
+export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Props) {
     const [students, setStudents] = useState<StudentMissing[]>([]);
     const [scores, setScores] = useState<Record<string, string>>({});
     // Per-paper scores: studentId -> componentId -> score (multi-paper exams)
@@ -39,8 +41,9 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
             setMessage(null);
 
             try {
-                // Get all students in the stream
-                const stuRes = await fetch('/api/school/data?type=students');
+                // Get all students in the stream (subject-scoped when known,
+                // so only the subject's takers count as "missing")
+                const stuRes = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
                 const stuData = await stuRes.json();
                 const allStudents = (stuData.data || []).filter((s: any) => s.current_grade_stream_id === gradeStreamId);
 
@@ -71,7 +74,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, onSaved }: Props) {
 
         fetchMissing();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [examId, gradeStreamId]);
+    }, [examId, gradeStreamId, subjectId]);
 
     // Fetch multi-paper configuration for this exam (if any)
     useEffect(() => {

@@ -692,9 +692,10 @@ export function MarksSetupTab() {
               maxScore={selectedExam.max_score}
               gradeId={selectedExam.grade_id}
               gradeStreamId={selectedExam.grade_stream_id || null}
+              subjectId={selectedExam.subject_id}
             />
           )}
-          {mode === 'bulk' && <BulkUpload examId={selectedExamId} />}
+          {mode === 'bulk' && <BulkUpload examId={selectedExamId} subjectId={selectedExam.subject_id} />}
           {mode === 'scan' && (
             <>
               {examIsMultiPaper && (
@@ -708,6 +709,7 @@ export function MarksSetupTab() {
                 maxScore={selectedExam.max_score}
                 gradeId={selectedExam.grade_id}
                 gradeStreamId={selectedExam.grade_stream_id || null}
+                subjectId={selectedExam.subject_id}
               />
             </>
           )}

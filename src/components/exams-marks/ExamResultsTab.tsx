@@ -10,7 +10,7 @@ import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
-interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; }
+interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string; }
 interface AcademicYear { id: string; name: string; }
 interface Term { id: string; name: string; academic_year_id: string; }
 
@@ -89,6 +89,7 @@ export function ExamResultsTab() {
                         exam_type: e.exam_type,
                         max_score: e.max_score,
                         subject_name: e.subject_name || 'N/A',
+                        subject_id: e.subject_id,
                     }));
                     setExams(mapped);
                     setSelectedExamId(mapped[0]?.id || '');
@@ -368,6 +369,7 @@ export function ExamResultsTab() {
                                 <QuickMarkEntry
                                     examId={selectedExamId}
                                     gradeStreamId={selectedStreamId}
+                                    subjectId={selectedExam?.subject_id}
                                     onSaved={fetchMarks}
                                 />
                             )}
