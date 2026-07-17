@@ -3,6 +3,7 @@
 import { useTheme } from '@/components/ThemeProvider';
 import Navbar from '@/components/landing/Navbar';
 import HeroSection from '@/components/landing/HeroSection';
+import ShaderBackdrop from '@/components/landing/ShaderBackdrop';
 import ShowcaseSection from '@/components/landing/ShowcaseSection';
 import ModulesSection from '@/components/landing/ModulesSection';
 import WorkflowSection from '@/components/landing/WorkflowSection';
@@ -17,7 +18,20 @@ export default function Home() {
   return (
     <div className="min-h-screen relative overflow-hidden transition-colors duration-500" style={{ background: 'var(--color-bg)' }}>
 
-      {/* AMBIENT LIGHT EFFECTS — static, no animation */}
+      {/* Scroll progress bar — driven by animation-timeline: scroll(),
+          invisible on browsers without support */}
+      <div
+        className="landing-scroll-progress fixed top-0 left-0 right-0 pointer-events-none"
+        style={{
+          height: '2px',
+          zIndex: 60,
+          transformOrigin: '0 50%',
+          transform: 'scaleX(0)',
+          background: 'linear-gradient(90deg, var(--color-accent), var(--color-success))',
+        }}
+      />
+
+      {/* AMBIENT LIGHT EFFECTS — static CSS fallback, always present */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div
           className="absolute top-[-20%] left-[10%] w-[50vw] h-[50vh] rounded-full blur-[160px]"
@@ -33,14 +47,10 @@ export default function Home() {
             opacity: theme === 'dark' ? 0.5 : 0.2,
           }}
         />
-        <div
-          className="absolute top-[5%] right-[20%] w-[30vw] h-[25vh] rounded-full blur-[100px]"
-          style={{
-            background: 'radial-gradient(circle, rgba(159, 122, 234, 0.06) 0%, transparent 70%)',
-            opacity: theme === 'dark' ? 0.4 : 0.15,
-          }}
-        />
       </div>
+
+      {/* Live WebGL aurora — layers over the static glow, skipped without WebGL2 */}
+      <ShaderBackdrop />
 
       <Navbar />
 

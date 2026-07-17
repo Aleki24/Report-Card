@@ -133,7 +133,7 @@ export default function ShowcaseSection() {
               style={{ gap: 'clamp(32px, 5vw, 72px)' }}
             >
               {/* Image panel */}
-              <div className="w-full lg:w-1/2 relative">
+              <div className={`w-full lg:w-1/2 relative ${reversed ? 'scroll-reveal-right' : 'scroll-reveal-left'}`}>
                 {/* Glow */}
                 <div
                   className="absolute rounded-full blur-[80px] pointer-events-none"
@@ -183,7 +183,7 @@ export default function ShowcaseSection() {
               </div>
 
               {/* Copy */}
-              <div className="w-full lg:w-1/2 text-center lg:text-left">
+              <div className="w-full lg:w-1/2 text-center lg:text-left scroll-reveal">
                 <h3
                   style={{
                     fontFamily: 'var(--font-display)',

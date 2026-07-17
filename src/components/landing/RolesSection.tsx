@@ -123,7 +123,7 @@ export default function RolesSection() {
           {roles.map((role, idx) => (
             <div
               key={idx}
-              className={`group relative rounded-2xl border transition-all duration-500 hover:border-[${role.hoverBorder}]`}
+              className={`group relative rounded-2xl border transition-all duration-500 hover:border-[${role.hoverBorder}] scroll-reveal`}
               style={{
                 padding: 'clamp(24px, 4vw, 36px)',
                 background: 'var(--color-surface)',
