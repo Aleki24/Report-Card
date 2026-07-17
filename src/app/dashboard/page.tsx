@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui';
 import {
   Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
   ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
-  BookOpen, Search, CheckCircle2, Plus
+  BookOpen, Search, CheckCircle2, Plus, MessageSquare
 } from 'lucide-react';
 
 interface DashboardData {
@@ -207,33 +207,45 @@ function AdminDashboard({ userName }: { userName: string }) {
         totalUsers={data?.totalUsers ?? 0}
         role="ADMIN"
       />
-      {/* Top Header Bar */}
-      <div className="mb-4 flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-3 sm:mb-5">
-        <div className="min-w-0">
-          <h1 className="font-display text-lg font-bold tracking-tight text-foreground sm:text-2xl">
-            {greeting}, {greetingName} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground sm:text-[13px]">
-            {todayLabel} &middot; {getCurrentTermName()}
-          </p>
-        </div>
-        <form
-          onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
-          className="hidden md:block"
-        >
-          <div className="flex w-64 items-center rounded-xl border border-border/60 bg-card/80 transition-colors focus-within:border-primary/50 lg:w-72">
-            <span className="flex shrink-0 items-center justify-center pl-3 text-muted-foreground">
-              <Search size={15} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search students…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm outline-none placeholder:text-muted-foreground/80"
-            />
+      {/* Hero Banner */}
+      <div className="relative mb-4 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:mb-5 sm:px-8 sm:py-7">
+        <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
+        <div className="pointer-events-none absolute -right-16 bottom-[-48px] h-40 w-40 rounded-full bg-white/10" aria-hidden />
+        <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <h1 className="font-display text-lg font-bold tracking-tight text-white sm:text-2xl">
+              {greeting}, {greetingName} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
+            </h1>
+            <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
+              {todayLabel} &middot; {getCurrentTermName()} &middot; Your school is running smoothly this term.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
+                <FileText size={15} /> Generate Report Cards
+              </Link>
+              <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors duration-200 hover:bg-white/20 sm:text-sm">
+                <MessageSquare size={15} /> Send SMS Results
+              </Link>
+            </div>
           </div>
-        </form>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
+            className="hidden md:block"
+          >
+            <div className="flex w-64 items-center rounded-xl border border-white/25 bg-white/10 backdrop-blur-sm transition-colors focus-within:border-white/50 lg:w-72">
+              <span className="flex shrink-0 items-center justify-center pl-3 text-white/70">
+                <Search size={15} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search students…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm text-white outline-none placeholder:text-white/60"
+              />
+            </div>
+          </form>
+        </div>
       </div>
 
       <div className="flex gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
@@ -246,12 +258,12 @@ function AdminDashboard({ userName }: { userName: string }) {
           <section>
             <SectionTitle>At a glance</SectionTitle>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiTile title="Students" value={data?.totalStudents ?? 0} icon={<Users size={17} />} href="/dashboard/people" />
-              <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" />
-              <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" />
-              <KpiTile title="Reports" value={data?.totalReports ?? 0} icon={<FileText size={17} />} href="/dashboard/reports" />
-              <KpiTile title="Present today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" />
-              <KpiTile title="Overdue fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={17} />} href="/dashboard/fees" alert={(data?.overdueFeesCount ?? 0) > 0} />
+              <KpiTile title="Students" value={data?.totalStudents ?? 0} icon={<Users size={17} />} href="/dashboard/people" tone="blue" />
+              <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
+              <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
+              <KpiTile title="Reports" value={data?.totalReports ?? 0} icon={<FileText size={17} />} href="/dashboard/reports" tone="purple" />
+              <KpiTile title="Present today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
+              <KpiTile title="Overdue fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={17} />} href="/dashboard/fees" alert={(data?.overdueFeesCount ?? 0) > 0} tone={(data?.overdueFeesCount ?? 0) > 0 ? 'red' : undefined} />
             </div>
           </section>
 
