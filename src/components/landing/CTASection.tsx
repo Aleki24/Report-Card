@@ -12,7 +12,7 @@ export default function CTASection() {
   return (
     <section style={{ padding: 'clamp(48px, 6vw, 80px) clamp(16px, 5vw, 48px)', maxWidth: '1280px', margin: '0 auto' }}>
       <div
-        className="relative rounded-3xl overflow-hidden"
+        className="relative rounded-3xl overflow-hidden scroll-reveal"
         style={{
           border: '1px solid var(--color-border)',
           boxShadow: isDark

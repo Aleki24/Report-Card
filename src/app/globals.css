@@ -924,6 +924,68 @@ select.input-field {
   animation: float 6s ease-in-out infinite;
 }
 
+/* ============================================= */
+/* LANDING — SCROLL-DRIVEN ANIMATIONS (2026)     */
+/* Elements stay fully visible when              */
+/* animation-timeline isn't supported.           */
+/* ============================================= */
+@keyframes landing-reveal-up {
+  from { opacity: 0; transform: translateY(56px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes landing-reveal-left {
+  from { opacity: 0; transform: translateX(-56px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes landing-reveal-right {
+  from { opacity: 0; transform: translateX(56px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes landing-grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@supports (animation-timeline: view()) {
+  .scroll-reveal,
+  .scroll-reveal-left,
+  .scroll-reveal-right {
+    animation: landing-reveal-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 32%;
+  }
+  .scroll-reveal-left { animation-name: landing-reveal-left; }
+  .scroll-reveal-right { animation-name: landing-reveal-right; }
+}
+
+@supports (animation-timeline: scroll()) {
+  .landing-scroll-progress {
+    animation: landing-grow-x linear both;
+    animation-timeline: scroll(root);
+  }
+}
+
+/* Module ticker marquee */
+@keyframes landing-marquee {
+  to { transform: translateX(-50%); }
+}
+
+.landing-marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+}
+
+.landing-marquee-track {
+  display: inline-flex;
+  white-space: nowrap;
+  width: max-content;
+  animation: landing-marquee 36s linear infinite;
+}
+
 .animation-delay-100 { animation-delay: 100ms; }
 .animation-delay-200 { animation-delay: 200ms; }
 .animation-delay-300 { animation-delay: 300ms; }
