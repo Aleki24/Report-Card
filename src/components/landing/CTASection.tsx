@@ -1,11 +1,13 @@
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Award, ChevronRight } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 export default function CTASection() {
   const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   return (
     <section style={{ padding: 'clamp(48px, 6vw, 80px) clamp(16px, 5vw, 48px)', maxWidth: '1280px', margin: '0 auto' }}>
@@ -13,7 +15,7 @@ export default function CTASection() {
         className="relative rounded-3xl overflow-hidden"
         style={{
           border: '1px solid var(--color-border)',
-          boxShadow: theme === 'dark'
+          boxShadow: isDark
             ? '0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)'
             : '0 32px 80px rgba(0,0,0,0.06)',
         }}
@@ -21,7 +23,7 @@ export default function CTASection() {
         <div
           className="absolute inset-0 z-0"
           style={{
-            background: theme === 'dark'
+            background: isDark
               ? 'linear-gradient(135deg, #1E1D1B 0%, #161514 40%, #0D0C0B 100%)'
               : 'linear-gradient(135deg, #FFFFFF 0%, #FAF8F5 40%, #F5F2EE 100%)',
           }}
@@ -33,20 +35,54 @@ export default function CTASection() {
             opacity: 0.8,
           }}
         />
-        <div
-          className="absolute top-0 right-0 z-0"
-          style={{
-            width: '1px',
-            height: '100%',
-            transform: 'rotate(12deg)',
-            transformOrigin: 'top',
-            background: 'linear-gradient(to bottom, var(--color-accent), transparent)',
-            opacity: 0.15,
-          }}
-        />
 
-        <div className="relative z-10 text-center" style={{ padding: 'clamp(32px, 5vw, 72px) clamp(24px, 4vw, 64px)' }}>
-          <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+        {/* Decorative floating assets */}
+        <div
+          className="absolute rounded-2xl overflow-hidden animate-float hidden lg:block z-0"
+          style={{
+            top: '-28px',
+            right: '4%',
+            width: '148px',
+            height: '148px',
+            border: '1px solid var(--color-border)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
+            transform: 'rotate(8deg)',
+            opacity: 0.9,
+          }}
+        >
+          <Image
+            src="/images/dashboard_users_icon.png"
+            alt="Neon 3D figures standing together"
+            fill
+            sizes="148px"
+            style={{ objectFit: 'cover' }}
+          />
+        </div>
+        <div
+          className="absolute rounded-2xl overflow-hidden animate-float hidden lg:block z-0"
+          style={{
+            bottom: '-32px',
+            left: '5%',
+            width: '124px',
+            height: '124px',
+            border: '1px solid var(--color-border)',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
+            transform: 'rotate(-7deg)',
+            opacity: 0.85,
+            animationDelay: '2s',
+          }}
+        >
+          <Image
+            src="/images/dashboard_hero.png"
+            alt="Abstract glass geometric shapes"
+            fill
+            sizes="124px"
+            style={{ objectFit: 'cover' }}
+          />
+        </div>
+
+        <div className="relative z-10 text-center" style={{ padding: 'clamp(40px, 6vw, 88px) clamp(24px, 4vw, 64px)' }}>
+          <div style={{ maxWidth: '660px', margin: '0 auto' }}>
             <span
               className="inline-flex items-center"
               style={{
@@ -61,70 +97,69 @@ export default function CTASection() {
               }}
             >
               <Award className="w-4 h-4" />
-              Ready to Begin
+              Ready When You Are
             </span>
 
             <h2
               style={{
                 fontFamily: 'var(--font-display)',
                 fontWeight: 700,
-                fontSize: 'clamp(1.5rem, 3.5vw, 2.75rem)',
+                fontSize: 'clamp(1.625rem, 3.8vw, 3rem)',
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
                 color: 'var(--color-text-primary)',
-                marginBottom: '24px',
-                wordSpacing: '0.02em',
+                marginBottom: '20px',
               }}
             >
-              Transform Your School&apos;s{' '}
-              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>Academic Management</span>
+              This term, retire the{' '}
+              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>marks spreadsheet</span>
             </h2>
 
             <p
               style={{
                 color: 'var(--color-text-secondary)',
                 fontFamily: 'var(--font-body)',
-                fontSize: 'clamp(0.875rem, 1.4vw, 1rem)',
+                fontSize: 'clamp(0.875rem, 1.4vw, 1.0625rem)',
                 lineHeight: 1.7,
-                marginBottom: '40px',
                 maxWidth: '540px',
-                margin: '0 auto 40px',
+                margin: '0 auto 36px',
                 letterSpacing: '0.01em',
-                wordSpacing: '0.02em',
               }}
             >
-              Manage students, teachers, classes, exams, attendance, and report cards — all from a single, powerful dashboard built for Kenyan schools.
+              Set up your school with the guided wizard, invite your staff with one-time
+              codes, and run this term&apos;s exams, report cards and parent updates from
+              one dashboard.
             </p>
 
             <div className="flex flex-col sm:flex-row justify-center" style={{ gap: '16px' }}>
               <Link
                 href="/signup"
-                className="group inline-flex items-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
+                className="group inline-flex items-center justify-center rounded-xl transition-all duration-300 hover:-translate-y-0.5"
                 style={{
                   background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-                  color: '#1A1816',
+                  color: 'var(--primary-foreground)',
                   fontFamily: 'var(--font-body)',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
-                  padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
+                  fontSize: '0.9375rem',
+                  padding: '13px 28px',
                   gap: '12px',
                   letterSpacing: '0.01em',
-                  boxShadow: '0 4px 30px rgba(212, 168, 83, 0.35)',
+                  boxShadow: '0 8px 32px var(--color-accent-glow), 0 2px 8px rgba(0,0,0,0.1)',
                 }}
               >
-                Register Your School
+                Register Your School — Free
                 <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/activate"
-                className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
+                className="group inline-flex items-center justify-center rounded-xl transition-all duration-300 hover:border-primary"
                 style={{
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text-primary)',
                   fontFamily: 'var(--font-body)',
                   fontWeight: 500,
-                  fontSize: '0.875rem',
-                  padding: 'clamp(10px, 1.5vw, 12px) clamp(20px, 2.5vw, 24px)',
+                  fontSize: '0.9375rem',
+                  padding: '13px 28px',
                   gap: '12px',
                   background: 'transparent',
                 }}

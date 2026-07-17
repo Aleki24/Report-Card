@@ -920,6 +920,10 @@ select.input-field {
   animation: scaleIn 0.6s ease-out both;
 }
 
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
 .animation-delay-100 { animation-delay: 100ms; }
 .animation-delay-200 { animation-delay: 200ms; }
 .animation-delay-300 { animation-delay: 300ms; }
