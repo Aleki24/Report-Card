@@ -986,6 +986,15 @@ select.input-field {
   animation: landing-marquee 36s linear infinite;
 }
 
+/* Hero mock module tabs: horizontally swipeable, no visible scrollbar */
+.landing-mock-tabs {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.landing-mock-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .animation-delay-100 { animation-delay: 100ms; }
 .animation-delay-200 { animation-delay: 200ms; }
 .animation-delay-300 { animation-delay: 300ms; }

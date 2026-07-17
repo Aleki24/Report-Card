@@ -125,7 +125,7 @@ export default function HeroSection() {
       >
         {/* ============ LEFT — COPY ============ */}
         <div
-          className="lg:col-span-6 text-center lg:text-left items-center lg:items-start animate-fade-in-up"
+          className="lg:col-span-6 min-w-0 text-center lg:text-left items-center lg:items-start animate-fade-in-up"
           style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(16px, 2.5vw, 24px)' }}
         >
           {/* Kicker */}
@@ -248,7 +248,7 @@ export default function HeroSection() {
         {/* ============ RIGHT — PRODUCT MOCK (pointer-tilt 3D scene) ============ */}
         <div
           ref={tiltRef}
-          className="lg:col-span-6 relative animate-scale-in animation-delay-200"
+          className="lg:col-span-6 min-w-0 relative animate-scale-in animation-delay-200"
           style={{ padding: '24px 0', perspective: '1400px' }}
           onPointerMove={handleTilt}
           onPointerLeave={resetTilt}
@@ -316,14 +316,15 @@ export default function HeroSection() {
                 }}
               />
 
-              {/* Mock module tabs — one screen of a much bigger system */}
+              {/* Mock module tabs — one screen of a much bigger system.
+                  Swipeable on narrow screens; must never widen the page. */}
               <div
-                className="flex items-center"
+                className="flex items-center landing-mock-tabs"
                 style={{
                   gap: '4px',
                   padding: '10px 14px 0',
                   borderBottom: '1px solid var(--color-border-subtle)',
-                  overflowX: 'hidden',
+                  overflowX: 'auto',
                 }}
               >
                 {['Dashboard', 'People', 'Marks', 'Attendance', 'Reports', 'Analytics'].map((tab) => {
