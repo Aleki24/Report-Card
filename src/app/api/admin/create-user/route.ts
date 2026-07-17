@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
-import { createInviteCode } from '@/lib/invite-codes';
+import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { inviteUserSchema } from '@/lib/schemas';
 
 export async function POST(request: NextRequest) {
@@ -253,6 +253,16 @@ export async function POST(request: NextRequest) {
         // 4. Generate invite code (NOT a password)
         const inviteCode = await createInviteCode(supabaseAdmin, newUser.id, school_id, role);
 
+        // Best-effort delivery — the code is still shown to the admin below
+        // regardless of whether this succeeds.
+        const notified = await notifyInviteCode({
+            phone,
+            email: null, // no real email is collected for staff/admin here
+            firstName: first_name,
+            schoolName: school.name,
+            code: inviteCode,
+        });
+
         return NextResponse.json({
             success: true,
             user: { first_name, last_name, role, username },
@@ -260,6 +270,7 @@ export async function POST(request: NextRequest) {
                 username,
                 invite_code: inviteCode,
             },
+            notified,
         });
     } catch (err: unknown) {
         console.error('create-user error:', err);

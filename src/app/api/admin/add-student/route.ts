@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
-import { createInviteCode } from '@/lib/invite-codes';
+import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 
 export async function POST(request: NextRequest) {
@@ -189,6 +189,16 @@ export async function POST(request: NextRequest) {
         // 4. Generate invite code (NOT a password)
         const inviteCode = await createInviteCode(supabaseAdmin, studentUserId, effectiveSchoolId, 'STUDENT');
 
+        // Best-effort delivery to the guardian — the code is still shown to
+        // the admin below regardless of whether this succeeds.
+        const notified = await notifyInviteCode({
+            phone: guardian_phone?.trim() || null,
+            email: guardian_email?.trim() || null,
+            firstName: guardian_name?.trim() || first_name.trim(),
+            schoolName: school.name,
+            code: inviteCode,
+        });
+
         return NextResponse.json({
             success: true,
             student_id: studentUserId,
@@ -196,6 +206,7 @@ export async function POST(request: NextRequest) {
             invite_code: inviteCode,
             admission_number: finalAdmNo,
             message: `Student ${first_name.trim()} ${last_name.trim()} added successfully. Share the invite code for them to activate their account.`,
+            notified,
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';

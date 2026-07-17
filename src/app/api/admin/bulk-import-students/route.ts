@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
-import { createInviteCode } from '@/lib/invite-codes';
+import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 
 export async function POST(request: NextRequest) {
     try {
@@ -93,7 +93,10 @@ export async function POST(request: NextRequest) {
 
         const createdCredentials: { first_name: string; last_name: string; username: string; invite_code: string }[] = [];
         // Track user IDs for invite code generation after insert
-        const pendingInvites: { userId: string; username: string; firstName: string; lastName: string }[] = [];
+        const pendingInvites: {
+            userId: string; username: string; firstName: string; lastName: string;
+            guardianName: string | null; guardianPhone: string | null; guardianEmail: string | null;
+        }[] = [];
 
         for (const student of students) {
             const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth } = student;
@@ -186,7 +189,10 @@ export async function POST(request: NextRequest) {
                 userId: tempUserId,
                 username: uniqueUsername,
                 firstName: first_name.trim(),
-                lastName: last_name.trim()
+                lastName: last_name.trim(),
+                guardianName: guardian_name?.trim() || null,
+                guardianPhone: guardian_phone?.trim() || null,
+                guardianEmail: guardian_email?.trim() || null,
             });
         }
 
@@ -214,6 +220,15 @@ export async function POST(request: NextRequest) {
         for (const invite of pendingInvites) {
             try {
                 const code = await createInviteCode(supabaseAdmin, invite.userId, effectiveSchoolId, 'STUDENT');
+                // Best-effort delivery to the guardian — the code is still
+                // shown to the admin regardless of whether this succeeds.
+                await notifyInviteCode({
+                    phone: invite.guardianPhone,
+                    email: invite.guardianEmail,
+                    firstName: invite.guardianName || invite.firstName,
+                    schoolName: school.name,
+                    code,
+                });
                 createdCredentials.push({
                     first_name: invite.firstName,
                     last_name: invite.lastName,

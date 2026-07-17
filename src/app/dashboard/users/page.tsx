@@ -77,11 +77,11 @@ export default function UsersPage() {
       )}
 
       {h.showInviteResult && (
-        <InviteResultModal invitedName={h.invitedName} invitedUsername={h.invitedUsername} invitedCode={h.invitedCode} onClose={() => h.setShowInviteResult(false)} />
+        <InviteResultModal invitedName={h.invitedName} invitedUsername={h.invitedUsername} invitedCode={h.invitedCode} notified={h.invitedNotified} onClose={() => h.setShowInviteResult(false)} />
       )}
 
       {h.showResetResult && (
-        <ResetPasswordResultModal inviteCode={h.resetResultInviteCode} onClose={() => h.setShowResetResult(false)} />
+        <ResetPasswordResultModal inviteCode={h.resetResultInviteCode} notified={h.resetResultNotified} onClose={() => h.setShowResetResult(false)} />
       )}
     </div>
   );

@@ -31,6 +31,7 @@ export function useUsersPage() {
   const [invitedUsername, setInvitedUsername] = useState('');
   const [invitedCode, setInvitedCode] = useState('');
   const [invitedName, setInvitedName] = useState('');
+  const [invitedNotified, setInvitedNotified] = useState<{ sms: boolean; email: boolean } | null>(null);
 
   // Filter, search, pagination state
   const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
@@ -42,6 +43,7 @@ export function useUsersPage() {
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
   const [showResetResult, setShowResetResult] = useState(false);
   const [resetResultInviteCode, setResetResultInviteCode] = useState('');
+  const [resetResultNotified, setResetResultNotified] = useState<{ sms: boolean; email: boolean } | null>(null);
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -143,6 +145,7 @@ export function useUsersPage() {
       else {
         setInvitedUsername(data.credentials?.username ?? ''); setInvitedCode(data.credentials?.invite_code ?? '');
         setInvitedName(`${data.user?.first_name || ''} ${data.user?.last_name || ''}`);
+        setInvitedNotified(data.notified ?? null);
         setShowModal(false); setShowInviteResult(true); fetchData(); resetForm();
       }
     } catch { setFormError('Network error. Please try again.'); }
@@ -156,7 +159,7 @@ export function useUsersPage() {
       const res = await fetch('/api/admin/reset-user-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: user.id }) });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Failed to reset password'); }
-      else { setResetResultInviteCode(data.password); setShowResetResult(true); fetchData(); }
+      else { setResetResultInviteCode(data.password); setResetResultNotified(data.notified ?? null); setShowResetResult(true); fetchData(); }
     } catch { alert('Network error'); }
     finally { setResettingPasswordId(null); }
   };
@@ -238,9 +241,9 @@ export function useUsersPage() {
     editRole, setEditRole, editIsActive, setEditIsActive,
     editClassTeacherStreamId, setEditClassTeacherStreamId, editSubjectTeacherSubjects, setEditSubjectTeacherSubjects,
     // Invite result
-    showInviteResult, setShowInviteResult, invitedUsername, invitedCode, invitedName,
+    showInviteResult, setShowInviteResult, invitedUsername, invitedCode, invitedName, invitedNotified,
     // Password reset
-    resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultInviteCode,
+    resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultInviteCode, resetResultNotified,
     // Shared
     formError, submitting, gradeStreams, academicLevels, subjects, grades,
   };
