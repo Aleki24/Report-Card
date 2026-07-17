@@ -121,11 +121,11 @@ export function DesktopUserMenu({
                 style={{
                     display: 'flex', alignItems: 'center', gap: 'var(--space-3)', width: '100%',
                     padding: 'var(--space-3) var(--space-3)', borderRadius: 'var(--radius-md)',
-                    background: showUserMenu ? 'var(--color-surface-raised)' : 'transparent',
-                    border: '1px solid transparent', color: 'var(--color-text)', cursor: 'pointer',
+                    background: showUserMenu ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    border: '1px solid transparent', color: 'var(--sidebar-foreground)', cursor: 'pointer',
                     transition: 'all 0.15s', justifyContent: collapsed ? 'center' : 'flex-start',
                 }}
-                onMouseEnter={e => { if (!showUserMenu) e.currentTarget.style.background = 'var(--color-surface-raised)'; }}
+                onMouseEnter={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
                 onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'transparent'; }}
                 title={collapsed ? `${profile.first_name} ${profile.last_name} — ${role?.replace('_', ' ')}` : undefined}
             >
@@ -147,7 +147,7 @@ export function DesktopUserMenu({
                                 {role?.replace('_', ' ')}
                             </div>
                         </div>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <polyline points="6 9 12 15 18 9" />
                         </svg>
                     </>

@@ -42,13 +42,15 @@
   --chart-3: oklch(0.585 0.233 277.117);
   --chart-4: oklch(0.696 0.170 162.480);
   --chart-5: oklch(0.769 0.188 70.080);
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
+  /* Sidebar is deliberately deep indigo in BOTH themes — it anchors the
+     layout while the content area flips light/dark. */
+  --sidebar: oklch(0.31 0.085 277);
+  --sidebar-foreground: oklch(0.97 0.01 277);
+  --sidebar-primary: oklch(0.93 0.03 277);
+  --sidebar-primary-foreground: oklch(0.31 0.085 277);
+  --sidebar-accent: oklch(0.38 0.085 277);
+  --sidebar-accent-foreground: oklch(0.97 0.01 277);
+  --sidebar-border: oklch(0.4 0.07 277);
   --sidebar-ring: oklch(0.623 0.214 259.815);
   --font-sans: Inter, system-ui, -apple-system, sans-serif;
   --font-serif: Syne, ui-sans-serif, sans-serif;
@@ -155,13 +157,13 @@
   --chart-3: oklch(0.673 0.182 276.935);
   --chart-4: oklch(0.792 0.209 151.711);
   --chart-5: oklch(0.828 0.189 84.429);
-  --sidebar: oklch(0.129 0.042 264.695);
-  --sidebar-foreground: oklch(0.968 0.007 247.896);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.968 0.007 247.896);
-  --sidebar-border: oklch(0.279 0.041 260.031);
+  --sidebar: oklch(0.26 0.075 277);
+  --sidebar-foreground: oklch(0.96 0.01 277);
+  --sidebar-primary: oklch(0.93 0.03 277);
+  --sidebar-primary-foreground: oklch(0.26 0.075 277);
+  --sidebar-accent: oklch(0.33 0.075 277);
+  --sidebar-accent-foreground: oklch(0.96 0.01 277);
+  --sidebar-border: oklch(0.35 0.06 277);
   --sidebar-ring: oklch(0.623 0.214 259.815);
 }
 

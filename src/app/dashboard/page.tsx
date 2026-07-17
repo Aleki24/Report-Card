@@ -32,7 +32,6 @@ interface DashboardData {
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
-import MiniCalendar from '@/components/dashboard/MiniCalendar';
 import KpiTile from '@/components/dashboard/KpiTile';
 import InsightCard from '@/components/dashboard/InsightCard';
 import SectionTitle from '@/components/dashboard/SectionTitle';
@@ -172,6 +171,7 @@ function QuickAction({ label, desc, href, icon }: { label: string; desc: string;
 // ── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard({ userName }: { userName: string }) {
   const router = useRouter();
+  const { profile, role } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,33 +207,16 @@ function AdminDashboard({ userName }: { userName: string }) {
         totalUsers={data?.totalUsers ?? 0}
         role="ADMIN"
       />
-      {/* Hero Banner */}
-      <div className="relative mb-4 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:mb-5 sm:px-8 sm:py-7">
-        <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
-        <div className="pointer-events-none absolute -right-16 bottom-[-48px] h-40 w-40 rounded-full bg-white/10" aria-hidden />
-        <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-          <div className="min-w-0">
-            <h1 className="font-display text-lg font-bold tracking-tight text-white sm:text-2xl">
-              {greeting}, {greetingName} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
-            </h1>
-            <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
-              {todayLabel} &middot; {getCurrentTermName()} &middot; Your school is running smoothly this term.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
-                <FileText size={15} /> Generate Report Cards
-              </Link>
-              <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors duration-200 hover:bg-white/20 sm:text-sm">
-                <MessageSquare size={15} /> Send SMS Results
-              </Link>
-            </div>
-          </div>
+      {/* Top Bar — search + profile */}
+      <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Dashboard</span>
+        <div className="flex min-w-0 items-center gap-3">
           <form
             onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
             className="hidden md:block"
           >
-            <div className="flex w-64 items-center rounded-xl border border-white/25 bg-white/10 backdrop-blur-sm transition-colors focus-within:border-white/50 lg:w-72">
-              <span className="flex shrink-0 items-center justify-center pl-3 text-white/70">
+            <div className="flex w-64 items-center rounded-xl border border-border/60 bg-card/80 transition-colors focus-within:border-primary/50 lg:w-72">
+              <span className="flex shrink-0 items-center justify-center pl-3 text-muted-foreground">
                 <Search size={15} />
               </span>
               <input
@@ -241,10 +224,45 @@ function AdminDashboard({ userName }: { userName: string }) {
                 placeholder="Search students…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm text-white outline-none placeholder:text-white/60"
+                className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm outline-none placeholder:text-muted-foreground/80"
               />
             </div>
           </form>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-[13px] font-bold text-white">
+              {(profile?.first_name?.[0] ?? 'A')}{(profile?.last_name?.[0] ?? '')}
+            </div>
+            <div className="hidden min-w-0 sm:block">
+              <div className="truncate text-[13px] font-semibold leading-tight text-foreground">
+                {profile ? `${profile.first_name} ${profile.last_name}` : greetingName}
+              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {role?.replace('_', ' ') ?? 'Admin'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero Banner */}
+      <div className="relative mb-4 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:mb-5 sm:px-8 sm:py-7">
+        <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
+        <div className="pointer-events-none absolute -right-16 bottom-[-48px] h-40 w-40 rounded-full bg-white/10" aria-hidden />
+        <div className="relative min-w-0">
+          <h1 className="font-display text-lg font-bold tracking-tight text-white sm:text-2xl">
+            {greeting}, {greetingName} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
+          </h1>
+          <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
+            {todayLabel} &middot; {getCurrentTermName()} &middot; Your school is running smoothly this term.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
+              <FileText size={15} /> Generate Report Cards
+            </Link>
+            <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors duration-200 hover:bg-white/20 sm:text-sm">
+              <MessageSquare size={15} /> Send SMS Results
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -286,17 +304,6 @@ function AdminDashboard({ userName }: { userName: string }) {
               <InsightCard title="Needs attention" action={{ label: 'Review all', href: '/dashboard/analytics' }}>
                 <AlertList upcomingExams={data?.upcomingExams ?? []} overdueFees={data?.overdueFeesCount ?? 0} enrollments={data?.recentEnrollmentsLast7 ?? 0} announcements={data?.announcementsLast7Days ?? 0} reports={data?.totalReports ?? 0} />
               </InsightCard>
-            </div>
-          </section>
-
-          {/* Quick Actions */}
-          <section>
-            <SectionTitle>Quick actions</SectionTitle>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 xs:gap-3">
-              <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" />
-              <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people?tab=teachers" />
-              <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" />
-              <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" />
             </div>
           </section>
 
@@ -472,7 +479,17 @@ function AlertList({ upcomingExams, overdueFees, enrollments, announcements, rep
 function SideRail({ data }: { data: DashboardData | null }) {
   return (
     <>
-      <MiniCalendar />
+      {/* Quick Actions */}
+      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
+        <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">Quick Actions</h3>
+        <div className="flex flex-col gap-2">
+          <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" />
+          <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people?tab=teachers" />
+          <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" />
+          <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" />
+          <QuickActionBtn icon={<BarChart3 size={16} />} label="View Analytics" href="/dashboard/analytics" />
+        </div>
+      </div>
 
       {/* This Week Summary */}
       <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
