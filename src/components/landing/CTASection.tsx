@@ -51,8 +51,8 @@ export default function CTASection() {
           }}
         >
           <Image
-            src="/images/dashboard_users_icon.png"
-            alt="Neon 3D figures standing together"
+            src="/images/empty_state.png"
+            alt="Holographic school records folder"
             fill
             sizes="148px"
             style={{ objectFit: 'cover' }}
@@ -111,8 +111,8 @@ export default function CTASection() {
                 marginBottom: '20px',
               }}
             >
-              This term, retire the{' '}
-              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>marks spreadsheet</span>
+              This term, run your whole school{' '}
+              <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>from one dashboard</span>
             </h2>
 
             <p
@@ -126,9 +126,9 @@ export default function CTASection() {
                 letterSpacing: '0.01em',
               }}
             >
-              Set up your school with the guided wizard, invite your staff with one-time
-              codes, and run this term&apos;s exams, report cards and parent updates from
-              one dashboard.
+              Set up your school with the guided wizard, invite staff and students with
+              one-time codes, and manage people, exams, attendance, report cards and
+              parent updates in one place — no more scattered spreadsheets.
             </p>
 
             <div className="flex flex-col sm:flex-row justify-center" style={{ gap: '16px' }}>
