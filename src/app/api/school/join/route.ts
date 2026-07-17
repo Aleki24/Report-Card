@@ -130,6 +130,22 @@ export async function POST(request: NextRequest) {
     // Update the current (real) user record with the admin-provided details.
     // Do this before deleting the old row, so if it fails we haven't
     // destroyed the pending record yet either.
+    //
+    // users.username is UNIQUE and the pending row still holds this exact
+    // username, so it must be released first — otherwise the update below
+    // ALWAYS fails with a unique violation ("Account linked but failed to
+    // update records") and nobody can ever finish joining. The email is
+    // staged too for the same reason, in case a future change copies it.
+    const { error: stageErr } = await supabaseAdmin.from('users').update({
+        email: `pending+${oldUserId}@migrating.local`,
+        username: null
+    }).eq('id', oldUserId);
+
+    if (stageErr) {
+        console.error('[join] Failed to stage pending row:', stageErr);
+        return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
+    }
+
     const { error: updateErr } = await supabaseAdmin.from('users').update({
         first_name: pendingUser.first_name,
         last_name: pendingUser.last_name,
@@ -141,6 +157,11 @@ export async function POST(request: NextRequest) {
 
     if (updateErr) {
         console.error('Failed to update user record:', updateErr);
+        // Restore the pending row so the invite stays retryable
+        await supabaseAdmin.from('users').update({
+            email: pendingUser.email,
+            username: pendingUser.username
+        }).eq('id', oldUserId);
         return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
     }
 

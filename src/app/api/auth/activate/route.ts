@@ -54,13 +54,28 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'User account not found. Contact your administrator.' }, { status: 404 });
         }
 
+        const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+        // Admin "Reset password" generates invite codes that point at an
+        // ALREADY-ACTIVATED account (its users.id is its Clerk user ID). For
+        // those the code must set a new password on the existing Clerk user —
+        // creating a second Clerk account would be rejected as a duplicate
+        // username/email, making reset codes unusable.
+        let existingClerkUser = null;
+        try {
+            existingClerkUser = await clerkClient.users.getUser(user.id);
+        } catch {
+            // No Clerk account for this ID — first-time activation.
+        }
+
         // ── STEP 1: Verify only — return user info for the form ──
         if (verify_only) {
             return NextResponse.json({
                 success: true,
                 username: user.username,
                 name: `${user.first_name} ${user.last_name}`,
-                role: user.role
+                role: user.role,
+                reset: !!existingClerkUser
             });
         }
 
@@ -94,6 +109,39 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // ── Password reset for an existing account ──
+        if (existingClerkUser) {
+            try {
+                await clerkClient.users.updateUser(user.id, {
+                    password,
+                    ...(finalUsername !== user.username ? { username: finalUsername } : {}),
+                });
+            } catch (clerkErr) {
+                console.error('Clerk password reset error:', clerkErr);
+                const msg = (clerkErr as { errors?: { message?: string }[] })?.errors?.[0]?.message
+                    || 'Failed to update the password. Please try a different one.';
+                return NextResponse.json({ error: msg }, { status: 400 });
+            }
+
+            if (finalUsername !== user.username) {
+                await supabaseAdmin.from('users').update({ username: finalUsername }).eq('id', user.id);
+            }
+
+            await supabaseAdmin.from('invite_codes').update({
+                is_used: true,
+                used_at: new Date().toISOString()
+            }).eq('id', invite.id);
+
+            return NextResponse.json({
+                success: true,
+                message: 'Password updated successfully! You can now log in.',
+                username: finalUsername,
+                role: user.role,
+                reset: true
+            });
+        }
+
+        // ── First-time activation ──
         // Get school name for the email
         const { data: school } = await supabaseAdmin
             .from('schools')
@@ -102,12 +150,10 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         // Use provided email or generate placeholder
-        const userEmail = email?.trim() || 
+        const userEmail = email?.trim() ||
             `${finalUsername}@${(school?.name || 'school').toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`;
 
         // 4. Create the Clerk account with the user's chosen password and username
-        const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-
         let clerkUserId: string;
         try {
             const clerkUser = await clerkClient.users.createUser({
