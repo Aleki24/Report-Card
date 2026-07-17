@@ -92,66 +92,35 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
             }
         }
-    } else if (pendingUser.role === 'CLASS_TEACHER') {
-        // Same idempotency concern as students, plus: a class teacher may
-        // have been created as "Unassigned" (no class picked yet), in which
-        // case there's no class_teachers row at all. Only treat a 0-row
-        // update as a genuine failure if a row exists for oldUserId and
-        // isn't already linked to the new userId.
-        const { data: alreadyLinked } = await supabaseAdmin
-            .from('class_teachers').select('id').eq('user_id', userId).maybeSingle();
+    } else if (pendingUser.role === 'CLASS_TEACHER' || pendingUser.role === 'SUBJECT_TEACHER') {
+        // Teacher assignment rows are OPTIONAL at invite time (a teacher can
+        // be created "Unassigned" with no class_teachers/subject_teachers row
+        // at all), so zero rows is a normal state — only a real query error
+        // may abort the join. Swap BOTH tables regardless of the exact
+        // teacher role: create-user lets a SUBJECT_TEACHER also hold a
+        // class_teachers row (is_class_teacher) and a CLASS_TEACHER hold a
+        // subject_teachers row (subject assignments), and any row left
+        // pointing at the pending user would be cascade-deleted below.
+        // Idempotency: skip a table if a previous attempt already moved its
+        // rows over to the new userId (retrying the update would violate the
+        // user_id unique constraints).
+        for (const table of ['class_teachers', 'subject_teachers'] as const) {
+            const { data: alreadyLinked, error: linkedErr } = await supabaseAdmin
+                .from(table).select('id').eq('user_id', userId).maybeSingle();
 
-        if (!alreadyLinked) {
-            const { count: existingCount, error: existErr } = await supabaseAdmin
-                .from('class_teachers')
-                .select('id', { count: 'exact', head: true })
-                .eq('user_id', oldUserId);
-
-            if (existErr) {
-                console.error('[join] class_teachers existence check failed', { oldUserId, userId, existErr });
+            if (linkedErr) {
+                console.error(`[join] ${table} linked-check failed`, { oldUserId, userId, linkedErr });
                 return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
             }
 
-            if (existingCount && existingCount > 0) {
-                const { data: swapped, error: swapErr } = await supabaseAdmin
-                    .from('class_teachers')
+            if (!alreadyLinked) {
+                const { error: swapErr } = await supabaseAdmin
+                    .from(table)
                     .update({ user_id: userId })
-                    .eq('user_id', oldUserId)
-                    .select('id');
+                    .eq('user_id', oldUserId);
 
-                if (swapErr || !swapped || swapped.length === 0) {
-                    console.error('[join] class_teachers id-swap failed', { oldUserId, userId, swapErr });
-                    return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
-                }
-            }
-        }
-    } else if (pendingUser.role === 'SUBJECT_TEACHER') {
-        // Same idempotency concern as above, plus: a subject teacher may
-        // have been created with no subjects assigned yet, in which case
-        // there's no subject_teachers row at all.
-        const { data: alreadyLinked } = await supabaseAdmin
-            .from('subject_teachers').select('id').eq('user_id', userId).maybeSingle();
-
-        if (!alreadyLinked) {
-            const { count: existingCount, error: existErr } = await supabaseAdmin
-                .from('subject_teachers')
-                .select('id', { count: 'exact', head: true })
-                .eq('user_id', oldUserId);
-
-            if (existErr) {
-                console.error('[join] subject_teachers existence check failed', { oldUserId, userId, existErr });
-                return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
-            }
-
-            if (existingCount && existingCount > 0) {
-                const { data: swapped, error: swapErr } = await supabaseAdmin
-                    .from('subject_teachers')
-                    .update({ user_id: userId })
-                    .eq('user_id', oldUserId)
-                    .select('id');
-
-                if (swapErr || !swapped || swapped.length === 0) {
-                    console.error('[join] subject_teachers id-swap failed', { oldUserId, userId, swapErr });
+                if (swapErr) {
+                    console.error(`[join] ${table} id-swap failed`, { oldUserId, userId, swapErr });
                     return NextResponse.json({ error: 'Failed to link your teacher record. Please contact your school admin.' }, { status: 500 });
                 }
             }
@@ -161,6 +130,22 @@ export async function POST(request: NextRequest) {
     // Update the current (real) user record with the admin-provided details.
     // Do this before deleting the old row, so if it fails we haven't
     // destroyed the pending record yet either.
+    //
+    // users.username is UNIQUE and the pending row still holds this exact
+    // username, so it must be released first — otherwise the update below
+    // ALWAYS fails with a unique violation ("Account linked but failed to
+    // update records") and nobody can ever finish joining. The email is
+    // staged too for the same reason, in case a future change copies it.
+    const { error: stageErr } = await supabaseAdmin.from('users').update({
+        email: `pending+${oldUserId}@migrating.local`,
+        username: null
+    }).eq('id', oldUserId);
+
+    if (stageErr) {
+        console.error('[join] Failed to stage pending row:', stageErr);
+        return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
+    }
+
     const { error: updateErr } = await supabaseAdmin.from('users').update({
         first_name: pendingUser.first_name,
         last_name: pendingUser.last_name,
@@ -172,6 +157,11 @@ export async function POST(request: NextRequest) {
 
     if (updateErr) {
         console.error('Failed to update user record:', updateErr);
+        // Restore the pending row so the invite stays retryable
+        await supabaseAdmin.from('users').update({
+            email: pendingUser.email,
+            username: pendingUser.username
+        }).eq('id', oldUserId);
         return NextResponse.json({ error: 'Account linked but failed to update records.' }, { status: 500 });
     }
 

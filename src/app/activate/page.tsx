@@ -22,6 +22,10 @@ export default function ActivatePage() {
     const [userName, setUserName] = useState('');
     const [userRole, setUserRole] = useState('');
     const [showPasswordForm, setShowPasswordForm] = useState(false);
+    // True when the code belongs to an already-activated account (admin
+    // "Reset password" codes) — then we only set a new password, and the
+    // Google option doesn't apply.
+    const [isReset, setIsReset] = useState(false);
 
     // Step 1: Verify the invite code
     const handleVerifyCode = async () => {
@@ -48,6 +52,9 @@ export default function ActivatePage() {
             setUsername(data.username || '');
             setUserName(data.name || '');
             setUserRole(data.role || '');
+            setIsReset(!!data.reset);
+            // Reset codes skip the method chooser — password is the only option
+            if (data.reset) setShowPasswordForm(true);
             setVerified(true);
         } catch (err: any) {
             setError(err.message || 'Failed to verify code.');
@@ -129,8 +136,10 @@ export default function ActivatePage() {
                 throw new Error(data.error || 'Activation failed');
             }
 
-            setSuccess('Account activated successfully! Redirecting to login...');
-            
+            setSuccess(isReset
+                ? 'Password updated successfully! Redirecting to login...'
+                : 'Account activated successfully! Redirecting to login...');
+
             setTimeout(() => {
                 router.push('/login');
             }, 2000);
@@ -155,11 +164,13 @@ export default function ActivatePage() {
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                         <span className="text-2xl text-primary">🔐</span>
                     </div>
-                    <h1 className="text-3xl font-bold tracking-tight mb-2">Activate Account</h1>
+                    <h1 className="text-3xl font-bold tracking-tight mb-2">{verified && isReset ? 'Reset Password' : 'Activate Account'}</h1>
                     <p className="text-muted-foreground text-sm">
-                        {!verified 
-                            ? 'Enter your invite code to get started.' 
-                            : `Welcome, ${userName}! Choose how to set up your account.`}
+                        {!verified
+                            ? 'Enter your invite code to get started.'
+                            : isReset
+                                ? `Welcome back, ${userName}! Set a new password for your account.`
+                                : `Welcome, ${userName}! Choose how to set up your account.`}
                     </p>
                 </div>
 
@@ -288,18 +299,20 @@ export default function ActivatePage() {
                             <p className="text-xs text-muted-foreground mt-1">This is what you&apos;ll use to log in</p>
                         </div>
 
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="input-field w-full"
-                                placeholder="your.email@example.com"
-                                disabled={loading}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">Add an email to help recover your account later</p>
-                        </div>
+                        {!isReset && (
+                            <div className="space-y-1">
+                                <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="input-field w-full"
+                                    placeholder="your.email@example.com"
+                                    disabled={loading}
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">Add an email to help recover your account later</p>
+                            </div>
+                        )}
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium text-foreground">New Password <span className="text-red-500">*</span></label>
@@ -334,16 +347,28 @@ export default function ActivatePage() {
                             disabled={loading}
                             className="btn-primary w-full py-3 mt-2 text-sm font-semibold tracking-wide"
                         >
-                            {loading ? 'Activating...' : 'Activate Account'}
+                            {loading
+                                ? (isReset ? 'Updating...' : 'Activating...')
+                                : (isReset ? 'Reset Password' : 'Activate Account')}
                         </button>
 
                         <button
                             type="button"
-                            onClick={() => setShowPasswordForm(false)}
+                            onClick={() => {
+                                // Reset codes have no method chooser to go back to
+                                if (isReset) {
+                                    setVerified(false);
+                                    setShowPasswordForm(false);
+                                    setCode('');
+                                    setError(null);
+                                } else {
+                                    setShowPasswordForm(false);
+                                }
+                            }}
                             className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
                             disabled={loading}
                         >
-                            ← Back to options
+                            {isReset ? '← Use a different code' : '← Back to options'}
                         </button>
                     </form>
                 )}
