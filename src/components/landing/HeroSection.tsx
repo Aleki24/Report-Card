@@ -5,21 +5,23 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   ArrowRight,
+  CalendarCheck,
   CheckCircle2,
   ChevronRight,
   FileText,
   MessageSquareText,
   Smartphone,
-  Upload,
+  Users,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { modules } from '@/lib/modules';
 
 const TRUST_CHIPS = [
-  { icon: CheckCircle2, label: 'CBC & 8-4-4 grading' },
-  { icon: FileText, label: 'PDF report cards' },
-  { icon: Smartphone, label: 'Results by SMS' },
-  { icon: Upload, label: 'Bulk student import' },
+  { icon: CheckCircle2, label: 'CBC & 8-4-4' },
+  { icon: Users, label: 'Students, teachers & classes' },
+  { icon: CalendarCheck, label: 'Exams & attendance' },
+  { icon: FileText, label: 'Report cards & analytics' },
+  { icon: Smartphone, label: 'Parents kept in the loop' },
 ];
 
 const STATS = [
@@ -140,7 +142,7 @@ export default function HeroSection() {
             }}
           >
             <span style={{ width: '32px', height: '1px', background: 'var(--color-accent)', display: 'inline-block' }} />
-            Built for Kenyan Schools
+            The Complete School Management System · Kenya
           </span>
 
           {/* Headline */}
@@ -154,11 +156,10 @@ export default function HeroSection() {
               color: 'var(--color-text-primary)',
             }}
           >
-            Marks in.{' '}
+            Your entire school,{' '}
             <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>
-              Report cards out.
-            </span>{' '}
-            Parents in the loop.
+              running on one dashboard.
+            </span>
           </h1>
 
           {/* Subtext */}
@@ -172,9 +173,9 @@ export default function HeroSection() {
               letterSpacing: '0.01em',
             }}
           >
-            Matokeo turns end-of-term chaos into a same-day job. Enter marks once —
-            get CBC and 8-4-4 grading, ranked class lists, polished PDF report cards,
-            and results delivered to parents by SMS.
+            Students, teachers, classes, subjects, exams, attendance, analytics and
+            report cards — Matokeo runs the whole term in one place, on CBC or 8-4-4,
+            and keeps parents in the loop by SMS.
           </p>
 
           {/* CTA Group */}
@@ -314,6 +315,37 @@ export default function HeroSection() {
                   zIndex: 1,
                 }}
               />
+
+              {/* Mock module tabs — one screen of a much bigger system */}
+              <div
+                className="flex items-center"
+                style={{
+                  gap: '4px',
+                  padding: '10px 14px 0',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  overflowX: 'hidden',
+                }}
+              >
+                {['Dashboard', 'People', 'Marks', 'Attendance', 'Reports', 'Analytics'].map((tab) => {
+                  const active = tab === 'Marks';
+                  return (
+                    <span
+                      key={tab}
+                      style={{
+                        fontSize: '0.6875rem',
+                        fontWeight: active ? 700 : 500,
+                        fontFamily: 'var(--font-body)',
+                        color: active ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                        padding: '6px 10px 8px',
+                        borderBottom: active ? '2px solid var(--color-accent)' : '2px solid transparent',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {tab}
+                    </span>
+                  );
+                })}
+              </div>
 
               {/* Mock header */}
               <div

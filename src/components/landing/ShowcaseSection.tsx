@@ -7,13 +7,28 @@ import { useTheme } from '@/components/ThemeProvider';
 
 const FEATURES = [
   {
+    kicker: 'People',
+    title: 'Every student, teacher and guardian in one place',
+    description:
+      'Profiles, classes and streams, subject assignments and guardian contacts live together — so attendance, marks and messages always point at the right person.',
+    image: '/images/dashboard_users_icon.png',
+    imageAlt: 'Neon 3D figures standing together on a glass base',
+    color: 'var(--color-accent)',
+    points: [
+      'Student and teacher profiles with role-based portals',
+      'Classes, streams and subject assignments',
+      'Daily attendance tracking per class',
+      'Guardian contacts wired to SMS updates',
+    ],
+  },
+  {
     kicker: 'Mark Entry',
     title: 'Marks entry that keeps up with your teachers',
     description:
       'Whether it\'s one subject or the whole exam, marks go in fast — and only the students who actually take a subject show up on its list.',
     image: '/images/dashboard_marks_icon.png',
     imageAlt: 'Glass 3D grade report with a pen',
-    color: 'var(--color-accent)',
+    color: 'var(--color-purple-500)',
     points: [
       'Quick grid entry per subject and class',
       'Bulk upload marks from CSV in seconds',
@@ -43,7 +58,7 @@ const FEATURES = [
       'Rankings, averages and subject breakdowns update as marks come in — so you see who\'s soaring and who needs help while there\'s still time to act.',
     image: '/images/dashboard_comparison_icon.png',
     imageAlt: 'Frosted glass 3D bar chart comparison',
-    color: 'var(--color-purple-500)',
+    color: 'var(--color-accent)',
     points: [
       'Class and subject performance at a glance',
       'Student rankings and term-over-term comparison',
@@ -104,8 +119,8 @@ export default function ShowcaseSection() {
             marginBottom: '18px',
           }}
         >
-          Built around the work{' '}
-          <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>you actually do</span>
+          Everything a school runs on,{' '}
+          <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>working together</span>
         </h2>
         <p
           style={{
@@ -117,8 +132,8 @@ export default function ShowcaseSection() {
             margin: '0 auto',
           }}
         >
-          Not another generic dashboard — every screen maps to something a Kenyan school
-          does every term.
+          From enrollment on day one to results on closing day — people, marks,
+          reports and analytics share one system, so nothing is retyped twice.
         </p>
       </div>
 

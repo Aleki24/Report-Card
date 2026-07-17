@@ -56,9 +56,9 @@ export default function Home() {
 
       <main className="relative z-10">
         <HeroSection />
+        <ModulesSection />
         <ShowcaseSection />
         <WorkflowSection />
-        <ModulesSection />
         <JoinGuideSection />
         <RolesSection />
         <CTASection />
