@@ -3,6 +3,7 @@
 import { useTheme } from '@/components/ThemeProvider';
 import Navbar from '@/components/landing/Navbar';
 import HeroSection from '@/components/landing/HeroSection';
+import ShowcaseSection from '@/components/landing/ShowcaseSection';
 import ModulesSection from '@/components/landing/ModulesSection';
 import WorkflowSection from '@/components/landing/WorkflowSection';
 import JoinGuideSection from '@/components/landing/JoinGuideSection';
@@ -45,8 +46,9 @@ export default function Home() {
 
       <main className="relative z-10">
         <HeroSection />
-        <ModulesSection />
+        <ShowcaseSection />
         <WorkflowSection />
+        <ModulesSection />
         <JoinGuideSection />
         <RolesSection />
         <CTASection />
