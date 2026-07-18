@@ -10,6 +10,25 @@ import { useTheme } from '@/components/ThemeProvider';
 import { Eye, EyeOff, Loader2, LogIn, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+/** Human-readable label for a Clerk first-factor strategy, or null to hide it from the list. */
+function describeStrategy(strategy: string): string | null {
+  if (strategy.startsWith('oauth_')) {
+    const provider = strategy.slice('oauth_'.length);
+    return provider.charAt(0).toUpperCase() + provider.slice(1);
+  }
+  switch (strategy) {
+    case 'email_code': return 'an emailed code';
+    case 'email_link': return 'an emailed link';
+    case 'saml': return 'your school SSO';
+    default: return null;
+  }
+}
+
+function joinWithOr(items: string[]): string {
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
+}
+
 export default function LoginPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -25,6 +44,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [wrongStrategy, setWrongStrategy] = useState(false);
+  const [availableMethods, setAvailableMethods] = useState<string[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +52,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setWrongStrategy(false);
+    setAvailableMethods([]);
 
     try {
       if (needsMfa) {
@@ -73,6 +94,19 @@ export default function LoginPage() {
       // Same underlying Clerk user either way; they just need to add a password.
       if (apiError?.code === 'strategy_for_user_invalid') {
         setWrongStrategy(true);
+        // Ask Clerk what this account can actually sign in with, so the
+        // message names the real method(s) instead of guessing "Google".
+        try {
+          const check = await signIn.create({ identifier });
+          const methods = Array.from(new Set(
+            (check.supportedFirstFactors ?? [])
+              .map((f) => describeStrategy(f.strategy))
+              .filter((s): s is string => s !== null)
+          ));
+          setAvailableMethods(methods);
+        } catch {
+          setAvailableMethods([]);
+        }
       } else {
         const msg =
           apiError?.code === 'form_identifier_not_found'
@@ -166,9 +200,16 @@ export default function LoginPage() {
                 color: isDark ? '#fde68a' : '#92400e',
                 border: `1px solid ${isDark ? 'rgba(234,179,8,0.2)' : 'rgba(234,179,8,0.15)'}`,
               }}>
-              This account doesn&apos;t have a password set — it was likely created with Google.
-              Use <button type="button" onClick={signInWithGoogle} className="font-semibold underline" style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Sign in with Google</button>,
-              {' '}or <Link href="/forgot-password" className="font-semibold underline" style={{ color: 'inherit' }}>set a password</Link> to use both.
+              {availableMethods.length > 0 ? (
+                <>This account signs in with {joinWithOr(availableMethods)} — no password is set yet.</>
+              ) : (
+                <>This account doesn&apos;t have a password set yet.</>
+              )}
+              {' '}
+              {availableMethods.length === 0 || availableMethods.includes('Google') ? (
+                <>Use <button type="button" onClick={signInWithGoogle} className="font-semibold underline" style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Sign in with Google</button>,{' '}</>
+              ) : null}
+              or <Link href="/forgot-password" className="font-semibold underline" style={{ color: 'inherit' }}>set a password</Link> so both work next time.
             </div>
           )}
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
