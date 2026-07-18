@@ -44,6 +44,12 @@ export default function GradeResultsCard() {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMarks, setLoadingMarks] = useState(false);
+  // On first load, auto-advance past streams with no marks so the card opens
+  // on a class that has results (e.g. skip an unmarked "Form 3" that happens
+  // to sort first). Stops at the first marked stream, on manual navigation,
+  // or after one full loop.
+  const [seeking, setSeeking] = useState(true);
+  const seekSteps = React.useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -92,12 +98,28 @@ export default function GradeResultsCard() {
     setExamId(preferred?.id ?? null);
   }, [streamExams, marks]);
 
+  useEffect(() => {
+    if (!seeking || loading || loadingMarks || streams.length === 0) return;
+    if (marks.length > 0) { setSeeking(false); return; }
+    if (streams.length < 2 || seekSteps.current >= streams.length - 1) {
+      // No stream has marks — settle back on the first one.
+      if (seekSteps.current > 0) setStreamIdx(0);
+      setSeeking(false);
+      return;
+    }
+    seekSteps.current += 1;
+    setStreamIdx(i => (i + 1) % streams.length);
+  }, [seeking, loading, loadingMarks, marks, streams.length]);
+
   const subjects = useMemo(() => aggregateBySubject(marks.filter(m => m.exam_id === examId)), [marks, examId]);
   const classAvg = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.avg * x.count, 0) / subjects.reduce((s, x) => s + x.count, 0)) : null;
   const exam = streamExams.find(e => e.id === examId) ?? null;
   const termName = exam?.term_id ? terms.find(t => t.id === exam.term_id)?.name : null;
 
-  const cycle = (dir: 1 | -1) => setStreamIdx(i => (i + dir + streams.length) % streams.length);
+  const cycle = (dir: 1 | -1) => {
+    setSeeking(false);
+    setStreamIdx(i => (i + dir + streams.length) % streams.length);
+  };
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm sm:p-5">
@@ -129,7 +151,7 @@ export default function GradeResultsCard() {
         {streamExams.length > 0 && (
           <select
             value={examId ?? ''}
-            onChange={e => setExamId(e.target.value)}
+            onChange={e => { setSeeking(false); setExamId(e.target.value); }}
             aria-label="Filter by exam"
             className="max-w-[150px] shrink-0 cursor-pointer truncate rounded-lg border border-border/60 bg-card px-2 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/50"
           >
@@ -138,7 +160,7 @@ export default function GradeResultsCard() {
         )}
       </div>
 
-      {loading || loadingMarks ? (
+      {loading || loadingMarks || (seeking && streams.length > 0 && marks.length === 0) ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[0, 1, 2, 3].map(i => <div key={i} className="skeleton-bone h-[88px] rounded-xl" />)}
         </div>
