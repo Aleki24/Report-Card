@@ -1,6 +1,6 @@
 import React from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
-import StudentPortalContent from '@/components/student/StudentPortalContent';
+import DashboardContent from '@/components/layout/DashboardContent';
 
 export default function StudentLayout({
     children,
@@ -9,7 +9,7 @@ export default function StudentLayout({
 }) {
     return (
         <AuthProvider>
-            <StudentPortalContent>{children}</StudentPortalContent>
+            <DashboardContent>{children}</DashboardContent>
         </AuthProvider>
     );
 }

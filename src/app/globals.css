@@ -1010,106 +1010,12 @@ select.input-field {
 .animation-delay-1400 { animation-delay: 1400ms; }
 
 /* ============================================= */
-/* STUDENT PORTAL LAYOUT                         */
-/* ============================================= */
-
-.student-sidebar {
-    display: none;
-}
-
-.student-topbar {
-    display: flex;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    z-index: 40;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 var(--space-4);
-}
-
-.student-bottom-nav {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-    align-items: center;
-    height: calc(64px + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
-}
-
-.student-main {
-    flex: 1;
-    min-height: 100vh;
-    padding: 72px var(--space-4) calc(80px + env(safe-area-inset-bottom));
-    font-size: 0.8125rem;
-}
-
-.student-more-menu {
-    position: fixed;
-    bottom: calc(64px + env(safe-area-inset-bottom));
-    left: var(--space-3);
-    right: var(--space-3);
-    z-index: 70;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 -8px 32px rgba(0,0,0,0.25);
-    max-height: 60vh;
-    overflow-y: auto;
-    animation: slideUpFade 0.2s ease-out;
-}
-
-@keyframes slideUpFade {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Desktop: sidebar + shifted main */
-@media (min-width: 769px) {
-    .student-sidebar {
-        display: flex;
-        flex-direction: column;
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 50;
-        height: 100vh;
-        background: var(--color-surface);
-        border-right: 1px solid var(--color-border);
-        transition: width 0.3s ease;
-        overflow: hidden;
-    }
-
-    .student-topbar {
-        display: none;
-    }
-
-    .student-bottom-nav {
-        display: none;
-    }
-
-    .student-main {
-        margin-left: var(--student-sidebar-width, 80px);
-        padding: var(--space-8);
-        min-height: 100vh;
-        height: auto;
-        transition: margin-left 0.3s ease;
-    }
-}
-
-/* ============================================= */
 /* STUDENT PORTAL COMPONENTS                     */
 /* ============================================= */
+/* Layout (sidebar/topbar/bottom-nav) is now shared with the admin
+   dashboard via DashboardContent + Sidebar — see .dashboard-main and
+   .mobile-topbar-container above. These are content-level classes used
+   inside student pages only. */
 
 .student-welcome-card {
     background: color-mix(in srgb, var(--primary) 6%, transparent);

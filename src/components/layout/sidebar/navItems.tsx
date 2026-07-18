@@ -19,7 +19,7 @@ export interface NavGroup {
     items: NavItem[];
 }
 
-const allRoles: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
+const staffRoles: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'];
 const adminRoles: UserRole[] = ['ADMIN'];
 
 const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSProperties }>) => (
@@ -29,7 +29,8 @@ const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSPropertie
 /* Items are named constants and groups reference them directly, so a group
    can never point at a nav item that doesn't exist (the old label-string
    lookup silently dropped items when the strings drifted). */
-const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: allRoles, icon: icon(LayoutDashboard) };
+const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: staffRoles, icon: icon(LayoutDashboard) };
+const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', roles: ['STUDENT'], icon: icon(LayoutDashboard) };
 const examsMarks: NavItem = { label: 'Exams & Marks', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(ClipboardList) };
 const reports: NavItem = { label: 'Report Cards', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(FileText) };
 const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(CalendarCheck) };
@@ -43,15 +44,19 @@ const assignments: NavItem = { label: 'Assignments', href: '/dashboard/assignmen
 const users: NavItem = { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: icon(UserCircle) };
 const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', roles: adminRoles, icon: icon(Settings) };
 const myResults: NavItem = { label: 'My Results', href: '/student/results', roles: ['STUDENT'], icon: icon(GraduationCap) };
+const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', roles: ['STUDENT'], icon: icon(BookOpen) };
+const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], icon: icon(CalendarCheck) };
+const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
 
 /** Flat list (legacy consumers + search). */
 export const navItems: NavItem[] = [
-    dashboard, examsMarks, reports, attendance, analytics, people, classes,
-    subjects, fees, announcements, assignments, users, settings, myResults,
+    dashboard, studentDashboard, examsMarks, reports, attendance, analytics, people, classes,
+    subjects, fees, announcements, assignments, users, settings,
+    myResults, mySubjects, myAttendance, myProfile,
 ];
 
 const groups: NavGroup[] = [
-    { title: null, items: [dashboard, myResults] },
+    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myAttendance] },
     { title: 'Academics', items: [examsMarks, reports, attendance, analytics] },
     { title: 'School', items: [people, classes, subjects] },
     { title: 'Finance', items: [fees] },
@@ -59,7 +64,7 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings];
+const pinnedItems: NavItem[] = [users, settings, myProfile];
 
 const forRole = (item: NavItem, role: UserRole | null) =>
     item.roles.includes(role ?? 'ADMIN');
@@ -80,7 +85,7 @@ const mobilePrimaryByRole: Record<Exclude<UserRole, 'PENDING'>, NavItem[]> = {
     ADMIN: [dashboard, examsMarks, people, fees],
     CLASS_TEACHER: [dashboard, examsMarks, attendance, reports],
     SUBJECT_TEACHER: [dashboard, examsMarks, assignments, announcements],
-    STUDENT: [dashboard, myResults],
+    STUDENT: [studentDashboard, myResults, mySubjects],
 };
 
 export function getMobileNav(role: UserRole | null): { primary: NavItem[]; overflow: NavItem[] } {
