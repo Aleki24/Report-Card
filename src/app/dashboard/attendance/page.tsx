@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Search, Save, CheckCircle, X, Undo2, Download } from 'lucide-react';
+import { Search, Save, CheckCircle, X, Undo2, Download, MessageSquare } from 'lucide-react';
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { Card, Input, Select, Button } from '@/components/ui';
@@ -222,6 +222,7 @@ export default function AttendancePage() {
   const [loadingStreams, setLoadingStreams] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [notifying, setNotifying] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -334,6 +335,39 @@ export default function AttendancePage() {
       toast.error(`Failed: ${err instanceof Error ? err.message : 'Network error'}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleNotifyGuardians = async () => {
+    if (!selectedStreamId) return;
+    setNotifying(true);
+    try {
+      const res = await fetch('/api/school/attendance/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate, stream_id: selectedStreamId }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(`Failed: ${json.error || 'Unknown error'}`);
+        return;
+      }
+      const { sent = 0, failed = 0, skipped = 0, alreadyNotified = 0 } = json;
+      if (sent === 0 && failed === 0 && skipped === 0 && alreadyNotified === 0) {
+        toast('No absent students to notify for this date.');
+        return;
+      }
+      const parts: string[] = [];
+      if (sent > 0) parts.push(`${sent} sent`);
+      if (alreadyNotified > 0) parts.push(`${alreadyNotified} already notified`);
+      if (skipped > 0) parts.push(`${skipped} skipped (no phone)`);
+      if (failed > 0) parts.push(`${failed} failed`);
+      const summary = `Guardian SMS: ${parts.join(', ')}`;
+      if (failed > 0) toast.error(summary); else toast.success(summary);
+    } catch (err) {
+      toast.error(`Failed: ${err instanceof Error ? err.message : 'Network error'}`);
+    } finally {
+      setNotifying(false);
     }
   };
 
@@ -473,6 +507,17 @@ export default function AttendancePage() {
           >
             <Download size={14} />
             PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!selectedStreamId || absentCount === 0 || hasPendingChanges || notifying}
+            onClick={handleNotifyGuardians}
+            title={hasPendingChanges ? 'Save changes before notifying guardians' : 'Text guardians of absent students'}
+            style={{ height: 36, borderRadius: 8, whiteSpace: 'nowrap' }}
+          >
+            <MessageSquare size={14} />
+            {notifying ? 'Notifying...' : 'Notify Guardians'}
           </Button>
         </div>
       </div>
