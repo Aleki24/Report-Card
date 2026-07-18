@@ -107,11 +107,12 @@ export async function getStudentSubjects(student: CurrentStudent) {
         }
     }
 
-    // Default: all subjects at the student's academic level (unchanged)
+    // Default: all subjects at the student's academic level
     const { data, error } = await supabase
         .from('subjects')
         .select('id, code, name, subject_type, display_order, category')
         .eq('academic_level_id', student.academicLevelId)
+        .eq('school_id', student.schoolId)
         .order('display_order', { ascending: true });
 
     if (error) throw error;
