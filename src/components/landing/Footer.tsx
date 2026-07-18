@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { Wordmark } from '@/components/Wordmark';
 
 export default function Footer() {
   return (
@@ -11,7 +12,7 @@ export default function Footer() {
           <div className="flex items-center" style={{ gap: '12px' }}>
             <Image src="/images/logo.png" alt="Skulbase Logo" width={36} height={36} className="rounded-lg object-cover" />
             <div>
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--color-text-primary)', fontSize: '1.125rem', letterSpacing: '-0.01em', display: 'block' }}>Skulbase</span>
+              <Wordmark style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1.125rem', letterSpacing: '-0.01em', display: 'block' }} />
               <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Modern School Management</span>
             </div>
           </div>
@@ -23,7 +24,7 @@ export default function Footer() {
         </div>
         <div style={{ height: '1px', background: 'var(--color-border-subtle)', marginBottom: '24px' }} />
         <div className="flex flex-col sm:flex-row items-center justify-between" style={{ gap: '16px' }}>
-          <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.75rem' }}>© {new Date().getFullYear()} Skulbase School Management System. All rights reserved.</span>
+          <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.75rem' }}>© {new Date().getFullYear()} <Wordmark style={{ fontWeight: 600 }} /> School Management System. All rights reserved.</span>
           <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.6875rem' }}>Built for Kenyan Schools 🇰🇪</span>
         </div>
       </div>

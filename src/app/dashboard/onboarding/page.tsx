@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Layers, Users, Building, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { Wordmark } from '@/components/Wordmark';
 import { toast } from 'sonner';
 
 type OnboardingRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | null;
@@ -162,7 +163,7 @@ export default function OnboardingWizard() {
     return (
       <div className="min-h-screen bg-muted/30 flex flex-col items-center py-12 px-4 sm:px-6">
         <div className="w-full max-w-4xl text-center mb-10">
-          <h1 className="text-4xl font-extrabold font-display text-foreground mb-4">Welcome to Skulbase!</h1>
+          <h1 className="text-4xl font-extrabold font-display text-foreground mb-4">Welcome to <Wordmark />!</h1>
           <p className="text-muted-foreground text-xl">How would you like to use the platform?</p>
         </div>
 
@@ -177,7 +178,7 @@ export default function OnboardingWizard() {
               <School className="w-7 h-7" />
             </div>
             <h3 className="text-2xl font-bold mb-3 relative z-10">Register a School</h3>
-            <p className="text-muted-foreground mb-8 flex-1 relative z-10">I am a principal or administrator looking to set up a new school on Skulbase.</p>
+            <p className="text-muted-foreground mb-8 flex-1 relative z-10">I am a principal or administrator looking to set up a new school on <Wordmark />.</p>
             <div className="text-primary font-semibold flex items-center gap-2 mt-auto">
               Get Started <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </div>

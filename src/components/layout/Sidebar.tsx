@@ -10,6 +10,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { getNavGroups, getPinnedItems, getMobileNav, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
+import { Wordmark } from "@/components/Wordmark";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -143,7 +144,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         )}
                         {!collapsed && (
                             <span className="min-w-0 break-words font-display text-[13px] font-bold leading-tight">
-                                {schoolName || "Skulbase"}
+                                {schoolName || <Wordmark />}
                             </span>
                         )}
                     </Link>

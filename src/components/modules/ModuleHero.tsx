@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import type { Module } from '@/lib/modules';
+import { Wordmark } from '@/components/Wordmark';
 
 interface ModuleHeroProps {
   module: Module;
@@ -33,7 +34,6 @@ export default function ModuleHero({ module }: ModuleHeroProps) {
         <div style={{ marginBottom: '16px' }}>
           <span
             style={{
-              color: 'var(--color-accent)',
               fontFamily: 'var(--font-body)',
               fontSize: '0.75rem',
               fontWeight: 600,
@@ -41,7 +41,7 @@ export default function ModuleHero({ module }: ModuleHeroProps) {
               letterSpacing: '0.2em',
             }}
           >
-            Skulbase Module
+            <Wordmark /> Module
           </span>
         </div>
 

@@ -13,6 +13,7 @@ import {
   Smartphone,
   Users,
 } from 'lucide-react';
+import { Wordmark } from '@/components/Wordmark';
 import { useTheme } from '@/components/ThemeProvider';
 import { modules } from '@/lib/modules';
 
@@ -174,7 +175,7 @@ export default function HeroSection() {
             }}
           >
             Students, teachers, classes, subjects, exams, attendance, analytics and
-            report cards — Skulbase runs the whole term in one place, on CBC or 8-4-4,
+            report cards — <Wordmark /> runs the whole term in one place, on CBC or 8-4-4,
             and keeps parents in the loop by SMS.
           </p>
 

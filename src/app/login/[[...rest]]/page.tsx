@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from '@/components/ThemeProvider';
+import { Wordmark } from '@/components/Wordmark';
 import { Eye, EyeOff, Loader2, LogIn, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -169,7 +170,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-            Sign in to your Skulbase account to continue
+            Sign in to your <Wordmark /> account to continue
           </p>
         </div>
 

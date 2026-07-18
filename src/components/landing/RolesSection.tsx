@@ -2,6 +2,7 @@
 
 import { BookOpen, CheckCircle2, ShieldCheck, Users, Heart } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { Wordmark } from '@/components/Wordmark';
 
 export default function RolesSection() {
   const { theme } = useTheme();
@@ -114,7 +115,7 @@ export default function RolesSection() {
               wordSpacing: '0.02em',
             }}
           >
-            Skulbase intelligently scopes access and tools to match each user&apos;s responsibilities.
+            <Wordmark /> intelligently scopes access and tools to match each user&apos;s responsibilities.
           </p>
         </div>
 

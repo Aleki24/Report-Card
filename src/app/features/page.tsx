@@ -5,6 +5,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import Navbar from '@/components/landing/Navbar';
 import Footer from '@/components/landing/Footer';
 import { modules, comingSoonModules } from '@/lib/modules';
+import { Wordmark } from '@/components/Wordmark';
 import { ArrowRight, Clock } from 'lucide-react';
 
 export default function FeaturesPage() {
@@ -70,7 +71,7 @@ export default function FeaturesPage() {
                 margin: '0 auto',
               }}
             >
-              Explore the modules that power Skulbase — from report cards and student management to attendance tracking and academic analytics.
+              Explore the modules that power <Wordmark /> — from report cards and student management to attendance tracking and academic analytics.
             </p>
           </div>
         </section>

@@ -3,6 +3,7 @@
 import { useTheme } from '@/components/ThemeProvider';
 import Navbar from '@/components/landing/Navbar';
 import Footer from '@/components/landing/Footer';
+import { Wordmark } from '@/components/Wordmark';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 
 export default function ContactPage() {
@@ -68,7 +69,7 @@ export default function ContactPage() {
                   margin: '0 auto',
                 }}
               >
-                Have questions about Skulbase? Want to bring modern school management to your institution? We&apos;d love to hear from you.
+                Have questions about <Wordmark />? Want to bring modern school management to your institution? We&apos;d love to hear from you.
               </p>
             </div>
 
