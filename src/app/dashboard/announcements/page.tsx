@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Bell } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface Announcement {
     id: string;
@@ -170,7 +170,21 @@ export default function AnnouncementsPage() {
                 </div>
             )}
 
-            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Announcement' : 'New Announcement'}>
+            {/* Side drawer rather than a centered popup, so the announcement
+                list stays visible while writing. */}
+            <Drawer
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={editing ? 'Edit Announcement' : 'New Announcement'}
+                footer={
+                    <>
+                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                            {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                        </button>
+                    </>
+                }
+            >
                 <div className="flex flex-col gap-4">
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
@@ -187,7 +201,7 @@ export default function AnnouncementsPage() {
                         <textarea
                             value={formContent}
                             onChange={e => setFormContent(e.target.value)}
-                            rows={4}
+                            rows={10}
                             placeholder="Announcement content..."
                             className="input-field w-full resize-y"
                         />
@@ -201,14 +215,8 @@ export default function AnnouncementsPage() {
                         />
                         Mark as important
                     </label>
-                    <div className="mt-2 flex justify-end gap-2">
-                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                            {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
-                        </button>
-                    </div>
                 </div>
-            </Modal>
+            </Drawer>
         </div>
     );
 }
