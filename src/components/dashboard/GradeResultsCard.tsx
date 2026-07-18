@@ -7,7 +7,7 @@ import EmptyState from './EmptyState';
 interface Stream { id: string; full_name: string; grade_id: string | null }
 interface Exam { id: string; name: string; term_id: string | null; grade_stream_id: string | null; grade_id: string | null; created_at: string }
 interface Term { id: string; name: string }
-interface Mark { subject_name: string; percentage: number | null; grade_symbol: string | null }
+interface Mark { subject_name: string; percentage: number | null; grade_symbol: string | null; exam_id: string }
 
 interface SubjectAgg { subject: string; avg: number; count: number; grade: string | null }
 
@@ -71,23 +71,28 @@ export default function GradeResultsCard() {
     return exams.filter(e => e.grade_stream_id === stream.id || (!e.grade_stream_id && e.grade_id != null && e.grade_id === stream.grade_id));
   }, [exams, stream]);
 
+  // One fetch per stream: all its marks. Exam switching then filters locally,
+  // and the default exam can be the newest one that actually has marks instead
+  // of the newest created (which is often a just-scheduled, unmarked exam).
   useEffect(() => {
-    setExamId(streamExams[0]?.id ?? null);
-  }, [streamExams]);
-
-  useEffect(() => {
-    if (!stream || !examId) { setMarks([]); return; }
+    if (!stream) { setMarks([]); return; }
     let cancelled = false;
     setLoadingMarks(true);
-    fetch(`/api/school/analytics?stream_id=${stream.id}&exam_id=${examId}`)
+    fetch(`/api/school/analytics?stream_id=${stream.id}`)
       .then(res => (res.ok ? res.json() : { marks: [] }))
       .then(json => { if (!cancelled) setMarks(json.marks ?? []); })
       .catch(() => { if (!cancelled) setMarks([]); })
       .finally(() => { if (!cancelled) setLoadingMarks(false); });
     return () => { cancelled = true; };
-  }, [stream, examId]);
+  }, [stream]);
 
-  const subjects = useMemo(() => aggregateBySubject(marks), [marks]);
+  useEffect(() => {
+    const withMarks = new Set(marks.map(m => m.exam_id));
+    const preferred = streamExams.find(e => withMarks.has(e.id)) ?? streamExams[0];
+    setExamId(preferred?.id ?? null);
+  }, [streamExams, marks]);
+
+  const subjects = useMemo(() => aggregateBySubject(marks.filter(m => m.exam_id === examId)), [marks, examId]);
   const classAvg = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.avg * x.count, 0) / subjects.reduce((s, x) => s + x.count, 0)) : null;
   const exam = streamExams.find(e => e.id === examId) ?? null;
   const termName = exam?.term_id ? terms.find(t => t.id === exam.term_id)?.name : null;
