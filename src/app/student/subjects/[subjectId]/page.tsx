@@ -4,10 +4,21 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     ArrowLeft, BookOpen, FileText, UploadCloud,
-    DownloadCloud, TrendingUp, X, Send
+    DownloadCloud, TrendingUp, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
+import DashboardCard from '@/components/dashboard/DashboardCard';
+import InsightCard from '@/components/dashboard/InsightCard';
+import EmptyState from '@/components/dashboard/EmptyState';
+import { Badge, Modal } from '@/components/ui';
+
+interface Subject {
+    id: string;
+    name: string;
+    code: string | null;
+    subject_type: 'CORE' | 'ESSENTIAL' | 'OPTIONAL' | null;
+}
 
 interface AssignmentItem {
     id: string;
@@ -25,6 +36,18 @@ interface MaterialItem {
     fileType: string | null;
     subjectName: string;
     createdAt: string;
+}
+
+interface PerformanceTrendTerm {
+    termName: string;
+    yearName: string;
+    subjects: { name: string; average: number }[];
+}
+
+function typeBadge(type: Subject['subject_type']) {
+    if (type === 'CORE') return <Badge variant="success">Core</Badge>;
+    if (type === 'ESSENTIAL') return <Badge variant="info">Essential</Badge>;
+    return <Badge variant="default">Optional</Badge>;
 }
 
 function getDueLabel(dateStr: string): string {
@@ -50,8 +73,8 @@ export default function SubjectAnalysisPage() {
     const router = useRouter();
     const subjectId = params.subjectId as string;
 
-    const [subject, setSubject] = useState<any>(null);
-    const [performance, setPerformance] = useState<any[]>([]);
+    const [subject, setSubject] = useState<Subject | null>(null);
+    const [performance, setPerformance] = useState<{ examName: string; average: number }[]>([]);
     const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
     const [materials, setMaterials] = useState<MaterialItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -105,19 +128,18 @@ export default function SubjectAnalysisPage() {
             fetch('/api/school/student/performance').then(r => r.json()),
             fetch('/api/school/student/dashboard').then(r => r.json()),
         ]).then(([subRes, perfRes, dashRes]) => {
-            const subs = subRes.data || [];
-            const found = subs.find((s: any) => s.id === subjectId);
+            const subs: Subject[] = subRes.data || [];
+            const found = subs.find((s) => s.id === subjectId) ?? null;
             setSubject(found);
 
             if (found && perfRes.data) {
-                // Map the performance data to only include this subject
-                const trendData = perfRes.data.map((term: any) => {
-                    const subjectMark = term.subjects.find((s: any) => s.subjectName === found.name);
-                    return {
-                        examName: `${term.termName} ${term.yearName}`.trim(),
-                        [found.name]: subjectMark ? subjectMark.percentage : null
-                    };
-                }).filter((t: any) => t[found.name] !== null);
+                const trends: PerformanceTrendTerm[] = perfRes.data;
+                const trendData = trends
+                    .map((term) => {
+                        const subjectMark = term.subjects.find((s) => s.name === found.name);
+                        return subjectMark ? { examName: `${term.termName} ${term.yearName}`.trim(), average: subjectMark.average } : null;
+                    })
+                    .filter((t): t is { examName: string; average: number } => t !== null);
 
                 setPerformance(trendData);
             }
@@ -135,94 +157,76 @@ export default function SubjectAnalysisPage() {
         });
     }, [subjectId]);
 
-    if (loading) return (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 0' }}>
-            <div className="skeleton-spinner" style={{ margin: '0 auto' }} />
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="mx-auto max-w-[1100px] py-10">
+                <div className="skeleton-spinner mx-auto" />
+            </div>
+        );
+    }
 
-    if (!subject) return (
-        <div style={{ maxWidth: 1100, margin: '0 auto', textAlign: 'center', padding: '100px 0' }}>
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--foreground)', marginBottom: 8 }}>Subject Not Found</h2>
-            <p style={{ color: 'var(--muted-foreground)', marginBottom: 24 }}>The subject you are looking for does not exist or you don&apos;t have access to it.</p>
-            <button onClick={() => router.back()} className="btn-secondary">Go Back</button>
-        </div>
-    );
+    if (!subject) {
+        return (
+            <div className="mx-auto max-w-[1100px] py-24 text-center">
+                <h2 className="mb-2 text-2xl font-bold text-foreground">Subject Not Found</h2>
+                <p className="mb-6 text-muted-foreground">The subject you are looking for does not exist or you don&apos;t have access to it.</p>
+                <button onClick={() => router.back()} className="btn-secondary">Go Back</button>
+            </div>
+        );
+    }
 
     return (
-        <div style={{ maxWidth: 1100, margin: '0 auto', paddingBottom: 'var(--space-10)' }}>
+        <div className="mx-auto max-w-[1100px] pb-10">
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+            <div className="mb-8 flex items-center gap-4">
                 <button
                     onClick={() => router.back()}
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--muted)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--muted-foreground)' }}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-muted/70"
                 >
                     <ArrowLeft size={20} />
                 </button>
                 <div>
-                    <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, color: 'var(--foreground)', marginBottom: 4 }}>
-                        {subject.name}
-                    </h1>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                        <span style={{ fontSize: 13, color: 'var(--muted-foreground)', fontWeight: 600 }}>{subject.code || 'No Code'}</span>
-                        <span style={{
-                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700,
-                            background: subject.subject_type === 'CORE' ? 'color-mix(in srgb, var(--viz-good) 10%, transparent)' : subject.subject_type === 'ESSENTIAL' ? 'color-mix(in srgb, var(--viz-info) 10%, transparent)' : 'color-mix(in srgb, var(--viz-warn) 10%, transparent)',
-                            color: subject.subject_type === 'CORE' ? 'var(--viz-good)' : subject.subject_type === 'ESSENTIAL' ? 'var(--viz-info)' : 'var(--viz-warn)'
-                        }}>
-                            {subject.subject_type === 'CORE' ? 'Core' : subject.subject_type === 'ESSENTIAL' ? 'Essential' : 'Optional'}
-                        </span>
+                    <h1 className="font-display text-2xl font-bold text-foreground">{subject.name}</h1>
+                    <div className="mt-1 flex items-center gap-3">
+                        <span className="text-[13px] font-semibold text-muted-foreground">{subject.code || 'No Code'}</span>
+                        {typeBadge(subject.subject_type)}
                     </div>
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+            <div className="flex flex-col gap-5">
                 {/* Performance Trend */}
-                <div className="premium-card" style={{ gridColumn: '1 / -1' }}>
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <TrendingUp size={18} color="var(--viz-info)" />
-                            Performance Analysis
-                        </div>
-                    </div>
-                    <div style={{ height: 300, width: '100%', marginTop: 16 }}>
+                <InsightCard title="Performance Analysis">
+                    <div className="mt-1 h-[300px] w-full">
                         {performance.length > 1 ? (
-                            <PerformanceTrendChart data={performance.map((d: any) => ({ examName: d.examName, average: d[subject.name] }))} />
+                            <PerformanceTrendChart data={performance} />
                         ) : (
-                            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', fontSize: 14, textAlign: 'center', padding: 20 }}>
-                                <TrendingUp size={48} style={{ opacity: 0.2, marginBottom: 16 }} />
+                            <div className="flex h-full flex-col items-center justify-center px-5 text-center text-sm text-muted-foreground">
+                                <TrendingUp size={48} className="mb-4 opacity-20" />
                                 Need more than one term of results to show a performance trend for {subject.name}.
                             </div>
                         )}
                     </div>
-                </div>
+                </InsightCard>
 
                 {/* Assignments & Homework */}
-                <div className="premium-card" style={{ display: 'flex', flexDirection: 'column', gridColumn: '1 / -1' }}>
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <FileText size={18} color="var(--viz-warn)" />
-                            Active Assignments
-                        </div>
-                    </div>
+                <InsightCard title="Active Assignments">
                     {assignments.length === 0 ? (
-                        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No assignments for {subject.name} right now.
-                        </div>
+                        <EmptyState icon={<FileText className="h-6 w-6" />} title="No assignments" description={`No assignments for ${subject.name} right now.`} />
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                        <div className="flex flex-col gap-3">
                             {assignments.map(a => (
-                                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 12 }}>
-                                    <div style={{ width: 36, height: 36, background: 'color-mix(in srgb, var(--viz-warn) 10%, transparent)', color: 'var(--viz-warn)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div key={a.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
                                         <FileText size={16} />
                                     </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>{a.title}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--viz-bad)', marginTop: 2, fontWeight: 600 }}>{getDueLabel(a.dueDate)}</div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-[13px] font-bold text-foreground">{a.title}</div>
+                                        <div className="mt-0.5 text-[11px] font-semibold text-destructive">{getDueLabel(a.dueDate)}</div>
                                     </div>
                                     <button
                                         onClick={() => setSubmitModal({ open: true, assignment: a })}
-                                        style={{ background: 'var(--muted)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--viz-info)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', flexShrink: 0 }}
+                                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-muted/70"
                                     >
                                         <UploadCloud size={14} /> Submit
                                     </button>
@@ -230,96 +234,76 @@ export default function SubjectAnalysisPage() {
                             ))}
                         </div>
                     )}
-                </div>
+                </InsightCard>
 
                 {/* Learning Materials */}
-                <div className="premium-card" style={{ display: 'flex', flexDirection: 'column', gridColumn: '1 / -1' }}>
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <BookOpen size={18} color="var(--primary)" />
-                            Learning Materials & Notes
-                        </div>
-                    </div>
+                <InsightCard title="Learning Materials & Notes">
                     {materials.length === 0 ? (
-                        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No learning materials for {subject.name} yet.
-                        </div>
+                        <EmptyState icon={<BookOpen className="h-6 w-6" />} title="No materials" description={`No learning materials for ${subject.name} yet.`} />
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 16, marginTop: 16 }}>
+                        <div className="grid grid-cols-1 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))]">
                             {materials.map(m => {
                                 const fileLabel = m.fileType
                                     ? `${m.fileType}${m.fileSizeBytes ? ` · ${formatFileSize(m.fileSizeBytes)}` : ''}`
                                     : m.fileSizeBytes ? formatFileSize(m.fileSizeBytes) : 'Resource';
                                 return (
-                                    <div key={m.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 16, padding: 16, background: 'var(--muted)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                                        <div style={{ width: 44, height: 44, background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <DashboardCard key={m.id} className="flex items-start gap-4 px-4 py-4">
+                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
                                             <FileText size={20} />
                                         </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)', marginBottom: 4 }}>{m.title}</div>
-                                            {m.description && <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginBottom: 8 }}>{m.description}</div>}
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
-                                                <span style={{ fontSize: 11, color: 'var(--muted-foreground)', fontWeight: 600 }}>{fileLabel}</span>
-                                            </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="mb-1 text-sm font-bold text-foreground">{m.title}</div>
+                                            {m.description && <div className="mb-2 text-xs text-muted-foreground">{m.description}</div>}
+                                            <span className="text-[11px] font-semibold text-muted-foreground">{fileLabel}</span>
                                         </div>
                                         {m.fileUrl && (
-                                            <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--viz-info)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, textDecoration: 'none' }}>
+                                            <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary no-underline">
                                                 <DownloadCloud size={16} />
                                             </a>
                                         )}
-                                    </div>
+                                    </DashboardCard>
                                 );
                             })}
                         </div>
                     )}
-                </div>
+                </InsightCard>
             </div>
 
             {/* Submission Modal */}
-            {submitModal.open && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
-                }} onClick={() => setSubmitModal({ open: false, assignment: null })}>
-                    <div style={{
-                        background: 'var(--card)', borderRadius: 16, maxWidth: 500, width: '100%',
-                        padding: 24, maxHeight: '90vh', overflow: 'auto'
-                    }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>Submit Assignment</h3>
-                            <button onClick={() => setSubmitModal({ open: false, assignment: null })}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>{submitModal.assignment?.title}</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>{subject.name}</div>
-                            {submitModal.assignment && <div style={{ fontSize: 12, color: 'var(--viz-bad)', marginTop: 2 }}>{getDueLabel(submitModal.assignment.dueDate)}</div>}
-                        </div>
-                        <div style={{ marginBottom: 16 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4 }}>Your Answer / Notes</label>
-                            <textarea value={subText} onChange={e => setSubText(e.target.value)}
-                                rows={5} placeholder="Type your submission here..."
-                                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, resize: 'vertical' }} />
-                        </div>
-                        <div style={{ marginBottom: 20 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4 }}>Upload File (optional)</label>
-                            <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)}
-                                style={{ fontSize: 13, width: '100%' }} />
-                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 4 }}>Max 10MB. PDF, DOC, images accepted.</div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                            <button onClick={() => setSubmitModal({ open: false, assignment: null })}
-                                className="btn-secondary">Cancel</button>
-                            <button onClick={handleSubmitAssignment} disabled={submitting || (!subText && !subFile)}
-                                className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Send size={14} /> {submitting ? 'Submitting...' : 'Submit'}
-                            </button>
-                        </div>
-                    </div>
+            <Modal
+                isOpen={submitModal.open}
+                onClose={() => setSubmitModal({ open: false, assignment: null })}
+                title="Submit Assignment"
+                footer={(
+                    <>
+                        <button onClick={() => setSubmitModal({ open: false, assignment: null })} className="btn-secondary">Cancel</button>
+                        <button onClick={handleSubmitAssignment} disabled={submitting || (!subText && !subFile)} className="btn-primary inline-flex items-center gap-1.5">
+                            <Send size={14} /> {submitting ? 'Submitting...' : 'Submit'}
+                        </button>
+                    </>
+                )}
+            >
+                <div className="mb-4">
+                    <div className="text-sm font-bold text-foreground">{submitModal.assignment?.title}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{subject.name}</div>
+                    {submitModal.assignment && <div className="mt-0.5 text-xs text-destructive">{getDueLabel(submitModal.assignment.dueDate)}</div>}
                 </div>
-            )}
+                <div className="mb-4">
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Your Answer / Notes</label>
+                    <textarea
+                        value={subText}
+                        onChange={e => setSubText(e.target.value)}
+                        rows={5}
+                        placeholder="Type your submission here..."
+                        className="w-full resize-y rounded-lg border border-border px-3 py-2.5 text-sm"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Upload File (optional)</label>
+                    <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+                    <div className="mt-1 text-[11px] text-muted-foreground">Max 10MB. PDF, DOC, images accepted.</div>
+                </div>
+            </Modal>
         </div>
     );
 }

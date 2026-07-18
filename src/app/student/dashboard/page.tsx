@@ -1,21 +1,47 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import {
     CalendarCheck, TrendingUp, BookOpen, Wallet,
-    Calendar, GraduationCap, X,
-    FileText, UploadCloud, MessageSquare, Target, DownloadCloud, Send
+    Calendar, GraduationCap, FileText, UploadCloud, MessageSquare,
+    Target, DownloadCloud, Send, Bell,
 } from 'lucide-react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
+import { Badge, Modal } from '@/components/ui';
+import KpiTile from '@/components/dashboard/KpiTile';
+import KpiCarousel from '@/components/dashboard/KpiCarousel';
+import SectionTitle from '@/components/dashboard/SectionTitle';
+import ListPanel from '@/components/dashboard/ListPanel';
+import EmptyState from '@/components/dashboard/EmptyState';
+import InsightCard from '@/components/dashboard/InsightCard';
+import { Bone } from '@/components/dashboard/LoadingSkeleton';
+import { getCurrentTermName } from '@/lib/term-calendar';
+
+interface UpcomingExam { id: string; name: string; exam_date: string; subject_name: string }
+interface Announcement { id: string; title: string; content: string; isImportant: boolean; createdAt: string }
+interface Assignment { id: string; title: string; subjectName: string; dueDate: string; fileUrl: string | null }
+interface LearningMaterial { id: string; title: string; subjectName: string; fileUrl: string | null; fileType: string | null; fileSizeBytes: number | null }
+interface PerformanceTrend { termId: string; termName: string; yearName: string; overallAverage: number }
+interface FeeRecord { balance: number }
+
+interface DashboardData {
+    stats: { attendanceRate: number; averageScore: number; examsTaken: number; subjectsCount: number };
+    upcomingExams: UpcomingExam[];
+    announcements: Announcement[];
+    assignments: Assignment[];
+    materials: LearningMaterial[];
+    trends: PerformanceTrend[];
+}
 
 export default function StudentDashboardPage() {
     const { profile, loading: authLoading } = useAuth();
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<Partial<DashboardData> | null>(null);
     const [loading, setLoading] = useState(true);
-    const [feesData, setFeesData] = useState<any[]>([]);
-    const [submitModal, setSubmitModal] = useState<{ open: boolean; assignment: any }>({ open: false, assignment: null });
+    const [feesData, setFeesData] = useState<FeeRecord[]>([]);
+    const [submitModal, setSubmitModal] = useState<{ open: boolean; assignment: Assignment | null }>({ open: false, assignment: null });
     const [subText, setSubText] = useState('');
     const [subFile, setSubFile] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -28,7 +54,7 @@ export default function StudentDashboardPage() {
                     fetch('/api/school/student/performance'),
                     fetch('/api/school/fees'),
                 ]);
-                
+
                 const dashData = dashRes.ok ? await dashRes.json() : null;
                 const perfData = perfRes.ok ? await perfRes.json() : null;
                 const feesJson = feesRes.ok ? await feesRes.json() : null;
@@ -51,17 +77,16 @@ export default function StudentDashboardPage() {
 
     const stats = data?.stats;
     const upcomingExams = data?.upcomingExams ?? [];
-    const latestResults = data?.latestResults ?? [];
     const announcements = data?.announcements ?? [];
     const assignments = data?.assignments ?? [];
     const materials = data?.materials ?? [];
     const trends = data?.trends ?? [];
-    const feesBalance = feesData.reduce((sum: number, f: any) => sum + (f.balance || 0), 0);
-    
+    const feesBalance = feesData.reduce((sum, f) => sum + (f.balance || 0), 0);
+
     // Performance Overview chart data (mini version)
-    const trendData = trends.map((t: any) => ({
+    const trendData = trends.map((t) => ({
         examName: `${t.termName} ${t.yearName}`.trim(),
-        'Average': t.overallAverage
+        average: t.overallAverage,
     }));
 
     const handleSubmitAssignment = async () => {
@@ -103,377 +128,246 @@ export default function StudentDashboardPage() {
         setSubmitting(false);
     };
 
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
     return (
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            {/* Header */}
-            <div style={{ marginBottom: 'var(--space-6)' }}>
-                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--foreground)', marginBottom: 4 }}>
-                    Good morning, {profile?.first_name}! 👋
-                </h1>
-                <p style={{ fontSize: 14, color: 'var(--muted-foreground)' }}>
-                    Here's what's happening today.
-                </p>
-            </div>
-
-            {/* Top Stat Cards (4 cols) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                {/* Attendance */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                    <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--viz-good) 10%, transparent)', color: 'var(--viz-good)' }}>
-                        <CalendarCheck size={22} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 600, marginBottom: 2 }}>Attendance</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--font-display)' }}>
-                                {stats?.attendanceRate ? `${stats.attendanceRate}%` : '—'}
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
-                            Overall
-                        </div>
-                    </div>
-                </div>
-
-                {/* Average Score */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                    <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--viz-info) 10%, transparent)', color: 'var(--viz-info)' }}>
-                        <TrendingUp size={22} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 600, marginBottom: 2 }}>Average Score</div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--font-display)' }}>
-                                {stats?.averageScore ? `${stats.averageScore}%` : '—'}
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
-                            Overall
-                        </div>
-                    </div>
-                </div>
-
-                {/* Exams Taken */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                    <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--viz-warn) 10%, transparent)', color: 'var(--viz-warn)' }}>
-                        <BookOpen size={22} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 600, marginBottom: 2 }}>Exams Taken</div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--font-display)' }}>
-                            {stats?.examsTaken ?? 0}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
-                            This term
-                        </div>
-                    </div>
-                </div>
-
-                {/* Subjects */}
-                <a href="/student/subjects" className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-                    <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)' }}>
-                        <BookOpen size={22} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 600, marginBottom: 2 }}>Subjects</div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--font-display)' }}>
-                            {stats?.subjectsCount ?? 0}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
-                            Enrolled subjects
-                        </div>
-                    </div>
-                </a>
-
-                {/* Fees Balance */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                    <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--primary) 10%, transparent)', color: 'var(--primary)' }}>
-                        <Wallet size={22} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 600, marginBottom: 2 }}>Fees Balance</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: feesBalance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)', fontFamily: 'var(--font-display)' }}>
-                            {feesData.length > 0 ? `KShs ${feesBalance.toLocaleString()}` : 'KShs —'}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>
-                            {feesData.length > 0 ? (feesBalance > 0 ? 'Outstanding balance' : 'Fully paid') : 'Awaiting data'}
-                        </div>
+        <div className="mx-auto max-w-[1200px] px-2 pb-4 sm:px-3">
+            {/* Hero Banner */}
+            <div className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:px-8 sm:py-7">
+                <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
+                <div className="pointer-events-none absolute -right-16 bottom-[-48px] h-40 w-40 rounded-full bg-white/10" aria-hidden />
+                <div className="relative min-w-0">
+                    <h1 className="font-display text-lg font-bold tracking-tight text-white sm:text-2xl">
+                        {greeting}, {profile?.first_name} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
+                    </h1>
+                    <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
+                        {todayLabel} &middot; {getCurrentTermName()}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        <Link href="/student/results" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
+                            <GraduationCap size={15} /> View My Results
+                        </Link>
+                        <Link href="/student/subjects" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors duration-200 hover:bg-white/20 sm:text-sm">
+                            <BookOpen size={15} /> My Subjects
+                        </Link>
                     </div>
                 </div>
             </div>
 
-            {/* Main Content Grid: 2 Columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+            {/* At a glance */}
+            <section className="mb-5">
+                <SectionTitle>At a glance</SectionTitle>
+                <KpiCarousel>
+                    <KpiTile title="Attendance" value={stats?.attendanceRate ? `${stats.attendanceRate}%` : '—'} icon={<CalendarCheck size={17} />} href="/student/attendance" tone="green" />
+                    <KpiTile title="Average score" value={stats?.averageScore ? `${stats.averageScore}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />
+                    <KpiTile title="Exams taken" value={stats?.examsTaken ?? 0} icon={<FileText size={17} />} href="/student/results" tone="purple" />
+                    <KpiTile title="Subjects" value={stats?.subjectsCount ?? 0} icon={<BookOpen size={17} />} href="/student/subjects" />
+                    <KpiTile
+                        title="Fees balance"
+                        value={feesData.length > 0 ? `KShs ${feesBalance.toLocaleString()}` : '—'}
+                        icon={<Wallet size={17} />}
+                        href="/student/profile"
+                        alert={feesBalance > 0}
+                        tone={feesBalance > 0 ? 'red' : undefined}
+                    />
+                </KpiCarousel>
+            </section>
 
-                {/* Left: Upcoming Exams */}
-                <div className="premium-card" style={{ gridColumn: 'span 1' }}>
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <Calendar size={18} color="var(--viz-info)" />
-                            Upcoming Exams
-                        </div>
-                        <a href="/student/results" className="premium-card-action">View All</a>
-                    </div>
-
-                    {upcomingExams.length === 0 ? (
-                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No upcoming exams scheduled.
-                        </div>
-                    ) : (
-                        <div>
-                            {upcomingExams.map((exam: any) => {
-                                const date = new Date(exam.exam_date);
-                                const { pillClass, statusText } = getExamCountdown(exam.exam_date);
-                                return (
-                                    <div key={exam.id} className="premium-list-item">
-                                        <div style={{ width: 80, fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', textAlign: 'right' }}>
-                                            {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                                        </div>
-                                        <div style={{ flex: 1, paddingLeft: 16, borderLeft: '2px solid var(--border)' }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)', marginBottom: 2 }}>{exam.subject_name}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>{exam.name}</div>
-                                        </div>
-                                        <div><span className={pillClass}>{statusText}</span></div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Right: Recent Announcements */}
-                <div className="premium-card">
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <GraduationCap size={18} color="var(--primary)" />
-                            Recent Announcements
-                        </div>
-                    </div>
-
-                    {announcements.length === 0 ? (
-                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No announcements yet.
-                        </div>
-                    ) : (
-                        <div>
-                            {announcements.map((a: any) => {
-                                const timeAgo = getTimeAgo(a.createdAt);
-                                return (
-                                    <div key={a.id} className="premium-list-item">
-                                        <div className="premium-icon-box" style={{ background: 'color-mix(in srgb, var(--viz-good) 10%, transparent)', color: 'var(--viz-good)' }}>
-                                            <BookOpen size={20} />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>{a.title}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                                {a.content}
+            {/* Upcoming exams + Announcements */}
+            <section className="mb-5">
+                <SectionTitle>Today&apos;s picture</SectionTitle>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xs:gap-4">
+                    <ListPanel title="Upcoming Exams" actionLabel="View all" actionHref="/student/results">
+                        {upcomingExams.length === 0 ? (
+                            <EmptyState icon={<Calendar className="h-6 w-6" />} title="No upcoming exams" description="Scheduled exams will appear here with clear date blocks." />
+                        ) : (
+                            <div className="flex flex-col gap-3">
+                                {upcomingExams.slice(0, 5).map((exam) => {
+                                    const date = new Date(exam.exam_date);
+                                    const { variant, statusText } = getExamCountdown(exam.exam_date);
+                                    return (
+                                        <div key={exam.id} className="flex items-center gap-3 rounded-xl border border-border/55 bg-muted/35 p-[5px] transition-colors hover:bg-muted/55">
+                                            <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border border-border/60 bg-card/80 text-muted-foreground">
+                                                <span className="text-[10px] font-bold leading-none tracking-[0.12em]">{date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}</span>
+                                                <span className="text-base font-bold leading-none tracking-tight">{date.toLocaleDateString('en-GB', { day: '2-digit' })}</span>
                                             </div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 4 }}>{timeAgo}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-semibold tracking-tight text-foreground">{exam.subject_name}</div>
+                                                <div className="truncate text-xs leading-relaxed text-muted-foreground">{exam.name}</div>
+                                            </div>
+                                            <Badge variant={variant}>{statusText}</Badge>
                                         </div>
-                                        {a.isImportant && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--viz-bad)' }} />}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </ListPanel>
 
-            {/* Bottom Row: 3 Columns for Academic Features */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
-                
-                {/* Assignments & Homework */}
-                <div className="premium-card">
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <FileText size={18} color="var(--viz-warn)" />
-                            Assignments & Homework
-                        </div>
-                    </div>
-                    
-                    {assignments.length === 0 ? (
-                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No assignments due.
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {assignments.map((a: any) => {
-                                const dueLabel = getDueLabel(a.dueDate);
-                                return (
-                                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 12 }}>
-                                        <div style={{ width: 36, height: 36, background: 'color-mix(in srgb, var(--viz-warn) 10%, transparent)', color: 'var(--viz-warn)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ListPanel title="Recent Announcements">
+                        {announcements.length === 0 ? (
+                            <EmptyState icon={<Bell className="h-6 w-6" />} title="No announcements yet" description="School announcements will show up here." />
+                        ) : (
+                            <div className="flex flex-col gap-3">
+                                {announcements.slice(0, 5).map((a) => (
+                                    <div key={a.id} className="flex items-start gap-3 rounded-xl border border-border/55 bg-muted/35 p-[5px] transition-colors hover:bg-muted/55">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            <BookOpen size={16} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-semibold tracking-tight text-foreground">{a.title}</div>
+                                            <div className="truncate text-xs leading-relaxed text-muted-foreground">{a.content}</div>
+                                            <div className="mt-0.5 text-[11px] text-muted-foreground">{getTimeAgo(a.createdAt)}</div>
+                                        </div>
+                                        {a.isImportant && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-destructive" />}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </ListPanel>
+                </div>
+            </section>
+
+            {/* Assignments / Performance / Materials */}
+            <section className="mb-5">
+                <SectionTitle>Academics</SectionTitle>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 xs:gap-4">
+                    <InsightCard title="Assignments & Homework">
+                        {assignments.length === 0 ? (
+                            <EmptyState icon={<FileText className="h-6 w-6" />} title="No assignments due" description="New homework and assignments will appear here." />
+                        ) : (
+                            <div className="flex flex-col gap-3">
+                                {assignments.map((a) => (
+                                    <div key={a.id} className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
                                             <FileText size={16} />
                                         </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>{a.title}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 1 }}>{a.subjectName}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--viz-bad)', marginTop: 2, fontWeight: 600 }}>{dueLabel}</div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-[13px] font-semibold text-foreground">{a.title}</div>
+                                            <div className="truncate text-[11px] text-muted-foreground">{a.subjectName}</div>
+                                            <div className="text-[11px] font-semibold text-destructive">{getDueLabel(a.dueDate)}</div>
                                         </div>
-                                        <button onClick={() => setSubmitModal({ open: true, assignment: a })} style={{ background: 'var(--muted)', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--viz-info)', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                                        <button
+                                            onClick={() => setSubmitModal({ open: true, assignment: a })}
+                                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-muted/70"
+                                        >
                                             <UploadCloud size={14} /> Submit
                                         </button>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Performance Overview */}
-                <div className="premium-card">
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <TrendingUp size={18} color="var(--viz-info)" />
-                            Performance Overview
-                        </div>
-                        <div style={{ fontSize: 12, padding: '4px 8px', background: 'var(--muted)', borderRadius: 6, fontWeight: 600, color: 'var(--muted-foreground)' }}>
-                            All Terms
-                        </div>
-                    </div>
-                    <div style={{ height: 180, width: '100%', marginTop: 16 }}>
-                        {trendData.length > 1 ? (
-                            <PerformanceTrendChart data={trendData.map((d: any) => ({ examName: d.examName, average: d.Average }))} />
-                        ) : (
-                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', fontSize: 13, textAlign: 'center', padding: 20 }}>
-                                Need more than one term of data to show performance trend.
+                                ))}
                             </div>
                         )}
-                    </div>
-                </div>
+                    </InsightCard>
 
-                {/* Learning Materials & Notes */}
-                <div className="premium-card">
-                    <div className="premium-card-header">
-                        <div className="premium-card-title">
-                            <BookOpen size={18} color="var(--viz-good)" />
-                            Learning Materials & Notes
+                    <InsightCard title="Performance Overview" meta="All terms">
+                        <div className="mt-1 h-[180px] w-full">
+                            {trendData.length > 1 ? (
+                                <PerformanceTrendChart data={trendData} />
+                            ) : (
+                                <div className="flex h-full items-center justify-center px-5 text-center text-[13px] text-muted-foreground">
+                                    Need more than one term of data to show performance trend.
+                                </div>
+                            )}
                         </div>
-                    </div>
-                    
-                    {materials.length === 0 ? (
-                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                            No learning materials available.
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {materials.map((m: any) => {
-                                const fileLabel = m.fileType
-                                    ? `${m.fileType}${m.fileSizeBytes ? ` · ${formatFileSize(m.fileSizeBytes)}` : ''}`
-                                    : m.fileSizeBytes ? formatFileSize(m.fileSizeBytes) : 'Resource';
-                                return (
-                                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 12 }}>
-                                        <div style={{ width: 36, height: 36, background: 'color-mix(in srgb, var(--viz-good) 10%, transparent)', color: 'var(--viz-good)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <FileText size={16} />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>{m.title}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 1 }}>{m.subjectName}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 1 }}>{fileLabel}</div>
-                                        </div>
-                                        {m.fileUrl && (
-                                            <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" style={{ background: 'none', border: 'none', color: 'var(--viz-info)', cursor: 'pointer', textDecoration: 'none' }}>
-                                                <DownloadCloud size={18} />
-                                            </a>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
+                    </InsightCard>
 
-            </div>
+                    <InsightCard title="Learning Materials & Notes">
+                        {materials.length === 0 ? (
+                            <EmptyState icon={<BookOpen className="h-6 w-6" />} title="No materials yet" description="Notes and resources shared by teachers will appear here." />
+                        ) : (
+                            <div className="flex flex-col gap-3">
+                                {materials.map((m) => {
+                                    const fileLabel = m.fileType
+                                        ? `${m.fileType}${m.fileSizeBytes ? ` · ${formatFileSize(m.fileSizeBytes)}` : ''}`
+                                        : m.fileSizeBytes ? formatFileSize(m.fileSizeBytes) : 'Resource';
+                                    return (
+                                        <div key={m.id} className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                                                <FileText size={16} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate text-[13px] font-semibold text-foreground">{m.title}</div>
+                                                <div className="truncate text-[11px] text-muted-foreground">{m.subjectName}</div>
+                                                <div className="truncate text-[11px] text-muted-foreground">{fileLabel}</div>
+                                            </div>
+                                            {m.fileUrl && (
+                                                <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary">
+                                                    <DownloadCloud size={18} />
+                                                </a>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </InsightCard>
+                </div>
+            </section>
 
             {/* Interaction Tools */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)' }}>
-                {/* Message Teachers */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ width: 48, height: 48, background: 'color-mix(in srgb, var(--viz-info) 10%, transparent)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--viz-info)' }}>
-                        <MessageSquare size={24} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', marginBottom: 4 }}>Message Teachers</h3>
-                        <p style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Get help or ask questions directly.</p>
-                    </div>
-                    <button
-                        disabled
-                        title="Coming soon"
-                        style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'not-allowed' }}
-                    >
-                        Coming soon
-                    </button>
-                </div>
+            <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 xs:gap-4">
+                <ComingSoonCard icon={<MessageSquare size={22} />} title="Message Teachers" desc="Get help or ask questions directly." tone="blue" />
+                <ComingSoonCard icon={<Target size={22} />} title="Study Goals" desc="Set reminders and track revision goals." tone="primary" />
+            </section>
 
-                {/* Set Study Goals */}
-                <div className="premium-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ width: 48, height: 48, background: 'color-mix(in srgb, var(--primary) 10%, transparent)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                        <Target size={24} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', marginBottom: 4 }}>Study Goals</h3>
-                        <p style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Set reminders and track revision goals.</p>
-                    </div>
-                    <button
-                        disabled
-                        title="Coming soon"
-                        style={{ background: 'var(--muted)', color: 'var(--muted-foreground)', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'not-allowed' }}
-                    >
-                        Coming soon
-                    </button>
-                </div>
-            </div>
-            
             {/* Submission Modal */}
-            {submitModal.open && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
-                }} onClick={() => setSubmitModal({ open: false, assignment: null })}>
-                    <div style={{
-                        background: 'var(--card)', borderRadius: 16, maxWidth: 500, width: '100%',
-                        padding: 24, maxHeight: '90vh', overflow: 'auto'
-                    }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>Submit Assignment</h3>
-                            <button onClick={() => setSubmitModal({ open: false, assignment: null })}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}>
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>{submitModal.assignment?.title}</div>
-                            <div style={{ fontSize: 12, color: 'var(--muted-foreground)', marginTop: 2 }}>{submitModal.assignment?.subjectName}</div>
-                            <div style={{ fontSize: 12, color: 'var(--viz-bad)', marginTop: 2 }}>{getDueLabel(submitModal.assignment?.dueDate)}</div>
-                        </div>
-                        <div style={{ marginBottom: 16 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4 }}>Your Answer / Notes</label>
-                            <textarea value={subText} onChange={e => setSubText(e.target.value)}
-                                rows={5} placeholder="Type your submission here..."
-                                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, resize: 'vertical' }} />
-                        </div>
-                        <div style={{ marginBottom: 20 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4 }}>Upload File (optional)</label>
-                            <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)}
-                                style={{ fontSize: 13, width: '100%' }} />
-                            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 4 }}>Max 10MB. PDF, DOC, images accepted.</div>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                            <button onClick={() => setSubmitModal({ open: false, assignment: null })}
-                                className="btn-secondary">Cancel</button>
-                            <button onClick={handleSubmitAssignment} disabled={submitting || (!subText && !subFile)}
-                                className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Send size={14} /> {submitting ? 'Submitting...' : 'Submit'}
-                            </button>
-                        </div>
-                    </div>
+            <Modal
+                isOpen={submitModal.open}
+                onClose={() => setSubmitModal({ open: false, assignment: null })}
+                title="Submit Assignment"
+                footer={(
+                    <>
+                        <button onClick={() => setSubmitModal({ open: false, assignment: null })} className="btn-secondary">Cancel</button>
+                        <button onClick={handleSubmitAssignment} disabled={submitting || (!subText && !subFile)} className="btn-primary inline-flex items-center gap-1.5">
+                            <Send size={14} /> {submitting ? 'Submitting...' : 'Submit'}
+                        </button>
+                    </>
+                )}
+            >
+                <div className="mb-4">
+                    <div className="text-sm font-bold text-foreground">{submitModal.assignment?.title}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{submitModal.assignment?.subjectName}</div>
+                    <div className="mt-0.5 text-xs text-destructive">{getDueLabel(submitModal.assignment?.dueDate)}</div>
                 </div>
-            )}
-            
+                <div className="mb-4">
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Your Answer / Notes</label>
+                    <textarea
+                        value={subText}
+                        onChange={e => setSubText(e.target.value)}
+                        rows={5}
+                        placeholder="Type your submission here..."
+                        className="w-full resize-y rounded-lg border border-border px-3 py-2.5 text-sm"
+                    />
+                </div>
+                <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Upload File (optional)</label>
+                    <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+                    <div className="mt-1 text-[11px] text-muted-foreground">Max 10MB. PDF, DOC, images accepted.</div>
+                </div>
+            </Modal>
         </div>
     );
 }
 
 // ── Helpers ─────────────────────────────────────────────────
+
+function ComingSoonCard({ icon, title, desc, tone }: { icon: React.ReactNode; title: string; desc: string; tone: 'blue' | 'primary' }) {
+    return (
+        <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${tone === 'blue' ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`}>
+                {icon}
+            </div>
+            <div className="min-w-0 flex-1">
+                <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+            </div>
+            <button disabled title="Coming soon" className="shrink-0 cursor-not-allowed rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                Coming soon
+            </button>
+        </div>
+    );
+}
 
 function getTimeAgo(dateStr: string): string {
     const now = Date.now();
@@ -489,15 +383,16 @@ function getTimeAgo(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function getExamCountdown(examDate: string): { pillClass: string; statusText: string } {
+function getExamCountdown(examDate: string): { variant: 'ongoing' | 'progress' | 'upcoming'; statusText: string } {
     const date = new Date(examDate);
     const daysLeft = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    const pillClass = daysLeft <= 2 ? 'pill-ongoing' : daysLeft <= 7 ? 'pill-progress' : 'pill-upcoming';
+    const variant = daysLeft <= 2 ? 'ongoing' : daysLeft <= 7 ? 'progress' : 'upcoming';
     const statusText = daysLeft <= 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `In ${daysLeft} days`;
-    return { pillClass, statusText };
+    return { variant, statusText };
 }
 
-function getDueLabel(dateStr: string): string {
+function getDueLabel(dateStr: string | undefined): string {
+    if (!dateStr) return '';
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const due = new Date(dateStr);
@@ -517,17 +412,20 @@ function formatFileSize(bytes: number): string {
 
 function DashboardSkeleton() {
     return (
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ marginBottom: 'var(--space-6)' }}>
-                <div className="skeleton-bone" style={{ width: 250, height: 32, borderRadius: 8, marginBottom: 8 }} />
-                <div className="skeleton-bone" style={{ width: 180, height: 16, borderRadius: 6 }} />
+        <div className="mx-auto max-w-[1200px] px-2 sm:px-3">
+            <div className="mb-5 h-[128px] w-full rounded-2xl bg-muted/50" />
+            <div className="mb-5 flex gap-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="h-[92px] w-[calc((100%-3rem)/5)] shrink-0 rounded-2xl border border-border/60 bg-card/60 p-3.5">
+                        <Bone width={32} height={32} radius={8} />
+                        <Bone width="60%" height={20} style={{ marginTop: 10 }} />
+                        <Bone width="80%" height={10} style={{ marginTop: 8 }} />
+                    </div>
+                ))}
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-                {[1, 2, 3, 4].map(i => <div key={i} className="student-skeleton-card" style={{ height: 100 }} />)}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 'var(--space-6)' }}>
-                <div className="student-skeleton-card" style={{ height: 300 }} />
-                <div className="student-skeleton-card" style={{ height: 300 }} />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="h-[260px] rounded-2xl border border-border/60 bg-card/60" />
+                <div className="h-[260px] rounded-2xl border border-border/60 bg-card/60" />
             </div>
         </div>
     );

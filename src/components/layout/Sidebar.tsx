@@ -17,8 +17,10 @@ interface SidebarProps {
     setCollapsed?: (val: boolean) => void;
 }
 
+const EXACT_MATCH_HREFS = new Set(["/dashboard", "/student/dashboard"]);
+
 function isActivePath(pathname: string, href: string) {
-    return pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+    return pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(href));
 }
 
 function NavLink({ item, collapsed, pathname }: { item: NavItem; collapsed: boolean; pathname: string }) {
@@ -92,6 +94,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const mobileNav = useMemo(() => getMobileNav(role), [role]);
 
     const handleSignOut = () => router.push("/logout");
+    const homeHref = role === "STUDENT" ? "/student/dashboard" : "/dashboard";
 
     return (
         <>
@@ -104,7 +107,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
             >
                 {/* Logo + collapse toggle */}
                 <div className={cn("flex items-center gap-3 p-4", collapsed && "justify-center")}>
-                    <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-3 no-underline text-inherit">
+                    <Link href={homeHref} className="flex min-w-0 flex-1 items-center gap-3 no-underline text-inherit">
                         {schoolLogo ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={schoolLogo} alt={schoolName || "School"} className={cn("shrink-0 object-contain", collapsed ? "h-10 w-10" : "h-12 w-12")} />
