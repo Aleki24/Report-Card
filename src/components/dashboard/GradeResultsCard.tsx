@@ -37,8 +37,13 @@ function aggregateBySubject(marks: Mark[]): SubjectAgg[] {
     .sort((a, b) => b.avg - a.avg);
 }
 
+/* Red is reserved for genuinely alarming scores (≤20%); everything else gets
+   calm colors — green for strong, amber for good, blue for the middle band. */
 function sevColor(avg: number): string {
-  return avg >= 80 ? 'var(--viz-good)' : avg >= 60 ? 'var(--viz-warn)' : 'var(--viz-bad)';
+  if (avg <= 20) return 'var(--viz-bad)';
+  if (avg >= 80) return 'var(--viz-good)';
+  if (avg >= 60) return 'var(--viz-warn)';
+  return 'var(--viz-info)';
 }
 
 /**
@@ -166,10 +171,10 @@ export default function GradeResultsCard() {
           <ChevronLeft size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <h3 className="font-display truncate text-[15px] font-semibold text-foreground">
+          <h3 className="font-display truncate text-sm font-semibold text-foreground">
             {series ? `${series.name} — ${scopeLabel}` : `Exam Results — ${scopeLabel}`}
           </h3>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-[11px] text-muted-foreground">
             {[examDate, subjects.length ? `${subjects.length} subjects` : null, classAvg != null ? `average ${classAvg}%` : null].filter(Boolean).join(' · ') || 'Latest exam performance by subject'}
           </p>
         </div>
@@ -194,8 +199,8 @@ export default function GradeResultsCard() {
       </div>
 
       {loading || seeking ? (
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton-bone h-[68px] rounded-xl" />)}
+        <div className="space-y-1.5">
+          {[0, 1, 2, 3, 4].map(i => <div key={i} className="skeleton-bone h-6 rounded-lg" />)}
         </div>
       ) : subjects.length === 0 ? (
         <EmptyState
@@ -203,25 +208,20 @@ export default function GradeResultsCard() {
           description={scopeKey === 'all' ? 'Marks entered in Exams & Marks will appear here.' : `No marks recorded for ${scopeLabel} yet.`}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+        <div className="space-y-0.5">
           {subjects.map(s => (
-            <div key={s.subject} className="rounded-xl border border-border/55 bg-muted/35 p-2.5 transition-colors hover:bg-muted/55">
-              <div className="flex items-center justify-between gap-1.5">
-                <span className="min-w-0 truncate text-[13px] font-semibold tracking-tight text-foreground">{s.subject}</span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">{s.count}</span>
-              </div>
-              <div className="mt-1 flex items-baseline gap-1.5">
-                <span className="text-lg font-bold leading-none tracking-tight text-foreground">{s.avg}</span>
-                <span
-                  className="rounded px-1 py-0.5 text-[10px] font-bold leading-none"
-                  style={{ color: sevColor(s.avg), background: `color-mix(in srgb, ${sevColor(s.avg)} 14%, transparent)` }}
-                >
-                  {s.grade ?? `${s.avg}%`}
-                </span>
-              </div>
-              <div className="mt-2 h-1 w-full overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${sevColor(s.avg)} 15%, transparent)` }}>
+            <div key={s.subject} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-muted/50">
+              <span className="w-28 shrink-0 truncate text-xs font-medium text-foreground sm:w-40">{s.subject}</span>
+              <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full" style={{ width: `${Math.min(s.avg, 100)}%`, background: sevColor(s.avg) }} />
               </div>
+              <span className="w-6 shrink-0 text-right text-[13px] font-bold tabular-nums text-foreground">{s.avg}</span>
+              <span
+                className="w-8 shrink-0 rounded px-1 py-0.5 text-center text-[10px] font-bold leading-none"
+                style={{ color: sevColor(s.avg), background: `color-mix(in srgb, ${sevColor(s.avg)} 14%, transparent)` }}
+              >
+                {s.grade ?? `${s.avg}%`}
+              </span>
             </div>
           ))}
         </div>
