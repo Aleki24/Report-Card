@@ -185,7 +185,7 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
             <View style={t.footer}>
                 {qrCodeDataUri && <Image style={t.qr} src={qrCodeDataUri} />}
                 <Text style={t.footerText}>Report generated on {today}{data.openingDate ? ` — next term begins ${data.openingDate}` : ''}</Text>
-                <Text style={t.footerText}>Matokeo · This document is electronically generated</Text>
+                <Text style={t.footerText}>Skulbase · This document is electronically generated</Text>
             </View>
         </>
     );

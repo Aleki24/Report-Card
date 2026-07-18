@@ -234,7 +234,7 @@ export const modules: Module[] = [
     description:
       'Create exams, enter marks, view results, auto-calculate grades, and connect everything to report cards.',
     longDescription:
-      'The Exams & Marks module is the academic heart of Matokeo. Create exams, enter student marks efficiently, auto-calculate grades using your school\'s grading system, and feed results directly into report cards and analytics.',
+      'The Exams & Marks module is the academic heart of Skulbase. Create exams, enter student marks efficiently, auto-calculate grades using your school\'s grading system, and feed results directly into report cards and analytics.',
     icon: ClipboardList,
     featureHref: '/features/exams',
     dashboardHref: '/dashboard/exams-marks',

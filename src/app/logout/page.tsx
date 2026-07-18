@@ -56,7 +56,7 @@ export default function LogoutPage() {
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-             Are you sure you want to sign out of Matokeo?
+             Are you sure you want to sign out of Skulbase?
           </p>
         </div>
 

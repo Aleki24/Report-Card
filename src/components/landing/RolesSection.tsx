@@ -114,7 +114,7 @@ export default function RolesSection() {
               wordSpacing: '0.02em',
             }}
           >
-            Matokeo intelligently scopes access and tools to match each user&apos;s responsibilities.
+            Skulbase intelligently scopes access and tools to match each user&apos;s responsibilities.
           </p>
         </div>
 

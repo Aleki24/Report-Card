@@ -83,7 +83,7 @@ export async function notifyInviteCode(params: {
 
   if (phone) {
     try {
-      const message = `Hi ${firstName}, your Matokeo invite code for ${schoolName} is ${code}. Activate your account at ${appUrl}/activate`;
+      const message = `Hi ${firstName}, your Skulbase invite code for ${schoolName} is ${code}. Activate your account at ${appUrl}/activate`;
       const smsRes = await sendSMS(phone, message);
       result.sms = smsRes.success;
       if (!smsRes.success) console.error('[invite] SMS send failed:', smsRes.error);
@@ -96,7 +96,7 @@ export async function notifyInviteCode(params: {
     try {
       await sendEmail({
         to: email,
-        subject: `Your Matokeo invite code for ${schoolName}`,
+        subject: `Your Skulbase invite code for ${schoolName}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #1a1a2e;">You're invited to ${schoolName}</h1>

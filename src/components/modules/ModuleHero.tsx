@@ -41,7 +41,7 @@ export default function ModuleHero({ module }: ModuleHeroProps) {
               letterSpacing: '0.2em',
             }}
           >
-            Matokeo Module
+            Skulbase Module
           </span>
         </div>
 

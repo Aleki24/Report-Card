@@ -111,7 +111,7 @@ export default function SignupPage() {
       <div className="relative z-10 w-full max-w-[440px]">
         {/* Header */}
         <div className="mb-8 text-center">
-          <Image src="/images/logo.jpg" alt="Matokeo Logo" width={64} height={64}
+          <Image src="/images/logo.jpg" alt="Skulbase Logo" width={64} height={64}
             className="mx-auto mb-5 rounded-2xl object-cover"
             style={{ boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}
           />
@@ -121,7 +121,7 @@ export default function SignupPage() {
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-            Get started with Matokeo today
+            Get started with Skulbase today
           </p>
         </div>
 

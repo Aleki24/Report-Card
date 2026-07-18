@@ -215,7 +215,7 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
             {/* Footer */}
             <View style={m.footer}>
                 <Text style={m.footerText}>Generated {today}{data.openingDate ? `  •  Next term begins ${data.openingDate}` : ''}</Text>
-                <Text style={m.footerText}>Matokeo — electronically generated document</Text>
+                <Text style={m.footerText}>Skulbase — electronically generated document</Text>
             </View>
         </>
     );

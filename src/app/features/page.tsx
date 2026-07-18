@@ -70,7 +70,7 @@ export default function FeaturesPage() {
                 margin: '0 auto',
               }}
             >
-              Explore the modules that power Matokeo — from report cards and student management to attendance tracking and academic analytics.
+              Explore the modules that power Skulbase — from report cards and student management to attendance tracking and academic analytics.
             </p>
           </div>
         </section>

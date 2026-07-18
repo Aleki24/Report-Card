@@ -68,7 +68,7 @@ export default function ContactPage() {
                   margin: '0 auto',
                 }}
               >
-                Have questions about Matokeo? Want to bring modern school management to your institution? We&apos;d love to hear from you.
+                Have questions about Skulbase? Want to bring modern school management to your institution? We&apos;d love to hear from you.
               </p>
             </div>
 
@@ -76,7 +76,7 @@ export default function ContactPage() {
               {/* Contact Info */}
               <div className="lg:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {[
-                  { icon: Mail, label: 'Email', value: 'hello@matokeo.app' },
+                  { icon: Mail, label: 'Email', value: 'hello@skulbase.app' },
                   { icon: Phone, label: 'Phone', value: '+254 700 000 000' },
                   { icon: MapPin, label: 'Location', value: 'Nairobi, Kenya' },
                 ].map((item, idx) => (

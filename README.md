@@ -1,9 +1,9 @@
-# Matokeo
+# Skulbase
 
-Matokeo ("results" in Swahili) is a modern school/student management system
-for schools — covering the full academic workflow from enrollment to exams,
-attendance, fees, and results delivery, with SMS notifications keeping
-parents in the loop.
+Skulbase is a modern school/student management system for schools —
+covering the full academic workflow from enrollment to exams, attendance,
+fees, and results delivery, with SMS notifications keeping parents in the
+loop.
 
 ## Modules
 

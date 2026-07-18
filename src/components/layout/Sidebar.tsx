@@ -135,7 +135,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         ) : (
                             <Image
                                 src="/images/logo.jpg"
-                                alt="Matokeo Logo"
+                                alt="Skulbase Logo"
                                 width={collapsed ? 40 : 48}
                                 height={collapsed ? 40 : 48}
                                 className="shrink-0 rounded-lg object-contain"
@@ -143,7 +143,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         )}
                         {!collapsed && (
                             <span className="min-w-0 break-words font-display text-[13px] font-bold leading-tight">
-                                {schoolName || "Matokeo"}
+                                {schoolName || "Skulbase"}
                             </span>
                         )}
                     </Link>

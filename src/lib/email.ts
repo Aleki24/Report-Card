@@ -24,7 +24,7 @@ export interface SendEmailParams {
 export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailParams) {
   const resend = getResend();
   return resend.emails.send({
-    from: from || 'Matokeo <noreply@matokeo.app>',
+    from: from || 'Skulbase <noreply@skulbase.app>',
     to: Array.isArray(to) ? to : [to],
     subject,
     html,
@@ -35,10 +35,10 @@ export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailP
 export async function sendWelcomeEmail(email: string, firstName: string, schoolName: string) {
   return sendEmail({
     to: email,
-    subject: `Welcome to Matokeo — ${schoolName}`,
+    subject: `Welcome to Skulbase — ${schoolName}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #1a1a2e;">Welcome to Matokeo!</h1>
+        <h1 style="color: #1a1a2e;">Welcome to Skulbase!</h1>
         <p>Hi ${firstName},</p>
         <p>Your account for <strong>${schoolName}</strong> has been created successfully.</p>
         <p>You can now log in to manage report cards, exams, attendance, and more.</p>
@@ -58,11 +58,11 @@ export async function sendInviteEmail(email: string, inviteCode: string, schoolN
   const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL}/register?code=${inviteCode}`;
   return sendEmail({
     to: email,
-    subject: `You've been invited to ${schoolName} on Matokeo`,
+    subject: `You've been invited to ${schoolName} on Skulbase`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #1a1a2e;">You're Invited!</h1>
-        <p>You have been invited to join <strong>${schoolName}</strong> on Matokeo.</p>
+        <p>You have been invited to join <strong>${schoolName}</strong> on Skulbase.</p>
         <p>Click the button below to set up your account:</p>
         <div style="margin: 24px 0;">
           <a href="${registerUrl}"

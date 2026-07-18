@@ -111,7 +111,7 @@ export default function ForgotPasswordPage() {
 
       <div className="relative z-10 w-full max-w-[440px]">
         <div className="mb-8 text-center">
-          <Image src="/images/logo.jpg" alt="Matokeo Logo" width={64} height={64}
+          <Image src="/images/logo.jpg" alt="Skulbase Logo" width={64} height={64}
             className="mx-auto mb-5 rounded-2xl object-cover"
             style={{ boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}
           />

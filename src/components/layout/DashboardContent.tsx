@@ -27,7 +27,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     };
 
     const sidebarWidth = collapsed ? 80 : 260;
-    const displayName = schoolName || 'Matokeo';
+    const displayName = schoolName || 'Skulbase';
 
     const needsSchoolSetup = role === 'PENDING' || (role === 'ADMIN' && profile && schoolOnboardingCompleted === false);
 
@@ -47,7 +47,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
             {/* Mobile Top Bar */}
             <div className="mobile-topbar-container">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <Image src="/images/logo.jpg" alt="Matokeo Logo" width={32} height={32}
+                    <Image src="/images/logo.jpg" alt="Skulbase Logo" width={32} height={32}
                       style={{ borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
                     />
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{displayName}</span>

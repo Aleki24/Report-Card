@@ -53,12 +53,12 @@ export default function Navbar() {
       <div className="flex items-center justify-between" style={{ maxWidth: '1280px', margin: '0 auto' }}>
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <Image src="/images/logo.jpg" alt="Matokeo Logo" width={44} height={44}
+          <Image src="/images/logo.jpg" alt="Skulbase Logo" width={44} height={44}
             className="rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
             style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)' }}
           />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--color-text-primary)', fontSize: 'clamp(1.25rem, 2.5vw, 1.5rem)', letterSpacing: '-0.01em' }}>
-            Matokeo
+            Skulbase
           </span>
         </Link>
 

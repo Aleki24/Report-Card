@@ -54,7 +54,7 @@ export default function ModulesSection() {
             margin: '0 auto',
           }}
         >
-          From student enrollment to final report cards, Matokeo covers every aspect of school academic management.
+          From student enrollment to final report cards, Skulbase covers every aspect of school academic management.
         </p>
       </div>
 

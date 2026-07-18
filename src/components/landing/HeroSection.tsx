@@ -174,7 +174,7 @@ export default function HeroSection() {
             }}
           >
             Students, teachers, classes, subjects, exams, attendance, analytics and
-            report cards — Matokeo runs the whole term in one place, on CBC or 8-4-4,
+            report cards — Skulbase runs the whole term in one place, on CBC or 8-4-4,
             and keeps parents in the loop by SMS.
           </p>
 
