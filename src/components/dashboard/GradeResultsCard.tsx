@@ -15,7 +15,8 @@ interface Mark {
 }
 
 interface SubjectAgg { subject: string; avg: number; count: number; grade: string | null }
-interface ExamOption { id: string; name: string; date: number }
+/** One assessment series, e.g. "Term 2 Midterm" — the per-subject exam records grouped back together. */
+interface SeriesOption { key: string; name: string; date: number; examIds: string[] }
 
 function aggregateBySubject(marks: Mark[]): SubjectAgg[] {
   const by: Record<string, { sum: number; n: number; grades: Record<string, number> }> = {};
@@ -89,26 +90,39 @@ export default function GradeResultsCard() {
     return () => { cancelled = true; };
   }, [scopeKey]);
 
-  // Exams present in this scope's marks, newest first — guaranteed to have data.
-  const examOptions = useMemo<ExamOption[]>(() => {
-    const byId = new Map<string, ExamOption>();
+  // Exams in this app are per-subject records ("Term 2 Midterm - English"),
+  // so group them back into assessment series by stripping the subject suffix
+  // off the exam name — one dropdown entry shows every subject sat together.
+  const seriesOptions = useMemo<SeriesOption[]>(() => {
+    const byKey = new Map<string, { name: string; date: number; examIds: Set<string> }>();
     for (const m of marks) {
-      if (!byId.has(m.exam_id)) {
-        byId.set(m.exam_id, { id: m.exam_id, name: m.exam_name || 'Exam', date: m.exam_date ? new Date(m.exam_date).getTime() : 0 });
-      }
+      const name = m.exam_name || 'Exam';
+      const subj = (m.subject_name || '').trim();
+      const suffix = ` - ${subj}`.toLowerCase();
+      const seriesName = subj && name.toLowerCase().endsWith(suffix) ? name.slice(0, name.length - suffix.length).trim() : name;
+      const time = m.exam_date ? new Date(m.exam_date).getTime() : 0;
+      // Year-scope the key so a recurring series name doesn't merge across years.
+      const key = `${seriesName.toLowerCase()}|${time ? new Date(time).getFullYear() : 0}`;
+      const cur = byKey.get(key) ?? { name: seriesName, date: 0, examIds: new Set<string>() };
+      cur.date = Math.max(cur.date, time);
+      cur.examIds.add(m.exam_id);
+      byKey.set(key, cur);
     }
-    return [...byId.values()].sort((a, b) => b.date - a.date);
+    return [...byKey.entries()]
+      .map(([key, v]) => ({ key, name: v.name, date: v.date, examIds: [...v.examIds] }))
+      .sort((a, b) => b.date - a.date);
   }, [marks]);
 
-  // Default to the newest exam whenever the scope's marks change.
+  // Default to the newest series whenever the scope's marks change.
   useEffect(() => {
-    setExamId(examOptions[0]?.id ?? null);
-  }, [examOptions]);
+    setExamId(seriesOptions[0]?.key ?? null);
+  }, [seriesOptions]);
 
-  const subjects = useMemo(() => aggregateBySubject(marks.filter(m => m.exam_id === examId)), [marks, examId]);
+  const series = seriesOptions.find(s => s.key === examId) ?? null;
+  const seriesExamIds = useMemo(() => new Set(series?.examIds ?? []), [series]);
+  const subjects = useMemo(() => aggregateBySubject(marks.filter(m => seriesExamIds.has(m.exam_id))), [marks, seriesExamIds]);
   const classAvg = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.avg * x.count, 0) / subjects.reduce((s, x) => s + x.count, 0)) : null;
-  const exam = examOptions.find(e => e.id === examId) ?? null;
-  const examDate = exam?.date ? new Date(exam.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+  const examDate = series?.date ? new Date(series.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   const scopeLabel = scopeStream ? scopeStream.full_name : 'All classes';
 
   // ‹ › order: All classes → stream 0 → … → stream n-1 → All classes.
@@ -131,7 +145,7 @@ export default function GradeResultsCard() {
         </button>
         <div className="min-w-0 flex-1">
           <h3 className="font-display truncate text-[15px] font-semibold text-foreground">
-            {exam ? `${exam.name} — ${scopeLabel}` : `Exam Results — ${scopeLabel}`}
+            {series ? `${series.name} — ${scopeLabel}` : `Exam Results — ${scopeLabel}`}
           </h3>
           <p className="truncate text-xs text-muted-foreground">
             {[examDate, subjects.length ? `${subjects.length} subjects` : null, classAvg != null ? `average ${classAvg}%` : null].filter(Boolean).join(' · ') || 'Latest exam performance by subject'}
@@ -145,14 +159,14 @@ export default function GradeResultsCard() {
         >
           <ChevronRight size={16} />
         </button>
-        {examOptions.length > 0 && (
+        {seriesOptions.length > 0 && (
           <select
             value={examId ?? ''}
             onChange={e => setExamId(e.target.value)}
             aria-label="Filter by exam"
             className="max-w-[150px] shrink-0 cursor-pointer truncate rounded-lg border border-border/60 bg-card px-2 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/50"
           >
-            {examOptions.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            {seriesOptions.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
           </select>
         )}
       </div>
