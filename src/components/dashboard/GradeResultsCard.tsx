@@ -34,34 +34,43 @@ function sevColor(avg: number): string {
   return avg >= 80 ? 'var(--viz-good)' : avg >= 60 ? 'var(--viz-warn)' : 'var(--viz-bad)';
 }
 
-/** Exam results for one grade/stream, with ‹ › navigation across streams and an exam filter. */
+function examBelongsToStream(exam: Exam, stream: Stream): boolean {
+  if (exam.grade_stream_id) return exam.grade_stream_id === stream.id;
+  if (exam.grade_id != null) return exam.grade_id === stream.grade_id;
+  return false;
+}
+
+/**
+ * Exam results by subject, with ‹ › navigation across classes and an exam
+ * filter. Marks-first: all marks are fetched once and the card opens on the
+ * newest exam that actually has marks, resolving its class from the exam's
+ * stream/grade link. An exam that matches no known class still displays,
+ * labelled "All classes" — marks can never be hidden by a linkage mismatch.
+ */
 export default function GradeResultsCard() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
-  const [streamIdx, setStreamIdx] = useState(0);
-  const [examId, setExamId] = useState<string | null>(null);
   const [marks, setMarks] = useState<Mark[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMarks, setLoadingMarks] = useState(false);
-  // On first load, auto-advance past streams with no marks so the card opens
-  // on a class that has results (e.g. skip an unmarked "Form 3" that happens
-  // to sort first). Stops at the first marked stream, on manual navigation,
-  // or after one full loop.
-  const [seeking, setSeeking] = useState(true);
-  const seekSteps = React.useRef(0);
+  // streamIdx === -1 → "All classes" view for a marked exam matching no stream.
+  const [streamIdx, setStreamIdx] = useState(0);
+  const [examId, setExamId] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [streamsRes, examsRes, termsRes] = await Promise.all([
+        const [streamsRes, examsRes, termsRes, marksRes] = await Promise.all([
           fetch('/api/school/data?type=grade_streams'),
           fetch('/api/school/data?type=exams'),
           fetch('/api/school/data?type=terms'),
+          fetch('/api/school/analytics'),
         ]);
         if (streamsRes.ok) setStreams((await streamsRes.json()).data ?? []);
         if (examsRes.ok) setExams((await examsRes.json()).data ?? []);
         if (termsRes.ok) setTerms((await termsRes.json()).data ?? []);
+        if (marksRes.ok) setMarks((await marksRes.json()).marks ?? []);
       } catch (err) {
         console.error('Grade results fetch error:', err);
       }
@@ -69,57 +78,54 @@ export default function GradeResultsCard() {
     })();
   }, []);
 
-  const stream = streams[streamIdx] ?? null;
+  const markedExamIds = useMemo(() => new Set(marks.map(m => m.exam_id)), [marks]);
+  // exams arrive newest-first from the API, so the first marked one is the latest.
+  const markedExams = useMemo(() => exams.filter(e => markedExamIds.has(e.id)), [exams, markedExamIds]);
 
-  // A stream's exams include stream-scoped exams and whole-grade exams for its grade.
-  const streamExams = useMemo(() => {
-    if (!stream) return [];
-    return exams.filter(e => e.grade_stream_id === stream.id || (!e.grade_stream_id && e.grade_id != null && e.grade_id === stream.grade_id));
-  }, [exams, stream]);
-
-  // One fetch per stream: all its marks. Exam switching then filters locally,
-  // and the default exam can be the newest one that actually has marks instead
-  // of the newest created (which is often a just-scheduled, unmarked exam).
+  // Open on the newest exam that has marks, on the class it belongs to.
   useEffect(() => {
-    if (!stream) { setMarks([]); return; }
-    let cancelled = false;
-    setLoadingMarks(true);
-    fetch(`/api/school/analytics?stream_id=${stream.id}`)
-      .then(res => (res.ok ? res.json() : { marks: [] }))
-      .then(json => { if (!cancelled) setMarks(json.marks ?? []); })
-      .catch(() => { if (!cancelled) setMarks([]); })
-      .finally(() => { if (!cancelled) setLoadingMarks(false); });
-    return () => { cancelled = true; };
-  }, [stream]);
-
-  useEffect(() => {
-    const withMarks = new Set(marks.map(m => m.exam_id));
-    const preferred = streamExams.find(e => withMarks.has(e.id)) ?? streamExams[0];
-    setExamId(preferred?.id ?? null);
-  }, [streamExams, marks]);
-
-  useEffect(() => {
-    if (!seeking || loading || loadingMarks || streams.length === 0) return;
-    if (marks.length > 0) { setSeeking(false); return; }
-    if (streams.length < 2 || seekSteps.current >= streams.length - 1) {
-      // No stream has marks — settle back on the first one.
-      if (seekSteps.current > 0) setStreamIdx(0);
-      setSeeking(false);
-      return;
+    if (loading || initialized) return;
+    const latest = markedExams[0];
+    if (latest) {
+      const idx = streams.findIndex(s => examBelongsToStream(latest, s));
+      setStreamIdx(idx); // -1 → "All classes" view
+      setExamId(latest.id);
+    } else {
+      setStreamIdx(0);
+      setExamId(null);
     }
-    seekSteps.current += 1;
-    setStreamIdx(i => (i + 1) % streams.length);
-  }, [seeking, loading, loadingMarks, marks, streams.length]);
+    setInitialized(true);
+  }, [loading, initialized, markedExams, streams]);
+
+  const stream = streamIdx >= 0 ? streams[streamIdx] ?? null : null;
+
+  // Exams selectable in the current view: the stream's own (marked ones first,
+  // then newest unmarked), or every marked exam in the "All classes" view.
+  const viewExams = useMemo(() => {
+    if (!stream) return markedExams;
+    const own = exams.filter(e => examBelongsToStream(e, stream));
+    return [...own.filter(e => markedExamIds.has(e.id)), ...own.filter(e => !markedExamIds.has(e.id))];
+  }, [stream, exams, markedExams, markedExamIds]);
+
+  const goToStream = (idx: number) => {
+    setStreamIdx(idx);
+    const target = streams[idx];
+    if (!target) return;
+    const own = exams.filter(e => examBelongsToStream(e, target));
+    const preferred = own.find(e => markedExamIds.has(e.id)) ?? own[0];
+    setExamId(preferred?.id ?? null);
+  };
+
+  const cycle = (dir: 1 | -1) => {
+    if (streams.length === 0) return;
+    goToStream(((streamIdx < 0 ? (dir === 1 ? -1 : 0) : streamIdx) + dir + streams.length) % streams.length);
+  };
 
   const subjects = useMemo(() => aggregateBySubject(marks.filter(m => m.exam_id === examId)), [marks, examId]);
   const classAvg = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.avg * x.count, 0) / subjects.reduce((s, x) => s + x.count, 0)) : null;
-  const exam = streamExams.find(e => e.id === examId) ?? null;
+  const exam = exams.find(e => e.id === examId) ?? null;
   const termName = exam?.term_id ? terms.find(t => t.id === exam.term_id)?.name : null;
-
-  const cycle = (dir: 1 | -1) => {
-    setSeeking(false);
-    setStreamIdx(i => (i + dir + streams.length) % streams.length);
-  };
+  const scopeLabel = stream ? stream.full_name : streams.length > 0 && exam ? 'All classes' : null;
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm sm:p-5">
@@ -134,7 +140,7 @@ export default function GradeResultsCard() {
         </button>
         <div className="min-w-0 flex-1">
           <h3 className="font-display truncate text-[15px] font-semibold text-foreground">
-            {exam ? exam.name : 'Exam Results'}{stream ? ` — ${stream.full_name}` : ''}
+            {exam ? exam.name : 'Exam Results'}{scopeLabel ? ` — ${scopeLabel}` : ''}
           </h3>
           <p className="truncate text-xs text-muted-foreground">
             {[termName, subjects.length ? `${subjects.length} subjects` : null, classAvg != null ? `class average ${classAvg}%` : null].filter(Boolean).join(' · ') || 'Latest exam performance by subject'}
@@ -148,26 +154,26 @@ export default function GradeResultsCard() {
         >
           <ChevronRight size={16} />
         </button>
-        {streamExams.length > 0 && (
+        {viewExams.length > 0 && (
           <select
             value={examId ?? ''}
-            onChange={e => { setSeeking(false); setExamId(e.target.value); }}
+            onChange={e => setExamId(e.target.value)}
             aria-label="Filter by exam"
             className="max-w-[150px] shrink-0 cursor-pointer truncate rounded-lg border border-border/60 bg-card px-2 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/50"
           >
-            {streamExams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            {viewExams.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
         )}
       </div>
 
-      {loading || loadingMarks || (seeking && streams.length > 0 && marks.length === 0) ? (
+      {loading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[0, 1, 2, 3].map(i => <div key={i} className="skeleton-bone h-[88px] rounded-xl" />)}
         </div>
-      ) : streams.length === 0 ? (
-        <EmptyState title="No classes yet" description="Set up grades and streams to see exam results here." />
+      ) : streams.length === 0 && exams.length === 0 ? (
+        <EmptyState title="No classes yet" description="Set up grades, streams and exams to see results here." />
       ) : subjects.length === 0 ? (
-        <EmptyState title="No marks yet" description={`No marks recorded for ${stream?.full_name ?? 'this class'}${exam ? ` on ${exam.name}` : ''}.`} />
+        <EmptyState title="No marks yet" description={`No marks recorded${scopeLabel ? ` for ${scopeLabel}` : ''}${exam ? ` on ${exam.name}` : ''}.`} />
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {subjects.map(s => (
