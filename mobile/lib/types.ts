@@ -139,3 +139,148 @@ export interface StudentProfile {
     grade_streams: { name: string; full_name: string } | null;
     academic_levels: { name: string } | null;
 }
+
+// ── Staff (ADMIN / CLASS_TEACHER / SUBJECT_TEACHER) ────────────
+// Mirrors GET /api/school/dashboard, /api/school/stats, /api/school/data,
+// /api/school/attendance, /api/school/fees, /api/school/announcements,
+// /api/school/assignments as consumed by src/app/dashboard/**/page.tsx.
+
+export interface StaffDashboardSummary {
+    totalStudents: number;
+    totalTeachers: number;
+    totalUsers: number;
+    totalClasses: number;
+    totalReports: number;
+    attendanceToday: { present: number; absent: number; late: number; excused: number } | null;
+    upcomingExams: { id: string; name: string; exam_type: string; exam_date: string; subject_name: string; grade_name: string }[];
+    recentActivities: { type: 'report' | 'student' | 'mark'; message: string; timestamp: string; href?: string }[];
+    overdueFeesCount: number;
+    announcementsLast7Days: number;
+    recentEnrollmentsLast7: number;
+    financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
+    academicSummary: { recentAvg: number | null };
+}
+
+export interface AdminStats {
+    totalReports: number;
+    totalStudents: number;
+    activeStudents: number;
+    totalTeachers: number;
+    classTeachers: number;
+    subjectTeachers: number;
+    totalClasses: number;
+    schoolAverage: number | null;
+    passRate: number | null;
+}
+
+export interface ClassTeacherStats {
+    streamName: string;
+    studentCount: number;
+    streamAvg: string;
+    reportsPending: number;
+}
+
+export interface SubjectTeacherStats {
+    examCount: number;
+    avg: string;
+    markCount: number;
+}
+
+export interface GradeStream {
+    id: string;
+    name: string;
+    full_name: string;
+    grade_id: string;
+}
+
+export interface StudentListItem {
+    id: string;
+    admission_number: string | null;
+    status: string | null;
+    users: { first_name: string; last_name: string; email: string | null } | null;
+    grade_streams: { id: string; full_name: string } | null;
+}
+
+export interface TeacherListItem {
+    id: string;
+    employee_id: string | null;
+    profile: { first_name: string; last_name: string; email: string | null; phone: string | null; is_active: boolean; role: string };
+    subjects: string;
+    classes: string;
+    stats: { subjectCount: number; classCount: number };
+}
+
+export interface ClassAttendanceRow {
+    id: string;
+    name: string;
+    admission_number: string;
+    status: AttendanceStatus | null;
+    notes: string | null;
+}
+
+export interface StaffFeeRecord extends FeeRecord {
+    studentName: string;
+    admissionNumber: string;
+}
+
+export interface StaffAnnouncement extends Announcement {
+    postedBy: string;
+}
+
+export interface StudentDetail {
+    profile: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        email: string | null;
+        phone: string | null;
+        admission_number: string | null;
+        gender: string | null;
+        date_of_birth: string | null;
+        date_enrolled: string | null;
+        status: string | null;
+        guardian_name: string | null;
+        guardian_phone: string | null;
+        guardian_email: string | null;
+        grade_stream: { id: string; full_name: string } | null;
+        academic_level: { id: string; name: string; code: string } | null;
+    };
+    academicHistory: { term_id: string; term_name: string; average: number; subjects: { name: string; percentage: number }[] }[];
+    reportHistory: { id: string; generated_at: string; term: string; year: string; average: number | null; position: number | null }[];
+    attendanceHistory: { id: string; term: string; year: string; present: number; total: number; percentage: number | null }[];
+}
+
+export interface TeacherDetail {
+    profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: string; is_active: boolean; created_at: string };
+    classAssignments: { id: string; stream: string; year: string }[];
+    subjectAssignments: { subject: string; subject_code: string; category: string; grade: string }[];
+}
+
+export interface AnalyticsMark {
+    id: string;
+    raw_score: number;
+    percentage: number;
+    grade_symbol: string | null;
+    subject_id: string;
+    exam_id: string;
+    student_id: string;
+    subject_name: string;
+    exam_name: string;
+    exam_date: string;
+    student_name: string;
+    admission_number: string;
+}
+
+export interface StaffAssignment {
+    id: string;
+    title: string;
+    description: string | null;
+    dueDate: string;
+    fileUrl: string | null;
+    subject: string;
+    subjectId: string;
+    stream: string;
+    streamId: string | null;
+    createdBy: string;
+    createdAt: string;
+}

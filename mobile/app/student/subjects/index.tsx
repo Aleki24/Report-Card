@@ -28,7 +28,7 @@ export default function SubjectsScreen() {
             ) : (
                 <View style={styles.grid}>
                     {subjects.map((s) => (
-                        <Pressable key={s.id} onPress={() => router.push(`/(tabs)/subjects/${s.id}`)} style={styles.cardWrap}>
+                        <Pressable key={s.id} onPress={() => router.push(`/student/subjects/${s.id}`)} style={styles.cardWrap}>
                             <Card>
                                 <Text style={styles.subjectName}>{s.name}</Text>
                                 <Text style={styles.subjectCode}>{s.code ?? 'No code'}</Text>

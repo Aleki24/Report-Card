@@ -5,7 +5,7 @@ export default function AuthLayout() {
     return (
         <>
             <SignedIn>
-                <Redirect href="/(tabs)" />
+                <Redirect href="/" />
             </SignedIn>
             <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="sign-in" />
