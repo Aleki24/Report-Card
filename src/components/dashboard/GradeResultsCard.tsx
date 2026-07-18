@@ -46,6 +46,21 @@ function sevColor(avg: number): string {
   return 'var(--viz-info)';
 }
 
+/* Kenyan-curriculum subject buckets; order is both match precedence and the
+   order category chips render in. More specific tests come before broader
+   ones ("Home Science" must hit Technical before the Sciences test sees it). */
+const SUBJECT_CATEGORIES: { label: string; test: RegExp }[] = [
+  { label: 'Mathematics', test: /math/i },
+  { label: 'Languages', test: /english|kiswahili|swahili|french|german|arabic|chinese|sign language|literature|lugha/i },
+  { label: 'Humanities', test: /history|geograph|religio|\bcre\b|\bire\b|\bhre\b|social studies|life skills|citizenship/i },
+  { label: 'Technical & Applied', test: /business|computer|agricult|home science|art|music|physical|sport|pre-?tech|creative|design|woodwork|metal|building|electric|drawing|aviation/i },
+  { label: 'Sciences', test: /biolog|chemist|physic|science/i },
+];
+
+function subjectCategory(subject: string): string {
+  return SUBJECT_CATEGORIES.find(c => c.test.test(subject))?.label ?? 'Other';
+}
+
 /**
  * Exam results by subject, sourced exactly like the Analytics page: the marks
  * endpoint does the class filtering server-side and the card aggregates what
@@ -116,16 +131,29 @@ export default function GradeResultsCard() {
     else { setScopeIdx(-1); setSeeking(false); } // no class had marks — fall back to All classes
   }, [seeking, streamsLoaded, loading, marks, marksScope, scopeKey, scopeIdx, streams.length]);
 
-  // Exams in this app are per-subject records ("Term 2 Midterm - English"),
-  // so group them back into assessment series by stripping the subject suffix
-  // off the exam name — one dropdown entry shows every subject sat together.
+  // Exams in this app are per-subject records ("Term 2 Midterm - English",
+  // sometimes with extra decoration like "(English)" appended), so group them
+  // back into assessment series. The subject name is removed wherever it
+  // appears in the exam name — tolerant of separators, parentheses and
+  // ordering — and leftover punctuation is cleaned, so every subject of a
+  // sitting lands in the same series regardless of naming quirks.
   const seriesOptions = useMemo<SeriesOption[]>(() => {
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const seriesNameOf = (examName: string, subjectName: string) => {
+      let n = examName;
+      const subj = subjectName.trim();
+      if (subj) n = n.replace(new RegExp(escapeRe(subj), 'gi'), '');
+      n = n
+        .replace(/\(\s*\)/g, ' ')          // empty parens left by removal
+        .replace(/\s*[-–—:/]\s*(?=$)/g, '') // dangling trailing separators
+        .replace(/^\s*[-–—:/]\s*/g, '')     // dangling leading separators
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      return n || examName;
+    };
     const byKey = new Map<string, { name: string; date: number; examIds: Set<string> }>();
     for (const m of marks) {
-      const name = m.exam_name || 'Exam';
-      const subj = (m.subject_name || '').trim();
-      const suffix = ` - ${subj}`.toLowerCase();
-      const seriesName = subj && name.toLowerCase().endsWith(suffix) ? name.slice(0, name.length - suffix.length).trim() : name;
+      const seriesName = seriesNameOf(m.exam_name || 'Exam', m.subject_name || '');
       const time = m.exam_date ? new Date(m.exam_date).getTime() : 0;
       // Year-scope the key so a recurring series name doesn't merge across years.
       const key = `${seriesName.toLowerCase()}|${time ? new Date(time).getFullYear() : 0}`;
@@ -150,6 +178,20 @@ export default function GradeResultsCard() {
   const classAvg = subjects.length ? Math.round(subjects.reduce((s, x) => s + x.avg * x.count, 0) / subjects.reduce((s, x) => s + x.count, 0)) : null;
   const examDate = series?.date ? new Date(series.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
   const scopeLabel = scopeStream ? scopeStream.full_name : 'All classes';
+
+  // Category chips: subjects render one type at a time (Humanities, …) with a
+  // click to see the others. Default is the first category present.
+  const [cat, setCat] = useState<string | null>(null);
+  const catOptions = useMemo(() => {
+    const present = new Set(subjects.map(s => subjectCategory(s.subject)));
+    const ordered = [...SUBJECT_CATEGORIES.map(c => c.label), 'Other'].filter(l => present.has(l));
+    return ordered;
+  }, [subjects]);
+  const activeCat = cat && catOptions.includes(cat) ? cat : catOptions[0] ?? null;
+  const visibleSubjects = useMemo(
+    () => (activeCat ? subjects.filter(s => subjectCategory(s.subject) === activeCat) : subjects),
+    [subjects, activeCat]
+  );
 
   // ‹ › order: All classes → stream 0 → … → stream n-1 → All classes.
   const cycle = (dir: 1 | -1) => {
@@ -186,17 +228,41 @@ export default function GradeResultsCard() {
         >
           <ChevronRight size={16} />
         </button>
-        {seriesOptions.length > 0 && (
+        {streams.length > 0 && (
           <select
-            value={examId ?? ''}
-            onChange={e => setExamId(e.target.value)}
-            aria-label="Filter by exam"
+            value={scopeKey}
+            onChange={e => {
+              setSeeking(false);
+              const v = e.target.value;
+              setScopeIdx(v === 'all' ? -1 : streams.findIndex(s => s.id === v));
+            }}
+            aria-label="Filter by class"
             className="max-w-[150px] shrink-0 cursor-pointer truncate rounded-lg border border-border/60 bg-card px-2 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/50"
           >
-            {seriesOptions.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+            <option value="all">All classes</option>
+            {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
           </select>
         )}
       </div>
+
+      {/* Subject type chips — one category shown at a time */}
+      {!loading && !seeking && catOptions.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {catOptions.map(c => (
+            <button
+              key={c}
+              onClick={() => setCat(c)}
+              className={`cursor-pointer rounded-full px-2.5 py-1 text-[10px] font-semibold leading-none transition-colors ${
+                c === activeCat
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading || seeking ? (
         <div className="space-y-1.5">
@@ -209,7 +275,7 @@ export default function GradeResultsCard() {
         />
       ) : (
         <div className="space-y-0.5">
-          {subjects.map(s => (
+          {visibleSubjects.map(s => (
             <div key={s.subject} className="flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-muted/50">
               <span className="w-28 shrink-0 truncate text-xs font-medium text-foreground sm:w-40">{s.subject}</span>
               <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
