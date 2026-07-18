@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
     CalendarCheck, TrendingUp, BookOpen, Wallet,
     Calendar, GraduationCap, FileText, UploadCloud, MessageSquare,
-    Target, DownloadCloud, Send, Bell, RefreshCw, Clock3,
+    DownloadCloud, Send, Bell, RefreshCw, Clock3,
 } from 'lucide-react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 import { Badge, Modal } from '@/components/ui';
@@ -18,6 +18,7 @@ import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
 import InsightCard from '@/components/dashboard/InsightCard';
 import { Bone } from '@/components/dashboard/LoadingSkeleton';
+import StudyGoalsCard from '@/components/student/StudyGoalsCard';
 import { getCurrentTermName } from '@/lib/term-calendar';
 
 interface UpcomingExam { id: string; name: string; exam_date: string; subject_name: string }
@@ -239,7 +240,7 @@ export default function StudentDashboardPage() {
                         title="Fees balance"
                         value={feesData.length > 0 ? `KShs ${feesBalance.toLocaleString()}` : '—'}
                         icon={<Wallet size={17} />}
-                        href="/student/profile"
+                        href="/student/fees"
                         alert={feesBalance > 0}
                         tone={feesBalance > 0 ? 'red' : undefined}
                     />
@@ -379,7 +380,7 @@ export default function StudentDashboardPage() {
             {/* Interaction Tools */}
             <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 xs:gap-4">
                 <ComingSoonCard icon={<MessageSquare size={22} />} title="Message Teachers" desc="Get help or ask questions directly." tone="blue" />
-                <ComingSoonCard icon={<Target size={22} />} title="Study Goals" desc="Set reminders and track revision goals." tone="primary" />
+                <StudyGoalsCard />
             </section>
 
             {/* Submission Modal */}

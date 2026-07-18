@@ -23,22 +23,32 @@ function isActivePath(pathname: string, href: string) {
     return pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(href));
 }
 
-function NavLink({ item, collapsed, pathname }: { item: NavItem; collapsed: boolean; pathname: string }) {
+function NavLink({ item, collapsed, pathname, badge }: { item: NavItem; collapsed: boolean; pathname: string; badge?: number }) {
     const isActive = isActivePath(pathname, item.href);
     return (
         <Link
             href={item.href}
             title={collapsed ? item.label : undefined}
             className={cn(
-                "flex items-center gap-3 rounded-lg text-sm no-underline transition-colors",
+                "relative flex items-center gap-3 rounded-lg text-sm no-underline transition-colors",
                 collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
                 isActive
                     ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
                     : "font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             )}
         >
-            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">{item.icon}</span>
+            <span className="relative flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+                {item.icon}
+                {!!badge && collapsed && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                )}
+            </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+            {!collapsed && !!badge && (
+                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                    {badge > 9 ? '9+' : badge}
+                </span>
+            )}
         </Link>
     );
 }
@@ -71,6 +81,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [notifCount, setNotifCount] = useState(0);
 
     useEffect(() => {
         fetch("/api/school/data?type=school_profile")
@@ -80,6 +91,16 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
             })
             .catch(() => {});
     }, []);
+
+    useEffect(() => {
+        if (role !== "STUDENT") return;
+        fetch("/api/school/student/notifications")
+            .then((res) => res.json())
+            .then((data) => setNotifCount(data.data?.count ?? 0))
+            .catch(() => {});
+    }, [role]);
+
+    const badges: Record<string, number> = role === "STUDENT" ? { "/student/dashboard": notifCount } : {};
 
     const groups = useMemo(() => {
         const base = getNavGroups(role);
@@ -175,7 +196,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             {collapsed && group.title && <div className="mx-2 mb-2 border-t border-sidebar-border" />}
                             <div className="flex flex-col gap-0.5">
                                 {group.items.map((item) => (
-                                    <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+                                    <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} badge={badges[item.href]} />
                                 ))}
                             </div>
                         </div>
@@ -235,8 +256,11 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             {isActive && (
                                 <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
                             )}
-                            <span className={cn("transition-transform", isActive ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
+                            <span className={cn("relative transition-transform", isActive ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
                                 {item.icon}
+                                {!!badges[item.href] && (
+                                    <span className="absolute -right-1.5 -top-1.5 h-2 w-2 rounded-full bg-destructive" />
+                                )}
                             </span>
                             <span className={cn("mt-1 max-w-full truncate text-[10px]", isActive ? "font-semibold opacity-100" : "font-medium opacity-70")}>
                                 {item.label}
