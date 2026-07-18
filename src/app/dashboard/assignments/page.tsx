@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface Assignment {
     id: string;
@@ -328,8 +329,22 @@ export default function AssignmentsPage() {
                 </div>
             )}
 
-            {/* Assignment Modal */}
-            <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editing ? 'Edit Assignment' : 'New Assignment'}>
+            {/* Assignment panel — a side drawer rather than a centered popup, so
+                the assignment list stays visible while a teacher writes. */}
+            <Drawer
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={editing ? 'Edit Assignment' : 'New Assignment'}
+                size="lg"
+                footer={
+                    <>
+                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                            {uploading ? 'Uploading...' : saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                        </button>
+                    </>
+                }
+            >
                 <div className="flex flex-col gap-4">
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
@@ -355,7 +370,7 @@ export default function AssignmentsPage() {
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Description</label>
-                        <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={3} placeholder="Assignment description..." className="input-field w-full resize-y" />
+                        <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={8} placeholder="Assignment description..." className="input-field w-full resize-y" />
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Attachment (optional)</label>
@@ -387,14 +402,8 @@ export default function AssignmentsPage() {
                         )}
                         <p className="mt-1 text-[11px] text-muted-foreground">PDF, image, or document, up to 10MB.</p>
                     </div>
-                    <div className="mt-2 flex justify-end gap-2">
-                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                            {uploading ? 'Uploading...' : saving ? 'Saving...' : editing ? 'Update' : 'Create'}
-                        </button>
-                    </div>
                 </div>
-            </Modal>
+            </Drawer>
 
             {/* Submissions Modal */}
             <Modal isOpen={showSubmissions} onClose={() => setShowSubmissions(false)} title="Assignment Submissions" size="xl">
