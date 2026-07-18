@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getCurrentStudent } from '@/lib/student/get-current-student';
 
 export async function GET() {
     try {
@@ -66,44 +67,39 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const student = await getCurrentStudent();
+        if (!student) {
             return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.role !== 'STUDENT') {
-            return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
-        }
-
         const body = await request.json();
         if (!body.assignment_id) {
             return NextResponse.json({ error: 'assignment_id is required' }, { status: 400 });
         }
 
-        // Verify assignment belongs to the student's school
+        // Verify assignment belongs to the student's school and, if
+        // stream-scoped, to the student's own stream.
         const { data: assignment } = await supabase
             .from('assignments')
-            .select('id')
+            .select('id, grade_stream_id')
             .eq('id', body.assignment_id)
-            .eq('school_id', userProfile.school_id)
+            .eq('school_id', student.schoolId)
             .maybeSingle();
 
         if (!assignment) {
             return NextResponse.json({ error: 'Assignment not found in your school' }, { status: 403 });
         }
 
+        if (assignment.grade_stream_id && assignment.grade_stream_id !== student.gradeStreamId) {
+            return NextResponse.json({ error: 'This assignment is not assigned to your class' }, { status: 403 });
+        }
+
         const { data, error } = await supabase
             .from('assignment_submissions')
             .upsert({
                 assignment_id: body.assignment_id,
-                student_id: userId,
+                student_id: student.userId,
                 file_url: body.file_url || null,
                 submission_text: body.submission_text || null,
             })
