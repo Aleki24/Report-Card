@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from '@/components/ThemeProvider';
+import { Wordmark } from '@/components/Wordmark';
 import { Eye, EyeOff, Loader2, LogIn, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -159,7 +160,7 @@ export default function LoginPage() {
       <div className="relative z-10 w-full max-w-[440px]">
         {/* Header */}
         <div className="mb-8 text-center">
-          <Image src="/images/logo.jpg" alt="Matokeo Logo" width={64} height={64}
+          <Image src="/images/logo.png" alt="Skulbase Logo" width={64} height={64}
             className="mx-auto mb-5 rounded-2xl object-cover"
             style={{ boxShadow: '0 8px 32px rgba(99,102,241,0.3)' }}
           />
@@ -169,7 +170,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-            Sign in to your Matokeo account to continue
+            Sign in to your <Wordmark /> account to continue
           </p>
         </div>
 

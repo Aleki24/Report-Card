@@ -23,7 +23,7 @@ const fontMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Matokeo — Modern School Management System',
+  title: 'Skulbase — Modern School Management System',
   description: 'Manage report cards, students, teachers, classes, exams, attendance, parents, and academic analytics from one powerful platform.',
 };
 

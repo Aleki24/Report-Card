@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import { useTheme } from '@/components/ThemeProvider';
+import { Wordmark } from '@/components/Wordmark';
 import { LogOut, ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function LogoutPage() {
@@ -56,7 +57,7 @@ export default function LogoutPage() {
           </h1>
           <p className="text-[15px] leading-relaxed"
             style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-             Are you sure you want to sign out of Matokeo?
+             Are you sure you want to sign out of <Wordmark />?
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight, School, BookOpen, GraduationCap, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { Wordmark } from '@/components/Wordmark';
 
 const paths = [
   {
@@ -100,7 +101,7 @@ export default function JoinGuideSection() {
               wordSpacing: '0.02em',
             }}
           >
-            Whether you run a school or belong to one, getting on Matokeo takes just a few minutes. Pick the path that matches you.
+            Whether you run a school or belong to one, getting on <Wordmark /> takes just a few minutes. Pick the path that matches you.
           </p>
         </div>
 

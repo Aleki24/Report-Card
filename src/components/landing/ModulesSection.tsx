@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { modules } from '@/lib/modules';
+import { Wordmark } from '@/components/Wordmark';
 
 const displayModules = modules.filter(m => m.slug !== 'settings');
 
@@ -54,7 +55,7 @@ export default function ModulesSection() {
             margin: '0 auto',
           }}
         >
-          From student enrollment to final report cards, Matokeo covers every aspect of school academic management.
+          From student enrollment to final report cards, <Wordmark /> covers every aspect of school academic management.
         </p>
       </div>
 

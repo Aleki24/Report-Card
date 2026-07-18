@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/components/AuthProvider';
+import { Wordmark } from '@/components/Wordmark';
 
 const COLLAPSE_KEY = 'sidebar-collapsed';
 
@@ -27,7 +28,6 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     };
 
     const sidebarWidth = collapsed ? 80 : 260;
-    const displayName = schoolName || 'Matokeo';
 
     const needsSchoolSetup = role === 'PENDING' || (role === 'ADMIN' && profile && schoolOnboardingCompleted === false);
 
@@ -47,10 +47,10 @@ export default function DashboardContent({ children }: { children: React.ReactNo
             {/* Mobile Top Bar */}
             <div className="mobile-topbar-container">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <Image src="/images/logo.jpg" alt="Matokeo Logo" width={32} height={32}
+                    <Image src="/images/logo.png" alt="Skulbase Logo" width={32} height={32}
                       style={{ borderRadius: 'var(--radius-md)', objectFit: 'contain' }}
                     />
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{displayName}</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>{schoolName || <Wordmark />}</span>
                 </div>
             </div>
 
