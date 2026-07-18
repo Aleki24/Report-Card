@@ -12,6 +12,8 @@ interface UserProfile {
     role: UserRole;
     is_active: boolean;
     school_id: string | null;
+    /** Real profile photo (uploaded or copied from an OAuth provider like Google); null if Clerk would only show its auto-generated placeholder. */
+    imageUrl: string | null;
 }
 
 export type { UserRole };
@@ -79,6 +81,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const clerkEmail = clerkUser?.emailAddresses?.[0]?.emailAddress || '';
         const clerkFirstName = clerkUser?.firstName || '';
         const clerkLastName = clerkUser?.lastName || '';
+        // hasImage is false when Clerk would only show its auto-generated
+        // placeholder, so only trust imageUrl when a real photo (uploaded or
+        // copied from an OAuth provider like Google) is set.
+        const clerkImageUrl = clerkUser?.hasImage ? clerkUser.imageUrl : null;
         const metadata = (clerkUser?.publicMetadata as any) || {};
         // Base role from Clerk metadata (synced from DB)
         const clerkBaseRole = (metadata.role as UserRole) || 'ADMIN';
@@ -95,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: effectiveRole,
             is_active: true,
             school_id: metadata.school_id || metadata.schoolId || null,
+            imageUrl: clerkImageUrl,
         };
 
         setProfile(fallback);
@@ -122,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         role: effective,
                         is_active: u.is_active ?? true,
                         school_id: u.school_id || null,
+                        imageUrl: clerkImageUrl,
                     });
                     setBaseRole(dbBaseRole);
                 }
@@ -132,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .finally(() => {
                 setIsProfileLoading(false);
             });
-    }, [isUserLoaded, userId, clerkUser?.emailAddresses, clerkUser?.firstName, clerkUser?.lastName]);
+    }, [isUserLoaded, userId, clerkUser?.emailAddresses, clerkUser?.firstName, clerkUser?.lastName, clerkUser?.hasImage, clerkUser?.imageUrl]);
 
     useEffect(() => {
         fetchRoles().then(({ roles, baseRole: br }) => {
