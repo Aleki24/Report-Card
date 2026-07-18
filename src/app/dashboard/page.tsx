@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { Avatar } from '@/components/Avatar';
 import StatCard from '@/components/dashboard/StatCard';
 import { Badge } from '@/components/ui';
 import {
@@ -231,9 +232,14 @@ function AdminDashboard({ userName }: { userName: string }) {
             </div>
           </form>
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-600 text-[13px] font-bold text-white">
-              {(profile?.first_name?.[0] ?? 'A')}{(profile?.last_name?.[0] ?? '')}
-            </div>
+            <Avatar
+              imageUrl={profile?.imageUrl}
+              firstName={profile?.first_name ?? 'A'}
+              lastName={profile?.last_name}
+              size={36}
+              fontSize={13}
+              background="linear-gradient(to bottom right, #2563eb, #7c3aed)"
+            />
             <div className="hidden min-w-0 sm:block">
               <div className="truncate text-[13px] font-semibold leading-tight text-foreground">
                 {profile ? `${profile.first_name} ${profile.last_name}` : greetingName}

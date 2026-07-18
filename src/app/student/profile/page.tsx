@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { User, Phone, Mail, Calendar, Shield, Users, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
+import { Avatar } from '@/components/Avatar';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
 import { FormField, InputField } from '@/components/ui/FormField';
@@ -21,7 +22,7 @@ interface StudentProfile {
 }
 
 export default function StudentProfilePage() {
-    const { schoolName } = useAuth();
+    const { schoolName, profile: authProfile } = useAuth();
     const [profile, setProfile] = useState<StudentProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -59,7 +60,6 @@ export default function StudentProfilePage() {
     const user = profile?.users;
     const stream = profile?.grade_streams;
     const level = profile?.academic_levels;
-    const initials = user ? `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}` : 'ST';
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
@@ -99,9 +99,16 @@ export default function StudentProfilePage() {
                     </div>
 
                     <div className="flex gap-5">
-                        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-primary text-[28px] font-extrabold text-primary-foreground shadow-[0_4px_12px_color-mix(in_srgb,var(--primary)_20%,transparent)]">
-                            {initials}
-                        </div>
+                        <Avatar
+                            imageUrl={authProfile?.imageUrl}
+                            firstName={user?.first_name}
+                            lastName={user?.last_name}
+                            size={80}
+                            fontSize={28}
+                            background="var(--primary)"
+                            color="var(--primary-foreground)"
+                            style={{ boxShadow: '0 4px 12px color-mix(in srgb, var(--primary) 20%, transparent)' }}
+                        />
 
                         <div className="flex flex-1 flex-col gap-3">
                             <FormField label="Full Name">

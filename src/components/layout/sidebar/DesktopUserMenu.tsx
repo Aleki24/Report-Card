@@ -2,10 +2,11 @@
 
 import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
+import { Avatar } from '@/components/Avatar';
 import { roleBadgeColors } from './navItems';
 
 interface DesktopUserMenuProps {
-    profile: { id: string; first_name: string; last_name: string; email?: string | null; role: UserRole };
+    profile: { id: string; first_name: string; last_name: string; email?: string | null; role: UserRole; imageUrl?: string | null };
     role: UserRole | null;
     baseRole: UserRole | null;
     availableRoles: UserRole[];
@@ -129,14 +130,14 @@ export function DesktopUserMenu({
                 onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'transparent'; }}
                 title={collapsed ? `${profile.first_name} ${profile.last_name} — ${role?.replace('_', ' ')}` : undefined}
             >
-                <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    background: roleBadgeColors[profile.role] || 'var(--color-accent)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
-                }}>
-                    {profile.first_name[0]}{profile.last_name[0]}
-                </div>
+                <Avatar
+                    imageUrl={profile.imageUrl}
+                    firstName={profile.first_name}
+                    lastName={profile.last_name}
+                    size={32}
+                    fontSize={13}
+                    background={roleBadgeColors[profile.role] || 'var(--color-accent)'}
+                />
                 {!collapsed && (
                     <>
                         <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
