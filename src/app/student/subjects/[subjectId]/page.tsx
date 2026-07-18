@@ -159,7 +159,7 @@ export default function SubjectAnalysisPage() {
 
     if (loading) {
         return (
-            <div className="mx-auto max-w-[1100px] py-10">
+            <div className="w-full mx-auto max-w-[1100px] py-10">
                 <div className="skeleton-spinner mx-auto" />
             </div>
         );
@@ -167,7 +167,7 @@ export default function SubjectAnalysisPage() {
 
     if (!subject) {
         return (
-            <div className="mx-auto max-w-[1100px] py-24 text-center">
+            <div className="w-full mx-auto max-w-[1100px] py-24 text-center">
                 <h2 className="mb-2 text-2xl font-bold text-foreground">Subject Not Found</h2>
                 <p className="mb-6 text-muted-foreground">The subject you are looking for does not exist or you don&apos;t have access to it.</p>
                 <button onClick={() => router.back()} className="btn-secondary">Go Back</button>
@@ -176,7 +176,7 @@ export default function SubjectAnalysisPage() {
     }
 
     return (
-        <div className="mx-auto max-w-[1100px] pb-10">
+        <div className="w-full mx-auto max-w-[1100px] pb-10">
             {/* Header */}
             <div className="mb-8 flex items-center gap-4">
                 <button

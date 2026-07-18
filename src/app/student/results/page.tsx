@@ -56,7 +56,7 @@ export default function StudentCombinedResultsPage() {
     const [activeTab, setActiveTab] = useState<'marks' | 'reports'>('marks');
 
     return (
-        <div className="mx-auto max-w-[1100px] pb-10">
+        <div className="w-full mx-auto max-w-[1100px] pb-10">
             <PageHeader title="My Results" description="View your granular exam marks and official report cards." />
 
             <div className="mb-6 flex overflow-x-auto border-b border-border">

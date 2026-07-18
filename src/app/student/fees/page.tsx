@@ -61,7 +61,7 @@ export default function StudentFeesPage() {
     ];
 
     return (
-        <div className="mx-auto max-w-[1100px] pb-10">
+        <div className="w-full mx-auto max-w-[1100px] pb-10">
             <PageHeader title="Fees" description="Your fee balance and payment history, term by term." />
 
             <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
