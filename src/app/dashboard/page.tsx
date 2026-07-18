@@ -249,7 +249,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="relative h-full overflow-hidden px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
+    <div className="relative px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
       <SetupNotifier
         hasLogo={data?.hasLogo ?? false}
         totalTeachers={data?.totalTeachers ?? 0}
@@ -329,10 +329,10 @@ function AdminDashboard({ userName }: { userName: string }) {
         </KpiCarousel>
       </section>
 
-      <div className="flex gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
+      <div className="flex items-start gap-4 md:gap-6">
 
-        {/* Main Content Area — scrollable independently, full width on mobile */}
-        <div className="flex-1 overflow-y-auto min-h-0 pr-1 pb-4 xs:pb-6">
+        {/* Main Content Area — full width on mobile; the page itself scrolls */}
+        <div className="min-w-0 flex-1 pb-4 xs:pb-6">
           <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
 
           {/* Exam results by class — ‹ › cycles grades/streams, dropdown filters exams */}
@@ -372,7 +372,7 @@ function AdminDashboard({ userName }: { userName: string }) {
         </div>
 
         {/* Right Sidebar — hidden below md, visible from md up */}
-        <div className="hidden md:flex w-[280px] lg:w-[300px] shrink-0 overflow-y-auto min-h-0 pb-2 flex-col gap-3 xs:gap-4 md:border-l md:border-border/60 md:pl-6">
+        <div className="hidden md:flex w-[280px] lg:w-[300px] shrink-0 pb-2 flex-col gap-3 xs:gap-4 md:border-l md:border-border/60 md:pl-6">
           <SideRail data={data} />
         </div>
       </div>
@@ -788,7 +788,7 @@ export default function DashboardPage() {
   const isAdmin = role === 'ADMIN' || !role;
 
   return (
-    <div className="flex-1 min-h-0 h-full p-2 md:p-6 lg:p-8 pt-1">
+    <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <ClassTeacherDashboard />}
       {role === 'SUBJECT_TEACHER' && <SubjectTeacherDashboard />}
