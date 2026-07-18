@@ -19,6 +19,7 @@ type DataType =
   | 'grading_scales'
   | 'exams'
   | 'my_subjects'
+  | 'subjects'
   | 'class_teacher_assignments'
   | 'subject_combinations';
 
@@ -216,6 +217,21 @@ export async function GET(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         const maxScore = searchParams.get('max_score') ? parseInt(searchParams.get('max_score')!) : 100;
         return NextResponse.json({ data: (data ?? []).map((m: any) => ({ id: m.id, exam_id: m.exam_id, student_id: m.student_id, student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(), admission_number: m.students?.admission_number || '', score: m.raw_score, max_score: maxScore })) });
+      }
+
+      case 'subjects': {
+        // All subjects taught at the school, unrestricted by role — matches
+        // /api/admin/academic-structure, which stopped filtering subjects so
+        // any teacher can see newly created ones in dropdowns. Unlike
+        // my_subjects, this isn't scoped to a specific teacher's assignments.
+        const { data, error } = await supabase
+          .from('subjects')
+          .select('id, code, name, academic_level_id, category, display_order')
+          .eq('school_id', schoolId)
+          .order('display_order');
+
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json({ data: data ?? [] });
       }
 
       case 'grade_streams': {
