@@ -25,9 +25,17 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
     const mouseDownOnBackdrop = useRef(false);
     const titleId = useId();
 
+    // onClose is typically a fresh arrow function on every parent render
+    // (e.g. onClose={() => setOpen(false)}). Reading it through a ref keeps
+    // handleKeyDown — and therefore the effect below — stable across
+    // keystrokes in a controlled input, instead of re-running init-focus
+    // logic (and yanking focus back to the first field) on every keypress.
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-            onClose();
+            onCloseRef.current();
             return;
         }
         if (e.key === 'Tab' && panelRef.current) {
@@ -44,7 +52,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
                 first.focus();
             }
         }
-    }, [onClose]);
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -59,7 +67,8 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
             document.body.style.overflow = '';
             previouslyFocused?.focus?.();
         };
-    }, [isOpen, handleKeyDown]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

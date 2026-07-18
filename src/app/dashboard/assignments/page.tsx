@@ -102,7 +102,7 @@ export default function AssignmentsPage() {
         ]);
         (async () => {
             const [subjRes, strRes] = await Promise.all([
-                fetch('/api/school/data?type=my_subjects'),
+                fetch('/api/school/data?type=subjects'),
                 fetch('/api/school/data?type=grade_streams'),
             ]);
             const subjData = await subjRes.json();
