@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
+const ROLE_LABELS: Record<string, string> = {
+    ADMIN: 'Admin',
+    CLASS_TEACHER: 'Class Teacher',
+    SUBJECT_TEACHER: 'Subject Teacher',
+};
+
+function formatPostedBy(poster: { first_name: string; last_name: string; role: string } | null | undefined) {
+    if (!poster) return 'School';
+    const roleLabel = ROLE_LABELS[poster.role] || poster.role;
+    return `${roleLabel} ${poster.first_name} ${poster.last_name}`.trim();
+}
+
 export async function GET() {
     try {
         const { userId } = await auth();
@@ -23,7 +35,7 @@ export async function GET() {
             .from('announcements')
             .select(`
                 id, title, content, is_important, created_at,
-                users!posted_by ( first_name, last_name )
+                users!posted_by ( first_name, last_name, role )
             `)
             .eq('school_id', schoolId)
             .order('created_at', { ascending: false })
@@ -37,7 +49,7 @@ export async function GET() {
             content: a.content,
             isImportant: a.is_important,
             createdAt: a.created_at,
-            postedBy: a.users ? `${a.users.first_name} ${a.users.last_name}` : 'School',
+            postedBy: formatPostedBy(a.users),
         }));
 
         return NextResponse.json({ data: mapped });
