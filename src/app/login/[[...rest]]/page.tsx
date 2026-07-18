@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useSignIn } from '@clerk/nextjs/legacy';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -23,12 +24,14 @@ export default function LoginPage() {
   const [mfaCode, setMfaCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [wrongStrategy, setWrongStrategy] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isLoaded || !signIn) return;
 
     setLoading(true);
+    setWrongStrategy(false);
 
     try {
       if (needsMfa) {
@@ -52,7 +55,7 @@ export default function LoginPage() {
           await setActive({ session: result.createdSessionId });
           router.push('/dashboard');
         } else if (result.status === 'needs_second_factor') {
-          const hasEmailCode = result.supportedSecondFactors?.some((f: any) => f.strategy === 'email_code');
+          const hasEmailCode = result.supportedSecondFactors?.some((f) => f.strategy === 'email_code');
           if (hasEmailCode) {
             await signIn.prepareSecondFactor({ strategy: 'email_code' });
             setNeedsMfa(true);
@@ -63,14 +66,22 @@ export default function LoginPage() {
           toast.error(`Sign in incomplete: ${result.status}. Please try again.`);
         }
       }
-    } catch (err: any) {
-      const msg =
-        err?.errors?.[0]?.code === 'form_identifier_not_found'
-          ? 'No account found with this email or username.'
-          : err?.errors?.[0]?.code === 'form_password_incorrect'
-            ? 'Incorrect password.'
-            : err?.errors?.[0]?.longMessage || 'Invalid credentials.';
-      toast.error(msg);
+    } catch (err) {
+      const apiError = isClerkAPIResponseError(err) ? err.errors[0] : undefined;
+      // This account was created via Google (or another method with no password
+      // credential) — Clerk rejects a password attempt for it with this code.
+      // Same underlying Clerk user either way; they just need to add a password.
+      if (apiError?.code === 'strategy_for_user_invalid') {
+        setWrongStrategy(true);
+      } else {
+        const msg =
+          apiError?.code === 'form_identifier_not_found'
+            ? 'No account found with this email or username.'
+            : apiError?.code === 'form_password_incorrect'
+              ? 'Incorrect password.'
+              : apiError?.longMessage || 'Invalid credentials.';
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -148,6 +159,18 @@ export default function LoginPage() {
               Account created! Sign in with your credentials.
             </div>
           )}
+          {wrongStrategy && (
+            <div className="rounded-xl px-4 py-3 text-sm leading-relaxed mb-2"
+              style={{
+                backgroundColor: isDark ? 'rgba(234,179,8,0.1)' : 'rgba(234,179,8,0.08)',
+                color: isDark ? '#fde68a' : '#92400e',
+                border: `1px solid ${isDark ? 'rgba(234,179,8,0.2)' : 'rgba(234,179,8,0.15)'}`,
+              }}>
+              This account doesn&apos;t have a password set — it was likely created with Google.
+              Use <button type="button" onClick={signInWithGoogle} className="font-semibold underline" style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Sign in with Google</button>,
+              {' '}or <Link href="/forgot-password" className="font-semibold underline" style={{ color: 'inherit' }}>set a password</Link> to use both.
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {needsMfa ? (
               <div className="flex flex-col gap-1.5">
@@ -156,7 +179,7 @@ export default function LoginPage() {
                   Verification Code
                 </label>
                 <p className="text-xs mb-2" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
-                  We've sent a 6-digit code to your email.
+                  We&apos;ve sent a 6-digit code to your email.
                 </p>
                 <input
                   type="text"
@@ -201,10 +224,15 @@ export default function LoginPage() {
 
                 {/* Password */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold"
-                    style={{ color: isDark ? '#94a3b8' : '#475569' }}>
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold"
+                      style={{ color: isDark ? '#94a3b8' : '#475569' }}>
+                      Password
+                    </label>
+                    <Link href="/forgot-password" className="text-xs font-semibold no-underline" style={{ color: '#6366f1' }}>
+                      Forgot password?
+                    </Link>
+                  </div>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
