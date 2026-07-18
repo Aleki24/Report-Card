@@ -355,6 +355,12 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
 
 // ── Announcements ────────────────────────────────────────────
 
+const ANNOUNCEMENT_ROLE_LABELS: Record<string, string> = {
+    ADMIN: 'Admin',
+    CLASS_TEACHER: 'Class Teacher',
+    SUBJECT_TEACHER: 'Subject Teacher',
+};
+
 export async function getSchoolAnnouncements(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
@@ -362,21 +368,27 @@ export async function getSchoolAnnouncements(student: CurrentStudent) {
         .from('announcements')
         .select(`
             id, title, content, is_important, created_at,
-            users!posted_by ( first_name, last_name )
+            users!posted_by ( first_name, last_name, role )
         `)
         .eq('school_id', student.schoolId)
         .order('created_at', { ascending: false })
         .limit(5);
 
     if (error) return [];
-    return (data ?? []).map((a: any) => ({
-        id: a.id,
-        title: a.title,
-        content: a.content,
-        isImportant: a.is_important,
-        createdAt: a.created_at,
-        postedBy: a.users ? `${a.users.first_name} ${a.users.last_name}` : 'School',
-    }));
+    return (data ?? []).map((a: any) => {
+        const poster = a.users;
+        const postedBy = poster
+            ? `${ANNOUNCEMENT_ROLE_LABELS[poster.role] || poster.role} ${poster.first_name} ${poster.last_name}`.trim()
+            : 'School';
+        return {
+            id: a.id,
+            title: a.title,
+            content: a.content,
+            isImportant: a.is_important,
+            createdAt: a.created_at,
+            postedBy,
+        };
+    });
 }
 
 // ── Assignments ─────────────────────────────────────────────
