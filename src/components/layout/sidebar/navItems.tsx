@@ -46,17 +46,18 @@ const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', role
 const myResults: NavItem = { label: 'My Results', href: '/student/results', roles: ['STUDENT'], icon: icon(GraduationCap) };
 const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', roles: ['STUDENT'], icon: icon(BookOpen) };
 const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], icon: icon(CalendarCheck) };
+const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], icon: icon(DollarSign) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
 
 /** Flat list (legacy consumers + search). */
 export const navItems: NavItem[] = [
     dashboard, studentDashboard, examsMarks, reports, attendance, analytics, people, classes,
     subjects, fees, announcements, assignments, users, settings,
-    myResults, mySubjects, myAttendance, myProfile,
+    myResults, mySubjects, myAttendance, myFees, myProfile,
 ];
 
 const groups: NavGroup[] = [
-    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myAttendance] },
+    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myAttendance, myFees] },
     { title: 'Academics', items: [examsMarks, reports, attendance, analytics] },
     { title: 'School', items: [people, classes, subjects] },
     { title: 'Finance', items: [fees] },

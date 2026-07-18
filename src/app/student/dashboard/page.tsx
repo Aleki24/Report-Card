@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import {
     CalendarCheck, TrendingUp, BookOpen, Wallet,
     Calendar, GraduationCap, FileText, UploadCloud, MessageSquare,
-    Target, DownloadCloud, Send, Bell,
+    DownloadCloud, Send, Bell, RefreshCw, Clock3,
 } from 'lucide-react';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 import { Badge, Modal } from '@/components/ui';
@@ -18,6 +18,7 @@ import ListPanel from '@/components/dashboard/ListPanel';
 import EmptyState from '@/components/dashboard/EmptyState';
 import InsightCard from '@/components/dashboard/InsightCard';
 import { Bone } from '@/components/dashboard/LoadingSkeleton';
+import StudyGoalsCard from '@/components/student/StudyGoalsCard';
 import { getCurrentTermName } from '@/lib/term-calendar';
 
 interface UpcomingExam { id: string; name: string; exam_date: string; subject_name: string }
@@ -40,35 +41,78 @@ export default function StudentDashboardPage() {
     const { profile, loading: authLoading } = useAuth();
     const [data, setData] = useState<Partial<DashboardData> | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [feesData, setFeesData] = useState<FeeRecord[]>([]);
     const [submitModal, setSubmitModal] = useState<{ open: boolean; assignment: Assignment | null }>({ open: false, assignment: null });
     const [subText, setSubText] = useState('');
     const [subFile, setSubFile] = useState<File | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const [dashRes, perfRes, feesRes] = await Promise.all([
-                    fetch('/api/school/student/dashboard'),
-                    fetch('/api/school/student/performance'),
-                    fetch('/api/school/fees'),
-                ]);
+    // Ticks so the greeting/date stay correct even if this tab sits open (or
+    // backgrounded) across the morning→afternoon→evening boundaries — a
+    // value computed once at mount would otherwise go stale for the rest of
+    // the session.
+    const [now, setNow] = useState(() => new Date());
+    const fetchingRef = React.useRef(false);
 
-                const dashData = dashRes.ok ? await dashRes.json() : null;
-                const perfData = perfRes.ok ? await perfRes.json() : null;
-                const feesJson = feesRes.ok ? await feesRes.json() : null;
+    const fetchDashboard = useCallback(async (opts?: { silent?: boolean }) => {
+        if (fetchingRef.current) return;
+        fetchingRef.current = true;
+        if (opts?.silent) setRefreshing(true); else setLoading(true);
+        try {
+            const [dashRes, perfRes, feesRes] = await Promise.all([
+                fetch('/api/school/student/dashboard'),
+                fetch('/api/school/student/performance'),
+                fetch('/api/school/fees'),
+            ]);
+            if (!dashRes.ok) throw new Error('Failed to load dashboard');
 
-                setData({
-                    ...dashData?.data,
-                    trends: perfData?.data || []
-                });
-                if (feesJson?.data) setFeesData(feesJson.data);
-            } catch (err) {
-                console.error('Dashboard fetch error:', err);
-            }
+            const dashData = await dashRes.json();
+            const perfData = perfRes.ok ? await perfRes.json() : null;
+            const feesJson = feesRes.ok ? await feesRes.json() : null;
+
+            setData({
+                ...dashData?.data,
+                trends: perfData?.data || []
+            });
+            if (feesJson?.data) setFeesData(feesJson.data);
+            setLastUpdated(new Date());
+            setLoadError(false);
+        } catch (err) {
+            console.error('Dashboard fetch error:', err);
+            setLoadError(true);
+            if (opts?.silent) toast.error('Could not refresh your dashboard.');
+        } finally {
+            fetchingRef.current = false;
             setLoading(false);
-        })();
+            setRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+    // Mobile browsers suspend background tabs — coming back to a tab left
+    // open since this morning would otherwise show a frozen "Good morning"
+    // and hours-stale data until the next full reload.
+    useEffect(() => {
+        function onVisible() {
+            if (document.visibilityState !== 'visible') return;
+            setNow(new Date());
+            fetchDashboard({ silent: true });
+        }
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onVisible);
+        };
+    }, [fetchDashboard]);
+
+    useEffect(() => {
+        const id = setInterval(() => setNow(new Date()), 60_000);
+        return () => clearInterval(id);
     }, []);
 
     if (authLoading || loading) {
@@ -128,9 +172,13 @@ export default function StudentDashboardPage() {
         setSubmitting(false);
     };
 
-    const hour = new Date().getHours();
+    const hour = now.getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const todayLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const nextExam = upcomingExams
+        .map((exam) => ({ exam, daysLeft: Math.ceil((new Date(exam.exam_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) }))
+        .filter((e) => e.daysLeft >= 0 && e.daysLeft <= 3)
+        .sort((a, b) => a.daysLeft - b.daysLeft)[0];
 
     return (
         <div className="mx-auto max-w-[1200px] px-2 pb-4 sm:px-3">
@@ -145,6 +193,12 @@ export default function StudentDashboardPage() {
                     <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
                         {todayLabel} &middot; {getCurrentTermName()}
                     </p>
+                    {nextExam && (
+                        <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-inset ring-white/25">
+                            <Clock3 size={14} />
+                            {nextExam.exam.subject_name} exam {nextExam.daysLeft === 0 ? 'today' : nextExam.daysLeft === 1 ? 'tomorrow' : `in ${nextExam.daysLeft} days`}
+                        </div>
+                    )}
                     <div className="mt-4 flex flex-wrap gap-2">
                         <Link href="/student/results" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
                             <GraduationCap size={15} /> View My Results
@@ -156,19 +210,37 @@ export default function StudentDashboardPage() {
                 </div>
             </div>
 
+            {loadError && (
+                <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    <span>Some of your data couldn&apos;t be loaded.</span>
+                    <button onClick={() => fetchDashboard({ silent: true })} className="shrink-0 font-semibold underline">Retry</button>
+                </div>
+            )}
+
             {/* At a glance */}
             <section className="mb-5">
-                <SectionTitle>At a glance</SectionTitle>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">At a glance</h2>
+                    <button
+                        onClick={() => fetchDashboard({ silent: true })}
+                        disabled={refreshing}
+                        className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+                        title="Refresh"
+                    >
+                        <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+                        {refreshing ? 'Updating…' : lastUpdated ? `Updated ${getTimeAgo(lastUpdated.toISOString())}` : ''}
+                    </button>
+                </div>
                 <KpiCarousel>
-                    <KpiTile title="Attendance" value={stats?.attendanceRate ? `${stats.attendanceRate}%` : '—'} icon={<CalendarCheck size={17} />} href="/student/attendance" tone="green" />
-                    <KpiTile title="Average score" value={stats?.averageScore ? `${stats.averageScore}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />
+                    <KpiTile title="Attendance" value={stats?.attendanceRate != null ? `${stats.attendanceRate}%` : '—'} icon={<CalendarCheck size={17} />} href="/student/attendance" tone="green" />
+                    <KpiTile title="Average score" value={stats?.averageScore != null ? `${stats.averageScore}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />
                     <KpiTile title="Exams taken" value={stats?.examsTaken ?? 0} icon={<FileText size={17} />} href="/student/results" tone="purple" />
                     <KpiTile title="Subjects" value={stats?.subjectsCount ?? 0} icon={<BookOpen size={17} />} href="/student/subjects" />
                     <KpiTile
                         title="Fees balance"
                         value={feesData.length > 0 ? `KShs ${feesBalance.toLocaleString()}` : '—'}
                         icon={<Wallet size={17} />}
-                        href="/student/profile"
+                        href="/student/fees"
                         alert={feesBalance > 0}
                         tone={feesBalance > 0 ? 'red' : undefined}
                     />
@@ -308,7 +380,7 @@ export default function StudentDashboardPage() {
             {/* Interaction Tools */}
             <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 xs:gap-4">
                 <ComingSoonCard icon={<MessageSquare size={22} />} title="Message Teachers" desc="Get help or ask questions directly." tone="blue" />
-                <ComingSoonCard icon={<Target size={22} />} title="Study Goals" desc="Set reminders and track revision goals." tone="primary" />
+                <StudyGoalsCard />
             </section>
 
             {/* Submission Modal */}
