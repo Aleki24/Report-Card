@@ -11,10 +11,10 @@ END $$;
 -- Create daily_attendance table
 CREATE TABLE IF NOT EXISTS daily_attendance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID REFERENCES students(id) ON DELETE CASCADE NOT NULL,
+    student_id TEXT REFERENCES students(id) ON DELETE CASCADE NOT NULL,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
     status attendance_status NOT NULL DEFAULT 'present',
-    marked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    marked_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
