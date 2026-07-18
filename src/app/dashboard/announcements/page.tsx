@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Bell } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
+import { FormattedTextarea } from '@/components/ui/FormattedTextarea';
+import { renderFormattedText } from '@/lib/formatted-text';
 
 interface Announcement {
     id: string;
@@ -156,7 +158,7 @@ export default function AnnouncementsPage() {
                                         </span>
                                     )}
                                 </div>
-                                <p className="mb-1.5 text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">{a.content}</p>
+                                <div className="mb-1.5 text-sm leading-relaxed text-muted-foreground">{renderFormattedText(a.content)}</div>
                                 <div className="text-[11px] text-muted-foreground">
                                     Posted by {a.postedBy} · {new Date(a.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
@@ -198,12 +200,10 @@ export default function AnnouncementsPage() {
                     </div>
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Content *</label>
-                        <textarea
+                        <FormattedTextarea
                             value={formContent}
-                            onChange={e => setFormContent(e.target.value)}
-                            rows={10}
+                            onChange={setFormContent}
                             placeholder="Announcement content..."
-                            className="input-field w-full resize-y"
                         />
                     </div>
                     <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground">
