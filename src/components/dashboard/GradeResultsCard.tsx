@@ -50,27 +50,38 @@ function sevColor(avg: number): string {
  */
 export default function GradeResultsCard() {
   const [streams, setStreams] = useState<Stream[]>([]);
-  // -1 = All classes; 0..n-1 = a specific stream. Mirrors analytics' "all" default.
-  const [scopeIdx, setScopeIdx] = useState(-1);
+  const [streamsLoaded, setStreamsLoaded] = useState(false);
+  // 0..n-1 = a specific stream; -1 = "All classes" (fallback when no single
+  // class has marks, e.g. exams not linked to a stream).
+  const [scopeIdx, setScopeIdx] = useState(0);
   const [marks, setMarks] = useState<Mark[]>([]);
+  // Which scope the marks in state belong to — guards the seek effect against
+  // reading the previous scope's (stale) marks before the next fetch lands.
+  const [marksScope, setMarksScope] = useState<string | null>(null);
   const [examId, setExamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // On first load, advance past classes whose marks come back empty so the
+  // card opens on a real class with results; ‹ › then cycles the rest.
+  const [seeking, setSeeking] = useState(true);
   const cacheRef = useRef(new Map<string, Mark[]>());
 
   useEffect(() => {
     fetch('/api/school/data?type=grade_streams')
       .then(res => (res.ok ? res.json() : { data: [] }))
       .then(json => setStreams(json.data ?? []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStreamsLoaded(true));
   }, []);
 
   const scopeStream = scopeIdx >= 0 ? streams[scopeIdx] ?? null : null;
   const scopeKey = scopeStream?.id ?? 'all';
 
   useEffect(() => {
+    if (!streamsLoaded) return;
     const cached = cacheRef.current.get(scopeKey);
     if (cached) {
       setMarks(cached);
+      setMarksScope(scopeKey);
       setLoading(false);
       return;
     }
@@ -84,11 +95,21 @@ export default function GradeResultsCard() {
         const rows: Mark[] = json.marks ?? [];
         cacheRef.current.set(scopeKey, rows);
         setMarks(rows);
+        setMarksScope(scopeKey);
       })
-      .catch(() => { if (!cancelled) setMarks([]); })
+      .catch(() => { if (!cancelled) { setMarks([]); setMarksScope(scopeKey); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [scopeKey]);
+  }, [scopeKey, streamsLoaded]);
+
+  useEffect(() => {
+    if (!seeking || !streamsLoaded) return;
+    if (streams.length === 0 || scopeIdx === -1) { setScopeIdx(-1); setSeeking(false); return; }
+    if (loading || marksScope !== scopeKey) return; // current scope's marks not in yet
+    if (marks.length > 0) { setSeeking(false); return; }
+    if (scopeIdx < streams.length - 1) setScopeIdx(scopeIdx + 1);
+    else { setScopeIdx(-1); setSeeking(false); } // no class had marks — fall back to All classes
+  }, [seeking, streamsLoaded, loading, marks, marksScope, scopeKey, scopeIdx, streams.length]);
 
   // Exams in this app are per-subject records ("Term 2 Midterm - English"),
   // so group them back into assessment series by stripping the subject suffix
@@ -127,6 +148,7 @@ export default function GradeResultsCard() {
 
   // ‹ › order: All classes → stream 0 → … → stream n-1 → All classes.
   const cycle = (dir: 1 | -1) => {
+    setSeeking(false);
     const total = streams.length + 1; // +1 for the All classes scope
     const pos = scopeIdx + 1;         // All classes occupies position 0
     setScopeIdx((((pos + dir) % total) + total) % total - 1);
@@ -171,9 +193,9 @@ export default function GradeResultsCard() {
         )}
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map(i => <div key={i} className="skeleton-bone h-[88px] rounded-xl" />)}
+      {loading || seeking ? (
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton-bone h-[68px] rounded-xl" />)}
         </div>
       ) : subjects.length === 0 ? (
         <EmptyState
@@ -181,23 +203,23 @@ export default function GradeResultsCard() {
           description={scopeKey === 'all' ? 'Marks entered in Exams & Marks will appear here.' : `No marks recorded for ${scopeLabel} yet.`}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           {subjects.map(s => (
-            <div key={s.subject} className="rounded-xl border border-border/55 bg-muted/35 p-3.5 transition-colors hover:bg-muted/55">
-              <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground">{s.subject}</span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">{s.count} {s.count === 1 ? 'mark' : 'marks'}</span>
+            <div key={s.subject} className="rounded-xl border border-border/55 bg-muted/35 p-2.5 transition-colors hover:bg-muted/55">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="min-w-0 truncate text-[13px] font-semibold tracking-tight text-foreground">{s.subject}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{s.count}</span>
               </div>
-              <div className="mt-1.5 flex items-baseline gap-2">
-                <span className="text-2xl font-bold leading-none tracking-tight text-foreground">{s.avg}</span>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-lg font-bold leading-none tracking-tight text-foreground">{s.avg}</span>
                 <span
-                  className="rounded-md px-1.5 py-0.5 text-[11px] font-bold"
+                  className="rounded px-1 py-0.5 text-[10px] font-bold leading-none"
                   style={{ color: sevColor(s.avg), background: `color-mix(in srgb, ${sevColor(s.avg)} 14%, transparent)` }}
                 >
                   {s.grade ?? `${s.avg}%`}
                 </span>
               </div>
-              <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${sevColor(s.avg)} 15%, transparent)` }}>
+              <div className="mt-2 h-1 w-full overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${sevColor(s.avg)} 15%, transparent)` }}>
                 <div className="h-full rounded-full" style={{ width: `${Math.min(s.avg, 100)}%`, background: sevColor(s.avg) }} />
               </div>
             </div>
