@@ -134,7 +134,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                             <img src={schoolLogo} alt={schoolName || "School"} className={cn("shrink-0 object-contain", collapsed ? "h-10 w-10" : "h-12 w-12")} />
                         ) : (
                             <Image
-                                src="/images/logo.jpg"
+                                src="/images/logo.png"
                                 alt="Skulbase Logo"
                                 width={collapsed ? 40 : 48}
                                 height={collapsed ? 40 : 48}
