@@ -75,7 +75,7 @@ export default function StudentAttendancePage() {
     ];
 
     return (
-        <div className="mx-auto max-w-[900px] pb-10">
+        <div className="w-full mx-auto max-w-[900px] pb-10">
             <PageHeader title="Attendance" description="View your daily attendance history." />
 
             <FilterBar>

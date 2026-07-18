@@ -38,7 +38,7 @@ export default function StudentSubjectsPage() {
 
     if (loading) {
         return (
-            <div className="mx-auto max-w-[1100px]">
+            <div className="w-full mx-auto max-w-[1100px]">
                 <div className="skeleton-bone mb-6 h-6 w-[30%] rounded-md" />
                 <div className="grid grid-cols-1 gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))]">
                     {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton-bone h-[120px] rounded-2xl" />)}
@@ -48,7 +48,7 @@ export default function StudentSubjectsPage() {
     }
 
     return (
-        <div className="mx-auto max-w-[1100px] pb-10">
+        <div className="w-full mx-auto max-w-[1100px] pb-10">
             <PageHeader title="My Subjects" description="Select a subject to view detailed performance, assignments, and notes." />
 
             <div className="mb-6 flex max-w-[400px] items-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5">

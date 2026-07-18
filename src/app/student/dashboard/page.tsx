@@ -181,7 +181,7 @@ export default function StudentDashboardPage() {
         .sort((a, b) => a.daysLeft - b.daysLeft)[0];
 
     return (
-        <div className="mx-auto max-w-[1200px] px-2 pb-4 sm:px-3">
+        <div className="w-full mx-auto max-w-[1200px] px-2 pb-4 sm:px-3">
             {/* Hero Banner */}
             <div className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:px-8 sm:py-7">
                 <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
@@ -484,7 +484,7 @@ function formatFileSize(bytes: number): string {
 
 function DashboardSkeleton() {
     return (
-        <div className="mx-auto max-w-[1200px] px-2 sm:px-3">
+        <div className="w-full mx-auto max-w-[1200px] px-2 sm:px-3">
             <div className="mb-5 h-[128px] w-full rounded-2xl bg-muted/50" />
             <div className="mb-5 flex gap-3">
                 {[1, 2, 3, 4, 5].map(i => (

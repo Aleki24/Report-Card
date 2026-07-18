@@ -50,7 +50,7 @@ export default function StudentProfilePage() {
 
     if (loading) {
         return (
-            <div className="mx-auto max-w-[1100px] py-10 text-center">
+            <div className="w-full mx-auto max-w-[1100px] py-10 text-center">
                 <div className="skeleton-spinner mx-auto" />
             </div>
         );
@@ -62,7 +62,7 @@ export default function StudentProfilePage() {
     const initials = user ? `${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}` : 'ST';
 
     return (
-        <div className="mx-auto max-w-[1100px] pb-10">
+        <div className="w-full mx-auto max-w-[1100px] pb-10">
             <PageHeader title="Profile" description="View your academic information and update your personal details." />
 
             <div className="grid grid-cols-1 items-start gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))]">
