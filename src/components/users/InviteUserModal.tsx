@@ -3,7 +3,7 @@
 import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
-import { type GradeStreamOption, type AcademicLevelOption, type SubjectOption, type GradeOption } from '@/hooks/useUsersPage';
+import { type GradeStreamOption, type AcademicLevelOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 
 interface InviteUserModalProps {
@@ -26,10 +26,12 @@ interface InviteUserModalProps {
   academicLevels: AcademicLevelOption[];
   subjects: SubjectOption[];
   grades: GradeOption[];
+  classTeacherAssignments: ClassTeacherAssignment[];
 }
 
 export function InviteUserModal(props: InviteUserModalProps) {
   const { onClose, onSubmit, formError, submitting } = props;
+  const assignedStreamIds = new Set(props.classTeacherAssignments.map(a => a.current_grade_stream_id));
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -90,7 +92,11 @@ export function InviteUserModal(props: InviteUserModalProps) {
             <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
               <select className="input-field w-full" value={props.formClassTeacherStreamId} onChange={e => props.setFormClassTeacherStreamId(e.target.value)}>
                 <option value="">-- Unassigned --</option>
-                {props.gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                {props.gradeStreams.map(gs => (
+                  <option key={gs.id} value={gs.id} disabled={assignedStreamIds.has(gs.id)}>
+                    {gs.full_name}{assignedStreamIds.has(gs.id) ? ' (already has a class teacher)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

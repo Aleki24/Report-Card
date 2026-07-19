@@ -56,6 +56,7 @@ export default function UsersPage() {
           formClassTeacherStreamId={h.formClassTeacherStreamId} setFormClassTeacherStreamId={h.setFormClassTeacherStreamId}
           formSubjectTeacherSubjects={h.formSubjectTeacherSubjects} setFormSubjectTeacherSubjects={h.setFormSubjectTeacherSubjects}
           gradeStreams={h.gradeStreams} academicLevels={h.academicLevels} subjects={h.subjects} grades={h.grades}
+          classTeacherAssignments={h.classTeacherAssignments}
         />
       )}
 
@@ -73,6 +74,7 @@ export default function UsersPage() {
           editClassTeacherStreamId={h.editClassTeacherStreamId} setEditClassTeacherStreamId={h.setEditClassTeacherStreamId}
           editSubjectTeacherSubjects={h.editSubjectTeacherSubjects} setEditSubjectTeacherSubjects={h.setEditSubjectTeacherSubjects}
           gradeStreams={h.gradeStreams} subjects={h.subjects} grades={h.grades}
+          classTeacherAssignments={h.classTeacherAssignments}
         />
       )}
 

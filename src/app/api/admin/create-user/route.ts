@@ -211,6 +211,17 @@ export async function POST(request: NextRequest) {
         const wantsClassAssignment = class_teacher_grade_stream_id
             && (role === 'CLASS_TEACHER' || (role === 'SUBJECT_TEACHER' && is_class_teacher));
         if (wantsClassAssignment) {
+            const { data: existingAssignment } = await supabaseAdmin
+                .from('class_teachers')
+                .select('id')
+                .eq('current_grade_stream_id', class_teacher_grade_stream_id)
+                .eq('academic_year_id', currentYearId)
+                .maybeSingle();
+            if (existingAssignment) {
+                await rollback();
+                return NextResponse.json({ error: 'This class already has a class teacher assigned for the current academic year. Remove the existing assignment first.' }, { status: 409 });
+            }
+
             const { error } = await supabaseAdmin.from('class_teachers').insert({
                 user_id: newUser.id,
                 current_grade_stream_id: class_teacher_grade_stream_id,
@@ -219,7 +230,10 @@ export async function POST(request: NextRequest) {
             if (error) {
                 console.error('Class teacher record error:', error);
                 await rollback();
-                return NextResponse.json({ error: 'Failed to assign the class. Please try again.' }, { status: 500 });
+                const message = error.code === '23505'
+                    ? 'This class already has a class teacher assigned for the current academic year.'
+                    : 'Failed to assign the class. Please try again.';
+                return NextResponse.json({ error: message }, { status: error.code === '23505' ? 409 : 500 });
             }
         }
 
