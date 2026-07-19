@@ -70,7 +70,7 @@ export default function ModulesSection() {
             <Link
               key={mod.slug}
               href={mod.featureHref}
-              className="group relative rounded-2xl border transition-all duration-500 hover:border-primary hover:shadow-lg scroll-reveal"
+              className="group relative rounded-2xl border transition-all duration-500 hover:border-primary hover:shadow-lg"
               style={{
                 background: 'var(--color-surface)',
                 borderColor: 'var(--color-border-subtle)',
