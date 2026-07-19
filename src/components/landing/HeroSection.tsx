@@ -219,6 +219,16 @@ export default function HeroSection() {
             </Link>
           </div>
 
+          <p
+            className="text-center lg:text-left"
+            style={{ fontFamily: 'var(--font-body)', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}
+          >
+            Already have an account?{' '}
+            <Link href="/login" className="font-semibold" style={{ color: 'var(--color-accent)' }}>
+              Sign in
+            </Link>
+          </p>
+
           {/* Trust chips */}
           <div
             className="flex flex-wrap justify-center lg:justify-start"
