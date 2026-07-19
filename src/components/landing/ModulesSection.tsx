@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { modules } from '@/lib/modules';
 import { Wordmark } from '@/components/Wordmark';
 
-const displayModules = modules.filter(m => m.slug !== 'settings');
+const displayModules = modules.filter(m => m.slug !== 'settings').slice(0, 3);
 
 export default function ModulesSection() {
   return (
