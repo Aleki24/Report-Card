@@ -49,10 +49,16 @@ export async function POST(request: NextRequest) {
 
         const clerkProd = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY_PROD });
 
+        // is_active also covers students who are simply enrolled/graded without
+        // ever personally logging in, so it's not a signal of "has a Clerk
+        // account." A Clerk-issued id always looks like "user_...", unlike the
+        // random UUID a pending/never-activated row keeps — that's the only
+        // reliable way to find accounts that actually need migrating.
         let query = supabaseAdmin
             .from('users')
             .select('id, first_name, last_name, username, email, phone, role, school_id, is_active')
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .like('id', 'user\\_%');
         if (targetUserId) query = query.eq('id', targetUserId);
 
         const { data: users, error: usersErr } = await query;
