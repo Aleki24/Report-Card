@@ -8,60 +8,25 @@ import { CheckCircle2, ArrowRight } from 'lucide-react';
 
 const plans = [
   {
-    name: 'Starter',
-    price: 'Free',
-    period: '',
-    description: 'Perfect for small schools getting started with digital management.',
-    features: [
-      'Up to 100 students',
-      'Report card generation',
-      'Basic marks entry',
-      '1 admin user',
-      'PDF export',
-      'Email support',
-    ],
-    cta: 'Get Started Free',
-    href: '/signup',
-    highlighted: false,
-  },
-  {
-    name: 'Professional',
+    name: 'School Plan',
     price: 'KES 5,000',
     period: '/term',
-    description: 'For growing schools that need the full suite of management tools.',
+    description: 'Everything your school needs to manage students, marks, and report cards.',
     features: [
-      'Up to 1,000 students',
-      'All Phase One modules',
+      'Unlimited students',
+      'All modules',
       'Unlimited teachers',
+      'Report card generation',
       'Attendance tracking',
       'Parent management',
       'Analytics dashboard',
       'Bulk report generation',
+      'PDF export',
       'Priority support',
     ],
-    cta: 'Start Free Trial',
+    cta: 'Get Started',
     href: '/signup',
     highlighted: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: '',
-    description: 'For large schools and school groups needing advanced features and support.',
-    features: [
-      'Unlimited students',
-      'All modules including Phase Two',
-      'M-Pesa integration',
-      'SMS communication',
-      'Parent portal',
-      'Custom branding',
-      'Dedicated support',
-      'Data migration assistance',
-      'Training sessions',
-    ],
-    cta: 'Contact Sales',
-    href: '/contact',
-    highlighted: false,
   },
 ];
 
@@ -129,12 +94,12 @@ export default function PricingPage() {
                   margin: '0 auto',
                 }}
               >
-                Choose the plan that fits your school. Start free and upgrade as you grow.
+                One plan, everything included. KES 5,000 per term — no hidden fees.
               </p>
             </div>
 
             {/* Pricing Cards */}
-            <div className="grid md:grid-cols-3" style={{ gap: 'clamp(16px, 2vw, 24px)', alignItems: 'stretch' }}>
+            <div className="grid" style={{ gap: 'clamp(16px, 2vw, 24px)', alignItems: 'stretch', maxWidth: '420px', margin: '0 auto' }}>
               {plans.map((plan) => (
                 <div
                   key={plan.name}
