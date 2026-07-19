@@ -100,7 +100,16 @@ export async function POST(request: NextRequest) {
                     continue;
                 }
 
-                // 1. Stage the new users row.
+                // 1. Free the unique email/username held by the old row so the
+                // new row can be inserted while the old one still exists —
+                // same reason src/app/api/auth/activate/route.ts does this.
+                const { error: renameErr } = await supabaseAdmin.from('users').update({
+                    email: `pending+${oldId}@migrating.local`,
+                    username: null,
+                }).eq('id', oldId);
+                if (renameErr) throw new Error(`stage old row: ${renameErr.message}`);
+
+                // 2. Insert the new users row.
                 const { error: upsertErr } = await supabaseAdmin.from('users').upsert({
                     id: clerkUserId,
                     first_name: user.first_name,
