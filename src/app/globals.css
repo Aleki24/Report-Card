@@ -940,40 +940,17 @@ select.input-field {
 }
 
 /* ============================================= */
-/* LANDING — SCROLL-DRIVEN ANIMATIONS (2026)     */
-/* Elements stay fully visible when              */
-/* animation-timeline isn't supported.           */
+/* LANDING — SCROLL-DRIVEN ANIMATIONS             */
+/* Removed: animation-timeline: view() would      */
+/* sometimes get stuck part-way through its entry */
+/* range on real mobile browsers, leaving content  */
+/* (sometimes an entire CTA card, button included) */
+/* permanently faded instead of fully visible.     */
+/* Not worth the risk for a decorative effect.     */
 /* ============================================= */
-@keyframes landing-reveal-up {
-  from { opacity: 0; transform: translateY(56px) scale(0.985); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes landing-reveal-left {
-  from { opacity: 0; transform: translateX(-56px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes landing-reveal-right {
-  from { opacity: 0; transform: translateX(56px); }
-  to { opacity: 1; transform: none; }
-}
-
 @keyframes landing-grow-x {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
-}
-
-@supports (animation-timeline: view()) {
-  .scroll-reveal,
-  .scroll-reveal-left,
-  .scroll-reveal-right {
-    animation: landing-reveal-up linear both;
-    animation-timeline: view();
-    animation-range: entry 0% cover 32%;
-  }
-  .scroll-reveal-left { animation-name: landing-reveal-left; }
-  .scroll-reveal-right { animation-name: landing-reveal-right; }
 }
 
 @supports (animation-timeline: scroll()) {
