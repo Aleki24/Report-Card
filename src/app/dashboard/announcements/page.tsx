@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Edit3, Trash2, Bell } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Bell, MessageSquare } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
 import { FormattedTextarea } from '@/components/ui/FormattedTextarea';
@@ -27,6 +27,8 @@ export default function AnnouncementsPage() {
     const [formTitle, setFormTitle] = useState('');
     const [formContent, setFormContent] = useState('');
     const [formImportant, setFormImportant] = useState(false);
+    const [formSendSms, setFormSendSms] = useState(false);
+    const [smsResult, setSmsResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
 
     const fetchData = async () => {
         try {
@@ -50,6 +52,8 @@ export default function AnnouncementsPage() {
         setFormTitle('');
         setFormContent('');
         setFormImportant(false);
+        setFormSendSms(false);
+        setSmsResult(null);
         setShowModal(true);
     };
 
@@ -58,6 +62,8 @@ export default function AnnouncementsPage() {
         setFormTitle(a.title);
         setFormContent(a.content);
         setFormImportant(a.isImportant);
+        setFormSendSms(false);
+        setSmsResult(null);
         setShowModal(true);
     };
 
@@ -71,14 +77,20 @@ export default function AnnouncementsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: formTitle, content: formContent, is_important: formImportant }),
                 });
+                setShowModal(false);
             } else {
-                await fetch('/api/school/announcements', {
+                const res = await fetch('/api/school/announcements', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: formTitle, content: formContent, is_important: formImportant }),
+                    body: JSON.stringify({ title: formTitle, content: formContent, is_important: formImportant, send_sms: formSendSms }),
                 });
+                const json = await res.json();
+                if (formSendSms && json.sms) {
+                    setSmsResult(json.sms);
+                } else {
+                    setShowModal(false);
+                }
             }
-            setShowModal(false);
             await fetchData();
         } catch (err) {
             console.error('Save failed:', err);
@@ -177,45 +189,80 @@ export default function AnnouncementsPage() {
             <Drawer
                 isOpen={showModal}
                 onClose={() => setShowModal(false)}
-                title={editing ? 'Edit Announcement' : 'New Announcement'}
+                title={smsResult ? 'Announcement Posted' : editing ? 'Edit Announcement' : 'New Announcement'}
                 footer={
-                    <>
-                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                            {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
-                        </button>
-                    </>
+                    smsResult ? (
+                        <button className="btn-primary" onClick={() => setShowModal(false)}>Done</button>
+                    ) : (
+                        <>
+                            <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                                {saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                            </button>
+                        </>
+                    )
                 }
             >
-                <div className="flex flex-col gap-4">
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
-                        <input
-                            type="text"
-                            value={formTitle}
-                            onChange={e => setFormTitle(e.target.value)}
-                            placeholder="Announcement title"
-                            className="input-field w-full"
-                        />
+                {smsResult ? (
+                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                        <div
+                            className="flex h-12 w-12 items-center justify-center rounded-xl"
+                            style={{ background: 'color-mix(in srgb, var(--viz-info) 12%, transparent)', color: 'var(--viz-info)' }}
+                        >
+                            <MessageSquare size={22} />
+                        </div>
+                        {smsResult.total === 0 ? (
+                            <p className="text-sm text-muted-foreground">Announcement posted. No guardian phone numbers were on file to send SMS to.</p>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Announcement posted and sent to <span className="font-bold text-foreground">{smsResult.sent}</span> of {smsResult.total} guardians by SMS
+                                {smsResult.failed > 0 ? ` (${smsResult.failed} failed)` : ''}.
+                            </p>
+                        )}
                     </div>
-                    <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Content *</label>
-                        <FormattedTextarea
-                            value={formContent}
-                            onChange={setFormContent}
-                            placeholder="Announcement content..."
-                        />
+                ) : (
+                    <div className="flex flex-col gap-4">
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
+                            <input
+                                type="text"
+                                value={formTitle}
+                                onChange={e => setFormTitle(e.target.value)}
+                                placeholder="Announcement title"
+                                className="input-field w-full"
+                            />
+                        </div>
+                        <div>
+                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Content *</label>
+                            <FormattedTextarea
+                                value={formContent}
+                                onChange={setFormContent}
+                                placeholder="Announcement content..."
+                            />
+                        </div>
+                        <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                checked={formImportant}
+                                onChange={e => setFormImportant(e.target.checked)}
+                                className="h-4 w-4"
+                            />
+                            Mark as important
+                        </label>
+                        {!editing && (
+                            <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={formSendSms}
+                                    onChange={e => setFormSendSms(e.target.checked)}
+                                    className="h-4 w-4"
+                                />
+                                <MessageSquare size={14} />
+                                Also send via SMS to every guardian on file
+                            </label>
+                        )}
                     </div>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted-foreground">
-                        <input
-                            type="checkbox"
-                            checked={formImportant}
-                            onChange={e => setFormImportant(e.target.checked)}
-                            className="h-4 w-4"
-                        />
-                        Mark as important
-                    </label>
-                </div>
+                )}
             </Drawer>
         </div>
     );

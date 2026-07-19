@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { sendBulkSMS } from '@/lib/africastalking';
 
 const ROLE_LABELS: Record<string, string> = {
     ADMIN: 'Admin',
@@ -102,7 +103,30 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (error) throw error;
-        return NextResponse.json({ data });
+
+        let sms: { sent: number; failed: number; total: number } | undefined;
+        if (body.send_sms) {
+            const { data: students } = await supabase
+                .from('students')
+                .select('guardian_phone, users!inner(school_id)')
+                .eq('users.school_id', schoolId)
+                .eq('status', 'ACTIVE')
+                .not('guardian_phone', 'is', null);
+
+            const phones = Array.from(new Set((students ?? [])
+                .map((s: { guardian_phone: string | null }) => s.guardian_phone)
+                .filter((p: string | null): p is string => !!p && p.trim().length > 0)));
+
+            if (phones.length > 0) {
+                const smsBody = `${body.title}: ${body.content}`.slice(0, 300);
+                const result = await sendBulkSMS(phones.map(phone => ({ phone, message: smsBody })));
+                sms = { sent: result.sent, failed: result.failed, total: phones.length };
+            } else {
+                sms = { sent: 0, failed: 0, total: 0 };
+            }
+        }
+
+        return NextResponse.json({ data, sms });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });

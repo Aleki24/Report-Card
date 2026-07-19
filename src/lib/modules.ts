@@ -10,6 +10,8 @@ import {
   Heart,
   LineChart,
   Settings,
+  CreditCard,
+  MessageSquare,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
@@ -376,6 +378,75 @@ export const modules: Module[] = [
     ],
   },
   {
+    title: 'Fees & Payments',
+    shortTitle: 'Fees',
+    slug: 'fees',
+    description:
+      'Track fee balances per student and term, record payments, and see who\'s paid, partial, or outstanding.',
+    longDescription:
+      'The Fees module keeps a clear record of what each student owes and has paid, term by term. Record payments as they come in, filter by status, and always know your school\'s fee collection picture at a glance.',
+    icon: CreditCard,
+    featureHref: '/features/fees',
+    dashboardHref: '/dashboard/fees',
+    status: 'active',
+    audience: ['admin', 'student'],
+    features: [
+      'Per-student, per-term fee tracking',
+      'Record payments against the total fee due',
+      'Paid, partial, and outstanding status at a glance',
+      'Filter fees by term and payment status',
+      'Batch fee record creation for a whole class or term',
+      'Students can view their own fee balance',
+    ],
+    workflow: [
+      'Set the total fee expected for a student and term',
+      'Record payments as they\'re received',
+      'Balance and status update automatically',
+      'Filter and search to see who still owes',
+      'Students see their own balance from their dashboard',
+    ],
+    benefits: [
+      'Clear, up-to-date view of fee collection',
+      'No more spreadsheets for tracking who has paid',
+      'Reduces disputes with an accurate payment record',
+      'Sets the foundation for M-Pesa integration (coming soon)',
+    ],
+  },
+  {
+    title: 'SMS Announcements',
+    shortTitle: 'SMS',
+    slug: 'sms',
+    description:
+      'Reach every parent instantly — send your school announcements out by SMS with one click.',
+    longDescription:
+      'SMS Announcements connects your existing Announcements to real-world delivery. When you post an announcement, send it straight to every parent and guardian\'s phone on file — no separate app or login required on their end.',
+    icon: MessageSquare,
+    featureHref: '/features/sms',
+    dashboardHref: '/dashboard/announcements',
+    status: 'active',
+    audience: ['admin', 'teacher'],
+    features: [
+      'One-click SMS delivery when posting an announcement',
+      'Reaches every parent/guardian phone on file for the school',
+      'No separate parent app or login required',
+      'Delivery count shown after sending',
+      'Built on the same SMS infrastructure used for invite codes',
+    ],
+    workflow: [
+      'Write an announcement as you normally would',
+      'Choose to also send it by SMS',
+      'Confirm the number of recipients',
+      'Skulbase sends the SMS to every guardian phone on file',
+      'See how many messages were delivered successfully',
+    ],
+    benefits: [
+      'Parents without the app still get important news',
+      'Faster reach than relying on students to pass messages home',
+      'One action posts and notifies at the same time',
+      'Foundation for future attendance and fee SMS alerts',
+    ],
+  },
+  {
     title: 'Settings',
     shortTitle: 'Settings',
     slug: 'settings',
@@ -417,38 +488,19 @@ export const modules: Module[] = [
 // ── Phase Two Modules (Coming Soon) ──────────────────────────
 // Icon imports are reused from lucide-react; these use placeholder icons
 import {
-  CreditCard,
   Smartphone,
-  MessageSquare,
   Globe,
-  Library,
   Bus,
-  Building,
   Shield,
   Package,
-  Laptop,
 } from 'lucide-react';
 
 export const comingSoonModules: ComingSoonModule[] = [
-  {
-    title: 'Fees & Payments',
-    slug: 'fees',
-    description: 'Track fee balances, record payments, generate fee statements, and manage school finances.',
-    icon: CreditCard,
-    status: 'coming-soon',
-  },
   {
     title: 'M-Pesa Integration',
     slug: 'mpesa',
     description: 'Accept fee payments via M-Pesa with automatic reconciliation and SMS receipts.',
     icon: Smartphone,
-    status: 'coming-soon',
-  },
-  {
-    title: 'SMS Communication',
-    slug: 'sms',
-    description: 'Send bulk SMS to parents for attendance alerts, fee reminders, and school announcements.',
-    icon: MessageSquare,
     status: 'coming-soon',
   },
   {
@@ -459,24 +511,10 @@ export const comingSoonModules: ComingSoonModule[] = [
     status: 'coming-soon',
   },
   {
-    title: 'Library',
-    slug: 'library',
-    description: 'Manage library books, track borrowing, and maintain a digital catalog for your school.',
-    icon: Library,
-    status: 'coming-soon',
-  },
-  {
     title: 'Transport',
     slug: 'transport',
     description: 'Manage school transport routes, vehicle assignments, and student transport tracking.',
     icon: Bus,
-    status: 'coming-soon',
-  },
-  {
-    title: 'Hostel',
-    slug: 'hostel',
-    description: 'Manage hostel rooms, bed allocation, and boarding student records.',
-    icon: Building,
     status: 'coming-soon',
   },
   {
@@ -491,13 +529,6 @@ export const comingSoonModules: ComingSoonModule[] = [
     slug: 'inventory',
     description: 'Track school assets, supplies, and equipment with inventory management tools.',
     icon: Package,
-    status: 'coming-soon',
-  },
-  {
-    title: 'LMS / Assignments',
-    slug: 'lms',
-    description: 'Create and distribute assignments, learning materials, and track student submissions.',
-    icon: Laptop,
     status: 'coming-soon',
   },
 ];
