@@ -1,13 +1,45 @@
 "use client";
 
+import { useState } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
 import Navbar from '@/components/landing/Navbar';
 import Footer from '@/components/landing/Footer';
 import { Wordmark } from '@/components/Wordmark';
-import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function ContactPage() {
   const { theme } = useTheme();
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, schoolName, message }),
+      });
+      const data = await res.json();
+      if (!res.ok) setError(data.error || 'Failed to send your message.');
+      else {
+        setSent(true);
+        setName(''); setEmail(''); setSchoolName(''); setMessage('');
+      }
+    } catch {
+      setError('Network error. Please try again or email us directly.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div
@@ -77,46 +109,54 @@ export default function ContactPage() {
               {/* Contact Info */}
               <div className="lg:col-span-2" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {[
-                  { icon: Mail, label: 'Email', value: 'hello@skulbase.app' },
-                  { icon: Phone, label: 'Phone', value: '+254 700 000 000' },
-                  { icon: MapPin, label: 'Location', value: 'Nairobi, Kenya' },
-                ].map((item, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '16px',
-                      padding: '20px',
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--color-surface)',
-                      border: '1px solid var(--color-border-subtle)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: 'var(--radius-md)',
-                        background: 'var(--color-accent-glow)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <item.icon style={{ width: '18px', height: '18px', color: 'var(--color-accent)' }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
-                        {item.label}
+                  { icon: Mail, label: 'Email', value: 'alexotieno293@gmail.com', href: 'mailto:alexotieno293@gmail.com' },
+                  { icon: Phone, label: 'Phone', value: '0740 129 444', href: 'tel:+254740129444' },
+                  { icon: MapPin, label: 'Location', value: 'Kenya', href: undefined },
+                ].map((item, idx) => {
+                  const content = (
+                    <>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: 'var(--radius-md)',
+                          background: 'var(--color-accent-glow)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <item.icon style={{ width: '18px', height: '18px', color: 'var(--color-accent)' }} />
                       </div>
-                      <div style={{ fontSize: '0.9375rem', color: 'var(--color-text-primary)', fontWeight: 500 }}>
-                        {item.value}
+                      <div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
+                          {item.label}
+                        </div>
+                        <div style={{ fontSize: '0.9375rem', color: 'var(--color-text-primary)', fontWeight: 500 }}>
+                          {item.value}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    </>
+                  );
+                  const sharedStyle: React.CSSProperties = {
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '16px',
+                    padding: '20px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border-subtle)',
+                    textDecoration: 'none',
+                  };
+                  return item.href ? (
+                    <a key={idx} href={item.href} style={sharedStyle} className="transition-colors hover:border-primary">
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={idx} style={sharedStyle}>{content}</div>
+                  );
+                })}
               </div>
 
               {/* Contact Form */}
@@ -129,47 +169,61 @@ export default function ContactPage() {
                   border: '1px solid var(--color-border)',
                 }}
               >
-                <form style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div className="grid sm:grid-cols-2" style={{ gap: '16px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                        Full Name
-                      </label>
-                      <input className="input-field" placeholder="John Kamau" />
+                {sent ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px', padding: '32px 0' }}>
+                    <CheckCircle2 style={{ width: '40px', height: '40px', color: 'var(--color-success)' }} />
+                    <p style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>Message sent!</p>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>We&apos;ll get back to you soon.</p>
+                    <button type="button" className="btn-secondary" onClick={() => setSent(false)}>Send another message</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {error && <div className="p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{error}</div>}
+                    <div className="grid sm:grid-cols-2" style={{ gap: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                          Full Name
+                        </label>
+                        <input className="input-field" placeholder="John Kamau" value={name} onChange={e => setName(e.target.value)} required />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                          Email Address
+                        </label>
+                        <input className="input-field" type="email" placeholder="john@school.ac.ke" value={email} onChange={e => setEmail(e.target.value)} required />
+                      </div>
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                        Email Address
+                        School Name
                       </label>
-                      <input className="input-field" type="email" placeholder="john@school.ac.ke" />
+                      <input className="input-field" placeholder="Nairobi Academy" value={schoolName} onChange={e => setSchoolName(e.target.value)} />
                     </div>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                      School Name
-                    </label>
-                    <input className="input-field" placeholder="Nairobi Academy" />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
-                      Message
-                    </label>
-                    <textarea
-                      className="input-field"
-                      rows={5}
-                      placeholder="Tell us about your school and what you need..."
-                      style={{ resize: 'vertical' }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    style={{ alignSelf: 'flex-start', gap: '8px' }}
-                  >
-                    <Send style={{ width: '16px', height: '16px' }} />
-                    Send Message
-                  </button>
-                </form>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
+                        Message
+                      </label>
+                      <textarea
+                        className="input-field"
+                        rows={5}
+                        placeholder="Tell us about your school and what you need..."
+                        style={{ resize: 'vertical' }}
+                        value={message}
+                        onChange={e => setMessage(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn-primary disabled:opacity-50"
+                      style={{ alignSelf: 'flex-start', gap: '8px' }}
+                      disabled={submitting}
+                    >
+                      {submitting ? <Loader2 style={{ width: '16px', height: '16px' }} className="animate-spin" /> : <Send style={{ width: '16px', height: '16px' }} />}
+                      {submitting ? 'Sending...' : 'Send Message'}
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           </div>

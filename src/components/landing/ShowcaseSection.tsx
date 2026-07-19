@@ -7,21 +7,6 @@ import { useTheme } from '@/components/ThemeProvider';
 
 const FEATURES = [
   {
-    kicker: 'People',
-    title: 'Every student, teacher and guardian in one place',
-    description:
-      'Profiles, classes and streams, subject assignments and guardian contacts live together — so attendance, marks and messages always point at the right person.',
-    image: '/images/dashboard_users_icon.png',
-    imageAlt: 'Neon 3D figures standing together on a glass base',
-    color: 'var(--color-accent)',
-    points: [
-      'Student and teacher profiles with role-based portals',
-      'Classes, streams and subject assignments',
-      'Daily attendance tracking per class',
-      'Guardian contacts wired to SMS updates',
-    ],
-  },
-  {
     kicker: 'Mark Entry',
     title: 'Marks entry that keeps up with your teachers',
     description:
@@ -49,21 +34,6 @@ const FEATURES = [
       'School logo, grading key and teacher comments included',
       'Class-wide generation in a single click',
       'Delivered to parents by SMS or download',
-    ],
-  },
-  {
-    kicker: 'Analytics',
-    title: 'Spot the trend before the term ends',
-    description:
-      'Rankings, averages and subject breakdowns update as marks come in — so you see who\'s soaring and who needs help while there\'s still time to act.',
-    image: '/images/dashboard_comparison_icon.png',
-    imageAlt: 'Frosted glass 3D bar chart comparison',
-    color: 'var(--color-accent)',
-    points: [
-      'Class and subject performance at a glance',
-      'Student rankings and term-over-term comparison',
-      'CBC pathways and KCSE points supported',
-      'Deep-dive dashboards for every role',
     ],
   },
   {
@@ -132,8 +102,8 @@ export default function ShowcaseSection() {
             margin: '0 auto',
           }}
         >
-          From enrollment on day one to results on closing day — people, marks,
-          reports and analytics share one system, so nothing is retyped twice.
+          From enrollment on day one to results on closing day — marks, report
+          cards and onboarding share one system, so nothing is retyped twice.
         </p>
       </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { ArrowRight, School, BookOpen, GraduationCap, KeyRound, UserPlus, LogIn } from 'lucide-react';
+import { ArrowRight, School, BookOpen, GraduationCap } from 'lucide-react';
 import { Wordmark } from '@/components/Wordmark';
 
 const paths = [
@@ -222,53 +222,6 @@ export default function JoinGuideSection() {
                   background: `linear-gradient(90deg, ${path.color}, transparent)`,
                 }}
               />
-            </div>
-          ))}
-        </div>
-
-        {/* Quick links strip */}
-        <div
-          className="flex flex-col sm:flex-row items-center justify-center rounded-2xl border"
-          style={{
-            marginTop: 'clamp(24px, 3vw, 40px)',
-            padding: 'clamp(16px, 2.5vw, 24px)',
-            gap: 'clamp(12px, 2vw, 32px)',
-            background: 'var(--color-surface)',
-            borderColor: 'var(--color-border-subtle)',
-          }}
-        >
-          {[
-            { icon: UserPlus, label: 'New school?', linkLabel: 'Register free', href: '/signup' },
-            { icon: KeyRound, label: 'Have an invite code?', linkLabel: 'Activate account', href: '/activate' },
-            { icon: LogIn, label: 'Already activated?', linkLabel: 'Sign in', href: '/login' },
-          ].map((item, idx) => (
-            <div key={idx} className="flex items-center" style={{ gap: '8px' }}>
-              <item.icon className="w-4 h-4" style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
-              <span
-                style={{
-                  color: 'var(--color-text-secondary)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.8125rem',
-                  letterSpacing: '0.01em',
-                }}
-              >
-                {item.label}
-              </span>
-              <Link
-                href={item.href}
-                className="inline-flex items-center transition-opacity hover:opacity-80"
-                style={{
-                  color: 'var(--color-accent)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  gap: '4px',
-                  textDecoration: 'none',
-                }}
-              >
-                {item.linkLabel}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
             </div>
           ))}
         </div>
