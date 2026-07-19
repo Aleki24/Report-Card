@@ -22,6 +22,10 @@ export interface AcademicLevelOption { id: string; code: string; name: string; }
 export interface SubjectOption { id: string; name: string; code: string; }
 export interface GradeOption { id: string; name_display: string; }
 
+// CLASS_TEACHER and SUBJECT_TEACHER are one "Teacher" form in the UI — the class
+// assignment is just an optional field on it, not a distinct role to switch to.
+export const isTeacherRole = (role: UserRole) => role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER';
+
 export function useUsersPage() {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -137,11 +141,13 @@ export function useUsersPage() {
       role: formRole, sequence_number: formSequenceNumber, school_id: profile?.school_id ?? undefined,
     };
     if (formRole === 'STUDENT') { payload.admission_number = formAdmissionNumber; payload.grade_stream_id = formGradeStreamId; payload.academic_level_id = formAcademicLevelId; }
-    else if (formRole === 'CLASS_TEACHER') { 
-      payload.class_teacher_grade_stream_id = formClassTeacherStreamId; 
+    else if (isTeacherRole(formRole)) {
+      // Class-teacher duty is just an optional field on the one teacher form now,
+      // not a separate role choice — whether a class was picked decides the role sent.
+      payload.role = formClassTeacherStreamId ? 'CLASS_TEACHER' : 'SUBJECT_TEACHER';
+      payload.class_teacher_grade_stream_id = formClassTeacherStreamId || undefined;
       payload.subject_teacher_subjects = formSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
     }
-    else if (formRole === 'SUBJECT_TEACHER') { payload.subject_teacher_subjects = formSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id); }
     try {
       const res = await fetch('/api/admin/create-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
@@ -193,11 +199,13 @@ export function useUsersPage() {
     if (!editingUser) return;
     setFormError(''); setSubmitting(true);
     const payload: Record<string, any> = { user_id: editingUser.id, first_name: editFirstName.trim(), last_name: editLastName.trim(), phone: editPhone.trim(), role: editRole, is_active: editIsActive };
-    if (editRole === 'CLASS_TEACHER') { 
-      payload.class_teacher_grade_stream_id = editClassTeacherStreamId; 
+    if (isTeacherRole(editRole)) {
+      // Same as invite: the class field is optional, so clearing/setting it is what
+      // decides CLASS_TEACHER vs SUBJECT_TEACHER — no separate role switch to make.
+      payload.role = editClassTeacherStreamId ? 'CLASS_TEACHER' : 'SUBJECT_TEACHER';
+      payload.class_teacher_grade_stream_id = editClassTeacherStreamId || null;
       payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
     }
-    else if (editRole === 'SUBJECT_TEACHER') { payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id); payload.class_teacher_grade_stream_id = null; }
     try {
       const res = await fetch('/api/admin/update-user', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();

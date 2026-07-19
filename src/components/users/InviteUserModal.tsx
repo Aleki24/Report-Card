@@ -3,7 +3,7 @@
 import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
-import { type GradeStreamOption, type AcademicLevelOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment } from '@/hooks/useUsersPage';
+import { type GradeStreamOption, type AcademicLevelOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 
 interface InviteUserModalProps {
@@ -58,7 +58,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
         <div className="mb-4">
           <label className="block text-xs text-muted-foreground mb-1">Role *</label>
           <select className="input-field w-full" value={props.formRole} onChange={e => props.setFormRole(e.target.value as UserRole)}>
-            <option value="CLASS_TEACHER">Class Teacher</option><option value="SUBJECT_TEACHER">Subject Teacher</option>
+            <option value="CLASS_TEACHER">Teacher</option>
             <option value="STUDENT">Student</option><option value="ADMIN">Admin</option>
           </select>
         </div>
@@ -86,12 +86,12 @@ export function InviteUserModal(props: InviteUserModalProps) {
           </div>
         )}
 
-        {props.formRole === 'CLASS_TEACHER' && (
+        {isTeacherRole(props.formRole) && (
           <div className="border-t border-border pt-4 mt-4">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment (optional)</p>
             <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
               <select className="input-field w-full" value={props.formClassTeacherStreamId} onChange={e => props.setFormClassTeacherStreamId(e.target.value)}>
-                <option value="">-- Unassigned --</option>
+                <option value="">-- Not a class teacher --</option>
                 {props.gradeStreams.map(gs => (
                   <option key={gs.id} value={gs.id} disabled={assignedStreamIds.has(gs.id)}>
                     {gs.full_name}{assignedStreamIds.has(gs.id) ? ' (already has a class teacher)' : ''}
@@ -102,7 +102,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
           </div>
         )}
 
-        {(props.formRole === 'SUBJECT_TEACHER' || props.formRole === 'CLASS_TEACHER') && (
+        {isTeacherRole(props.formRole) && (
           <SubjectTeacherFields subjects={props.subjects} grades={props.grades} gradeStreams={props.gradeStreams} entries={props.formSubjectTeacherSubjects} setEntries={props.setFormSubjectTeacherSubjects} />
         )}
 
