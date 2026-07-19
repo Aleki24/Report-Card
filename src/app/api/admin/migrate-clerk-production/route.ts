@@ -1,0 +1,179 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { createClerkClient } from '@clerk/nextjs/server';
+import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
+
+// One-time migration: recreates every already-activated account in Clerk's
+// Production instance (this app went live on Clerk Development and only
+// later got a custom domain + Production environment) and re-points every
+// table that references users(id)/students(id) to the new Clerk-issued ID.
+//
+// Clerk never exposes password hashes, even to the app that owns the
+// account, so passwords cannot be carried over — every migrated user is
+// created with skipPasswordRequirement and gets a fresh invite code to set
+// one, reusing the existing invite-code activation flow.
+//
+// Safety: the OLD row (and its OLD id) is only deleted after every
+// dependent table has been confirmed re-pointed to the NEW id, in the same
+// insert-new -> repoint-children -> delete-old order src/app/api/auth/activate/route.ts
+// already uses for first-time activation — a failure partway through
+// leaves both old and new data intact (harmlessly duplicated) rather than
+// losing anything, and is safe to retry.
+export async function POST(request: NextRequest) {
+    try {
+        const { userId } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const supabaseAdmin = createSupabaseAdmin();
+        const { data: adminProfile } = await supabaseAdmin
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (!adminProfile || adminProfile.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only admins can run this migration.' }, { status: 403 });
+        }
+
+        if (!process.env.CLERK_SECRET_KEY_PROD) {
+            return NextResponse.json({ error: 'CLERK_SECRET_KEY_PROD is not configured in this environment.' }, { status: 500 });
+        }
+
+        const body = await request.json().catch(() => ({}));
+        const dryRun: boolean = body.dryRun !== false; // default true — must explicitly opt out
+        const targetUserId: string | undefined = body.targetUserId;
+        const sendNotifications: boolean = body.sendNotifications === true;
+
+        const clerkProd = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY_PROD });
+
+        let query = supabaseAdmin
+            .from('users')
+            .select('id, first_name, last_name, username, email, phone, role, school_id, is_active')
+            .eq('is_active', true);
+        if (targetUserId) query = query.eq('id', targetUserId);
+
+        const { data: users, error: usersErr } = await query;
+        if (usersErr) return NextResponse.json({ error: usersErr.message }, { status: 500 });
+
+        const results: Array<Record<string, unknown>> = [];
+
+        for (const user of users || []) {
+            if (dryRun) {
+                results.push({ id: user.id, username: user.username, role: user.role, action: 'would-migrate' });
+                continue;
+            }
+
+            try {
+                const oldId = user.id;
+                const hasRealEmail = !!user.email && !user.email.endsWith('.school.local');
+
+                // Idempotent: if a Production user tagged with this old id
+                // already exists, reuse it instead of creating a duplicate.
+                const existing = await clerkProd.users.getUserList({ externalId: [oldId] });
+                let clerkUserId: string;
+                if (existing.data.length > 0) {
+                    clerkUserId = existing.data[0].id;
+                } else {
+                    const created = await clerkProd.users.createUser({
+                        externalId: oldId,
+                        username: user.username,
+                        emailAddress: hasRealEmail ? [user.email as string] : undefined,
+                        firstName: user.first_name,
+                        lastName: user.last_name,
+                        skipPasswordRequirement: true,
+                        publicMetadata: { role: user.role, school_id: user.school_id },
+                    });
+                    clerkUserId = created.id;
+                }
+
+                if (clerkUserId === oldId) {
+                    results.push({ id: oldId, action: 'already-migrated' });
+                    continue;
+                }
+
+                // 1. Stage the new users row.
+                const { error: upsertErr } = await supabaseAdmin.from('users').upsert({
+                    id: clerkUserId,
+                    first_name: user.first_name,
+                    last_name: user.last_name,
+                    email: user.email,
+                    username: user.username,
+                    phone: user.phone,
+                    role: user.role,
+                    school_id: user.school_id,
+                    is_active: true,
+                }, { onConflict: 'id' });
+                if (upsertErr) throw new Error(`users upsert: ${upsertErr.message}`);
+
+                if (user.role === 'STUDENT') {
+                    const { data: oldStudent, error: fetchErr } = await supabaseAdmin
+                        .from('students')
+                        .select('*')
+                        .eq('id', oldId)
+                        .maybeSingle();
+                    if (fetchErr) throw new Error(`students fetch: ${fetchErr.message}`);
+
+                    if (oldStudent) {
+                        const { id: _oldStudentId, ...studentFields } = oldStudent;
+                        const { error: sErr } = await supabaseAdmin
+                            .from('students')
+                            .upsert({ id: clerkUserId, ...studentFields }, { onConflict: 'id' });
+                        if (sErr) throw new Error(`students upsert: ${sErr.message}`);
+
+                        // Every table hanging off a student's academic history.
+                        for (const table of ['exam_marks', 'report_cards', 'performance_history', 'student_fees', 'exam_mark_components', 'student_subjects']) {
+                            const { error } = await supabaseAdmin.from(table).update({ student_id: clerkUserId }).eq('student_id', oldId);
+                            if (error) throw new Error(`${table} repoint: ${error.message}`);
+                        }
+
+                        const { error: delStudentErr } = await supabaseAdmin.from('students').delete().eq('id', oldId);
+                        if (delStudentErr) throw new Error(`old students delete: ${delStudentErr.message}`);
+                    }
+                } else {
+                    const { error: ctErr } = await supabaseAdmin.from('class_teachers').update({ user_id: clerkUserId }).eq('user_id', oldId);
+                    if (ctErr) throw new Error(`class_teachers repoint: ${ctErr.message}`);
+                    const { error: stErr } = await supabaseAdmin.from('subject_teachers').update({ user_id: clerkUserId }).eq('user_id', oldId);
+                    if (stErr) throw new Error(`subject_teachers repoint: ${stErr.message}`);
+                    const { error: exErr } = await supabaseAdmin.from('exams').update({ created_by_teacher_id: clerkUserId }).eq('created_by_teacher_id', oldId);
+                    if (exErr) throw new Error(`exams repoint: ${exErr.message}`);
+                    const { error: rc1Err } = await supabaseAdmin.from('report_cards').update({ class_teacher_id: clerkUserId }).eq('class_teacher_id', oldId);
+                    if (rc1Err) throw new Error(`report_cards.class_teacher_id repoint: ${rc1Err.message}`);
+                    const { error: rc2Err } = await supabaseAdmin.from('report_cards').update({ generated_by_user_id: clerkUserId }).eq('generated_by_user_id', oldId);
+                    if (rc2Err) throw new Error(`report_cards.generated_by_user_id repoint: ${rc2Err.message}`);
+                }
+
+                await supabaseAdmin.from('invite_codes').update({ user_id: clerkUserId }).eq('user_id', oldId);
+
+                // Everything that referenced the old id has been repointed —
+                // safe to remove it now.
+                const { error: delOldErr } = await supabaseAdmin.from('users').delete().eq('id', oldId);
+                if (delOldErr) throw new Error(`old users delete: ${delOldErr.message}`);
+
+                const { data: school } = await supabaseAdmin.from('schools').select('name').eq('id', user.school_id).maybeSingle();
+                const code = await createInviteCode(supabaseAdmin, clerkUserId, user.school_id, user.role);
+                let notified = { sms: false, email: false };
+                if (sendNotifications) {
+                    notified = await notifyInviteCode({
+                        phone: user.phone,
+                        email: hasRealEmail ? user.email : null,
+                        firstName: user.first_name,
+                        schoolName: school?.name || 'your school',
+                        code,
+                    });
+                }
+
+                results.push({ id: oldId, newId: clerkUserId, username: user.username, role: user.role, action: 'migrated', inviteCode: code, notified });
+            } catch (err: unknown) {
+                results.push({ id: user.id, username: user.username, action: 'error', error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+
+        return NextResponse.json({ dryRun, count: results.length, results });
+    } catch (err: unknown) {
+        console.error('migrate-clerk-production error:', err);
+        return NextResponse.json({ error: err instanceof Error ? err.message : 'Migration failed' }, { status: 500 });
+    }
+}
