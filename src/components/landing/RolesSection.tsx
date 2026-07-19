@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, CheckCircle2, ShieldCheck, Users, Heart } from 'lucide-react';
+import Link from 'next/link';
+import { BookOpen, CheckCircle2, ShieldCheck, Users, Heart, ArrowRight } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { Wordmark } from '@/components/Wordmark';
 
@@ -106,9 +107,10 @@ export default function RolesSection() {
           </h2>
           <p
             style={{
-              color: 'var(--color-text-secondary)',
+              color: 'var(--color-text-primary)',
               fontFamily: 'var(--font-body)',
               fontSize: 'clamp(0.875rem, 1.4vw, 1rem)',
+              fontWeight: 500,
               lineHeight: 1.7,
               maxWidth: '480px',
               letterSpacing: '0.01em',
@@ -203,9 +205,9 @@ export default function RolesSection() {
                 {role.description}
               </p>
 
-              {/* Features */}
-              <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {role.features.map((f, i) => (
+              {/* Top features */}
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                {role.features.slice(0, 2).map((f, i) => (
                   <li
                     key={i}
                     className="flex items-center"
@@ -222,6 +224,22 @@ export default function RolesSection() {
                   </li>
                 ))}
               </ul>
+
+              <Link
+                href="/features"
+                className="group/link inline-flex items-center transition-opacity hover:opacity-80"
+                style={{
+                  color: role.iconColor,
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  gap: '6px',
+                  textDecoration: 'none',
+                }}
+              >
+                See all features
+                <ArrowRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover/link:translate-x-1" />
+              </Link>
             </div>
           ))}
         </div>
