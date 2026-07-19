@@ -64,11 +64,11 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [studentsLoading, setStudentsLoading] = useState(false);
 
-    // Grade scale options
-    const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
-
-    // Grading scales for auto-grade
-    const [gradingScales, setGradingScales] = useState<{ symbol: string; min_percentage: number; max_percentage: number }[]>([]);
+    // Raw grading systems/scales — filtered below to the ones for this exam's
+    // academic level, since a school can run CBC and 8-4-4 side by side and
+    // their scale symbols/ranges overlap (e.g. both can cover 30-40%).
+    const [gradingSystems, setGradingSystems] = useState<{ id: string; academic_level_id: string; name: string }[]>([]);
+    const [allGradingScales, setAllGradingScales] = useState<{ grading_system_id: string; symbol: string; label: string; min_percentage: number; max_percentage: number }[]>([]);
 
     // Entry rows
     const [rows, setRows] = useState<MarkRow[]>([emptyRow(), emptyRow(), emptyRow()]);
@@ -114,7 +114,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         );
     }, [schemeComponents, scheme?.aggregation_method]);
 
-    // ── Fetch grades + streams on mount ──────────────────
+    // ── Fetch grades + streams + grading systems/scales on mount ──
     useEffect(() => {
         const fetchStructure = async () => {
             try {
@@ -123,41 +123,13 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 if (data.academic_levels) setAcademicLevels(data.academic_levels);
                 if (data.grades) setGrades(data.grades);
                 if (data.grade_streams) setAllStreams(data.grade_streams);
+                if (data.grading_systems) setGradingSystems(data.grading_systems);
+                if (data.grading_scales) setAllGradingScales(data.grading_scales);
             } catch (err) {
                 console.error('Failed to load class structure:', err);
             }
         };
         fetchStructure();
-    }, []);
-
-    // ── Fetch grading scales + grade options on mount ────
-    useEffect(() => {
-        const fetchGrades = async () => {
-            try {
-                const res = await fetch('/api/school/data?type=grading_scales');
-                const dataObj = await res.json();
-                if (dataObj.data) {
-                    const scales: any[] = [];
-                    dataObj.data.forEach((sys: any) => {
-                        sys.grading_scales?.forEach((sc: any) => {
-                            scales.push({
-                                symbol: sc.symbol,
-                                label: sc.label || '',
-                                systemName: sys.name,
-                                min_percentage: sc.min_percentage,
-                                max_percentage: sc.max_percentage,
-                            });
-                        });
-                    });
-                    setGradeOptions(scales);
-                    setGradingScales(scales);
-                }
-            } catch (err) {
-                console.error('Failed to load grading scales:', err);
-            }
-        };
-        fetchGrades();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Reset grade & stream when level changes ──────────
@@ -243,6 +215,29 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
 
     // ── Already-selected student IDs (prevent duplicate selection) ──
     const selectedStudentIds = new Set(rows.map(r => r.studentId).filter(Boolean));
+
+    // ── Grading systems for this exam's academic level only ──────
+    // Falls back to every system until the level is known (e.g. before a
+    // grade is picked in manual mode) rather than showing nothing.
+    const effectiveAcademicLevelId = grades.find(g => g.id === (gradeId || selectedGradeId))?.academic_level_id ?? null;
+    const relevantGradingSystems = useMemo(
+        () => effectiveAcademicLevelId
+            ? gradingSystems.filter(sys => sys.academic_level_id === effectiveAcademicLevelId)
+            : gradingSystems,
+        [gradingSystems, effectiveAcademicLevelId]
+    );
+    const gradingScales = useMemo(
+        () => relevantGradingSystems.flatMap(sys => allGradingScales.filter(sc => sc.grading_system_id === sys.id)),
+        [relevantGradingSystems, allGradingScales]
+    );
+    const gradeOptions: GradeOption[] = useMemo(
+        () => relevantGradingSystems.flatMap(sys =>
+            allGradingScales
+                .filter(sc => sc.grading_system_id === sys.id)
+                .map(sc => ({ symbol: sc.symbol, label: sc.label || '', systemName: sys.name }))
+        ),
+        [relevantGradingSystems, allGradingScales]
+    );
 
     // ── Auto-resolve grade from percentage ───────────────
     const resolveGradeFromPct = (pct: number): string => {
