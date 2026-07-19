@@ -3,7 +3,7 @@
 import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
-import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment } from '@/hooks/useUsersPage';
+import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 
 interface EditUserModalProps {
@@ -55,19 +55,24 @@ export function EditUserModal(props: EditUserModalProps) {
 
         <div className="mb-4">
           <label className="block text-xs text-muted-foreground mb-1">Role *</label>
-          <select className="input-field w-full" value={props.editRole} onChange={e => props.setEditRole(e.target.value as UserRole)} disabled={editingUser.role === 'STUDENT'}>
-            <option value="CLASS_TEACHER">Class Teacher</option><option value="SUBJECT_TEACHER">Subject Teacher</option><option value="ADMIN">Admin</option>
+          <select
+            className="input-field w-full"
+            value={isTeacherRole(props.editRole) ? 'CLASS_TEACHER' : props.editRole}
+            onChange={e => props.setEditRole(e.target.value as UserRole)}
+            disabled={editingUser.role === 'STUDENT'}
+          >
+            <option value="CLASS_TEACHER">Teacher</option><option value="ADMIN">Admin</option>
             {editingUser.role === 'STUDENT' && <option value="STUDENT">Student</option>}
           </select>
           {editingUser.role === 'STUDENT' && <p className="text-[10px] text-muted-foreground mt-1 opacity-70">Students must be managed separately.</p>}
         </div>
 
-        {props.editRole === 'CLASS_TEACHER' && (
+        {isTeacherRole(props.editRole) && (
           <div className="border-t border-border pt-4 mt-4">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment (optional)</p>
             <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
               <select className="input-field w-full" value={props.editClassTeacherStreamId} onChange={e => props.setEditClassTeacherStreamId(e.target.value)}>
-                <option value="">-- Unassigned --</option>
+                <option value="">-- Not a class teacher --</option>
                 {props.gradeStreams.map(gs => (
                   <option key={gs.id} value={gs.id} disabled={assignedStreamIds.has(gs.id)}>
                     {gs.full_name}{assignedStreamIds.has(gs.id) ? ' (already has a class teacher)' : ''}
@@ -78,7 +83,7 @@ export function EditUserModal(props: EditUserModalProps) {
           </div>
         )}
 
-        {(props.editRole === 'SUBJECT_TEACHER' || props.editRole === 'CLASS_TEACHER') && (
+        {isTeacherRole(props.editRole) && (
           <SubjectTeacherFields subjects={props.subjects} grades={props.grades} gradeStreams={props.gradeStreams} entries={props.editSubjectTeacherSubjects} setEntries={props.setEditSubjectTeacherSubjects} />
         )}
 
