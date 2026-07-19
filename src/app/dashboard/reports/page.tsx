@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { StudentCommentsSection } from '@/components/reports/StudentCommentsSection';
@@ -17,7 +16,6 @@ import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { BookOpen, ArrowRight } from 'lucide-react';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
@@ -27,8 +25,7 @@ interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
 export default function ReportsPage() {
-  const { profile, availableRoles, schoolName } = useAuth();
-  const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
+  const { schoolName } = useAuth();
 
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
@@ -330,19 +327,6 @@ export default function ReportsPage() {
           title="Academic Reports" 
           description="Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics."
       />
-
-      {isAlsoSubjectTeacher && (
-        <Link href="/dashboard/exams-marks" className="flex items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-4 no-underline transition-all hover:border-primary/50 hover:bg-primary/10">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/12">
-            <BookOpen className="h-4 w-4 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="font-semibold text-sm text-foreground">Go to My Subjects</span>
-            <span className="block text-xs text-muted-foreground mt-0.5">Enter and manage marks for your assigned subjects</span>
-          </div>
-          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </Link>
-      )}
 
       {/* Report Settings */}
       <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />

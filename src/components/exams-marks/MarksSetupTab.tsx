@@ -26,7 +26,6 @@ interface ExamSlot {
 
 export function MarksSetupTab() {
   const { profile, availableRoles } = useAuth();
-  const isAlsoClassTeacher = profile?.role === 'SUBJECT_TEACHER' && availableRoles.includes('CLASS_TEACHER');
   const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
 
   // State
@@ -347,19 +346,6 @@ export function MarksSetupTab() {
           </div>
         )}
       </div>
-
-      {isAlsoClassTeacher && (
-        <a href="/dashboard/reports" className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 no-underline text-inherit transition-all hover:border-primary/50 hover:bg-primary/10">
-          <span className="text-[22px]">📋</span>
-          <div className="flex-1">
-            <span className="block text-sm font-semibold text-primary">Go to My Class</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">Switch to class teacher dashboard for reports &amp; student management</span>
-          </div>
-          <span className="text-lg text-muted-foreground">→</span>
-        </a>
-      )}
-
-
 
       {/* ═══ STEP 1: Select Term ═══ */}
       <div className="card mb-4 p-5">
