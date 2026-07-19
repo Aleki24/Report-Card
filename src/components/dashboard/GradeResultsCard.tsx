@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import EmptyState from './EmptyState';
 
 interface Stream { id: string; full_name: string }
@@ -64,9 +63,8 @@ function subjectCategory(subject: string): string {
 /**
  * Exam results by subject, sourced exactly like the Analytics page: the marks
  * endpoint does the class filtering server-side and the card aggregates what
- * comes back. Opens on "All classes" (every recorded mark), ‹ › cycles into
- * individual classes, and the dropdown filters by exam — options come from the
- * marks themselves, so only exams that actually have marks are listed.
+ * comes back. Opens on "All classes" (every recorded mark); the dropdown
+ * switches to individual classes.
  */
 export default function GradeResultsCard() {
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -81,7 +79,7 @@ export default function GradeResultsCard() {
   const [examId, setExamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // On first load, advance past classes whose marks come back empty so the
-  // card opens on a real class with results; ‹ › then cycles the rest.
+  // card opens on a real class with results.
   const [seeking, setSeeking] = useState(true);
   const cacheRef = useRef(new Map<string, Mark[]>());
 
@@ -193,25 +191,9 @@ export default function GradeResultsCard() {
     [subjects, activeCat]
   );
 
-  // ‹ › order: All classes → stream 0 → … → stream n-1 → All classes.
-  const cycle = (dir: 1 | -1) => {
-    setSeeking(false);
-    const total = streams.length + 1; // +1 for the All classes scope
-    const pos = scopeIdx + 1;         // All classes occupies position 0
-    setScopeIdx((((pos + dir) % total) + total) % total - 1);
-  };
-
   return (
     <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => cycle(-1)}
-          disabled={streams.length === 0}
-          aria-label="Previous class"
-          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary disabled:cursor-default disabled:opacity-40"
-        >
-          <ChevronLeft size={16} />
-        </button>
         <div className="min-w-0 flex-1">
           <h3 className="font-display truncate text-sm font-semibold text-foreground">
             {series ? `${series.name} — ${scopeLabel}` : `Exam Results — ${scopeLabel}`}
@@ -220,14 +202,6 @@ export default function GradeResultsCard() {
             {[examDate, subjects.length ? `${subjects.length} subjects` : null, classAvg != null ? `average ${classAvg}%` : null].filter(Boolean).join(' · ') || 'Latest exam performance by subject'}
           </p>
         </div>
-        <button
-          onClick={() => cycle(1)}
-          disabled={streams.length === 0}
-          aria-label="Next class"
-          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary disabled:cursor-default disabled:opacity-40"
-        >
-          <ChevronRight size={16} />
-        </button>
         {streams.length > 0 && (
           <select
             value={scopeKey}
