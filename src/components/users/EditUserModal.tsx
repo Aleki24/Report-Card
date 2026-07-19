@@ -3,7 +3,7 @@
 import React from 'react';
 import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
-import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption } from '@/hooks/useUsersPage';
+import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 
 interface EditUserModalProps {
@@ -23,10 +23,14 @@ interface EditUserModalProps {
   gradeStreams: GradeStreamOption[];
   subjects: SubjectOption[];
   grades: GradeOption[];
+  classTeacherAssignments: ClassTeacherAssignment[];
 }
 
 export function EditUserModal(props: EditUserModalProps) {
   const { editingUser, onClose, onSubmit, formError, submitting } = props;
+  const assignedStreamIds = new Set(
+    props.classTeacherAssignments.filter(a => a.user_id !== editingUser.id).map(a => a.current_grade_stream_id)
+  );
 
   return (
     <ModalOverlay onClose={onClose}>
@@ -64,7 +68,11 @@ export function EditUserModal(props: EditUserModalProps) {
             <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
               <select className="input-field w-full" value={props.editClassTeacherStreamId} onChange={e => props.setEditClassTeacherStreamId(e.target.value)}>
                 <option value="">-- Unassigned --</option>
-                {props.gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                {props.gradeStreams.map(gs => (
+                  <option key={gs.id} value={gs.id} disabled={assignedStreamIds.has(gs.id)}>
+                    {gs.full_name}{assignedStreamIds.has(gs.id) ? ' (already has a class teacher)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

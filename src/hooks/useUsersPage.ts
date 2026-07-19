@@ -17,6 +17,7 @@ export interface UserRow {
 }
 
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
+export interface ClassTeacherAssignment { user_id: string; current_grade_stream_id: string; }
 export interface AcademicLevelOption { id: string; code: string; name: string; }
 export interface SubjectOption { id: string; name: string; code: string; }
 export interface GradeOption { id: string; name_display: string; }
@@ -59,6 +60,7 @@ export function useUsersPage() {
   const [academicLevels, setAcademicLevels] = useState<AcademicLevelOption[]>([]);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [grades, setGrades] = useState<GradeOption[]>([]);
+  const [classTeacherAssignments, setClassTeacherAssignments] = useState<ClassTeacherAssignment[]>([]);
 
   // Edit user form state
   const [editFirstName, setEditFirstName] = useState('');
@@ -95,12 +97,13 @@ export function useUsersPage() {
 
   const fetchDropdowns = useCallback(async () => {
     try {
-      const [gsRes, structureRes] = await Promise.all([
+      const [gsRes, structureRes, ctaRes] = await Promise.all([
         fetch('/api/school/data?type=grade_streams', { cache: 'no-store' }),
         fetch('/api/admin/academic-structure', { cache: 'no-store' }),
+        fetch('/api/school/data?type=class_teacher_assignments', { cache: 'no-store' }),
       ]);
-      const [gsJson, structureJson] = await Promise.all([gsRes.json(), structureRes.json()]);
-      
+      const [gsJson, structureJson, ctaJson] = await Promise.all([gsRes.json(), structureRes.json(), ctaRes.json()]);
+
       if (!gsRes.ok) throw new Error(gsJson.error || 'Failed to fetch grade streams');
       if (!structureRes.ok) throw new Error(structureJson.error || 'Failed to fetch academic structure');
 
@@ -108,6 +111,7 @@ export function useUsersPage() {
       setAcademicLevels(structureJson.academic_levels || []);
       setSubjects(structureJson.subjects || []);
       setGrades(structureJson.grades || []);
+      setClassTeacherAssignments(ctaRes.ok ? (ctaJson.data || []) : []);
     } catch (err: any) {
       console.error('Failed to load dropdown data', err);
       setFormError(err.message || 'Failed to load dropdown data');
@@ -245,6 +249,6 @@ export function useUsersPage() {
     // Password reset
     resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultInviteCode, resetResultNotified,
     // Shared
-    formError, submitting, gradeStreams, academicLevels, subjects, grades,
+    formError, submitting, gradeStreams, academicLevels, subjects, grades, classTeacherAssignments,
   };
 }

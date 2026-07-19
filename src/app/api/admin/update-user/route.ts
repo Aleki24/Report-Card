@@ -115,6 +115,18 @@ export async function PUT(request: NextRequest) {
         // ── Handle Class Teacher assignment ──
         if (class_teacher_grade_stream_id !== undefined) {
             if (class_teacher_grade_stream_id && currentYear) {
+                // Reject if another teacher already holds this stream for the current year
+                const { data: conflict } = await supabase
+                    .from('class_teachers')
+                    .select('id')
+                    .eq('current_grade_stream_id', class_teacher_grade_stream_id)
+                    .eq('academic_year_id', currentYear.id)
+                    .neq('user_id', user_id)
+                    .maybeSingle();
+                if (conflict) {
+                    return NextResponse.json({ error: 'This class already has a class teacher assigned for the current academic year. Remove the existing assignment first.' }, { status: 409 });
+                }
+
                 // Upsert: check if record exists
                 const { data: existing } = await supabase
                     .from('class_teachers')
@@ -123,19 +135,33 @@ export async function PUT(request: NextRequest) {
                     .maybeSingle();
 
                 if (existing) {
-                    await supabase
+                    const { error } = await supabase
                         .from('class_teachers')
                         .update({
                             current_grade_stream_id: class_teacher_grade_stream_id,
                             academic_year_id: currentYear.id,
                         })
                         .eq('id', existing.id);
+                    if (error) {
+                        console.error('Failed to update class teacher assignment:', error);
+                        const message = error.code === '23505'
+                            ? 'This class already has a class teacher assigned for the current academic year.'
+                            : 'Failed to assign the class. Please try again.';
+                        return NextResponse.json({ error: message }, { status: error.code === '23505' ? 409 : 500 });
+                    }
                 } else {
-                    await supabase.from('class_teachers').insert({
+                    const { error } = await supabase.from('class_teachers').insert({
                         user_id,
                         current_grade_stream_id: class_teacher_grade_stream_id,
                         academic_year_id: currentYear.id,
                     });
+                    if (error) {
+                        console.error('Failed to insert class teacher assignment:', error);
+                        const message = error.code === '23505'
+                            ? 'This class already has a class teacher assigned for the current academic year.'
+                            : 'Failed to assign the class. Please try again.';
+                        return NextResponse.json({ error: message }, { status: error.code === '23505' ? 409 : 500 });
+                    }
                 }
             } else if (class_teacher_grade_stream_id === null || class_teacher_grade_stream_id === '') {
                 // Remove class teacher assignment
