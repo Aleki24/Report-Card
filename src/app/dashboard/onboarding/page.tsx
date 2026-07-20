@@ -46,7 +46,9 @@ export default function OnboardingWizard() {
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear().toString());
   const [termName, setTermName] = useState('Term 1');
   const [curriculum, setCurriculum] = useState({ cbc: true, '844': false });
+  const [classesSetupMode, setClassesSetupMode] = useState<'manual' | 'skip'>('manual');
   const [classes, setClasses] = useState([{ grade: '', streams: '' }]);
+  const [subjectsSetupMode, setSubjectsSetupMode] = useState<'auto' | 'custom' | 'skip'>('auto');
   const [subjects, setSubjects] = useState('Mathematics, English, Kiswahili, Science');
 
   // --- Teacher/Student Form State ---
@@ -106,8 +108,9 @@ export default function OnboardingWizard() {
           academicYear,
           termName,
           curriculum,
-          classes,
-          subjects
+          classes: classesSetupMode === 'skip' ? [] : classes,
+          subjects: subjectsSetupMode === 'custom' ? subjects : '',
+          subjectsMode: subjectsSetupMode,
         }),
       });
 
@@ -400,9 +403,34 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Classes & Streams</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Add your grades and their respective streams (e.g., Grade 1: East, West).</p>
+                    <p className="text-sm text-muted-foreground mb-4">Add your grades and their respective streams (e.g., Grade 1: East, West), or skip and set this up later.</p>
                   </div>
-                  
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className={`cursor-pointer flex items-start p-4 rounded-xl border-2 transition-all ${classesSetupMode === 'manual' ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="radio" className="hidden" checked={classesSetupMode === 'manual'} onChange={() => setClassesSetupMode('manual')} />
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 ${classesSetupMode === 'manual' ? 'bg-primary border-primary' : 'border-input'}`}>
+                        {classesSetupMode === 'manual' && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold">Set up now</div>
+                        <div className="text-xs text-muted-foreground">Add your grades and streams below.</div>
+                      </div>
+                    </label>
+
+                    <label className={`cursor-pointer flex items-start p-4 rounded-xl border-2 transition-all ${classesSetupMode === 'skip' ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="radio" className="hidden" checked={classesSetupMode === 'skip'} onChange={() => setClassesSetupMode('skip')} />
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 ${classesSetupMode === 'skip' ? 'bg-primary border-primary' : 'border-input'}`}>
+                        {classesSetupMode === 'skip' && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold">Skip for now</div>
+                        <div className="text-xs text-muted-foreground">Add classes later from Dashboard → Classes.</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {classesSetupMode === 'manual' && (
                   <div className="space-y-4">
                     {classes.map((cls, idx) => (
                       <div key={idx} className="flex gap-3 items-start">
@@ -443,13 +471,14 @@ export default function OnboardingWizard() {
                       </div>
                     ))}
                     
-                    <button 
+                    <button
                       onClick={() => setClasses([...classes, { grade: '', streams: '' }])}
                       className="text-sm font-semibold text-primary flex items-center gap-1 hover:underline"
                     >
                       + Add another grade
                     </button>
                   </div>
+                  )}
                 </div>
               )}
 
@@ -457,17 +486,58 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Subjects</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Enter the subjects offered at your school, separated by commas.</p>
+                    <p className="text-sm text-muted-foreground mb-4">Choose how you&rsquo;d like to set up subjects for your school.</p>
                   </div>
-                  
+
+                  <div className="grid gap-3">
+                    <label className={`cursor-pointer flex items-start p-4 rounded-xl border-2 transition-all ${subjectsSetupMode === 'auto' ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="radio" className="hidden" checked={subjectsSetupMode === 'auto'} onChange={() => setSubjectsSetupMode('auto')} />
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 ${subjectsSetupMode === 'auto' ? 'bg-primary border-primary' : 'border-input'}`}>
+                        {subjectsSetupMode === 'auto' && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold">Auto-add standard subjects (recommended)</div>
+                        <div className="text-xs text-muted-foreground">
+                          {classesSetupMode === 'skip'
+                            ? "You skipped classes, so there's nothing to auto-populate yet — add classes first, then use Dashboard → Subjects to auto-add for each level."
+                            : "We'll add the official CBC/8-4-4 subjects for every grade level you just created (e.g. Lower Primary, Upper Primary, Junior School)."}
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={`cursor-pointer flex items-start p-4 rounded-xl border-2 transition-all ${subjectsSetupMode === 'custom' ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="radio" className="hidden" checked={subjectsSetupMode === 'custom'} onChange={() => setSubjectsSetupMode('custom')} />
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 ${subjectsSetupMode === 'custom' ? 'bg-primary border-primary' : 'border-input'}`}>
+                        {subjectsSetupMode === 'custom' && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold">Enter my own list</div>
+                        <div className="text-xs text-muted-foreground">Type a custom, comma-separated list of subjects.</div>
+                      </div>
+                    </label>
+
+                    <label className={`cursor-pointer flex items-start p-4 rounded-xl border-2 transition-all ${subjectsSetupMode === 'skip' ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                      <input type="radio" className="hidden" checked={subjectsSetupMode === 'skip'} onChange={() => setSubjectsSetupMode('skip')} />
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 mt-0.5 shrink-0 ${subjectsSetupMode === 'skip' ? 'bg-primary border-primary' : 'border-input'}`}>
+                        {subjectsSetupMode === 'skip' && <CheckCircle2 size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-semibold">Skip for now</div>
+                        <div className="text-xs text-muted-foreground">Add subjects later from Dashboard → Subjects.</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {subjectsSetupMode === 'custom' && (
                   <div className="space-y-2">
-                    <textarea 
+                    <textarea
                       value={subjects}
                       onChange={(e) => setSubjects(e.target.value)}
                       className="w-full h-32 p-4 rounded-xl border border-input bg-transparent resize-none leading-relaxed"
                       placeholder="Mathematics, English, Kiswahili, Science, Social Studies..."
                     />
                   </div>
+                  )}
                 </div>
               )}
             </>

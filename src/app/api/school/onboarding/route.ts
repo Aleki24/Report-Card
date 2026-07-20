@@ -2,6 +2,41 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth, createClerkClient } from '@clerk/nextjs/server';
 import { sendWelcomeEmail } from '@/lib/email';
+import { PREDEFINED_SUBJECTS, getCBCBandForGradeName, type EducationLevel } from '@/lib/subject-definitions';
+
+// `subjects.code` is globally unique, but PREDEFINED_SUBJECTS codes (e.g.
+// "MATH_LP") are shared across every school. Fall back to a school-suffixed
+// code if another school already claimed it, and skip silently if this
+// school already has the subject.
+async function insertSubjectSafe(
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>,
+  schoolId: string,
+  base: { code: string; name: string; academic_level_id: string; category?: string; subject_type?: string }
+) {
+  const { data: existingForSchool } = await supabaseAdmin
+    .from('subjects')
+    .select('id')
+    .eq('school_id', schoolId)
+    .eq('code', base.code)
+    .maybeSingle();
+  if (existingForSchool) return;
+
+  let code = base.code;
+  const { data: codeTaken } = await supabaseAdmin
+    .from('subjects')
+    .select('id')
+    .eq('code', code)
+    .maybeSingle();
+  if (codeTaken) {
+    code = `${base.code}-${schoolId.replace(/-/g, '').slice(0, 5).toUpperCase()}`;
+  }
+
+  await supabaseAdmin
+    .from('subjects')
+    .insert({ ...base, code, school_id: schoolId })
+    .select()
+    .maybeSingle();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Parse payload
     const body = await request.json();
-    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes, subjects } = body;
+    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes, subjects, subjectsMode } = body;
 
     let schoolId = userData.school_id;
 
@@ -134,9 +169,12 @@ export async function POST(request: NextRequest) {
     const getLevelId = (code: string) => levels?.find(l => l.code === code)?.id;
     const fallbackLevelId = levels?.[0]?.id;
 
+    const touchedGradeNames: string[] = [];
+
     for (const cls of classes) {
       if (!cls.grade) continue;
-      
+      touchedGradeNames.push(cls.grade);
+
       // Ensure Grade exists globally
       let gradeId;
       const { data: existingGrade } = await supabaseAdmin
@@ -192,7 +230,34 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Insert Subjects
-    if (subjects) {
+    if (subjectsMode === 'auto') {
+      // Populate the standard subjects for every CBC/8-4-4 band the admin
+      // actually created classes in, so e.g. Lower/Upper Primary aren't
+      // left without subjects just because nobody added them manually.
+      const bands = new Set<EducationLevel>();
+      for (const name of touchedGradeNames) {
+        const band = getCBCBandForGradeName(name);
+        if (band) bands.add(band);
+      }
+
+      for (const band of bands) {
+        const levelCode = band.startsWith('CBC') ? 'CBC' : '844';
+        const levelId = getLevelId(levelCode) || fallbackLevelId;
+        if (!levelId) continue;
+
+        const predefined = PREDEFINED_SUBJECTS.filter(s => s.level === band);
+        for (const subj of predefined) {
+          await insertSubjectSafe(supabaseAdmin, schoolId, {
+            code: subj.code,
+            name: subj.name,
+            academic_level_id: levelId,
+            category: subj.category || 'TECHNICAL',
+            subject_type: subj.isCore ? 'CORE' : 'OPTIONAL',
+          });
+        }
+      }
+    } else if (subjectsMode !== 'skip' && subjects) {
+      // Custom/legacy free-text list — one generic subject per name.
       const subjectNames = subjects.split(',').map((s: string) => s.trim()).filter(Boolean);
       for (let i = 0; i < subjectNames.length; i++) {
         const sName = subjectNames[i];
@@ -200,16 +265,11 @@ export async function POST(request: NextRequest) {
         const levelId = getLevelId('CBC') || fallbackLevelId;
         if (!levelId) continue;
 
-        await supabaseAdmin
-          .from('subjects')
-          .insert({
-            code: code,
-            name: sName,
-            academic_level_id: levelId
-          })
-          // Ignore conflicts if subject exists
-          .select()
-          .maybeSingle();
+        await insertSubjectSafe(supabaseAdmin, schoolId, {
+          code,
+          name: sName,
+          academic_level_id: levelId,
+        });
       }
     }
 

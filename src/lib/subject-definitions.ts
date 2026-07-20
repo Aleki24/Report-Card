@@ -19,6 +19,38 @@ export interface PredefinedSubject {
   pathway?: SeniorPathway;
 }
 
+/** Human-readable labels for each education level/band. */
+export const CBC_BAND_LABELS: Record<EducationLevel, string> = {
+  CBC_LOWER_PRIMARY: 'CBC Lower Primary',
+  CBC_UPPER_PRIMARY: 'CBC Upper Primary',
+  CBC_JUNIOR_SCHOOL: 'CBC Junior School',
+  CBC_SENIOR_SCHOOL: 'CBC Senior School',
+  '844_SECONDARY': '8-4-4 Secondary',
+};
+
+/**
+ * Maps a grade's display name (e.g. "Grade 1", "Grade 8", "Form 3") to the
+ * education band it belongs to. Returns null for names that don't match a
+ * known CBC grade or 8-4-4 form (e.g. "Standard 5", "Pre-Primary 1").
+ */
+export function getCBCBandForGradeName(gradeName: string): EducationLevel | null {
+  const n = (gradeName || '').toLowerCase().trim();
+
+  const gradeMatch = n.match(/^grade\s+(\d+)$/);
+  if (gradeMatch) {
+    const num = parseInt(gradeMatch[1], 10);
+    if (num >= 1 && num <= 3) return 'CBC_LOWER_PRIMARY';
+    if (num >= 4 && num <= 6) return 'CBC_UPPER_PRIMARY';
+    if (num >= 7 && num <= 9) return 'CBC_JUNIOR_SCHOOL';
+    if (num >= 10 && num <= 12) return 'CBC_SENIOR_SCHOOL';
+    return null;
+  }
+
+  if (n.startsWith('form ')) return '844_SECONDARY';
+
+  return null;
+}
+
 export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
 
   // ═══════════════════════════════════════════════════════════════

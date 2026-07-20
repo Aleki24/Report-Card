@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Search, BookOpen, Plus, RotateCcw, Layers } from 'lucide-react';
-import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
+import { PREDEFINED_SUBJECTS, EducationLevel, getCBCBandForGradeName, CBC_BAND_LABELS } from '@/lib/subject-definitions';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
 import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
 import type { SubjectCombination } from '@/types';
@@ -37,6 +37,7 @@ export default function SubjectsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
     const [grades, setGrades] = useState<Grade[]>([]);
+    const [streams, setStreams] = useState<{ id: string; grade_id: string }[]>([]);
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
     const [minGroupSize, setMinGroupSize] = useState(15);
     const [activeTab, setActiveTab] = useState<'subjects' | 'combinations'>('subjects');
@@ -51,13 +52,20 @@ export default function SubjectsPage() {
 
     const fetchSubjects = async () => {
         try {
-            const res = await fetch('/api/admin/academic-structure');
-            const json = await res.json();
-            if (res.ok) {
+            const [structureRes, streamsRes] = await Promise.all([
+                fetch('/api/admin/academic-structure'),
+                fetch('/api/school/data?type=grade_streams'),
+            ]);
+            const json = await structureRes.json();
+            if (structureRes.ok) {
                 setSubjects(json.subjects || []);
                 setAcademicLevels(json.academic_levels || []);
                 setGrades(json.grades || []);
                 setCombinations(json.subject_combinations || []);
+            }
+            if (streamsRes.ok) {
+                const streamsJson = await streamsRes.json();
+                setStreams(streamsJson.data || []);
             }
         } catch (err) { console.error('Failed to fetch subjects:', err); }
         finally { setLoading(false); }
@@ -115,6 +123,17 @@ export default function SubjectsPage() {
     };
 
     const getLevelName = (levelId?: string) => levelId ? academicLevels.find(l => l.id === levelId)?.name || '—' : '—';
+
+    // Grades the school actually has classes (streams) in — used to hide
+    // CBC bands / grades the school hasn't set up yet.
+    const gradesWithStreams = grades.filter(g => streams.some(s => s.grade_id === g.id));
+    const availableBands = new Set(
+        gradesWithStreams.map(g => getCBCBandForGradeName(g.name_display)).filter((b): b is EducationLevel => !!b)
+    );
+    // If the school has no classes yet at all, don't restrict — there's nothing to base it on.
+    const bandOptions: EducationLevel[] = availableBands.size > 0
+        ? (['CBC_LOWER_PRIMARY', 'CBC_UPPER_PRIMARY', 'CBC_JUNIOR_SCHOOL', 'CBC_SENIOR_SCHOOL', '844_SECONDARY'] as EducationLevel[]).filter(b => availableBands.has(b))
+        : (['CBC_LOWER_PRIMARY', 'CBC_UPPER_PRIMARY', 'CBC_JUNIOR_SCHOOL', 'CBC_SENIOR_SCHOOL', '844_SECONDARY'] as EducationLevel[]);
 
     const selectedGradeObj = tableLevelFilter ? grades.find(g => g.id === tableLevelFilter) : null;
     const resolvedLevelId = selectedGradeObj ? selectedGradeObj.academic_level_id : tableLevelFilter;
@@ -205,11 +224,9 @@ export default function SubjectsPage() {
                                 }}
                             >
                                 <option value="">All Levels</option>
-                                <option value="CBC_LOWER_PRIMARY">CBC Lower Primary</option>
-                                <option value="CBC_UPPER_PRIMARY">CBC Upper Primary</option>
-                                <option value="CBC_JUNIOR_SCHOOL">CBC Junior School</option>
-                                <option value="CBC_SENIOR_SCHOOL">CBC Senior School</option>
-                                <option value="844_SECONDARY">8-4-4 Secondary</option>
+                                {bandOptions.map(b => (
+                                    <option key={b} value={b}>{CBC_BAND_LABELS[b]}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="flex-[2] min-w-[240px]">
@@ -310,7 +327,7 @@ export default function SubjectsPage() {
                         <select className="input-field text-sm" value={tableLevelFilter} onChange={e => setTableLevelFilter(e.target.value)} style={{ width: 'auto', minWidth: '200px' }}>
                             <option value="">All Levels & Grades</option>
                             {academicLevels.map(al => {
-                                const levelGrades = grades.filter(g => g.academic_level_id === al.id).sort((a, b) => a.numeric_order - b.numeric_order);
+                                const levelGrades = gradesWithStreams.filter(g => g.academic_level_id === al.id).sort((a, b) => a.numeric_order - b.numeric_order);
                                 return (
                                     <optgroup key={al.id} label={al.name}>
                                         <option value={al.id}>All {al.name}</option>
