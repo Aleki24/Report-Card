@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getCurrentStudent } from '@/lib/student/get-current-student';
+import { computeFeeStatus } from '@/lib/fees';
 
 export async function GET(request: NextRequest) {
     try {
@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
             dueDate: f.due_date,
             status: f.status,
             notes: f.notes,
+            termId: f.terms?.id ?? null,
             termName: f.terms?.name,
             studentName: f.students?.users ? `${f.students.users.first_name} ${f.students.users.last_name}` : null,
             admissionNumber: f.students?.admission_number,
@@ -102,6 +103,22 @@ export async function POST(request: NextRequest) {
         if (isNaN(total) || isNaN(paid)) {
             return NextResponse.json({ error: 'total_fee and paid_amount must be numbers' }, { status: 400 });
         }
+        if (total < 0 || paid < 0) {
+            return NextResponse.json({ error: 'total_fee and paid_amount cannot be negative' }, { status: 400 });
+        }
+
+        // Verify the student and term actually belong to this school — prevents
+        // billing records being created against another school's records.
+        const [{ data: studentRow }, { data: termRow }] = await Promise.all([
+            supabase.from('students').select('id, users!inner(school_id)').eq('id', student_id).eq('users.school_id', schoolId).maybeSingle(),
+            supabase.from('terms').select('id').eq('id', term_id).eq('school_id', schoolId).maybeSingle(),
+        ]);
+        if (!studentRow) {
+            return NextResponse.json({ error: 'Student not found in your school' }, { status: 404 });
+        }
+        if (!termRow) {
+            return NextResponse.json({ error: 'Term not found in your school' }, { status: 404 });
+        }
 
         const { data, error } = await supabase
             .from('student_fees')
@@ -113,7 +130,7 @@ export async function POST(request: NextRequest) {
                 paid_amount: paid,
                 due_date: due_date || null,
                 notes: notes || null,
-                status: getFeeStatus(total, paid),
+                status: computeFeeStatus(total, paid),
             }, { onConflict: 'student_id, term_id' })
             .select()
             .single();
@@ -125,10 +142,4 @@ export async function POST(request: NextRequest) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });
     }
-}
-
-function getFeeStatus(total: number, paid: number): string {
-    if (paid <= 0) return 'PENDING';
-    if (paid >= total) return paid > total ? 'OVERPAID' : 'PAID';
-    return 'PARTIAL';
 }

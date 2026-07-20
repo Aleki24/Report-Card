@@ -8,6 +8,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { computeFeeStatus, isOverdue } from '@/lib/fees';
 
 interface FeeRecord {
     id: string;
@@ -17,6 +18,7 @@ interface FeeRecord {
     dueDate: string;
     status: string;
     notes: string;
+    termId: string | null;
     termName: string;
     studentName: string | null;
     admissionNumber: string | null;
@@ -29,6 +31,7 @@ interface StudentOption {
     name: string;
     admission: string;
     gradeStreamId?: string | null;
+    status?: string;
 }
 
 interface TermOption {
@@ -132,11 +135,7 @@ export default function FeesPage() {
     }, [selectedTerm]);
 
     useEffect(() => {
-        Promise.all([
-            fetchFees(),
-            fetch('/api/school/data?type=grade_streams').then(r => r.json()).catch(() => ({})),
-            fetch('/api/school/data?type=terms').then(r => r.json()).catch(() => ({})),
-        ]);
+        fetchFees();
     }, [fetchFees]);
 
     useEffect(() => {
@@ -156,6 +155,7 @@ export default function FeesPage() {
                     name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
                     admission: s.admission_number,
                     gradeStreamId: s.current_grade_stream_id || null,
+                    status: s.status,
                 })));
             }
             if (tData.data) {
@@ -197,12 +197,29 @@ export default function FeesPage() {
         const expected = fees.reduce((s, f) => s + f.totalFee, 0);
         const collected = fees.reduce((s, f) => s + f.paidAmount, 0);
         const outstanding = fees.reduce((s, f) => s + f.balance, 0);
-        const now = new Date();
-        const overdue = fees.filter(f => f.balance > 0 && f.dueDate && new Date(f.dueDate) < now);
+        const overdue = fees.filter(f => isOverdue(f.dueDate, f.balance));
         const overdueAmount = overdue.reduce((s, f) => s + f.balance, 0);
         const collectionRate = expected > 0 ? Math.round((collected / expected) * 100) : 0;
         return { expected, collected, outstanding, overdueCount: overdue.length, overdueAmount, collectionRate };
     }, [fees]);
+
+    // Students who've left the school shouldn't show up as billing targets for new records.
+    const activeStudents = useMemo(() => students.filter(s => !s.status || s.status === 'ACTIVE'), [students]);
+
+    // Students who already have a fee record for the term selected in the Add
+    // modal — hidden from the picker so a fresh "Add" can't silently clobber
+    // an existing balance via the upsert; only reliable when `fees` was
+    // loaded for that same term (the common case, since formTerm defaults to
+    // the page's selected term). Falls back to showing everyone otherwise.
+    const billedAdmissionsForFormTerm = useMemo(() => {
+        if (!formTerm || formTerm !== selectedTerm) return new Set<string>();
+        return new Set(fees.filter(f => f.admissionNumber).map(f => f.admissionNumber as string));
+    }, [fees, formTerm, selectedTerm]);
+
+    const availableStudentsForAdd = useMemo(
+        () => activeStudents.filter(s => !billedAdmissionsForFormTerm.has(s.admission)),
+        [activeStudents, billedAdmissionsForFormTerm]
+    );
 
     const openAdd = () => {
         setEditingFee(null);
@@ -286,11 +303,13 @@ export default function FeesPage() {
         try {
             const res = await fetch(`/api/school/data?type=students&grade_stream_id=${batchStream}`);
             const json = await res.json();
-            const mapped: StudentOption[] = (json.data || []).map((s: any) => ({
-                id: s.id,
-                name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-                admission: s.admission_number || '',
-            }));
+            const mapped: StudentOption[] = (json.data || [])
+                .filter((s: any) => !s.status || s.status === 'ACTIVE')
+                .map((s: any) => ({
+                    id: s.id,
+                    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
+                    admission: s.admission_number || '',
+                }));
             setBatchStudents(mapped);
 
             const feeRes = await fetch(`/api/school/fees?term_id=${batchTerm || ''}`);
@@ -336,7 +355,10 @@ export default function FeesPage() {
         let saved = 0;
 
         const promises = Object.entries(batchEntries).map(async ([studentId, entry]) => {
-            if (!entry.total || parseFloat(entry.total) <= 0) return;
+            // Skip untouched rows, but let an explicit 0 through (fee waivers).
+            if (entry.total === '' || entry.total == null) return;
+            const totalValue = parseFloat(entry.total);
+            if (isNaN(totalValue) || totalValue < 0) return;
             try {
                 const res = await fetch('/api/school/fees', {
                     method: 'POST',
@@ -344,7 +366,7 @@ export default function FeesPage() {
                     body: JSON.stringify({
                         student_id: studentId,
                         term_id: batchTerm,
-                        total_fee: parseFloat(entry.total),
+                        total_fee: totalValue,
                         paid_amount: parseFloat(entry.paid) || 0,
                         due_date: entry.dueDate || null,
                         notes: entry.notes || null,
@@ -530,10 +552,11 @@ export default function FeesPage() {
                                         <tbody>
                                             {batchStudents.map(s => {
                                                 const entry = batchEntries[s.id];
+                                                const hasTotal = !!entry?.total && entry.total !== '';
                                                 const total = parseFloat(entry?.total || '0');
                                                 const paid = parseFloat(entry?.paid || '0');
                                                 const balance = total - paid;
-                                                const status = paid <= 0 ? 'PENDING' : paid >= total ? (paid > total ? 'OVERPAID' : 'PAID') : 'PARTIAL';
+                                                const status = computeFeeStatus(total, paid);
                                                 return (
                                                     <tr key={s.id}>
                                                         <td data-label="Student" className="font-semibold">{s.name}</td>
@@ -541,6 +564,8 @@ export default function FeesPage() {
                                                         <td data-label="Total Fee">
                                                             <input
                                                                 type="number"
+                                                                min="0"
+                                                                step="0.01"
                                                                 className="input-field w-full"
                                                                 style={{ minWidth: 100, height: 32, fontSize: 12 }}
                                                                 placeholder="0"
@@ -551,6 +576,8 @@ export default function FeesPage() {
                                                         <td data-label="Paid">
                                                             <input
                                                                 type="number"
+                                                                min="0"
+                                                                step="0.01"
                                                                 className="input-field w-full"
                                                                 style={{ minWidth: 100, height: 32, fontSize: 12 }}
                                                                 placeholder="0"
@@ -559,7 +586,7 @@ export default function FeesPage() {
                                                             />
                                                         </td>
                                                         <td data-label="Balance" style={{ fontFamily: 'monospace', color: balanceColor(balance), fontWeight: 600 }}>
-                                                            {total > 0 ? balance.toLocaleString() : '—'}
+                                                            {hasTotal ? balance.toLocaleString() : '—'}
                                                         </td>
                                                         <td data-label="Due Date">
                                                             <input
@@ -580,7 +607,7 @@ export default function FeesPage() {
                                                                 onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)}
                                                             />
                                                         </td>
-                                                        <td data-label="Status">{total > 0 ? statusBadge(status) : '—'}</td>
+                                                        <td data-label="Status">{hasTotal ? statusBadge(status) : '—'}</td>
                                                     </tr>
                                                 );
                                             })}
@@ -746,16 +773,21 @@ export default function FeesPage() {
                                             className="input-field w-full"
                                         >
                                             <option value="">Select student...</option>
-                                            {students.map(s => (
+                                            {availableStudentsForAdd.map(s => (
                                                 <option key={s.id} value={s.id}>{s.name} ({s.admission})</option>
                                             ))}
                                         </select>
+                                        {billedAdmissionsForFormTerm.size > 0 && (
+                                            <p className="mt-1 text-[11px] text-muted-foreground">
+                                                {billedAdmissionsForFormTerm.size} student(s) already have a record for this term and are hidden here — edit them from the list instead.
+                                            </p>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Term *</label>
                                         <select
                                             value={formTerm}
-                                            onChange={e => setFormTerm(e.target.value)}
+                                            onChange={e => { setFormTerm(e.target.value); setFormStudent(''); }}
                                             className="input-field w-full"
                                         >
                                             <option value="">Select term...</option>
@@ -768,11 +800,11 @@ export default function FeesPage() {
                             )}
                             <div>
                                 <label className="mb-1 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
-                                <input type="number" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
+                                <input type="number" min="0" step="0.01" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
                             </div>
                             <div>
                                 <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paid Amount (KShs)</label>
-                                <input type="number" value={formPaid} onChange={e => setFormPaid(e.target.value)} placeholder="e.g. 20000" className="input-field w-full" />
+                                <input type="number" min="0" step="0.01" value={formPaid} onChange={e => setFormPaid(e.target.value)} placeholder="e.g. 20000" className="input-field w-full" />
                             </div>
                             <div>
                                 <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due Date</label>

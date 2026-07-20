@@ -7,6 +7,7 @@ import StatCard from '@/components/dashboard/StatCard';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge } from '@/components/ui';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
+import { isOverdue } from '@/lib/fees';
 
 type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
@@ -43,7 +44,7 @@ export default function StudentFeesPage() {
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
     const totalBalance = fees.reduce((sum, f) => sum + f.balance, 0);
-    const overdueCount = fees.filter(f => f.balance > 0 && f.dueDate && new Date(f.dueDate) < new Date()).length;
+    const overdueCount = fees.filter(f => isOverdue(f.dueDate, f.balance)).length;
 
     const columns: DataTableColumn<FeeRecord>[] = [
         { key: 'termName', header: 'Term', render: f => <span className="font-semibold text-foreground">{f.termName || '—'}</span> },
