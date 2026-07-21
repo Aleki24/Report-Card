@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { computeFeeStatus } from '@/lib/fees';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -35,34 +36,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         const body = await request.json();
 
+        // paid_amount/status are derived from the fee_payments ledger (see
+        // POST /api/school/fees/[id]/payments) and can't be set directly —
+        // only total_fee, due_date, and notes are editable here.
         const updateData: Record<string, any> = {};
         if (body.total_fee != null) {
             updateData.total_fee = Number(body.total_fee);
             if (isNaN(updateData.total_fee)) {
                 return NextResponse.json({ error: 'total_fee must be a number' }, { status: 400 });
             }
-        }
-        if (body.paid_amount != null) {
-            updateData.paid_amount = Number(body.paid_amount);
-            if (isNaN(updateData.paid_amount)) {
-                return NextResponse.json({ error: 'paid_amount must be a number' }, { status: 400 });
+            if (updateData.total_fee < 0) {
+                return NextResponse.json({ error: 'total_fee cannot be negative' }, { status: 400 });
             }
         }
         if (body.due_date !== undefined) updateData.due_date = body.due_date;
         if (body.notes !== undefined) updateData.notes = body.notes;
         updateData.updated_at = new Date().toISOString();
 
-        if (body.total_fee != null || body.paid_amount != null) {
+        if (body.total_fee != null) {
             const { data: current } = await supabase
                 .from('student_fees')
-                .select('total_fee, paid_amount')
+                .select('paid_amount')
                 .eq('id', id)
                 .single();
 
             if (current) {
-                const total = body.total_fee != null ? Number(body.total_fee) : Number(current.total_fee);
-                const paid = body.paid_amount != null ? Number(body.paid_amount) : Number(current.paid_amount);
-                updateData.status = paid <= 0 ? 'PENDING' : paid >= total ? (paid > total ? 'OVERPAID' : 'PAID') : 'PARTIAL';
+                updateData.status = computeFeeStatus(updateData.total_fee, Number(current.paid_amount));
             }
         }
 

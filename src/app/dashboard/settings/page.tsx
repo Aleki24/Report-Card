@@ -8,6 +8,7 @@ import { Card, CardContent, Button } from '@/components/ui';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
+import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { SchoolForm } from '@/components/settings/SchoolForm';
 import { toast } from 'sonner';
 
@@ -21,7 +22,7 @@ interface Term { id: string; academic_year_id: string; name: string; start_date:
 
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar' | 'payments'>('profile');
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -176,6 +177,7 @@ export default function SettingsPage() {
     { key: 'academic' as const, label: 'Academic Structure' },
     { key: 'grading' as const, label: 'Grading Systems' },
     { key: 'calendar' as const, label: '📅 Academic Calendar' },
+    { key: 'payments' as const, label: 'Payments' },
   ];
 
   return (
@@ -195,7 +197,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {loading && activeTab !== 'profile' ? (
+      {loading && activeTab !== 'profile' && activeTab !== 'payments' ? (
         <div className="p-12 text-center text-muted-foreground">Loading configuration...</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -236,6 +238,7 @@ export default function SettingsPage() {
           )}
           {activeTab === 'academic' && <AcademicStructureTab academicLevels={academicLevels} grades={grades} />}
           {activeTab === 'grading' && <GradingSystemsTab academicLevels={academicLevels} gradingSystems={gradingSystems} gradingScales={gradingScales} />}
+          {activeTab === 'payments' && <PaymentsTab />}
           {activeTab === 'calendar' && (
             <AcademicCalendarTab
               academicYears={academicYears} terms={terms} selectedCalYearId={selectedCalYearId}
