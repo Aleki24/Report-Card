@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, ChevronDown, CircleDollarSign, History, Download, Ban, Receipt } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { computeFeeStatus, isOverdue } from '@/lib/fees';
+import { computeFeeStatus, isOverdue, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
 
 interface FeeRecord {
     id: string;
@@ -96,7 +96,6 @@ export default function FeesPage() {
     const [formStudent, setFormStudent] = useState('');
     const [formTerm, setFormTerm] = useState('');
     const [formTotal, setFormTotal] = useState('');
-    const [formPaid, setFormPaid] = useState('');
     const [formDueDate, setFormDueDate] = useState('');
     const [formNotes, setFormNotes] = useState('');
 
@@ -109,6 +108,22 @@ export default function FeesPage() {
     const [batchEntries, setBatchEntries] = useState<Record<string, { total: string; paid: string; dueDate: string; notes: string; existing: FeeRecord | null }>>({});
     const [batchSaving, setBatchSaving] = useState(false);
     const [batchMsg, setBatchMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Record-payment modal
+    const [payingFee, setPayingFee] = useState<FeeRecord | null>(null);
+    const [payAmount, setPayAmount] = useState('');
+    const [payMethod, setPayMethod] = useState<FeePaymentMethod>('CASH');
+    const [payPayerName, setPayPayerName] = useState('');
+    const [payPhone, setPayPhone] = useState('');
+    const [payMpesaRef, setPayMpesaRef] = useState('');
+    const [payNotes, setPayNotes] = useState('');
+    const [paySaving, setPaySaving] = useState(false);
+    const [payError, setPayError] = useState('');
+
+    // Payment history modal
+    const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
+    const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -226,7 +241,6 @@ export default function FeesPage() {
         setFormStudent('');
         setFormTerm(selectedTerm);
         setFormTotal('');
-        setFormPaid('');
         setFormDueDate('');
         setFormNotes('');
         setShowAddModal(true);
@@ -241,7 +255,6 @@ export default function FeesPage() {
     const openEdit = (fee: FeeRecord) => {
         setEditingFee(fee);
         setFormTotal(String(fee.totalFee));
-        setFormPaid(String(fee.paidAmount));
         setFormDueDate(fee.dueDate || '');
         setFormNotes(fee.notes || '');
         setShowAddModal(true);
@@ -257,7 +270,6 @@ export default function FeesPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         total_fee: parseFloat(formTotal),
-                        paid_amount: parseFloat(formPaid) || 0,
                         due_date: formDueDate || null,
                         notes: formNotes || null,
                     }),
@@ -271,7 +283,6 @@ export default function FeesPage() {
                         student_id: formStudent,
                         term_id: formTerm,
                         total_fee: parseFloat(formTotal),
-                        paid_amount: parseFloat(formPaid) || 0,
                         due_date: formDueDate || null,
                         notes: formNotes || null,
                     }),
@@ -292,6 +303,84 @@ export default function FeesPage() {
             await fetchFees();
         } catch (err) {
             console.error('Delete failed:', err);
+        }
+    };
+
+    // ── Record payment ──
+
+    const openPay = (fee: FeeRecord) => {
+        setPayingFee(fee);
+        setPayAmount(fee.balance > 0 ? String(fee.balance) : '');
+        setPayMethod('CASH');
+        setPayPayerName('');
+        setPayPhone('');
+        setPayMpesaRef('');
+        setPayNotes('');
+        setPayError('');
+    };
+
+    const submitPayment = async () => {
+        if (!payingFee) return;
+        const amountValue = parseFloat(payAmount);
+        if (!payAmount || isNaN(amountValue) || amountValue <= 0) {
+            setPayError('Enter a valid amount greater than 0.');
+            return;
+        }
+        setPaySaving(true);
+        setPayError('');
+        try {
+            const res = await fetch(`/api/school/fees/${payingFee.id}/payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: amountValue,
+                    method: payMethod,
+                    payer_name: payPayerName || null,
+                    phone_number: payPhone || null,
+                    mpesa_receipt_number: payMethod === 'MPESA' ? (payMpesaRef || null) : null,
+                    notes: payNotes || null,
+                }),
+            });
+            if (!res.ok) {
+                const errData = await res.json();
+                setPayError(errData.error || 'Failed to record payment.');
+                setPaySaving(false);
+                return;
+            }
+            setPayingFee(null);
+            await fetchFees();
+        } catch (err) {
+            console.error('Record payment failed:', err);
+            setPayError('Failed to record payment.');
+        }
+        setPaySaving(false);
+    };
+
+    // ── Payment history ──
+
+    const openHistory = async (fee: FeeRecord) => {
+        setHistoryFee(fee);
+        setHistoryLoading(true);
+        try {
+            const res = await fetch(`/api/school/fees/${fee.id}/payments`);
+            const json = await res.json();
+            setHistoryPayments(json.data || []);
+        } catch (err) {
+            console.error('Failed to load payment history:', err);
+            setHistoryPayments([]);
+        }
+        setHistoryLoading(false);
+    };
+
+    const voidPayment = async (payment: FeePayment) => {
+        if (!historyFee) return;
+        if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
+        try {
+            await fetch(`/api/school/fees/${historyFee.id}/payments/${payment.id}`, { method: 'DELETE' });
+            await openHistory(historyFee);
+            await fetchFees();
+        } catch (err) {
+            console.error('Void failed:', err);
         }
     };
 
@@ -367,7 +456,6 @@ export default function FeesPage() {
                         student_id: studentId,
                         term_id: batchTerm,
                         total_fee: totalValue,
-                        paid_amount: parseFloat(entry.paid) || 0,
                         due_date: entry.dueDate || null,
                         notes: entry.notes || null,
                     }),
@@ -375,9 +463,24 @@ export default function FeesPage() {
                 if (!res.ok) {
                     const errData = await res.json();
                     errors.push(`${batchStudents.find(s => s.id === studentId)?.name || studentId}: ${errData.error}`);
-                } else {
-                    saved++;
+                    return;
                 }
+                const { data: savedFee } = await res.json();
+
+                // paid_amount is ledger-derived — only log a payment for the
+                // NEW money entered here (vs. what was already recorded), so
+                // resaving a batch screen unchanged never double-counts.
+                const enteredPaid = parseFloat(entry.paid) || 0;
+                const alreadyPaid = entry.existing?.paidAmount ?? 0;
+                const delta = enteredPaid - alreadyPaid;
+                if (delta > 0 && savedFee?.id) {
+                    await fetch(`/api/school/fees/${savedFee.id}/payments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: delta, method: 'OTHER', notes: 'Batch entry' }),
+                    });
+                }
+                saved++;
             } catch {
                 errors.push(batchStudents.find(s => s.id === studentId)?.name || studentId);
             }
@@ -409,6 +512,14 @@ export default function FeesPage() {
 
     const totalRecords = fees.length;
 
+    const exportExcel = () => {
+        const params = new URLSearchParams();
+        if (selectedTerm) params.set('term_id', selectedTerm);
+        if (statusFilter) params.set('status', statusFilter);
+        if (streamFilter) params.set('grade_stream_id', streamFilter);
+        window.location.href = `/api/school/fees/export?${params}`;
+    };
+
     return (
         <div>
             <PageHeader
@@ -428,6 +539,12 @@ export default function FeesPage() {
                                 <option key={t.id} value={t.id}>{t.name}</option>
                             ))}
                         </select>
+
+                        {mode === 'list' && (
+                            <button className="btn-secondary" onClick={exportExcel} title="Export the current view to Excel">
+                                <Download size={14} /> Export
+                            </button>
+                        )}
 
                         {mode === 'list' ? (
                             <div className="relative" ref={actionsRef}>
@@ -753,6 +870,8 @@ export default function FeesPage() {
                             rowKey={fee => fee.id}
                             rowActions={fee => (
                                 <span className="whitespace-nowrap">
+                                    <button className="btn-icon text-primary hover:text-primary" onClick={() => openPay(fee)} title="Record Payment"><CircleDollarSign size={14} /></button>
+                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment History"><History size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit"><Edit3 size={14} /></button>
                                     <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete"><Trash2 size={14} /></button>
                                 </span>
@@ -801,10 +920,11 @@ export default function FeesPage() {
                             <div>
                                 <label className="mb-1 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
                                 <input type="number" min="0" step="0.01" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paid Amount (KShs)</label>
-                                <input type="number" min="0" step="0.01" value={formPaid} onChange={e => setFormPaid(e.target.value)} placeholder="e.g. 20000" className="input-field w-full" />
+                                {editingFee && (
+                                    <p className="mt-1 text-[11px] text-muted-foreground">
+                                        {formatCurrency(editingFee.paidAmount)} paid to date — use <strong>Record Payment</strong> from the list to log a new payment.
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due Date</label>
@@ -821,6 +941,125 @@ export default function FeesPage() {
                                 </button>
                             </div>
                         </div>
+                    </Modal>
+
+                    {/* ── Record Payment ── */}
+                    <Modal isOpen={!!payingFee} onClose={() => setPayingFee(null)} title="Record Payment">
+                        {payingFee && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                <div className="rounded-xl bg-muted/40 p-3 text-sm">
+                                    <div className="font-semibold">{payingFee.studentName}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {payingFee.admissionNumber} · {payingFee.termName} · Balance {formatCurrency(payingFee.balance)}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
+                                    <input type="number" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Payment Method</label>
+                                    <select value={payMethod} onChange={e => setPayMethod(e.target.value as FeePaymentMethod)} className="input-field w-full">
+                                        {FEE_PAYMENT_METHODS.map(m => (
+                                            <option key={m} value={m}>{m === 'MPESA' ? 'M-Pesa' : m.charAt(0) + m.slice(1).toLowerCase()}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {payMethod === 'MPESA' && (
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">M-Pesa Receipt Code</label>
+                                        <input type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
+                                        <p className="mt-1 text-[11px] text-muted-foreground">For a paybill payment confirmed by SMS — enter it here until M-Pesa auto-reconciliation is set up.</p>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paid By (optional)</label>
+                                    <input type="text" value={payPayerName} onChange={e => setPayPayerName(e.target.value)} placeholder="Guardian name" className="input-field w-full" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
+                                    <input type="text" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Notes</label>
+                                    <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} rows={2} className="input-field w-full resize-y" />
+                                </div>
+                                {payError && <p className="text-sm text-destructive">{payError}</p>}
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                                    <button className="btn-secondary" onClick={() => setPayingFee(null)}>Cancel</button>
+                                    <button className="btn-primary" onClick={submitPayment} disabled={paySaving}>
+                                        {paySaving ? 'Saving...' : 'Record Payment'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </Modal>
+
+                    {/* ── Payment History ── */}
+                    <Modal isOpen={!!historyFee} onClose={() => setHistoryFee(null)} title="Payment History" size="lg">
+                        {historyFee && (
+                            <div>
+                                <div className="mb-4 rounded-xl bg-muted/40 p-3 text-sm">
+                                    <div className="font-semibold">{historyFee.studentName}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {historyFee.admissionNumber} · {historyFee.termName} · {formatCurrency(historyFee.paidAmount)} of {formatCurrency(historyFee.totalFee)} paid
+                                    </div>
+                                </div>
+                                {historyLoading ? (
+                                    <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+                                ) : historyPayments.length === 0 ? (
+                                    <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet.</p>
+                                ) : (
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Receipt</th>
+                                                    <th>Date</th>
+                                                    <th>Method</th>
+                                                    <th>Amount</th>
+                                                    <th>Status</th>
+                                                    <th />
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {historyPayments.map(p => (
+                                                    <tr key={p.id}>
+                                                        <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
+                                                        <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
+                                                        <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                        <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
+                                                        <td data-label="Status">
+                                                            <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                                                                {p.status}
+                                                            </span>
+                                                        </td>
+                                                        <td data-label="" className="whitespace-nowrap text-right">
+                                                            {p.status !== 'CANCELLED' && (
+                                                                <>
+                                                                    <a
+                                                                        className="btn-icon text-muted-foreground hover:text-foreground"
+                                                                        href={`/api/school/fees/payments/${p.id}/receipt`}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        title="Download Receipt"
+                                                                    >
+                                                                        <Receipt size={14} />
+                                                                    </a>
+                                                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
+                                                                        <Ban size={14} />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </Modal>
                 </>
             )}

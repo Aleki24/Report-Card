@@ -91,20 +91,19 @@ export async function POST(request: NextRequest) {
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
 
         const body = await request.json();
-        const { student_id, term_id, total_fee, paid_amount, due_date, notes } = body;
+        const { student_id, term_id, total_fee, due_date, notes } = body;
 
         if (!student_id || !term_id || total_fee == null) {
             return NextResponse.json({ error: 'student_id, term_id, and total_fee are required' }, { status: 400 });
         }
 
         const total = Number(total_fee);
-        const paid = Number(paid_amount ?? 0);
 
-        if (isNaN(total) || isNaN(paid)) {
-            return NextResponse.json({ error: 'total_fee and paid_amount must be numbers' }, { status: 400 });
+        if (isNaN(total)) {
+            return NextResponse.json({ error: 'total_fee must be a number' }, { status: 400 });
         }
-        if (total < 0 || paid < 0) {
-            return NextResponse.json({ error: 'total_fee and paid_amount cannot be negative' }, { status: 400 });
+        if (total < 0) {
+            return NextResponse.json({ error: 'total_fee cannot be negative' }, { status: 400 });
         }
 
         // Verify the student and term actually belong to this school — prevents
@@ -120,22 +119,51 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Term not found in your school' }, { status: 404 });
         }
 
-        const { data, error } = await supabase
+        // paid_amount/status are derived from the fee_payments ledger (see
+        // POST /api/school/fees/[id]/payments), so this only ever touches
+        // total_fee/due_date/notes — never overwrite an existing row's
+        // ledger-derived paid_amount by blindly upserting it.
+        const { data: existing } = await supabase
             .from('student_fees')
-            .upsert({
-                school_id: schoolId,
-                student_id,
-                term_id,
-                total_fee: total,
-                paid_amount: paid,
-                due_date: due_date || null,
-                notes: notes || null,
-                status: computeFeeStatus(total, paid),
-            }, { onConflict: 'student_id, term_id' })
-            .select()
-            .single();
+            .select('id, paid_amount')
+            .eq('student_id', student_id)
+            .eq('term_id', term_id)
+            .maybeSingle();
 
-        if (error) throw error;
+        let data;
+        if (existing) {
+            const { data: updated, error } = await supabase
+                .from('student_fees')
+                .update({
+                    total_fee: total,
+                    due_date: due_date || null,
+                    notes: notes || null,
+                    status: computeFeeStatus(total, Number(existing.paid_amount)),
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', existing.id)
+                .select()
+                .single();
+            if (error) throw error;
+            data = updated;
+        } else {
+            const { data: inserted, error } = await supabase
+                .from('student_fees')
+                .insert({
+                    school_id: schoolId,
+                    student_id,
+                    term_id,
+                    total_fee: total,
+                    paid_amount: 0,
+                    due_date: due_date || null,
+                    notes: notes || null,
+                    status: computeFeeStatus(total, 0),
+                })
+                .select()
+                .single();
+            if (error) throw error;
+            data = inserted;
+        }
 
         return NextResponse.json({ data });
     } catch (err: unknown) {

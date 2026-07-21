@@ -34,3 +34,53 @@ export function isOverdue(dueDate: string | null | undefined, balance: number): 
     const endOfDueDay = new Date(y, m - 1, d, 23, 59, 59, 999);
     return endOfDueDay.getTime() < Date.now();
 }
+
+/**
+ * Individual entries in the fee_payments ledger. student_fees.paid_amount
+ * and .status are derived from the SUM of COMPLETED rows here by a DB
+ * trigger (see supabase/migrations/20260720191758_add_fee_payments_ledger.sql)
+ * — every entry point (manual recording, M-Pesa STK Push, M-Pesa C2B
+ * confirmation) writes here rather than touching the aggregate directly.
+ */
+export type FeePaymentMethod = 'MPESA' | 'CASH' | 'BANK' | 'CHEQUE' | 'OTHER';
+export type FeePaymentRecordStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export const FEE_PAYMENT_METHODS: FeePaymentMethod[] = ['MPESA', 'CASH', 'BANK', 'CHEQUE', 'OTHER'];
+
+export interface FeePayment {
+    id: string;
+    studentFeeId: string | null;
+    receiptNumber: string;
+    amount: number;
+    method: FeePaymentMethod;
+    status: FeePaymentRecordStatus;
+    phoneNumber: string | null;
+    payerName: string | null;
+    mpesaReceiptNumber: string | null;
+    mpesaCheckoutRequestId: string | null;
+    unmatchedAccountReference: string | null;
+    notes: string | null;
+    recordedBy: string | null;
+    paidAt: string;
+    createdAt: string;
+}
+
+export function mapFeePaymentRow(p: any): FeePayment {
+    return {
+        id: p.id,
+        studentFeeId: p.student_fee_id,
+        receiptNumber: p.receipt_number,
+        amount: Number(p.amount),
+        method: p.method,
+        status: p.status,
+        phoneNumber: p.phone_number,
+        payerName: p.payer_name,
+        mpesaReceiptNumber: p.mpesa_receipt_number,
+        mpesaCheckoutRequestId: p.mpesa_checkout_request_id,
+        unmatchedAccountReference: p.unmatched_account_reference,
+        notes: p.notes,
+        recordedBy: p.recorded_by,
+        paidAt: p.paid_at,
+        createdAt: p.created_at,
+    };
+}

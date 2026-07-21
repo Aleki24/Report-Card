@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Wallet, CheckCircle2, Clock3, AlertTriangle } from 'lucide-react';
+import { Wallet, CheckCircle2, Clock3, AlertTriangle, Receipt } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge } from '@/components/ui';
+import { Modal } from '@/components/ui/Modal';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
-import { isOverdue } from '@/lib/fees';
+import { isOverdue, type FeePayment } from '@/lib/fees';
 
 type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
@@ -36,10 +37,26 @@ function formatCurrency(amount: number): string {
 export default function StudentFeesPage() {
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
+    const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     useEffect(() => {
         fetch('/api/school/fees').then(r => r.json()).then(j => setFees(j.data || [])).catch(() => {}).finally(() => setLoading(false));
     }, []);
+
+    const openHistory = async (fee: FeeRecord) => {
+        setHistoryFee(fee);
+        setHistoryLoading(true);
+        try {
+            const res = await fetch(`/api/school/fees/${fee.id}/payments`);
+            const json = await res.json();
+            setHistoryPayments(json.data || []);
+        } catch {
+            setHistoryPayments([]);
+        }
+        setHistoryLoading(false);
+    };
 
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
@@ -83,8 +100,65 @@ export default function StudentFeesPage() {
                 rowKey={f => f.id}
                 loading={loading}
                 mobileTitleKey="termName"
+                onRowClick={openHistory}
                 emptyState={<EmptyState icon={<Wallet className="h-6 w-6" />} title="No fee records yet" description="Your school hasn't billed any fees to your account yet." />}
             />
+            {fees.length > 0 && !loading && (
+                <p className="mt-2 text-xs text-muted-foreground">Tap a row to see payment history and download receipts.</p>
+            )}
+
+            <Modal isOpen={!!historyFee} onClose={() => setHistoryFee(null)} title="Payment History" size="lg">
+                {historyFee && (
+                    <div>
+                        <div className="mb-4 rounded-xl bg-muted/40 p-3 text-sm">
+                            <div className="font-semibold">{historyFee.termName}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {formatCurrency(historyFee.paidAmount)} of {formatCurrency(historyFee.totalFee)} paid
+                            </div>
+                        </div>
+                        {historyLoading ? (
+                            <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
+                        ) : historyPayments.length === 0 ? (
+                            <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet.</p>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Receipt</th>
+                                            <th>Date</th>
+                                            <th>Method</th>
+                                            <th>Amount</th>
+                                            <th />
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {historyPayments.filter(p => p.status !== 'CANCELLED').map(p => (
+                                            <tr key={p.id}>
+                                                <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
+                                                <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
+                                                <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
+                                                <td data-label="" className="text-right">
+                                                    <a
+                                                        className="btn-icon text-muted-foreground hover:text-foreground"
+                                                        href={`/api/school/fees/payments/${p.id}/receipt`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        title="Download Receipt"
+                                                    >
+                                                        <Receipt size={14} />
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 }
