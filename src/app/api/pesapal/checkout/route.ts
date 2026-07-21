@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
+import { submitPesapalOrder, type PesapalEnvironment } from '@/lib/pesapal';
 
 export const runtime = 'nodejs';
 
-/** Initiates an M-Pesa STK Push ("Pay with M-Pesa") prompt for a fee record. */
+/** Initiates a Pesapal hosted-checkout order for a fee record; returns a redirect_url to send the payer to. */
 export async function POST(request: NextRequest) {
     try {
         const { userId } = await auth();
@@ -20,16 +20,16 @@ export async function POST(request: NextRequest) {
         if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await request.json();
-        const { student_fee_id, phone_number, amount } = body;
-        if (!student_fee_id || !phone_number) {
-            return NextResponse.json({ error: 'student_fee_id and phone_number are required' }, { status: 400 });
+        const { student_fee_id, amount, phone_number, email } = body;
+        if (!student_fee_id) {
+            return NextResponse.json({ error: 'student_fee_id is required' }, { status: 400 });
         }
 
         const { data: fee } = await supabase
             .from('student_fees')
             .select(`
-                id, school_id, student_id, total_fee, paid_amount, term_id,
-                students ( admission_number, users ( first_name, last_name ) )
+                id, school_id, student_id, total_fee, paid_amount,
+                students ( admission_number, users ( first_name, last_name, email ) )
             `)
             .eq('id', student_fee_id)
             .maybeSingle();
@@ -49,33 +49,33 @@ export async function POST(request: NextRequest) {
 
         const { data: settings } = await supabase
             .from('school_payment_settings')
-            .select('environment, shortcode, passkey, consumer_key, consumer_secret, active_provider')
+            .select('active_provider, pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret, pesapal_ipn_id')
             .eq('school_id', fee.school_id)
             .maybeSingle();
 
-        if (!settings || settings.active_provider !== 'DARAJA' || !settings.shortcode || !settings.passkey || !settings.consumer_key || !settings.consumer_secret) {
-            return NextResponse.json({ error: 'M-Pesa payments are not set up for this school yet. Ask an admin to configure it in Settings.' }, { status: 400 });
+        if (!settings || settings.active_provider !== 'PESAPAL' || !settings.pesapal_consumer_key || !settings.pesapal_consumer_secret || !settings.pesapal_ipn_id) {
+            return NextResponse.json({ error: 'Pesapal payments are not set up for this school yet. Ask an admin to configure it in Settings.' }, { status: 400 });
         }
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
         if (!appUrl) {
-            return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the M-Pesa callback URL' }, { status: 500 });
+            return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the Pesapal callback URL' }, { status: 500 });
         }
 
         const student = fee.students as any;
         const admissionNumber = student?.admission_number || 'FEES';
 
-        // Reserve the ledger row before calling Safaricom so a callback that
-        // arrives moments later always has something to match against.
+        // Reserve the ledger row before calling Pesapal so the IPN webhook
+        // (which can arrive within seconds) always has something to match.
         const { data: payment, error: insertError } = await supabase
             .from('fee_payments')
             .insert({
                 school_id: fee.school_id,
                 student_fee_id: fee.id,
                 amount: amountValue,
-                method: 'MPESA',
+                method: 'PESAPAL',
                 status: 'PENDING',
-                phone_number: phone_number,
+                phone_number: phone_number || null,
                 recorded_by: userId,
             })
             .select('id')
@@ -83,38 +83,40 @@ export async function POST(request: NextRequest) {
         if (insertError) throw insertError;
 
         try {
-            const stkResponse = await initiateStkPush({
+            const order = await submitPesapalOrder({
                 creds: {
-                    environment: settings.environment as MpesaEnvironment,
-                    shortcode: settings.shortcode,
-                    passkey: settings.passkey,
-                    consumerKey: settings.consumer_key,
-                    consumerSecret: settings.consumer_secret,
+                    environment: settings.pesapal_environment as PesapalEnvironment,
+                    consumerKey: settings.pesapal_consumer_key,
+                    consumerSecret: settings.pesapal_consumer_secret,
                 },
-                phoneNumber: phone_number,
+                ipnId: settings.pesapal_ipn_id,
+                merchantReference: payment.id,
                 amount: amountValue,
-                accountReference: admissionNumber,
-                transactionDesc: 'School Fees',
-                callbackUrl: `${appUrl}/api/mpesa/stkpush/callback/${fee.school_id}`,
+                description: `School Fees - ${admissionNumber}`,
+                callbackUrl: `${appUrl}/pesapal/callback`,
+                payerEmail: email || student?.users?.email || undefined,
+                payerPhone: phone_number || undefined,
+                payerFirstName: student?.users?.first_name || undefined,
+                payerLastName: student?.users?.last_name || undefined,
             });
 
             await supabase
                 .from('fee_payments')
                 .update({
-                    mpesa_checkout_request_id: stkResponse.CheckoutRequestID,
-                    mpesa_merchant_request_id: stkResponse.MerchantRequestID,
+                    pesapal_order_tracking_id: order.order_tracking_id,
+                    pesapal_merchant_reference: order.merchant_reference,
                 })
                 .eq('id', payment.id);
 
             return NextResponse.json({
                 data: {
                     paymentId: payment.id,
-                    checkoutRequestId: stkResponse.CheckoutRequestID,
-                    customerMessage: stkResponse.CustomerMessage,
+                    orderTrackingId: order.order_tracking_id,
+                    redirectUrl: order.redirect_url,
                 },
             });
-        } catch (stkError: unknown) {
-            const message = stkError instanceof Error ? stkError.message : 'STK Push failed';
+        } catch (orderError: unknown) {
+            const message = orderError instanceof Error ? orderError.message : 'Pesapal checkout failed';
             await supabase
                 .from('fee_payments')
                 .update({ status: 'FAILED', notes: message })

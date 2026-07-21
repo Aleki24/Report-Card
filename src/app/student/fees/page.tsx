@@ -8,7 +8,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge } from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
-import { isOverdue, type FeePayment } from '@/lib/fees';
+import { isOverdue, type FeePayment, type PaymentProvider } from '@/lib/fees';
 
 type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
@@ -42,7 +42,7 @@ export default function StudentFeesPage() {
     const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
-    const [mpesaActive, setMpesaActive] = useState(false);
+    const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('NONE');
 
     const [payingFee, setPayingFee] = useState<FeeRecord | null>(null);
     const [payPhone, setPayPhone] = useState('');
@@ -51,12 +51,13 @@ export default function StudentFeesPage() {
     const [payError, setPayError] = useState('');
     const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
     const pollDeadline = useRef<number>(0);
+    const pesapalWindow = useRef<Window | null>(null);
 
     const fetchFees = () => fetch('/api/school/fees').then(r => r.json()).then(j => setFees(j.data || [])).catch(() => {});
 
     useEffect(() => {
         fetchFees().finally(() => setLoading(false));
-        fetch('/api/school/payment-settings/status').then(r => r.json()).then(j => setMpesaActive(!!j.data?.active)).catch(() => {});
+        fetch('/api/school/payment-settings/status').then(r => r.json()).then(j => setPaymentProvider(j.data?.provider || 'NONE')).catch(() => {});
         return () => { if (pollTimer.current) clearInterval(pollTimer.current); };
     }, []);
 
@@ -83,7 +84,34 @@ export default function StudentFeesPage() {
 
     const closePay = () => {
         if (pollTimer.current) clearInterval(pollTimer.current);
+        if (pesapalWindow.current && !pesapalWindow.current.closed) pesapalWindow.current.close();
         setPayingFee(null);
+    };
+
+    const pollUntilResolved = (fetchStatusUrl: string) => {
+        pollDeadline.current = Date.now() + 90_000;
+        pollTimer.current = setInterval(async () => {
+            try {
+                const statusRes = await fetch(fetchStatusUrl);
+                const statusJson = await statusRes.json();
+                const status = statusJson.data?.status;
+                if (status === 'COMPLETED') {
+                    if (pollTimer.current) clearInterval(pollTimer.current);
+                    setPayState('success');
+                    await fetchFees();
+                } else if (status === 'FAILED' || status === 'CANCELLED') {
+                    if (pollTimer.current) clearInterval(pollTimer.current);
+                    setPayState('failed');
+                    setPayError(statusJson.data?.notes || 'The payment was not completed.');
+                } else if (Date.now() > pollDeadline.current) {
+                    if (pollTimer.current) clearInterval(pollTimer.current);
+                    setPayState('failed');
+                    setPayError('Timed out waiting for confirmation. If you completed the payment, it will still be recorded shortly.');
+                }
+            } catch {
+                // transient network hiccup — keep polling until the deadline
+            }
+        }, 3000);
     };
 
     const submitStkPush = async () => {
@@ -106,37 +134,52 @@ export default function StudentFeesPage() {
                 setPayError(json.error || 'Failed to send the M-Pesa prompt.');
                 return;
             }
-
             setPayState('waiting');
-            const checkoutRequestId = json.data.checkoutRequestId;
-            pollDeadline.current = Date.now() + 90_000;
-            pollTimer.current = setInterval(async () => {
-                try {
-                    const statusRes = await fetch(`/api/mpesa/stkpush/status?checkout_request_id=${checkoutRequestId}`);
-                    const statusJson = await statusRes.json();
-                    const status = statusJson.data?.status;
-                    if (status === 'COMPLETED') {
-                        if (pollTimer.current) clearInterval(pollTimer.current);
-                        setPayState('success');
-                        await fetchFees();
-                    } else if (status === 'FAILED' || status === 'CANCELLED') {
-                        if (pollTimer.current) clearInterval(pollTimer.current);
-                        setPayState('failed');
-                        setPayError(statusJson.data?.notes || 'The M-Pesa payment was not completed.');
-                    } else if (Date.now() > pollDeadline.current) {
-                        if (pollTimer.current) clearInterval(pollTimer.current);
-                        setPayState('failed');
-                        setPayError('Timed out waiting for confirmation. If you completed it on your phone, it will still be recorded shortly.');
-                    }
-                } catch {
-                    // transient network hiccup — keep polling until the deadline
-                }
-            }, 3000);
+            pollUntilResolved(`/api/mpesa/stkpush/status?checkout_request_id=${json.data.checkoutRequestId}`);
         } catch (err) {
             setPayState('failed');
             setPayError(err instanceof Error ? err.message : 'Failed to send the M-Pesa prompt.');
         }
     };
+
+    const submitPesapalCheckout = async () => {
+        if (!payingFee) return;
+        const amountValue = parseFloat(payAmount);
+        if (!payAmount || isNaN(amountValue) || amountValue <= 0) { setPayError('Enter a valid amount.'); return; }
+
+        // Open the tab synchronously (within the click's user-gesture context) so
+        // Safari/popup blockers don't swallow it once we're past the await below.
+        const win = window.open('', '_blank');
+        pesapalWindow.current = win;
+
+        setPayState('sending');
+        setPayError('');
+        try {
+            const res = await fetch('/api/pesapal/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_fee_id: payingFee.id, amount: amountValue, phone_number: payPhone.trim() || undefined }),
+            });
+            const json = await res.json();
+            if (!res.ok) {
+                if (win) win.close();
+                setPayState('failed');
+                setPayError(json.error || 'Failed to start Pesapal checkout.');
+                return;
+            }
+            if (win) win.location.href = json.data.redirectUrl;
+            else window.open(json.data.redirectUrl, '_blank');
+
+            setPayState('waiting');
+            pollUntilResolved(`/api/pesapal/status?order_tracking_id=${json.data.orderTrackingId}`);
+        } catch (err) {
+            if (win) win.close();
+            setPayState('failed');
+            setPayError(err instanceof Error ? err.message : 'Failed to start Pesapal checkout.');
+        }
+    };
+
+    const submitPayment = paymentProvider === 'PESAPAL' ? submitPesapalCheckout : submitStkPush;
 
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
@@ -181,7 +224,7 @@ export default function StudentFeesPage() {
                 loading={loading}
                 mobileTitleKey="termName"
                 onRowClick={openHistory}
-                rowActions={mpesaActive ? (fee => fee.balance > 0 ? (
+                rowActions={paymentProvider !== 'NONE' ? (fee => fee.balance > 0 ? (
                     <button className="btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => openPay(fee)}>
                         <Smartphone size={13} /> Pay
                     </button>
@@ -245,7 +288,7 @@ export default function StudentFeesPage() {
                 )}
             </Modal>
 
-            <Modal isOpen={!!payingFee} onClose={closePay} title="Pay with M-Pesa">
+            <Modal isOpen={!!payingFee} onClose={closePay} title={paymentProvider === 'PESAPAL' ? 'Pay Fees' : 'Pay with M-Pesa'}>
                 {payingFee && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div className="rounded-xl bg-muted/40 p-3 text-sm">
@@ -256,7 +299,9 @@ export default function StudentFeesPage() {
                         {payState === 'form' || payState === 'sending' ? (
                             <>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">M-Pesa Phone Number</label>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                                        {paymentProvider === 'PESAPAL' ? 'Phone Number (optional)' : 'M-Pesa Phone Number'}
+                                    </label>
                                     <input type="tel" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
                                 </div>
                                 <div>
@@ -266,15 +311,26 @@ export default function StudentFeesPage() {
                                 {payError && <p className="text-sm text-destructive">{payError}</p>}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                     <button className="btn-secondary" onClick={closePay}>Cancel</button>
-                                    <button className="btn-primary" onClick={submitStkPush} disabled={payState === 'sending'}>
-                                        {payState === 'sending' ? 'Sending prompt...' : 'Send M-Pesa Prompt'}
+                                    <button className="btn-primary" onClick={submitPayment} disabled={payState === 'sending'}>
+                                        {payState === 'sending'
+                                            ? (paymentProvider === 'PESAPAL' ? 'Opening checkout...' : 'Sending prompt...')
+                                            : (paymentProvider === 'PESAPAL' ? 'Continue to Checkout' : 'Send M-Pesa Prompt')}
                                     </button>
                                 </div>
                             </>
                         ) : payState === 'waiting' ? (
                             <div className="py-6 text-center">
-                                <p className="text-sm font-medium mb-1">Check your phone</p>
-                                <p className="text-sm text-muted-foreground">Enter your M-Pesa PIN on the prompt sent to {payPhone} to complete the payment.</p>
+                                {paymentProvider === 'PESAPAL' ? (
+                                    <>
+                                        <p className="text-sm font-medium mb-1">Complete payment in the new tab</p>
+                                        <p className="text-sm text-muted-foreground">Finish paying on the Pesapal page that just opened, then come back here — this updates automatically.</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm font-medium mb-1">Check your phone</p>
+                                        <p className="text-sm text-muted-foreground">Enter your M-Pesa PIN on the prompt sent to {payPhone} to complete the payment.</p>
+                                    </>
+                                )}
                             </div>
                         ) : payState === 'success' ? (
                             <div className="py-6 text-center">
