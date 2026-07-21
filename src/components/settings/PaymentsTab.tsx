@@ -2,11 +2,20 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { Trash2, Star } from 'lucide-react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
-import type { FeePayment, PaymentProvider } from '@/lib/fees';
+import type { FeePayment, PaymentProvider, SchoolBankAccount } from '@/lib/fees';
+
+const KENYA_BANKS = [
+    'KCB Bank', 'Equity Bank', 'Co-operative Bank', 'NCBA Bank', 'Absa Bank Kenya',
+    'Standard Chartered Bank', 'Stanbic Bank', 'Diamond Trust Bank (DTB)', 'Family Bank',
+    'I&M Bank', 'National Bank of Kenya', 'Sidian Bank', 'Prime Bank', 'Bank of Africa',
+    'Housing Finance Company (HFC)', 'Other',
+];
 
 interface PaymentSettings {
     activeProvider: PaymentProvider;
+    bankEnabled: boolean;
     // Daraja
     environment: 'sandbox' | 'production';
     shortcode: string;
@@ -36,6 +45,18 @@ export function PaymentsTab() {
     const [registering, setRegistering] = useState(false);
 
     const [activeProvider, setActiveProvider] = useState<PaymentProvider>('NONE');
+    const [bankEnabled, setBankEnabled] = useState(false);
+
+    // Bank transfer
+    const [bankAccounts, setBankAccounts] = useState<SchoolBankAccount[]>([]);
+    const [bankAccountsLoading, setBankAccountsLoading] = useState(true);
+    const [newBankChoice, setNewBankChoice] = useState(KENYA_BANKS[0]);
+    const [newBankOther, setNewBankOther] = useState('');
+    const [newAccountName, setNewAccountName] = useState('');
+    const [newAccountNumber, setNewAccountNumber] = useState('');
+    const [newBranch, setNewBranch] = useState('');
+    const [addingBankAccount, setAddingBankAccount] = useState(false);
+    const [bankAccountBusyId, setBankAccountBusyId] = useState<string | null>(null);
 
     // Daraja
     const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
@@ -64,6 +85,7 @@ export function PaymentsTab() {
             if (json.data) {
                 setSettings(json.data);
                 setActiveProvider(json.data.activeProvider);
+                setBankEnabled(json.data.bankEnabled);
                 setEnvironment(json.data.environment);
                 setShortcode(json.data.shortcode);
                 setConsumerKey(json.data.consumerKey);
@@ -74,6 +96,18 @@ export function PaymentsTab() {
             console.error('Failed to load payment settings:', err);
         }
         setLoading(false);
+    }, []);
+
+    const fetchBankAccounts = useCallback(async () => {
+        setBankAccountsLoading(true);
+        try {
+            const res = await fetch('/api/school/payment-settings/bank-accounts');
+            const json = await res.json();
+            setBankAccounts(json.data || []);
+        } catch (err) {
+            console.error('Failed to load bank accounts:', err);
+        }
+        setBankAccountsLoading(false);
     }, []);
 
     const fetchUnmatched = useCallback(async () => {
@@ -91,8 +125,9 @@ export function PaymentsTab() {
     useEffect(() => {
         fetchSettings();
         fetchUnmatched();
+        fetchBankAccounts();
         fetch('/api/school/data?type=terms').then(r => r.json()).then(j => setTerms((j.data || []).map((t: any) => ({ id: t.id, name: t.name })))).catch(() => {});
-    }, [fetchSettings, fetchUnmatched]);
+    }, [fetchSettings, fetchUnmatched, fetchBankAccounts]);
 
     const saveSettings = async () => {
         setSaving(true);
@@ -102,6 +137,7 @@ export function PaymentsTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     active_provider: activeProvider,
+                    bank_enabled: bankEnabled,
                     environment,
                     shortcode: shortcode || null,
                     consumer_key: consumerKey || undefined,
@@ -136,6 +172,71 @@ export function PaymentsTab() {
             toast.error(err instanceof Error ? err.message : 'Failed to register URLs');
         }
         setRegistering(false);
+    };
+
+    const addBankAccount = async () => {
+        const bankName = newBankChoice === 'Other' ? newBankOther.trim() : newBankChoice;
+        if (!bankName || !newAccountName.trim() || !newAccountNumber.trim()) {
+            toast.error('Enter the bank, account name, and account number.');
+            return;
+        }
+        setAddingBankAccount(true);
+        try {
+            const res = await fetch('/api/school/payment-settings/bank-accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bank_name: bankName,
+                    account_name: newAccountName.trim(),
+                    account_number: newAccountNumber.trim(),
+                    branch: newBranch.trim() || undefined,
+                    is_primary: bankAccounts.length === 0,
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to add bank account');
+            toast.success('Bank account added.');
+            setNewBankChoice(KENYA_BANKS[0]);
+            setNewBankOther('');
+            setNewAccountName('');
+            setNewAccountNumber('');
+            setNewBranch('');
+            await fetchBankAccounts();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to add bank account');
+        }
+        setAddingBankAccount(false);
+    };
+
+    const makeBankAccountPrimary = async (account: SchoolBankAccount) => {
+        setBankAccountBusyId(account.id);
+        try {
+            const res = await fetch(`/api/school/payment-settings/bank-accounts/${account.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_primary: true }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to update bank account');
+            await fetchBankAccounts();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to update bank account');
+        }
+        setBankAccountBusyId(null);
+    };
+
+    const deleteBankAccount = async (account: SchoolBankAccount) => {
+        if (!confirm(`Remove ${account.bankName} — ${account.accountNumber}? Parents will no longer see it as a pay-in option.`)) return;
+        setBankAccountBusyId(account.id);
+        try {
+            const res = await fetch(`/api/school/payment-settings/bank-accounts/${account.id}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Failed to remove bank account');
+            await fetchBankAccounts();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to remove bank account');
+        }
+        setBankAccountBusyId(null);
     };
 
     const assignPayment = async (payment: FeePayment) => {
@@ -182,7 +283,8 @@ export function PaymentsTab() {
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li><strong>M-Pesa (Direct)</strong> uses your own Safaricom Paybill/Till via a Daraja API app — get these from <strong>developer.safaricom.co.ke</strong> and your Safaricom business account.</li>
                     <li><strong>Pesapal</strong> uses a Pesapal merchant account instead — supports M-Pesa, cards, and more, and doesn&apos;t require your own Safaricom developer app. Sign up at <strong>pesapal.com</strong>.</li>
-                    <li>Pick one provider at a time — students see a single &quot;Pay&quot; option matching whichever is active.</li>
+                    <li>Pick one automated provider at a time — students see a single &quot;Pay&quot; button matching whichever is active.</li>
+                    <li><strong>Bank Transfer</strong> is separate and can be switched on alongside either provider (or on its own) — it just shows your account details as pay-in instructions; the bursar records each deposit manually once it clears.</li>
                     <li>Payments that can&apos;t be matched to a student&apos;s current-term bill land below for manual assignment.</li>
                 </ul>
             </InfoGuide>
@@ -288,9 +390,104 @@ export function PaymentsTab() {
                 </div>
             )}
 
+            <div className="card p-5">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                        <h3 className="font-bold text-sm">Bank Transfer</h3>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                            Show your bank account(s) as a pay-in option alongside {activeProvider === 'NONE' ? 'M-Pesa/Pesapal' : PROVIDERS.find(p => p.value === activeProvider)?.label}.
+                            Deposits are always reconciled manually — there&apos;s no automatic bank webhook, so record each one under Fees once it clears.
+                        </p>
+                    </div>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-2">
+                        <input type="checkbox" checked={bankEnabled} onChange={e => setBankEnabled(e.target.checked)} />
+                        <span className="text-xs font-semibold">{bankEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </label>
+                </div>
+
+                {bankAccountsLoading ? (
+                    <p className="py-4 text-center text-sm text-muted-foreground">Loading…</p>
+                ) : (
+                    <>
+                        {bankAccounts.length > 0 && (
+                            <div className="mb-4 flex flex-col gap-2">
+                                {bankAccounts.map(a => (
+                                    <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 p-3">
+                                        <div className="min-w-[180px] flex-1">
+                                            <div className="flex items-center gap-1.5 text-sm font-semibold">
+                                                {a.isPrimary && <Star size={12} className="fill-amber-400 text-amber-400" />}
+                                                {a.bankName}
+                                            </div>
+                                            <div className="text-[11px] text-muted-foreground">
+                                                {a.accountName} · {a.accountNumber}{a.branch ? ` · ${a.branch}` : ''}
+                                            </div>
+                                        </div>
+                                        {!a.isPrimary && (
+                                            <button
+                                                className="btn-secondary"
+                                                style={{ height: 30, fontSize: 11 }}
+                                                onClick={() => makeBankAccountPrimary(a)}
+                                                disabled={bankAccountBusyId === a.id}
+                                            >
+                                                Make Primary
+                                            </button>
+                                        )}
+                                        <button
+                                            className="btn-icon text-destructive/80 hover:text-destructive"
+                                            onClick={() => deleteBankAccount(a)}
+                                            disabled={bankAccountBusyId === a.id}
+                                            title="Remove"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="rounded-xl border border-dashed border-border/60 p-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Bank</label>
+                                    <select className="input-field w-full" value={newBankChoice} onChange={e => setNewBankChoice(e.target.value)}>
+                                        {KENYA_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                                    </select>
+                                </div>
+                                {newBankChoice === 'Other' && (
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Bank Name</label>
+                                        <input type="text" className="input-field w-full" value={newBankOther} onChange={e => setNewBankOther(e.target.value)} placeholder="e.g. Sidian Bank" />
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Account Name</label>
+                                    <input type="text" className="input-field w-full" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} placeholder="e.g. Green Hills Academy" />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Account Number</label>
+                                    <input type="text" className="input-field w-full" value={newAccountNumber} onChange={e => setNewAccountNumber(e.target.value)} />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Branch (optional)</label>
+                                    <input type="text" className="input-field w-full" value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="e.g. Westlands" />
+                                </div>
+                            </div>
+                            <div className="mt-3 flex">
+                                <button className="btn-secondary" onClick={addBankAccount} disabled={addingBankAccount}>
+                                    {addingBankAccount ? 'Adding...' : 'Add Bank Account'}
+                                </button>
+                            </div>
+                        </div>
+                        {bankEnabled && bankAccounts.length === 0 && (
+                            <p className="mt-2 text-[11px] text-destructive">Add at least one bank account above before saving with bank transfer enabled.</p>
+                        )}
+                    </>
+                )}
+            </div>
+
             <div className="flex">
                 <button className="btn-primary" onClick={saveSettings} disabled={saving}>
-                    {saving ? 'Saving...' : activeProvider === 'NONE' ? 'Save (Disable Online Payments)' : 'Save Settings'}
+                    {saving ? 'Saving...' : (activeProvider === 'NONE' && !bankEnabled) ? 'Save (Disable Online Payments)' : 'Save Settings'}
                 </button>
             </div>
 

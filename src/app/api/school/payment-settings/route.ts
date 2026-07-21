@@ -41,6 +41,7 @@ export async function GET() {
         return NextResponse.json({
             data: {
                 activeProvider: data?.active_provider ?? 'NONE',
+                bankEnabled: data?.bank_enabled ?? false,
                 // Daraja
                 environment: data?.environment ?? 'sandbox',
                 shortcode: data?.shortcode ?? '',
@@ -69,7 +70,7 @@ export async function PUT(request: NextRequest) {
         const { supabase, schoolId } = result;
 
         const body = await request.json();
-        const { environment, shortcode, passkey, consumer_key, consumer_secret, active_provider, pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret } = body;
+        const { environment, shortcode, passkey, consumer_key, consumer_secret, active_provider, pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret, bank_enabled } = body;
 
         if (environment && !['sandbox', 'production'].includes(environment)) {
             return NextResponse.json({ error: 'environment must be sandbox or production' }, { status: 400 });
@@ -79,6 +80,9 @@ export async function PUT(request: NextRequest) {
         }
         if (active_provider && !['NONE', 'DARAJA', 'PESAPAL'].includes(active_provider)) {
             return NextResponse.json({ error: 'active_provider must be NONE, DARAJA, or PESAPAL' }, { status: 400 });
+        }
+        if (bank_enabled !== undefined && typeof bank_enabled !== 'boolean') {
+            return NextResponse.json({ error: 'bank_enabled must be a boolean' }, { status: 400 });
         }
 
         const { data: existing } = await supabase
@@ -93,6 +97,7 @@ export async function PUT(request: NextRequest) {
         if (pesapal_environment !== undefined) update.pesapal_environment = pesapal_environment;
         if (pesapal_consumer_key !== undefined) update.pesapal_consumer_key = pesapal_consumer_key || null;
         if (active_provider !== undefined) update.active_provider = active_provider;
+        if (bank_enabled !== undefined) update.bank_enabled = bank_enabled;
         // Blank strings mean "leave unchanged" for secrets — the client never
         // gets to read these back, so it can't round-trip them intentionally
         // blank without this being a footgun for "I left the field empty."
@@ -102,6 +107,17 @@ export async function PUT(request: NextRequest) {
         if (pesapal_consumer_secret) update.pesapal_consumer_secret = pesapal_consumer_secret;
 
         const resolvedProvider = update.active_provider ?? existing?.active_provider ?? 'NONE';
+        const resolvedBankEnabled = update.bank_enabled ?? existing?.bank_enabled ?? false;
+
+        if (resolvedBankEnabled) {
+            const { count } = await supabase
+                .from('school_bank_accounts')
+                .select('id', { count: 'exact', head: true })
+                .eq('school_id', schoolId);
+            if (!count) {
+                return NextResponse.json({ error: 'Add at least one bank account before enabling bank transfer' }, { status: 400 });
+            }
+        }
 
         // Switching Pesapal on (or updating its credentials while active) means
         // Pesapal needs to know where to send payment notifications — register

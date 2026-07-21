@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Wallet, CheckCircle2, Clock3, AlertTriangle, Receipt, Smartphone } from 'lucide-react';
+import { Wallet, CheckCircle2, Clock3, AlertTriangle, Receipt, Smartphone, Landmark, Copy, Check } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge } from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
-import { isOverdue, type FeePayment, type PaymentProvider } from '@/lib/fees';
+import { isOverdue, type FeePayment, type PaymentProvider, type SchoolBankAccount } from '@/lib/fees';
 
 type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
@@ -43,6 +43,8 @@ export default function StudentFeesPage() {
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
     const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('NONE');
+    const [bankAccounts, setBankAccounts] = useState<SchoolBankAccount[]>([]);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const [payingFee, setPayingFee] = useState<FeeRecord | null>(null);
     const [payPhone, setPayPhone] = useState('');
@@ -57,7 +59,10 @@ export default function StudentFeesPage() {
 
     useEffect(() => {
         fetchFees().finally(() => setLoading(false));
-        fetch('/api/school/payment-settings/status').then(r => r.json()).then(j => setPaymentProvider(j.data?.provider || 'NONE')).catch(() => {});
+        fetch('/api/school/payment-settings/status').then(r => r.json()).then(j => {
+            setPaymentProvider(j.data?.provider || 'NONE');
+            setBankAccounts(j.data?.bankAccounts || []);
+        }).catch(() => {});
         return () => { if (pollTimer.current) clearInterval(pollTimer.current); };
     }, []);
 
@@ -181,6 +186,13 @@ export default function StudentFeesPage() {
 
     const submitPayment = paymentProvider === 'PESAPAL' ? submitPesapalCheckout : submitStkPush;
 
+    const copyAccountNumber = (account: SchoolBankAccount) => {
+        navigator.clipboard.writeText(account.accountNumber).then(() => {
+            setCopiedId(account.id);
+            setTimeout(() => setCopiedId(current => (current === account.id ? null : current)), 2000);
+        }).catch(() => {});
+    };
+
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
     const totalBalance = fees.reduce((sum, f) => sum + f.balance, 0);
@@ -216,6 +228,36 @@ export default function StudentFeesPage() {
                     iconClassName={totalBalance > 0 ? 'bg-red-500/12 text-red-600' : 'bg-emerald-500/12 text-emerald-600'}
                 />
             </div>
+
+            {bankAccounts.length > 0 && (
+                <div className="card mb-6 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                        <Landmark size={16} className="text-primary" />
+                        <h3 className="text-sm font-bold">Pay by Bank Transfer</h3>
+                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                        Deposit or transfer directly into one of the accounts below, then keep your slip/reference — your school will record it once it clears.
+                    </p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {bankAccounts.map(a => (
+                            <div key={a.id} className="rounded-xl border border-border/60 p-3">
+                                <div className="text-sm font-semibold">{a.bankName}{a.isPrimary && bankAccounts.length > 1 ? ' (Preferred)' : ''}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">{a.accountName}{a.branch ? ` · ${a.branch}` : ''}</div>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="font-mono text-sm font-bold">{a.accountNumber}</span>
+                                    <button
+                                        className="btn-icon text-muted-foreground hover:text-foreground"
+                                        onClick={() => copyAccountNumber(a)}
+                                        title="Copy account number"
+                                    >
+                                        {copiedId === a.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <DataTable
                 columns={columns}

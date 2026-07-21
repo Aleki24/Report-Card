@@ -70,6 +70,26 @@ export interface FeePayment {
     createdAt: string;
 }
 
+export interface SchoolBankAccount {
+    id: string;
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    branch: string | null;
+    isPrimary: boolean;
+}
+
+export function mapBankAccountRow(a: any): SchoolBankAccount {
+    return {
+        id: a.id,
+        bankName: a.bank_name,
+        accountName: a.account_name,
+        accountNumber: a.account_number,
+        branch: a.branch,
+        isPrimary: a.is_primary,
+    };
+}
+
 export function mapFeePaymentRow(p: any): FeePayment {
     return {
         id: p.id,
