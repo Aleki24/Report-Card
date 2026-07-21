@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerPesapalIPN } from '@/lib/pesapal';
+import { encryptSecret, decryptSecret } from '@/lib/crypto';
 
 // Checks the Clerk session BEFORE touching Supabase — an anonymous request
 // must get a clean 401, not a raw 500 from createSupabaseAdmin() throwing.
@@ -101,10 +102,11 @@ export async function PUT(request: NextRequest) {
         // Blank strings mean "leave unchanged" for secrets — the client never
         // gets to read these back, so it can't round-trip them intentionally
         // blank without this being a footgun for "I left the field empty."
-        if (passkey) update.passkey = passkey;
+        // Secrets are encrypted before they ever touch the database — see lib/crypto.ts.
+        if (passkey) update.passkey = encryptSecret(passkey);
         if (consumer_key) update.consumer_key = consumer_key;
-        if (consumer_secret) update.consumer_secret = consumer_secret;
-        if (pesapal_consumer_secret) update.pesapal_consumer_secret = pesapal_consumer_secret;
+        if (consumer_secret) update.consumer_secret = encryptSecret(consumer_secret);
+        if (pesapal_consumer_secret) update.pesapal_consumer_secret = encryptSecret(pesapal_consumer_secret);
 
         const resolvedProvider = update.active_provider ?? existing?.active_provider ?? 'NONE';
         const resolvedBankEnabled = update.bank_enabled ?? existing?.bank_enabled ?? false;
@@ -125,7 +127,11 @@ export async function PUT(request: NextRequest) {
         // immediately instead of failing silently at checkout time later.
         if (resolvedProvider === 'PESAPAL') {
             const resolvedKey = update.pesapal_consumer_key ?? existing?.pesapal_consumer_key;
-            const resolvedSecret = update.pesapal_consumer_secret ?? existing?.pesapal_consumer_secret;
+            // pesapal_consumer_secret here is the plaintext value straight from the
+            // request body (not update.pesapal_consumer_secret, which is now
+            // encrypted) — fall back to decrypting the stored secret only when the
+            // admin didn't resubmit one.
+            const resolvedSecret = pesapal_consumer_secret || (existing?.pesapal_consumer_secret ? decryptSecret(existing.pesapal_consumer_secret) : undefined);
             const resolvedEnv = update.pesapal_environment ?? existing?.pesapal_environment ?? 'sandbox';
 
             if (!resolvedKey || !resolvedSecret) {

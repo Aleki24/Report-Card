@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
+import { decryptSecret } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
@@ -87,9 +88,9 @@ export async function POST(request: NextRequest) {
                 creds: {
                     environment: settings.environment as MpesaEnvironment,
                     shortcode: settings.shortcode,
-                    passkey: settings.passkey,
+                    passkey: decryptSecret(settings.passkey),
                     consumerKey: settings.consumer_key,
-                    consumerSecret: settings.consumer_secret,
+                    consumerSecret: decryptSecret(settings.consumer_secret),
                 },
                 phoneNumber: phone_number,
                 amount: amountValue,

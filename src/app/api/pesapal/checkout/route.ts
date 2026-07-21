@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { submitPesapalOrder, type PesapalEnvironment } from '@/lib/pesapal';
+import { decryptSecret } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
                 creds: {
                     environment: settings.pesapal_environment as PesapalEnvironment,
                     consumerKey: settings.pesapal_consumer_key,
-                    consumerSecret: settings.pesapal_consumer_secret,
+                    consumerSecret: decryptSecret(settings.pesapal_consumer_secret),
                 },
                 ipnId: settings.pesapal_ipn_id,
                 merchantReference: payment.id,

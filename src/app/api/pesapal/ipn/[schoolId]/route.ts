@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getPesapalTransactionStatus, mapPesapalStatus, type PesapalEnvironment } from '@/lib/pesapal';
+import { decryptSecret } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
@@ -59,7 +60,7 @@ async function handleIpn(request: NextRequest, schoolId: string) {
         }
 
         const txn = await getPesapalTransactionStatus(
-            { environment: settings.pesapal_environment as PesapalEnvironment, consumerKey: settings.pesapal_consumer_key, consumerSecret: settings.pesapal_consumer_secret },
+            { environment: settings.pesapal_environment as PesapalEnvironment, consumerKey: settings.pesapal_consumer_key, consumerSecret: decryptSecret(settings.pesapal_consumer_secret) },
             orderTrackingId
         );
         const mapped = mapPesapalStatus(txn.status_code);

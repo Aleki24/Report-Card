@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerC2BUrls, type MpesaEnvironment } from '@/lib/mpesa';
+import { decryptSecret } from '@/lib/crypto';
 
 /**
  * Tells Safaricom where to send Paybill (C2B) confirmations for this
@@ -48,7 +49,7 @@ export async function POST() {
         const validationUrl = confirmationUrl;
 
         const result = await registerC2BUrls(
-            { environment: settings.environment as MpesaEnvironment, shortcode: settings.shortcode, consumerKey: settings.consumer_key, consumerSecret: settings.consumer_secret },
+            { environment: settings.environment as MpesaEnvironment, shortcode: settings.shortcode, consumerKey: settings.consumer_key, consumerSecret: decryptSecret(settings.consumer_secret) },
             confirmationUrl,
             validationUrl
         );
