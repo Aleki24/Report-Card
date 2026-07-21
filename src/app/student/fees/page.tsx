@@ -256,6 +256,7 @@ export default function StudentFeesPage() {
                                             <th>Receipt</th>
                                             <th>Date</th>
                                             <th>Method</th>
+                                            <th>Transaction Code</th>
                                             <th>Amount</th>
                                             <th />
                                         </tr>
@@ -266,6 +267,7 @@ export default function StudentFeesPage() {
                                                 <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
                                                 <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
                                                 <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
                                                 <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                 <td data-label="" className="text-right">
                                                     <a

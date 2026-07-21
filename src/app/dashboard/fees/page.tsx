@@ -898,6 +898,10 @@ export default function FeesPage() {
                                 render: p => <span>{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</span>,
                             },
                             {
+                                key: 'transactionCode', header: 'Transaction Code', hideOnMobile: true,
+                                render: p => <span className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</span>,
+                            },
+                            {
                                 key: 'source', header: 'Source', hideOnMobile: true,
                                 render: p => (
                                     <span className={`badge whitespace-nowrap ${p.source === 'AUTO' ? 'badge-success' : 'badge-info'}`}>
@@ -1227,6 +1231,7 @@ export default function FeesPage() {
                                                     <th>Receipt</th>
                                                     <th>Date</th>
                                                     <th>Method</th>
+                                                    <th>Transaction Code</th>
                                                     <th>Amount</th>
                                                     <th>Status</th>
                                                     <th />
@@ -1238,6 +1243,7 @@ export default function FeesPage() {
                                                         <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
                                                         <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
                                                         <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                        <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
                                                         <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                         <td data-label="Status">
                                                             <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
