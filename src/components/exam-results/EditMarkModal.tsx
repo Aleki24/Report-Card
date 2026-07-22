@@ -34,7 +34,8 @@ interface Props {
     /** Multi-paper scheme for this exam (null/undefined = single paper) */
     scheme?: ExamSubjectComponentScheme | null;
     onClose: () => void;
-    onSaved: () => void;
+    /** Receives the patched row so the parent can update in place instead of refetching the whole grid. */
+    onSaved: (patched?: EditMarkData) => void;
     onDeleted: () => void;
 }
 
@@ -303,12 +304,24 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 })
             });
 
-            const data = await res.json();
+            const json = await res.json();
             if (!res.ok) {
-                toast.error(`Failed to save: ${data.error}`);
+                toast.error(`Failed to save: ${json.error}`);
             } else {
                 toast.success('Saved successfully');
-                onSaved();
+                // Hand the parent the updated row (server values are authoritative
+                // for the multi-paper recompute) so it can patch in place rather
+                // than refetch the whole grid.
+                const row = json.data || {};
+                onSaved({
+                    ...mark,
+                    raw_score: row.raw_score ?? numScore,
+                    percentage: row.percentage ?? newPercentage,
+                    grade_symbol: row.grade_symbol ?? grade,
+                    rubric: row.rubric ?? (isCBC ? (rubric || null) : null),
+                    remarks: row.remarks ?? (remarks.trim() || null),
+                    components: componentsPayload ?? mark.components,
+                });
             }
         } catch (err: unknown) {
             toast.error(`Failed to save: ${err instanceof Error ? err.message : 'Unknown Error'}`);

@@ -111,41 +111,36 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get student IDs for this school only
-    const { data: schoolUsers } = await supabase
-      .from('users')
-      .select('id')
-      .eq('school_id', schoolId)
-      .eq('role', 'STUDENT');
-
-    const studentIds = (schoolUsers || []).map(u => u.id);
-    if (studentIds.length === 0) return NextResponse.json({ data: [] });
-
+    // School-scope through the join rather than pre-fetching every student id
+    // in the school (which was unbounded and could be thousands of ids).
     const { data, error } = await supabase
       .from('exam_marks')
       .select(`
         id, student_id, raw_score, percentage, grade_symbol, rubric, remarks,
         students!inner (
           admission_number,
-          users ( first_name, last_name )
+          users!inner ( first_name, last_name, school_id )
         )
       `)
       .eq('exam_id', examId)
-      .in('student_id', studentIds);
+      .eq('students.users.school_id', schoolId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Attach per-paper scores when this exam uses a multi-paper scheme
+    // Attach per-paper scores when this exam uses a multi-paper scheme. The
+    // exam is already school-scoped, so filtering components by exam_id (and the
+    // students actually returned) is sufficient.
+    const returnedStudentIds = (data || []).map((m: any) => m.student_id);
     const scheme = await fetchActiveMultiPaperScheme(supabase, examId);
     const componentsByStudent = new Map<string, Record<string, number>>();
-    if (scheme) {
+    if (scheme && returnedStudentIds.length > 0) {
       const { data: markComponents } = await supabase
         .from('exam_mark_components')
         .select('student_id, component_id, raw_score')
         .eq('exam_id', examId)
-        .in('student_id', studentIds);
+        .in('student_id', returnedStudentIds);
 
       for (const mc of markComponents || []) {
         const entry = componentsByStudent.get(mc.student_id) || {};
