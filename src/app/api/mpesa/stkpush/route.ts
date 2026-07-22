@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
@@ -79,6 +80,22 @@ export async function POST(request: NextRequest) {
         const student = fee.students as any;
         const admissionNumber = student?.admission_number || 'FEES';
 
+        // One prompt at a time per fee: an STK prompt lives ~60–90s on the
+        // payer's phone, and phone_number is caller-supplied — without a
+        // cooldown this endpoint doubles as a prompt-spam vector.
+        const { data: inFlight } = await supabase
+            .from('fee_payments')
+            .select('id')
+            .eq('student_fee_id', fee.id)
+            .eq('method', 'MPESA')
+            .eq('status', 'PENDING')
+            .gte('created_at', new Date(Date.now() - 90_000).toISOString())
+            .limit(1)
+            .maybeSingle();
+        if (inFlight) {
+            return NextResponse.json({ error: 'An M-Pesa prompt for this fee is already in progress. Wait for it to complete or time out (about 90 seconds), then try again.' }, { status: 429 });
+        }
+
         // Reserve the ledger row before calling Safaricom so a callback that
         // arrives moments later always has something to match against.
         const { data: payment, error: insertError } = await supabase
@@ -136,7 +153,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: message }, { status: 502 });
         }
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('mpesa stkpush', err);
     }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import * as XLSX from 'xlsx';
@@ -17,7 +18,8 @@ export async function GET(request: NextRequest) {
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+        // ADMIN (bursar) only — matches the Payments Log endpoint this exports.
+        if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const schoolId = userProfile.school_id;
@@ -107,7 +109,6 @@ export async function GET(request: NextRequest) {
             },
         });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('payments export', err);
     }
 }

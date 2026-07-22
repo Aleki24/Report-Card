@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { mapBankAccountRow } from '@/lib/fees';
@@ -65,8 +66,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (error) throw error;
         return NextResponse.json({ data: mapBankAccountRow(data) });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('bank account id', err);
     }
 }
 
@@ -91,7 +91,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('bank account id', err);
     }
 }

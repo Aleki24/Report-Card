@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { submitPesapalOrder, type PesapalEnvironment } from '@/lib/pesapal';
@@ -125,7 +126,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: message }, { status: 502 });
         }
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('pesapal checkout', err);
     }
 }

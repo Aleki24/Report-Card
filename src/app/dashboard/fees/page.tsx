@@ -97,7 +97,7 @@ const statusBadge = (status: string) => {
 const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
 
 export default function FeesPage() {
-    const { profile } = useAuth();
+    const { profile, role } = useAuth();
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -638,7 +638,7 @@ export default function FeesPage() {
                             </button>
                         )}
 
-                        {mode === 'list' && (
+                        {mode === 'list' && role === 'ADMIN' && (
                             <button className="btn-secondary" onClick={openPaymentsLog}>
                                 <Receipt size={14} /> Payments Log
                             </button>

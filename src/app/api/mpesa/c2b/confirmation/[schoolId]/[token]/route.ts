@@ -66,10 +66,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ ResultCode: 0, ResultDesc: 'Success' });
         }
 
+        // BillRefNumber is attacker-influenced free text; escape LIKE wildcards
+        // so "ADM1_" can't fuzzy-match ADM10/ADM11 — ilike is only used here
+        // for case-insensitivity, never pattern matching.
+        const escapedRef = rawRef.replace(/([\\%_])/g, '\\$1');
         const { data: student } = await supabase
             .from('students')
             .select('id, users!inner(school_id)')
-            .ilike('admission_number', rawRef)
+            .ilike('admission_number', escapedRef)
             .eq('users.school_id', schoolId)
             .maybeSingle();
 

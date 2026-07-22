@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
@@ -64,8 +65,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ data: mapped });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fees', err);
     }
 }
 
@@ -167,7 +167,6 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fees', err);
     }
 }

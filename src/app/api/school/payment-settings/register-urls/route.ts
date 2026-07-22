@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerC2BUrls, type MpesaEnvironment } from '@/lib/mpesa';
@@ -69,7 +70,6 @@ export async function POST() {
 
         return NextResponse.json({ data: result });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('register c2b urls', err);
     }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerPesapalIPN } from '@/lib/pesapal';
@@ -59,8 +60,7 @@ export async function GET() {
             },
         });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('payment settings', err);
     }
 }
 
@@ -166,7 +166,6 @@ export async function PUT(request: NextRequest) {
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('payment settings', err);
     }
 }
