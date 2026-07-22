@@ -11,6 +11,7 @@ import {
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
+    isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -109,11 +110,7 @@ export async function GET(
         }
         
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        // Check both stream name AND grade code for compatibility
-        const combinedCode = `${gradeLevelCode} ${streamName}`;
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
-                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
-                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
+        const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase
@@ -342,6 +339,25 @@ export async function GET(
         // 8. Generate raw data array instead of PDFs
         const reportCardsData: ReportCardData[] = [];
 
+        // Batch-fetch every student's report-card comments in one query instead
+        // of one per student inside the loop below (N+1 on the hottest endpoint).
+        const commentsByStudent = new Map<string, { classTeacher: string; principal: string }>();
+        if (termId && yearId) {
+            const studentIds = students.map(s => s.id);
+            const { data: reportCards } = await supabase
+                .from('report_cards')
+                .select('student_id, comments_class_teacher, comments_principal')
+                .in('student_id', studentIds)
+                .eq('term_id', termId)
+                .eq('academic_year_id', yearId);
+            for (const rc of reportCards || []) {
+                commentsByStudent.set(rc.student_id, {
+                    classTeacher: rc.comments_class_teacher || '',
+                    principal: rc.comments_principal || '',
+                });
+            }
+        }
+
         for (const student of students) {
             const studentMarks = marksByStudent[student.id] || [];
             // If student has no marks and there are no exams either, skip
@@ -372,25 +388,10 @@ export async function GET(
                     ? getGradeFromScales(studentPerf.percentage, gradingScales) 
                     : studentPerf.grade);
 
-            // Fetch class teacher and principal comments
-            let classTeacherComment = '';
-            let principalComment = '';
-            if (termId && yearId) {
-                const { data: reportCard } = await supabase
-                    .from('report_cards')
-                    .select('comments_class_teacher, comments_principal')
-                    .eq('student_id', student.id)
-                    .eq('term_id', termId)
-                    .eq('academic_year_id', yearId)
-                    .maybeSingle();
-
-                if (reportCard?.comments_class_teacher) {
-                    classTeacherComment = reportCard.comments_class_teacher;
-                }
-                if (reportCard?.comments_principal) {
-                    principalComment = reportCard.comments_principal;
-                }
-            }
+            // Class teacher and principal comments (pre-fetched in one batch above)
+            const studentComments = commentsByStudent.get(student.id);
+            const classTeacherComment = studentComments?.classTeacher || '';
+            const principalComment = studentComments?.principal || '';
 
             const firstName = (student.users as any)?.first_name || 'Student';
             const lastName = (student.users as any)?.last_name || '';

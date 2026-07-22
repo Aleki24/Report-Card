@@ -241,8 +241,11 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
 
     // ── Auto-resolve grade from percentage ───────────────
     const resolveGradeFromPct = (pct: number): string => {
+        // Round before matching so a percentage in a gap between integer-bounded
+        // bands resolves the same as the shared getGradeFromScales helper.
+        const rounded = Math.round(pct);
         for (const scale of gradingScales) {
-            if (pct >= scale.min_percentage && pct <= scale.max_percentage) {
+            if (rounded >= scale.min_percentage && rounded <= scale.max_percentage) {
                 return scale.symbol;
             }
         }
@@ -399,11 +402,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         setSaveMessage(null);
 
         try {
-            // Fetch exam max_score for accurate percentage
-            const examRes = await fetch('/api/school/data?type=exams');
-            const { data: examsData } = await examRes.json();
-            const examData = examsData?.find((e: any) => e.id === examId);
-            const examMaxScore = examData?.max_score || maxScore;
+            // Use the same maxScore the grid validated against (the exam's
+            // max_score passed as a prop) rather than a second fetched copy —
+            // the two could diverge if the exam was edited mid-session, letting
+            // a validated score produce a >100% percentage. The server
+            // re-validates and recomputes the percentage regardless.
+            const examMaxScore = maxScore;
 
             const insertRows = filledRows.map(r => {
                 if (multiPaper) {

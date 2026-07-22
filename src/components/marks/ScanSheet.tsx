@@ -178,7 +178,9 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
 
     const resolveGrade = useCallback((score: number): string => {
         if (maxScore <= 0) return '';
-        const pct = (score / maxScore) * 100;
+        // Round before matching, consistent with the shared getGradeFromScales
+        // helper, so gap percentages don't resolve differently per screen.
+        const pct = Math.round((score / maxScore) * 100);
         for (const sc of gradingScales) {
             if (pct >= sc.min_percentage && pct <= sc.max_percentage) return sc.symbol;
         }

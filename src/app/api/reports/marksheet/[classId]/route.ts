@@ -6,7 +6,8 @@ import {
     calculatePercentage,
     getGradeFromScales,
     getGradeFromPercentage,
-    getGradeFromPercentageSimple,
+    getOverallGradeFromMeanPoints,
+    isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -37,7 +38,7 @@ export async function GET(
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
         let studentsQuery = supabase
             .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name)')
+            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id)')
             .eq('current_grade_stream_id', classId);
         if (combinationId) studentsQuery = studentsQuery.eq('subject_combination_id', combinationId);
         if (pathwayFilter) studentsQuery = studentsQuery.eq('pathway', pathwayFilter);
@@ -100,11 +101,7 @@ export async function GET(
         }
         
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        // Check both stream name AND grade code for compatibility
-        const combinedCode = `${gradeLevelCode} ${streamName}`;
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
-                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
-                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
+        const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle();
@@ -358,6 +355,9 @@ export async function GET(
                 overallPercentage: displayPercentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints || 0,
+                // Per-subject mean points (KCSE) — the class mean grade must be
+                // derived from these, not from total points.
+                meanPoints: studentPerf.markCount > 0 ? (studentPerf.totalPoints || 0) / studentPerf.markCount : 0,
                 overallPointsGrade: studentPerf.overallGrade,
                 classRank: ranks.get(student.id) || 0,
                 hasAnyMarks,
@@ -376,10 +376,14 @@ export async function GET(
             }
         }
 
-        const totalPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0);
-        const meanPoints = studentsWithMarks.length > 0 ? Math.round(totalPointsSum / studentsWithMarks.length) : 0;
+        // Class mean grade (KCSE): average the students' per-subject mean points
+        // (a 0-12 scale), then map with the points-band function. Previously this
+        // summed total points (0-84) and fed that into a 0-100 percentage-band
+        // function, so a straight-A class could read as 'B'.
+        const meanPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.meanPoints) || 0), 0);
+        const classMeanPoints = studentsWithMarks.length > 0 ? meanPointsSum / studentsWithMarks.length : 0;
 
-        const meanGrade = gradingSystemType === 'KCSE' ? getGradeFromPercentageSimple(meanPoints) : '';
+        const meanGrade = gradingSystemType === 'KCSE' ? getOverallGradeFromMeanPoints(classMeanPoints) : '';
         
         // Label a filtered sheet with its combination code / pathway
         let classNameLabel = (students[0].grade_streams as any)?.full_name || 'Class';
@@ -407,7 +411,7 @@ export async function GET(
             students: studentsData,
             gradeDistribution,
             meanGrade,
-            meanPoints,
+            meanPoints: Math.round(classMeanPoints * 100) / 100,
             subjectStats,
             subjectRankings,
         };

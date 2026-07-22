@@ -195,7 +195,9 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
     const autoResolveGrade = useCallback((newScore: number) => {
         if (gradeManuallySet) return; // Don't auto-resolve if teacher manually selected a grade
         if (maxScore <= 0 || gradeOptions.length === 0) return;
-        const newPercentage = Math.round((newScore / maxScore) * 10000) / 100;
+        // Round to a whole percent before band matching, consistent with the
+        // shared getGradeFromScales helper, so gap percentages resolve uniformly.
+        const newPercentage = Math.round((newScore / maxScore) * 100);
 
         const matching = gradeOptions.find(o => newPercentage >= o.min_percentage && newPercentage <= o.max_percentage);
         if (matching) setGrade(matching.symbol);
@@ -224,8 +226,9 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                     })),
                     scheme!.aggregation_method
                 );
+                const roundedPct = Math.round(result.finalPercentage);
                 const matching = gradeOptions.find(o =>
-                    result.finalPercentage >= o.min_percentage && result.finalPercentage <= o.max_percentage
+                    roundedPct >= o.min_percentage && roundedPct <= o.max_percentage
                 );
                 if (matching) setGrade(matching.symbol);
             }
@@ -449,14 +452,11 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                                 onChange={e => setRubric(e.target.value)}
                             >
                                 <option value="">Select points</option>
-                                <option value="8">8 - EE1</option>
-                                <option value="7">7 - EE2</option>
-                                <option value="6">6 - ME1</option>
-                                <option value="5">5 - ME2</option>
-                                <option value="4">4 - AE1</option>
-                                <option value="3">3 - AE2</option>
-                                <option value="2">2 - BE1</option>
-                                <option value="1">1 - BE2</option>
+                                {/* Derived from CBC_RUBRIC_MAP so the manual options
+                                    and the auto-fill mapping can't drift apart. */}
+                                {Object.entries(CBC_RUBRIC_MAP).map(([grade, pts]) => (
+                                    <option key={grade} value={pts}>{pts} - {grade}</option>
+                                ))}
                             </select>
                         </div>
                     )}

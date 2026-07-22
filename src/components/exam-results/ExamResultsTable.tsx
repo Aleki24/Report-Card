@@ -67,7 +67,9 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             
             try {
                 const [marksRes, structureRes] = await Promise.all([
-                    fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}`),
+                    // Pass the current exam so the stream marks are scoped to its
+                    // term — otherwise total points accumulate across every term.
+                    fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}${examId ? `&exam_id=${examId}` : ''}`),
                     fetch('/api/admin/academic-structure')
                 ]);
 
@@ -114,7 +116,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
         };
 
         fetchTotalPoints();
-    }, [gradeStreamId]);
+    }, [gradeStreamId, examId]);
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {

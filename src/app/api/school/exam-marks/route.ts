@@ -48,6 +48,28 @@ function resolveComponentEntry(
     };
 }
 
+/**
+ * Validate and normalize a single-paper score against the exam's max. The
+ * multi-paper path validates per-paper (resolveComponentEntry); this is the
+ * equivalent guard for the plain path, which previously stored client-supplied
+ * raw_score/percentage verbatim — a 500 on a /100 exam skewed every class
+ * average and ranking, and >= 1000 overflowed NUMERIC(5,2).
+ */
+function validateSinglePaperScore(
+    rawScore: unknown,
+    examMaxScore: number
+): { raw_score: number; percentage: number } | { error: string } {
+    const score = Number(rawScore);
+    if (rawScore === null || rawScore === undefined || rawScore === '' || isNaN(score)) {
+        return { error: 'Score must be a number' };
+    }
+    const max = examMaxScore > 0 ? examMaxScore : 100;
+    if (score < 0 || score > max) {
+        return { error: `Score must be between 0 and ${max}` };
+    }
+    return { raw_score: score, percentage: Math.round((score / max) * 10000) / 100 };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -160,11 +182,14 @@ export async function POST(request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
       .from('users')
-      .select('role, school_id')
+      .select('role, school_id, is_active')
       .eq('id', userId)
       .single();
-    
-    if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
+
+    if (!userProfile || userProfile.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -240,11 +265,16 @@ export async function POST(request: NextRequest) {
           });
         }
       } else {
+        const validated = validateSinglePaperScore(m.raw_score, Number(examRow?.max_score) || 100);
+        if ('error' in validated) {
+          return NextResponse.json({ error: `Student ${m.student_id}: ${validated.error}` }, { status: 400 });
+        }
         processedMarks.push({
           student_id: m.student_id,
           exam_id,
-          raw_score: m.raw_score,
-          percentage: m.percentage,
+          raw_score: validated.raw_score,
+          // Recompute percentage server-side rather than trusting the client's.
+          percentage: validated.percentage,
           grade_symbol: m.grade_symbol,
           rubric: m.rubric || null,
           remarks: m.remarks,
@@ -281,11 +311,14 @@ export async function PATCH(request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
       .from('users')
-      .select('role, school_id')
+      .select('role, school_id, is_active')
       .eq('id', userId)
       .single();
 
-    if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
+    if (!userProfile || userProfile.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -319,21 +352,23 @@ export async function PATCH(request: NextRequest) {
       }
     }
     
-    const updateData: Record<string, any> = { raw_score, percentage, grade_symbol, remarks };
+    const updateData: Record<string, any> = { grade_symbol, remarks };
     if (rubric !== undefined) {
         updateData.rubric = rubric;
     }
+
+    const { data: patchExamRow } = await supabase
+      .from('exams')
+      .select('max_score')
+      .eq('id', markCheck.exam_id)
+      .maybeSingle();
+    const patchExamMax = Number(patchExamRow?.max_score) || 100;
 
     // Multi-paper: recompute the resolved score from the edited papers
     if (components && typeof components === 'object') {
       const scheme = await fetchActiveMultiPaperScheme(supabase, markCheck.exam_id);
       if (scheme) {
-        const { data: examRow } = await supabase
-          .from('exams')
-          .select('max_score')
-          .eq('id', markCheck.exam_id)
-          .maybeSingle();
-        const resolved = resolveComponentEntry(scheme, Number(examRow?.max_score) || 100, components);
+        const resolved = resolveComponentEntry(scheme, patchExamMax, components);
         if ('error' in resolved) {
           return NextResponse.json({ error: resolved.error }, { status: 400 });
         }
@@ -353,7 +388,27 @@ export async function PATCH(request: NextRequest) {
             { onConflict: 'component_id,student_id' }
           );
         if (compError) return NextResponse.json({ error: compError.message }, { status: 400 });
+
+        // Delete component rows the teacher cleared this edit (papers omitted
+        // from the payload count as 0 in the resolved score, so their stale
+        // rows must not linger and print on the report card).
+        const keptIds = resolved.rows.map(r => r.component_id);
+        const { error: delError } = await supabase
+          .from('exam_mark_components')
+          .delete()
+          .eq('exam_id', markCheck.exam_id)
+          .eq('student_id', (markCheck as any).student_id)
+          .not('component_id', 'in', `(${keptIds.join(',')})`);
+        if (delError) return NextResponse.json({ error: delError.message }, { status: 400 });
       }
+    } else {
+      // Single-paper edit: validate/normalize like the POST path.
+      const validated = validateSinglePaperScore(raw_score, patchExamMax);
+      if ('error' in validated) {
+        return NextResponse.json({ error: validated.error }, { status: 400 });
+      }
+      updateData.raw_score = validated.raw_score;
+      updateData.percentage = validated.percentage;
     }
 
     const { data, error } = await supabase

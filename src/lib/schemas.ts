@@ -1,9 +1,13 @@
 import { z } from 'zod';
+import { ALL_EXAM_TYPES } from './exam-types';
 
 export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING']);
 export type UserRole = z.infer<typeof UserRole>;
 
-export const ExamType = z.enum(['CBC', '844', 'MIDTERM', 'ENDTERM', 'OPENER']);
+// Derived from the single source of truth for exam types (exam-types.ts), which
+// the Create-Exam UI also drives — previously this hardcoded 5 codes while the
+// UI offered 15, so validating an exam here would have rejected most real ones.
+export const ExamType = z.enum(ALL_EXAM_TYPES.map(t => t.code) as [string, ...string[]]);
 export type ExamType = z.infer<typeof ExamType>;
 
 export const StudentStatus = z.enum(['ACTIVE', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED']);
