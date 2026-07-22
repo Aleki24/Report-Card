@@ -20,11 +20,15 @@ export async function POST(request: NextRequest) {
     // Verify the requester is an admin and get their school_id
     const { data: adminUser } = await supabase
       .from('users')
-      .select('role, school_id')
+      .select('role, school_id, is_active')
       .eq('id', userId)
       .single();
 
-    if (!adminUser || adminUser.role !== 'ADMIN') {
+    if (!adminUser || adminUser.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (adminUser.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only admins can reset passwords' }, { status: 403 });
     }
 

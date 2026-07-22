@@ -14,11 +14,15 @@ export async function DELETE(request: NextRequest) {
         // Verify admin
         const { data: adminProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (adminProfile.role !== 'ADMIN' || !adminProfile.school_id) {
             return NextResponse.json({ error: 'Only admins can delete users.' }, { status: 403 });
         }
 

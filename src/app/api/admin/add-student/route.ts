@@ -28,11 +28,15 @@ export async function POST(request: NextRequest) {
         // Verify the caller is an ADMIN or CLASS_TEACHER
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', user_id)
             .maybeSingle();
 
-        if (!adminProfile || !adminProfile.school_id) {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!adminProfile.school_id) {
             return NextResponse.json({ error: 'You must have a school to add students.' }, { status: 403 });
         }
 

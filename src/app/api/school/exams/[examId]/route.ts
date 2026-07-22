@@ -21,11 +21,14 @@ export async function PATCH(
 
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || !userProfile.school_id) {
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (!userProfile.school_id) {
             return NextResponse.json({ error: 'User profile not found' }, { status: 403 });
         }
 
@@ -49,7 +52,13 @@ export async function PATCH(
         const updateData: Record<string, any> = {};
 
         if (body.name !== undefined) updateData.name = body.name.trim();
-        if (body.max_score !== undefined) updateData.max_score = Number(body.max_score);
+        if (body.max_score !== undefined) {
+            const maxScore = Number(body.max_score);
+            if (!Number.isFinite(maxScore) || maxScore <= 0) {
+                return NextResponse.json({ error: 'max_score must be a positive number' }, { status: 400 });
+            }
+            updateData.max_score = maxScore;
+        }
         if (body.exam_type !== undefined) updateData.exam_type = body.exam_type;
         if (body.exam_date !== undefined) updateData.exam_date = body.exam_date || null;
 
@@ -94,11 +103,14 @@ export async function DELETE(
 
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || !userProfile.school_id) {
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (!userProfile.school_id) {
             return NextResponse.json({ error: 'User profile not found' }, { status: 403 });
         }
 

@@ -3,6 +3,13 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const EXT_BY_TYPE: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+};
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,11 +21,14 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: profile } = await supabase
             .from('users')
-            .select('school_id')
+            .select('school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!profile?.school_id) {
+        if (!profile || profile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (!profile.school_id) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
 
@@ -28,11 +38,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
         }
 
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            return NextResponse.json({ error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP' }, { status: 400 });
+        }
+
         if (file.size > MAX_SIZE) {
             return NextResponse.json({ error: 'File too large. Maximum size is 10MB' }, { status: 400 });
         }
 
-        const ext = file.name.split('.').pop() || 'bin';
+        const ext = EXT_BY_TYPE[file.type];
         const timestamp = Date.now();
         const fileName = `${profile.school_id}/submissions/${timestamp}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const buffer = Buffer.from(await file.arrayBuffer());

@@ -10,7 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
 });
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
     try {
         const { userId } = await auth();
         if (!userId) {
@@ -20,11 +20,15 @@ export async function GET(request: Request) {
         const supabaseAdmin = createSupabaseAdmin();
         const { data: userProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || userProfile.role !== 'ADMIN') {
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const schoolId = userProfile.school_id;

@@ -38,11 +38,15 @@ export async function PATCH(request: NextRequest) {
         // Verify the caller is an admin or teacher
         const { data: profile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!profile || !['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role) || !profile.school_id) {
+        if (!profile || profile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role) || !profile.school_id) {
             return NextResponse.json({ error: 'Only admins and teachers can update students.' }, { status: 403 });
         }
 

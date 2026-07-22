@@ -13,9 +13,13 @@ export async function GET(_request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
       .from('users')
-      .select('school_id, role')
+      .select('school_id, role, is_active')
       .eq('id', userId)
       .maybeSingle();
+
+    if (!userProfile || userProfile.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role as string;

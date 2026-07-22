@@ -13,12 +13,16 @@ export async function GET() {
 
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
         if (!userProfile) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        if (!userProfile.is_active) {
+            return NextResponse.json({ error: 'Account is deactivated' }, { status: 401 });
         }
 
         const baseRole = userProfile.role;

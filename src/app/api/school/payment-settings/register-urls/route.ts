@@ -18,11 +18,14 @@ export async function POST() {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || userProfile.role !== 'ADMIN') {
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Only an admin can do this' }, { status: 403 });
         }
         const schoolId = userProfile.school_id;

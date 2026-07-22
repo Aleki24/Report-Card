@@ -22,11 +22,15 @@ export async function DELETE(request: NextRequest) {
         // Verify the caller is an ADMIN or CLASS_TEACHER and get their school_id
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', user_id)
             .maybeSingle();
 
-        if (!adminProfile || !adminProfile.school_id) {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!adminProfile.school_id) {
             return NextResponse.json({ error: 'You must have a school to delete students.' }, { status: 403 });
         }
 
@@ -49,6 +53,29 @@ export async function DELETE(request: NextRequest) {
 
         if (!studentUser || studentUser.school_id !== school_id) {
             return NextResponse.json({ error: 'Student not found in your school.' }, { status: 404 });
+        }
+
+        // Class teachers may only delete students in their own assigned stream
+        if (isClassTeacher && !isAdmin) {
+            const { data: teacherAssignment } = await supabaseAdmin
+                .from('class_teachers')
+                .select('current_grade_stream_id')
+                .eq('user_id', user_id)
+                .maybeSingle();
+
+            const { data: studentRecord } = await supabaseAdmin
+                .from('students')
+                .select('current_grade_stream_id')
+                .eq('id', student_id)
+                .maybeSingle();
+
+            if (
+                !teacherAssignment?.current_grade_stream_id ||
+                !studentRecord ||
+                studentRecord.current_grade_stream_id !== teacherAssignment.current_grade_stream_id
+            ) {
+                return NextResponse.json({ error: 'You can only delete students in your own class.' }, { status: 403 });
+            }
         }
 
         // Cascade delete all related records before removing the student

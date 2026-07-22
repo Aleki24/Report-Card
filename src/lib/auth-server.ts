@@ -1,5 +1,5 @@
 // Server-side auth helpers using Clerk
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from './supabase-admin';
 import type { UserRole } from '@/types';
 
@@ -20,34 +20,25 @@ export async function getAuthSession(): Promise<ServerSession | null> {
   const clerkAuth = await auth();
   if (!clerkAuth.userId) return null;
 
-  const user = await currentUser();
-  if (!user) return null;
-
-  // Always look up role and schoolId from the database — never trust session claims alone
+  // Authorization is driven entirely by our own DB row — NEVER by Clerk
+  // session claims, which are client-influenceable. A missing row is
+  // unauthorized, full stop: this covers a brand-new user before the webhook
+  // has synced them, and — critically — a deleted or deactivated account
+  // whose Clerk session is still valid. Previously a null row skipped the
+  // is_active guard and reconstructed role/school from the stale JWT claims,
+  // handing a deleted admin a fully-authorized session until token expiry.
   const dbUser = await getUserDbRecord(clerkAuth.userId);
-
-  // A deactivated account must not pass server-side auth. Relying on the
-  // client (AuthProvider) to sign out on 403 from /api/auth/me leaves a still
-  // -valid Clerk session able to hit every API route directly — enforce here.
-  if (dbUser && dbUser.is_active === false) {
-    return null;
-  }
-
-  const role = dbUser?.role || (clerkAuth.sessionClaims as any)?.role || null;
-  const schoolId = dbUser?.school_id || (clerkAuth.sessionClaims as any)?.schoolId || null;
-
-  if (!role) {
-    // User exists in Clerk but not in our database yet (webhook may not have fired)
+  if (!dbUser || dbUser.is_active === false || !dbUser.role) {
     return null;
   }
 
   return {
     userId: clerkAuth.userId,
-    schoolId,
-    role,
-    email: user.emailAddresses[0]?.emailAddress || '',
-    firstName: dbUser?.first_name || user.firstName || '',
-    lastName: dbUser?.last_name || user.lastName || '',
+    schoolId: dbUser.school_id || null,
+    role: dbUser.role,
+    email: dbUser.email || '',
+    firstName: dbUser.first_name || '',
+    lastName: dbUser.last_name || '',
   };
 }
 

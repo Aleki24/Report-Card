@@ -15,12 +15,21 @@ export async function POST(request: NextRequest) {
     const supabase = createSupabaseAdmin();
     const { data: profile } = await supabase
       .from('users')
-      .select('role, school_id')
+      .select('role, school_id, is_active')
       .eq('id', userId)
       .maybeSingle();
 
-    if (!profile || !profile.school_id) {
+    if (!profile || profile.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!profile.school_id) {
       return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+    }
+
+    // Only staff may upload photos — students must not be able to write to storage.
+    if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const formData = await request.formData();
