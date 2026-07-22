@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerC2BUrls, type MpesaEnvironment } from '@/lib/mpesa';
-import { decryptSecret } from '@/lib/crypto';
+import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
 /**
  * Tells Safaricom where to send Paybill (C2B) confirmations for this
@@ -29,7 +29,7 @@ export async function POST() {
 
         const { data: settings } = await supabase
             .from('school_payment_settings')
-            .select('environment, shortcode, consumer_key, consumer_secret')
+            .select('environment, shortcode, consumer_key, consumer_secret, webhook_token')
             .eq('school_id', schoolId)
             .maybeSingle();
 
@@ -42,7 +42,20 @@ export async function POST() {
             return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL' }, { status: 500 });
         }
 
-        const confirmationUrl = `${appUrl}/api/mpesa/c2b/confirmation/${schoolId}`;
+        // The registered URL carries a per-school secret token (Daraja doesn't
+        // sign its confirmations) — generate it on first use for settings
+        // saved before the token column existed.
+        let webhookToken = settings.webhook_token as string | null;
+        if (!webhookToken) {
+            webhookToken = generateWebhookToken();
+            const { error: tokenError } = await supabase
+                .from('school_payment_settings')
+                .update({ webhook_token: webhookToken, updated_at: new Date().toISOString() })
+                .eq('school_id', schoolId);
+            if (tokenError) throw tokenError;
+        }
+
+        const confirmationUrl = `${appUrl}/api/mpesa/c2b/confirmation/${schoolId}/${webhookToken}`;
         // No Validation URL implementation (see the confirmation route's
         // comment) — point it at the same confirmation endpoint since
         // Safaricom requires a value here even when unused.

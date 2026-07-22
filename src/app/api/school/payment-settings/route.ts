@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { registerPesapalIPN } from '@/lib/pesapal';
-import { encryptSecret, decryptSecret } from '@/lib/crypto';
+import { encryptSecret, decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
 // Checks the Clerk session BEFORE touching Supabase — an anonymous request
 // must get a clean 401, not a raw 500 from createSupabaseAdmin() throwing.
@@ -93,6 +93,9 @@ export async function PUT(request: NextRequest) {
             .maybeSingle();
 
         const update: Record<string, any> = { school_id: schoolId, updated_at: new Date().toISOString() };
+        // Every school gets a webhook token from its very first save — the
+        // Daraja callback URLs embed it as their only forgery protection.
+        if (!existing?.webhook_token) update.webhook_token = generateWebhookToken();
         if (environment !== undefined) update.environment = environment;
         if (shortcode !== undefined) update.shortcode = shortcode || null;
         if (pesapal_environment !== undefined) update.pesapal_environment = pesapal_environment;

@@ -31,6 +31,23 @@ export function encryptSecret(plaintext: string): string {
     return [FORMAT_VERSION, iv.toString('base64'), authTag.toString('base64'), ciphertext.toString('base64')].join(':');
 }
 
+/**
+ * Unguessable path segment for a school's Daraja webhook URLs. Safaricom
+ * doesn't sign its callbacks, so the URL itself has to carry the secret —
+ * a callback arriving without the right token is a forgery.
+ */
+export function generateWebhookToken(): string {
+    return crypto.randomBytes(24).toString('hex');
+}
+
+/** Constant-time comparison (via digest) so a forger can't feel out the token byte by byte. */
+export function verifyWebhookToken(provided: string | null | undefined, stored: string | null | undefined): boolean {
+    if (!provided || !stored) return false;
+    const a = crypto.createHash('sha256').update(provided).digest();
+    const b = crypto.createHash('sha256').update(stored).digest();
+    return crypto.timingSafeEqual(a, b);
+}
+
 export function decryptSecret(stored: string): string {
     const [version, ivB64, authTagB64, ciphertextB64] = stored.split(':');
     if (version !== FORMAT_VERSION || !ivB64 || !authTagB64 || !ciphertextB64) {

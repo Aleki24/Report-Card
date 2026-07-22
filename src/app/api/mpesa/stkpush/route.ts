@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
-import { decryptSecret } from '@/lib/crypto';
+import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
         const { data: settings } = await supabase
             .from('school_payment_settings')
-            .select('environment, shortcode, passkey, consumer_key, consumer_secret, active_provider')
+            .select('environment, shortcode, passkey, consumer_key, consumer_secret, active_provider, webhook_token')
             .eq('school_id', fee.school_id)
             .maybeSingle();
 
@@ -61,6 +61,19 @@ export async function POST(request: NextRequest) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
         if (!appUrl) {
             return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the M-Pesa callback URL' }, { status: 500 });
+        }
+
+        // The callback URL carries a per-school secret token (Daraja callbacks
+        // aren't signed) — generate it on first use for settings saved before
+        // the token column existed.
+        let webhookToken = settings.webhook_token as string | null;
+        if (!webhookToken) {
+            webhookToken = generateWebhookToken();
+            const { error: tokenError } = await supabase
+                .from('school_payment_settings')
+                .update({ webhook_token: webhookToken, updated_at: new Date().toISOString() })
+                .eq('school_id', fee.school_id);
+            if (tokenError) throw tokenError;
         }
 
         const student = fee.students as any;
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest) {
                 amount: amountValue,
                 accountReference: admissionNumber,
                 transactionDesc: 'School Fees',
-                callbackUrl: `${appUrl}/api/mpesa/stkpush/callback/${fee.school_id}`,
+                callbackUrl: `${appUrl}/api/mpesa/stkpush/callback/${fee.school_id}/${webhookToken}`,
             });
 
             await supabase
