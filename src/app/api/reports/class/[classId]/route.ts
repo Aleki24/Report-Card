@@ -11,6 +11,7 @@ import {
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
+    isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -84,15 +85,6 @@ export async function GET(
             }
         }
 
-        if (targetSchoolId) {
-            const { data: schoolData } = await supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle();
-            if (schoolData) {
-                schoolName = schoolData.name;
-                schoolLogoUrl = schoolData.logo_url || undefined;
-                schoolAddress = schoolData.address || undefined;
-            }
-        }
-
         // 3. Determine academic level and grading system from first student
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
@@ -100,59 +92,53 @@ export async function GET(
         const firstAcademicLevelId = students[0].academic_level_id;
         const streamName = (students[0].grade_streams as any)?.full_name || '';
         const gradeId = (students[0].grade_streams as any)?.grade_id;
-        
-        // Fetch grade code from grades table
-        let gradeLevelCode = '';
-        if (gradeId) {
-            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).maybeSingle();
-            if (gradeData) gradeLevelCode = gradeData.code || '';
+
+        // These lookups are all independent of each other — run them together
+        // instead of six sequential round-trips on this batch-generation path.
+        const [schoolRes, gradeRes, academicLevelRes, gradingSystemsRes, termRes, yearRes] = await Promise.all([
+            targetSchoolId ? supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle() : Promise.resolve({ data: null }),
+            gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
+            firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
+            firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId) : Promise.resolve({ data: [] as any[] }),
+            termId ? supabase.from('terms').select('name, opening_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
+            yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
+        ]);
+
+        if (schoolRes.data) {
+            schoolName = schoolRes.data.name;
+            schoolLogoUrl = schoolRes.data.logo_url || undefined;
+            schoolAddress = schoolRes.data.address || undefined;
         }
-        
+
+        const gradeLevelCode = gradeRes.data?.code || '';
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        // Check both stream name AND grade code for compatibility
-        const combinedCode = `${gradeLevelCode} ${streamName}`;
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
-                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
-                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
+        const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {
-            const { data: academicLevel } = await supabase
-                .from('academic_levels')
-                .select('code')
-                .eq('id', firstAcademicLevelId)
-                .maybeSingle();
-
             // Use grade code to determine KCSE vs CBC, fallback to academic level
             if (isKCSEGrade) {
                 gradingSystemType = 'KCSE';
-            } else if (academicLevel) {
-                gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
+            } else if (academicLevelRes.data) {
+                gradingSystemType = academicLevelRes.data.code === 'CBC' ? 'CBC' : 'KCSE';
             }
-            
-            // Fetch grading systems for this academic level - get the one with scales
-            const { data: allGradingSystems } = await supabase
-                .from('grading_systems')
-                .select('id, name')
-                .eq('academic_level_id', firstAcademicLevelId);
 
-            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
+            // Pick the grading system for this level that actually has scales
+            // (preferring the first in order), then a KCSE/Letter-named one, then
+            // the first. One query for all systems' scale membership beats a
+            // per-system count loop.
+            const allGradingSystems = (gradingSystemsRes.data || []) as any[];
             let gradingSystemId: string | null = null;
-            if (allGradingSystems && allGradingSystems.length > 0) {
-                for (const gs of allGradingSystems) {
-                    const { count } = await supabase
-                        .from('grading_scales')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('grading_system_id', gs.id);
-                    
-                    if (count && count > 0) {
-                        gradingSystemId = gs.id;
-                        break; // Found one with scales
-                    }
-                }
-                // Fallback: prefer system with "KCSE" or "Letter" in name
-                if (!gradingSystemId && allGradingSystems.length > 0) {
-                    const preferred = allGradingSystems.find((gs: any) => 
-                        gs.name?.toLowerCase().includes('kcse') || 
+            if (allGradingSystems.length > 0) {
+                const systemIds = allGradingSystems.map(g => g.id);
+                const { data: scaleRows } = await supabase
+                    .from('grading_scales')
+                    .select('grading_system_id')
+                    .in('grading_system_id', systemIds);
+                const systemsWithScales = new Set((scaleRows || []).map((r: any) => r.grading_system_id));
+                gradingSystemId = allGradingSystems.find(g => systemsWithScales.has(g.id))?.id || null;
+                if (!gradingSystemId) {
+                    const preferred = allGradingSystems.find((gs: any) =>
+                        gs.name?.toLowerCase().includes('kcse') ||
                         gs.name?.toLowerCase().includes('letter')
                     );
                     gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
@@ -181,23 +167,14 @@ export async function GET(
             points: s.points,
         }));
 
-        // 5. Fetch term/year info
-        let termTitle = 'Term Report';
-        let academicYearName = 'Academic Year';
-        let openingDate: string | undefined;
-        if (termId) {
-            const { data: termData } = await supabase.from('terms').select('name, opening_date').eq('id', termId).maybeSingle();
-            if (termData) termTitle = termData.name;
-            openingDate = termData?.opening_date || undefined;
-        }
-        
+        // 5. Term/year info (fetched in the batch above)
+        let termTitle = termRes.data?.name || 'Term Report';
+        const academicYearName = yearRes.data?.name || 'Academic Year';
+        const openingDate: string | undefined = termRes.data?.opening_date || undefined;
+
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
             termTitle = customTitle;
-        }
-        if (yearId) {
-            const { data: yearData } = await supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle();
-            if (yearData) academicYearName = yearData.name;
         }
 
         // 6. Fetch all marks and also ALL exams for this term and class
@@ -218,13 +195,6 @@ export async function GET(
             marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
         }
 
-        const { data: allMarks, error: marksErr } = await marksQuery;
-
-        if (marksErr) {
-            console.error('Error fetching class marks:', marksErr);
-            return NextResponse.json({ error: 'Failed to fetch marks' }, { status: 500 });
-        }
-
         // Fetch all exams for this term and grade to ensure all subjects are shown even if missing from exam_marks
         let examsQ = supabase
             .from('exams')
@@ -233,7 +203,13 @@ export async function GET(
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
         if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
 
-        const { data: termExams } = await examsQ;
+        // Independent of each other — fetch together.
+        const [{ data: allMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);
+
+        if (marksErr) {
+            console.error('Error fetching class marks:', marksErr);
+            return NextResponse.json({ error: 'Failed to fetch marks' }, { status: 500 });
+        }
         const examMap = new Map<string, any>();
         if (termExams) {
             termExams.forEach((ex: any) => {
@@ -342,6 +318,25 @@ export async function GET(
         // 8. Generate raw data array instead of PDFs
         const reportCardsData: ReportCardData[] = [];
 
+        // Batch-fetch every student's report-card comments in one query instead
+        // of one per student inside the loop below (N+1 on the hottest endpoint).
+        const commentsByStudent = new Map<string, { classTeacher: string; principal: string }>();
+        if (termId && yearId) {
+            const studentIds = students.map(s => s.id);
+            const { data: reportCards } = await supabase
+                .from('report_cards')
+                .select('student_id, comments_class_teacher, comments_principal')
+                .in('student_id', studentIds)
+                .eq('term_id', termId)
+                .eq('academic_year_id', yearId);
+            for (const rc of reportCards || []) {
+                commentsByStudent.set(rc.student_id, {
+                    classTeacher: rc.comments_class_teacher || '',
+                    principal: rc.comments_principal || '',
+                });
+            }
+        }
+
         for (const student of students) {
             const studentMarks = marksByStudent[student.id] || [];
             // If student has no marks and there are no exams either, skip
@@ -372,25 +367,10 @@ export async function GET(
                     ? getGradeFromScales(studentPerf.percentage, gradingScales) 
                     : studentPerf.grade);
 
-            // Fetch class teacher and principal comments
-            let classTeacherComment = '';
-            let principalComment = '';
-            if (termId && yearId) {
-                const { data: reportCard } = await supabase
-                    .from('report_cards')
-                    .select('comments_class_teacher, comments_principal')
-                    .eq('student_id', student.id)
-                    .eq('term_id', termId)
-                    .eq('academic_year_id', yearId)
-                    .maybeSingle();
-
-                if (reportCard?.comments_class_teacher) {
-                    classTeacherComment = reportCard.comments_class_teacher;
-                }
-                if (reportCard?.comments_principal) {
-                    principalComment = reportCard.comments_principal;
-                }
-            }
+            // Class teacher and principal comments (pre-fetched in one batch above)
+            const studentComments = commentsByStudent.get(student.id);
+            const classTeacherComment = studentComments?.classTeacher || '';
+            const principalComment = studentComments?.principal || '';
 
             const firstName = (student.users as any)?.first_name || 'Student';
             const lastName = (student.users as any)?.last_name || '';

@@ -42,10 +42,12 @@ export function isOverdue(dueDate: string | null | undefined, balance: number): 
  * — every entry point (manual recording, M-Pesa STK Push, M-Pesa C2B
  * confirmation) writes here rather than touching the aggregate directly.
  */
-export type FeePaymentMethod = 'MPESA' | 'CASH' | 'BANK' | 'CHEQUE' | 'OTHER';
+export type FeePaymentMethod = 'MPESA' | 'PESAPAL' | 'CASH' | 'BANK' | 'CHEQUE' | 'OTHER';
 export type FeePaymentRecordStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
-export const FEE_PAYMENT_METHODS: FeePaymentMethod[] = ['MPESA', 'CASH', 'BANK', 'CHEQUE', 'OTHER'];
+export const FEE_PAYMENT_METHODS: FeePaymentMethod[] = ['MPESA', 'PESAPAL', 'CASH', 'BANK', 'CHEQUE', 'OTHER'];
+
+export type PaymentProvider = 'NONE' | 'DARAJA' | 'PESAPAL';
 
 export interface FeePayment {
     id: string;
@@ -58,11 +60,34 @@ export interface FeePayment {
     payerName: string | null;
     mpesaReceiptNumber: string | null;
     mpesaCheckoutRequestId: string | null;
+    pesapalOrderTrackingId: string | null;
+    pesapalConfirmationCode: string | null;
+    pesapalPaymentMethod: string | null;
     unmatchedAccountReference: string | null;
     notes: string | null;
     recordedBy: string | null;
     paidAt: string;
     createdAt: string;
+}
+
+export interface SchoolBankAccount {
+    id: string;
+    bankName: string;
+    accountName: string;
+    accountNumber: string;
+    branch: string | null;
+    isPrimary: boolean;
+}
+
+export function mapBankAccountRow(a: any): SchoolBankAccount {
+    return {
+        id: a.id,
+        bankName: a.bank_name,
+        accountName: a.account_name,
+        accountNumber: a.account_number,
+        branch: a.branch,
+        isPrimary: a.is_primary,
+    };
 }
 
 export function mapFeePaymentRow(p: any): FeePayment {
@@ -77,6 +102,9 @@ export function mapFeePaymentRow(p: any): FeePayment {
         payerName: p.payer_name,
         mpesaReceiptNumber: p.mpesa_receipt_number,
         mpesaCheckoutRequestId: p.mpesa_checkout_request_id,
+        pesapalOrderTrackingId: p.pesapal_order_tracking_id,
+        pesapalConfirmationCode: p.pesapal_confirmation_code,
+        pesapalPaymentMethod: p.pesapal_payment_method,
         unmatchedAccountReference: p.unmatched_account_reference,
         notes: p.notes,
         recordedBy: p.recorded_by,

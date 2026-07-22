@@ -172,7 +172,11 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
     const autoResolveGrade = (scoreStr: string, maxScoreVal: number): string => {
         const num = parseFloat(scoreStr);
         if (!scoreStr || isNaN(num) || maxScoreVal <= 0) return '';
-        const pct = (num / maxScoreVal) * 100;
+        // Round before matching so a fractional percentage that falls in a gap
+        // between integer-bounded bands (e.g. 89.5 with bands 75-89 / 90-100)
+        // resolves the same way the shared getGradeFromScales helper and the DB
+        // do — otherwise the stored grade depends on which screen was used.
+        const pct = Math.round((num / maxScoreVal) * 100);
         for (const scale of gradingScales) {
             if (pct >= scale.min_percentage && pct <= scale.max_percentage) {
                 return scale.symbol;
@@ -275,44 +279,17 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
         setSaving(true);
 
         try {
-            // 1. Fetch exam max_score
-            const examsRes = await fetch('/api/school/data?type=exams');
-            const { data: examsData } = await examsRes.json();
-            const examData = examsData?.find((e: any) => e.id === examId);
-            const examMaxScore = examData?.max_score || 100;
-
-            // 2. Fetch grading scales
-            const scalesRes = await fetch('/api/school/data?type=grading_scales');
-            const scalesObj = await scalesRes.json();
-            let gradingScales: { symbol: string; min_percentage: number; max_percentage: number }[] = [];
-            
-            // Assume the first grading system applies, or flatten all scales (adjust if multiple systems exist)
-            if (scalesObj.data) {
-                scalesObj.data.forEach((sys: any) => {
-                    sys.grading_scales?.forEach((sc: any) => {
-                        gradingScales.push({
-                            symbol: sc.symbol,
-                            min_percentage: sc.min_percentage,
-                            max_percentage: sc.max_percentage,
-                        });
-                    });
-                });
-            }
-
-            // 3. Build entries with percentage and auto-grade
+            // Resolve grades from the same level-filtered gradingScales state and
+            // examMaxScore the on-screen dropdown uses (via autoResolveGrade), so
+            // the saved grade always matches what the teacher saw. Previously this
+            // re-fetched an unfiltered flatten of every grading system's scales,
+            // which could resolve a different grade than the display when a school
+            // ran two systems with overlapping bands. The server recomputes and
+            // range-checks the percentage, so we only send raw_score + grade.
             const entries = rawEntries.map(([studentId, val]) => {
                 const rawScore = Number(val);
                 const percentage = examMaxScore > 0 ? Math.round((rawScore / examMaxScore) * 10000) / 100 : 0;
-
-                // Find matching grade from scales
-                let gradeSymbol: string | null = null;
-                for (const scale of gradingScales) {
-                    if (percentage >= scale.min_percentage && percentage <= scale.max_percentage) {
-                        gradeSymbol = scale.symbol;
-                        break;
-                    }
-                }
-
+                const gradeSymbol = autoResolveGrade(val, examMaxScore) || null;
                 return {
                     student_id: studentId,
                     raw_score: rawScore,

@@ -27,6 +27,8 @@ interface Props {
     /** Multi-paper scheme for this exam (null/undefined = single paper) */
     scheme?: ExamSubjectComponentScheme | null;
     onRefresh: () => void;
+    /** Patch a single row in place after an edit, avoiding a full grid refetch. */
+    onMarkPatched?: (patched: MarkRow) => void;
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -52,7 +54,7 @@ const OVERALL_POINTS_GRADES = [
 
 type SortKey = 'student_name' | 'percentage' | 'grade_symbol';
 
-export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh }: Props) {
+export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh, onMarkPatched }: Props) {
     const multiPaper = isMultiPaper(scheme);
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
     const [sortKey, setSortKey] = useState<SortKey>('student_name');
@@ -67,7 +69,9 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             
             try {
                 const [marksRes, structureRes] = await Promise.all([
-                    fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}`),
+                    // Pass the current exam so the stream marks are scoped to its
+                    // term — otherwise total points accumulate across every term.
+                    fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}${examId ? `&exam_id=${examId}` : ''}`),
                     fetch('/api/admin/academic-structure')
                 ]);
 
@@ -114,7 +118,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
         };
 
         fetchTotalPoints();
-    }, [gradeStreamId]);
+    }, [gradeStreamId, examId]);
 
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {
@@ -317,7 +321,13 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                     examId={examId}
                     scheme={scheme}
                     onClose={() => setEditingMark(null)}
-                    onSaved={() => { setEditingMark(null); onRefresh(); }}
+                    onSaved={(patched) => {
+                        setEditingMark(null);
+                        // Patch the single row in place when possible; fall back to
+                        // a full refetch only if the parent didn't wire the handler.
+                        if (patched && onMarkPatched) onMarkPatched(patched);
+                        else onRefresh();
+                    }}
                     onDeleted={() => { setEditingMark(null); onRefresh(); }}
                 />
             )}

@@ -19,13 +19,16 @@ export async function POST(request: NextRequest) {
 
     const { data: userProfile } = await supabase
       .from('users')
-      .select('school_id, role')
+      .select('school_id, role, is_active')
       .eq('id', userId)
       .maybeSingle();
 
     const schoolId = userProfile?.school_id as string;
     const role = userProfile?.role as string;
 
+    if (!userProfile || userProfile.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!schoolId) {
       return NextResponse.json({ error: 'No school associated with user' }, { status: 403 });
     }
@@ -42,6 +45,22 @@ export async function POST(request: NextRequest) {
     ]);
     if (!streamCheck.data || !termCheck.data || !yearCheck.data) {
       return NextResponse.json({ error: 'Class, term, or academic year not found for this school' }, { status: 403 });
+    }
+
+    // A class teacher may only (re)generate reports for a stream they're
+    // assigned to. The RPC's own guard is neutralized under the service-role
+    // client (auth.uid() is null → its role check is skipped), so this must be
+    // enforced here or a teacher could wipe+regenerate any stream's reports.
+    if (role === 'CLASS_TEACHER') {
+      const { data: assignment } = await supabase
+        .from('class_teachers')
+        .select('user_id')
+        .eq('user_id', userId)
+        .eq('current_grade_stream_id', grade_stream_id)
+        .maybeSingle();
+      if (!assignment) {
+        return NextResponse.json({ error: 'You can only generate reports for your own class.' }, { status: 403 });
+      }
     }
 
     const { error: rpcError } = await supabase.rpc('generate_term_reports', {

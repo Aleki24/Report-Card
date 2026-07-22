@@ -44,6 +44,26 @@ interface StreamOption {
     full_name: string;
 }
 
+interface PaymentLogRow {
+    id: string;
+    studentFeeId: string | null;
+    receiptNumber: string;
+    amount: number;
+    method: string;
+    status: string;
+    source: 'AUTO' | 'MANUAL';
+    studentName: string | null;
+    admissionNumber: string | null;
+    unmatchedReference: string | null;
+    termId: string | null;
+    termName: string | null;
+    mpesaReceiptNumber: string | null;
+    pesapalConfirmationCode: string | null;
+    notes: string | null;
+    recordedByName: string | null;
+    paidAt: string;
+}
+
 function timeAgo(dateStr: string): string {
     if (!dateStr) return '';
     const now = Date.now();
@@ -77,7 +97,7 @@ const statusBadge = (status: string) => {
 const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
 
 export default function FeesPage() {
-    const { profile } = useAuth();
+    const { profile, role } = useAuth();
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -100,7 +120,7 @@ export default function FeesPage() {
     const [formNotes, setFormNotes] = useState('');
 
     // Batch entry state
-    const [mode, setMode] = useState<'list' | 'batch'>('list');
+    const [mode, setMode] = useState<'list' | 'batch' | 'payments'>('list');
     const [gradeStreams, setGradeStreams] = useState<StreamOption[]>([]);
     const [batchStream, setBatchStream] = useState('');
     const [batchTerm, setBatchTerm] = useState('');
@@ -124,6 +144,16 @@ export default function FeesPage() {
     const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+
+    // Payments log (school-wide transactions view)
+    const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
+    const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
+    const [plSearch, setPlSearch] = useState('');
+    const [plMethod, setPlMethod] = useState('');
+    const [plStatus, setPlStatus] = useState('');
+    const [plSource, setPlSource] = useState('');
+    const [plDateFrom, setPlDateFrom] = useState('');
+    const [plDateTo, setPlDateTo] = useState('');
 
     // Close dropdown on outside click
     useEffect(() => {
@@ -384,6 +414,63 @@ export default function FeesPage() {
         }
     };
 
+    // ── Payments log (school-wide transactions view) ──
+
+    const fetchPaymentsLog = useCallback(async () => {
+        setPaymentsLogLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (selectedTerm) params.set('term_id', selectedTerm);
+            if (plMethod) params.set('method', plMethod);
+            if (plStatus) params.set('status', plStatus);
+            if (plSource) params.set('source', plSource);
+            if (plDateFrom) params.set('date_from', plDateFrom);
+            if (plDateTo) params.set('date_to', plDateTo);
+            if (plSearch) params.set('search', plSearch);
+            const res = await fetch(`/api/school/fees/payments?${params}`);
+            const json = await res.json();
+            setPaymentsLog(json.data || []);
+        } catch (err) {
+            console.error('Failed to load payments log:', err);
+            setPaymentsLog([]);
+        }
+        setPaymentsLogLoading(false);
+    }, [selectedTerm, plMethod, plStatus, plSource, plDateFrom, plDateTo, plSearch]);
+
+    useEffect(() => {
+        if (mode === 'payments') fetchPaymentsLog();
+    }, [mode, fetchPaymentsLog]);
+
+    const openPaymentsLog = () => {
+        setMode('payments');
+        setShowActionsDropdown(false);
+    };
+
+    const voidLogPayment = async (payment: PaymentLogRow) => {
+        if (!payment.studentFeeId) {
+            alert('This payment is unmatched to a student and has nothing to void — it can only be assigned or left as-is from Settings > Payments.');
+            return;
+        }
+        if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
+        try {
+            await fetch(`/api/school/fees/${payment.studentFeeId}/payments/${payment.id}`, { method: 'DELETE' });
+            await fetchPaymentsLog();
+        } catch (err) {
+            console.error('Void failed:', err);
+        }
+    };
+
+    const exportPaymentsLog = () => {
+        const params = new URLSearchParams();
+        if (selectedTerm) params.set('term_id', selectedTerm);
+        if (plMethod) params.set('method', plMethod);
+        if (plStatus) params.set('status', plStatus);
+        if (plSource) params.set('source', plSource);
+        if (plDateFrom) params.set('date_from', plDateFrom);
+        if (plDateTo) params.set('date_to', plDateTo);
+        window.location.href = `/api/school/fees/payments/export?${params}`;
+    };
+
     // ── Batch entry ──
 
     const loadBatchStudents = useCallback(async () => {
@@ -543,6 +630,17 @@ export default function FeesPage() {
                         {mode === 'list' && (
                             <button className="btn-secondary" onClick={exportExcel} title="Export the current view to Excel">
                                 <Download size={14} /> Export
+                            </button>
+                        )}
+                        {mode === 'payments' && (
+                            <button className="btn-secondary" onClick={exportPaymentsLog} title="Export the payments log to Excel">
+                                <Download size={14} /> Export
+                            </button>
+                        )}
+
+                        {mode === 'list' && role === 'ADMIN' && (
+                            <button className="btn-secondary" onClick={openPaymentsLog}>
+                                <Receipt size={14} /> Payments Log
                             </button>
                         )}
 
@@ -734,6 +832,122 @@ export default function FeesPage() {
                             )}
                         </>
                     )}
+                </div>
+            )}
+
+            {/* ════════════════════════════════════════════ */}
+            {/* PAYMENTS LOG (school-wide transactions)       */}
+            {/* ════════════════════════════════════════════ */}
+            {mode === 'payments' && (
+                <div>
+                    <div className="card p-4 mb-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="relative flex-1 min-w-[200px] max-w-xs">
+                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    placeholder="Search student, admission, or receipt..."
+                                    value={plSearch}
+                                    onChange={e => setPlSearch(e.target.value)}
+                                    className="input-field w-full pl-9"
+                                />
+                            </div>
+                            <select className="input-field min-w-[130px]" value={plMethod} onChange={e => setPlMethod(e.target.value)}>
+                                <option value="">All Methods</option>
+                                {FEE_PAYMENT_METHODS.map(m => (
+                                    <option key={m} value={m}>{m === 'MPESA' ? 'M-Pesa' : m.charAt(0) + m.slice(1).toLowerCase()}</option>
+                                ))}
+                            </select>
+                            <select className="input-field min-w-[130px]" value={plSource} onChange={e => setPlSource(e.target.value)}>
+                                <option value="">Auto & Manual</option>
+                                <option value="AUTO">Auto only</option>
+                                <option value="MANUAL">Manual only</option>
+                            </select>
+                            <select className="input-field min-w-[130px]" value={plStatus} onChange={e => setPlStatus(e.target.value)}>
+                                <option value="">All Statuses</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="PENDING">Pending</option>
+                                <option value="FAILED">Failed</option>
+                                <option value="CANCELLED">Cancelled</option>
+                            </select>
+                            <input type="date" className="input-field" value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} title="From date" />
+                            <input type="date" className="input-field" value={plDateTo} onChange={e => setPlDateTo(e.target.value)} title="To date" />
+                            <button className="btn-secondary" onClick={fetchPaymentsLog}>Apply</button>
+                        </div>
+                    </div>
+
+                    <DataTable<PaymentLogRow>
+                        columns={[
+                            {
+                                key: 'paidAt', header: 'Date',
+                                render: p => <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>,
+                            },
+                            {
+                                key: 'student', header: 'Student',
+                                render: p => (
+                                    <div>
+                                        <div className="font-semibold text-sm">{p.studentName || (p.unmatchedReference ? `Unmatched (${p.unmatchedReference})` : '—')}</div>
+                                        <div className="text-[11px] text-muted-foreground">{p.admissionNumber || ''} {p.termName ? `· ${p.termName}` : ''}</div>
+                                    </div>
+                                ),
+                            },
+                            { key: 'receiptNumber', header: 'Receipt', render: p => <span className="font-mono text-xs">{p.receiptNumber}</span> },
+                            { key: 'amount', header: 'Amount', numeric: true, render: p => <span className="font-semibold">{formatCurrency(p.amount)}</span> },
+                            {
+                                key: 'method', header: 'Method',
+                                render: p => <span>{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</span>,
+                            },
+                            {
+                                key: 'transactionCode', header: 'Transaction Code', hideOnMobile: true,
+                                render: p => <span className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</span>,
+                            },
+                            {
+                                key: 'source', header: 'Source', hideOnMobile: true,
+                                render: p => (
+                                    <span className={`badge whitespace-nowrap ${p.source === 'AUTO' ? 'badge-success' : 'badge-info'}`}>
+                                        {p.source === 'AUTO' ? 'Auto' : 'Manual'}
+                                    </span>
+                                ),
+                            },
+                            {
+                                key: 'status', header: 'Status',
+                                render: p => (
+                                    <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : p.status === 'FAILED' ? 'badge-danger' : 'badge-warning'}`}>
+                                        {p.status}
+                                    </span>
+                                ),
+                            },
+                            {
+                                key: 'recordedBy', header: 'Recorded By', hideOnMobile: true,
+                                render: p => <span className="text-xs text-muted-foreground">{p.recordedByName || (p.source === 'AUTO' ? 'System' : '—')}</span>,
+                            },
+                        ]}
+                        rows={paymentsLog}
+                        rowKey={p => p.id}
+                        loading={paymentsLogLoading}
+                        mobileTitleKey="student"
+                        rowActions={p => (
+                            <span className="whitespace-nowrap">
+                                {p.status !== 'CANCELLED' && (
+                                    <a
+                                        className="btn-icon text-muted-foreground hover:text-foreground"
+                                        href={`/api/school/fees/payments/${p.id}/receipt`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="Download Receipt"
+                                    >
+                                        <Receipt size={14} />
+                                    </a>
+                                )}
+                                {p.status === 'COMPLETED' && p.studentFeeId && (
+                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidLogPayment(p)} title="Void Payment">
+                                        <Ban size={14} />
+                                    </button>
+                                )}
+                            </span>
+                        )}
+                        emptyState={<p className="text-sm">No payments found for the current filters.</p>}
+                    />
                 </div>
             )}
 
@@ -1017,6 +1231,7 @@ export default function FeesPage() {
                                                     <th>Receipt</th>
                                                     <th>Date</th>
                                                     <th>Method</th>
+                                                    <th>Transaction Code</th>
                                                     <th>Amount</th>
                                                     <th>Status</th>
                                                     <th />
@@ -1028,6 +1243,7 @@ export default function FeesPage() {
                                                         <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
                                                         <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
                                                         <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                        <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
                                                         <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                         <td data-label="Status">
                                                             <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>

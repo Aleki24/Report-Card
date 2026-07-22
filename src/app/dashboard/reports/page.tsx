@@ -263,14 +263,17 @@ export default function ReportsPage() {
   };
 
   const handleSaveAllComments = async () => {
-    setSavingCommentId('all'); let successCount = 0;
-    for (const sc of studentComments) {
+    setSavingCommentId('all');
+    // Fire the saves in parallel instead of one awaited request at a time —
+    // a 45-student class went from ~45 sequential round-trips to one batch.
+    const results = await Promise.all(studentComments.map(async sc => {
       try {
         const res = await fetch('/api/reports/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ student_id: sc.student_id, term_id: selectedTerm, academic_year_id: selectedAcademicYear, grade_stream_id: selectedGradeStream, comments_class_teacher: sc.comments_class_teacher, comments_principal: sc.comments_principal }) });
-        if (res.ok) successCount++;
-      } catch { /* skip */ }
-    }
+        return res.ok;
+      } catch { return false; }
+    }));
+    const successCount = results.filter(Boolean).length;
     showToastMsg(`✅ Saved comments for ${successCount} of ${studentComments.length} students`);
     setSavingCommentId(null);
   };

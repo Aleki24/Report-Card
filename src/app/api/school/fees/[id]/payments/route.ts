@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
@@ -64,8 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         return NextResponse.json({ data: (data ?? []).map(mapFeePaymentRow) });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fee payments', err);
     }
 }
 
@@ -93,6 +93,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
         const methodValue: FeePaymentMethod = FEE_PAYMENT_METHODS.includes(method) ? method : 'CASH';
 
+        // Backdating is legitimate (recording an old deposit slip); a future
+        // date is always a typo — catch it here instead of polluting the ledger.
+        let paidAtValue: string | undefined;
+        if (paid_at) {
+            const paidAtDate = new Date(paid_at);
+            if (isNaN(paidAtDate.getTime())) {
+                return NextResponse.json({ error: 'paid_at is not a valid date' }, { status: 400 });
+            }
+            if (paidAtDate.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+                return NextResponse.json({ error: 'paid_at cannot be in the future' }, { status: 400 });
+            }
+            paidAtValue = paidAtDate.toISOString();
+        }
+
         const { data, error: insertError } = await supabase
             .from('fee_payments')
             .insert({
@@ -101,7 +115,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 amount: amountValue,
                 method: methodValue,
                 status: 'COMPLETED',
-                paid_at: paid_at || new Date().toISOString(),
+                paid_at: paidAtValue || new Date().toISOString(),
                 notes: notes || null,
                 payer_name: payer_name || null,
                 phone_number: phone_number || null,
@@ -123,7 +137,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         return NextResponse.json({ data: mapFeePaymentRow(data), fee: updatedFee });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fee payments', err);
     }
 }

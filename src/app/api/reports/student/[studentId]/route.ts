@@ -11,6 +11,7 @@ import {
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
+    isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
@@ -27,8 +28,17 @@ export async function GET(
         const studentId = (await params).studentId;
         const { searchParams } = new URL(request.url);
         const baseUrl = new URL(request.url).origin;
-        const termId = searchParams.get('termId') || searchParams.get('term');
-        const yearId = searchParams.get('yearId') || searchParams.get('year');
+        // Normalize empty query params to null — callers sometimes build
+        // `?term=` with a blank value; treating '' as "no filter" silently
+        // merged marks from every term into one report card.
+        const rawTerm = searchParams.get('termId') || searchParams.get('term');
+        const rawYear = searchParams.get('yearId') || searchParams.get('year');
+        const termId = rawTerm && rawTerm.trim() ? rawTerm : null;
+        const yearId = rawYear && rawYear.trim() ? rawYear : null;
+
+        if (!termId) {
+            return NextResponse.json({ error: 'A term is required to generate a report card.' }, { status: 400 });
+        }
         const templateParam = searchParams.get('template');
         const template = isReportTemplateId(templateParam) ? templateParam : undefined;
 
@@ -124,11 +134,7 @@ export async function GET(
         }
         
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        // Check both stream name AND grade code for compatibility
-        const combinedCode = `${gradeLevelCode} ${streamName}`;
-        const isKCSEGrade = /^(G[78]|G1[12]|F[34])/i.test(gradeLevelCode) || 
-                           /^(G[78]|G1[12]|F[34])/i.test(streamName) ||
-                           /\b(F[34]|G[78]|G1[12])\b/i.test(combinedCode);
+        const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (student.academic_level_id) {
             // Fetch the academic level code to determine KCSE vs CBC
@@ -155,12 +161,17 @@ export async function GET(
             let gradingSystemId: string | null = null;
             if (allGradingSystems && allGradingSystems.length > 0) {
                 for (const gs of allGradingSystems) {
-                    const { data: scalesCount } = await supabase
+                    // A head+count query returns the count in `count`, not `data`
+                    // (data is always null) — reading `.length` off data meant
+                    // this "prefer the system that actually has scales" check
+                    // never fired, so the report always fell to the name-based
+                    // fallback and could pick an empty system → blank grades.
+                    const { count: scalesCount } = await supabase
                         .from('grading_scales')
                         .select('id', { count: 'exact', head: true })
                         .eq('grading_system_id', gs.id);
-                    
-                    if (scalesCount && (scalesCount as any).length > 0) {
+
+                    if (scalesCount && scalesCount > 0) {
                         gradingSystemId = gs.id;
                         break; // Found one with scales
                     }
@@ -204,7 +215,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, term_id, academic_year_id,
+                exams!inner ( id, name, max_score, term_id, academic_year_id, created_at,
                     terms ( name ),
                     academic_years ( name ),
                     subjects ( id, name, code, category, display_order, grading_system_id )
@@ -252,30 +263,38 @@ export async function GET(
             }
         }
 
-        for (const gsId of gradingSystemIds) {
-            const { data: gs } = await supabase
-                .from('grading_systems')
-                .select('id, academic_levels!inner(code)')
-                .eq('id', gsId)
-                .maybeSingle();
-            
-            if (gs) {
+        // Batch the two per-system lookups into one query each (was 2 sequential
+        // queries per grading system).
+        const gsIdList = Array.from(gradingSystemIds);
+        if (gsIdList.length > 0) {
+            const [{ data: systems }, { data: allScales }] = await Promise.all([
+                supabase.from('grading_systems').select('id, academic_levels!inner(code)').in('id', gsIdList),
+                supabase.from('grading_scales').select('*').in('grading_system_id', gsIdList).order('order_index', { ascending: true }),
+            ]);
+            for (const gs of systems || []) {
                 const levelCode = (gs.academic_levels as any)?.code;
-                subjectGradingSystemTypes[gsId] = levelCode === 'CBC' ? 'CBC' : 'KCSE';
+                subjectGradingSystemTypes[gs.id] = levelCode === 'CBC' ? 'CBC' : 'KCSE';
             }
-
-            const { data: scales } = await supabase
-                .from('grading_scales')
-                .select('*')
-                .eq('grading_system_id', gsId)
-                .order('order_index', { ascending: true });
-            
-            if (scales) {
-                subjectGradingSystems[gsId] = scales as GradingScale[];
+            for (const sc of (allScales || []) as any[]) {
+                (subjectGradingSystems[sc.grading_system_id] ||= []).push(sc as GradingScale);
             }
         }
 
-        const safeMarks = marks || [];
+        // Collapse to one mark per subject for this term. A subject can have
+        // several exams in a term (OPENER/MIDTERM/ENDTERM); previously the
+        // subject-row map kept whichever the DB returned last (non-deterministic,
+        // and inconsistent with the overall average that counted them all). Keep
+        // the most recent exam's mark deterministically and feed that same set to
+        // both the subject rows and the aggregate, so rows and totals agree.
+        const orderedMarks = [...(marks || [])].sort((a: any, b: any) =>
+            new Date(a.exams?.created_at || 0).getTime() - new Date(b.exams?.created_at || 0).getTime()
+        );
+        const marksBySubject = new Map<string, any>();
+        for (const m of orderedMarks) {
+            const sid = (m as any).exams?.subjects?.id;
+            if (sid) marksBySubject.set(sid, m); // later (more recent) exam wins
+        }
+        const safeMarks = Array.from(marksBySubject.values());
         const firstExam = safeMarks.length > 0 ? safeMarks[0].exams : (termExams && termExams.length > 0 ? termExams[0] : null);
 
         let termTitle = 'Term Report';
@@ -624,7 +643,11 @@ export async function GET(
             gradingSystemType,
             subjectMarks,
             overallPercentage: displayPercentage,
-            overallGrade: gradingScales.length > 0 ? getGradeFromScales(displayPercentage, gradingScales) : studentPerf.grade,
+            // Use the points-based grade for KCSE (and percentage-based for CBC),
+            // matching the class-report/marksheet routes — previously this always
+            // used the percentage band, so the same KCSE student's individual and
+            // class reports could show different overall grades.
+            overallGrade: overallGradeSymbol,
             totalPoints: studentPerf.totalPoints,
             overallPointsGrade: studentPerf.overallGrade,
             classRank,

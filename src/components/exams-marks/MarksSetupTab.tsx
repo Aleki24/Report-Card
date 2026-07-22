@@ -236,8 +236,6 @@ export function MarksSetupTab() {
 
 
 
-  // Find selected exam manually from selectedExamId
-  const selectedExam = exams.find(e => e.id === selectedExamId);
   const examsForSelectedSubject = exams
     .filter(e => e.exam_type === selectedExamType && e.subject_id === selectedSubjectId)
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
@@ -245,18 +243,6 @@ export function MarksSetupTab() {
     .sort((a, b) => a.grade_name.localeCompare(b.grade_name));
 
 
-
-  useEffect(() => {
-    // If the selected subject changes, clear the selected exam ID.
-    // We intentionally DO NOT auto-set the level here, because a subject might have a default
-    // level (e.g. Primary) but the teacher is assigned to teach it in a different level (e.g. Secondary).
-    setSelectedExamId('');
-  }, [selectedSubjectId, allSubjects]); // allSubjects kept purely to prevent React hot-reload crash
-
-  useEffect(() => {
-    // If the level changes, clear the selected exam ID
-    setSelectedExamId('');
-  }, [selectedLevelId]);
 
   // Close any open subject group when the exam type or class changes
   useEffect(() => {
@@ -272,27 +258,32 @@ export function MarksSetupTab() {
     }
   }, [loadingExams, exams, selectedExamType]);
 
-  // Only one class/exam slot for the chosen subject → select it
+  // Only one class/exam slot for the chosen subject → use it
   const soleExamId = examsForSelectedSubject.length === 1 ? examsForSelectedSubject[0].id : '';
-  useEffect(() => {
-    if (selectedSubjectId && !selectedExamId && soleExamId) {
-      setSelectedExamId(soleExamId);
-    }
-  }, [selectedSubjectId, selectedExamId, soleExamId]);
+
+  // Derive the effective exam rather than clearing selectedExamId through a
+  // chain of reset effects: an explicit pick only counts while it still belongs
+  // to the current subject/level/grade, otherwise fall back to the sole slot.
+  // This removes the one-render window where a stale exam's mark-entry UI
+  // flashed after changing subject/level before a passive effect cleared it.
+  const effectiveSelectedExamId = examsForSelectedSubject.some(e => e.id === selectedExamId)
+    ? selectedExamId
+    : soleExamId;
+  const selectedExam = exams.find(e => e.id === effectiveSelectedExamId);
 
   // ── Papers configuration status for the selected exam ──
   useEffect(() => {
-    if (!selectedExamId) { setExamScheme(null); return; }
+    if (!effectiveSelectedExamId) { setExamScheme(null); return; }
     (async () => {
       try {
-        const res = await fetch(`/api/school/exams/${selectedExamId}/components`, { cache: 'no-store' });
+        const res = await fetch(`/api/school/exams/${effectiveSelectedExamId}/components`, { cache: 'no-store' });
         const json = await res.json();
         setExamScheme(json.data || null);
       } catch {
         setExamScheme(null);
       }
     })();
-  }, [selectedExamId, schemeVersion]);
+  }, [effectiveSelectedExamId, schemeVersion]);
 
   const examIsMultiPaper = isMultiPaper(examScheme);
   const examPaperSummary = examIsMultiPaper
@@ -621,7 +612,7 @@ export function MarksSetupTab() {
           </div>
           <div className="flex flex-wrap gap-2">
             {examsForSelectedSubject.map(exam => {
-              const isActive = selectedExamId === exam.id;
+              const isActive = effectiveSelectedExamId === exam.id;
               return (
                 <button
                   key={exam.id}
@@ -639,7 +630,7 @@ export function MarksSetupTab() {
       )}
 
       {/* ═══ MARK ENTRY ═══ */}
-      {selectedExamId && selectedExam && (
+      {effectiveSelectedExamId && selectedExam && (
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3">
             <div className="text-sm">
@@ -673,15 +664,15 @@ export function MarksSetupTab() {
           </div>
           {mode === 'manual' && (
             <ManualEntryGrid
-              key={`${selectedExamId}-${schemeVersion}`}
-              examId={selectedExamId}
+              key={`${effectiveSelectedExamId}-${schemeVersion}`}
+              examId={effectiveSelectedExamId}
               maxScore={selectedExam.max_score}
               gradeId={selectedExam.grade_id}
               gradeStreamId={selectedExam.grade_stream_id || null}
               subjectId={selectedExam.subject_id}
             />
           )}
-          {mode === 'bulk' && <BulkUpload examId={selectedExamId} subjectId={selectedExam.subject_id} />}
+          {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} />}
           {mode === 'scan' && (
             <>
               {examIsMultiPaper && (
@@ -690,8 +681,8 @@ export function MarksSetupTab() {
                 </div>
               )}
               <ScanSheet
-                key={`scan-${selectedExamId}`}
-                examId={selectedExamId}
+                key={`scan-${effectiveSelectedExamId}`}
+                examId={effectiveSelectedExamId}
                 maxScore={selectedExam.max_score}
                 gradeId={selectedExam.grade_id}
                 gradeStreamId={selectedExam.grade_stream_id || null}
@@ -728,9 +719,9 @@ export function MarksSetupTab() {
         </div>
       )}
       
-      {showPaperModal && selectedExamId && (
+      {showPaperModal && effectiveSelectedExamId && (
         <PaperSchemeModal
-          examId={selectedExamId}
+          examId={effectiveSelectedExamId}
           subjectName={selectedExam?.subject_name}
           onClose={() => setShowPaperModal(false)}
           onSaved={() => setSchemeVersion(v => v + 1)}

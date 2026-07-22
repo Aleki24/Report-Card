@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { registerPesapalIPN } from '@/lib/pesapal';
+import { encryptSecret, decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
 // Checks the Clerk session BEFORE touching Supabase — an anonymous request
 // must get a clean 401, not a raw 500 from createSupabaseAdmin() throwing.
@@ -24,7 +27,7 @@ async function requireAdmin() {
     return { supabase, schoolId: userProfile.school_id as string };
 }
 
-// GET never returns consumer_secret/passkey — only whether they're set.
+// GET never returns consumer_secret/passkey/pesapal_consumer_secret — only whether they're set.
 export async function GET() {
     try {
         const result = await requireAdmin();
@@ -33,25 +36,31 @@ export async function GET() {
 
         const { data } = await supabase
             .from('school_payment_settings')
-            .select('environment, shortcode, consumer_key, is_active, passkey, consumer_secret, updated_at')
+            .select('*')
             .eq('school_id', schoolId)
             .maybeSingle();
 
         return NextResponse.json({
             data: {
+                activeProvider: data?.active_provider ?? 'NONE',
+                bankEnabled: data?.bank_enabled ?? false,
+                // Daraja
                 environment: data?.environment ?? 'sandbox',
                 shortcode: data?.shortcode ?? '',
                 consumerKey: data?.consumer_key ?? '',
-                isActive: data?.is_active ?? false,
                 hasPasskey: !!data?.passkey,
                 hasConsumerSecret: !!data?.consumer_secret,
-                updatedAt: data?.updated_at ?? null,
                 configured: !!(data?.shortcode && data?.passkey && data?.consumer_key && data?.consumer_secret),
+                // Pesapal
+                pesapalEnvironment: data?.pesapal_environment ?? 'sandbox',
+                pesapalConsumerKey: data?.pesapal_consumer_key ?? '',
+                hasPesapalConsumerSecret: !!data?.pesapal_consumer_secret,
+                pesapalConfigured: !!(data?.pesapal_consumer_key && data?.pesapal_consumer_secret && data?.pesapal_ipn_id),
+                updatedAt: data?.updated_at ?? null,
             },
         });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('payment settings', err);
     }
 }
 
@@ -62,22 +71,92 @@ export async function PUT(request: NextRequest) {
         const { supabase, schoolId } = result;
 
         const body = await request.json();
-        const { environment, shortcode, passkey, consumer_key, consumer_secret, is_active } = body;
+        const { environment, shortcode, passkey, consumer_key, consumer_secret, active_provider, pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret, bank_enabled } = body;
 
         if (environment && !['sandbox', 'production'].includes(environment)) {
             return NextResponse.json({ error: 'environment must be sandbox or production' }, { status: 400 });
         }
+        if (pesapal_environment && !['sandbox', 'live'].includes(pesapal_environment)) {
+            return NextResponse.json({ error: 'pesapal_environment must be sandbox or live' }, { status: 400 });
+        }
+        if (active_provider && !['NONE', 'DARAJA', 'PESAPAL'].includes(active_provider)) {
+            return NextResponse.json({ error: 'active_provider must be NONE, DARAJA, or PESAPAL' }, { status: 400 });
+        }
+        if (bank_enabled !== undefined && typeof bank_enabled !== 'boolean') {
+            return NextResponse.json({ error: 'bank_enabled must be a boolean' }, { status: 400 });
+        }
+
+        const { data: existing } = await supabase
+            .from('school_payment_settings')
+            .select('*')
+            .eq('school_id', schoolId)
+            .maybeSingle();
 
         const update: Record<string, any> = { school_id: schoolId, updated_at: new Date().toISOString() };
+        // Every school gets a webhook token from its very first save — the
+        // Daraja callback URLs embed it as their only forgery protection.
+        if (!existing?.webhook_token) update.webhook_token = generateWebhookToken();
         if (environment !== undefined) update.environment = environment;
         if (shortcode !== undefined) update.shortcode = shortcode || null;
+        if (pesapal_environment !== undefined) update.pesapal_environment = pesapal_environment;
+        if (pesapal_consumer_key !== undefined) update.pesapal_consumer_key = pesapal_consumer_key || null;
+        if (active_provider !== undefined) update.active_provider = active_provider;
+        if (bank_enabled !== undefined) update.bank_enabled = bank_enabled;
         // Blank strings mean "leave unchanged" for secrets — the client never
         // gets to read these back, so it can't round-trip them intentionally
         // blank without this being a footgun for "I left the field empty."
-        if (passkey) update.passkey = passkey;
+        // Secrets are encrypted before they ever touch the database — see lib/crypto.ts.
+        if (passkey) update.passkey = encryptSecret(passkey);
         if (consumer_key) update.consumer_key = consumer_key;
-        if (consumer_secret) update.consumer_secret = consumer_secret;
-        if (is_active !== undefined) update.is_active = !!is_active;
+        if (consumer_secret) update.consumer_secret = encryptSecret(consumer_secret);
+        if (pesapal_consumer_secret) update.pesapal_consumer_secret = encryptSecret(pesapal_consumer_secret);
+
+        const resolvedProvider = update.active_provider ?? existing?.active_provider ?? 'NONE';
+        const resolvedBankEnabled = update.bank_enabled ?? existing?.bank_enabled ?? false;
+
+        if (resolvedBankEnabled) {
+            const { count } = await supabase
+                .from('school_bank_accounts')
+                .select('id', { count: 'exact', head: true })
+                .eq('school_id', schoolId);
+            if (!count) {
+                return NextResponse.json({ error: 'Add at least one bank account before enabling bank transfer' }, { status: 400 });
+            }
+        }
+
+        // Switching Pesapal on (or updating its credentials while active) means
+        // Pesapal needs to know where to send payment notifications — register
+        // the IPN URL now, before saving, so a bad credential surfaces
+        // immediately instead of failing silently at checkout time later.
+        if (resolvedProvider === 'PESAPAL') {
+            const resolvedKey = update.pesapal_consumer_key ?? existing?.pesapal_consumer_key;
+            // pesapal_consumer_secret here is the plaintext value straight from the
+            // request body (not update.pesapal_consumer_secret, which is now
+            // encrypted) — fall back to decrypting the stored secret only when the
+            // admin didn't resubmit one.
+            const resolvedSecret = pesapal_consumer_secret || (existing?.pesapal_consumer_secret ? decryptSecret(existing.pesapal_consumer_secret) : undefined);
+            const resolvedEnv = update.pesapal_environment ?? existing?.pesapal_environment ?? 'sandbox';
+
+            if (!resolvedKey || !resolvedSecret) {
+                return NextResponse.json({ error: 'Enter your Pesapal consumer key and secret before enabling Pesapal' }, { status: 400 });
+            }
+
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+            if (!appUrl) {
+                return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the Pesapal IPN URL' }, { status: 500 });
+            }
+
+            try {
+                const ipnId = await registerPesapalIPN(
+                    { environment: resolvedEnv, consumerKey: resolvedKey, consumerSecret: resolvedSecret },
+                    `${appUrl}/api/pesapal/ipn/${schoolId}`
+                );
+                update.pesapal_ipn_id = ipnId;
+            } catch (ipnError: unknown) {
+                const message = ipnError instanceof Error ? ipnError.message : 'Failed to register with Pesapal';
+                return NextResponse.json({ error: `Pesapal rejected these credentials: ${message}` }, { status: 400 });
+            }
+        }
 
         const { error } = await supabase
             .from('school_payment_settings')
@@ -87,7 +166,6 @@ export async function PUT(request: NextRequest) {
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('payment settings', err);
     }
 }

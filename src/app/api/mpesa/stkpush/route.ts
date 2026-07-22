@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
+import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
@@ -49,11 +51,11 @@ export async function POST(request: NextRequest) {
 
         const { data: settings } = await supabase
             .from('school_payment_settings')
-            .select('environment, shortcode, passkey, consumer_key, consumer_secret, is_active')
+            .select('environment, shortcode, passkey, consumer_key, consumer_secret, active_provider, webhook_token')
             .eq('school_id', fee.school_id)
             .maybeSingle();
 
-        if (!settings || !settings.is_active || !settings.shortcode || !settings.passkey || !settings.consumer_key || !settings.consumer_secret) {
+        if (!settings || settings.active_provider !== 'DARAJA' || !settings.shortcode || !settings.passkey || !settings.consumer_key || !settings.consumer_secret) {
             return NextResponse.json({ error: 'M-Pesa payments are not set up for this school yet. Ask an admin to configure it in Settings.' }, { status: 400 });
         }
 
@@ -62,8 +64,37 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the M-Pesa callback URL' }, { status: 500 });
         }
 
+        // The callback URL carries a per-school secret token (Daraja callbacks
+        // aren't signed) — generate it on first use for settings saved before
+        // the token column existed.
+        let webhookToken = settings.webhook_token as string | null;
+        if (!webhookToken) {
+            webhookToken = generateWebhookToken();
+            const { error: tokenError } = await supabase
+                .from('school_payment_settings')
+                .update({ webhook_token: webhookToken, updated_at: new Date().toISOString() })
+                .eq('school_id', fee.school_id);
+            if (tokenError) throw tokenError;
+        }
+
         const student = fee.students as any;
         const admissionNumber = student?.admission_number || 'FEES';
+
+        // One prompt at a time per fee: an STK prompt lives ~60–90s on the
+        // payer's phone, and phone_number is caller-supplied — without a
+        // cooldown this endpoint doubles as a prompt-spam vector.
+        const { data: inFlight } = await supabase
+            .from('fee_payments')
+            .select('id')
+            .eq('student_fee_id', fee.id)
+            .eq('method', 'MPESA')
+            .eq('status', 'PENDING')
+            .gte('created_at', new Date(Date.now() - 90_000).toISOString())
+            .limit(1)
+            .maybeSingle();
+        if (inFlight) {
+            return NextResponse.json({ error: 'An M-Pesa prompt for this fee is already in progress. Wait for it to complete or time out (about 90 seconds), then try again.' }, { status: 429 });
+        }
 
         // Reserve the ledger row before calling Safaricom so a callback that
         // arrives moments later always has something to match against.
@@ -87,15 +118,15 @@ export async function POST(request: NextRequest) {
                 creds: {
                     environment: settings.environment as MpesaEnvironment,
                     shortcode: settings.shortcode,
-                    passkey: settings.passkey,
+                    passkey: decryptSecret(settings.passkey),
                     consumerKey: settings.consumer_key,
-                    consumerSecret: settings.consumer_secret,
+                    consumerSecret: decryptSecret(settings.consumer_secret),
                 },
                 phoneNumber: phone_number,
                 amount: amountValue,
                 accountReference: admissionNumber,
                 transactionDesc: 'School Fees',
-                callbackUrl: `${appUrl}/api/mpesa/stkpush/callback/${fee.school_id}`,
+                callbackUrl: `${appUrl}/api/mpesa/stkpush/callback/${fee.school_id}/${webhookToken}`,
             });
 
             await supabase
@@ -122,7 +153,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: message }, { status: 502 });
         }
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('mpesa stkpush', err);
     }
 }

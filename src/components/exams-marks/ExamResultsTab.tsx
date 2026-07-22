@@ -353,6 +353,7 @@ export function ExamResultsTab() {
                                     gradeStreamId={selectedStreamId}
                                     scheme={markScheme}
                                     onRefresh={fetchMarks}
+                                    onMarkPatched={(patched) => setMarks(prev => prev.map(m => m.id === patched.id ? patched : m))}
                                 />
                             )}
                             {activeTab === 'results' && !selectedExamId && (

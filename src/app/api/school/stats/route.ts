@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { aggregateStudentPerformance, type ExamMarkWithDetails } from '@/lib/analytics';
+import { aggregateStudentPerformance, isKCSEGradeLevel, type ExamMarkWithDetails } from '@/lib/analytics';
 
 export async function GET(request: NextRequest) {
   try {
@@ -401,11 +401,11 @@ export async function GET(request: NextRequest) {
         // Grade code decides KCSE (8-4-4, points-ranked) vs CBC (percentage).
         const { data: streamData } = await supabase
           .from('grade_streams')
-          .select('grades ( code )')
+          .select('full_name, grades ( code )')
           .eq('id', gradeStreamId)
           .maybeSingle();
         const gradeCode = (streamData?.grades as any)?.code || '';
-        const isKCSE = /^(G[78]|G1[12]|F[34])/i.test(gradeCode);
+        const isKCSE = isKCSEGradeLevel(gradeCode, (streamData as any)?.full_name);
 
         const { data: classmates } = await supabase
           .from('students')

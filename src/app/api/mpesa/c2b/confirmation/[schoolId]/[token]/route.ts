@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { verifyWebhookToken } from '@/lib/crypto';
 import type { C2BConfirmationBody } from '@/lib/mpesa';
 
 export const runtime = 'nodejs';
@@ -11,25 +12,40 @@ export const runtime = 'nodejs';
  * fires AFTER the money has already moved, so this always accepts it; the
  * only question is which student it belongs to.
  *
+ * Daraja doesn't sign these, so the per-school webhook token in the URL is
+ * what separates Safaricom (which got the token inside the URL we
+ * registered) from a forger who only knows the school's UUID — without it,
+ * anyone could insert a COMPLETED payment against any admission number.
+ * Forged requests (bad token) get a plain 403 before anything is written.
+ *
  * We only auto-match to the CURRENT term's fee record (never guess across
  * terms) by BillRefNumber == admission number. Anything that doesn't match
  * — a typo'd account number, a student with no bill yet this term — lands
  * as an unmatched payment for staff to assign from the Fees dashboard,
  * rather than silently being dropped or mis-applied.
  *
- * No Clerk session here (Safaricom calls this directly); see the STK Push
- * callback route for the same caveat about signing/IP allowlisting.
- *
  * The (optional) C2B Validation URL is intentionally not implemented —
  * Safaricom only invokes it when a shortcode has explicitly opted in via
  * support, so most integrations (including this one) rely on
  * Confirmation-only, which Safaricom defaults to auto-accepting.
  */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ schoolId: string }> }) {
-    const { schoolId } = await params;
+export async function POST(request: NextRequest, { params }: { params: Promise<{ schoolId: string; token: string }> }) {
+    const { schoolId, token } = await params;
     try {
-        const body = (await request.json()) as C2BConfirmationBody;
         const supabase = createSupabaseAdmin();
+
+        const { data: settings } = await supabase
+            .from('school_payment_settings')
+            .select('webhook_token')
+            .eq('school_id', schoolId)
+            .maybeSingle();
+
+        if (!verifyWebhookToken(token, settings?.webhook_token)) {
+            console.error('[mpesa c2b confirmation] webhook token mismatch for school', schoolId);
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const body = (await request.json()) as C2BConfirmationBody;
 
         const amount = Number(body.TransAmount);
         const rawRef = (body.BillRefNumber || '').trim();
@@ -50,10 +66,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ ResultCode: 0, ResultDesc: 'Success' });
         }
 
+        // BillRefNumber is attacker-influenced free text; escape LIKE wildcards
+        // so "ADM1_" can't fuzzy-match ADM10/ADM11 — ilike is only used here
+        // for case-insensitivity, never pattern matching.
+        const escapedRef = rawRef.replace(/([\\%_])/g, '\\$1');
         const { data: student } = await supabase
             .from('students')
             .select('id, users!inner(school_id)')
-            .ilike('admission_number', rawRef)
+            .ilike('admission_number', escapedRef)
             .eq('users.school_id', schoolId)
             .maybeSingle();
 

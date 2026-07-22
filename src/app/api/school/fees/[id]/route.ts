@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
@@ -75,8 +76,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (error) throw error;
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fees id', err);
     }
 }
 
@@ -116,7 +116,6 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('fees id', err);
     }
 }

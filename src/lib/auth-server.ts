@@ -25,6 +25,14 @@ export async function getAuthSession(): Promise<ServerSession | null> {
 
   // Always look up role and schoolId from the database — never trust session claims alone
   const dbUser = await getUserDbRecord(clerkAuth.userId);
+
+  // A deactivated account must not pass server-side auth. Relying on the
+  // client (AuthProvider) to sign out on 403 from /api/auth/me leaves a still
+  // -valid Clerk session able to hit every API route directly — enforce here.
+  if (dbUser && dbUser.is_active === false) {
+    return null;
+  }
+
   const role = dbUser?.role || (clerkAuth.sessionClaims as any)?.role || null;
   const schoolId = dbUser?.school_id || (clerkAuth.sessionClaims as any)?.schoolId || null;
 

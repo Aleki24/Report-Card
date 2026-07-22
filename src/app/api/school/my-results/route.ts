@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { aggregateStudentPerformance, type ExamMarkWithDetails } from '@/lib/analytics';
+import { aggregateStudentPerformance, isKCSEGradeLevel, type ExamMarkWithDetails } from '@/lib/analytics';
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,11 +40,14 @@ export async function GET(request: NextRequest) {
     if (gradeStreamId) {
       const { data: streamData } = await supabase
         .from('grade_streams')
-        .select('grades ( code )')
+        .select('full_name, grades ( code )')
         .eq('id', gradeStreamId)
         .maybeSingle();
       const gradeCode = (streamData?.grades as any)?.code || '';
-      isKCSE = /^(G[78]|G1[12]|F[34])/i.test(gradeCode);
+      // Check the stream name too, matching the report/marksheet routes, so a
+      // student's dashboard position uses the same KCSE-vs-CBC ranking metric
+      // as their report card.
+      isKCSE = isKCSEGradeLevel(gradeCode, (streamData as any)?.full_name);
     }
 
     // Step 2: Fetch all marks for this student (school-scoped via exam ownership)
@@ -180,17 +183,28 @@ export async function GET(request: NextRequest) {
 
       if (classmates && classmates.length > 0) {
         const classmateIds = classmates.map((c: any) => c.id);
+        const termIds = resultsArray.map(t => t.termId).filter(Boolean) as string[];
+
+        // Fetch every term's classmate marks in one query, then bucket by term —
+        // previously this ran one query per term in a sequential loop.
+        const { data: allTermMarks } = termIds.length > 0 ? await supabase
+          .from('exam_marks')
+          .select('student_id, raw_score, percentage, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, school_id, subjects(id, name, category))')
+          .in('student_id', classmateIds)
+          .in('exams.term_id', termIds)
+          .eq('exams.school_id', schoolId) : { data: [] as any[] };
+
+        const marksByTerm = new Map<string, any[]>();
+        for (const m of (allTermMarks || []) as any[]) {
+          const tid = m.exams?.term_id;
+          if (!tid) continue;
+          (marksByTerm.get(tid) || marksByTerm.set(tid, []).get(tid)!).push(m);
+        }
 
         for (const term of resultsArray) {
           if (!term.termId) continue;
 
-          // Get all marks for classmates for this term (school-scoped via exam.school_id)
-          const { data: allMarks } = await supabase
-            .from('exam_marks')
-            .select('student_id, raw_score, percentage, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, school_id, subjects(id, name, category))')
-            .in('student_id', classmateIds)
-            .eq('exams.term_id', term.termId)
-            .eq('exams.school_id', schoolId);
+          const allMarks = marksByTerm.get(term.termId) || [];
 
           if (allMarks && allMarks.length > 0) {
             // Group marks per classmate; build name/category maps for 8-4-4 selection

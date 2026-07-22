@@ -29,6 +29,23 @@ export function getOverallGradeFromMeanPoints(meanPoints: number): string {
     return match?.symbol || '-';
 }
 
+/**
+ * Whether a grade level uses KCSE-style (points-based) grading rather than CBC.
+ * G7-8, G11-12, and F3-4 are KCSE. Checks both the grade code and the stream
+ * name so a class carrying its level only in one field is still classified
+ * consistently everywhere — report cards, marksheets, the student dashboard,
+ * and school stats must all agree, or the same student can rank by points in
+ * one view and by percentage in another.
+ */
+export function isKCSEGradeLevel(gradeCode?: string | null, streamName?: string | null): boolean {
+    const code = gradeCode || '';
+    const stream = streamName || '';
+    const combined = `${code} ${stream}`;
+    return /^(G[78]|G1[12]|F[34])/i.test(code)
+        || /^(G[78]|G1[12]|F[34])/i.test(stream)
+        || /\b(F[34]|G[78]|G1[12])\b/i.test(combined);
+}
+
 export function getGradeFromPercentageSimple(percentage: number): string {
     if (percentage >= 81) return 'A';
     if (percentage >= 74) return 'A-';
@@ -180,7 +197,15 @@ export function aggregateStudentPerformance(
     let totalPoints = 0;
     if (gradingSystemType === 'KCSE') {
         for (const mark of marksToProcess) {
-            const pts = getPointsFromGrade((mark as any).grade_symbol || '');
+            // Prefer the entered grade symbol, but fall back to points derived
+            // from the percentage via the grading scales when no grade was
+            // stored (e.g. bulk-uploaded scores with no grade column). Without
+            // this, every such mark scored 0 points and the whole class tied.
+            let pts = getPointsFromGrade((mark as any).grade_symbol || '');
+            if (!pts && scales && scales.length > 0) {
+                const pct = calculatePercentage(mark.raw_score, mark.max_score);
+                pts = getPointsFromScales(pct, scales) || 0;
+            }
             totalPoints += pts;
         }
     } else {
