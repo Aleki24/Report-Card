@@ -25,14 +25,23 @@ import { syncCombinationStudents } from '@/lib/pathway/sync-student-subjects';
 
 type CreatePayload = Record<string, unknown>;
 
+// These four tables are GLOBAL, seeded national-curriculum reference data
+// shared by every school (there is no school_id column on them — 40 schools
+// share the same 2 grading systems / 20 scales / grade levels). A per-school
+// admin editing them corrupts every other school's report cards, so they are
+// read-only through this per-school API; they are managed centrally via seed
+// migrations, not the app.
+const GLOBAL_REFERENCE_TYPES = ['level', 'grade', 'grading_system', 'grading_scale'];
+
 async function getLatestSession() {
     const { userId } = await auth();
     if (!userId) return null;
-    
+
     const supabaseAdmin = createSupabaseAdmin();
-    const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).maybeSingle();
-    
-    if (!data) return null;
+    const { data } = await supabaseAdmin.from('users').select('school_id, role, is_active').eq('id', userId).maybeSingle();
+
+    // A missing or deactivated account is unauthorized.
+    if (!data || data.is_active === false) return null;
 
     return {
         userId,
@@ -190,6 +199,12 @@ export async function POST(request: NextRequest) {
             if (!isTeacher || !allowedForTeachers.includes(type)) {
                 return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
             }
+        }
+
+        // Global reference data is shared across all schools and cannot be
+        // created/altered from a single school's admin.
+        if (GLOBAL_REFERENCE_TYPES.includes(type)) {
+            return NextResponse.json({ error: 'Grading systems, grading scales, grade levels, and academic levels are centrally managed and cannot be modified here.' }, { status: 403 });
         }
 
         const supabaseAdmin = createSupabaseAdmin();
@@ -368,14 +383,20 @@ export async function PATCH(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
+        // Global reference data (grading systems/scales, grade levels) is shared
+        // across all schools and must not be editable per-school — previously a
+        // bypass here let one school's admin PATCH a grading_scale every other
+        // school relies on, corrupting their report-card grades.
+        if (GLOBAL_REFERENCE_TYPES.includes(type)) {
+            return NextResponse.json({ error: 'Grading systems, grading scales, grade levels, and academic levels are centrally managed and cannot be modified here.' }, { status: 403 });
+        }
+
         // School-scoped tables that can be updated
         const schoolScopedTables: Record<string, string> = {
             academic_year: 'academic_years',
             term: 'terms',
             stream: 'grade_streams',
             subject: 'subjects',
-            grading_system: 'grading_systems',
-            grading_scale: 'grading_scales',
             subject_combination: 'subject_combinations',
         };
 
@@ -384,20 +405,15 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: `Cannot update type "${type}". Updatable types: ${Object.keys(schoolScopedTables).join(', ')}` }, { status: 400 });
         }
 
-        // Bypass school_id checks for global curriculum tables
-        if (['grading_system', 'grading_scale'].includes(type)) {
-            // Allow admins to update global tables
-        } else {
-            // Verify this record belongs to the admin's school
-            const { data: existing } = await supabaseAdmin
-                .from(table)
-                .select('school_id')
-                .eq('id', id)
-                .maybeSingle();
+        // Verify this record belongs to the admin's school
+        const { data: existing } = await supabaseAdmin
+            .from(table)
+            .select('school_id')
+            .eq('id', id)
+            .maybeSingle();
 
-            if (!existing || existing.school_id !== schoolId) {
-                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
-            }
+        if (!existing || existing.school_id !== schoolId) {
+            return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
         }
 
         // Subject combinations need dedicated handling (junction table

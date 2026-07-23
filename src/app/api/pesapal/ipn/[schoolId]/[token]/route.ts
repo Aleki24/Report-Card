@@ -1,20 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getPesapalTransactionStatus, mapPesapalStatus, type PesapalEnvironment } from '@/lib/pesapal';
-import { decryptSecret } from '@/lib/crypto';
+import { decryptSecret, verifyWebhookToken } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
 
 /**
  * Pesapal calls this directly (registered as a GET-type IPN) whenever an
- * order's status changes. The notification itself carries no verified
- * status — just OrderTrackingId/OrderMerchantReference — so we always call
- * GetTransactionStatus ourselves to learn the real outcome rather than
- * trusting anything in the query string. No Clerk session here; matching
- * the M-Pesa STK Push/C2B webhooks, always ack cleanly so Pesapal doesn't
- * retry into a loop, and log rather than throw on anything unexpected.
+ * order's status changes. Pesapal doesn't sign its IPNs, so — like the M-Pesa
+ * Daraja callbacks — the URL carries the school's unguessable webhook token:
+ * a request without the right token for this schoolId is a forgery and is
+ * rejected before anything is read or written. Even past that, the
+ * notification body is never trusted: we always call GetTransactionStatus
+ * ourselves to learn the real outcome. Always ack cleanly to Pesapal on the
+ * legitimate path so it doesn't retry into a loop.
  */
-async function handleIpn(request: NextRequest, schoolId: string) {
+async function handleIpn(request: NextRequest, schoolId: string, token: string) {
+    const supabase = createSupabaseAdmin();
+
+    const { data: school } = await supabase
+        .from('school_payment_settings')
+        .select('webhook_token, pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret')
+        .eq('school_id', schoolId)
+        .maybeSingle();
+
+    if (!verifyWebhookToken(token, school?.webhook_token)) {
+        console.error('[pesapal ipn] webhook token mismatch for school', schoolId);
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const orderTrackingId = searchParams.get('OrderTrackingId');
     const orderMerchantReference = searchParams.get('OrderMerchantReference') || '';
@@ -33,7 +47,6 @@ async function handleIpn(request: NextRequest, schoolId: string) {
     }
 
     try {
-        const supabase = createSupabaseAdmin();
         const { data: payment } = await supabase
             .from('fee_payments')
             .select('id, school_id, status')
@@ -48,19 +61,13 @@ async function handleIpn(request: NextRequest, schoolId: string) {
             return ack(orderTrackingId); // already processed — no-op
         }
 
-        const { data: settings } = await supabase
-            .from('school_payment_settings')
-            .select('pesapal_environment, pesapal_consumer_key, pesapal_consumer_secret')
-            .eq('school_id', schoolId)
-            .maybeSingle();
-
-        if (!settings?.pesapal_consumer_key || !settings.pesapal_consumer_secret) {
+        if (!school?.pesapal_consumer_key || !school.pesapal_consumer_secret) {
             console.error('[pesapal ipn] missing credentials for school', schoolId);
             return ack(orderTrackingId);
         }
 
         const txn = await getPesapalTransactionStatus(
-            { environment: settings.pesapal_environment as PesapalEnvironment, consumerKey: settings.pesapal_consumer_key, consumerSecret: decryptSecret(settings.pesapal_consumer_secret) },
+            { environment: school.pesapal_environment as PesapalEnvironment, consumerKey: school.pesapal_consumer_key, consumerSecret: decryptSecret(school.pesapal_consumer_secret) },
             orderTrackingId
         );
         const mapped = mapPesapalStatus(txn.status_code);
@@ -97,12 +104,12 @@ async function handleIpn(request: NextRequest, schoolId: string) {
     }
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ schoolId: string }> }) {
-    const { schoolId } = await params;
-    return handleIpn(request, schoolId);
+export async function GET(request: NextRequest, { params }: { params: Promise<{ schoolId: string; token: string }> }) {
+    const { schoolId, token } = await params;
+    return handleIpn(request, schoolId, token);
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ schoolId: string }> }) {
-    const { schoolId } = await params;
-    return handleIpn(request, schoolId);
+export async function POST(request: NextRequest, { params }: { params: Promise<{ schoolId: string; token: string }> }) {
+    const { schoolId, token } = await params;
+    return handleIpn(request, schoolId, token);
 }
