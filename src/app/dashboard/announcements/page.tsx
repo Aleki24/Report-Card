@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Bell, MessageSquare } from 'lucide-react';
+import { toast } from 'sonner';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Drawer } from '@/components/ui/Drawer';
 import { FormattedTextarea } from '@/components/ui/FormattedTextarea';
 import { renderFormattedText } from '@/lib/formatted-text';
+import { useAuth } from '@/components/AuthProvider';
 
 interface Announcement {
     id: string;
@@ -14,9 +16,16 @@ interface Announcement {
     isImportant: boolean;
     createdAt: string;
     postedBy: string;
+    postedById: string | null;
 }
 
 export default function AnnouncementsPage() {
+    const { role, profile } = useAuth();
+    // Admins and class teachers manage every announcement; a subject teacher
+    // can only edit/delete the ones they posted (the API enforces the same).
+    const canManageAll = role === 'ADMIN' || role === 'CLASS_TEACHER';
+    const canManage = (a: Announcement) => canManageAll || (!!profile && a.postedById === profile.id);
+
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -72,11 +81,17 @@ export default function AnnouncementsPage() {
         setSaving(true);
         try {
             if (editing) {
-                await fetch(`/api/school/announcements/${editing.id}`, {
+                const res = await fetch(`/api/school/announcements/${editing.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: formTitle, content: formContent, is_important: formImportant }),
                 });
+                if (!res.ok) {
+                    const json = await res.json().catch(() => ({}));
+                    toast.error(json.error || 'Failed to update the announcement.');
+                    return;
+                }
+                toast.success('Announcement updated.');
                 setShowModal(false);
             } else {
                 const res = await fetch('/api/school/announcements', {
@@ -84,27 +99,41 @@ export default function AnnouncementsPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title: formTitle, content: formContent, is_important: formImportant, send_sms: formSendSms }),
                 });
-                const json = await res.json();
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    toast.error(json.error || 'Failed to post the announcement.');
+                    return;
+                }
                 if (formSendSms && json.sms) {
                     setSmsResult(json.sms);
                 } else {
+                    toast.success('Announcement posted.');
                     setShowModal(false);
                 }
             }
             await fetchData();
         } catch (err) {
             console.error('Save failed:', err);
+            toast.error('Network error. Please try again.');
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this announcement?')) return;
         try {
-            await fetch(`/api/school/announcements/${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/school/announcements/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const json = await res.json().catch(() => ({}));
+                toast.error(json.error || 'Failed to delete the announcement.');
+                return;
+            }
+            toast.success('Announcement deleted.');
             await fetchData();
         } catch (err) {
             console.error('Delete failed:', err);
+            toast.error('Network error. Please try again.');
         }
     };
 
@@ -175,10 +204,12 @@ export default function AnnouncementsPage() {
                                     Posted by {a.postedBy} · {new Date(a.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             </div>
-                            <div className="flex shrink-0 gap-1">
-                                <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
-                                <button className="btn-icon" style={{ color: 'var(--viz-bad)' }} onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
-                            </div>
+                            {canManage(a) && (
+                                <div className="flex shrink-0 gap-1">
+                                    <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
+                                    <button className="btn-icon" style={{ color: 'var(--viz-bad)' }} onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

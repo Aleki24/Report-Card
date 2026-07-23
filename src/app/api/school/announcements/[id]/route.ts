@@ -24,16 +24,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
 
         const { id } = await params;
-        
-        // Verify ownership
+
+        // Verify the announcement is in the caller's school.
         const { data: currentItem } = await supabase
             .from('announcements')
-            .select('school_id')
+            .select('school_id, posted_by')
             .eq('id', id)
             .maybeSingle();
 
         if (!currentItem || currentItem.school_id !== userProfile.school_id) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        // Admins and class teachers can edit any announcement in the school; a
+        // subject teacher may only edit one they posted themselves.
+        const canEditAny = userProfile.role === 'ADMIN' || userProfile.role === 'CLASS_TEACHER';
+        if (!canEditAny && currentItem.posted_by !== userId) {
+            return NextResponse.json({ error: 'You can only edit announcements you posted.' }, { status: 403 });
         }
 
         const body = await request.json();
@@ -75,21 +82,30 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         if (!userProfile || userProfile.is_active === false) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (!['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const { id } = await params;
 
-        // Verify ownership
+        // Verify the announcement is in the caller's school.
         const { data: currentItem } = await supabase
             .from('announcements')
-            .select('school_id')
+            .select('school_id, posted_by')
             .eq('id', id)
             .single();
 
         if (!currentItem || currentItem.school_id !== userProfile.school_id) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        // Admins and class teachers can remove any announcement in the school;
+        // a subject teacher may only remove one they posted themselves (so the
+        // delete action isn't a dead button for them, without letting them
+        // clear other people's posts).
+        const canDeleteAny = userProfile.role === 'ADMIN' || userProfile.role === 'CLASS_TEACHER';
+        if (!canDeleteAny && currentItem.posted_by !== userId) {
+            return NextResponse.json({ error: 'You can only delete announcements you posted.' }, { status: 403 });
         }
 
         const { error } = await supabase.from('announcements').delete().eq('id', id);

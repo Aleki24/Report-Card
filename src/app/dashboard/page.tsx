@@ -41,26 +41,7 @@ import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
 import { SetupNotifier } from '@/components/dashboard/SetupNotifier';
-
-function WelcomeBanner({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="bg-gradient-to-br from-emerald-500/10 to-purple-500/10 border border-border rounded-2xl p-5 mb-6 flex items-start gap-4">
-      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>
-        </svg>
-      </div>
-      <div className="text-[13px] leading-relaxed text-muted-foreground">
-        <strong className="text-foreground font-display text-[15px]">{title}</strong>
-        <ul className="mt-2 pl-5 list-disc opacity-85">
-          {items.map((item, i) => (
-            <li key={i} className="mb-1">{item}</li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
+import { InfoGuide } from '@/components/ui/InfoGuide';
 
 function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
   const [now] = useState(() => Date.now());
@@ -609,14 +590,15 @@ function ClassTeacherDashboard() {
 
   return (
     <>
-      <WelcomeBanner
-        title="Class Teacher Guide"
-        items={[
-          'Manage students in your assigned homeroom stream.',
-          'Generate final Report Cards at the end of the term.',
-          'Use Generate Reports to compile marks across all subjects.',
-        ]}
-      />
+      <InfoGuide title="Class Teacher Guide — how to run your class">
+        <ol className="list-decimal space-y-1.5 pl-5">
+          <li><strong>Enter marks:</strong> open <strong>Exams &amp; Marks</strong>, pick the class, subject and exam, then type scores straight down the list — drafts autosave and sync when the network returns.</li>
+          <li><strong>Track attendance:</strong> use <strong>Attendance</strong> to mark your stream daily; absentees&apos; guardians can be notified by SMS.</li>
+          <li><strong>Manage your roster:</strong> add or update students in your stream from <strong>People</strong>.</li>
+          <li><strong>Generate report cards:</strong> at term end, open <strong>Report Cards</strong> → <em>Generate Reports</em> to compile every subject into one branded card, then export or send to parents.</li>
+          <li><strong>Communicate:</strong> post <strong>Announcements</strong> (optionally by SMS) and set <strong>Assignments</strong> for your class.</li>
+        </ol>
+      </InfoGuide>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {kpis.map((k, i) => (
@@ -683,14 +665,14 @@ function SubjectTeacherDashboard() {
 
   return (
     <>
-      <WelcomeBanner
-        title="Subject Teacher Guide"
-        items={[
-          'Create exams and enter marks for the subjects you teach.',
-          'Schedule new assessments via the Exams section.',
-          'Use Enter Marks below to record student scores.',
-        ]}
-      />
+      <InfoGuide title="Subject Teacher Guide — how to assess your subjects">
+        <ol className="list-decimal space-y-1.5 pl-5">
+          <li><strong>Create an exam:</strong> in <strong>Exams &amp; Marks</strong> → <em>Mark Entry &amp; Setup</em>, add an exam for a subject you teach. For multi-paper subjects, set the paper structure (P1/P2/P3) once.</li>
+          <li><strong>Enter marks:</strong> load the whole class and type scores down the column — <em>Enter</em> jumps to the next student. Entries autosave locally and sync automatically when you&apos;re back online.</li>
+          <li><strong>Review results:</strong> open <em>Results &amp; Reports</em> to see the broadsheet, subject averages and rankings.</li>
+          <li><strong>Communicate:</strong> set <strong>Assignments</strong> and post <strong>Announcements</strong> for the classes you teach.</li>
+        </ol>
+      </InfoGuide>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {kpis.map((k, i) => (

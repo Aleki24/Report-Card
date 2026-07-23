@@ -39,7 +39,7 @@ export async function GET() {
         const { data, error } = await supabase
             .from('announcements')
             .select(`
-                id, title, content, is_important, created_at,
+                id, title, content, is_important, created_at, posted_by,
                 users!posted_by ( first_name, last_name, role )
             `)
             .eq('school_id', schoolId)
@@ -55,6 +55,7 @@ export async function GET() {
             isImportant: a.is_important,
             createdAt: a.created_at,
             postedBy: formatPostedBy(a.users),
+            postedById: a.posted_by ?? null,
         }));
 
         return NextResponse.json({ data: mapped });
