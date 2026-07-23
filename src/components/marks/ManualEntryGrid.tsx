@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
+import {
+    saveDraft, loadDraft, clearDraft,
+    enqueueBatch, flushQueue, pendingCountForExam, isOnline,
+} from '@/lib/offline-marks';
 
 interface GradeOption {
     symbol: string;
@@ -75,6 +79,16 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // ── Offline-first entry (Google-Docs style) ──────────
+    // Rows are autosaved locally as they're typed, and confirmed batches that
+    // can't reach the server are queued and flushed automatically once online.
+    const [offline, setOffline] = useState(false);
+    const [pendingSync, setPendingSync] = useState(0);
+    const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+    // Guards against overwriting a saved draft with the empty initial rows
+    // before the draft for this exam has been loaded.
+    const draftLoadedRef = useRef<string | null>(null);
+
     // Multi-paper scheme for this exam (null = normal single-paper flow)
     const [scheme, setScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const multiPaper = isMultiPaper(scheme);
@@ -96,6 +110,64 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 setScheme(null);
             }
         })();
+    }, [examId]);
+
+    // ── Restore any locally saved draft when the exam changes ──
+    // Rows typed earlier (even mid-paper for P1/P2/P3) come back exactly as
+    // they were left, so entry continues where it stopped.
+    useEffect(() => {
+        if (!examId) { draftLoadedRef.current = null; return; }
+        const draft = loadDraft<MarkRow>(examId);
+        if (draft && draft.rows.length > 0) {
+            setRows(draft.rows.map(r => ({ ...emptyRow(), ...r, error: '' })));
+            setLastSavedAt(draft.savedAt);
+        } else {
+            setRows([emptyRow(), emptyRow(), emptyRow()]);
+            setLastSavedAt(null);
+        }
+        setPendingSync(pendingCountForExam(examId));
+        draftLoadedRef.current = examId;
+    }, [examId]);
+
+    // ── Autosave rows to local storage as they're typed ──
+    useEffect(() => {
+        // Only autosave once the draft for the current exam has been loaded,
+        // so we never clobber a restored draft with the blank initial rows.
+        if (!examId || draftLoadedRef.current !== examId) return;
+        const hasContent = rows.some(r => r.studentId || r.score || Object.values(r.componentScores).some(v => v !== ''));
+        const t = setTimeout(() => {
+            if (hasContent) {
+                const savedAt = saveDraft(examId, rows);
+                if (savedAt) setLastSavedAt(savedAt);
+            } else {
+                clearDraft(examId);
+            }
+        }, 600);
+        return () => clearTimeout(t);
+    }, [rows, examId]);
+
+    // ── Track connectivity + flush the sync queue when back online ──
+    useEffect(() => {
+        setOffline(!isOnline());
+        const syncNow = async () => {
+            const result = await flushQueue();
+            if (examId) setPendingSync(pendingCountForExam(examId));
+            if (result.sent > 0) {
+                setSaveMessage({ type: 'success', text: `☁️ Synced ${result.sent} pending mark batch${result.sent !== 1 ? 'es' : ''} to the server.` });
+                setTimeout(() => setSaveMessage(null), 3000);
+            }
+        };
+        const handleOnline = () => { setOffline(false); syncNow(); };
+        const handleOffline = () => setOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        // Attempt an initial flush in case batches were left queued from a
+        // previous session and we're already online.
+        if (isOnline()) syncNow();
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, [examId]);
 
     // ── Live composite result for a multi-paper row ──────
@@ -401,15 +473,15 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         setSaving(true);
         setSaveMessage(null);
 
-        try {
-            // Use the same maxScore the grid validated against (the exam's
-            // max_score passed as a prop) rather than a second fetched copy —
-            // the two could diverge if the exam was edited mid-session, letting
-            // a validated score produce a >100% percentage. The server
-            // re-validates and recomputes the percentage regardless.
-            const examMaxScore = maxScore;
-
-            const insertRows = filledRows.map(r => {
+        // Use the same maxScore the grid validated against (the exam's
+        // max_score passed as a prop) rather than a second fetched copy —
+        // the two could diverge if the exam was edited mid-session, letting
+        // a validated score produce a >100% percentage. The server
+        // re-validates and recomputes the percentage regardless.
+        // Built before the try so the catch block can queue the same payload
+        // when a network error strikes mid-request.
+        const examMaxScore = maxScore;
+        const insertRows = filledRows.map(r => {
                 if (multiPaper) {
                     // Send per-paper scores; the server resolves the final
                     // subject score using the configured aggregation method.
@@ -441,10 +513,27 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 };
             });
 
+            const payload = { exam_id: examId, marks: insertRows };
+
+            // Offline before we even try — queue immediately so nothing is lost
+            // and the teacher can keep entering the next class.
+            if (!isOnline()) {
+                enqueueBatch({ examId, payload, label: `${filledRows.length} marks` });
+                clearDraft(examId);
+                setPendingSync(pendingCountForExam(examId));
+                setSaveMessage({ type: 'success', text: `📴 Offline — ${filledRows.length} mark${filledRows.length !== 1 ? 's' : ''} saved on this device and will sync automatically when the network returns.` });
+                setTimeout(() => {
+                    setRows([emptyRow(), emptyRow(), emptyRow()]);
+                    setSaveMessage(null);
+                }, 3500);
+                return;
+            }
+
+            try {
             const res = await fetch('/api/school/exam-marks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ exam_id: examId, marks: insertRows }),
+                body: JSON.stringify(payload),
             });
             const result = await res.json();
 
@@ -452,6 +541,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 setSaveMessage({ type: 'error', text: `Database error: ${result.error}` });
             } else {
                 setSaveMessage({ type: 'success', text: `✅ Successfully saved ${filledRows.length} mark${filledRows.length !== 1 ? 's' : ''}!` });
+                // Entry succeeded — the local draft is no longer needed
+                clearDraft(examId);
                 // Refresh students list (some are now entered) and reset rows
                 await fetchStudents();
                 setTimeout(() => {
@@ -459,9 +550,18 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     setSaveMessage(null);
                 }, 2500);
             }
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Unknown';
-            setSaveMessage({ type: 'error', text: `Unexpected error: ${message}` });
+        } catch {
+            // Network error (dropped connection mid-request): queue and keep
+            // going rather than losing the marks. The upsert is idempotent, so
+            // re-sending later is safe even if this request partly landed.
+            enqueueBatch({ examId, payload: { exam_id: examId, marks: insertRows }, label: `${filledRows.length} marks` });
+            clearDraft(examId);
+            setPendingSync(pendingCountForExam(examId));
+            setSaveMessage({ type: 'success', text: `📡 Network hiccup — ${filledRows.length} mark${filledRows.length !== 1 ? 's' : ''} saved on this device and queued to sync automatically.` });
+            setTimeout(() => {
+                setRows([emptyRow(), emptyRow(), emptyRow()]);
+                setSaveMessage(null);
+            }, 3500);
         } finally {
             setSaving(false);
         }
@@ -486,6 +586,33 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                             : <> · Max score: {maxScore}</>}
                     </p>
                 </div>
+
+                {/* ── Live save / connectivity status (Google-Docs style) ── */}
+                {examId && (
+                    <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
+                        <span
+                            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${offline
+                                ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
+                                : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'}`}
+                            title={offline
+                                ? 'You are offline. Marks are saved on this device and will sync automatically when the connection returns.'
+                                : 'Connected. Marks you enter are autosaved and submitted to the server.'}
+                        >
+                            <span className={`w-1.5 h-1.5 rounded-full ${offline ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            {offline ? 'Offline — saving on device' : 'Online — autosaving'}
+                        </span>
+                        {pendingSync > 0 && (
+                            <span className="text-[11px] text-amber-500" title="Confirmed marks waiting to reach the server. They sync automatically once online.">
+                                ☁️ {pendingSync} batch{pendingSync !== 1 ? 'es' : ''} waiting to sync
+                            </span>
+                        )}
+                        {lastSavedAt && (
+                            <span className="text-[11px] text-muted-foreground">
+                                Draft saved locally {new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* ── Exam-scoped: students auto-load from the exam's class ── */}
