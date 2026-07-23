@@ -55,6 +55,10 @@ export default function LoginPage() {
     setWrongStrategy(false);
     setAvailableMethods([]);
 
+    // The identifier actually handed to Clerk (a username is resolved to its
+    // email below). Kept at function scope so the error-recovery paths reuse it.
+    let loginIdentifier = identifier.trim();
+
     try {
       if (needsMfa) {
         const result = await signIn.attemptSecondFactor({
@@ -68,8 +72,29 @@ export default function LoginPage() {
           toast.error(`Verification incomplete: ${result.status}`);
         }
       } else {
+        // Teachers/students sign in with a generated username. Username may not
+        // be an enabled Clerk sign-in identifier (that yields
+        // "identifier is invalid"), so resolve a non-email identifier to the
+        // account's email first — email is always accepted. Email logins and
+        // any resolver failure fall straight through to the raw identifier.
+        if (!loginIdentifier.includes('@')) {
+          try {
+            const resolveRes = await fetch('/api/auth/resolve-identifier', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ identifier: loginIdentifier }),
+            });
+            if (resolveRes.ok) {
+              const { email } = await resolveRes.json();
+              if (email) loginIdentifier = email;
+            }
+          } catch {
+            /* fall back to the raw identifier */
+          }
+        }
+
         const result = await signIn.create({
-          identifier: identifier,
+          identifier: loginIdentifier,
           password,
         });
 
@@ -98,7 +123,7 @@ export default function LoginPage() {
         // Ask Clerk what this account can actually sign in with, so the
         // message names the real method(s) instead of guessing "Google".
         try {
-          const check = await signIn.create({ identifier });
+          const check = await signIn.create({ identifier: loginIdentifier });
           const methods = Array.from(new Set(
             (check.supportedFirstFactors ?? [])
               .map((f) => describeStrategy(f.strategy))
@@ -112,9 +137,11 @@ export default function LoginPage() {
         const msg =
           apiError?.code === 'form_identifier_not_found'
             ? 'No account found with this email or username.'
-            : apiError?.code === 'form_password_incorrect'
-              ? 'Incorrect password.'
-              : apiError?.longMessage || 'Invalid credentials.';
+            : apiError?.code === 'form_identifier_invalid'
+              ? 'That username or email isn’t recognized. If you just activated your account, try your email address instead.'
+              : apiError?.code === 'form_password_incorrect'
+                ? 'Incorrect password.'
+                : apiError?.longMessage || 'Invalid credentials.';
         toast.error(msg);
       }
     } finally {
