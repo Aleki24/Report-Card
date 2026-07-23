@@ -20,7 +20,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
 interface StudentComment { student_id: string; admission_number: string; student_name: string; comments_class_teacher: string; comments_principal: string; }
-interface GradeStreamOption { id: string; full_name: string; }
+interface GradeStreamOption { id: string; full_name: string; grade_id?: string; }
 interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
@@ -123,9 +123,14 @@ export default function ReportsPage() {
   useEffect(() => {
     setSelectedExamType('');
     if (!selectedGradeStream || !selectedTerm) { setAvailableExamTypes([]); return; }
+    const stream = gradeStreams.find(s => s.id === selectedGradeStream);
     (async () => {
       try {
-        const params = new URLSearchParams({ stream_id: selectedGradeStream, term_id: selectedTerm });
+        const paramsObj: Record<string, string> = { stream_id: selectedGradeStream, term_id: selectedTerm };
+        // Many exams are grade-wide (no specific stream assigned) — the API
+        // only matches those when grade_id is passed alongside stream_id.
+        if (stream?.grade_id) paramsObj.grade_id = stream.grade_id;
+        const params = new URLSearchParams(paramsObj);
         const res = await fetch(`/api/school/exams?${params.toString()}`);
         if (!res.ok) { setAvailableExamTypes([]); return; }
         const json = await res.json();
@@ -136,7 +141,7 @@ export default function ReportsPage() {
         setAvailableExamTypes([]);
       }
     })();
-  }, [selectedGradeStream, selectedTerm]);
+  }, [selectedGradeStream, selectedTerm, gradeStreams]);
 
   const fetchStudents = async () => {
     setLoadingStudents(true);
