@@ -71,17 +71,13 @@ export async function GET() {
             availableRoles.add('CLASS_TEACHER');
         }
 
-        // Check if they are a subject teacher
-        const { data: subjectAssigned } = await supabase
-            .from('subject_teachers')
-            .select('id')
-            .eq('user_id', userId)
-            .limit(1)
-            .maybeSingle();
-
-        if (subjectAssigned) {
-            availableRoles.add('SUBJECT_TEACHER');
-        }
+        // SUBJECT_TEACHER is intentionally never offered as a switch *target*.
+        // A class teacher already covers subject-teacher work with broader
+        // access, so switching a class teacher down into the narrower
+        // subject-teacher view (which strands them) serves no purpose. Users
+        // whose base role is SUBJECT_TEACHER still get it via the always-added
+        // base role above; the only extra role on offer is the CLASS_TEACHER
+        // upgrade for a subject teacher who also holds a class-teacher record.
 
         return NextResponse.json({
             roles: Array.from(availableRoles),
