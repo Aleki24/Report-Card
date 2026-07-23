@@ -136,17 +136,24 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
                 // Fetch all grading systems and filter by academic level
                 const structureRes = await fetch('/api/admin/academic-structure');
                 const structureData = await structureRes.json();
-                
+
                 const allGradingSystems = structureData.grading_systems || [];
                 const allScales = structureData.grading_scales || [];
-                
+
                 // Build filtered scales
                 const filteredScales: typeof gradingScales = [];
-                
+
+                // A grading system assigned directly to the subject (Settings >
+                // Subjects) takes priority over every level-wide system.
+                const subjectGsId: string | null = exam?.subjects?.grading_system_id || null;
+                const assignedSystem = subjectGsId ? allGradingSystems.find((gs: any) => gs.id === subjectGsId) : null;
+
                 // Get systems that match the academic level, or all systems as fallback
-                const relevantSystems = academicLevelId 
-                    ? allGradingSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
-                    : allGradingSystems;
+                const relevantSystems = assignedSystem
+                    ? [assignedSystem]
+                    : academicLevelId
+                        ? allGradingSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
+                        : allGradingSystems;
                 
                 relevantSystems.forEach((sys: any) => {
                     const sysScales = allScales.filter((sc: any) => sc.grading_system_id === sys.id);

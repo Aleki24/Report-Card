@@ -1,35 +1,185 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 
 interface AcademicLevel { id: string; code: string; name: string; }
-interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; }
+interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
 
 interface GradingSystemsTabProps {
     academicLevels: AcademicLevel[];
     gradingSystems: GradingSystem[];
     gradingScales: GradingScale[];
+    schoolId?: string;
+    saving?: boolean;
+    onCreate: (type: string, payload: Record<string, unknown>) => Promise<any>;
+    onDelete: (type: string, id: string) => Promise<void>;
 }
 
-export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScales }: GradingSystemsTabProps) {
+interface DraftRow { symbol: string; label: string; min_percentage: string; max_percentage: string; points: string; }
+
+const emptyRow = (): DraftRow => ({ symbol: '', label: '', min_percentage: '', max_percentage: '', points: '' });
+
+export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScales, schoolId, saving, onCreate, onDelete }: GradingSystemsTabProps) {
+    const [showCreate, setShowCreate] = useState(false);
+    const [name, setName] = useState('');
+    const [academicLevelId, setAcademicLevelId] = useState('');
+    const [rows, setRows] = useState<DraftRow[]>([emptyRow(), emptyRow(), emptyRow()]);
+    const [formError, setFormError] = useState('');
+
+    const resetForm = () => {
+        setName(''); setAcademicLevelId(''); setRows([emptyRow(), emptyRow(), emptyRow()]); setFormError('');
+    };
+
+    const updateRow = (i: number, field: keyof DraftRow, value: string) => {
+        setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
+    };
+
+    const addRow = () => setRows(prev => [...prev, emptyRow()]);
+    const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError('');
+
+        if (!name.trim()) { setFormError('Grading system name is required.'); return; }
+        if (!academicLevelId) { setFormError('Please select an academic level.'); return; }
+
+        const filledRows = rows.filter(r => r.symbol.trim() || r.min_percentage !== '' || r.max_percentage !== '');
+        if (filledRows.length === 0) { setFormError('Add at least one grade row to the grading grid.'); return; }
+
+        const scales = [];
+        for (const r of filledRows) {
+            if (!r.symbol.trim()) { setFormError('Every row needs a grade (e.g. A, B+, E).'); return; }
+            if (r.min_percentage === '' || r.max_percentage === '') { setFormError(`Row "${r.symbol}" needs both a Low and High mark.`); return; }
+            const min = Number(r.min_percentage);
+            const max = Number(r.max_percentage);
+            if (Number.isNaN(min) || Number.isNaN(max) || min < 0 || max > 100) { setFormError(`Row "${r.symbol}": Low/High must be between 0 and 100.`); return; }
+            if (min > max) { setFormError(`Row "${r.symbol}": Low mark cannot be greater than High mark.`); return; }
+            scales.push({
+                symbol: r.symbol.trim(),
+                label: r.label.trim(),
+                min_percentage: min,
+                max_percentage: max,
+                points: r.points === '' ? undefined : Number(r.points),
+            });
+        }
+
+        const result = await onCreate('grading_system', { name: name.trim(), academic_level_id: academicLevelId, scales });
+        if (result) {
+            setShowCreate(false);
+            resetForm();
+        }
+    };
+
     return (
         <div className="lg:col-span-3 flex flex-col gap-6">
             <InfoGuide title="How grading works:">
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li><strong>Grading Systems</strong> group scales by curriculum (e.g., KNEC 8-4-4, CBC). Each system belongs to an Academic Level.</li>
-                    <li><strong>Grading Scales</strong> define the grade boundaries — each row maps a percentage range to a symbol, label, and GPA points.</li>
-                    <li>These scales are automatically applied when teachers enter exam scores to calculate grades and points.</li>
+                    <li><strong>Grading Scales</strong> define the grade boundaries — each row maps a percentage range to a symbol, label, and points.</li>
+                    <li>Assign a grading system to a subject from the Subjects page — it&apos;s then used automatically when teachers enter scores and when report cards are generated.</li>
+                    <li>The default CBC / 8-4-4 templates are shared and read-only. Create your own to customize grade boundaries for your school.</li>
                 </ul>
             </InfoGuide>
+
+            <div className="flex justify-end">
+                <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={() => { setShowCreate(v => !v); if (showCreate) resetForm(); }}
+                >
+                    {showCreate ? 'Cancel' : '+ Create Grading System'}
+                </button>
+            </div>
+
+            {showCreate && (
+                <form onSubmit={handleSubmit} className="card p-5">
+                    {formError && (
+                        <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className="block text-xs text-muted-foreground mb-1">Grading System Name *</label>
+                            <input className="input-field w-full" placeholder="e.g. Sciences Grading" value={name} onChange={e => setName(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
+                            <select className="input-field w-full" value={academicLevelId} onChange={e => setAcademicLevelId(e.target.value)} required>
+                                <option value="">-- Select --</option>
+                                {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Grading Grid (start with the lowest)</p>
+                    <div className="overflow-x-auto border border-border rounded-lg mb-3">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-muted border-b border-border">
+                                <tr>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">#</th>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">Low</th>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">High</th>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">Grade</th>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">Points</th>
+                                    <th className="px-3 py-2 text-xs font-semibold text-muted-foreground">Remarks</th>
+                                    <th className="px-3 py-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--color-border)]">
+                                {rows.map((r, i) => (
+                                    <tr key={i}>
+                                        <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
+                                        <td className="px-2 py-1.5"><input className="input-field w-20" type="number" min={0} max={100} value={r.min_percentage} onChange={e => updateRow(i, 'min_percentage', e.target.value)} /></td>
+                                        <td className="px-2 py-1.5"><input className="input-field w-20" type="number" min={0} max={100} value={r.max_percentage} onChange={e => updateRow(i, 'max_percentage', e.target.value)} /></td>
+                                        <td className="px-2 py-1.5"><input className="input-field w-20" placeholder="A" value={r.symbol} onChange={e => updateRow(i, 'symbol', e.target.value.toUpperCase())} /></td>
+                                        <td className="px-2 py-1.5"><input className="input-field w-16" type="number" min={0} value={r.points} onChange={e => updateRow(i, 'points', e.target.value)} /></td>
+                                        <td className="px-2 py-1.5"><input className="input-field w-full min-w-[120px]" placeholder="Excellent" value={r.label} onChange={e => updateRow(i, 'label', e.target.value)} /></td>
+                                        <td className="px-2 py-1.5 text-right">
+                                            <button type="button" className="text-red-400 hover:text-red-300 text-xs font-medium" onClick={() => removeRow(i)} disabled={rows.length <= 1}>Remove</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" className="btn-secondary text-xs mb-5" onClick={addRow}>+ Add Row</button>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                        <button type="button" className="btn-secondary" onClick={() => { setShowCreate(false); resetForm(); }} disabled={saving}>Cancel</button>
+                        <button type="submit" className="btn-primary disabled:opacity-50" disabled={saving}>{saving ? 'Saving...' : 'Save Grading System'}</button>
+                    </div>
+                </form>
+            )}
 
             {gradingSystems.length > 0 ? gradingSystems.map(gs => {
                 const levelName = academicLevels.find(l => l.id === gs.academic_level_id)?.name || '';
                 const scales = gradingScales.filter(sc => sc.grading_system_id === gs.id);
+                const isOwn = !!gs.school_id && gs.school_id === schoolId;
                 return (
                     <div key={gs.id} className="card">
-                        <h3 className="font-bold text-lg mb-1 font-[family-name:var(--font-display)]">{gs.name}</h3>
+                        <div className="flex items-center justify-between mb-1">
+                            <h3 className="font-bold text-lg font-[family-name:var(--font-display)]">{gs.name}</h3>
+                            <div className="flex items-center gap-3">
+                                {isOwn ? (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">Your school</span>
+                                ) : (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">System default</span>
+                                )}
+                                {isOwn && (
+                                    <button
+                                        type="button"
+                                        className="text-red-400 hover:text-red-300 text-xs font-medium"
+                                        onClick={() => onDelete('grading_system', gs.id)}
+                                        disabled={saving}
+                                    >
+                                        Delete
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                         <p className="text-xs text-muted-foreground mb-4">{levelName}{gs.description ? ` · ${gs.description}` : ''}</p>
                         {scales.length > 0 && (
                             <div className="overflow-x-auto border border-border rounded-lg">

@@ -73,6 +73,11 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // their scale symbols/ranges overlap (e.g. both can cover 30-40%).
     const [gradingSystems, setGradingSystems] = useState<{ id: string; academic_level_id: string; name: string }[]>([]);
     const [allGradingScales, setAllGradingScales] = useState<{ grading_system_id: string; symbol: string; label: string; min_percentage: number; max_percentage: number }[]>([]);
+    // Per-subject grading system assignment (Settings > Subjects). When the
+    // current subject has one assigned, it takes priority over the academic
+    // level's default so a school can grade e.g. Sciences on a different
+    // scale from Languages.
+    const [subjectGradingSystemId, setSubjectGradingSystemId] = useState<string | null>(null);
 
     // Entry rows
     const [rows, setRows] = useState<MarkRow[]>([emptyRow(), emptyRow(), emptyRow()]);
@@ -197,6 +202,10 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 if (data.grade_streams) setAllStreams(data.grade_streams);
                 if (data.grading_systems) setGradingSystems(data.grading_systems);
                 if (data.grading_scales) setAllGradingScales(data.grading_scales);
+                if (subjectId && data.subjects) {
+                    const subj = (data.subjects as { id: string; grading_system_id?: string | null }[]).find(s => s.id === subjectId);
+                    setSubjectGradingSystemId(subj?.grading_system_id || null);
+                }
             } catch (err) {
                 console.error('Failed to load class structure:', err);
             }
@@ -291,12 +300,18 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // ── Grading systems for this exam's academic level only ──────
     // Falls back to every system until the level is known (e.g. before a
     // grade is picked in manual mode) rather than showing nothing.
+    // If the subject has its own grading system assigned (Settings > Subjects),
+    // that one wins outright instead of merging every level-wide system's
+    // scales together.
     const effectiveAcademicLevelId = grades.find(g => g.id === (gradeId || selectedGradeId))?.academic_level_id ?? null;
+    const assignedSystem = subjectGradingSystemId ? gradingSystems.find(sys => sys.id === subjectGradingSystemId) : null;
     const relevantGradingSystems = useMemo(
-        () => effectiveAcademicLevelId
-            ? gradingSystems.filter(sys => sys.academic_level_id === effectiveAcademicLevelId)
-            : gradingSystems,
-        [gradingSystems, effectiveAcademicLevelId]
+        () => assignedSystem
+            ? [assignedSystem]
+            : effectiveAcademicLevelId
+                ? gradingSystems.filter(sys => sys.academic_level_id === effectiveAcademicLevelId)
+                : gradingSystems,
+        [gradingSystems, effectiveAcademicLevelId, assignedSystem]
     );
     const gradingScales = useMemo(
         () => relevantGradingSystems.flatMap(sys => allGradingScales.filter(sc => sc.grading_system_id === sys.id)),

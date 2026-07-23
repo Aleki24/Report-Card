@@ -25,13 +25,19 @@ import { syncCombinationStudents } from '@/lib/pathway/sync-student-subjects';
 
 type CreatePayload = Record<string, unknown>;
 
-// These four tables are GLOBAL, seeded national-curriculum reference data
-// shared by every school (there is no school_id column on them — 40 schools
-// share the same 2 grading systems / 20 scales / grade levels). A per-school
-// admin editing them corrupts every other school's report cards, so they are
-// read-only through this per-school API; they are managed centrally via seed
-// migrations, not the app.
-const GLOBAL_REFERENCE_TYPES = ['level', 'grade', 'grading_system', 'grading_scale'];
+// These two tables are GLOBAL, seeded national-curriculum reference data
+// shared by every school (there is no school_id column on them — every
+// school shares the same academic levels / grade lists). A per-school admin
+// editing them corrupts every other school's data, so they are read-only
+// through this per-school API; they are managed centrally via seed migrations.
+//
+// Grading systems/scales used to be in this list too, but that blocked the
+// "create your own grading system" feature entirely. They're now
+// school-scoped: rows with school_id = NULL are the shared national-default
+// templates (still read-only here), while rows with school_id set are owned
+// by that school and fully editable/deletable by it — enforced per-record
+// below rather than by type.
+const GLOBAL_REFERENCE_TYPES = ['level', 'grade'];
 
 async function getLatestSession() {
     const { userId } = await auth();
@@ -95,13 +101,13 @@ export async function GET(request: NextRequest) {
         let combinationsData: any[] = [];
 
         if (schoolId) {
-            const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, gscRes, combosRes] = await Promise.all([
+            const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, combosRes] = await Promise.all([
                 supabaseAdmin.from('academic_years').select('*').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('*').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('*').eq('school_id', schoolId).order('name'),
                 supabaseAdmin.from('subjects').select('*').eq('school_id', schoolId).order('display_order'),
-                supabaseAdmin.from('grading_systems').select('*').order('name'),
-                supabaseAdmin.from('grading_scales').select('*').order('order_index'),
+                // Global default templates (school_id IS NULL) + this school's own systems
+                supabaseAdmin.from('grading_systems').select('*').or(`school_id.is.null,school_id.eq.${schoolId}`).order('name'),
                 supabaseAdmin.from('subject_combinations')
                     .select('*, subject_combination_subjects ( subject_id, subjects ( id, name, code ) )')
                     .eq('school_id', schoolId)
@@ -112,7 +118,14 @@ export async function GET(request: NextRequest) {
             streamsData = streamsRes.data ?? [];
             subjectsData = subjectsRes.data ?? [];
             gsData = gsRes.data ?? [];
-            gscData = gscRes.data ?? [];
+            if (gsData.length > 0) {
+                const { data: scalesData } = await supabaseAdmin
+                    .from('grading_scales')
+                    .select('*')
+                    .in('grading_system_id', gsData.map(g => g.id))
+                    .order('order_index');
+                gscData = scalesData ?? [];
+            }
 
             const combos = combosRes.data ?? [];
             if (combos.length > 0) {
@@ -231,12 +244,32 @@ export async function POST(request: NextRequest) {
             },
 
             grading_system: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = gradingSystemSchema.parse(payload);
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_systems')
-                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id })
+                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'grading system');
+
+                if (data.scales && data.scales.length > 0) {
+                    const scaleRows = data.scales.map((s, i) => ({
+                        grading_system_id: result.id,
+                        symbol: s.symbol,
+                        label: s.label || s.symbol,
+                        min_percentage: s.min_percentage,
+                        max_percentage: s.max_percentage,
+                        points: s.points ?? null,
+                        order_index: i,
+                    }));
+                    const { error: scalesError } = await supabaseAdmin.from('grading_scales').insert(scaleRows);
+                    if (scalesError) {
+                        // Keep the system atomic: don't leave a grading system with no grid behind
+                        await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
+                        return handleDatabaseError(scalesError, 'grading scale');
+                    }
+                }
+
                 return NextResponse.json({ success: true, data: result });
             },
 
@@ -261,7 +294,20 @@ export async function POST(request: NextRequest) {
             },
 
             grading_scale: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = gradingScaleSchema.parse(payload);
+
+                // Only the owning school can add rows to its own grading system —
+                // the shared national-default templates (school_id NULL) are read-only.
+                const { data: system } = await supabaseAdmin
+                    .from('grading_systems')
+                    .select('school_id')
+                    .eq('id', data.grading_system_id)
+                    .maybeSingle();
+                if (!system || system.school_id !== schoolId) {
+                    return NextResponse.json({ error: 'Grading system not found or not editable.' }, { status: 404 });
+                }
+
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_scales')
                     .insert({ grading_system_id: data.grading_system_id, symbol: data.symbol, label: data.label, min_percentage: data.min_percentage, max_percentage: data.max_percentage, points: data.points ?? null, order_index: data.order_index })
@@ -383,12 +429,45 @@ export async function PATCH(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Global reference data (grading systems/scales, grade levels) is shared
-        // across all schools and must not be editable per-school — previously a
-        // bypass here let one school's admin PATCH a grading_scale every other
-        // school relies on, corrupting their report-card grades.
+        // Global reference data (grade levels, academic levels) is shared across
+        // all schools and must not be editable per-school.
         if (GLOBAL_REFERENCE_TYPES.includes(type)) {
-            return NextResponse.json({ error: 'Grading systems, grading scales, grade levels, and academic levels are centrally managed and cannot be modified here.' }, { status: 403 });
+            return NextResponse.json({ error: 'Grade levels and academic levels are centrally managed and cannot be modified here.' }, { status: 403 });
+        }
+
+        // grading_scale rows don't carry their own school_id — ownership is via
+        // their parent grading_system, so it needs its own lookup rather than
+        // the generic schoolScopedTables path below.
+        if (type === 'grading_scale') {
+            const { data: scaleRow } = await supabaseAdmin
+                .from('grading_scales')
+                .select('grading_system_id, grading_systems!inner(school_id)')
+                .eq('id', id)
+                .maybeSingle();
+            const ownerSchoolId = (scaleRow as any)?.grading_systems?.school_id;
+            if (!scaleRow || ownerSchoolId !== schoolId) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            const updateData: Record<string, any> = {};
+            if (payload.symbol !== undefined) updateData.symbol = payload.symbol;
+            if (payload.label !== undefined) updateData.label = payload.label;
+            if (payload.min_percentage !== undefined) updateData.min_percentage = payload.min_percentage;
+            if (payload.max_percentage !== undefined) updateData.max_percentage = payload.max_percentage;
+            if (payload.points !== undefined) updateData.points = payload.points;
+            if (payload.order_index !== undefined) updateData.order_index = payload.order_index;
+            if (Object.keys(updateData).length === 0) {
+                return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+            }
+
+            const { data: result, error } = await supabaseAdmin
+                .from('grading_scales')
+                .update(updateData)
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) return handleDatabaseError(error, 'grading scale');
+            return NextResponse.json({ success: true, data: result });
         }
 
         // School-scoped tables that can be updated
@@ -398,6 +477,7 @@ export async function PATCH(request: NextRequest) {
             stream: 'grade_streams',
             subject: 'subjects',
             subject_combination: 'subject_combinations',
+            grading_system: 'grading_systems',
         };
 
         const table = schoolScopedTables[type];
@@ -510,13 +590,6 @@ export async function PATCH(request: NextRequest) {
         } else if (type === 'grading_system') {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.description !== undefined) updateData.description = payload.description;
-        } else if (type === 'grading_scale') {
-            if (payload.symbol !== undefined) updateData.symbol = payload.symbol;
-            if (payload.label !== undefined) updateData.label = payload.label;
-            if (payload.min_percentage !== undefined) updateData.min_percentage = payload.min_percentage;
-            if (payload.max_percentage !== undefined) updateData.max_percentage = payload.max_percentage;
-            if (payload.points !== undefined) updateData.points = payload.points;
-            if (payload.order_index !== undefined) updateData.order_index = payload.order_index;
         }
 
         if (Object.keys(updateData).length === 0) {
@@ -565,10 +638,11 @@ export async function DELETE(request: NextRequest) {
             stream: 'grade_streams',
             subject: 'subjects',
             subject_combination: 'subject_combinations',
+            grading_system: 'grading_systems',
         };
 
         // Global/shared curriculum tables — deletion is blocked for individual school admins
-        const globalTypes = ['level', 'grade', 'grading_system', 'grading_scale'];
+        const globalTypes = ['level', 'grade'];
 
         if (globalTypes.includes(type)) {
             return NextResponse.json(
@@ -576,6 +650,27 @@ export async function DELETE(request: NextRequest) {
                 { status: 403 }
             );
         }
+
+        // grading_scale rows don't carry their own school_id — ownership is via
+        // their parent grading_system.
+        if (type === 'grading_scale') {
+            const { data: scaleRow } = await supabaseAdmin
+                .from('grading_scales')
+                .select('id, grading_systems!inner(school_id)')
+                .eq('id', id)
+                .maybeSingle();
+            const ownerSchoolId = (scaleRow as any)?.grading_systems?.school_id;
+            if (!scaleRow || ownerSchoolId !== schoolId) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+            const { error } = await supabaseAdmin.from('grading_scales').delete().eq('id', id);
+            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+            return NextResponse.json({ success: true });
+        }
+
+        // Global default grading systems (school_id NULL) are shared national
+        // templates — the check below (existing.school_id !== schoolId) already
+        // rejects those, since school_id will be null there, not this school's id.
 
         if (schoolScopedTables[type]) {
             const table = schoolScopedTables[type];

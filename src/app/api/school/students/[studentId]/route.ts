@@ -128,17 +128,17 @@ export async function GET(
     const { data: reportCards } = await supabase
       .from('report_cards')
       .select(`
-        id, created_at, overall_average, overall_position,
+        id, generated_at, overall_average, overall_position,
         term_id, academic_year_id,
         terms ( name ),
         academic_years ( name )
       `)
       .eq('student_id', studentId)
-      .order('created_at', { ascending: false });
+      .order('generated_at', { ascending: false });
 
     const reportHistory = (reportCards || []).map((rc: any) => ({
       id: rc.id,
-      generated_at: rc.created_at,
+      generated_at: rc.generated_at,
       term: rc.terms?.name || '—',
       year: rc.academic_years?.name || '—',
       average: rc.overall_average,
@@ -156,7 +156,7 @@ export async function GET(
       `)
       .eq('student_id', studentId)
       .not('attendance_present', 'is', null)
-      .order('created_at', { ascending: false });
+      .order('generated_at', { ascending: false });
 
     const attendanceHistory = (attendanceRecords || []).map((rc: any) => ({
       id: rc.id,

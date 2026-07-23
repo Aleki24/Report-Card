@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       .from('exams')
       .select(`
         id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
+        status, published_by, approved_by,
         subjects:subject_id ( name, code, category ),
         grades:grade_id ( name_display )
       `)
@@ -90,6 +91,10 @@ export async function GET(request: NextRequest) {
       grade_stream_id: e.grade_stream_id,
       grade_id: e.grade_id,
       term_id: e.term_id,
+      status: e.status || 'DRAFT',
+      published_by: e.published_by,
+      approved_by: e.approved_by,
+      created_by_teacher_id: e.created_by_teacher_id,
     }));
 
     return NextResponse.json({ data: mapped });

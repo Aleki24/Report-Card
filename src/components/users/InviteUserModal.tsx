@@ -76,8 +76,8 @@ export function InviteUserModal(props: InviteUserModalProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Class (Optional)</label>
-                <select className="input-field w-full" value={props.formGradeStreamId} onChange={e => props.setFormGradeStreamId(e.target.value)}>
+                <label className="block text-xs text-muted-foreground mb-1">Class *</label>
+                <select className="input-field w-full" value={props.formGradeStreamId} onChange={e => props.setFormGradeStreamId(e.target.value)} required>
                   <option value="">-- Select --</option>
                   {props.gradeStreams.filter(gs => !props.formAcademicLevelId || gs.grades?.academic_level_id === props.formAcademicLevelId).map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
                 </select>

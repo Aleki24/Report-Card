@@ -191,7 +191,15 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Generate invite code (NOT a password)
-        const inviteCode = await createInviteCode(supabaseAdmin, studentUserId, effectiveSchoolId, 'STUDENT');
+        let inviteCode: string;
+        try {
+            inviteCode = await createInviteCode(supabaseAdmin, studentUserId, effectiveSchoolId, 'STUDENT');
+        } catch (err) {
+            console.error('add-student invite code error:', err);
+            // Cleanup: student row cascades from users delete (FK ON DELETE CASCADE)
+            await supabaseAdmin.from('users').delete().eq('id', studentUserId);
+            return NextResponse.json({ error: 'Failed to generate an invite code for the new student. Please try again.' }, { status: 500 });
+        }
 
         // Best-effort delivery to the guardian — the code is still shown to
         // the admin below regardless of whether this succeeds.

@@ -179,7 +179,13 @@ export async function POST(request: NextRequest) {
 
         if (insertError || !newUser) {
             console.error('Insert error:', insertError);
-            return NextResponse.json({ error: 'Failed to create user. Please try again.' }, { status: 500 });
+            let message = 'Failed to create user. Please try again.';
+            if (insertError?.code === '23505') {
+                message = 'A user with these details (username, phone, or email) already exists.';
+            } else if (insertError?.code === '23503') {
+                message = 'The selected school, class, or academic level no longer exists. Please refresh and try again.';
+            }
+            return NextResponse.json({ error: message }, { status: insertError?.code === '23505' ? 409 : 500 });
         }
 
         // Remove the user row and any role records if a later step fails,
@@ -269,7 +275,14 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Generate invite code (NOT a password)
-        const inviteCode = await createInviteCode(supabaseAdmin, newUser.id, school_id, role);
+        let inviteCode: string;
+        try {
+            inviteCode = await createInviteCode(supabaseAdmin, newUser.id, school_id, role);
+        } catch (err) {
+            console.error('Invite code generation error:', err);
+            await rollback();
+            return NextResponse.json({ error: 'Failed to generate an invite code for the new user. Please try again.' }, { status: 500 });
+        }
 
         // Best-effort delivery — the code is still shown to the admin below
         // regardless of whether this succeeds.
