@@ -5,12 +5,20 @@ import { Card, CardContent, Select, Input } from '@/components/ui';
 import { Filter, CheckCircle2 } from 'lucide-react';
 import { REPORT_TEMPLATES, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
+const EXAM_TYPE_LABELS: Record<string, string> = {
+  CAT: 'CAT', TOPICAL: 'Topical', MIDTERM: 'Midterm', ENDTERM: 'End Term',
+  OPENER: 'Opener', MOCK: 'Mock', PRE_MOCK: 'Pre-Mock', POST_MOCK: 'Post-Mock',
+  ZONE: 'Zone', SUB_COUNTY: 'Sub-County', COUNTY: 'County', REGIONAL: 'Regional', NATIONAL: 'National',
+};
+
 interface ReportSettingsProps {
   selectedAcademicYear: string; setSelectedAcademicYear: (v: string) => void;
   selectedTerm: string; setSelectedTerm: (v: string) => void;
   selectedGradeStream: string; setSelectedGradeStream: (v: string) => void;
   customReportTitle: string; setCustomReportTitle: (v: string) => void;
   selectedTemplate: ReportTemplateId; setSelectedTemplate: (v: ReportTemplateId) => void;
+  selectedExamType: string; setSelectedExamType: (v: string) => void;
+  availableExamTypes: string[];
   academicYears: { id: string; name: string }[];
   terms: { id: string; name: string }[];
   gradeStreams: { id: string; full_name: string }[];
@@ -22,6 +30,8 @@ export function ReportSettings({
   selectedGradeStream, setSelectedGradeStream,
   customReportTitle, setCustomReportTitle,
   selectedTemplate, setSelectedTemplate,
+  selectedExamType, setSelectedExamType,
+  availableExamTypes,
   academicYears, terms, gradeStreams,
 }: ReportSettingsProps) {
   const isReady = !!(selectedAcademicYear && selectedTerm && selectedGradeStream);
@@ -41,7 +51,7 @@ export function ReportSettings({
             <span className="text-xs text-muted-foreground">Select year, term &amp; class to unlock actions</span>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Academic Year <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
@@ -62,6 +72,21 @@ export function ReportSettings({
               <option value="">-- Choose Stream --</option>
               {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
             </Select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Exam</label>
+            <Select
+              className="w-full h-9 text-sm"
+              value={selectedExamType}
+              onChange={e => setSelectedExamType(e.target.value)}
+              disabled={availableExamTypes.length === 0}
+            >
+              <option value="">
+                {availableExamTypes.length === 0 ? 'No exams for this term yet' : 'Most recent per subject'}
+              </option>
+              {availableExamTypes.map(t => <option key={t} value={t}>{EXAM_TYPE_LABELS[t] || t}</option>)}
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">A term can hold several rounds (CAT, Midterm, End Term, Mock...) — pick which one to report on.</p>
           </div>
           <div>
             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Custom Title (Optional)</label>

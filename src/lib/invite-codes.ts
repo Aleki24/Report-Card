@@ -3,12 +3,13 @@ import { sendSMS } from './africastalking';
 import { sendEmail } from './email';
 
 /**
- * Generates a unique 10-character alphanumeric invite code.
+ * Generates a unique 6-character alphanumeric invite code.
  * Uses uppercase letters and digits, excluding confusing characters (0/O, 1/I/L).
  * Uses rejection sampling to avoid modulo bias.
+ * Must stay <= 6 chars to fit the `invite_codes.code` VARCHAR(6) column.
  */
 const CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // No 0,O,1,I,L
-const CODE_LENGTH = 10;
+const CODE_LENGTH = 6;
 
 export function generateInviteCode(): string {
   // Largest multiple of CHARSET.length that fits in a byte; bytes >= this

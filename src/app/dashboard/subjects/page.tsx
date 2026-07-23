@@ -13,6 +13,7 @@ import type { SubjectCombination } from '@/types';
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; name_display: string; code: string; academic_level_id: string; numeric_order: number; }
 interface Subject { id: string; name: string; code: string; category?: string; academic_level_id?: string; subject_type?: 'CORE' | 'ESSENTIAL' | 'OPTIONAL'; grading_system_id?: string | null; }
+interface GradingSystem { id: string; name: string; academic_level_id: string; }
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
     LANGUAGE: { bg: 'rgba(59, 130, 246, 0.15)', color: '#3B82F6' },
@@ -35,6 +36,7 @@ export default function SubjectsPage() {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('ALL');
     const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
     const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
     const [grades, setGrades] = useState<Grade[]>([]);
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
@@ -55,6 +57,7 @@ export default function SubjectsPage() {
             const json = await res.json();
             if (res.ok) {
                 setSubjects(json.subjects || []);
+                setGradingSystems(json.grading_systems || []);
                 setAcademicLevels(json.academic_levels || []);
                 setGrades(json.grades || []);
                 setCombinations(json.subject_combinations || []);
@@ -109,6 +112,21 @@ export default function SubjectsPage() {
             });
             if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
             setCalMsg('Updated successfully');
+            await fetchSubjects();
+        } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
+        finally { setCalSaving(false); }
+    };
+
+    const setSubjectGradingSystem = async (id: string, gradingSystemId: string) => {
+        setCalSaving(true); setCalMsg('');
+        try {
+            const res = await fetch(`/api/admin/academic-structure`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'subject', id, grading_system_id: gradingSystemId || null })
+            });
+            if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+            setCalMsg('Grading system updated');
             await fetchSubjects();
         } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
         finally { setCalSaving(false); }
@@ -347,6 +365,7 @@ export default function SubjectsPage() {
                                     <th className="sticky top-0 z-10 bg-card shadow-sm">Category</th>
                                     <th className="sticky top-0 z-10 bg-card shadow-sm">Type</th>
                                     <th className="sticky top-0 z-10 bg-card shadow-sm">Level</th>
+                                    <th className="sticky top-0 z-10 bg-card shadow-sm">Grading System</th>
                                     <th className="sticky top-0 z-10 bg-card shadow-sm text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -367,6 +386,23 @@ export default function SubjectsPage() {
                                             </td>
                                             <td>{typeBadge(s.subject_type)}</td>
                                             <td className="text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
+                                            <td>
+                                                {role === 'ADMIN' ? (
+                                                    <select
+                                                        className="text-[11px] bg-transparent border border-border/60 rounded-md px-2 py-1 outline-none text-muted-foreground hover:border-primary/40 transition-colors cursor-pointer max-w-[160px]"
+                                                        value={s.grading_system_id || ''}
+                                                        onChange={(e) => setSubjectGradingSystem(s.id, e.target.value)}
+                                                        disabled={calSaving}
+                                                    >
+                                                        <option value="">-- Default --</option>
+                                                        {gradingSystems.filter(gs => gs.academic_level_id === s.academic_level_id).map(gs => (
+                                                            <option key={gs.id} value={gs.id}>{gs.name}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">{gradingSystems.find(gs => gs.id === s.grading_system_id)?.name || 'Default'}</span>
+                                                )}
+                                            </td>
                                             <td className="text-right">
                                                 {role === 'ADMIN' && (
                                                     <div className="flex justify-end gap-2 items-center">

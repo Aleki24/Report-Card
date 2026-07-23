@@ -33,8 +33,13 @@ export async function GET(
         // merged marks from every term into one report card.
         const rawTerm = searchParams.get('termId') || searchParams.get('term');
         const rawYear = searchParams.get('yearId') || searchParams.get('year');
+        const rawExamType = searchParams.get('examType');
         const termId = rawTerm && rawTerm.trim() ? rawTerm : null;
         const yearId = rawYear && rawYear.trim() ? rawYear : null;
+        // A term can contain several rounds of exams per subject (CAT, Midterm,
+        // End Term, Mock, ...). Without an explicit choice the report falls
+        // back to each subject's most recently-entered exam, same as before.
+        const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
 
         if (!termId) {
             return NextResponse.json({ error: 'A term is required to generate a report card.' }, { status: 400 });
@@ -125,7 +130,26 @@ export async function GET(
         // Grade 9 and 10 are CBC
         const streamName = student.grade_streams?.full_name || '';
         const gradeId = student.grade_streams?.grade_id;
-        
+
+        // Gate downloads: report cards can only be generated once every exam
+        // feeding this term's results has been reviewed and approved by an
+        // admin. Admins themselves can always preview (they're the approvers).
+        if (role !== 'ADMIN' && gradeId) {
+            let unapprovedQuery = supabase
+                .from('exams')
+                .select('name, status, subjects(name)')
+                .eq('term_id', termId)
+                .eq('grade_id', gradeId)
+                .neq('status', 'APPROVED');
+            if (yearId) unapprovedQuery = unapprovedQuery.eq('academic_year_id', yearId);
+            if (examType) unapprovedQuery = unapprovedQuery.eq('exam_type', examType);
+            const { data: unapproved } = await unapprovedQuery;
+            if (unapproved && unapproved.length > 0) {
+                const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
+                return NextResponse.json({ error: `Report card not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
+            }
+        }
+
         // Fetch grade code from grades table
         let gradeLevelCode = '';
         if (gradeId) {
@@ -202,11 +226,12 @@ export async function GET(
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
+            .select('id, max_score, exam_type, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
             .eq('term_id', termId);
-        
+
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
         if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
+        if (examType) examsQ = examsQ.eq('exam_type', examType);
 
         const { data: termExams } = await examsQ;
 
@@ -215,7 +240,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, term_id, academic_year_id, created_at,
+                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id, created_at,
                     terms ( name ),
                     academic_years ( name ),
                     subjects ( id, name, code, category, display_order, grading_system_id )
@@ -228,6 +253,9 @@ export async function GET(
         }
         if (yearId) {
             marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
+        }
+        if (examType) {
+            marksQuery = marksQuery.eq('exams.exam_type', examType);
         }
 
         const { data: marks, error: marksErr } = await marksQuery;
@@ -307,8 +335,8 @@ export async function GET(
         }
 
         if (termId) {
-            const { data: termData } = await supabase.from('terms').select('opening_date').eq('id', termId).maybeSingle();
-            openingDate = termData?.opening_date || undefined;
+            const { data: termData } = await supabase.from('terms').select('start_date').eq('id', termId).maybeSingle();
+            openingDate = termData?.start_date || undefined;
         }
 
         const customTitle = searchParams.get('customTitle');

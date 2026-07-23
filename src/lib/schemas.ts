@@ -84,10 +84,22 @@ export const bulkPathwayAssignSchema = z.object({
     subject_combination_id: z.string().uuid('Invalid combination ID').optional().nullable(),
 });
 
+export const gradingSystemScaleInputSchema = z.object({
+    symbol: z.string().min(1, 'Grade is required').max(10),
+    label: z.string().max(100).optional().default(''),
+    min_percentage: z.number().min(0).max(100),
+    max_percentage: z.number().min(0).max(100),
+    points: z.number().int().min(0).optional(),
+}).refine(
+    data => data.min_percentage <= data.max_percentage,
+    { message: 'Low marks must be less than or equal to High marks' }
+);
+
 export const gradingSystemSchema = z.object({
     name: z.string().min(1, 'Name is required').max(100),
     description: z.string().max(500).optional(),
     academic_level_id: z.string().uuid('Invalid academic level ID'),
+    scales: z.array(gradingSystemScaleInputSchema).max(20).optional(),
 });
 
 export const gradingScaleSchema = z.object({

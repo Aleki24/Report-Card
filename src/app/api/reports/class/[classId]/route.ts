@@ -30,6 +30,8 @@ export async function GET(
         const baseUrl = new URL(request.url).origin;
         const termId = searchParams.get('termId');
         const yearId = searchParams.get('yearId');
+        const rawExamType = searchParams.get('examType');
+        const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
 
         if (!termId) {
             return NextResponse.json({ error: 'termId is required for class reports' }, { status: 400 });
@@ -93,6 +95,24 @@ export async function GET(
         const streamName = (students[0].grade_streams as any)?.full_name || '';
         const gradeId = (students[0].grade_streams as any)?.grade_id;
 
+        // Gate downloads: bulk class reports can only be generated once every
+        // exam feeding this term's results has been reviewed and approved by
+        // an admin. Admins themselves can always generate (they're the approvers).
+        if (role !== 'ADMIN' && gradeId) {
+            let unapprovedQuery = supabase
+                .from('exams')
+                .select('name, status, subjects(name)')
+                .eq('term_id', termId)
+                .eq('grade_id', gradeId)
+                .neq('status', 'APPROVED');
+            if (examType) unapprovedQuery = unapprovedQuery.eq('exam_type', examType);
+            const { data: unapproved } = await unapprovedQuery;
+            if (unapproved && unapproved.length > 0) {
+                const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
+                return NextResponse.json({ error: `Class reports not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
+            }
+        }
+
         // These lookups are all independent of each other — run them together
         // instead of six sequential round-trips on this batch-generation path.
         const [schoolRes, gradeRes, academicLevelRes, gradingSystemsRes, termRes, yearRes] = await Promise.all([
@@ -100,7 +120,7 @@ export async function GET(
             gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId) : Promise.resolve({ data: [] as any[] }),
-            termId ? supabase.from('terms').select('name, opening_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
+            termId ? supabase.from('terms').select('name, start_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
 
@@ -170,7 +190,7 @@ export async function GET(
         // 5. Term/year info (fetched in the batch above)
         let termTitle = termRes.data?.name || 'Term Report';
         const academicYearName = yearRes.data?.name || 'Academic Year';
-        const openingDate: string | undefined = termRes.data?.opening_date || undefined;
+        const openingDate: string | undefined = termRes.data?.start_date || undefined;
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
@@ -184,7 +204,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, term_id, academic_year_id,
+                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id,
                     subjects ( id, name, code, category, display_order )
                 )
             `)
@@ -194,14 +214,18 @@ export async function GET(
         if (yearId) {
             marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
         }
+        if (examType) {
+            marksQuery = marksQuery.eq('exams.exam_type', examType);
+        }
 
         // Fetch all exams for this term and grade to ensure all subjects are shown even if missing from exam_marks
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, subjects(id, name, code, category, display_order)')
+            .select('id, max_score, exam_type, subjects(id, name, code, category, display_order)')
             .eq('term_id', termId);
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
         if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
+        if (examType) examsQ = examsQ.eq('exam_type', examType);
 
         // Independent of each other — fetch together.
         const [{ data: allMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);

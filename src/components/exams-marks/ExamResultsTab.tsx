@@ -8,13 +8,23 @@ import type { ExamSubjectComponentScheme } from '@/types';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
+import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
-interface ExamOption { id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string; }
+interface ExamOption {
+    id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string;
+    status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED'; published_by?: string | null; approved_by?: string | null; created_by_teacher_id?: string | null;
+}
 interface AcademicYear { id: string; name: string; }
 interface Term { id: string; name: string; academic_year_id: string; }
 
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
+
+const EXAM_TYPE_LABELS: Record<string, string> = {
+    CAT: 'CAT', TOPICAL: 'Topical', MIDTERM: 'Midterm', ENDTERM: 'End Term',
+    OPENER: 'Opener', MOCK: 'Mock', PRE_MOCK: 'Pre-Mock', POST_MOCK: 'Post-Mock',
+    ZONE: 'Zone', SUB_COUNTY: 'Sub-County', COUNTY: 'County', REGIONAL: 'Regional', NATIONAL: 'National',
+};
 
 export function ExamResultsTab() {
     const { user, profile } = useAuth();
@@ -42,6 +52,10 @@ export function ExamResultsTab() {
     const [reportMsg, setReportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [customReportTitle, setCustomReportTitle] = useState('');
     const [classStudents, setClassStudents] = useState<{ id: string; name: string; admission_number: string }[]>([]);
+    // Which round of exams (CAT, Midterm, End Term, Mock, ...) to base the
+    // report card on — a term can have several per subject.
+    const [availableExamTypes, setAvailableExamTypes] = useState<string[]>([]);
+    const [selectedReportExamType, setSelectedReportExamType] = useState('');
 
     // ═══════════════════ Data fetching (all via server APIs) ═══════════════════
 
@@ -67,47 +81,49 @@ export function ExamResultsTab() {
     }, []);
 
     // 2. Fetch exams for selected stream (via server API instead of browser Supabase)
-    useEffect(() => {
+    const fetchExams = useCallback(async (opts?: { keepSelection?: boolean }) => {
         if (!selectedStreamId) { setExams([]); setSelectedExamId(''); return; }
+        setLoadingExams(true);
+        const stream = gradeStreams.find(s => s.id === selectedStreamId);
+        if (!stream) { setLoadingExams(false); return; }
 
-        const fetchExams = async () => {
-            setLoadingExams(true);
-            const stream = gradeStreams.find(s => s.id === selectedStreamId);
-            if (!stream) { setLoadingExams(false); return; }
-
-            try {
-                const params = new URLSearchParams({
-                    stream_id: selectedStreamId,
-                    grade_id: stream.grade_id,
-                });
-                const res = await fetch(`/api/school/exams?${params.toString()}`);
-                if (res.ok) {
-                    const json = await res.json();
-                    const mapped = (json.data || []).map((e: any) => ({
-                        id: e.id,
-                        name: e.name,
-                        exam_type: e.exam_type,
-                        max_score: e.max_score,
-                        subject_name: e.subject_name || 'N/A',
-                        subject_id: e.subject_id,
-                    }));
-                    setExams(mapped);
-                    setSelectedExamId(mapped[0]?.id || '');
-                } else {
-                    setExams([]);
-                    setSelectedExamId('');
-                }
-            } catch (err) {
-                console.error('Failed to fetch exams:', err);
+        try {
+            const params = new URLSearchParams({
+                stream_id: selectedStreamId,
+                grade_id: stream.grade_id,
+            });
+            const res = await fetch(`/api/school/exams?${params.toString()}`);
+            if (res.ok) {
+                const json = await res.json();
+                const mapped = (json.data || []).map((e: any) => ({
+                    id: e.id,
+                    name: e.name,
+                    exam_type: e.exam_type,
+                    max_score: e.max_score,
+                    subject_name: e.subject_name || 'N/A',
+                    subject_id: e.subject_id,
+                    status: e.status || 'DRAFT',
+                    published_by: e.published_by,
+                    approved_by: e.approved_by,
+                    created_by_teacher_id: e.created_by_teacher_id,
+                }));
+                setExams(mapped);
+                if (!opts?.keepSelection) setSelectedExamId(mapped[0]?.id || '');
+            } else {
                 setExams([]);
-                setSelectedExamId('');
-            } finally {
-                setLoadingExams(false);
+                if (!opts?.keepSelection) setSelectedExamId('');
             }
-        };
-        fetchExams();
+        } catch (err) {
+            console.error('Failed to fetch exams:', err);
+            setExams([]);
+            if (!opts?.keepSelection) setSelectedExamId('');
+        } finally {
+            setLoadingExams(false);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedStreamId]);
+
+    useEffect(() => { fetchExams(); }, [selectedStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // 3. Fetch marks for selected exam (via server API instead of browser Supabase)
     const fetchMarks = useCallback(async () => {
@@ -171,9 +187,33 @@ export function ExamResultsTab() {
         }
     }, [selectedStreamId]);
 
-    useEffect(() => { 
-        if (selectedStreamId) fetchClassStudents(); 
+    useEffect(() => {
+        if (selectedStreamId) fetchClassStudents();
     }, [selectedStreamId, fetchClassStudents]);
+
+    // 3.6. Fetch which exam rounds (CAT, Midterm, End Term, Mock, ...) exist
+    // for this class + term, so the admin/teacher can pick which one the
+    // report card should be based on — a term can hold several per subject.
+    useEffect(() => {
+        setSelectedReportExamType('');
+        if (!selectedStreamId || !selectedTermId) { setAvailableExamTypes([]); return; }
+        const stream = gradeStreams.find(s => s.id === selectedStreamId);
+        if (!stream) { setAvailableExamTypes([]); return; }
+
+        (async () => {
+            try {
+                const params = new URLSearchParams({ stream_id: selectedStreamId, grade_id: stream.grade_id, term_id: selectedTermId });
+                const res = await fetch(`/api/school/exams?${params.toString()}`);
+                if (!res.ok) { setAvailableExamTypes([]); return; }
+                const json = await res.json();
+                const types = Array.from(new Set((json.data || []).map((e: any) => e.exam_type).filter(Boolean))) as string[];
+                setAvailableExamTypes(types);
+            } catch (err) {
+                console.error('Failed to fetch exam types:', err);
+                setAvailableExamTypes([]);
+            }
+        })();
+    }, [selectedStreamId, selectedTermId, gradeStreams]);
 
     // 4. Fetch academic years + terms (for reports tab)
     useEffect(() => {
@@ -209,6 +249,7 @@ export function ExamResultsTab() {
         if (selectedTermId) params.set('term', selectedTermId);
         if (selectedYearId) params.set('year', selectedYearId);
         if (customReportTitle) params.set('customTitle', customReportTitle);
+        if (selectedReportExamType) params.set('examType', selectedReportExamType);
         window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
     };
 
@@ -308,6 +349,15 @@ export function ExamResultsTab() {
                         </div>
                     )}
 
+                    {selectedExamId && selectedExam && (
+                        <ExamStatusBar
+                            examId={selectedExam.id}
+                            status={selectedExam.status || 'DRAFT'}
+                            isAdmin={profile?.role === 'ADMIN'}
+                            onChanged={() => fetchExams({ keepSelection: true })}
+                        />
+                    )}
+
                     {/* ── Tabs ── */}
                     <div
                         className="flex flex-wrap bg-card border border-border rounded-md overflow-hidden"
@@ -393,6 +443,18 @@ export function ExamResultsTab() {
                                                 <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)} disabled={!selectedYearId}>
                                                     <option value="">-- Select Term --</option>
                                                     {filteredTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-xs text-muted-foreground mb-1">Exam</label>
+                                                <select
+                                                    className="input-field w-full"
+                                                    value={selectedReportExamType}
+                                                    onChange={e => setSelectedReportExamType(e.target.value)}
+                                                    disabled={availableExamTypes.length === 0}
+                                                >
+                                                    <option value="">{availableExamTypes.length === 0 ? 'No exams for this term yet' : 'Most recent per subject'}</option>
+                                                    {availableExamTypes.map(t => <option key={t} value={t}>{EXAM_TYPE_LABELS[t] || t}</option>)}
                                                 </select>
                                             </div>
                                         </div>

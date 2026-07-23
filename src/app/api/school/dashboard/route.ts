@@ -106,10 +106,10 @@ export async function GET(_request: NextRequest) {
       currentYear
         ? supabase
             .from('report_cards')
-            .select('id, created_at, grade_stream_id')
-            .eq('school_id', schoolId)
+            .select('id, generated_at, grade_stream_id, grade_streams!inner(school_id)')
+            .eq('grade_streams.school_id', schoolId)
             .eq('academic_year_id', currentYear.id)
-            .order('created_at', { ascending: false })
+            .order('generated_at', { ascending: false })
             .limit(5)
         : Promise.resolve({ data: [] }),
       supabase
@@ -152,7 +152,7 @@ export async function GET(_request: NextRequest) {
       activities.push({
         type: 'report',
         message: 'Report cards generated',
-        timestamp: r.created_at,
+        timestamp: r.generated_at,
         href: '/dashboard/reports',
       });
     }

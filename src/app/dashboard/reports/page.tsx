@@ -30,6 +30,8 @@ export default function ReportsPage() {
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
+  const [selectedExamType, setSelectedExamType] = useState('');
+  const [availableExamTypes, setAvailableExamTypes] = useState<string[]>([]);
   const [customReportTitle, setCustomReportTitle] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
   const [generating, setGenerating] = useState(false);
@@ -115,6 +117,27 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termsForYear]);
 
+  // Which rounds of exams (CAT, Midterm, End Term, Mock...) exist for this
+  // class + term — a term can hold several per subject, so let the admin
+  // pick which one the report card should be based on.
+  useEffect(() => {
+    setSelectedExamType('');
+    if (!selectedGradeStream || !selectedTerm) { setAvailableExamTypes([]); return; }
+    (async () => {
+      try {
+        const params = new URLSearchParams({ stream_id: selectedGradeStream, term_id: selectedTerm });
+        const res = await fetch(`/api/school/exams?${params.toString()}`);
+        if (!res.ok) { setAvailableExamTypes([]); return; }
+        const json = await res.json();
+        const types = Array.from(new Set((json.data || []).map((e: any) => e.exam_type).filter(Boolean))) as string[];
+        setAvailableExamTypes(types);
+      } catch (err) {
+        console.error('Failed to fetch exam types:', err);
+        setAvailableExamTypes([]);
+      }
+    })();
+  }, [selectedGradeStream, selectedTerm]);
+
   const fetchStudents = async () => {
     setLoadingStudents(true);
     try {
@@ -138,6 +161,7 @@ export default function ReportsPage() {
     if (selectedTerm) params.append('term', selectedTerm);
     if (customReportTitle) params.append('customTitle', customReportTitle);
     if (selectedTemplate !== DEFAULT_TEMPLATE) params.append('template', selectedTemplate);
+    if (selectedExamType) params.append('examType', selectedExamType);
     window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
   };
 
@@ -155,6 +179,7 @@ export default function ReportsPage() {
       setProgress({ current: 0, total: 0, message: 'Step 2 of 3: Fetching report data...' });
       const params = new URLSearchParams(); params.append('yearId', selectedAcademicYear); params.append('termId', selectedTerm);
       if (customReportTitle) params.append('customTitle', customReportTitle);
+      if (selectedExamType) params.append('examType', selectedExamType);
       const response = await fetch(`/api/reports/class/${selectedGradeStream}?${params.toString()}`);
       if (!response.ok) { const errJson = await response.json(); throw new Error(errJson.error || 'Failed to fetch report data'); }
       const reportCardsData: ReportCardData[] = await response.json();
@@ -332,7 +357,7 @@ export default function ReportsPage() {
       />
 
       {/* Report Settings */}
-      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
+      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} selectedExamType={selectedExamType} setSelectedExamType={setSelectedExamType} availableExamTypes={availableExamTypes} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
 
       {hasCombinations && (
         <div className="card p-4 flex flex-wrap items-center gap-4">
