@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
+import { useAuth } from '@/components/AuthProvider';
 import {
     saveDraft, loadDraft, clearDraft,
     enqueueBatch, flushQueue, pendingCountForExam, isOnline,
@@ -52,6 +53,9 @@ const emptyRow = (): MarkRow => ({
 });
 
 export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
+    const { profile } = useAuth();
+    const isAdmin = profile?.role === 'ADMIN';
+
     // When the exam's class is known, students load automatically and the
     // manual Level/Grade/Stream re-selection is skipped entirely.
     const examScoped = !!gradeId;
@@ -78,6 +82,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // level's default so a school can grade e.g. Sciences on a different
     // scale from Languages.
     const [subjectGradingSystemId, setSubjectGradingSystemId] = useState<string | null>(null);
+    // Lets whoever is entering marks pick a different grading system for
+    // this session, overriding the subject's default. Admins can also save
+    // the choice back onto the subject so it's used automatically next time.
+    const [manualGradingSystemId, setManualGradingSystemId] = useState<string | null>(null);
+    const [savingGradingSystemLink, setSavingGradingSystemLink] = useState(false);
+    const [gradingSystemLinkMsg, setGradingSystemLinkMsg] = useState('');
 
     // Entry rows
     const [rows, setRows] = useState<MarkRow[]>([emptyRow(), emptyRow(), emptyRow()]);
@@ -101,6 +111,13 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         () => (multiPaper ? (scheme?.components || []) : []),
         [multiPaper, scheme]
     );
+
+    // Reset any manual grading-system override when switching to a
+    // different exam/subject — it shouldn't leak across contexts.
+    useEffect(() => {
+        setManualGradingSystemId(null);
+        setGradingSystemLinkMsg('');
+    }, [examId, subjectId]);
 
     // ── Fetch paper configuration for this exam ──────────
     useEffect(() => {
@@ -300,19 +317,49 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // ── Grading systems for this exam's academic level only ──────
     // Falls back to every system until the level is known (e.g. before a
     // grade is picked in manual mode) rather than showing nothing.
-    // If the subject has its own grading system assigned (Settings > Subjects),
-    // that one wins outright instead of merging every level-wide system's
-    // scales together.
+    // Resolution order: whatever the teacher picked for this session, then
+    // the subject's saved default (Settings > Subjects), then every system
+    // for the academic level (only when neither is set).
     const effectiveAcademicLevelId = grades.find(g => g.id === (gradeId || selectedGradeId))?.academic_level_id ?? null;
     const assignedSystem = subjectGradingSystemId ? gradingSystems.find(sys => sys.id === subjectGradingSystemId) : null;
+    const activeSystem = manualGradingSystemId ? gradingSystems.find(sys => sys.id === manualGradingSystemId) : assignedSystem;
     const relevantGradingSystems = useMemo(
-        () => assignedSystem
-            ? [assignedSystem]
+        () => activeSystem
+            ? [activeSystem]
             : effectiveAcademicLevelId
                 ? gradingSystems.filter(sys => sys.academic_level_id === effectiveAcademicLevelId)
                 : gradingSystems,
-        [gradingSystems, effectiveAcademicLevelId, assignedSystem]
+        [gradingSystems, effectiveAcademicLevelId, activeSystem]
     );
+    // Systems the teacher can pick from — same academic level as the exam,
+    // since a different level's boundaries wouldn't make sense here.
+    const selectableGradingSystems = useMemo(
+        () => effectiveAcademicLevelId
+            ? gradingSystems.filter(sys => sys.academic_level_id === effectiveAcademicLevelId)
+            : gradingSystems,
+        [gradingSystems, effectiveAcademicLevelId]
+    );
+
+    const linkGradingSystemToSubject = async (systemId: string) => {
+        if (!subjectId) return;
+        setSavingGradingSystemLink(true);
+        setGradingSystemLinkMsg('');
+        try {
+            const res = await fetch('/api/admin/academic-structure', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'subject', id: subjectId, grading_system_id: systemId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to save');
+            setSubjectGradingSystemId(systemId);
+            setGradingSystemLinkMsg('✅ Saved — this subject will use this grading system automatically from now on.');
+        } catch (err) {
+            setGradingSystemLinkMsg(`❌ ${err instanceof Error ? err.message : 'Failed to save'}`);
+        } finally {
+            setSavingGradingSystemLink(false);
+        }
+    };
     const gradingScales = useMemo(
         () => relevantGradingSystems.flatMap(sys => allGradingScales.filter(sc => sc.grading_system_id === sys.id)),
         [relevantGradingSystems, allGradingScales]
@@ -748,6 +795,34 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             {!examScoped && selectedGradeId && filteredStreams.length > 0 && !selectedStreamId && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
                     👆 Select a <strong>Stream</strong> above to load students
+                </div>
+            )}
+
+            {/* ── Grading System selector ── */}
+            {entryReady && students.length > 0 && selectableGradingSystems.length > 0 && (
+                <div className="mb-4 p-3 rounded-md text-sm bg-muted border border-border flex flex-wrap items-center gap-3">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Grading system:</span>
+                    <select
+                        className="input-field text-sm flex-1 min-w-[200px]"
+                        value={activeSystem?.id || ''}
+                        onChange={e => setManualGradingSystemId(e.target.value || null)}
+                    >
+                        {!activeSystem && <option value="">-- Multiple systems match, pick one --</option>}
+                        {selectableGradingSystems.map(sys => (
+                            <option key={sys.id} value={sys.id}>{sys.name}{sys.id === subjectGradingSystemId ? ' (subject default)' : ''}</option>
+                        ))}
+                    </select>
+                    {isAdmin && subjectId && activeSystem && activeSystem.id !== subjectGradingSystemId && (
+                        <button
+                            type="button"
+                            className="btn-secondary text-xs whitespace-nowrap"
+                            onClick={() => linkGradingSystemToSubject(activeSystem.id)}
+                            disabled={savingGradingSystemLink}
+                        >
+                            {savingGradingSystemLink ? 'Saving…' : 'Save as subject default'}
+                        </button>
+                    )}
+                    {gradingSystemLinkMsg && <span className="text-xs w-full">{gradingSystemLinkMsg}</span>}
                 </div>
             )}
 
