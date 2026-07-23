@@ -12,10 +12,10 @@ export async function GET(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
-        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!userProfile || userProfile.is_active === false) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(request.url);
         const checkoutRequestId = searchParams.get('checkout_request_id');

@@ -23,11 +23,15 @@ export async function POST(request: NextRequest) {
         // Verify the caller is an ADMIN or CLASS_TEACHER
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!adminProfile || !adminProfile.school_id) {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!adminProfile.school_id) {
             return NextResponse.json({ error: 'You must have a school to add students.' }, { status: 403 });
         }
 
@@ -39,6 +43,21 @@ export async function POST(request: NextRequest) {
         }
 
         const effectiveSchoolId = adminProfile.school_id;
+
+        // Class teachers may only import students into their own assigned stream.
+        // Fetch their assigned stream up front so every row can be constrained.
+        let teacherStreamId: string | null = null;
+        if (isClassTeacher) {
+            const { data: teacherAssignment } = await supabaseAdmin
+                .from('class_teachers')
+                .select('current_grade_stream_id')
+                .eq('user_id', userId)
+                .maybeSingle();
+            teacherStreamId = teacherAssignment?.current_grade_stream_id || null;
+            if (!teacherStreamId) {
+                return NextResponse.json({ error: 'You are not assigned to a class stream.' }, { status: 403 });
+            }
+        }
 
         // Get school name for username generation
         const { data: school } = await supabaseAdmin
@@ -136,6 +155,12 @@ export async function POST(request: NextRequest) {
 
             if (!resolvedStreamId) {
                 skippedRows.push({ row: student, reason: 'Could not resolve a class/stream for this student' });
+                continue;
+            }
+
+            // Class teachers can only import into their own assigned stream
+            if (isClassTeacher && resolvedStreamId !== teacherStreamId) {
+                skippedRows.push({ row: student, reason: 'You can only import students into your own class stream' });
                 continue;
             }
 

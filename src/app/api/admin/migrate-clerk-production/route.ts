@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { auth } from '@clerk/nextjs/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
+
+export const runtime = 'nodejs';
 
 // One-time migration: recreates every already-activated account in Clerk's
 // Production instance (this app went live on Clerk Development and only
@@ -30,12 +33,31 @@ export async function POST(request: NextRequest) {
         const supabaseAdmin = createSupabaseAdmin();
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
-            .select('role')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!adminProfile || adminProfile.role !== 'ADMIN') {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (adminProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Only admins can run this migration.' }, { status: 403 });
+        }
+
+        // This is a destructive one-off platform maintenance operation that
+        // deletes and recreates user rows. It must NOT be reachable by an
+        // ordinary logged-in admin: gate it behind a server-side operator
+        // secret (set MIGRATION_SECRET in the environment and pass it as the
+        // x-migration-secret header when running the migration). Without this,
+        // any single school's admin could fire a platform-wide account
+        // rebuild. Constant-time compare so the secret can't be probed.
+        const migrationSecret = process.env.MIGRATION_SECRET;
+        const providedSecret = request.headers.get('x-migration-secret') || '';
+        const secretsMatch = !!migrationSecret
+            && providedSecret.length === migrationSecret.length
+            && require('crypto').timingSafeEqual(Buffer.from(providedSecret), Buffer.from(migrationSecret));
+        if (!secretsMatch) {
+            return NextResponse.json({ error: 'This maintenance endpoint requires an operator secret.' }, { status: 403 });
         }
 
         if (!process.env.CLERK_SECRET_KEY_PROD) {

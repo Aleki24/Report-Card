@@ -32,11 +32,15 @@ export async function POST(request: NextRequest) {
         // Verify the user is an ADMIN
         const { data: userProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', user_id)
             .maybeSingle();
 
-        if (!userProfile || userProfile.role !== 'ADMIN') {
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Only admins can manage schools' }, { status: 403 });
         }
 

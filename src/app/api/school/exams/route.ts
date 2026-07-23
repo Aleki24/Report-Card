@@ -9,11 +9,11 @@ async function getSession() {
   const supabase = createSupabaseAdmin();
   const { data: userProfile } = await supabase
     .from('users')
-    .select('school_id, role')
+    .select('school_id, role, is_active')
     .eq('id', userId)
     .maybeSingle();
 
-  if (!userProfile) return null;
+  if (!userProfile || userProfile.is_active === false) return null;
 
   return {
     userId,
@@ -156,6 +156,15 @@ export async function POST(request: NextRequest) {
     if (!term_id) return NextResponse.json({ error: 'Term is required' }, { status: 400 });
     if (!grade_id) return NextResponse.json({ error: 'Grade is required' }, { status: 400 });
 
+    // Guard max_score coercion against NaN/Infinity when provided
+    let resolvedMaxScore = 100;
+    if (max_score !== undefined && max_score !== null && max_score !== '') {
+      resolvedMaxScore = Number(max_score);
+      if (!Number.isFinite(resolvedMaxScore) || resolvedMaxScore <= 0) {
+        return NextResponse.json({ error: 'max_score must be a positive number' }, { status: 400 });
+      }
+    }
+
     // Verify the term belongs to this school
     const supabase = createSupabaseAdmin();
 
@@ -192,7 +201,7 @@ export async function POST(request: NextRequest) {
         term_id,
         grade_id,
         grade_stream_id: grade_stream_id || null,
-        max_score: Number(max_score) || 100,
+        max_score: resolvedMaxScore,
         exam_date: exam_date || null,
         created_by_teacher_id: userId,
         school_id: schoolId,

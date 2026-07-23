@@ -9,10 +9,10 @@ async function getSession() {
     const supabaseAdmin = createSupabaseAdmin();
     const { data } = await supabaseAdmin
         .from('users')
-        .select('school_id, role')
+        .select('school_id, role, is_active')
         .eq('id', userId)
         .maybeSingle();
-    if (!data?.school_id) return null;
+    if (!data?.school_id || data.is_active === false) return null;
 
     return { userId, schoolId: data.school_id as string, role: data.role as string };
 }

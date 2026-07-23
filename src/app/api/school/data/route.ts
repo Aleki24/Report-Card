@@ -28,9 +28,9 @@ async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string;
   if (!userId) return null;
   
   const supabaseAdmin = createSupabaseAdmin();
-  const { data } = await supabaseAdmin.from('users').select('school_id, role').eq('id', userId).maybeSingle();
+  const { data } = await supabaseAdmin.from('users').select('school_id, role, is_active').eq('id', userId).maybeSingle();
 
-  if (!data) return null;
+  if (!data || data.is_active === false) return null;
 
   return {
     schoolId: data.school_id as string,

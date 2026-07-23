@@ -50,11 +50,15 @@ export async function POST(request: NextRequest) {
         // Verify the caller can create users and get their school_id
         const { data: adminProfile } = await supabaseAdmin
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!adminProfile || !adminProfile.school_id) {
+        if (!adminProfile || adminProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        if (!adminProfile.school_id) {
             return NextResponse.json({ error: 'User must have a school to create users.' }, { status: 403 });
         }
 

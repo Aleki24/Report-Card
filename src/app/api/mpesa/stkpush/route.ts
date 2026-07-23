@@ -16,10 +16,10 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
-        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!userProfile || userProfile.is_active === false) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await request.json();
         const { student_fee_id, phone_number, amount } = body;

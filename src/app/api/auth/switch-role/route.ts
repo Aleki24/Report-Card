@@ -24,12 +24,16 @@ export async function POST(request: NextRequest) {
     // Get the user's BASE role from the database (never mutated by switching)
     const { data: dbUser } = await supabase
       .from('users')
-      .select('id, role, school_id')
+      .select('id, role, school_id, is_active')
       .eq('id', userId)
       .maybeSingle();
 
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (!dbUser.is_active) {
+      return NextResponse.json({ error: 'Account is deactivated' }, { status: 401 });
     }
 
     const baseRole = dbUser.role;

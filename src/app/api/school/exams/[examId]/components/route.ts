@@ -14,11 +14,14 @@ async function getSessionAndExam(examId: string) {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
         .from('users')
-        .select('role, school_id')
+        .select('role, school_id, is_active')
         .eq('id', userId)
         .maybeSingle();
 
-    if (!userProfile?.school_id) {
+    if (!userProfile || userProfile.is_active === false) {
+        return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    }
+    if (!userProfile.school_id) {
         return { error: NextResponse.json({ error: 'No school associated' }, { status: 403 }) };
     }
 
@@ -108,7 +111,7 @@ export async function PUT(
                 if (!code) return NextResponse.json({ error: 'Every paper needs a code (e.g. P1)' }, { status: 400 });
                 if (codes.has(code)) return NextResponse.json({ error: `Duplicate paper code: ${code}` }, { status: 400 });
                 codes.add(code);
-                if (!max || max <= 0) {
+                if (!Number.isFinite(max) || max <= 0) {
                     return NextResponse.json({ error: `Paper ${code} needs a max score greater than 0` }, { status: 400 });
                 }
             }
@@ -151,12 +154,23 @@ export async function PUT(
                 const c = components[i];
                 const code = String(c.component_code).trim().toUpperCase();
                 incomingCodes.add(code);
+                const maxScore = Number(c.max_score);
+                if (!Number.isFinite(maxScore) || maxScore <= 0) {
+                    return NextResponse.json({ error: `Paper ${code} needs a max score greater than 0` }, { status: 400 });
+                }
+                let weight: number | null = null;
+                if (c.weight != null) {
+                    weight = Number(c.weight);
+                    if (!Number.isFinite(weight) || weight <= 0) {
+                        return NextResponse.json({ error: `Paper ${code} has an invalid weight` }, { status: 400 });
+                    }
+                }
                 const payload = {
                     scheme_id: scheme.id,
                     component_code: code,
                     component_name: String(c.component_name || code).trim(),
-                    max_score: Number(c.max_score),
-                    weight: c.weight != null ? Number(c.weight) : null,
+                    max_score: maxScore,
+                    weight,
                     display_order: i + 1,
                 };
                 const existingId = existingByCode.get(code);

@@ -3,16 +3,22 @@ import { sendSMS } from './africastalking';
 import { sendEmail } from './email';
 
 /**
- * Generates a unique 6-character alphanumeric invite code.
+ * Generates a unique 10-character alphanumeric invite code.
  * Uses uppercase letters and digits, excluding confusing characters (0/O, 1/I/L).
+ * Uses rejection sampling to avoid modulo bias.
  */
 const CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // No 0,O,1,I,L
+const CODE_LENGTH = 10;
 
 export function generateInviteCode(): string {
-  const bytes = crypto.randomBytes(6);
+  // Largest multiple of CHARSET.length that fits in a byte; bytes >= this
+  // would bias the modulo, so we reject and redraw.
+  const maxUnbiased = Math.floor(256 / CHARSET.length) * CHARSET.length;
   let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += CHARSET[bytes[i] % CHARSET.length];
+  while (code.length < CODE_LENGTH) {
+    const byte = crypto.randomBytes(1)[0];
+    if (byte >= maxUnbiased) continue; // reject to remove modulo bias
+    code += CHARSET[byte % CHARSET.length];
   }
   return code;
 }

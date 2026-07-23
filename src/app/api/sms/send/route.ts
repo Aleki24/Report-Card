@@ -2,10 +2,13 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
+import { rateLimit } from '@/lib/rate-limit';
 import {
     getGradeFromScales,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+
+const MAX_STUDENT_IDS = 500;
 
 export const runtime = 'nodejs';
 
@@ -23,6 +26,32 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        const supabase = createSupabaseAdmin();
+
+        // Resolve and authorize the caller
+        const { data: caller } = await supabase
+            .from('users')
+            .select('role, school_id, is_active')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (!caller || caller.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (!['ADMIN', 'CLASS_TEACHER'].includes(caller.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        const schoolId = caller.school_id;
+        if (!schoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
+        // Rate-limit SMS sends per caller
+        const limit = rateLimit(`sms-send:${userId}`, { maxRequests: 5, windowMs: 60_000 });
+        if (!limit.allowed) {
+            return NextResponse.json({ error: 'Too many SMS requests. Please wait a minute and try again.' }, { status: 429 });
+        }
+
         const body: SendSMSBody = await request.json();
         const { studentIds, termId, academicYearId, gradeStreamId } = body;
 
@@ -33,23 +62,37 @@ export async function POST(request: Request) {
             );
         }
 
-        const supabase = createSupabaseAdmin();
+        if (studentIds.length > MAX_STUDENT_IDS) {
+            return NextResponse.json(
+                { error: `Too many students. Maximum ${MAX_STUDENT_IDS} per request.` },
+                { status: 400 }
+            );
+        }
 
-        // 1. Fetch students with guardian phone
-        const { data: students, error: studentsErr } = await supabase
+        // 1. Fetch students with guardian phone (tenant-scoped to the caller's school)
+        const { data: allStudents, error: studentsErr } = await supabase
             .from('students')
             .select('id, admission_number, guardian_phone, guardian_name, users(first_name, last_name, school_id)')
             .in('id', studentIds);
 
-        if (studentsErr || !students?.length) {
+        if (studentsErr) {
+            return NextResponse.json({ error: studentsErr.message }, { status: 500 });
+        }
+
+        // Tenant-scope: only keep students that belong to the caller's school.
+        const students = (allStudents || []).filter(
+            (s: any) => s.users?.school_id === schoolId
+        );
+
+        if (!students.length) {
             return NextResponse.json(
-                { error: studentsErr?.message || 'No students found' },
+                { error: 'No students found for your school' },
                 { status: 404 }
             );
         }
 
-        // Get school_id from first student
-        const schoolId = (students[0] as any).users?.school_id;
+        // Only reference student ids that passed the tenant check downstream.
+        const scopedStudentIds = students.map((s: any) => s.id);
 
         // 2. Fetch grading scales via grading_systems (grading_scales doesn't have school_id)
         let gradingScales: GradingScale[] = [];
@@ -58,7 +101,7 @@ export async function POST(request: Request) {
             const { data: firstStudent } = await supabase
                 .from('students')
                 .select('academic_level_id')
-                .eq('id', studentIds[0])
+                .eq('id', scopedStudentIds[0])
                 .maybeSingle();
 
             if (firstStudent?.academic_level_id) {
@@ -102,14 +145,14 @@ export async function POST(request: Request) {
                 grade_symbol,
                 exams!inner(term_id, subjects (name))
             `)
-            .in('student_id', studentIds)
+            .in('student_id', scopedStudentIds)
             .eq('exams.term_id', termId);
 
         // 5. Fetch term reports for averages/ranks
         const { data: termReports } = await supabase
             .from('term_reports')
             .select('student_id, average_score, overall_grade, rank')
-            .in('student_id', studentIds)
+            .in('student_id', scopedStudentIds)
             .eq('term_id', termId)
             .eq('grade_stream_id', gradeStreamId);
 

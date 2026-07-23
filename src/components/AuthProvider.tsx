@@ -42,16 +42,16 @@ const DEFAULT_ROLES: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 
 async function fetchRoles(): Promise<{ roles: UserRole[]; baseRole: UserRole | null }> {
     try {
         const res = await fetch('/api/auth/available-roles');
-        if (!res.ok) return { roles: DEFAULT_ROLES, baseRole: null };
+        if (!res.ok) return { roles: [], baseRole: null };
         const data = await res.json();
-        if (!data.roles) return { roles: DEFAULT_ROLES, baseRole: null };
+        if (!data.roles) return { roles: [], baseRole: null };
         const valid = data.roles.filter((r: string) => DEFAULT_ROLES.includes(r as UserRole));
         return {
-            roles: valid.length > 0 ? valid : DEFAULT_ROLES,
+            roles: valid,
             baseRole: data.baseRole || null,
         };
     } catch {
-        return { roles: DEFAULT_ROLES, baseRole: null };
+        return { roles: [], baseRole: null };
     }
 }
 
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [schoolName, setSchoolName] = useState<string | null>(null);
     const [schoolOnboardingCompleted, setSchoolOnboardingCompleted] = useState<boolean | null>(null);
-    const [availableRoles, setAvailableRoles] = useState<UserRole[]>(DEFAULT_ROLES);
+    const [availableRoles, setAvailableRoles] = useState<UserRole[]>([]);
     const [baseRole, setBaseRole] = useState<UserRole | null>(null);
     const [devRoleOverride, setDevRoleOverride] = useState<UserRole | null>(null);
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const clerkImageUrl = clerkUser?.hasImage ? clerkUser.imageUrl : null;
         const metadata = (clerkUser?.publicMetadata as any) || {};
         // Base role from Clerk metadata (synced from DB)
-        const clerkBaseRole = (metadata.role as UserRole) || 'ADMIN';
+        const clerkBaseRole = (metadata.role as UserRole) || 'STUDENT';
         // Active role from Clerk metadata (set by role switching)
         const clerkActiveRole = (metadata.active_role as UserRole) || null;
         // Effective role: active_role overrides base role when switching
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             ? { id: userId, email: clerkUser.emailAddresses?.[0]?.emailAddress || '' }
             : null,
         profile,
-        role: devRoleOverride || profile?.role || null,
+        role: (process.env.NODE_ENV !== 'production' && devRoleOverride) || profile?.role || null,
         baseRole,
         availableRoles,
         schoolName,

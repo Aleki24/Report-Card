@@ -14,7 +14,10 @@ export async function GET(
 
     const teacherId = (await params).teacherId;
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id, role').eq('id', userId).maybeSingle();
+    const { data: userData } = await supabase.from('users').select('school_id, role, is_active').eq('id', userId).maybeSingle();
+    if (!userData || userData.is_active === false) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const schoolId = userData?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
 

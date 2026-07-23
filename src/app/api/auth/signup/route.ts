@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
     try {
+        // Unauthenticated endpoint: throttle account creation per IP to
+        // prevent account/DB flooding and email enumeration.
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+            || request.headers.get('x-real-ip')?.trim()
+            || 'unknown';
+        const limit = rateLimit(`signup:${ip}`, { maxRequests: 5, windowMs: 60_000 });
+        if (!limit.allowed) {
+            return NextResponse.json(
+                { error: 'Too many attempts. Please wait a minute and try again.' },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
         const { email, password, first_name, last_name } = body;
 

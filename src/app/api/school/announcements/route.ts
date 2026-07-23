@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
+import { rateLimit } from '@/lib/rate-limit';
+
+const MAX_TITLE_LENGTH = 200;
+const MAX_CONTENT_LENGTH = 5000;
 
 const ROLE_LABELS: Record<string, string> = {
     ADMIN: 'Admin',
@@ -70,12 +74,15 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('school_id, role')
+            .select('school_id, role, is_active')
             .eq('id', userId)
             .single();
 
         if (!userProfile) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+        if (userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const schoolId = userProfile.school_id;
@@ -88,6 +95,12 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         if (!body.title || !body.content) {
             return NextResponse.json({ error: 'title and content are required' }, { status: 400 });
+        }
+        if (typeof body.title !== 'string' || body.title.length > MAX_TITLE_LENGTH) {
+            return NextResponse.json({ error: `Title must be at most ${MAX_TITLE_LENGTH} characters` }, { status: 400 });
+        }
+        if (typeof body.content !== 'string' || body.content.length > MAX_CONTENT_LENGTH) {
+            return NextResponse.json({ error: `Content must be at most ${MAX_CONTENT_LENGTH} characters` }, { status: 400 });
         }
 
         const { data, error } = await supabase
@@ -106,6 +119,13 @@ export async function POST(request: NextRequest) {
 
         let sms: { sent: number; failed: number; total: number } | undefined;
         if (body.send_sms) {
+            const smsLimit = rateLimit(`announcement-sms:${userId}`, { maxRequests: 3, windowMs: 60_000 });
+            if (!smsLimit.allowed) {
+                return NextResponse.json(
+                    { data, sms: { sent: 0, failed: 0, total: 0 }, warning: 'SMS blast rate limit reached. The announcement was posted but SMS was not sent. Please wait a minute and try again.' },
+                    { status: 429 }
+                );
+            }
             const { data: students } = await supabase
                 .from('students')
                 .select('guardian_phone, users!inner(school_id)')

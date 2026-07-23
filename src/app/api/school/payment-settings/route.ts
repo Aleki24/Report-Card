@@ -14,11 +14,14 @@ async function requireAdmin() {
     const supabase = createSupabaseAdmin();
     const { data: userProfile } = await supabase
         .from('users')
-        .select('role, school_id')
+        .select('role, school_id, is_active')
         .eq('id', userId)
         .maybeSingle();
 
-    if (!userProfile || userProfile.role !== 'ADMIN') {
+    if (!userProfile || userProfile.is_active === false) {
+        return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    }
+    if (userProfile.role !== 'ADMIN') {
         return { error: NextResponse.json({ error: 'Only an admin can manage payment settings' }, { status: 403 }) };
     }
     if (!userProfile.school_id) {
@@ -146,10 +149,15 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: 'Server is missing NEXT_PUBLIC_APP_URL, needed for the Pesapal IPN URL' }, { status: 500 });
             }
 
+            // The IPN URL carries the school's unguessable webhook token (same
+            // forgery protection as the Daraja callbacks) — Pesapal doesn't sign
+            // its IPNs, so the token in the path is what proves the caller is
+            // Pesapal and not an attacker who guessed the schoolId.
+            const resolvedWebhookToken = update.webhook_token ?? existing?.webhook_token;
             try {
                 const ipnId = await registerPesapalIPN(
                     { environment: resolvedEnv, consumerKey: resolvedKey, consumerSecret: resolvedSecret },
-                    `${appUrl}/api/pesapal/ipn/${schoolId}`
+                    `${appUrl}/api/pesapal/ipn/${schoolId}/${resolvedWebhookToken}`
                 );
                 update.pesapal_ipn_id = ipnId;
             } catch (ipnError: unknown) {

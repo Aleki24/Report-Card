@@ -12,12 +12,16 @@ export async function GET(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         // Only admins can view other users' assignments
-        if (!userProfile || userProfile.role !== 'ADMIN') {
+        if (userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -25,6 +29,17 @@ export async function GET(request: NextRequest) {
         const targetUserId = searchParams.get('user_id');
         if (!targetUserId) {
             return NextResponse.json({ error: 'user_id is required' }, { status: 400 });
+        }
+
+        // Cross-tenant guard: the target user must belong to the caller's school
+        const { data: targetProfile } = await supabase
+            .from('users')
+            .select('school_id')
+            .eq('id', targetUserId)
+            .maybeSingle();
+
+        if (!targetProfile || targetProfile.school_id !== userProfile.school_id) {
+            return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
 
         // 1. Get class teacher assignment

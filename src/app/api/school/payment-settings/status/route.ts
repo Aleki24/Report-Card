@@ -13,9 +13,12 @@ export async function GET() {
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('school_id')
+            .select('school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
+        if (!userProfile || userProfile.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         if (!userProfile?.school_id) {
             return NextResponse.json({ data: { active: false, provider: 'NONE', bankEnabled: false, bankAccounts: [] } });
         }
