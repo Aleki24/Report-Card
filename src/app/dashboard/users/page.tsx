@@ -1,15 +1,19 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useUsersPage } from '@/hooks/useUsersPage';
+import { useAuth } from '@/components/AuthProvider';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { UsersTable } from '@/components/users/UsersTable';
 import { InviteUserModal } from '@/components/users/InviteUserModal';
 import { EditUserModal } from '@/components/users/EditUserModal';
 import { InviteResultModal, ResetPasswordResultModal } from '@/components/users/UserResultModals';
+import { InviteCodesPrintModal } from '@/components/users/InviteCodesPrintModal';
 
 export default function UsersPage() {
   const h = useUsersPage();
+  const { role } = useAuth();
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
@@ -18,7 +22,12 @@ export default function UsersPage() {
           <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">User Management</h1>
           <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Add teachers and students by phone number</p>
         </div>
-        <button className="btn-primary shrink-0" onClick={() => { h.resetForm(); h.setShowModal(true); }}>+ Add User</button>
+        <div className="flex items-center gap-2 shrink-0">
+          {role === 'ADMIN' && (
+            <button className="btn-secondary" onClick={() => setShowPrintModal(true)} title="Download a printable PDF of invitation codes grouped by category">🖨️ Print Invite Codes</button>
+          )}
+          <button className="btn-primary" onClick={() => { h.resetForm(); h.setShowModal(true); }}>+ Add User</button>
+        </div>
       </div>
 
       <InfoGuide title="How your users log in:">
@@ -85,6 +94,8 @@ export default function UsersPage() {
       {h.showResetResult && (
         <ResetPasswordResultModal inviteCode={h.resetResultInviteCode} notified={h.resetResultNotified} onClose={() => h.setShowResetResult(false)} />
       )}
+
+      {showPrintModal && <InviteCodesPrintModal onClose={() => setShowPrintModal(false)} />}
     </div>
   );
 }

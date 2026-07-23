@@ -55,6 +55,37 @@ The Exams & Marks page can read marks straight from a photo of a paper
 marksheet (📷 Scan Sheet). Extraction never writes marks directly — teachers
 review and confirm every row before anything is saved.
 
+### Offline-first mark entry
+
+Manual mark entry keeps working when the network is flaky — like a Google
+Doc, nothing typed is lost:
+
+- **Autosave drafts.** Every row (including per-paper P1/P2/P3 scores on
+  multi-paper subjects) is autosaved to the browser as it's typed, keyed per
+  exam. Reload or come back later and entry continues exactly where it
+  stopped.
+- **Offline sync queue.** If **Save All** is pressed while offline (or a
+  request drops mid-flight), the batch is stored on the device and synced
+  automatically once the connection returns. The `exam_marks` upsert is
+  idempotent, so re-sending a queued batch is always safe.
+- **Live status.** The Manual Entry card shows an Online/Offline badge, the
+  count of batches waiting to sync, and when the local draft was last saved.
+
+This is entirely client-side (`localStorage`) — no schema changes required.
+
+### Printing invitation codes
+
+Admins can print a directory of user invitation codes grouped by category
+(Administrators / Teachers / Students) from **User Management → 🖨️ Print
+Invite Codes**, to hand each person their activation code in person:
+
+- One **combined PDF** with each category on its own page, or a **ZIP of one
+  PDF per category**.
+- Filter to **active codes only** (unused & not expired) or include used and
+  expired codes.
+- Served by `GET /api/admin/invite-codes/pdf` (admin-only, school-scoped;
+  params `category`, `status`, `format`).
+
 ### SMS notifications
 
 Attendance and results notifications are sent to parents via
