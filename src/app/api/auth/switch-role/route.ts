@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
       // Always allowed to go back to base role
       isAllowed = true;
     } else if (role === 'CLASS_TEACHER') {
-      // Check if user has a class_teachers record
+      // The only allowed non-base switch: a subject teacher who also holds a
+      // class-teacher record upgrading to the broader class-teacher view.
       const { data: ctRecord } = await supabase
         .from('class_teachers')
         .select('id')
@@ -58,16 +59,11 @@ export async function POST(request: NextRequest) {
         .limit(1)
         .maybeSingle();
       if (ctRecord) isAllowed = true;
-    } else if (role === 'SUBJECT_TEACHER') {
-      // Check if user has a subject_teachers record
-      const { data: stRecord } = await supabase
-        .from('subject_teachers')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-      if (stRecord) isAllowed = true;
     }
+    // Switching *into* SUBJECT_TEACHER is intentionally not allowed unless it is
+    // the user's base role (handled above). A class teacher already covers
+    // subject-teacher work with more access, so there's no reason to drop them
+    // into the narrower subject-teacher view.
 
     if (!isAllowed) {
       return NextResponse.json({ error: 'You do not have permission to switch to this role' }, { status: 403 });

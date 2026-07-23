@@ -44,37 +44,44 @@ export function MobileMoreMenu({
                 }}
                 onClick={e => e.stopPropagation()}
             >
-                <div style={{
-                    padding: '12px 16px', borderBottom: '1px solid var(--color-border)',
-                    marginBottom: '8px', fontWeight: 600, color: 'var(--color-text)',
-                    fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px'
-                }}>
-                    <BookOpen size={20} />
-                    All Pages
-                </div>
+                {/* The pages list only appears when there are overflow pages —
+                    roles whose pages all fit the bottom bar (e.g. subject
+                    teacher) still open this sheet for the actions below. */}
+                {overflowItems.length > 0 && (
+                    <>
+                        <div style={{
+                            padding: '12px 16px', borderBottom: '1px solid var(--color-border)',
+                            marginBottom: '8px', fontWeight: 600, color: 'var(--color-text)',
+                            fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px'
+                        }}>
+                            <BookOpen size={20} />
+                            All Pages
+                        </div>
 
-                {overflowItems.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setShowMoreMenu(false)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '12px',
-                                padding: '12px 16px', borderRadius: '8px',
-                                color: isActive ? 'var(--color-accent)' : 'var(--color-text)',
-                                background: isActive ? 'var(--color-accent-transparent)' : 'transparent',
-                                textDecoration: 'none', fontWeight: isActive ? 600 : 500, fontSize: '14px',
-                            }}
-                        >
-                            <div style={{ opacity: isActive ? 1 : 0.7, color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)' }}>
-                                {item.icon}
-                            </div>
-                            {item.label}
-                        </Link>
-                    );
-                })}
+                        {overflowItems.map((item) => {
+                            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    onClick={() => setShowMoreMenu(false)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '12px',
+                                        padding: '12px 16px', borderRadius: '8px',
+                                        color: isActive ? 'var(--color-accent)' : 'var(--color-text)',
+                                        background: isActive ? 'var(--color-accent-transparent)' : 'transparent',
+                                        textDecoration: 'none', fontWeight: isActive ? 600 : 500, fontSize: '14px',
+                                    }}
+                                >
+                                    <div style={{ opacity: isActive ? 1 : 0.7, color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)' }}>
+                                        {item.icon}
+                                    </div>
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </>
+                )}
 
                 {showRoleSwitcher && (
                     <div style={{ padding: '8px 0' }}>

@@ -39,6 +39,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEFAULT_ROLES: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
 
+/**
+ * A class teacher already covers subject-teacher work with broader access and
+ * is never dropped into the narrower subject-teacher view. Ignore any
+ * SUBJECT_TEACHER active_role sitting on a class-teacher account (left over
+ * from before this rule, or set out-of-band) so the effective role stays
+ * CLASS_TEACHER. Mirrors the same guard in /api/auth/me.
+ */
+function sanitizeActiveRole(baseRole: UserRole | null, activeRole: UserRole | null): UserRole | null {
+    if (baseRole === 'CLASS_TEACHER' && activeRole === 'SUBJECT_TEACHER') return null;
+    return activeRole;
+}
+
 async function fetchRoles(): Promise<{ roles: UserRole[]; baseRole: UserRole | null }> {
     try {
         const res = await fetch('/api/auth/available-roles');
@@ -89,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Base role from Clerk metadata (synced from DB)
         const clerkBaseRole = (metadata.role as UserRole) || 'STUDENT';
         // Active role from Clerk metadata (set by role switching)
-        const clerkActiveRole = (metadata.active_role as UserRole) || null;
+        const clerkActiveRole = sanitizeActiveRole(clerkBaseRole, (metadata.active_role as UserRole) || null);
         // Effective role: active_role overrides base role when switching
         const effectiveRole = clerkActiveRole || clerkBaseRole;
 
@@ -118,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (u) {
                     // The DB role is the base role; effective role may differ if active_role is set
                     const dbBaseRole = u.role || clerkBaseRole;
-                    const activeRole = data.activeRole || clerkActiveRole;
+                    const activeRole = sanitizeActiveRole(dbBaseRole, data.activeRole || clerkActiveRole);
                     const effective = activeRole || dbBaseRole;
 
                     setProfile({

@@ -270,25 +270,27 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     );
                 })}
 
-                {mobileNav.overflow.length > 0 && (
-                    <button
-                        onClick={() => setShowMoreMenu(!showMoreMenu)}
-                        className={cn(
-                            "relative flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center border-none bg-transparent transition-colors",
-                            showMoreMenu ? "text-primary" : "text-muted-foreground"
-                        )}
-                    >
-                        {showMoreMenu && (
-                            <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
-                        )}
-                        <span className={cn("transition-transform", showMoreMenu ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
-                            <MoreHorizontal size={18} />
-                        </span>
-                        <span className={cn("mt-1 text-[10px]", showMoreMenu ? "font-semibold opacity-100" : "font-medium opacity-70")}>
-                            More
-                        </span>
-                    </button>
-                )}
+                {/* Always shown: the More sheet is the only place Sign Out, the
+                    theme toggle, and the role switcher live on mobile — even for
+                    roles like subject teacher whose few pages all fit the primary
+                    bar (empty overflow), it must stay reachable. */}
+                <button
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    className={cn(
+                        "relative flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center border-none bg-transparent transition-colors",
+                        showMoreMenu ? "text-primary" : "text-muted-foreground"
+                    )}
+                >
+                    {showMoreMenu && (
+                        <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
+                    )}
+                    <span className={cn("transition-transform", showMoreMenu ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
+                        <MoreHorizontal size={18} />
+                    </span>
+                    <span className={cn("mt-1 text-[10px]", showMoreMenu ? "font-semibold opacity-100" : "font-medium opacity-70")}>
+                        More
+                    </span>
+                </button>
             </nav>
 
             <MobileMoreMenu

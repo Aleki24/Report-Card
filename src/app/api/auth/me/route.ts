@@ -99,7 +99,15 @@ export async function GET() {
     }
 
     // Get active_role from Clerk metadata (set by role switching)
-    const activeRole = (user?.publicMetadata as any)?.active_role || null;
+    let activeRole = (user?.publicMetadata as any)?.active_role || null;
+    // A class teacher already does everything a subject teacher can, with more
+    // access — they are never dropped into the narrower subject-teacher view.
+    // Ignore any SUBJECT_TEACHER active_role left over from before this rule (or
+    // set out-of-band) so a class teacher always renders as a class teacher.
+    // Subject-teacher base users are unaffected.
+    if (dbUser.role === 'CLASS_TEACHER' && activeRole === 'SUBJECT_TEACHER') {
+      activeRole = null;
+    }
 
     return NextResponse.json({
       profile: dbUser,
