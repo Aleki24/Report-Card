@@ -62,23 +62,36 @@ export async function POST(request: NextRequest) {
 
         const effectiveSchoolId = adminProfile.school_id;
 
-        // Check for duplicate admission number
-        let admNo = admission_number?.trim() || null;
-        if (!admNo) {
-            const randomSequence = Math.floor(Math.random() * 90000) + 10000;
-            admNo = `ADM-${new Date().getFullYear()}-${randomSequence}`;
-        }
+        // Admission number is optional: schools that auto-number their students
+        // can leave it blank and we generate a unique one for them.
+        const providedAdmNo = admission_number?.trim() || null;
 
-        if (admNo) {
-            const { data: existingStudent } = await supabaseAdmin
+        const admNoExists = async (candidate: string) => {
+            const { data } = await supabaseAdmin
                 .from('users')
                 .select('id, students!inner(admission_number)')
                 .eq('school_id', effectiveSchoolId)
-                .eq('students.admission_number', admNo)
+                .eq('students.admission_number', candidate)
                 .maybeSingle();
+            return !!data;
+        };
 
-            if (existingStudent) {
-                return NextResponse.json({ error: `A student with admission number "${admNo}" already exists in your school.` }, { status: 409 });
+        let admNo = providedAdmNo;
+        if (providedAdmNo) {
+            // A number the admin typed must be unique — surface a clear conflict.
+            if (await admNoExists(providedAdmNo)) {
+                return NextResponse.json({ error: `A student with admission number "${providedAdmNo}" already exists in your school.` }, { status: 409 });
+            }
+        } else {
+            // Auto-generate, retrying on the rare random collision so blank entry
+            // never fails with a duplicate error.
+            const year = new Date().getFullYear();
+            for (let attempt = 0; attempt < 10 && !admNo; attempt++) {
+                const candidate = `ADM-${year}-${Math.floor(Math.random() * 90000) + 10000}`;
+                if (!(await admNoExists(candidate))) admNo = candidate;
+            }
+            if (!admNo) {
+                return NextResponse.json({ error: 'Could not generate a unique admission number. Please try again.' }, { status: 500 });
             }
         }
 
