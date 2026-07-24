@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import { generateShortFeedback, generateClassTeacherComment, generatePrincipalComment } from './pdfHelpers';
+import { ReportFooter } from './ReportFooter';
 import type { ReportCardData } from '../pdfGenerator';
 
 /* ── Minimal palette: monochrome, ink-friendly ──────────── */
@@ -182,11 +183,12 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
             </View>
 
             {/* Footer */}
-            <View style={t.footer}>
-                {qrCodeDataUri && <Image style={t.qr} src={qrCodeDataUri} />}
-                <Text style={t.footerText}>Report generated on {today}{data.openingDate ? ` — next term begins ${data.openingDate}` : ''}</Text>
-                <Text style={t.footerText}>Skulbase · This document is electronically generated</Text>
-            </View>
+            {qrCodeDataUri && (
+                <View style={{ alignItems: 'center', marginTop: 'auto', paddingTop: 8 }}>
+                    <Image style={t.qr} src={qrCodeDataUri} />
+                </View>
+            )}
+            <ReportFooter generatedOn={today} openingDate={data.openingDate} />
         </>
     );
 }

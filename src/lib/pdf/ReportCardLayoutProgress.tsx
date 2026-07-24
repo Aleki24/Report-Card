@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import { generateShortFeedback, generateClassTeacherComment } from './pdfHelpers';
+import { ReportFooter } from './ReportFooter';
 import type { ReportCardData } from '../pdfGenerator';
 
 /* ── Progress palette (teal banner on warm cream) ─────────── */
@@ -279,11 +280,7 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
             </View>
 
             {/* Footer */}
-            <View style={p.footer}>
-                <Text style={p.footerText}>
-                    {data.schoolAddress ? `${data.schoolAddress}  •  ` : ''}Generated {today}{data.openingDate ? `  •  Next term begins ${data.openingDate}` : ''}
-                </Text>
-            </View>
+            <ReportFooter generatedOn={today} openingDate={data.openingDate} />
         </View>
     );
 }

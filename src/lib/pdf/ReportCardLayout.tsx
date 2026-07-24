@@ -1,239 +1,411 @@
 import React from 'react';
-import { Text, View, Image } from '@react-pdf/renderer';
-import { s, NAVY, ORANGE, WHITE, GRAY_400, GRAY_700 } from './pdfStyles';
-import { gradeColor, generateShortFeedback, generateClassTeacherComment, generatePrincipalComment, barColor } from './pdfHelpers';
+import { Text, View, Image, Svg, Path } from '@react-pdf/renderer';
+import {
+    c, INK, GOLD, WHITE, GRAY_400, KENYA_GREEN, KENYA_RED,
+    EE_GREEN, ME_BLUE, AE_ORANGE, BE_RED, INK_MUTED,
+} from './pdfStyles';
+import { generateShortFeedback, generateClassTeacherComment, generatePrincipalComment } from './pdfHelpers';
+import { ReportFooter } from './ReportFooter';
 import type { ReportCardData } from '../pdfGenerator';
 
+/* ── Competency bands (CBC) ──────────────────────────────────
+   A learner's mark is printed in the ONE band it falls into, and the
+   other bands show a dash — exactly how the reference report reads,
+   so a parent can see the achieved level at a glance without decoding
+   a grade symbol. Bands are the standard CBC four. */
+const CBC_BANDS = [
+    { code: 'EE', name: 'Exceeding\nExpectations', color: EE_GREEN, min: 76 },
+    { code: 'ME', name: 'Meeting\nExpectations', color: ME_BLUE, min: 51 },
+    { code: 'AE', name: 'Approaching\nExpectations', color: AE_ORANGE, min: 26 },
+    { code: 'BE', name: 'Below\nExpectations', color: BE_RED, min: 0 },
+] as const;
+
+function bandFor(percentage: number | null | undefined) {
+    if (percentage == null) return null;
+    return CBC_BANDS.find(b => percentage >= b.min) ?? CBC_BANDS[CBC_BANDS.length - 1];
+}
+
+/** Subject accent dot — keyed to performance, the page's only per-row colour. */
+function perfColor(pct: number | null | undefined): string {
+    if (pct == null) return GRAY_400;
+    if (pct >= 76) return EE_GREEN;
+    if (pct >= 51) return ME_BLUE;
+    if (pct >= 26) return AE_ORANGE;
+    return BE_RED;
+}
+
 /**
- * Shared report card layout used by both ReportCardDocument (single) and ReportCardContent (bulk).
- * Renders everything between the navy bars: header, banner, info grid, table, badges, comments, signatures, footer.
+ * The national ribbon that separates the masthead from the report body.
+ * Drawn as a real curve rather than flat bars so the page opens with
+ * something crafted — it is the single decorative flourish on the sheet.
+ */
+function FlagRibbon() {
+    return (
+        <Svg width="100%" height="14" viewBox="0 0 600 14" style={{ marginTop: -1 }}>
+            <Path d="M0 0 C 150 12, 300 -6, 600 6 L600 0 L0 0 Z" fill={INK} />
+            <Path d="M0 1 C 150 13, 300 -5, 600 7 L600 10 C 300 -2, 150 16, 0 4 Z" fill={KENYA_GREEN} />
+            <Path d="M0 4 C 150 16, 300 -2, 600 10 L600 12 C 300 0, 150 18, 0 6 Z" fill={WHITE} />
+            <Path d="M0 6 C 150 18, 300 0, 600 12 L600 14 L0 14 Z" fill={KENYA_RED} />
+        </Svg>
+    );
+}
+
+function InfoLine({ label, value }: { label: string; value?: string }) {
+    return (
+        <View style={c.infoLine}>
+            <Text style={c.infoKey}>{label}</Text>
+            <View style={c.infoLeader} />
+            <Text style={c.infoVal}>{value || '—'}</Text>
+        </View>
+    );
+}
+
+/**
+ * Classic report card — an institutional sheet built around one navy
+ * masthead, one gold accent and a single column rhythm. Serves both
+ * curricula: CBC prints competency bands, 8-4-4 prints grade / points /
+ * rank in the same grouped table so the two never diverge in feel.
  */
 export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
     const isKCSE = data.gradingSystemType === 'KCSE';
     const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, m) => sum + (m.score || 0), 0);
-    let rowCounter = 0;
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    const curriculum = isKCSE ? '8-4-4 System · KCSE' : 'Competency-Based Curriculum (CBC)';
 
     return (
         <>
-            {/* Header Band */}
-            <View style={s.headerBand}>
-                <View>
-                    {data.schoolLogoUrl ? (
-                        <View style={s.logoFrame}><Image style={s.logo} src={data.schoolLogoUrl} /></View>
-                    ) : (
-                        <View style={s.logoPlaceholder}><Text style={{ fontSize: 20, color: GRAY_400 }}>🏫</Text></View>
+            {/* ── Masthead ── */}
+            <View style={c.masthead}>
+                {data.schoolLogoUrl ? (
+                    <View style={c.crestFrame}><Image style={c.crest} src={data.schoolLogoUrl} /></View>
+                ) : (
+                    <View style={c.crestFallback}>
+                        <Text style={c.crestFallbackText}>
+                            {(data.schoolName || 'S').trim().charAt(0).toUpperCase()}
+                        </Text>
+                    </View>
+                )}
+                <View style={c.mastheadCenter}>
+                    <Text style={c.mastheadSchool}>{data.schoolName}</Text>
+                    <Text style={c.mastheadCurriculum}>{curriculum}</Text>
+                    {data.schoolAddress && <Text style={c.mastheadAddress}>{data.schoolAddress}</Text>}
+                </View>
+                {qrCodeDataUri ? (
+                    <View style={c.photoFrame}><Image style={c.photoImg} src={qrCodeDataUri} /></View>
+                ) : (
+                    <View style={c.photoEmpty}><Text style={{ fontSize: 8, color: GOLD, fontFamily: 'Helvetica-Bold' }}>REPORT</Text></View>
+                )}
+            </View>
+            <FlagRibbon />
+
+            {/* ── Title ── */}
+            <View style={c.titleStrip}>
+                <Text style={c.titleText}>{isKCSE ? 'Academic Report' : 'Learner Assessment Report'}</Text>
+                <View style={c.titleRule}>
+                    <View style={c.titleRuleBar} />
+                    <View style={c.titleRuleDot} />
+                    <View style={c.titleRuleBar} />
+                </View>
+            </View>
+
+            {/* ── Paired info cards ── */}
+            <View style={c.infoRow}>
+                <View style={c.infoCard}>
+                    <View style={c.infoCardHead}><Text style={c.infoCardTitle}>Learner Information</Text></View>
+                    <View style={c.infoCardBody}>
+                        <InfoLine label="Name" value={data.studentName} />
+                        <InfoLine label="Admission No" value={data.enrollmentNumber} />
+                        <InfoLine label="Class" value={data.className} />
+                        {data.pathwayName
+                            ? <InfoLine label="Pathway" value={`${data.pathwayName}${data.combinationCode ? ` (${data.combinationCode})` : ''}`} />
+                            : <InfoLine label="Curriculum" value={isKCSE ? '8-4-4' : 'CBC'} />}
+                    </View>
+                </View>
+                <View style={c.infoCard}>
+                    <View style={c.infoCardHead}><Text style={c.infoCardTitle}>Assessment Information</Text></View>
+                    <View style={c.infoCardBody}>
+                        <InfoLine label="Examination" value={data.examTitle} />
+                        <InfoLine label="Academic Year" value={data.academicYear} />
+                        <InfoLine label="Position in Class" value={data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'} />
+                        {data.combinationRank !== undefined
+                            ? <InfoLine label="Pathway Position" value={`${data.combinationRank} of ${data.combinationSize}`} />
+                            : <InfoLine label="Subjects Taken" value={`${data.subjectMarks.length}`} />}
+                    </View>
+                </View>
+            </View>
+
+            {/* ── Subject table ── */}
+            {isKCSE ? <KcseTable data={data} /> : <CbcTable data={data} />}
+
+            {/* ── Overall average ── */}
+            <View style={c.averageBar}>
+                <View style={c.averageLabelWrap}>
+                    <Text style={c.averageLabel}>Overall {isKCSE ? 'Performance' : 'Average'}</Text>
+                </View>
+                <View style={c.averageValueWrap}>
+                    <View style={c.averageStat}>
+                        <Text style={c.averageStatLabel}>Mean</Text>
+                        <Text style={c.averageHero}>{Math.round(data.overallPercentage)}%</Text>
+                    </View>
+                    <View style={c.averageStat}>
+                        <Text style={c.averageStatLabel}>Total Marks</Text>
+                        <Text style={c.averageStatValue}>{totalScore}</Text>
+                    </View>
+                    {isKCSE && data.totalPoints !== undefined && (
+                        <View style={c.averageStat}>
+                            <Text style={c.averageStatLabel}>Points</Text>
+                            <Text style={c.averageStatValue}>{data.totalPoints}</Text>
+                        </View>
                     )}
-                </View>
-                <View style={s.headerCenter}>
-                    <Text style={s.schoolName}>{data.schoolName}</Text>
-                    {data.schoolAddress && <Text style={s.schoolAddress}>{data.schoolAddress}</Text>}
-                </View>
-                <View>
-                    {qrCodeDataUri ? (
-                        <Image style={{ width: 46, height: 52, borderRadius: 4, backgroundColor: WHITE, padding: 2 }} src={qrCodeDataUri} />
-                    ) : (
-                        <View style={s.photoPlaceholder}><Text style={s.photoSilhouette}>👤</Text></View>
-                    )}
-                </View>
-            </View>
-
-            {/* Banner Ribbon */}
-            <View style={s.bannerRibbon}>
-                <Text style={s.bannerText}>{isKCSE ? 'Learner Academic Report' : 'Learner Assessment Report'}</Text>
-            </View>
-
-            {/* Student Info Grid */}
-            <View style={s.infoGrid}>
-                <View style={s.infoItem}><Text style={s.infoLabel}>Name</Text><Text style={s.infoValue}>{data.studentName}</Text></View>
-                <View style={[s.infoItem, { flex: 0.6 }]}><Text style={s.infoLabel}>Class</Text><Text style={s.infoValue}>{data.className}</Text></View>
-                <View style={[s.infoItem, { flex: 0.6 }]}><Text style={s.infoLabel}>Adm No</Text><Text style={s.infoValue}>{data.enrollmentNumber || ''}</Text></View>
-                <View style={[s.infoItem, { flex: 0.5 }]}><Text style={s.infoLabel}>Year</Text><Text style={s.infoValue}>{data.academicYear}</Text></View>
-            </View>
-
-            {/* CBC Senior Pathway line */}
-            {data.pathwayName && (
-                <View style={[s.infoGrid, { marginTop: 2 }]}>
-                    <View style={s.infoItem}>
-                        <Text style={s.infoLabel}>Pathway</Text>
-                        <Text style={s.infoValue}>
-                            {data.pathwayName}
-                            {data.trackName ? ` — ${data.trackName}` : ''}
-                            {data.combinationCode ? ` (${data.combinationCode})` : ''}
+                    <View style={c.averageStat}>
+                        <Text style={c.averageStatLabel}>{isKCSE ? 'Mean Grade' : 'Level'}</Text>
+                        <Text style={[c.averageStatValue, { color: perfColor(data.overallPercentage) }]}>
+                            {data.overallPointsGrade || data.overallGrade || '—'}
                         </Text>
                     </View>
                 </View>
-            )}
+            </View>
 
-            {/* Summary Strip */}
-            <View style={s.summaryStrip}>
-                <View style={s.summaryLeft}><Text style={s.summaryLabel}>Exam</Text><Text style={s.summaryVal}>{data.examTitle}</Text></View>
-                <View style={s.summaryRight}>
-                    {data.combinationRank !== undefined && (
-                        <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Pathway Rank</Text><Text style={s.summaryVal}>{`${data.combinationRank}/${data.combinationSize}`}</Text></View>
-                    )}
-                    <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Rank</Text><Text style={s.summaryVal}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text></View>
-                    <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Total Marks</Text><Text style={s.summaryVal}>{totalScore}</Text></View>
-                    {isKCSE && data.totalPoints !== undefined && (
-                        <View style={{ alignItems: 'center' }}><Text style={s.summaryLabel}>Points</Text><Text style={s.summaryVal}>{data.totalPoints}</Text>{data.overallPointsGrade && <Text style={[s.summaryLabel, { marginTop: 2 }]}>({data.overallPointsGrade})</Text>}</View>
-                    )}
+            {/* ── Analysis + grading key ── */}
+            <View style={c.panelRow}>
+                <View style={[c.panel, { flex: 1.55 }]}>
+                    <View style={c.panelHead}><Text style={c.panelTitle}>Subject Performance Analysis</Text></View>
+                    <View style={c.panelBody}><SubjectAnalysis data={data} /></View>
+                </View>
+                <View style={[c.panel, { flex: 1 }]}>
+                    <View style={c.panelHead}><Text style={c.panelTitle}>{isKCSE ? 'Grading Key' : 'Competency Key'}</Text></View>
+                    <View style={c.panelBody}><GradingKey data={data} isKCSE={isKCSE} /></View>
                 </View>
             </View>
 
-            {/* Subject Table */}
-            <View style={s.table}>
-                {isKCSE ? (
-                    <View style={s.tableHeader}>
-                        <Text style={[s.thText, s.colNo]}>#</Text><Text style={[s.thText, s.colKcseSubject]}>Subject</Text>
-                        <Text style={[s.thText, s.colKcseScore]}>Scores(%)</Text><Text style={[s.thText, s.colKcseRank]}>Rank</Text>
-                        <Text style={[s.thText, s.colKcseGrade]}>Grade</Text><Text style={[s.thText, s.colKcsePoints]}>Pts</Text>
-                        <Text style={[s.thText, s.colKcseComment]}>Comment</Text>
-                    </View>
-                ) : (
-                    <View style={s.tableHeader}>
-                        <Text style={[s.thText, s.colNo]}>#</Text><Text style={[s.thText, s.colSubject]}>Learning Area</Text>
-                        <Text style={[s.thText, s.colMarks]}>Marks</Text><Text style={[s.thText, s.colGrade]}>Grade</Text>
-                        <Text style={[s.thText, s.colRubric]}>Points</Text><Text style={[s.thText, s.colRank]}>Rank</Text>
-                        <Text style={[s.thText, s.colComment]}>Comments</Text>
-                    </View>
-                )}
-
-                {data.subjectMarks.map((sm) => {
-                    rowCounter++;
-                    const rowStyle = rowCounter % 2 === 0 ? s.tableRowAlt : s.tableRow;
-                    const rankText = sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—';
-                    const comment = sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade);
-
-                    if (isKCSE) {
-                        return (
-                            <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
-                                <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                                <Text style={[s.tdText, s.colKcseSubject]}>{sm.subjectName}</Text>
-                                <Text style={[s.tdBold, s.colKcseScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
-                                <Text style={[s.tdText, s.colKcseRank]}>{rankText}</Text>
-                                <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(sm.grade) }]}>{sm.grade}</Text>
-                                <Text style={[s.tdText, s.colKcsePoints]}>{sm.points ?? '—'}</Text>
-                                <Text style={[s.tdSmall, s.colKcseComment]}>{comment}</Text>
-                            </View>
-                        );
-                    }
-                    return (
-                        <View style={rowStyle} key={`${sm.subjectName}-${rowCounter}`}>
-                            <Text style={[s.tdText, s.colNo]}>{rowCounter}</Text>
-                            <Text style={[s.tdText, s.colSubject]}>{sm.subjectName}</Text>
-                            <Text style={[s.tdBold, s.colMarks]}>{sm.score != null ? `${sm.score}` : '—'}</Text>
-                            <Text style={[s.tdBold, s.colGrade, { color: gradeColor(sm.grade) }]}>{sm.grade || '—'}</Text>
-                            <Text style={[s.tdBold, s.colRubric]}>{sm.points != null ? `${sm.points}` : '—'}</Text>
-                            <Text style={[s.tdText, s.colRank]}>{rankText}</Text>
-                            <Text style={[s.tdSmall, s.colComment]}>{comment}</Text>
-                        </View>
-                    );
-                })}
-
-                {/* Totals Row */}
-                <View style={s.totalsRow}>
-                    <Text style={[s.tdBold, s.colNo]}></Text>
-                    <Text style={[s.tdBold, isKCSE ? s.colKcseSubject : s.colSubject, { color: NAVY }]}>TOTAL</Text>
-                    {isKCSE ? (
-                        <>
-                            <Text style={[s.tdBold, s.colKcseScore, { color: ORANGE }]}>{Math.round(data.overallPercentage)}%</Text>
-                            <Text style={[s.tdBold, s.colKcseRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                            <Text style={[s.tdBold, s.colKcseGrade, { color: gradeColor(data.overallPointsGrade || data.overallGrade) }]}>{data.overallPointsGrade || data.overallGrade}</Text>
-                            <Text style={[s.tdBold, s.colKcsePoints, { color: NAVY }]}>{data.totalPoints ?? '—'}</Text>
-                            <Text style={[s.tdBold, s.colKcseComment]}></Text>
-                        </>
-                    ) : (
-                        <>
-                            <Text style={[s.tdBold, s.colMarks, { color: ORANGE }]}>{totalScore}</Text>
-                            <Text style={[s.tdBold, s.colGrade, { color: gradeColor(data.overallGrade) }]}>{data.overallGrade}</Text>
-                            <Text style={[s.tdBold, s.colRubric]}></Text>
-                            <Text style={[s.tdBold, s.colRank, { color: NAVY }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                            <Text style={[s.tdBold, s.colComment]}></Text>
-                        </>
-                    )}
+            {/* ── Comments ── */}
+            <View style={c.commentWrap}>
+                <View style={c.commentHead}><Text style={c.commentHeadText}>Remarks</Text></View>
+                <View style={c.commentBody}>
+                    <Text style={c.commentRole}>Class Teacher</Text>
+                    <Text style={c.commentText}>
+                        {data.classTeacherComment || generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints)}
+                    </Text>
+                    <View style={c.commentDivider} />
+                    <Text style={c.commentRole}>Principal</Text>
+                    <Text style={c.commentText}>
+                        {data.principalComment || generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints)}
+                    </Text>
                 </View>
             </View>
 
-            {/* Average Badge + Performance Graph */}
-            <View style={s.bottomRow}>
-                <View style={s.avgBadge}>
-                    <Text style={s.avgLabel}>Average</Text>
-                    <Text style={s.avgValue}>{Math.round(data.overallPercentage)}%</Text>
-                </View>
-                <View style={s.gradingKey}>
-                    <View style={s.gradingKeyHeader}><Text style={s.gradingKeyTitle}>Subject Performance Analysis</Text></View>
-                    <PerformanceGraph data={data} />
-                </View>
+            {/* ── Signatures ── */}
+            <View style={c.signRow}>
+                <View style={c.signBlock}><View style={c.signLine} /><Text style={c.signLabel}>Class Teacher</Text></View>
+                <View style={c.signBlock}><View style={c.signLine} /><Text style={c.signLabel}>Principal</Text></View>
+                <View style={c.signBlock}><View style={c.signLine} /><Text style={c.signLabel}>Parent / Guardian</Text></View>
             </View>
 
-            {/* Comments */}
-            <View style={s.commentBox}>
-                <Text style={s.commentTitle}>Class Teacher&apos;s Comment:</Text>
-                <Text style={s.commentText}>{data.classTeacherComment || generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
-            </View>
-            <View style={s.commentBox}>
-                <Text style={s.commentTitle}>Principal&apos;s Comment:</Text>
-                <Text style={s.commentText}>{data.principalComment || generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints)}</Text>
-            </View>
-
-            {/* Signatures */}
-            <View style={s.signaturesRow}>
-                <View style={s.sigBlock}><Text style={s.sigLabel}>Parent&apos;s / Guardian&apos;s Signature</Text><View style={s.sigLine} /></View>
-                <View style={s.sigBlock}><Text style={s.sigLabel}>Class Teacher&apos;s Signature</Text><View style={s.sigLine} /></View>
-            </View>
-
-            {/* Footer */}
-            <View style={s.footer}>
-                <Text style={s.footerLine}>Report generated on {today}</Text>
-                {data.openingDate && <Text style={s.footerLine}>Next term begins on: {data.openingDate}</Text>}
-                <Text style={s.footerLine}>Skulbase</Text>
-                <Text>This document is electronically generated</Text>
-            </View>
+            <ReportFooter generatedOn={today} openingDate={data.openingDate} />
         </>
     );
 }
 
-function PerformanceGraph({ data }: { data: ReportCardData }) {
-    if (data.subjectTrendData && data.subjectTrendData.length > 0) {
-        return (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-                {data.subjectTrendData.slice(0, 6).map((subj, idx) => {
-                    const currentScore = subj.scores[subj.scores.length - 1]?.percentage || 0;
-                    const barHeight = (currentScore / 100) * 50;
-                    return (
-                        <View key={idx} style={{ width: 55, alignItems: 'center', marginBottom: 4 }}>
-                            <View style={{ height: 50, width: 20, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
-                                <View style={{ height: barHeight, width: 20, backgroundColor: barColor(currentScore), borderRadius: 2 }} />
+/* ── CBC table: Subject | Score | Competency bands ─────────── */
+const CBC_W = { subject: '30%', score: '13%', band: '14.25%' };
+
+function CbcTable({ data }: { data: ReportCardData }) {
+    return (
+        <View style={c.table}>
+            <View style={c.thGroupRow}>
+                <View style={[c.thGroupCell, { width: CBC_W.subject }]}><Text style={c.thGroupText}>Learning Area</Text></View>
+                <View style={[c.thGroupCell, { width: CBC_W.score, borderLeft: `0.5pt solid ${INK_MUTED}` }]}>
+                    <Text style={c.thGroupText}>Score</Text>
+                </View>
+                <View style={[c.thGroupCell, { flex: 1, borderLeft: `0.5pt solid ${INK_MUTED}` }]}>
+                    <Text style={c.thGroupText}>Competency Level</Text>
+                </View>
+            </View>
+            <View style={[c.thSubRow, { backgroundColor: INK }]}>
+                <View style={{ width: CBC_W.subject }} />
+                <View style={[c.thSubCell, { width: CBC_W.score }]}><Text style={c.thSubNote}>out of 100</Text></View>
+                {CBC_BANDS.map(b => (
+                    <View key={b.code} style={[c.thSubCell, { width: CBC_W.band, backgroundColor: b.color }]}>
+                        <Text style={c.thSubText}>{b.code}</Text>
+                    </View>
+                ))}
+            </View>
+
+            {data.subjectMarks.map((sm, i) => {
+                const band = bandFor(sm.percentage);
+                return (
+                    <View style={i % 2 === 1 ? c.rowAlt : c.row} key={`${sm.subjectName}-${i}`}>
+                        <View style={[c.subjectCell, { width: CBC_W.subject }]}>
+                            <View style={[c.subjectDot, { backgroundColor: perfColor(sm.percentage) }]} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={c.subjectName}>{sm.subjectName}</Text>
+                                {sm.paperScores && sm.paperScores.length > 0 && (
+                                    <Text style={c.subjectPapers}>
+                                        {sm.paperScores.map(p => `${p.code} ${p.score}/${p.maxScore}`).join('  ')}
+                                    </Text>
+                                )}
                             </View>
-                            <Text style={{ fontSize: 6, marginTop: 2, color: GRAY_700 }}>{currentScore.toFixed(0)}%</Text>
-                            <Text style={{ fontSize: 5, color: GRAY_400, textAlign: 'center', marginTop: 1 }}>
-                                {subj.subjectName.length > 10 ? subj.subjectName.substring(0, 8) + '..' : subj.subjectName}
-                            </Text>
+                        </View>
+                        <View style={[c.cellPad, { width: CBC_W.score }]}>
+                            <Text style={c.tdCenterBold}>{sm.percentage != null ? sm.percentage : '—'}</Text>
+                        </View>
+                        {CBC_BANDS.map(b => (
+                            <View key={b.code} style={[c.cellPad, { width: CBC_W.band }]}>
+                                {band?.code === b.code
+                                    ? <Text style={[c.bandMark, { color: b.color }]}>{sm.percentage}</Text>
+                                    : <Text style={c.bandDash}>–</Text>}
+                            </View>
+                        ))}
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+/* ── 8-4-4 table: Subject | Score | Grade/Points/Rank | Remark ── */
+const K_W = { subject: '24%', score: '10%', grade: '9%', points: '8%', rank: '11%' };
+
+function KcseTable({ data }: { data: ReportCardData }) {
+    return (
+        <View style={c.table}>
+            <View style={c.thGroupRow}>
+                <View style={[c.thGroupCell, { width: K_W.subject }]}><Text style={c.thGroupText}>Subject</Text></View>
+                <View style={[c.thGroupCell, { width: K_W.score, borderLeft: `0.5pt solid ${INK_MUTED}` }]}><Text style={c.thGroupText}>Score</Text></View>
+                <View style={[c.thGroupCell, { width: `${28}%`, borderLeft: `0.5pt solid ${INK_MUTED}` }]}><Text style={c.thGroupText}>Attainment</Text></View>
+                <View style={[c.thGroupCell, { flex: 1, borderLeft: `0.5pt solid ${INK_MUTED}` }]}><Text style={c.thGroupText}>Remark</Text></View>
+            </View>
+            <View style={[c.thSubRow, { backgroundColor: INK }]}>
+                <View style={{ width: K_W.subject }} />
+                <View style={[c.thSubCell, { width: K_W.score }]}><Text style={c.thSubNote}>%</Text></View>
+                <View style={[c.thSubCell, { width: K_W.grade }]}><Text style={c.thSubText}>Grade</Text></View>
+                <View style={[c.thSubCell, { width: K_W.points }]}><Text style={c.thSubText}>Pts</Text></View>
+                <View style={[c.thSubCell, { width: K_W.rank }]}><Text style={c.thSubText}>Rank</Text></View>
+                <View style={{ flex: 1 }} />
+            </View>
+
+            {data.subjectMarks.map((sm, i) => {
+                const rank = sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—';
+                return (
+                    <View style={i % 2 === 1 ? c.rowAlt : c.row} key={`${sm.subjectName}-${i}`}>
+                        <View style={[c.subjectCell, { width: K_W.subject }]}>
+                            <View style={[c.subjectDot, { backgroundColor: perfColor(sm.percentage) }]} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={c.subjectName}>{sm.subjectName}</Text>
+                                {sm.paperScores && sm.paperScores.length > 0 && (
+                                    <Text style={c.subjectPapers}>
+                                        {sm.paperScores.map(p => `${p.code} ${p.score}/${p.maxScore}`).join('  ')}
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+                        <View style={[c.cellPad, { width: K_W.score }]}>
+                            <Text style={c.tdCenterBold}>{sm.percentage != null ? sm.percentage : '—'}</Text>
+                        </View>
+                        <View style={[c.cellPad, { width: K_W.grade }]}>
+                            <Text style={[c.bandMark, { color: perfColor(sm.percentage) }]}>{sm.grade || '—'}</Text>
+                        </View>
+                        <View style={[c.cellPad, { width: K_W.points }]}>
+                            <Text style={c.tdCenter}>{sm.points ?? '—'}</Text>
+                        </View>
+                        <View style={[c.cellPad, { width: K_W.rank }]}>
+                            <Text style={c.tdMuted}>{rank}</Text>
+                        </View>
+                        <Text style={[c.tdComment, { flex: 1 }]}>
+                            {sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}
+                        </Text>
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+/* ── Subject analysis ─────────────────────────────────────── */
+function SubjectAnalysis({ data }: { data: ReportCardData }) {
+    const marks = data.subjectMarks.filter(m => m.percentage != null);
+    if (marks.length === 0) {
+        return <Text style={{ fontSize: 7, color: INK_MUTED }}>No subject marks recorded for this assessment.</Text>;
+    }
+
+    // Chart the first 9 so the bars stay legible; the table above is the
+    // complete record, this panel is for shape-of-performance at a glance.
+    const charted = marks.slice(0, 9);
+    const sorted = [...marks].sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
+    const best = sorted[0];
+    const weakest = sorted[sorted.length - 1];
+    const mean = marks.reduce((sum, m) => sum + (m.percentage || 0), 0) / marks.length;
+    const aboveMean = marks.filter(m => (m.percentage || 0) >= mean).length;
+
+    const shortName = (n: string) => (n.length > 7 ? `${n.substring(0, 6)}.` : n);
+
+    return (
+        <View>
+            <View style={c.chartRow}>
+                {charted.map((m, i) => {
+                    const pct = m.percentage || 0;
+                    return (
+                        <View key={i} style={c.chartCol}>
+                            <View style={c.chartTrack}>
+                                <View style={[c.chartFill, { height: Math.max(2, (pct / 100) * 38), backgroundColor: perfColor(pct) }]} />
+                            </View>
+                            <Text style={c.chartPct}>{Math.round(pct)}</Text>
+                            <Text style={c.chartLabel}>{shortName(m.subjectName)}</Text>
                         </View>
                     );
                 })}
+            </View>
+            <View style={c.calloutRow}>
+                <View style={c.callout}>
+                    <Text style={c.calloutLabel}>Strongest</Text>
+                    <Text style={c.calloutValue}>{shortName(best.subjectName)} · {Math.round(best.percentage || 0)}%</Text>
+                </View>
+                <View style={c.callout}>
+                    <Text style={c.calloutLabel}>Needs Focus</Text>
+                    <Text style={c.calloutValue}>{shortName(weakest.subjectName)} · {Math.round(weakest.percentage || 0)}%</Text>
+                </View>
+                <View style={c.callout}>
+                    <Text style={c.calloutLabel}>At / Above Mean</Text>
+                    <Text style={c.calloutValue}>{aboveMean} of {marks.length}</Text>
+                </View>
+            </View>
+        </View>
+    );
+}
+
+/* ── Grading / competency key ─────────────────────────────── */
+function GradingKey({ data, isKCSE }: { data: ReportCardData; isKCSE: boolean }) {
+    if (!isKCSE) {
+        return (
+            <View>
+                {CBC_BANDS.map(b => (
+                    <View key={b.code} style={c.keyItem}>
+                        <View style={[c.keyChip, { backgroundColor: b.color }]}><Text style={c.keyChipText}>{b.code}</Text></View>
+                        <Text style={c.keyText}>{b.name.replace('\n', ' ')}</Text>
+                        <Text style={c.keyRange}>{b.min}+</Text>
+                    </View>
+                ))}
             </View>
         );
     }
 
+    const bounds = (data.gradeBoundaries || []).slice(0, 12);
+    if (bounds.length === 0) {
+        return <Text style={{ fontSize: 6.5, color: INK_MUTED }}>No grading scale configured.</Text>;
+    }
     return (
-        <View style={{ marginTop: 8 }}>
-            <Text style={{ fontSize: 7, color: GRAY_700, marginBottom: 6 }}>Current Term Performance</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                {data.subjectMarks.slice(0, 8).map((subj, idx) => {
-                    const currentScore = subj.percentage || 0;
-                    const barHeight = (currentScore / 100) * 40;
-                    return (
-                        <View key={idx} style={{ width: 40, alignItems: 'center', marginBottom: 4 }}>
-                            <View style={{ height: 40, width: 14, backgroundColor: '#E5E7EB', borderRadius: 2, position: 'relative', justifyContent: 'flex-end' }}>
-                                <View style={{ height: barHeight, width: 14, backgroundColor: barColor(currentScore), borderRadius: 2 }} />
-                            </View>
-                            <Text style={{ fontSize: 5, marginTop: 2, color: GRAY_700 }}>{currentScore.toFixed(0)}%</Text>
-                        </View>
-                    );
-                })}
-            </View>
-            <Text style={{ fontSize: 6, color: GRAY_400, marginTop: 4 }}>Score distribution by subject</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {bounds.map((g, i) => (
+                <View key={i} style={[c.keyItem, { width: '50%', paddingRight: 4 }]}>
+                    <View style={[c.keyChip, { backgroundColor: perfColor(g.min), width: 16 }]}>
+                        <Text style={c.keyChipText}>{g.symbol}</Text>
+                    </View>
+                    <Text style={c.keyRange}>{g.min}–{g.max}</Text>
+                    {g.points !== undefined && (
+                        <Text style={[c.keyText, { textAlign: 'right', fontSize: 5.6 }]}> {g.points}pt</Text>
+                    )}
+                </View>
+            ))}
         </View>
     );
 }
