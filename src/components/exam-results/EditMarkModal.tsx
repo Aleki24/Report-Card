@@ -116,7 +116,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 const allGradingSystems = (structureData.grading_systems || []).filter((gs: any) => gs.system_kind !== 'OVERALL');
                 const allScales = structureData.grading_scales || [];
 
-                let options: GradeOption[] = [];
+                const options: GradeOption[] = [];
 
                 // A grading system assigned directly to the subject (Settings >
                 // Subjects) takes priority over every level-wide system.
@@ -144,11 +144,23 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 });
                 
                 setGradeOptions(options);
+
+                // Re-apply the CURRENT subject grading scale to this already-entered
+                // mark: if the school changed its bands since the mark was entered,
+                // the grade shown here updates to match, and saving persists it.
+                // Skipped for multi-paper (recomputed from components) and when the
+                // teacher has manually chosen a grade in this session.
+                if (!multiPaper && !gradeManuallySet && options.length > 0 && maxScore > 0) {
+                    const pct = Math.round((mark.raw_score / maxScore) * 100);
+                    const matching = options.find(o => pct >= o.min_percentage && pct <= o.max_percentage);
+                    if (matching && matching.symbol !== grade) setGrade(matching.symbol);
+                }
             } catch (err) {
                 console.error("Failed to load grades", err);
             }
         };
         fetchGrades();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId]);
 
     // Fetch total points for this student
@@ -175,9 +187,16 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
 
                 const allMarks = marksData.data || [];
                 const gradingScales = structureData.grading_scales || [];
+                // Points come only from SUBJECT-kind scales — OVERALL systems
+                // reuse the same symbols with no per-grade points and would
+                // otherwise zero out a subject's points in this symbol map.
+                const overallSystemIds = new Set(
+                    (structureData.grading_systems || []).filter((gs: any) => gs.system_kind === 'OVERALL').map((gs: any) => gs.id)
+                );
 
                 const scalesMap: Record<string, number> = {};
                 gradingScales.forEach((sc: any) => {
+                    if (overallSystemIds.has(sc.grading_system_id)) return;
                     scalesMap[sc.symbol] = sc.points ?? 0;
                 });
 
