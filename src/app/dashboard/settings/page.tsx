@@ -16,7 +16,8 @@ interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; }
+interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; }
+interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
   const [gradingScales, setGradingScales] = useState<GradingScale[]>([]);
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
@@ -59,6 +61,7 @@ export default function SettingsPage() {
       setGrades(structureData.grades || []);
       setGradingSystems(structureData.grading_systems || []);
       setGradingScales(structureData.grading_scales || []);
+      setSubjects(structureData.subjects || []);
 
       const years = yearsData.data || [];
       setAcademicYears(years);
@@ -72,6 +75,7 @@ export default function SettingsPage() {
           teacher_invite_code: schoolData.data.teacher_invite_code || '',
           student_invite_code: schoolData.data.student_invite_code || '',
           min_combination_group_size: schoolData.data.min_combination_group_size ?? 15,
+          overall_grading_system_id: schoolData.data.overall_grading_system_id || null,
         });
       }
     } catch (err) {
@@ -126,6 +130,35 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       toast.success('Deleted successfully');
+      await fetchAllData();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
+    finally { setCalSaving(false); }
+  };
+
+  const patchStructure = async (type: string, id: string, payload: Record<string, unknown>) => {
+    setCalSaving(true);
+    try {
+      const res = await fetch('/api/admin/academic-structure', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, ...payload }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      toast.success('Updated successfully');
+      await fetchAllData();
+      return data.data;
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); return null; }
+    finally { setCalSaving(false); }
+  };
+
+  const handleSetOverallGradingSystem = async (gradingSystemId: string) => {
+    if (!school.id) return;
+    setCalSaving(true);
+    try {
+      const res = await fetch('/api/admin/school', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ school_id: school.id, name: school.name, address: school.address || null, phone: school.phone || null, email: school.email || null, logo_url: school.logo_url || null, overall_grading_system_id: gradingSystemId || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      toast.success('Overall grading system updated');
       await fetchAllData();
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
     finally { setCalSaving(false); }
@@ -242,10 +275,14 @@ export default function SettingsPage() {
               academicLevels={academicLevels}
               gradingSystems={gradingSystems}
               gradingScales={gradingScales}
+              subjects={subjects}
+              overallGradingSystemId={school.overall_grading_system_id}
               schoolId={school.id}
               saving={calSaving}
               onCreate={postStructure}
               onDelete={deleteStructure}
+              onPatch={patchStructure}
+              onSetOverall={handleSetOverallGradingSystem}
             />
           )}
           {activeTab === 'payments' && <PaymentsTab />}

@@ -160,7 +160,12 @@ export function aggregateStudentPerformance(
     scales?: GradingScale[],
     gradingSystemType?: 'KCSE' | 'CBC',
     subjectNames?: Record<string, string>,
-    subjectCategories?: Record<string, string>
+    subjectCategories?: Record<string, string>,
+    // Optional school-level "Overall Grading System" scales. When a school
+    // has configured one, its percentage bands decide the overall grade
+    // instead of the built-in mean-points table — existing schools that
+    // haven't set one keep the exact behavior they always had.
+    overallScales?: GradingScale[]
 ): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
@@ -230,9 +235,14 @@ export function aggregateStudentPerformance(
     const gpa = getGPAFromPercentage(avgPercentage);
     const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
-    // overallGrade: KCSE uses mean points, CBC uses percentage-based grade
+    // overallGrade: a school-configured Overall Grading System (percentage
+    // bands, same shape as any other grading system) wins when set;
+    // otherwise fall back to the existing defaults — KCSE uses mean points,
+    // CBC uses the percentage-based grade.
     let overallGrade: string;
-    if (gradingSystemType === 'KCSE') {
+    if (overallScales && overallScales.length > 0) {
+        overallGrade = getGradeFromScales(avgPercentage, overallScales);
+    } else if (gradingSystemType === 'KCSE') {
         overallGrade = getOverallGradeFromMeanPoints(meanPoints);
     } else {
         // CBC: use the grade derived from percentage

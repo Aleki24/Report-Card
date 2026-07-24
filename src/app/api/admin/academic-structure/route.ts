@@ -246,6 +246,9 @@ export async function POST(request: NextRequest) {
             grading_system: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = gradingSystemSchema.parse(payload);
+                const rawSubjectIds = (payload as Record<string, unknown>).subject_ids;
+                const subjectIds = Array.isArray(rawSubjectIds) ? (rawSubjectIds as string[]) : [];
+
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_systems')
                     .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId })
@@ -267,6 +270,29 @@ export async function POST(request: NextRequest) {
                         // Keep the system atomic: don't leave a grading system with no grid behind
                         await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
                         return handleDatabaseError(scalesError, 'grading scale');
+                    }
+                }
+
+                // Link the group of subjects chosen at creation time, if any —
+                // this is the "grading system linked to subjects" grouping.
+                if (subjectIds.length > 0) {
+                    const { data: validSubjects } = await supabaseAdmin
+                        .from('subjects')
+                        .select('id')
+                        .eq('school_id', schoolId)
+                        .in('id', subjectIds);
+                    if ((validSubjects ?? []).length !== subjectIds.length) {
+                        await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
+                        return NextResponse.json({ error: 'All subjects must belong to your school.' }, { status: 400 });
+                    }
+                    const { error: assignError } = await supabaseAdmin
+                        .from('subjects')
+                        .update({ grading_system_id: result.id })
+                        .eq('school_id', schoolId)
+                        .in('id', subjectIds);
+                    if (assignError) {
+                        await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
+                        return handleDatabaseError(assignError, 'grading system');
                     }
                 }
 
@@ -468,6 +494,53 @@ export async function PATCH(request: NextRequest) {
                 .single();
             if (error) return handleDatabaseError(error, 'grading scale');
             return NextResponse.json({ success: true, data: result });
+        }
+
+        // Sync which subjects belong to a grading system's group in one shot:
+        // subjects in `subject_ids` get linked to it, subjects that were
+        // linked but are no longer in the list get cleared back to no
+        // grading system assigned.
+        if (type === 'grading_system_subjects') {
+            const { data: system } = await supabaseAdmin
+                .from('grading_systems')
+                .select('school_id')
+                .eq('id', id)
+                .maybeSingle();
+            if (!system || system.school_id !== schoolId) {
+                return NextResponse.json({ error: 'Grading system not found or not editable.' }, { status: 404 });
+            }
+
+            const subjectIds = Array.isArray(payload.subject_ids) ? (payload.subject_ids as string[]) : [];
+
+            if (subjectIds.length > 0) {
+                const { data: validSubjects } = await supabaseAdmin
+                    .from('subjects')
+                    .select('id')
+                    .eq('school_id', schoolId)
+                    .in('id', subjectIds);
+                if ((validSubjects ?? []).length !== subjectIds.length) {
+                    return NextResponse.json({ error: 'All subjects must belong to your school.' }, { status: 400 });
+                }
+            }
+
+            const { error: clearError } = await supabaseAdmin
+                .from('subjects')
+                .update({ grading_system_id: null })
+                .eq('school_id', schoolId)
+                .eq('grading_system_id', id)
+                .not('id', 'in', `(${subjectIds.length > 0 ? subjectIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
+            if (clearError) return handleDatabaseError(clearError, 'grading system group');
+
+            if (subjectIds.length > 0) {
+                const { error: assignError } = await supabaseAdmin
+                    .from('subjects')
+                    .update({ grading_system_id: id })
+                    .eq('school_id', schoolId)
+                    .in('id', subjectIds);
+                if (assignError) return handleDatabaseError(assignError, 'grading system group');
+            }
+
+            return NextResponse.json({ success: true });
         }
 
         // School-scoped tables that can be updated

@@ -223,6 +223,28 @@ export async function GET(
             }
         }
 
+        // A school-configured Overall Grading System (Settings > Grading) is
+        // opt-in — most schools won't have one set, in which case this stays
+        // undefined and every existing report card computes exactly as before.
+        let overallGradingScales: GradingScale[] | undefined;
+        if (targetSchoolId) {
+            const { data: schoolRow } = await supabase
+                .from('schools')
+                .select('overall_grading_system_id')
+                .eq('id', targetSchoolId)
+                .maybeSingle();
+            if (schoolRow?.overall_grading_system_id) {
+                const { data: overallScales } = await supabase
+                    .from('grading_scales')
+                    .select('*')
+                    .eq('grading_system_id', schoolRow.overall_grading_system_id)
+                    .order('order_index', { ascending: true });
+                if (overallScales && overallScales.length > 0) {
+                    overallGradingScales = overallScales as GradingScale[];
+                }
+            }
+        }
+
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
         let examsQ = supabase
             .from('exams')
@@ -370,7 +392,7 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
