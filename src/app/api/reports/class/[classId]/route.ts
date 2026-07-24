@@ -119,7 +119,7 @@ export async function GET(
             targetSchoolId ? supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle() : Promise.resolve({ data: null }),
             gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
-            firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId) : Promise.resolve({ data: [] as any[] }),
+            firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL') : Promise.resolve({ data: [] as any[] }),
             termId ? supabase.from('terms').select('name, start_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
@@ -182,6 +182,7 @@ export async function GET(
         // opt-in — most schools won't have one set, in which case this stays
         // undefined and every existing report card computes exactly as before.
         let overallGradingScales: GradingScale[] | undefined;
+        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
         if (targetSchoolId) {
             const { data: schoolRow } = await supabase
                 .from('schools')
@@ -189,13 +190,13 @@ export async function GET(
                 .eq('id', targetSchoolId)
                 .maybeSingle();
             if (schoolRow?.overall_grading_system_id) {
-                const { data: overallScales } = await supabase
-                    .from('grading_scales')
-                    .select('*')
-                    .eq('grading_system_id', schoolRow.overall_grading_system_id)
-                    .order('order_index', { ascending: true });
+                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
+                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
+                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
+                ]);
                 if (overallScales && overallScales.length > 0) {
                     overallGradingScales = overallScales as GradingScale[];
+                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
                 }
             }
         }
@@ -401,7 +402,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
             const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 

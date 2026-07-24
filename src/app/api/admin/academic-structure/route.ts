@@ -248,10 +248,19 @@ export async function POST(request: NextRequest) {
                 const data = gradingSystemSchema.parse(payload);
                 const rawSubjectIds = (payload as Record<string, unknown>).subject_ids;
                 const subjectIds = Array.isArray(rawSubjectIds) ? (rawSubjectIds as string[]) : [];
+                const systemKind = data.system_kind ?? 'SUBJECT';
+
+                // SUBJECT bands are percentages (0-100); OVERALL bands are total
+                // points (must not sit inside the 0-100 percentage cap since a
+                // best-7 total tops out at 84 but bigger totals are valid).
+                if (systemKind === 'SUBJECT' && data.scales) {
+                    const bad = data.scales.find(s => s.min_percentage > 100 || s.max_percentage > 100);
+                    if (bad) return NextResponse.json({ error: 'Subject grade bands must be between 0 and 100%.' }, { status: 400 });
+                }
 
                 const { data: result, error } = await supabaseAdmin
                     .from('grading_systems')
-                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId })
+                    .insert({ name: data.name, description: data.description || null, academic_level_id: data.academic_level_id, school_id: schoolId, system_kind: systemKind })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'grading system');
 

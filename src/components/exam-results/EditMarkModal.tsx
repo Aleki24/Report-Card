@@ -112,7 +112,8 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 const structureRes = await fetch('/api/admin/academic-structure');
                 const structureData = await structureRes.json();
 
-                const allGradingSystems = structureData.grading_systems || [];
+                // Exclude OVERALL (points-band) systems — only subject systems grade marks.
+                const allGradingSystems = (structureData.grading_systems || []).filter((gs: any) => gs.system_kind !== 'OVERALL');
                 const allScales = structureData.grading_scales || [];
 
                 let options: GradeOption[] = [];

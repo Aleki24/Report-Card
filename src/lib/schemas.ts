@@ -87,18 +87,23 @@ export const bulkPathwayAssignSchema = z.object({
 export const gradingSystemScaleInputSchema = z.object({
     symbol: z.string().min(1, 'Grade is required').max(10),
     label: z.string().max(100).optional().default(''),
-    min_percentage: z.number().min(0).max(100),
-    max_percentage: z.number().min(0).max(100),
+    // Bounds are a percentage (0-100) for SUBJECT systems, or a total-points
+    // value for OVERALL systems (which can exceed 100 — e.g. best-7 tops out
+    // at 84, but bigger scales are allowed), so the ceiling is generous here
+    // and the exact meaning is enforced per system_kind in the handler.
+    min_percentage: z.number().min(0).max(100000),
+    max_percentage: z.number().min(0).max(100000),
     points: z.number().int().min(0).optional(),
 }).refine(
     data => data.min_percentage <= data.max_percentage,
-    { message: 'Low marks must be less than or equal to High marks' }
+    { message: 'Low must be less than or equal to High' }
 );
 
 export const gradingSystemSchema = z.object({
     name: z.string().min(1, 'Name is required').max(100),
     description: z.string().max(500).optional(),
     academic_level_id: z.string().uuid('Invalid academic level ID'),
+    system_kind: z.enum(['SUBJECT', 'OVERALL']).optional().default('SUBJECT'),
     scales: z.array(gradingSystemScaleInputSchema).max(20).optional(),
 });
 

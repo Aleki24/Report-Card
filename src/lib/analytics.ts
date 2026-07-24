@@ -108,6 +108,31 @@ export function getPointsFromScales(percentage: number, scales: GradingScale[]):
 }
 
 /**
+ * Points a specific grade symbol is worth, taken from the subject's own
+ * grading scale (so "points as per their grade" respects a school's custom
+ * scale, not just the fixed A=12 table). Returns undefined if the symbol
+ * isn't in the scale, letting callers fall back.
+ */
+export function getPointsForGradeSymbol(symbol: string, scales?: GradingScale[]): number | undefined {
+    if (!symbol || !scales || scales.length === 0) return undefined;
+    const target = symbol.trim().toUpperCase();
+    const match = scales.find(s => (s.symbol || '').trim().toUpperCase() === target);
+    return match?.points ?? undefined;
+}
+
+/**
+ * Overall/mean grade from a student's TOTAL POINTS, using an "overall" grading
+ * system whose bands are expressed in points (not percentage). This is the
+ * 8-4-4 flow: subject grades → points → summed → total points → overall grade.
+ */
+export function getGradeFromPointsScales(totalPoints: number, scales: GradingScale[]): string {
+    const match = scales.find(s =>
+        totalPoints >= Number(s.min_percentage) && totalPoints <= Number(s.max_percentage)
+    );
+    return match?.symbol || '-';
+}
+
+/**
  * Look up CBC rubric symbol (EE1, ME2, etc.) from percent using grading scales.
  * Uses the `symbol` field from the matching scale.
  */
@@ -162,10 +187,15 @@ export function aggregateStudentPerformance(
     subjectNames?: Record<string, string>,
     subjectCategories?: Record<string, string>,
     // Optional school-level "Overall Grading System" scales. When a school
-    // has configured one, its percentage bands decide the overall grade
-    // instead of the built-in mean-points table — existing schools that
-    // haven't set one keep the exact behavior they always had.
-    overallScales?: GradingScale[]
+    // has configured one, it decides the overall grade instead of the
+    // built-in mean-points table — existing schools that haven't set one keep
+    // the exact behavior they always had.
+    overallScales?: GradingScale[],
+    // How to read those overall scales: 'POINTS' looks the student's TOTAL
+    // POINTS up in the bands (the 8-4-4 flow — this is what an OVERALL-kind
+    // grading system uses); 'PERCENTAGE' looks up the average percentage
+    // (when a normal subject-style system was chosen as the overall one).
+    overallKind: 'POINTS' | 'PERCENTAGE' = 'PERCENTAGE'
 ): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
@@ -202,16 +232,22 @@ export function aggregateStudentPerformance(
     let totalPoints = 0;
     if (gradingSystemType === 'KCSE') {
         for (const mark of marksToProcess) {
-            // Prefer the entered grade symbol, but fall back to points derived
-            // from the percentage via the grading scales when no grade was
-            // stored (e.g. bulk-uploaded scores with no grade column). Without
-            // this, every such mark scored 0 points and the whole class tied.
-            let pts = getPointsFromGrade((mark as any).grade_symbol || '');
-            if (!pts && scales && scales.length > 0) {
-                const pct = calculatePercentage(mark.raw_score, mark.max_score);
-                pts = getPointsFromScales(pct, scales) || 0;
+            const symbol = (mark as any).grade_symbol || '';
+            // Points as per the grade: first from the subject's own scale (so a
+            // school's custom points are honoured), then the fixed A=12 table,
+            // then finally derived from the percentage when no grade was stored
+            // (e.g. bulk-uploaded scores). Without the last fallback every such
+            // mark scored 0 and the whole class tied.
+            let pts: number | undefined = getPointsForGradeSymbol(symbol, scales);
+            if (pts === undefined) {
+                const fromGrade = getPointsFromGrade(symbol);
+                if (fromGrade) pts = fromGrade;
             }
-            totalPoints += pts;
+            if (pts === undefined && scales && scales.length > 0) {
+                const pct = calculatePercentage(mark.raw_score, mark.max_score);
+                pts = getPointsFromScales(pct, scales);
+            }
+            totalPoints += pts || 0;
         }
     } else {
         // CBC: use points from grading scales
@@ -235,13 +271,17 @@ export function aggregateStudentPerformance(
     const gpa = getGPAFromPercentage(avgPercentage);
     const grade = scales ? getGradeFromScales(avgPercentage, scales) : getGradeFromPercentage(avgPercentage);
 
-    // overallGrade: a school-configured Overall Grading System (percentage
-    // bands, same shape as any other grading system) wins when set;
-    // otherwise fall back to the existing defaults — KCSE uses mean points,
-    // CBC uses the percentage-based grade.
+    // overallGrade: a school-configured Overall Grading System wins when set.
+    // An OVERALL-kind system grades the student's TOTAL POINTS (the 8-4-4
+    // flow); a subject-style system chosen as overall grades the average
+    // percentage. With no overall system configured we fall back to the
+    // existing defaults — KCSE uses mean points, CBC uses the percentage grade
+    // — so schools that never set one keep the exact behaviour they had.
     let overallGrade: string;
     if (overallScales && overallScales.length > 0) {
-        overallGrade = getGradeFromScales(avgPercentage, overallScales);
+        overallGrade = overallKind === 'POINTS'
+            ? getGradeFromPointsScales(totalPoints, overallScales)
+            : getGradeFromScales(avgPercentage, overallScales);
     } else if (gradingSystemType === 'KCSE') {
         overallGrade = getOverallGradeFromMeanPoints(meanPoints);
     } else {

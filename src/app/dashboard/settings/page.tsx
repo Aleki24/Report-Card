@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
-interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; }
+interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL'; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
 interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; }
 interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
