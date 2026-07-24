@@ -56,20 +56,24 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Exam not found' }, { status: 404 });
         }
 
+        // The teacher who owns/teaches this exam can always download their own
+        // subject's entered marks — the point is to confirm the marks with
+        // students and fix corrections before finalising, so it must work in
+        // DRAFT/PENDING too. Other staff (a class teacher pulling a subject
+        // they don't teach) only get it once results are approved.
+        let isOwningTeacher = false;
         if (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER') {
             const perms = await getTeacherPermissions(userId);
             if (!isExamVisibleToTeacher(exam, perms, userId)) {
                 return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
             }
+            isOwningTeacher = true;
         }
 
-        // Downloading exported results is a form of "release" — only allow it
-        // once an admin has approved these results (admins can always export
-        // since they're the ones doing the approving).
-        if (role !== 'ADMIN' && exam.status !== 'APPROVED') {
+        if (role !== 'ADMIN' && !isOwningTeacher && exam.status !== 'APPROVED') {
             return NextResponse.json({
                 error: exam.status === 'DRAFT'
-                    ? 'These results have not been published yet. Publish them for review before exporting.'
+                    ? 'These results have not been published yet.'
                     : 'These results are pending admin approval and cannot be exported yet.',
             }, { status: 403 });
         }
