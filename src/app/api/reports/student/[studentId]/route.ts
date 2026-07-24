@@ -20,6 +20,41 @@ import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 
 export const runtime = 'nodejs';
 
+/**
+ * Which date the report card should print as the reopening day.
+ *
+ * A school breaks twice per term, so the admin sets both dates on the term:
+ * after the mid-term break and after the term ends. A mid-term report prints
+ * the first, everything else prints the second. When neither is set we fall
+ * back to the NEXT term's start date — never this term's own start_date,
+ * which is the day the term began, not the day learners come back.
+ */
+async function resolveReopeningDate(
+    supabase: ReturnType<typeof createSupabaseAdmin>,
+    term: { start_date?: string; end_date?: string; academic_year_id?: string; midterm_reopening_date?: string | null; reopening_date?: string | null } | null,
+    examType: string | null
+): Promise<string | undefined> {
+    if (!term) return undefined;
+    const isMidTerm = (examType || '').toUpperCase().includes('MID');
+    const chosen = isMidTerm
+        ? term.midterm_reopening_date || term.reopening_date
+        : term.reopening_date;
+    if (chosen) return chosen;
+
+    if (term.end_date && term.academic_year_id) {
+        const { data: nextTerm } = await supabase
+            .from('terms')
+            .select('start_date')
+            .eq('academic_year_id', term.academic_year_id)
+            .gt('start_date', term.end_date)
+            .order('start_date', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+        if (nextTerm?.start_date) return nextTerm.start_date;
+    }
+    return undefined;
+}
+
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ studentId: string }> }
@@ -363,8 +398,12 @@ export async function GET(
         }
 
         if (termId) {
-            const { data: termData } = await supabase.from('terms').select('start_date').eq('id', termId).maybeSingle();
-            openingDate = termData?.start_date || undefined;
+            const { data: termData } = await supabase
+                .from('terms')
+                .select('start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date')
+                .eq('id', termId)
+                .maybeSingle();
+            openingDate = await resolveReopeningDate(supabase, termData, searchParams.get('examType'));
         }
 
         const customTitle = searchParams.get('customTitle');

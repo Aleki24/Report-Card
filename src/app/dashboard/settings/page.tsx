@@ -19,7 +19,7 @@ interface GradingScale { id: string; grading_system_id: string; min_percentage: 
 interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; }
 interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
-interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
+interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null; }
 
 export default function SettingsPage() {
   const { profile } = useAuth();
@@ -41,7 +41,7 @@ export default function SettingsPage() {
 
   const [calSaving, setCalSaving] = useState(false);
   const [newYear, setNewYear] = useState({ name: '', start_date: '', end_date: '' });
-  const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '' });
+  const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '', midterm_reopening_date: '', reopening_date: '' });
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
@@ -175,7 +175,32 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!selectedCalYearId || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date) return;
     const result = await postStructure('term', { academic_year_id: selectedCalYearId, ...newTerm });
-    if (result) setNewTerm({ name: '', start_date: '', end_date: '' });
+    if (result) setNewTerm({ name: '', start_date: '', end_date: '', midterm_reopening_date: '', reopening_date: '' });
+  };
+
+  /**
+   * Reopening dates print on report cards as "Next term begins", so they are
+   * edited in place on the term row and saved immediately. The local list is
+   * updated optimistically so the date picker doesn't snap back while saving.
+   */
+  const handleUpdateTermDates = async (
+    termId: string,
+    field: 'midterm_reopening_date' | 'reopening_date',
+    value: string,
+  ) => {
+    const previous = terms;
+    setTerms(prev => prev.map(t => (t.id === termId ? { ...t, [field]: value || null } : t)));
+    try {
+      const res = await fetch('/api/admin/academic-structure', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'term', id: termId, [field]: value || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save the reopening date');
+    } catch (err) {
+      setTerms(previous);
+      toast.error(err instanceof Error ? err.message : 'Failed to save the reopening date');
+    }
   };
 
   const handleSetCurrentTerm = async (term: Term) => {
@@ -293,6 +318,7 @@ export default function SettingsPage() {
               newYear={newYear} setNewYear={setNewYear} newTerm={newTerm} setNewTerm={setNewTerm}
               onAddYear={handleAddYear} onAddTerm={handleAddTerm} onDelete={deleteStructure}
               onSetCurrentTerm={handleSetCurrentTerm}
+              onUpdateTermDates={handleUpdateTermDates}
             />
           )}
         </div>

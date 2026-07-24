@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
                 const data = termSchema.parse(payload);
                 const { data: result, error } = await supabaseAdmin
                     .from('terms')
-                    .insert({ academic_year_id: data.academic_year_id, name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: data.is_current ?? false, school_id: schoolId })
+                    .insert({ academic_year_id: data.academic_year_id, name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: data.is_current ?? false, midterm_reopening_date: data.midterm_reopening_date || null, reopening_date: data.reopening_date || null, school_id: schoolId })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'term');
                 return NextResponse.json({ success: true, data: result });
@@ -659,6 +659,9 @@ export async function PATCH(request: NextRequest) {
             if (payload.start_date !== undefined) updateData.start_date = payload.start_date;
             if (payload.end_date !== undefined) updateData.end_date = payload.end_date;
             if (payload.is_current !== undefined) updateData.is_current = payload.is_current;
+            // Reopening dates print on report cards; empty clears them.
+            if (payload.midterm_reopening_date !== undefined) updateData.midterm_reopening_date = payload.midterm_reopening_date || null;
+            if (payload.reopening_date !== undefined) updateData.reopening_date = payload.reopening_date || null;
         } else if (type === 'stream') {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.full_name !== undefined) updateData.full_name = payload.full_name;

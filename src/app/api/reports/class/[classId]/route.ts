@@ -120,7 +120,7 @@ export async function GET(
             gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL') : Promise.resolve({ data: [] as any[] }),
-            termId ? supabase.from('terms').select('name, start_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
+            termId ? supabase.from('terms').select('name, start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
 
@@ -213,7 +213,29 @@ export async function GET(
         // 5. Term/year info (fetched in the batch above)
         let termTitle = termRes.data?.name || 'Term Report';
         const academicYearName = yearRes.data?.name || 'Academic Year';
-        const openingDate: string | undefined = termRes.data?.start_date || undefined;
+        // Reopening day the admin set on the term (mid-term break vs end of
+        // term), falling back to the next term's start — never this term's own
+        // start_date, which is when the term began rather than when learners
+        // come back. Mirrors resolveReopeningDate in the single-student route.
+        let openingDate: string | undefined;
+        {
+            const t: any = termRes.data;
+            if (t) {
+                const isMidTerm = (examType || '').toUpperCase().includes('MID');
+                openingDate = (isMidTerm ? (t.midterm_reopening_date || t.reopening_date) : t.reopening_date) || undefined;
+                if (!openingDate && t.end_date && t.academic_year_id) {
+                    const { data: nextTerm } = await supabase
+                        .from('terms')
+                        .select('start_date')
+                        .eq('academic_year_id', t.academic_year_id)
+                        .gt('start_date', t.end_date)
+                        .order('start_date', { ascending: true })
+                        .limit(1)
+                        .maybeSingle();
+                    openingDate = nextTerm?.start_date || undefined;
+                }
+            }
+        }
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {

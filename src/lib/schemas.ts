@@ -22,12 +22,18 @@ export const academicYearSchema = z.object({
     end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
 });
 
+const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional().nullable();
+
 export const termSchema = z.object({
     academic_year_id: z.string().uuid('Invalid academic year ID'),
     name: z.string().min(1, 'Name is required').max(100),
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     is_current: z.boolean().optional(),
+    /** When learners return after the mid-term break. */
+    midterm_reopening_date: optionalDate,
+    /** When learners return after this term ends (i.e. next term begins). */
+    reopening_date: optionalDate,
 });
 
 export const academicLevelSchema = z.object({
