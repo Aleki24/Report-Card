@@ -196,7 +196,8 @@ export function ExamStatusBar({ examId, status, isAdmin, onChanged }: Props) {
                         {readiness.partiallyMarked.length > 0 && (
                             <div className="mb-3">
                                 <p className="text-xs font-semibold text-amber-500 mb-1">
-                                    ⚠️ Missing some papers — will be scored on the papers they have:
+                                    ⚠️ Missing some papers — a missing paper counts as 0, so their subject mark is
+                                    still out of all papers. Enter the marks first if these papers were sat:
                                 </p>
                                 <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-1">
                                     {readiness.partiallyMarked.slice(0, 50).map((s, i) => (

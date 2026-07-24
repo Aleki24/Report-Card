@@ -428,7 +428,9 @@ export async function GET(
             studentMarks.forEach((m: any) => {
                 const subject = m.exams.subjects;
                 if (!subject) return;
-                const pct = Number(m.percentage);
+                // Whole-number marks on report cards — round at the source so the
+                // printed mark, grade and points all come from the same value.
+                const pct = Math.round(Number(m.percentage));
                 // Prioritise manually-entered grade_symbol over auto-calculated
                 const grade = m.grade_symbol
                     ? m.grade_symbol
@@ -452,7 +454,7 @@ export async function GET(
                     subjectCode: subject.code || subject.name || 'Unknown',
                     subjectName: subject.name || 'Unknown Subject',
                     category: subject.category || 'TECHNICAL',
-                    score: Number(m.raw_score),
+                    score: Math.round(Number(m.raw_score)),
                     totalPossible: Number(m.exams.max_score),
                     percentage: pct,
                     grade,
