@@ -11,7 +11,13 @@ type Tab = 'setup' | 'results' | 'publish';
 
 export default function ExamsMarksPage() {
   const { role } = useAuth();
-  const [tab, setTab] = useState<Tab>('setup');
+  // Honor a ?tab= deep link (e.g. the admin dashboard's "results awaiting
+  // approval" banner links straight to the Publish tab). Read once on mount.
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === 'undefined') return 'setup';
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return t === 'results' || t === 'publish' ? t : 'setup';
+  });
 
   const tabs = [
     { id: 'setup' as const, label: 'Mark Entry & Setup', icon: <PenTool size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
