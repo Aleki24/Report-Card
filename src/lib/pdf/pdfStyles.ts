@@ -1,4 +1,5 @@
 import { StyleSheet } from '@react-pdf/renderer';
+import { T, FONT_BODY, boldFont, italicFont, displayFont } from './pdfTheme';
 
 /* ── Colour constants ────────────────────────────────────── */
 export const NAVY = '#1A365D';
@@ -144,143 +145,133 @@ export const s = StyleSheet.create({
 });
 
 /* ═══════════════════════════════════════════════════════════
-   Redesigned CLASSIC template — "institutional premium".
+   CLASSIC template — typeset in the SkulBase design language.
 
-   Layout rules that keep it from feeling generated:
-   • ONE accent (gold) — used on the curriculum line, rules and the
-     average figure, nowhere else.
-   • A single horizontal rhythm: every band shares PAGE_X margins so
-     the crest, table and footer all sit on the same two vertical lines.
-   • Type scale is fixed (6 / 7 / 8 / 9 / 11 / 15 / 22) — no ad-hoc sizes.
+   Colour and type come from pdfTheme (the project's own tokens and
+   fonts), so the printed report and the dashboard read as one product.
+   Layout rules:
+   • Primary blue carries every band; nothing else competes for it.
+   • One horizontal rhythm — every band shares PAGE_X, so masthead,
+     table and footer sit on the same two vertical lines.
+   • Sections grow to fill the sheet (see `grow`), so a short subject
+     list produces a well-filled page rather than a block of white.
    ═════════════════════════════════════════════════════════ */
 const PAGE_X = 26;
 
 export const c = StyleSheet.create({
-    page: { padding: 0, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700, backgroundColor: WHITE },
+    page: { padding: 0, fontFamily: FONT_BODY, fontSize: 8.5, color: T.ink, backgroundColor: T.white },
 
     /* ── Masthead ── */
-    masthead: { backgroundColor: INK, paddingTop: 14, paddingBottom: 10, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
-    crestFrame: { width: 54, height: 54, borderRadius: 6, backgroundColor: WHITE, padding: 4, alignItems: 'center', justifyContent: 'center' },
-    crest: { width: 46, height: 46, objectFit: 'contain' },
-    crestFallback: { width: 54, height: 54, borderRadius: 6, backgroundColor: '#1B3D6B', alignItems: 'center', justifyContent: 'center' },
-    crestFallbackText: { fontSize: 18, color: GOLD, fontFamily: 'Helvetica-Bold' },
+    masthead: { backgroundColor: T.primary, paddingTop: 13, paddingBottom: 11, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
+    crestFrame: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.white, padding: 4, alignItems: 'center', justifyContent: 'center' },
+    crest: { width: 42, height: 42, objectFit: 'contain' },
+    crestFallback: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.primaryDark, alignItems: 'center', justifyContent: 'center' },
+    crestFallbackText: { ...displayFont, fontSize: 19, color: T.white },
     mastheadCenter: { flex: 1, paddingHorizontal: 12 },
-    mastheadSchool: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 0.6, lineHeight: 1.15 },
-    mastheadCurriculum: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: GOLD, textTransform: 'uppercase', letterSpacing: 1.1, marginTop: 3 },
-    mastheadAddress: { fontSize: 6.5, color: '#9FB3CC', marginTop: 3 },
-    photoFrame: { width: 52, height: 58, borderRadius: 4, backgroundColor: WHITE, padding: 2, alignItems: 'center', justifyContent: 'center' },
-    photoImg: { width: 48, height: 54, objectFit: 'contain' },
-    photoEmpty: { width: 52, height: 58, borderRadius: 4, backgroundColor: '#1B3D6B', alignItems: 'center', justifyContent: 'center' },
+    mastheadSchool: { ...displayFont, fontSize: 13, color: T.white, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 },
+    mastheadAddress: { fontSize: 6.5, color: '#CFE0FF', marginTop: 3 },
+    mastheadDoc: { fontSize: 7, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 4 },
+    badge: { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 5, paddingHorizontal: 9, alignItems: 'center', minWidth: 54 },
+    badgeLabel: { fontSize: 5.5, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 0.6 },
+    badgeValue: { ...boldFont, fontSize: 14, color: T.white, marginTop: 1 },
+    qrImg: { width: 44, height: 44, backgroundColor: T.white, padding: 2, borderRadius: 4, marginLeft: 8 },
+    accentRule: { height: 3, flexDirection: 'row' },
 
-    /* ── Title strip under the ribbon ── */
-    titleStrip: { alignItems: 'center', paddingTop: 8, paddingBottom: 6 },
-    titleText: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: INK, textTransform: 'uppercase', letterSpacing: 2.2 },
-    titleRule: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
-    titleRuleBar: { width: 26, height: 1.6, backgroundColor: GOLD },
-    titleRuleDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: GOLD },
-
-    /* ── Paired info cards ── */
-    infoRow: { flexDirection: 'row', gap: 10, paddingHorizontal: PAGE_X, marginBottom: 9 },
-    infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${HAIRLINE}` },
-    infoCardHead: { backgroundColor: INK, paddingVertical: 4, paddingHorizontal: 8 },
-    infoCardTitle: { fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 1 },
-    infoCardBody: { backgroundColor: CREAM, paddingVertical: 6, paddingHorizontal: 8 },
+    /* ── Info cards ── */
+    infoRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 10, marginBottom: 9 },
+    infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    infoCardHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
+    infoCardTitle: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
+    infoCardBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 8 },
     infoLine: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 3.5 },
-    infoKey: { fontSize: 7.5, color: INK_MUTED, width: '38%' },
-    infoLeader: { flex: 1, borderBottom: `0.6pt dotted ${GRAY_400}`, marginBottom: 2, marginHorizontal: 3 },
-    infoVal: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: INK, maxWidth: '60%', textAlign: 'right' },
+    infoKey: { fontSize: 7, color: T.muted, width: '36%' },
+    infoLeader: { flex: 1, borderBottom: `0.6pt dotted ${T.line}`, marginBottom: 2, marginHorizontal: 3 },
+    infoVal: { ...boldFont, fontSize: 8, color: T.ink, maxWidth: '62%', textAlign: 'right' },
 
     /* ── Subject table ── */
-    table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${HAIRLINE}` },
-    thGroupRow: { flexDirection: 'row', backgroundColor: INK },
-    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center' },
-    thGroupText: { fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 0.9 },
-    thSubRow: { flexDirection: 'row' },
-    thSubCell: { paddingVertical: 3.5, alignItems: 'center', justifyContent: 'center' },
-    thSubText: { fontSize: 6, fontFamily: 'Helvetica-Bold', color: WHITE, textAlign: 'center', lineHeight: 1.15 },
-    thSubNote: { fontSize: 5, color: '#D9E2EF', textAlign: 'center' },
+    table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    thGroupRow: { flexDirection: 'row', backgroundColor: T.primary },
+    thGroupCell: { paddingVertical: 4.5, alignItems: 'center', justifyContent: 'center' },
+    thGroupText: { ...boldFont, fontSize: 6.5, color: T.white, textTransform: 'uppercase', letterSpacing: 0.8 },
+    thSubRow: { flexDirection: 'row', backgroundColor: T.primaryDark },
+    thSubCell: { paddingVertical: 3, alignItems: 'center', justifyContent: 'center' },
+    thSubText: { ...boldFont, fontSize: 5.8, color: T.white, textAlign: 'center' },
+    thSubNote: { fontSize: 5.2, color: '#CFE0FF', textAlign: 'center' },
 
-    row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${HAIRLINE}`, minHeight: 17, backgroundColor: WHITE },
-    rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${HAIRLINE}`, minHeight: 17, backgroundColor: SURFACE },
-    cellPad: { paddingVertical: 4, paddingHorizontal: 5 },
+    row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
+    rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
+    cellPad: { paddingVertical: 4.5, paddingHorizontal: 4 },
+    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4.5, paddingLeft: 7, paddingRight: 4 },
+    subjectDot: { width: 4, height: 4, borderRadius: 2, marginRight: 6 },
+    subjectName: { fontSize: 7.8, color: T.ink },
+    tdCenter: { fontSize: 7.8, color: T.ink, textAlign: 'center' },
+    tdCenterBold: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
+    tdMuted: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
+    tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 4.5, paddingHorizontal: 5, lineHeight: 1.25 },
+    bandMark: { ...boldFont, fontSize: 8.2, textAlign: 'center' },
+    bandDash: { fontSize: 7.5, color: '#C7D0DC', textAlign: 'center' },
+    totalRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.primarySoft, borderTop: `1pt solid ${T.primary}` },
+    totalLabel: { ...boldFont, fontSize: 7.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.8, paddingVertical: 5, paddingLeft: 7 },
 
-    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingLeft: 6, paddingRight: 4 },
-    subjectDot: { width: 4, height: 4, borderRadius: 2, marginRight: 5 },
-    // No flex here: this Text sits in a COLUMN beside the per-paper line, and
-    // flex:1 would stretch it over its sibling so the two overlap.
-    subjectName: { fontSize: 8, color: BLACK },
-    subjectPapers: { fontSize: 5.5, color: INK_MUTED, marginTop: 1.5 },
-
-    tdCenter: { fontSize: 8, color: BLACK, textAlign: 'center' },
-    tdCenterBold: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: INK, textAlign: 'center' },
-    tdMuted: { fontSize: 7, color: INK_MUTED, textAlign: 'center' },
-    tdComment: { fontSize: 6.8, color: INK_MUTED, paddingVertical: 4, paddingHorizontal: 5, lineHeight: 1.25 },
-    bandMark: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-    bandDash: { fontSize: 8, color: '#C3CAD6', textAlign: 'center' },
-
-    /* ── Overall average bar ── */
-    averageBar: { flexDirection: 'row', marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${HAIRLINE}` },
-    averageLabelWrap: { backgroundColor: INK, paddingVertical: 7, paddingHorizontal: 12, justifyContent: 'center', width: '46%' },
-    averageLabel: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 1.2 },
-    averageValueWrap: { flex: 1, backgroundColor: CREAM, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 5, paddingHorizontal: 8 },
+    /* ── Overall bar ── */
+    averageBar: { flexDirection: 'row', marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden' },
+    averageLabelWrap: { backgroundColor: T.indigo, paddingVertical: 8, paddingHorizontal: 12, justifyContent: 'center', width: '34%' },
+    averageLabel: { ...boldFont, fontSize: 7.5, color: T.white, textTransform: 'uppercase', letterSpacing: 1 },
+    averageSub: { fontSize: 5.8, color: '#B9BDE0', marginTop: 2 },
+    averageValueWrap: { flex: 1, backgroundColor: T.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 6, paddingHorizontal: 8 },
     averageStat: { alignItems: 'center' },
-    averageStatLabel: { fontSize: 5.8, color: INK_MUTED, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 1 },
-    averageStatValue: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: INK },
-    averageHero: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: INK },
+    averageStatLabel: { fontSize: 5.5, color: T.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1.5 },
+    averageStatValue: { ...boldFont, fontSize: 11, color: T.ink },
+    averageHero: { ...boldFont, fontSize: 19, color: T.primary },
 
-    /* ── Analysis + key ── */
-    panelRow: { flexDirection: 'row', gap: 10, paddingHorizontal: PAGE_X, marginTop: 9 },
-    panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${HAIRLINE}` },
-    panelHead: { backgroundColor: INK, paddingVertical: 4, paddingHorizontal: 8 },
-    panelTitle: { fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 1 },
-    panelBody: { backgroundColor: WHITE, padding: 8 },
+    /* ── Panels ── */
+    grow: { flexGrow: 1, flexShrink: 1 },
+    panelRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 9 },
+    panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    panelHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
+    panelTitle: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
+    panelBody: { backgroundColor: T.white, paddingVertical: 9, paddingHorizontal: 9, flexGrow: 1, justifyContent: 'center' },
 
-    chartRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 52 },
+    chartRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
     chartCol: { alignItems: 'center', flex: 1 },
-    chartTrack: { width: 11, height: 38, backgroundColor: '#EDF0F5', borderRadius: 2, justifyContent: 'flex-end', overflow: 'hidden' },
-    chartFill: { width: 11, borderRadius: 2 },
-    chartPct: { fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: INK, marginTop: 2 },
-    chartLabel: { fontSize: 5, color: INK_MUTED, textAlign: 'center', marginTop: 0.5 },
+    chartTrack: { width: 12, backgroundColor: T.surface, borderRadius: 2, justifyContent: 'flex-end', overflow: 'hidden' },
+    chartFill: { width: 12, borderRadius: 2 },
+    chartPct: { ...boldFont, fontSize: 5.5, color: T.ink, marginTop: 2.5 },
+    chartLabel: { fontSize: 5, color: T.muted, textAlign: 'center', marginTop: 1 },
 
-    calloutRow: { flexDirection: 'row', gap: 6, marginTop: 7 },
-    callout: { flex: 1, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 6, backgroundColor: SURFACE },
-    calloutLabel: { fontSize: 5.5, color: INK_MUTED, textTransform: 'uppercase', letterSpacing: 0.6 },
-    calloutValue: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: INK, marginTop: 1 },
+    statList: { justifyContent: 'space-around', flexGrow: 1 },
+    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5, borderBottom: `0.5pt solid ${T.line}` },
+    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5 },
+    statKey: { fontSize: 6.5, color: T.muted },
+    statVal: { ...boldFont, fontSize: 7.5, color: T.ink },
 
-    keyItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
-    keyChip: { width: 20, paddingVertical: 1.5, borderRadius: 2, alignItems: 'center', marginRight: 5 },
-    keyChipText: { fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: WHITE },
-    keyText: { flex: 1, fontSize: 6.2, color: INK_MUTED },
-    keyRange: { fontSize: 6, color: INK, fontFamily: 'Helvetica-Bold' },
-
-    /* ── Comments ── */
-    commentWrap: { marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${HAIRLINE}` },
-    commentHead: { backgroundColor: INK, paddingVertical: 4, paddingHorizontal: 8 },
-    commentHeadText: { fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 1 },
-    commentBody: { backgroundColor: CREAM, paddingVertical: 7, paddingHorizontal: 10 },
-    commentRole: { fontSize: 6.2, fontFamily: 'Helvetica-Bold', color: GOLD, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2 },
-    commentText: { fontSize: 8, fontFamily: 'Helvetica-Oblique', color: GRAY_700, lineHeight: 1.45 },
-    commentDivider: { height: 0.6, backgroundColor: HAIRLINE, marginVertical: 6 },
+    /* ── Remarks ── */
+    commentWrap: { marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    commentHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
+    commentHeadText: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
+    commentBody: { backgroundColor: T.white, paddingVertical: 8, paddingHorizontal: 10, flexGrow: 1, justifyContent: 'center' },
+    commentRole: { ...boldFont, fontSize: 6, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2.5 },
+    commentText: { ...italicFont, fontSize: 7.8, color: T.ink, lineHeight: 1.5 },
+    commentDivider: { height: 0.6, backgroundColor: T.line, marginVertical: 7 },
 
     /* ── Signatures ── */
-    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 12, gap: 18 },
+    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 11, gap: 16 },
     signBlock: { flex: 1 },
-    signLine: { borderBottom: `0.8pt solid ${INK}`, height: 15 },
-    signLabel: { fontSize: 6.5, color: INK_MUTED, marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.6 },
+    signLine: { borderBottom: `0.8pt solid ${T.muted}`, height: 14 },
+    signLabel: { fontSize: 6.2, color: T.muted, marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
 });
 
-/* ── Shared footer (every template) ──────────────────────────
-   Deliberately three short elements on ONE line plus a single
-   meta line: the old footer stacked four centred lines and read
-   as clutter at the bottom of the page. */
+/* ── Shared footer (every template) ─────────────────────────
+   One hairline rule and one balanced line: the SkulBase mark on the
+   left, report meta on the right. Replaces four stacked centred lines. */
 export const f = StyleSheet.create({
     wrap: { marginTop: 'auto', paddingTop: 8 },
-    rule: { height: 0.8, backgroundColor: HAIRLINE, marginHorizontal: PAGE_X },
-    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAGE_X, paddingTop: 6, paddingBottom: 8 },
+    rule: { height: 0.8, backgroundColor: T.line, marginHorizontal: PAGE_X },
+    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAGE_X, paddingTop: 6, paddingBottom: 9 },
     brand: { flexDirection: 'row', alignItems: 'center' },
-    brandMark: { width: 9, height: 9, borderRadius: 2, backgroundColor: INK, marginRight: 4, alignItems: 'center', justifyContent: 'center' },
-    brandMarkText: { fontSize: 6, fontFamily: 'Helvetica-Bold', color: GOLD },
-    brandName: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: INK, letterSpacing: 0.4 },
-    brandTag: { fontSize: 6, color: GRAY_400, marginLeft: 4 },
-    meta: { fontSize: 6, color: GRAY_400 },
+    brandMark: { width: 9, height: 9, borderRadius: 2, backgroundColor: T.primary, marginRight: 4, alignItems: 'center', justifyContent: 'center' },
+    brandMarkText: { ...boldFont, fontSize: 5.5, color: T.white },
+    brandName: { ...boldFont, fontSize: 6.8, color: T.ink, letterSpacing: 0.3 },
+    brandTag: { fontSize: 5.8, color: T.muted, marginLeft: 4 },
+    meta: { fontSize: 5.8, color: T.muted },
 });
