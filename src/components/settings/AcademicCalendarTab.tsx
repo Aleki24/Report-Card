@@ -4,7 +4,7 @@ import React from 'react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
-interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; }
+interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null; }
 
 interface AcademicCalendarTabProps {
     academicYears: AcademicYear[];
@@ -15,18 +15,19 @@ interface AcademicCalendarTabProps {
     calSaving: boolean;
     newYear: { name: string; start_date: string; end_date: string };
     setNewYear: React.Dispatch<React.SetStateAction<{ name: string; start_date: string; end_date: string }>>;
-    newTerm: { name: string; start_date: string; end_date: string };
-    setNewTerm: React.Dispatch<React.SetStateAction<{ name: string; start_date: string; end_date: string }>>;
+    newTerm: { name: string; start_date: string; end_date: string; midterm_reopening_date: string; reopening_date: string };
+    setNewTerm: React.Dispatch<React.SetStateAction<{ name: string; start_date: string; end_date: string; midterm_reopening_date: string; reopening_date: string }>>;
     onAddYear: (e: React.FormEvent) => void;
     onAddTerm: (e: React.FormEvent) => void;
     onDelete: (type: string, id: string) => void;
     onSetCurrentTerm: (term: Term) => void;
+    onUpdateTermDates: (termId: string, field: 'midterm_reopening_date' | 'reopening_date', value: string) => void;
 }
 
 export function AcademicCalendarTab({
     academicYears, terms, selectedCalYearId, setSelectedCalYearId,
     calMsg, calSaving, newYear, setNewYear, newTerm, setNewTerm,
-    onAddYear, onAddTerm, onDelete, onSetCurrentTerm,
+    onAddYear, onAddTerm, onDelete, onSetCurrentTerm, onUpdateTermDates,
 }: AcademicCalendarTabProps) {
     const calTerms = terms.filter(t => t.academic_year_id === selectedCalYearId);
 
@@ -36,6 +37,7 @@ export function AcademicCalendarTab({
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li><strong>Academic Years</strong> represent school years (e.g., 2026). Add one before creating terms.</li>
                     <li><strong>Terms</strong> belong to a year. Set clear start and end dates — overlapping terms will cause issues with exam and report assignments.</li>
+                    <li><strong>Reopening dates</strong> are what report cards print as &ldquo;Next term begins&rdquo;. Set the mid-term date for mid-term reports and the end-of-term date for end-of-term reports. Leave blank and the next term&rsquo;s start date is used.</li>
                     <li>Mark one term as <strong>Current</strong> to indicate which term is active. Only one term should be current at a time.</li>
                     <li>To delete a year or term, make sure it isn&apos;t referenced by any exams or reports first.</li>
                 </ul>
@@ -129,6 +131,8 @@ export function AcademicCalendarTab({
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Term</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Start</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">End</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Reopen after mid-term</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Reopen after term</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Current</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
                                         </tr>
@@ -139,6 +143,24 @@ export function AcademicCalendarTab({
                                                 <td className="px-4 py-3 font-medium">{t.name}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.start_date}</td>
                                                 <td className="px-4 py-3 text-sm font-mono">{t.end_date}</td>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="date"
+                                                        className="input-field text-xs"
+                                                        value={t.midterm_reopening_date || ''}
+                                                        onChange={e => onUpdateTermDates(t.id, 'midterm_reopening_date', e.target.value)}
+                                                        disabled={calSaving}
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="date"
+                                                        className="input-field text-xs"
+                                                        value={t.reopening_date || ''}
+                                                        onChange={e => onUpdateTermDates(t.id, 'reopening_date', e.target.value)}
+                                                        disabled={calSaving}
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-3 text-sm">
                                                     {t.is_current ? (
                                                         <span
@@ -180,6 +202,14 @@ export function AcademicCalendarTab({
                             <div className="flex-1 min-w-[140px]">
                                 <label className="block text-xs text-muted-foreground mb-1">End Date *</label>
                                 <input type="date" className="input-field w-full" value={newTerm.end_date} onChange={e => setNewTerm(p => ({ ...p, end_date: e.target.value }))} />
+                            </div>
+                            <div className="flex-1 min-w-[140px]">
+                                <label className="block text-xs text-muted-foreground mb-1">Reopen after mid-term</label>
+                                <input type="date" className="input-field w-full" value={newTerm.midterm_reopening_date} onChange={e => setNewTerm(p => ({ ...p, midterm_reopening_date: e.target.value }))} />
+                            </div>
+                            <div className="flex-1 min-w-[140px]">
+                                <label className="block text-xs text-muted-foreground mb-1">Reopen after term</label>
+                                <input type="date" className="input-field w-full" value={newTerm.reopening_date} onChange={e => setNewTerm(p => ({ ...p, reopening_date: e.target.value }))} />
                             </div>
                             <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date}>
                                 {calSaving ? '...' : '+ Add Term'}

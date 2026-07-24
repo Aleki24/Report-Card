@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
       case 'terms': {
         const { data, error } = await supabase
           .from('terms')
-          .select('id, name, academic_year_id, start_date, end_date, is_current')
+          .select('id, name, academic_year_id, start_date, end_date, is_current, midterm_reopening_date, reopening_date')
           .eq('school_id', schoolId)
           .order('start_date');
 
