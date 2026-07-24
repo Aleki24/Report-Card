@@ -11,6 +11,18 @@ interface ExamRow {
     status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
 }
 
+interface StudentGap { name: string; admission_number: string; missing?: string[] }
+interface PublishReadiness {
+    isMultiPaper: boolean;
+    papers: { code: string; name: string }[];
+    rosterCount: number;
+    markedCount: number;
+    fullyMarkedCount: number;
+    unmarked: StudentGap[];
+    partiallyMarked: StudentGap[];
+    hasIssues: boolean;
+}
+
 type RankBy = 'mean_marks' | 'total_points' | 'mean_points';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
@@ -44,6 +56,8 @@ export function PublishResultsView() {
     const [loadingExams, setLoadingExams] = useState(false);
     const [busyExamId, setBusyExamId] = useState<string | null>(null);
     const [bulkBusy, setBulkBusy] = useState(false);
+    const [confirmExam, setConfirmExam] = useState<{ id: string; name: string; subject: string; readiness: PublishReadiness } | null>(null);
+    const [confirmBusy, setConfirmBusy] = useState(false);
 
     // Ranking preview
     const [rankBy, setRankBy] = useState<RankBy>('mean_marks');
@@ -149,6 +163,8 @@ export function PublishResultsView() {
     useEffect(() => { loadPreview(); }, [loadPreview]);
 
     // ── Publish workflow actions ──
+    // Publishing is a two-step confirm (see status route): the first POST with
+    // no `confirm` returns a readiness report; only the confirmed POST commits.
     const runAction = async (examId: string, action: 'publish' | 'approve' | 'unpublish') => {
         setBusyExamId(examId);
         try {
@@ -158,21 +174,44 @@ export function PublishResultsView() {
             });
             const data = await res.json();
             if (!res.ok) { toast.error(data.error || 'Action failed'); return; }
+            if (action === 'publish' && data.requiresConfirmation) {
+                const ex = exams.find(e => e.id === examId);
+                setConfirmExam({ id: examId, name: ex?.name || '', subject: ex?.subject_name || '', readiness: data.readiness });
+                return;
+            }
             await loadExams();
         } catch { toast.error('Network error'); }
         finally { setBusyExamId(null); }
     };
 
+    const confirmPublish = async () => {
+        if (!confirmExam) return;
+        setConfirmBusy(true);
+        try {
+            const res = await fetch(`/api/school/exams/${confirmExam.id}/status`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'publish', confirm: true }),
+            });
+            const data = await res.json();
+            if (!res.ok) { toast.error(data.error || 'Action failed'); return; }
+            setConfirmExam(null);
+            await loadExams();
+        } catch { toast.error('Network error'); }
+        finally { setConfirmBusy(false); }
+    };
+
     const runBulk = async (action: 'publish' | 'approve', fromStatus: 'DRAFT' | 'PENDING_APPROVAL') => {
         const targets = exams.filter(e => e.status === fromStatus);
         if (targets.length === 0) { toast.info('Nothing to do.'); return; }
+        if (action === 'publish' && !confirm(`Publish ${targets.length} subject(s) for review? Students with no marks are excluded, and any missing papers are scored on what was entered.`)) return;
         setBulkBusy(true);
         let ok = 0, fail = 0;
         for (const ex of targets) {
             try {
                 const res = await fetch(`/api/school/exams/${ex.id}/status`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action }),
+                    // Bulk is an explicit, already-confirmed intent.
+                    body: JSON.stringify(action === 'publish' ? { action, confirm: true } : { action }),
                 });
                 if (res.ok) ok++; else fail++;
             } catch { fail++; }
@@ -357,6 +396,61 @@ export function PublishResultsView() {
                         <p className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">Preview only — the official report-card ranking uses the full 8-4-4 subject clustering. &quot;Best subjects&quot; sums each student&apos;s top-N grade points.</p>
                     </div>
                 </>
+            )}
+
+            {confirmExam && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => !confirmBusy && setConfirmExam(null)}>
+                    <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-base font-bold font-[family-name:var(--font-display)] mb-1">Publish {confirmExam.subject} results?</h2>
+                        <p className="text-xs text-muted-foreground mb-4">{confirmExam.name} — once published, an admin reviews and approves before report cards can be downloaded.</p>
+
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            <div className="p-3 rounded-lg bg-surface-raised text-center">
+                                <div className="text-lg font-bold text-emerald-400">{confirmExam.readiness.fullyMarkedCount}</div>
+                                <div className="text-[11px] text-muted-foreground">Fully marked</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-surface-raised text-center">
+                                <div className="text-lg font-bold text-amber-400">{confirmExam.readiness.partiallyMarked.length}</div>
+                                <div className="text-[11px] text-muted-foreground">Missing papers</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-surface-raised text-center">
+                                <div className="text-lg font-bold text-muted-foreground">{confirmExam.readiness.unmarked.length}</div>
+                                <div className="text-[11px] text-muted-foreground">No marks</div>
+                            </div>
+                        </div>
+
+                        {confirmExam.readiness.partiallyMarked.length > 0 && (
+                            <div className="mb-3">
+                                <p className="text-xs font-semibold text-amber-500 mb-1">⚠️ Missing some papers — scored on the papers they have:</p>
+                                <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-1">
+                                    {confirmExam.readiness.partiallyMarked.slice(0, 50).map((s, i) => (
+                                        <li key={i}><strong className="text-foreground">{s.name || s.admission_number}</strong>{s.missing && s.missing.length > 0 && <span> — missing {s.missing.join(', ')}</span>}</li>
+                                    ))}
+                                    {confirmExam.readiness.partiallyMarked.length > 50 && <li>…and {confirmExam.readiness.partiallyMarked.length - 50} more</li>}
+                                </ul>
+                            </div>
+                        )}
+
+                        {confirmExam.readiness.unmarked.length > 0 && (
+                            <div className="mb-3">
+                                <p className="text-xs font-semibold text-muted-foreground mb-1">No marks — will not be included:</p>
+                                <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-1">
+                                    {confirmExam.readiness.unmarked.slice(0, 50).map((s, i) => <li key={i}>{s.name || s.admission_number}</li>)}
+                                    {confirmExam.readiness.unmarked.length > 50 && <li>…and {confirmExam.readiness.unmarked.length - 50} more</li>}
+                                </ul>
+                            </div>
+                        )}
+
+                        {!confirmExam.readiness.hasIssues && <p className="text-xs text-emerald-400 mb-3">✅ Every student in this class is fully marked.</p>}
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                            <button type="button" className="btn-secondary text-xs" onClick={() => setConfirmExam(null)} disabled={confirmBusy}>Cancel</button>
+                            <button type="button" className="btn-primary text-xs disabled:opacity-50" onClick={confirmPublish} disabled={confirmBusy}>
+                                {confirmBusy ? 'Publishing…' : confirmExam.readiness.hasIssues ? 'Publish anyway' : 'Publish for review'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -26,6 +26,7 @@ interface DashboardData {
   recentEnrollmentsLast7: number;
   financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
   academicSummary: { recentAvg: number | null };
+  pendingApprovalCount?: number;
   hasLogo: boolean;
 }
 
@@ -232,6 +233,22 @@ function AdminDashboard({ userName }: { userName: string }) {
           </div>
         </div>
       </div>
+
+      {/* Results awaiting approval — teachers have published, admin must approve
+          before report cards can be generated / downloaded. */}
+      {(data?.pendingApprovalCount ?? 0) > 0 && (
+        <Link
+          href="/dashboard/exams-marks?tab=publish"
+          className="mb-3 flex shrink-0 items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm transition-colors hover:bg-amber-500/15"
+        >
+          <span className="text-lg" aria-hidden>📥</span>
+          <span className="flex-1">
+            <strong className="text-amber-500">{data!.pendingApprovalCount} exam result{data!.pendingApprovalCount === 1 ? '' : 's'} awaiting your approval.</strong>
+            <span className="ml-1 text-muted-foreground">Review and approve so report cards can be downloaded.</span>
+          </span>
+          <span className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white">Review →</span>
+        </Link>
+      )}
 
       {/* Hero Banner */}
       <div className="relative mb-4 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:mb-5 sm:px-8 sm:py-7">
