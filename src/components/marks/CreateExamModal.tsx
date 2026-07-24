@@ -81,7 +81,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
       if (data.terms) setAllTerms(data.terms);
       if (data.grades) setGrades(data.grades);
       if (data.grade_streams) setAllStreams(data.grade_streams);
-      if (data.grading_systems) setGradingSystems(data.grading_systems);
+      // A subject can only use a SUBJECT-kind grading system, not an OVERALL one.
+      if (data.grading_systems) setGradingSystems((data.grading_systems as any[]).filter(gs => gs.system_kind !== 'OVERALL'));
     } catch (err) {
       console.error('Error fetching dropdown data:', err);
     }

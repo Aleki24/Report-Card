@@ -69,37 +69,53 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             if (!gradeStreamId) return;
             
             try {
-                const [marksRes, structureRes] = await Promise.all([
+                const [marksRes, structureRes, schoolRes] = await Promise.all([
                     // Pass the current exam so the stream marks are scoped to its
                     // term — otherwise total points accumulate across every term.
                     fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}${examId ? `&exam_id=${examId}` : ''}`),
-                    fetch('/api/admin/academic-structure')
+                    fetch('/api/admin/academic-structure'),
+                    fetch('/api/school/data?type=school_profile'),
                 ]);
 
                 const marksData = await marksRes.json();
                 const structureData = await structureRes.json();
+                const schoolData = schoolRes.ok ? await schoolRes.json() : { data: null };
 
                 const allMarks = marksData.data || [];
                 const gradingSystems = structureData.grading_systems || [];
                 const gradingScales = structureData.grading_scales || [];
 
+                // Points come only from SUBJECT-kind scales — OVERALL systems
+                // reuse the same symbols (A, B...) with no per-grade points and
+                // would otherwise clobber the subject points in this symbol map.
+                const overallSystemIds = new Set(gradingSystems.filter((gs: any) => gs.system_kind === 'OVERALL').map((gs: any) => gs.id));
                 const scalesMap: Record<string, { points: number; systemId: string }> = {};
                 gradingScales.forEach((sc: any) => {
-                    scalesMap[sc.symbol] = { 
-                        points: sc.points ?? 0, 
-                        systemId: sc.grading_system_id 
+                    if (overallSystemIds.has(sc.grading_system_id)) return;
+                    scalesMap[sc.symbol] = {
+                        points: sc.points ?? 0,
+                        systemId: sc.grading_system_id
                     };
                 });
 
+                // The school's chosen Overall Grading System (points bands) wins
+                // for the overall grade; otherwise fall back to the KCSE default.
+                const overallSystemId: string | null = schoolData?.data?.overall_grading_system_id || null;
+                const overallBands = overallSystemId
+                    ? gradingScales
+                        .filter((sc: any) => sc.grading_system_id === overallSystemId)
+                        .map((sc: any) => ({ symbol: sc.symbol, min: Number(sc.min_percentage), max: Number(sc.max_percentage) }))
+                    : OVERALL_POINTS_GRADES;
+
                 const studentTotalPoints: Record<string, number> = {};
                 const overallGrades: Record<string, string> = {};
-                
+
                 allMarks.forEach((m: any) => {
                     const studentId = m.student_id;
                     if (!studentTotalPoints[studentId]) {
                         studentTotalPoints[studentId] = 0;
                     }
-                    
+
                     const gradeSymbol = m.grade_symbol;
                     if (gradeSymbol && scalesMap[gradeSymbol]) {
                         studentTotalPoints[studentId] += scalesMap[gradeSymbol].points || 0;
@@ -107,7 +123,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                 });
 
                 Object.entries(studentTotalPoints).forEach(([studentId, totalPoints]) => {
-                    const overall = OVERALL_POINTS_GRADES.find(g => totalPoints >= g.min && totalPoints <= g.max);
+                    const overall = (overallBands as { symbol: string; min: number; max: number }[]).find(g => totalPoints >= g.min && totalPoints <= g.max);
                     overallGrades[studentId] = overall?.symbol || '—';
                 });
 

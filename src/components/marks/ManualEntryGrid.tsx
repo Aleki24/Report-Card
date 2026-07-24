@@ -75,7 +75,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // Raw grading systems/scales — filtered below to the ones for this exam's
     // academic level, since a school can run CBC and 8-4-4 side by side and
     // their scale symbols/ranges overlap (e.g. both can cover 30-40%).
-    const [gradingSystems, setGradingSystems] = useState<{ id: string; academic_level_id: string; name: string }[]>([]);
+    const [gradingSystems, setGradingSystems] = useState<{ id: string; academic_level_id: string; name: string; system_kind?: string }[]>([]);
     const [allGradingScales, setAllGradingScales] = useState<{ grading_system_id: string; symbol: string; label: string; min_percentage: number; max_percentage: number }[]>([]);
     // Per-subject grading system assignment (Settings > Subjects). When the
     // current subject has one assigned, it takes priority over the academic
@@ -217,7 +217,9 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 if (data.academic_levels) setAcademicLevels(data.academic_levels);
                 if (data.grades) setGrades(data.grades);
                 if (data.grade_streams) setAllStreams(data.grade_streams);
-                if (data.grading_systems) setGradingSystems(data.grading_systems);
+                // Only SUBJECT-kind systems grade a subject's marks; OVERALL
+                // systems use point bands and would wrongly match percentages.
+                if (data.grading_systems) setGradingSystems((data.grading_systems as any[]).filter(gs => gs.system_kind !== 'OVERALL'));
                 if (data.grading_scales) setAllGradingScales(data.grading_scales);
                 if (subjectId && data.subjects) {
                     const subj = (data.subjects as { id: string; grading_system_id?: string | null }[]).find(s => s.id === subjectId);

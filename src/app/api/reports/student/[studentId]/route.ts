@@ -175,11 +175,14 @@ export async function GET(
                 gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
             }
 
-            // Fetch grading systems for this academic level - get the one with scales
+            // Fetch grading systems for this academic level - get the one with
+            // scales. Only SUBJECT-kind systems grade subject marks; an OVERALL
+            // (points-band) system must never be chosen as the subject default.
             const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
                 .select('id, name')
-                .eq('academic_level_id', student.academic_level_id);
+                .eq('academic_level_id', student.academic_level_id)
+                .neq('system_kind', 'OVERALL');
 
             // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
             let gradingSystemId: string | null = null;
@@ -227,6 +230,7 @@ export async function GET(
         // opt-in — most schools won't have one set, in which case this stays
         // undefined and every existing report card computes exactly as before.
         let overallGradingScales: GradingScale[] | undefined;
+        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
         if (targetSchoolId) {
             const { data: schoolRow } = await supabase
                 .from('schools')
@@ -234,13 +238,15 @@ export async function GET(
                 .eq('id', targetSchoolId)
                 .maybeSingle();
             if (schoolRow?.overall_grading_system_id) {
-                const { data: overallScales } = await supabase
-                    .from('grading_scales')
-                    .select('*')
-                    .eq('grading_system_id', schoolRow.overall_grading_system_id)
-                    .order('order_index', { ascending: true });
+                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
+                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
+                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
+                ]);
                 if (overallScales && overallScales.length > 0) {
                     overallGradingScales = overallScales as GradingScale[];
+                    // An OVERALL-kind system grades total points; a subject-style
+                    // system chosen as overall grades average percentage.
+                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
                 }
             }
         }
@@ -392,7 +398,7 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);

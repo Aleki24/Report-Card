@@ -116,7 +116,8 @@ export async function GET(
             const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
                 .select('id, name')
-                .eq('academic_level_id', firstAcademicLevelId);
+                .eq('academic_level_id', firstAcademicLevelId)
+                .neq('system_kind', 'OVERALL');
 
             // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
             let gradingSystemId: string | null = null;
@@ -152,6 +153,30 @@ export async function GET(
                         points: s.points ? Number(s.points) : undefined,
                         order_index: Number(s.order_index)
                     })) as GradingScale[];
+                }
+            }
+        }
+
+        // A school-configured Overall Grading System (opt-in) decides the
+        // overall grade from total points (8-4-4). Unset → unchanged behaviour.
+        let overallGradingScales: GradingScale[] | undefined;
+        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
+        if (targetSchoolId) {
+            const { data: schoolRow } = await supabase.from('schools').select('overall_grading_system_id').eq('id', targetSchoolId).maybeSingle();
+            if (schoolRow?.overall_grading_system_id) {
+                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
+                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
+                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
+                ]);
+                if (overallScales && overallScales.length > 0) {
+                    overallGradingScales = (overallScales as any[]).map(s => ({
+                        ...s,
+                        min_percentage: Number(s.min_percentage),
+                        max_percentage: Number(s.max_percentage),
+                        points: s.points != null ? Number(s.points) : undefined,
+                        order_index: Number(s.order_index),
+                    })) as GradingScale[];
+                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
                 }
             }
         }
@@ -308,7 +333,7 @@ export async function GET(
                 grade_symbol: m.grade_symbol,
             }));
 
-            const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap);
+            const studentPerf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind);
             const isKCSE = gradingSystemType === 'KCSE';
             
             const firstName = (student.users as any)?.first_name || 'Student';
