@@ -122,33 +122,53 @@ export function calculateCompositeSubjectScore(
     const totalPossible = round2(breakdown.reduce((s, c) => s + c.maxScore, 0));
     const enteredCount = breakdown.filter(c => c.entered).length;
 
+    // A student may have only some of the papers entered (e.g. Paper 1 sat,
+    // Paper 2 still to come). Rather than counting the missing papers as 0 —
+    // which unfairly tanks the score — the final percentage is computed over
+    // ONLY the entered papers, re-normalised to their configured ratio. When
+    // every paper is entered this is identical to the full calculation, so
+    // complete results are unaffected; partial results read as clear,
+    // proportional marks. `isComplete` still flags whether all papers are in.
+    const enteredEntries = breakdown.filter(c => c.entered);
+
     let finalPercentage = 0;
 
-    if (breakdown.length > 0) {
+    if (enteredEntries.length > 0) {
         switch (method) {
             case 'languages_average_percentages': {
-                finalPercentage = breakdown.reduce((s, c) => s + c.percentage, 0) / breakdown.length;
+                finalPercentage = enteredEntries.reduce((s, c) => s + c.percentage, 0) / enteredEntries.length;
                 break;
             }
             case 'science_70_plus_practical': {
                 if (breakdown.length < 2) {
                     // Can't split theory/practical with one paper — plain percentage
-                    finalPercentage = totalPossible > 0 ? (totalRawScore / totalPossible) * 100 : 0;
+                    const max = enteredEntries.reduce((s, c) => s + c.maxScore, 0);
+                    const raw = enteredEntries.reduce((s, c) => s + c.score, 0);
+                    finalPercentage = max > 0 ? (raw / max) * 100 : 0;
                     break;
                 }
+                // Last paper is the practical (30), the rest are theory (70).
+                // Missing side drops out and the remaining side is re-normalised
+                // to 100 so a theory-only or practical-only entry stays fair.
                 const practical = breakdown[breakdown.length - 1];
-                const theory = breakdown.slice(0, -1);
-                const theoryRaw = theory.reduce((s, c) => s + c.score, 0);
+                const theory = breakdown.slice(0, -1).filter(c => c.entered);
                 const theoryMax = theory.reduce((s, c) => s + c.maxScore, 0);
-                const theoryContribution = theoryMax > 0 ? (theoryRaw / theoryMax) * 70 : 0;
-                const practicalContribution =
-                    practical.maxScore > 0 ? (practical.score / practical.maxScore) * 30 : 0;
-                finalPercentage = theoryContribution + practicalContribution;
+                const theoryRaw = theory.reduce((s, c) => s + c.score, 0);
+                const theoryWeight = theory.length > 0 && theoryMax > 0 ? 70 : 0;
+                const practicalWeight = practical.entered && practical.maxScore > 0 ? 30 : 0;
+                const totalWeight = theoryWeight + practicalWeight;
+                if (totalWeight > 0) {
+                    const theoryContribution = theoryWeight > 0 ? (theoryRaw / theoryMax) * theoryWeight : 0;
+                    const practicalContribution = practicalWeight > 0 ? (practical.score / practical.maxScore) * practicalWeight : 0;
+                    finalPercentage = ((theoryContribution + practicalContribution) / totalWeight) * 100;
+                }
                 break;
             }
             case 'sum_then_percentage':
             default: {
-                finalPercentage = totalPossible > 0 ? (totalRawScore / totalPossible) * 100 : 0;
+                const max = enteredEntries.reduce((s, c) => s + c.maxScore, 0);
+                const raw = enteredEntries.reduce((s, c) => s + c.score, 0);
+                finalPercentage = max > 0 ? (raw / max) * 100 : 0;
                 break;
             }
         }
