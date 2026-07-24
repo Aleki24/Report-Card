@@ -157,15 +157,34 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
         })();
     }, [gradeId, gradeStreamId, subjectId]);
 
-    /* Grading scales for auto-grade */
+    /* Grading scales for auto-grade — resolved to THIS subject's grading system
+       (its assigned system if any, else the academic level's), matching manual
+       and quick entry. OVERALL (points-band) systems are excluded. */
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch('/api/school/data?type=grading_scales');
-                const dataObj = await res.json();
+                const [examsRes, structureRes] = await Promise.all([
+                    fetch('/api/school/data?type=exams'),
+                    fetch('/api/admin/academic-structure'),
+                ]);
+                const examsData = await examsRes.json();
+                const structureData = await structureRes.json();
+                const exam = (examsData.data || []).find((e: any) => e.id === examId);
+                const academicLevelId = exam?.subjects?.academic_level_id || exam?.grades?.academic_level_id || null;
+                const subjectGsId: string | null = exam?.subjects?.grading_system_id || null;
+
+                const allSystems = (structureData.grading_systems || []).filter((gs: any) => gs.system_kind !== 'OVERALL');
+                const allScales = structureData.grading_scales || [];
+                const assigned = subjectGsId ? allSystems.find((gs: any) => gs.id === subjectGsId) : null;
+                const relevant = assigned
+                    ? [assigned]
+                    : academicLevelId
+                        ? allSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
+                        : allSystems;
+
                 const scales: { symbol: string; label: string; min_percentage: number; max_percentage: number }[] = [];
-                (dataObj.data || []).forEach((sys: { grading_scales?: { symbol: string; label?: string; min_percentage: number; max_percentage: number }[] }) => {
-                    sys.grading_scales?.forEach(sc => {
+                relevant.forEach((sys: any) => {
+                    allScales.filter((sc: any) => sc.grading_system_id === sys.id).forEach((sc: any) => {
                         scales.push({ symbol: sc.symbol, label: sc.label || '', min_percentage: sc.min_percentage, max_percentage: sc.max_percentage });
                     });
                 });
@@ -174,7 +193,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                 console.error('Failed to load grading scales:', err);
             }
         })();
-    }, []);
+    }, [examId]);
 
     const resolveGrade = useCallback((score: number): string => {
         if (maxScore <= 0) return '';

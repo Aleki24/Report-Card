@@ -106,11 +106,35 @@ export function BulkUpload({ examId, subjectId }: Props) {
         setSubmitMessage(null);
 
         try {
-            // 1. Fetch exam max_score
-            const examRes = await fetch('/api/school/data?type=exams');
+            // 1. Fetch exam max_score + resolve this subject's grading scale so
+            //    a grade can be auto-filled when the CSV has no grade column
+            //    (same subject grading system used by manual/quick entry).
+            const [examRes, structureRes] = await Promise.all([
+                fetch('/api/school/data?type=exams'),
+                fetch('/api/admin/academic-structure'),
+            ]);
             const examJson = await examRes.json();
+            const structureData = await structureRes.json();
             const examData = examJson.data?.find((e: any) => e.id === examId);
             const examMaxScore = examData?.max_score || 100;
+
+            const academicLevelId = examData?.subjects?.academic_level_id || examData?.grades?.academic_level_id || null;
+            const subjectGsId: string | null = examData?.subjects?.grading_system_id || null;
+            const allSystems = (structureData.grading_systems || []).filter((gs: any) => gs.system_kind !== 'OVERALL');
+            const allScales = structureData.grading_scales || [];
+            const assigned = subjectGsId ? allSystems.find((gs: any) => gs.id === subjectGsId) : null;
+            const relevantSystems = assigned
+                ? [assigned]
+                : academicLevelId
+                    ? allSystems.filter((gs: any) => gs.academic_level_id === academicLevelId)
+                    : allSystems;
+            const relevantSystemIds = new Set(relevantSystems.map((gs: any) => gs.id));
+            const subjectScales = allScales.filter((sc: any) => relevantSystemIds.has(sc.grading_system_id));
+            const resolveGrade = (pct: number): string => {
+                const rounded = Math.round(pct);
+                const match = subjectScales.find((sc: any) => rounded >= Number(sc.min_percentage) && rounded <= Number(sc.max_percentage));
+                return match?.symbol || '';
+            };
 
             // 2. Resolve student IDs from admission numbers
             //    (subject-scoped so out-of-subject learners land in "missing")
@@ -140,7 +164,10 @@ export function BulkUpload({ examId, subjectId }: Props) {
 
                 const score = parseFloat(row[mapping.score]);
                 const percentage = examMaxScore > 0 ? (score / examMaxScore) * 100 : 0;
-                const gradeVal = mapping.grade ? row[mapping.grade] : '';
+                // Use the CSV's grade column if provided, otherwise auto-resolve
+                // from this subject's grading scale so the published mark carries
+                // a grade (and points) just like manual entry.
+                const gradeVal = (mapping.grade ? row[mapping.grade] : '') || resolveGrade(percentage);
 
                 rows.push({
                     student_id,
