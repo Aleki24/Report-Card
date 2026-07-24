@@ -3,18 +3,18 @@
  *
  * Colours are the project's own tokens from globals.css (authored in oklch)
  * converted to the sRGB hex that @react-pdf/renderer needs, so a printed
- * report reads as the same product as the dashboard rather than a separate
- * document with its own palette.
+ * report reads as the same product as the dashboard.
  *
  * Fonts are the project's own too: Merriweather for body copy and Syne for
- * display, matching --font-sans / --font-display. They are bundled with the
- * app (see next.config outputFileTracingIncludes) and registered here. If a
- * deployment ever fails to ship the files, registration falls back to the
- * built-in Times/Helvetica families so report cards still generate — a
- * slightly different typeface beats a 500 on a parent's report.
+ * display, matching --font-sans / --font-display.
+ *
+ * This module is imported by BOTH the server (report API routes) and the
+ * browser (the bulk-download page generates its PDFs client-side), so it must
+ * stay free of `fs`/`path` — a Node built-in here breaks the client build.
+ * Registration therefore feeds react-pdf a filesystem path on the server and a
+ * public URL in the browser, and touches `process` only inside the server
+ * branch so no bundler ever has to resolve it.
  */
-import path from 'path';
-import fs from 'fs';
 import { Font } from '@react-pdf/renderer';
 
 /* ── Project palette (globals.css → sRGB) ─────────────────── */
@@ -35,6 +35,9 @@ export const T = {
     surface: '#F1F5F9',
     surfaceSoft: '#F8FAFC',
     white: '#FFFFFF',
+    /** Wordmark two-tone: --viz-info ("skul") and --viz-good ("base"). */
+    brandBlue: '#2563EB',
+    brandGreen: '#16A34A',
     /* Semantic — the project's chart tokens */
     green: '#00BC7D',
     cyan: '#00B8DB',
@@ -43,72 +46,52 @@ export const T = {
 } as const;
 
 /* ── Fonts ────────────────────────────────────────────────── */
-const FONT_DIR = path.join(process.cwd(), 'src', 'lib', 'pdf', 'fonts');
 
-/** Absolute path to a bundled font, or null when it wasn't shipped. */
-function ttf(file: string): string | null {
-    try {
-        const p = path.join(FONT_DIR, file);
-        return fs.existsSync(p) ? p : null;
-    } catch {
-        return null;
-    }
-}
+/** Where the .ttf files live in each environment. */
+const FONT_BASE = typeof window === 'undefined'
+    // Server: a real path on disk. public/fonts/report is traced into the
+    // serverless bundle by outputFileTracingIncludes in next.config.ts.
+    ? `${process.cwd()}/public/fonts/report`
+    // Browser: fetched over HTTP from the same folder, served statically.
+    : '/fonts/report';
 
 let registered = false;
-let usingProjectFonts = false;
 
-function register(): void {
+function registerReportFonts(): void {
     if (registered) return;
     registered = true;
     try {
-        const body = ttf('merriweather-400.ttf');
-        const bodyBold = ttf('merriweather-700.ttf');
-        const bodyItalic = ttf('merriweather-400i.ttf');
-        const display = ttf('syne-800.ttf');
-        if (!body || !bodyBold || !display) return;
-
         Font.register({
             family: 'Merriweather',
             fonts: [
-                { src: body, fontWeight: 400 },
-                { src: bodyBold, fontWeight: 700 },
-                ...(bodyItalic ? [{ src: bodyItalic, fontWeight: 400, fontStyle: 'italic' as const }] : []),
+                { src: `${FONT_BASE}/merriweather-400.ttf`, fontWeight: 400 },
+                { src: `${FONT_BASE}/merriweather-700.ttf`, fontWeight: 700 },
+                { src: `${FONT_BASE}/merriweather-400i.ttf`, fontWeight: 400, fontStyle: 'italic' },
             ],
         });
-        Font.register({ family: 'Syne', fonts: [{ src: display, fontWeight: 800 }] });
-
+        Font.register({ family: 'Syne', fonts: [{ src: `${FONT_BASE}/syne-800.ttf`, fontWeight: 800 }] });
         // Merriweather has generous sidebearings; without this react-pdf breaks
         // long subject names mid-word in narrow table cells.
         Font.registerHyphenationCallback(word => [word]);
-
-        usingProjectFonts = true;
     } catch {
-        usingProjectFonts = false;
+        // Never let a font problem stop a report card from being produced.
     }
 }
 
-register();
+registerReportFonts();
 
-/** Body face — Merriweather when bundled, Times otherwise. */
-export const FONT_BODY = usingProjectFonts ? 'Merriweather' : 'Times-Roman';
-export const FONT_BODY_BOLD = usingProjectFonts ? 'Merriweather' : 'Times-Bold';
-export const FONT_ITALIC = usingProjectFonts ? 'Merriweather' : 'Times-Italic';
-/** Display face — Syne when bundled, Helvetica-Bold otherwise. */
-export const FONT_DISPLAY = usingProjectFonts ? 'Syne' : 'Helvetica-Bold';
+/** The app logo, resolved the same way as the fonts. */
+export const APP_LOGO = typeof window === 'undefined'
+    ? `${process.cwd()}/public/images/logo.png`
+    : '/images/logo.png';
 
-/** Bold is a weight on the Merriweather family but a separate built-in face. */
-export const boldFont = usingProjectFonts
-    ? { fontFamily: 'Merriweather', fontWeight: 700 as const }
-    : { fontFamily: 'Times-Bold' };
+export const FONT_BODY = 'Merriweather';
+export const FONT_DISPLAY = 'Syne';
 
-export const italicFont = usingProjectFonts
-    ? { fontFamily: 'Merriweather', fontStyle: 'italic' as const }
-    : { fontFamily: 'Times-Italic' };
-
-export const displayFont = usingProjectFonts
-    ? { fontFamily: 'Syne', fontWeight: 800 as const }
-    : { fontFamily: 'Helvetica-Bold' };
+/** Bold and italic are weights/styles on the Merriweather family. */
+export const boldFont = { fontFamily: 'Merriweather', fontWeight: 700 as const };
+export const italicFont = { fontFamily: 'Merriweather', fontStyle: 'italic' as const };
+export const displayFont = { fontFamily: 'Syne', fontWeight: 800 as const };
 
 /** Attainment colour ramp, drawn from the project's chart tokens. */
 export function attainmentColor(pct: number | null | undefined): string {

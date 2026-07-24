@@ -74,11 +74,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                 </View>
                 {qrCodeDataUri && <Image style={c.qrImg} src={qrCodeDataUri} />}
             </View>
-            <View style={c.accentRule}>
-                <View style={{ flex: 2, backgroundColor: T.indigo }} />
-                <View style={{ flex: 1, backgroundColor: T.violet }} />
-                <View style={{ flex: 1, backgroundColor: T.cyan }} />
-            </View>
+            <View style={c.accentRule} />
 
             {/* ── Info cards ── */}
             <View style={c.infoRow}>

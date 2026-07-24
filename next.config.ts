@@ -3,11 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD === '1' ? 'standalone' : undefined,
   // Report cards are typeset in the project's own fonts (Merriweather + Syne).
-  // The .ttf files are read at render time, so they must be traced into the
-  // serverless bundle — nothing imports them, so Next cannot infer this.
+  // The server reads the .ttf files off disk at render time and nothing
+  // imports them, so Next cannot infer the dependency — trace them explicitly
+  // into the serverless bundle. (The browser fetches the same files over HTTP
+  // when the bulk-download page generates PDFs client-side.)
   outputFileTracingIncludes: {
-    '/api/reports/**': ['./src/lib/pdf/fonts/**'],
-    '/api/school/generate-reports': ['./src/lib/pdf/fonts/**'],
+    '/api/reports/**': ['./public/fonts/report/*.ttf', './public/images/logo.png'],
+    '/api/school/generate-reports': ['./public/fonts/report/*.ttf', './public/images/logo.png'],
   },
   serverExternalPackages: [
     "@react-pdf/renderer",

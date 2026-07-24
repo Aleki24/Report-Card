@@ -175,7 +175,7 @@ export const c = StyleSheet.create({
     badgeLabel: { fontSize: 5.5, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 0.6 },
     badgeValue: { ...boldFont, fontSize: 14, color: T.white, marginTop: 1 },
     qrImg: { width: 44, height: 44, backgroundColor: T.white, padding: 2, borderRadius: 4, marginLeft: 8 },
-    accentRule: { height: 3, flexDirection: 'row' },
+    accentRule: { height: 3, backgroundColor: T.indigo },
 
     /* ── Info cards ── */
     infoRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 10, marginBottom: 9 },
@@ -265,13 +265,14 @@ export const c = StyleSheet.create({
    One hairline rule and one balanced line: the SkulBase mark on the
    left, report meta on the right. Replaces four stacked centred lines. */
 export const f = StyleSheet.create({
-    wrap: { marginTop: 'auto', paddingTop: 8 },
-    rule: { height: 0.8, backgroundColor: T.line, marginHorizontal: PAGE_X },
-    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAGE_X, paddingTop: 6, paddingBottom: 9 },
+    wrap: { marginTop: 'auto', paddingTop: 14 },
+    /** The product gradient, as a hairline above the footer line. */
+    gradientRule: { flexDirection: 'row', height: 2, marginHorizontal: PAGE_X, borderRadius: 1, overflow: 'hidden' },
+    bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: PAGE_X, paddingTop: 7, paddingBottom: 9 },
     brand: { flexDirection: 'row', alignItems: 'center' },
-    brandMark: { width: 9, height: 9, borderRadius: 2, backgroundColor: T.primary, marginRight: 4, alignItems: 'center', justifyContent: 'center' },
-    brandMarkText: { ...boldFont, fontSize: 5.5, color: T.white },
-    brandName: { ...boldFont, fontSize: 6.8, color: T.ink, letterSpacing: 0.3 },
-    brandTag: { fontSize: 5.8, color: T.muted, marginLeft: 4 },
+    brandLogo: { width: 13, height: 13, objectFit: 'contain', marginRight: 5 },
+    /** Wordmark is deliberately lowercase, as the product sets it. */
+    brandName: { ...boldFont, fontSize: 8, letterSpacing: 0.2 },
+    brandTag: { fontSize: 5.8, color: T.muted, marginLeft: 5 },
     meta: { fontSize: 5.8, color: T.muted },
 });
