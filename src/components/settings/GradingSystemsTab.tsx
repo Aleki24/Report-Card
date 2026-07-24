@@ -6,38 +6,71 @@ import { InfoGuide } from '@/components/ui/InfoGuide';
 interface AcademicLevel { id: string; code: string; name: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
+interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
 
 interface GradingSystemsTabProps {
     academicLevels: AcademicLevel[];
     gradingSystems: GradingSystem[];
     gradingScales: GradingScale[];
+    subjects: SubjectOption[];
+    overallGradingSystemId?: string | null;
     schoolId?: string;
     saving?: boolean;
     onCreate: (type: string, payload: Record<string, unknown>) => Promise<any>;
     onDelete: (type: string, id: string) => Promise<void>;
+    onPatch: (type: string, id: string, payload: Record<string, unknown>) => Promise<any>;
+    onSetOverall: (gradingSystemId: string) => Promise<void>;
 }
 
 interface DraftRow { symbol: string; label: string; min_percentage: string; max_percentage: string; points: string; }
 
 const emptyRow = (): DraftRow => ({ symbol: '', label: '', min_percentage: '', max_percentage: '', points: '' });
 
-export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScales, schoolId, saving, onCreate, onDelete }: GradingSystemsTabProps) {
+// Standard descending letter-grade sequence — used to auto-fill the next
+// row's grade (and its high mark / points) so schools don't have to retype
+// a predictable progression for every band.
+const GRADE_SEQUENCE = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'E'];
+
+function nextRowFrom(last: DraftRow | undefined): DraftRow {
+    if (!last) return emptyRow();
+    const idx = GRADE_SEQUENCE.indexOf(last.symbol.trim().toUpperCase());
+    const nextSymbol = idx >= 0 && idx < GRADE_SEQUENCE.length - 1 ? GRADE_SEQUENCE[idx + 1] : '';
+    const lastLow = Number(last.min_percentage);
+    const nextHigh = last.min_percentage !== '' && !Number.isNaN(lastLow) ? String(lastLow - 1) : '';
+    const lastPoints = Number(last.points);
+    const nextPoints = last.points !== '' && !Number.isNaN(lastPoints) ? String(Math.max(0, lastPoints - 1)) : '';
+    return { symbol: nextSymbol, label: '', min_percentage: '', max_percentage: nextHigh, points: nextPoints };
+}
+
+export function GradingSystemsTab({
+    academicLevels, gradingSystems, gradingScales, subjects, overallGradingSystemId,
+    schoolId, saving, onCreate, onDelete, onPatch, onSetOverall,
+}: GradingSystemsTabProps) {
     const [showCreate, setShowCreate] = useState(false);
     const [name, setName] = useState('');
     const [academicLevelId, setAcademicLevelId] = useState('');
-    const [rows, setRows] = useState<DraftRow[]>([emptyRow(), emptyRow(), emptyRow()]);
+    const [rows, setRows] = useState<DraftRow[]>([emptyRow()]);
+    const [groupSubjectIds, setGroupSubjectIds] = useState<string[]>([]);
     const [formError, setFormError] = useState('');
+    const [managingGroupFor, setManagingGroupFor] = useState<string | null>(null);
+    const [draftGroupSubjectIds, setDraftGroupSubjectIds] = useState<string[]>([]);
 
     const resetForm = () => {
-        setName(''); setAcademicLevelId(''); setRows([emptyRow(), emptyRow(), emptyRow()]); setFormError('');
+        setName(''); setAcademicLevelId(''); setRows([emptyRow()]); setGroupSubjectIds([]); setFormError('');
     };
 
     const updateRow = (i: number, field: keyof DraftRow, value: string) => {
         setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r));
     };
 
-    const addRow = () => setRows(prev => [...prev, emptyRow()]);
+    const addRow = () => setRows(prev => [...prev, nextRowFrom(prev[prev.length - 1])]);
     const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
+
+    const subjectsForLevel = (levelId: string) => subjects.filter(s => s.academic_level_id === levelId);
+
+    const toggleGroupSubject = (id: string) => {
+        setGroupSubjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -66,12 +99,31 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
             });
         }
 
-        const result = await onCreate('grading_system', { name: name.trim(), academic_level_id: academicLevelId, scales });
+        const result = await onCreate('grading_system', { name: name.trim(), academic_level_id: academicLevelId, scales, subject_ids: groupSubjectIds });
         if (result) {
             setShowCreate(false);
             resetForm();
         }
     };
+
+    const startManagingGroup = (gs: GradingSystem) => {
+        setManagingGroupFor(gs.id);
+        setDraftGroupSubjectIds(subjects.filter(s => s.grading_system_id === gs.id).map(s => s.id));
+    };
+
+    const toggleDraftGroupSubject = (id: string) => {
+        setDraftGroupSubjectIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    const saveGroup = async (gradingSystemId: string) => {
+        const result = await onPatch('grading_system_subjects', gradingSystemId, { subject_ids: draftGroupSubjectIds });
+        if (result !== null) setManagingGroupFor(null);
+    };
+
+    // Systems eligible to be "the overall one" — any system the school can
+    // see (its own + the shared defaults), since the overall grade is a
+    // school-wide setting rather than tied to one academic level.
+    const overallCandidates = gradingSystems;
 
     return (
         <div className="lg:col-span-3 flex flex-col gap-6">
@@ -79,10 +131,25 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
                 <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
                     <li><strong>Grading Systems</strong> group scales by curriculum (e.g., KNEC 8-4-4, CBC). Each system belongs to an Academic Level.</li>
                     <li><strong>Grading Scales</strong> define the grade boundaries — each row maps a percentage range to a symbol, label, and points.</li>
-                    <li>Assign a grading system to a subject from the Subjects page — it&apos;s then used automatically when teachers enter scores and when report cards are generated.</li>
+                    <li>Group several subjects under one grading system (e.g. Math, Geography, Chemistry, Physics can all share one system) — assign the group when creating it, or manage it later from each system&apos;s card.</li>
+                    <li>Pick one <strong>Overall Grading System</strong> below — it&apos;s used to compute each student&apos;s overall/aggregate grade on report cards.</li>
                     <li>The default CBC / 8-4-4 templates are shared and read-only. Create your own to customize grade boundaries for your school.</li>
                 </ul>
             </InfoGuide>
+
+            <div className="card p-5">
+                <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Overall Grading System</label>
+                <select
+                    className="input-field w-full max-w-md"
+                    value={overallGradingSystemId || ''}
+                    onChange={e => onSetOverall(e.target.value)}
+                    disabled={saving || overallCandidates.length === 0}
+                >
+                    <option value="">-- Not set (use the built-in default) --</option>
+                    {overallCandidates.map(gs => <option key={gs.id} value={gs.id}>{gs.name}</option>)}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1.5">Used to compute the overall/mean grade on report cards, separate from the per-subject grading systems below.</p>
+            </div>
 
             <div className="flex justify-end">
                 <button
@@ -107,7 +174,7 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
                         </div>
                         <div>
                             <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
-                            <select className="input-field w-full" value={academicLevelId} onChange={e => setAcademicLevelId(e.target.value)} required>
+                            <select className="input-field w-full" value={academicLevelId} onChange={e => { setAcademicLevelId(e.target.value); setGroupSubjectIds([]); }} required>
                                 <option value="">-- Select --</option>
                                 {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
                             </select>
@@ -146,6 +213,25 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
                         </table>
                     </div>
                     <button type="button" className="btn-secondary text-xs mb-5" onClick={addRow}>+ Add Row</button>
+                    <p className="text-[11px] text-muted-foreground -mt-4 mb-5">Adding a row auto-fills the next grade, high mark, and points from the row above — just fill in the low mark.</p>
+
+                    <div className="mb-2">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Subjects in this group (optional)</p>
+                        {!academicLevelId ? (
+                            <p className="text-xs text-muted-foreground">Pick an academic level above to choose which subjects use this system.</p>
+                        ) : subjectsForLevel(academicLevelId).length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No subjects found for this academic level yet.</p>
+                        ) : (
+                            <div className="border border-border rounded-lg p-3 max-h-48 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {subjectsForLevel(academicLevelId).map(s => (
+                                    <label key={s.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                        <input type="checkbox" checked={groupSubjectIds.includes(s.id)} onChange={() => toggleGroupSubject(s.id)} />
+                                        <span className="truncate">{s.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-border">
                         <button type="button" className="btn-secondary" onClick={() => { setShowCreate(false); resetForm(); }} disabled={saving}>Cancel</button>
@@ -158,11 +244,16 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
                 const levelName = academicLevels.find(l => l.id === gs.academic_level_id)?.name || '';
                 const scales = gradingScales.filter(sc => sc.grading_system_id === gs.id);
                 const isOwn = !!gs.school_id && gs.school_id === schoolId;
+                const memberSubjects = subjects.filter(s => s.grading_system_id === gs.id);
+                const isManaging = managingGroupFor === gs.id;
                 return (
                     <div key={gs.id} className="card">
                         <div className="flex items-center justify-between mb-1">
                             <h3 className="font-bold text-lg font-[family-name:var(--font-display)]">{gs.name}</h3>
                             <div className="flex items-center gap-3">
+                                {gs.id === overallGradingSystemId && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 font-semibold">Overall system</span>
+                                )}
                                 {isOwn ? (
                                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">Your school</span>
                                 ) : (
@@ -180,7 +271,39 @@ export function GradingSystemsTab({ academicLevels, gradingSystems, gradingScale
                                 )}
                             </div>
                         </div>
-                        <p className="text-xs text-muted-foreground mb-4">{levelName}{gs.description ? ` · ${gs.description}` : ''}</p>
+                        <p className="text-xs text-muted-foreground mb-2">{levelName}{gs.description ? ` · ${gs.description}` : ''}</p>
+
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs text-muted-foreground">
+                                    <strong>Subjects:</strong> {memberSubjects.length > 0 ? memberSubjects.map(s => s.name).join(', ') : '—'}
+                                </p>
+                                {isOwn && !isManaging && (
+                                    <button type="button" className="text-primary text-xs font-medium" onClick={() => startManagingGroup(gs)}>Manage subjects</button>
+                                )}
+                            </div>
+                            {isManaging && (
+                                <div className="border border-border rounded-lg p-3 mt-2">
+                                    {subjectsForLevel(gs.academic_level_id).length === 0 ? (
+                                        <p className="text-xs text-muted-foreground">No subjects found for this academic level.</p>
+                                    ) : (
+                                        <div className="max-h-48 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                                            {subjectsForLevel(gs.academic_level_id).map(s => (
+                                                <label key={s.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                                    <input type="checkbox" checked={draftGroupSubjectIds.includes(s.id)} onChange={() => toggleDraftGroupSubject(s.id)} />
+                                                    <span className="truncate">{s.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="flex justify-end gap-2">
+                                        <button type="button" className="btn-secondary text-xs" onClick={() => setManagingGroupFor(null)} disabled={saving}>Cancel</button>
+                                        <button type="button" className="btn-primary text-xs" onClick={() => saveGroup(gs.id)} disabled={saving}>{saving ? 'Saving...' : 'Save group'}</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {scales.length > 0 && (
                             <div className="overflow-x-auto border border-border rounded-lg">
                                 <table className="data-table w-full text-left sm:whitespace-nowrap">

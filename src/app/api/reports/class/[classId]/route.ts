@@ -178,6 +178,28 @@ export async function GET(
             }
         }
 
+        // A school-configured Overall Grading System (Settings > Grading) is
+        // opt-in — most schools won't have one set, in which case this stays
+        // undefined and every existing report card computes exactly as before.
+        let overallGradingScales: GradingScale[] | undefined;
+        if (targetSchoolId) {
+            const { data: schoolRow } = await supabase
+                .from('schools')
+                .select('overall_grading_system_id')
+                .eq('id', targetSchoolId)
+                .maybeSingle();
+            if (schoolRow?.overall_grading_system_id) {
+                const { data: overallScales } = await supabase
+                    .from('grading_scales')
+                    .select('*')
+                    .eq('grading_system_id', schoolRow.overall_grading_system_id)
+                    .order('order_index', { ascending: true });
+                if (overallScales && overallScales.length > 0) {
+                    overallGradingScales = overallScales as GradingScale[];
+                }
+            }
+        }
+
         // 4. Build grade boundaries from scales
         const gradeBoundaries = gradingScales.map(s => ({
             symbol: s.symbol,
@@ -379,7 +401,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
             const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 

@@ -312,7 +312,7 @@ export async function GET(request: NextRequest) {
       case 'school_profile': {
         const { data, error } = await supabase
           .from('schools')
-          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code, min_combination_group_size')
+          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code, min_combination_group_size, overall_grading_system_id')
           .eq('id', schoolId)
           .maybeSingle();
 

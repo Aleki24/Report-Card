@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
         
         const user_id = userId;
         const body = await request.json();
-        const { name, address, phone, email, school_id, logo_url, min_combination_group_size } = body;
+        const { name, address, phone, email, school_id, logo_url, min_combination_group_size, overall_grading_system_id } = body;
 
         // CBC ministry minimum learners per subject combination (optional)
         let minGroupSize: number | undefined;
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
                 email: email?.trim() || null,
                 logo_url: logo_url || null,
                 ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
+                ...(overall_grading_system_id !== undefined ? { overall_grading_system_id: overall_grading_system_id || null } : {}),
             }).eq('id', school_id);
 
             if (error) {
