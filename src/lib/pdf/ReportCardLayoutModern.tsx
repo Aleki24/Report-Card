@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import { gradeColor, generateShortFeedback, generateClassTeacherComment, generatePrincipalComment, barColor } from './pdfHelpers';
+import { ReportFooter } from './ReportFooter';
 import type { ReportCardData } from '../pdfGenerator';
 
 /* ── Modern palette ─────────────────────────────────────── */
@@ -213,10 +214,7 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
             </View>
 
             {/* Footer */}
-            <View style={m.footer}>
-                <Text style={m.footerText}>Generated {today}{data.openingDate ? `  •  Next term begins ${data.openingDate}` : ''}</Text>
-                <Text style={m.footerText}>Skulbase — electronically generated document</Text>
-            </View>
+            <ReportFooter generatedOn={today} openingDate={data.openingDate} />
         </>
     );
 }
