@@ -5,6 +5,7 @@ import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { type GradeStreamOption, type AcademicLevelOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
+import { STAFF_JOB_TITLES } from '@/lib/staff-roles';
 
 interface InviteUserModalProps {
   onClose: () => void;
@@ -15,6 +16,7 @@ interface InviteUserModalProps {
   formLastName: string; setFormLastName: (v: string) => void;
   formPhone: string; setFormPhone: (v: string) => void;
   formRole: UserRole; setFormRole: (v: UserRole) => void;
+  formJobTitle: string; setFormJobTitle: (v: string) => void;
   formSequenceNumber: number; setFormSequenceNumber: (v: number) => void;
   formAdmissionNumber: string; setFormAdmissionNumber: (v: string) => void;
   formGradeStreamId: string; setFormGradeStreamId: (v: string) => void;
@@ -59,9 +61,22 @@ export function InviteUserModal(props: InviteUserModalProps) {
           <label className="block text-xs text-muted-foreground mb-1">Role *</label>
           <select className="input-field w-full" value={props.formRole} onChange={e => props.setFormRole(e.target.value as UserRole)}>
             <option value="CLASS_TEACHER">Teacher</option>
-            <option value="STUDENT">Student</option><option value="ADMIN">Admin</option>
+            <option value="STUDENT">Student</option>
+            <option value="STAFF">Other Staff</option>
+            <option value="ADMIN">Admin</option>
           </select>
         </div>
+
+        {props.formRole === 'STAFF' && (
+          <div className="mb-4">
+            <label className="block text-xs text-muted-foreground mb-1">Staff Role / Title *</label>
+            <select className="input-field w-full" value={props.formJobTitle} onChange={e => props.setFormJobTitle(e.target.value)} required>
+              <option value="">-- Select --</option>
+              {STAFF_JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <p className="text-[10px] text-muted-foreground mt-1">Non-teaching staff (e.g. Bursar, Secretary). They sign in for announcements; grant more access later if needed.</p>
+          </div>
+        )}
 
         {props.formRole === 'STUDENT' && (
           <div className="border-t border-border pt-4 mt-4">

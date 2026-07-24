@@ -8,6 +8,7 @@ const roleBadgeClasses: Record<UserRole, { bg: string; text: string; border: str
   ADMIN: { bg: 'bg-destructive/10', text: 'text-destructive', border: 'border-destructive/30' },
   CLASS_TEACHER: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30' },
   SUBJECT_TEACHER: { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/30' },
+  STAFF: { bg: 'bg-sky-500/10', text: 'text-sky-500', border: 'border-sky-500/30' },
   STUDENT: { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/30' },
   PENDING: { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/30' },
 };
@@ -51,7 +52,7 @@ export function UsersTable({
       </div>
 
       <div className="flex overflow-x-auto pb-2 mb-4 -mx-2 px-2 gap-1">
-        {(['ALL', 'ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'] as const).map((role) => (
+        {(['ALL', 'ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT'] as const).map((role) => (
           <button key={role} onClick={() => setRoleFilter(role)}
             className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${roleFilter === role ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
             {role === 'ALL' ? 'All' : role.replace('_', ' ')}

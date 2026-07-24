@@ -14,6 +14,7 @@ export interface UserRow {
   is_active: boolean;
   created_at: string;
   admission_number?: string | null;
+  job_title?: string | null;
 }
 
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
@@ -71,6 +72,7 @@ export function useUsersPage() {
   const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('CLASS_TEACHER');
+  const [editJobTitle, setEditJobTitle] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editClassTeacherStreamId, setEditClassTeacherStreamId] = useState('');
   const [editSubjectTeacherSubjects, setEditSubjectTeacherSubjects] = useState<{subject_id: string, grade_id: string}[]>([]);
@@ -80,6 +82,7 @@ export function useUsersPage() {
   const [formLastName, setFormLastName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('CLASS_TEACHER');
+  const [formJobTitle, setFormJobTitle] = useState('');
   const [formSequenceNumber, setFormSequenceNumber] = useState<number>(1);
   const [formAdmissionNumber, setFormAdmissionNumber] = useState('');
   const [formGradeStreamId, setFormGradeStreamId] = useState('');
@@ -126,7 +129,7 @@ export function useUsersPage() {
 
   const resetForm = () => {
     setFormFirstName(''); setFormLastName(''); setFormPhone('');
-    setFormRole('CLASS_TEACHER'); setFormSequenceNumber(1);
+    setFormRole('CLASS_TEACHER'); setFormJobTitle(''); setFormSequenceNumber(1);
     setFormAdmissionNumber(''); setFormGradeStreamId(''); setFormAcademicLevelId('');
     setFormClassTeacherStreamId('');
     setFormSubjectTeacherSubjects([{ subject_id: '', grade_id: '' }]);
@@ -141,6 +144,7 @@ export function useUsersPage() {
       role: formRole, sequence_number: formSequenceNumber, school_id: profile?.school_id ?? undefined,
     };
     if (formRole === 'STUDENT') { payload.admission_number = formAdmissionNumber; payload.grade_stream_id = formGradeStreamId; payload.academic_level_id = formAcademicLevelId; }
+    else if (formRole === 'STAFF') { payload.job_title = formJobTitle; }
     else if (isTeacherRole(formRole)) {
       // Class-teacher duty is just an optional field on the one teacher form now,
       // not a separate role choice — whether a class was picked decides the role sent.
@@ -176,7 +180,7 @@ export function useUsersPage() {
 
   const handleEditClick = async (user: UserRow) => {
     setEditingUser(user); setEditFirstName(user.first_name); setEditLastName(user.last_name);
-    setEditPhone(user.phone || ''); setEditRole(user.role); setEditIsActive(user.is_active);
+    setEditPhone(user.phone || ''); setEditRole(user.role); setEditJobTitle(user.job_title || ''); setEditIsActive(user.is_active);
     setEditClassTeacherStreamId(''); setEditSubjectTeacherSubjects([]);
     setFormError('');
     try { await fetchDropdowns(); } catch (err) { console.error('Failed to load dropdowns', err); }
@@ -199,6 +203,7 @@ export function useUsersPage() {
     if (!editingUser) return;
     setFormError(''); setSubmitting(true);
     const payload: Record<string, any> = { user_id: editingUser.id, first_name: editFirstName.trim(), last_name: editLastName.trim(), phone: editPhone.trim(), role: editRole, is_active: editIsActive };
+    if (editRole === 'STAFF') { payload.job_title = editJobTitle; }
     if (isTeacherRole(editRole)) {
       // Same as invite: the class field is optional, so clearing/setting it is what
       // decides CLASS_TEACHER vs SUBJECT_TEACHER — no separate role switch to make.
@@ -243,14 +248,14 @@ export function useUsersPage() {
     // Invite modal
     showModal, setShowModal, resetForm, handleInviteUser,
     formFirstName, setFormFirstName, formLastName, setFormLastName, formPhone, setFormPhone,
-    formRole, setFormRole, formSequenceNumber, setFormSequenceNumber,
+    formRole, setFormRole, formJobTitle, setFormJobTitle, formSequenceNumber, setFormSequenceNumber,
     formAdmissionNumber, setFormAdmissionNumber, formGradeStreamId, setFormGradeStreamId,
     formAcademicLevelId, setFormAcademicLevelId, formClassTeacherStreamId, setFormClassTeacherStreamId,
     formSubjectTeacherSubjects, setFormSubjectTeacherSubjects,
     // Edit modal
     showEditModal, setShowEditModal, editingUser, handleEditClick, handleUpdateUser,
     editFirstName, setEditFirstName, editLastName, setEditLastName, editPhone, setEditPhone,
-    editRole, setEditRole, editIsActive, setEditIsActive,
+    editRole, setEditRole, editJobTitle, setEditJobTitle, editIsActive, setEditIsActive,
     editClassTeacherStreamId, setEditClassTeacherStreamId, editSubjectTeacherSubjects, setEditSubjectTeacherSubjects,
     // Invite result
     showInviteResult, setShowInviteResult, invitedUsername, invitedCode, invitedName, invitedNotified,

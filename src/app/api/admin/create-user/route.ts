@@ -29,10 +29,11 @@ export async function POST(request: NextRequest) {
             class_teacher_grade_stream_id,
             subject_teacher_subjects,
             is_class_teacher,
+            job_title,
         } = parsed.data;
 
         // Validate role is one of the allowed values (prevents arbitrary role strings)
-        const ALLOWED_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
+        const ALLOWED_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'STAFF'];
         if (!ALLOWED_ROLES.includes(role)) {
             return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
         }
@@ -173,6 +174,7 @@ export async function POST(request: NextRequest) {
                 username,
                 is_active: false, // Will be activated when user sets their password
                 email: fakeEmail,
+                job_title: role === 'STAFF' ? (job_title || null) : null,
             })
             .select('id')
             .single();

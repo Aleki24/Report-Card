@@ -14,7 +14,7 @@ export async function GET() {
 
     let { data: dbUser } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, role, school_id, is_active')
+      .select('id, first_name, last_name, email, role, school_id, is_active, job_title')
       .eq('id', clerkAuth.userId)
       .maybeSingle();
 
@@ -50,7 +50,7 @@ export async function GET() {
           is_active: true,
           school_id: schoolId,
         })
-        .select('id, first_name, last_name, email, role, school_id, is_active')
+        .select('id, first_name, last_name, email, role, school_id, is_active, job_title')
         .single();
 
       if (insertErr) {

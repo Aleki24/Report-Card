@@ -725,6 +725,9 @@ export default function DashboardPage() {
 
   if (loading || role === 'STUDENT' || role === 'PENDING') return <div style={{ padding: 'var(--space-6)' }}><LoadingSkeleton /></div>;
 
+  // STAFF (non-teaching staff: bursar, secretary, etc.) is not an admin — it
+  // only ever sees the light staff landing below, never the admin dashboard.
+  // (role === 'ADMIN' || !role) already excludes STAFF, which renders its own card.
   const isAdmin = role === 'ADMIN' || !role;
 
   return (
@@ -732,6 +735,17 @@ export default function DashboardPage() {
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <ClassTeacherDashboard />}
       {role === 'SUBJECT_TEACHER' && <SubjectTeacherDashboard />}
+      {role === 'STAFF' && (
+        <div className="max-w-xl mx-auto mt-8 card p-8 text-center">
+          <h2 className="text-xl font-bold font-display mb-2">Welcome{userName ? `, ${userName}` : ''} 👋</h2>
+          <p className="text-sm text-muted-foreground mb-1">
+            {profile?.job_title ? `You're signed in as ${profile.job_title}.` : "You're signed in as staff."}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Use <strong>Announcements</strong> in the menu to stay up to date. Your administrator can grant you more access when needed.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

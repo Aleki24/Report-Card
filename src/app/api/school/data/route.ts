@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'teachers': {
-        const usersRes = await supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER']).order('created_at', { ascending: false });
+        const usersRes = await supabase.from('users').select('id, first_name, last_name, email, phone, role, is_active, avatar_url, job_title').eq('school_id', schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF']).order('created_at', { ascending: false });
         if (usersRes.error) return NextResponse.json({ error: usersRes.error.message }, { status: 400 });
 
         const teachers = usersRes.data || [];
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
           const cls = [...new Set([...sa.map((a: any) => a.grades?.name_display).filter(Boolean), ...ct.map(c => (c.grade_streams as any)?.full_name).filter(Boolean)])] as string[];
           return {
             id: t.id, employee_id: `TCH-${String(teachers.indexOf(t)+1).padStart(4,'0')}`,
-            profile: { first_name: t.first_name, last_name: t.last_name, email: t.email, phone: t.phone || '', avatar_url: t.avatar_url, is_active: t.is_active, role: t.role },
+            profile: { first_name: t.first_name, last_name: t.last_name, email: t.email, phone: t.phone || '', avatar_url: t.avatar_url, is_active: t.is_active, role: t.role, job_title: t.job_title ?? null },
             subjects: subs.join(', '), classes: cls.join(', '),
             stats: { subjectCount: subs.length, classCount: cls.length, examCount: 0, markCount: 0 },
           };
@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
           .from('users')
           .select(`
-            id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id,
+            id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, job_title,
             students!left ( admission_number )
           `)
           .eq('school_id', schoolId)

@@ -58,6 +58,7 @@ export default function UsersPage() {
           formLastName={h.formLastName} setFormLastName={h.setFormLastName}
           formPhone={h.formPhone} setFormPhone={h.setFormPhone}
           formRole={h.formRole} setFormRole={h.setFormRole}
+          formJobTitle={h.formJobTitle} setFormJobTitle={h.setFormJobTitle}
           formSequenceNumber={h.formSequenceNumber} setFormSequenceNumber={h.setFormSequenceNumber}
           formAdmissionNumber={h.formAdmissionNumber} setFormAdmissionNumber={h.setFormAdmissionNumber}
           formGradeStreamId={h.formGradeStreamId} setFormGradeStreamId={h.setFormGradeStreamId}
@@ -79,6 +80,7 @@ export default function UsersPage() {
           editLastName={h.editLastName} setEditLastName={h.setEditLastName}
           editPhone={h.editPhone} setEditPhone={h.setEditPhone}
           editRole={h.editRole} setEditRole={h.setEditRole}
+          editJobTitle={h.editJobTitle} setEditJobTitle={h.setEditJobTitle}
           editIsActive={h.editIsActive} setEditIsActive={h.setEditIsActive}
           editClassTeacherStreamId={h.editClassTeacherStreamId} setEditClassTeacherStreamId={h.setEditClassTeacherStreamId}
           editSubjectTeacherSubjects={h.editSubjectTeacherSubjects} setEditSubjectTeacherSubjects={h.setEditSubjectTeacherSubjects}
