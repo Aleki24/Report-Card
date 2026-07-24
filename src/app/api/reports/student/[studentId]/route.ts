@@ -17,6 +17,7 @@ import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { selectExamRound } from '@/lib/reports/exam-round';
 
 export const runtime = 'nodejs';
 
@@ -377,7 +378,12 @@ export async function GET(
         // and inconsistent with the overall average that counted them all). Keep
         // the most recent exam's mark deterministically and feed that same set to
         // both the subject rows and the aggregate, so rows and totals agree.
-        const orderedMarks = [...(marks || [])].sort((a: any, b: any) =>
+        // Without an explicit round, narrow to ONE sitting first — otherwise
+        // each subject below would pick its own latest exam and the card would
+        // mix Mid Term and End Term marks across subjects.
+        const roundMarks = examType ? (marks || []) : selectExamRound(marks || []).marks;
+
+        const orderedMarks = [...roundMarks].sort((a: any, b: any) =>
             new Date(a.exams?.created_at || 0).getTime() - new Date(b.exams?.created_at || 0).getTime()
         );
         const marksBySubject = new Map<string, any>();

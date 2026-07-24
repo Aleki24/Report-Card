@@ -18,6 +18,7 @@ import type { GradingScale } from '@/types';
 import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { selectExamRound } from '@/lib/reports/exam-round';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -249,7 +250,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id,
+                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id, created_at,
                     subjects ( id, name, code, category, display_order )
                 )
             `)
@@ -273,7 +274,13 @@ export async function GET(
         if (examType) examsQ = examsQ.eq('exam_type', examType);
 
         // Independent of each other — fetch together.
-        const [{ data: allMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);
+        const [{ data: fetchedMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);
+
+        // Without an explicit round, narrow the whole class to ONE sitting.
+        // Otherwise every round in the term (Mid Term, End Term, ...) would be
+        // averaged together and each subject row would keep whichever mark the
+        // DB happened to return last — a report of nothing in particular.
+        const allMarks = examType ? fetchedMarks : selectExamRound(fetchedMarks || []).marks;
 
         if (marksErr) {
             console.error('Error fetching class marks:', marksErr);
