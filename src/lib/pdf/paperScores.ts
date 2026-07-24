@@ -50,7 +50,8 @@ export async function fetchPaperScores(
         if (!def) continue;
         const key = `${s.exam_id}|${s.student_id}`;
         const list = withOrder.get(key) || [];
-        list.push({ code: def.code, score: Number(s.raw_score), maxScore: def.maxScore, order: def.order });
+        // Whole-number marks on report cards, same as the resolved subject score.
+        list.push({ code: def.code, score: Math.round(Number(s.raw_score)), maxScore: def.maxScore, order: def.order });
         withOrder.set(key, list);
     }
 

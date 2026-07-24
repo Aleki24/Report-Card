@@ -11,32 +11,40 @@ export function gradeColor(grade: string): string {
     }
 }
 
+/* ── Auto-generated remarks ──────────────────────────────────
+   These are the fallback remarks printed when a teacher hasn't written
+   their own. They are read by the learner and their parents, so they stay
+   encouraging and specific about the next step — never a judgement of the
+   child ("poor", "unsatisfactory") and never a summons or threat. A teacher's
+   own comment always takes precedence over anything generated here. */
+
 export function generateShortFeedback(percentage: number | null, grade: string): string {
     if (percentage == null) return '';
-    if (percentage >= 80) return 'Excellent work';
-    if (percentage >= 60) return 'Good progress';
-    if (percentage >= 40) return 'Fair, needs improvement';
-    return 'Needs more effort';
+    if (percentage >= 80) return 'Excellent grasp of the subject';
+    if (percentage >= 65) return 'Good understanding shown';
+    if (percentage >= 50) return 'Steady work, keep practising';
+    if (percentage >= 35) return 'Improving, needs more practice';
+    return 'Keep working, ask for support';
 }
 
 export function generateClassTeacherComment(percentage: number, grade: string, totalPoints?: number): string {
-    if (percentage >= 90) return 'Outstanding performance! Keep up the excellent work.';
-    if (percentage >= 80) return 'Great work! You are performing very well.';
-    if (percentage >= 70) return 'Good progress. Keep working hard.';
-    if (percentage >= 60) return 'Fair performance. Focus on improving weak areas.';
-    if (percentage >= 50) return 'You need to put more effort. Seek help where needed.';
-    if (percentage >= 40) return 'Performance is below average. Please see me for extra help.';
-    return 'Urgent improvement needed. Parent meeting required.';
+    if (percentage >= 80) return 'Excellent results this term. Keep up the consistent effort.';
+    if (percentage >= 70) return 'Very good work. Maintain this pace and aim a little higher.';
+    if (percentage >= 60) return 'Good performance. With steady revision you can move up further.';
+    if (percentage >= 50) return 'A fair term. Focus your revision on the weaker subjects.';
+    if (percentage >= 40) return 'You are making progress. Give the difficult subjects more practice time.';
+    if (percentage >= 30) return 'There is room to grow. Let us work together on a revision plan.';
+    return 'A challenging term. With extra support and regular practice you can improve.';
 }
 
 export function generatePrincipalComment(percentage: number, grade: string, totalPoints?: number): string {
-    if (percentage >= 90) return 'Congratulations on your outstanding achievement. Keep aiming for excellence.';
-    if (percentage >= 80) return 'Excellent performance. You make us proud. Continue the good work.';
-    if (percentage >= 70) return 'Good performance. With more dedication, you can achieve even better results.';
-    if (percentage >= 60) return 'Satisfactory performance. We encourage you to work harder.';
-    if (percentage >= 50) return 'Performance needs improvement. We believe you can do better.';
-    if (percentage >= 40) return 'Performance is unsatisfactory. Please put more effort.';
-    return 'Poor performance. Immediate improvement is required. Parents to see the principal.';
+    if (percentage >= 80) return 'Outstanding achievement. Congratulations and keep aiming high.';
+    if (percentage >= 70) return 'Very good results. Continue with the same commitment.';
+    if (percentage >= 60) return 'Good progress. Keep building on these results next term.';
+    if (percentage >= 50) return 'A fair performance. Consistent revision will lift these marks.';
+    if (percentage >= 40) return 'You are on your way. Keep working and use the support available.';
+    if (percentage >= 30) return 'Improvement is possible with steady effort. The school is here to help.';
+    return 'Do not lose heart. With guidance and regular practice you can do better next term.';
 }
 
 export function barColor(score: number): string {

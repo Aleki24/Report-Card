@@ -203,7 +203,7 @@ export function PublishResultsView() {
     const runBulk = async (action: 'publish' | 'approve', fromStatus: 'DRAFT' | 'PENDING_APPROVAL') => {
         const targets = exams.filter(e => e.status === fromStatus);
         if (targets.length === 0) { toast.info('Nothing to do.'); return; }
-        if (action === 'publish' && !confirm(`Publish ${targets.length} subject(s) for review? Students with no marks are excluded, and any missing papers are scored on what was entered.`)) return;
+        if (action === 'publish' && !confirm(`Publish ${targets.length} subject(s) for review? Students with no marks are excluded. Any missing paper counts as 0, so those subject marks stay out of all papers.`)) return;
         setBulkBusy(true);
         let ok = 0, fail = 0;
         for (const ex of targets) {
@@ -421,7 +421,7 @@ export function PublishResultsView() {
 
                         {confirmExam.readiness.partiallyMarked.length > 0 && (
                             <div className="mb-3">
-                                <p className="text-xs font-semibold text-amber-500 mb-1">⚠️ Missing some papers — scored on the papers they have:</p>
+                                <p className="text-xs font-semibold text-amber-500 mb-1">⚠️ Missing some papers — a missing paper counts as 0, so the subject mark is still out of all papers:</p>
                                 <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-1">
                                     {confirmExam.readiness.partiallyMarked.slice(0, 50).map((s, i) => (
                                         <li key={i}><strong className="text-foreground">{s.name || s.admission_number}</strong>{s.missing && s.missing.length > 0 && <span> — missing {s.missing.join(', ')}</span>}</li>

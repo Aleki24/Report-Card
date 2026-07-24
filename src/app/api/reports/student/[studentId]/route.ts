@@ -571,7 +571,10 @@ export async function GET(
         safeMarks.forEach((m: any) => {
             const subject = m.exams.subjects;
             if (!subject) return;
-            const pct = Number(m.percentage);
+            // Report cards show whole-number marks. Round here, at the source, so
+            // the printed mark, the grade and the points are all derived from the
+            // same value — a 79.6 that prints as 80 is never graded as a 79.
+            const pct = Math.round(Number(m.percentage));
 
             // Get subject-specific grading if available
             const subjectGsId = subject.grading_system_id;
@@ -606,7 +609,7 @@ export async function GET(
                 subjectName: subject.name || 'Unknown Subject',
                 category: subject.category || 'TECHNICAL',
                 gradingSystemType: isSubjectCBC ? 'CBC' : 'KCSE',
-                score: Number(m.raw_score),
+                score: Math.round(Number(m.raw_score)),
                 totalPossible: Number(m.exams.max_score),
                 percentage: pct,
                 grade,
