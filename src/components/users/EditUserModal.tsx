@@ -5,6 +5,7 @@ import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
+import { STAFF_JOB_TITLES } from '@/lib/staff-roles';
 
 interface EditUserModalProps {
   editingUser: UserRow;
@@ -16,6 +17,7 @@ interface EditUserModalProps {
   editLastName: string; setEditLastName: (v: string) => void;
   editPhone: string; setEditPhone: (v: string) => void;
   editRole: UserRole; setEditRole: (v: UserRole) => void;
+  editJobTitle: string; setEditJobTitle: (v: string) => void;
   editIsActive: boolean; setEditIsActive: (v: boolean) => void;
   editClassTeacherStreamId: string; setEditClassTeacherStreamId: (v: string) => void;
   editSubjectTeacherSubjects: {subject_id: string, grade_id: string}[];
@@ -62,10 +64,21 @@ export function EditUserModal(props: EditUserModalProps) {
             disabled={editingUser.role === 'STUDENT'}
           >
             <option value="CLASS_TEACHER">Teacher</option><option value="ADMIN">Admin</option>
+            <option value="STAFF">Other Staff</option>
             {editingUser.role === 'STUDENT' && <option value="STUDENT">Student</option>}
           </select>
           {editingUser.role === 'STUDENT' && <p className="text-[10px] text-muted-foreground mt-1 opacity-70">Students must be managed separately.</p>}
         </div>
+
+        {props.editRole === 'STAFF' && (
+          <div className="mb-4">
+            <label className="block text-xs text-muted-foreground mb-1">Staff Role / Title *</label>
+            <select className="input-field w-full" value={props.editJobTitle} onChange={e => props.setEditJobTitle(e.target.value)} required>
+              <option value="">-- Select --</option>
+              {STAFF_JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
 
         {isTeacherRole(props.editRole) && (
           <div className="border-t border-border pt-4 mt-4">

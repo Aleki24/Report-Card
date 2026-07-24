@@ -30,7 +30,7 @@ function PeoplePageInner() {
 
   const tabs = [
     { id: 'students' as const, label: 'Students', icon: <Users size={16} />, roles: ['ADMIN', 'CLASS_TEACHER'] as const },
-    { id: 'teachers' as const, label: 'Teachers', icon: <GraduationCap size={16} />, roles: ['ADMIN'] as const },
+    { id: 'teachers' as const, label: 'Staff', icon: <GraduationCap size={16} />, roles: ['ADMIN'] as const },
     { id: 'parents' as const, label: 'Parents', icon: <Heart size={16} />, roles: ['ADMIN'] as const },
   ].filter(t => t.roles.includes(role as any));
 
@@ -42,7 +42,7 @@ function PeoplePageInner() {
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="mb-6">
         <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">People</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage students, teachers, and parent contacts</p>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage students, teachers, staff, and parent contacts</p>
       </div>
 
       <div className="flex gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
@@ -772,8 +772,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 }
 
 /* ───── Teachers Section ───── */
-interface TeacherRow { id: string; employee_id: string; profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; }; subjects: string; classes: string; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; }
-interface TeacherDetail { profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; }; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; subjectAssignments: any[]; classAssignments: any[]; recentExams: any[]; }
+interface TeacherRow { id: string; employee_id: string; profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; job_title?: string | null; }; subjects: string; classes: string; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; }
+interface TeacherDetail { profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; job_title?: string | null; }; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; subjectAssignments: any[]; classAssignments: any[]; recentExams: any[]; }
 type TeacherTab = 'overview' | 'subjects' | 'classes' | 'exams';
 
 function TeachersSection() {
@@ -813,11 +813,13 @@ function TeachersSection() {
     return matchSearch && matchRole && matchStatus;
   });
 
-  const roleBadge = (role: string, isActive: boolean) => {
+  const roleBadge = (role: string, isActive: boolean, jobTitle?: string | null) => {
     if (!isActive) return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400">Inactive</span>;
-    const colors: Record<string, string> = { CLASS_TEACHER: 'bg-blue-500/15 text-blue-400', SUBJECT_TEACHER: 'bg-purple-500/15 text-purple-400', ADMIN: 'bg-red-500/15 text-red-400' };
-    const labels: Record<string, string> = { CLASS_TEACHER: 'Class Teacher', SUBJECT_TEACHER: 'Subject Teacher', ADMIN: 'Admin' };
-    return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-500/15 text-gray-400'}`}>{labels[role] || role}</span>;
+    const colors: Record<string, string> = { CLASS_TEACHER: 'bg-blue-500/15 text-blue-400', SUBJECT_TEACHER: 'bg-purple-500/15 text-purple-400', ADMIN: 'bg-red-500/15 text-red-400', STAFF: 'bg-sky-500/15 text-sky-400' };
+    const labels: Record<string, string> = { CLASS_TEACHER: 'Class Teacher', SUBJECT_TEACHER: 'Subject Teacher', ADMIN: 'Admin', STAFF: 'Staff' };
+    // Non-teaching staff carry a descriptive title (Bursar, Secretary, …) — show it in place of the generic "Staff".
+    const label = role === 'STAFF' ? (jobTitle || 'Staff') : (labels[role] || role);
+    return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-500/15 text-gray-400'}`}>{label}</span>;
   };
 
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -866,13 +868,14 @@ function TeachersSection() {
       <div className="flex flex-col md:flex-row gap-3 mb-4">
         <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
-          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search teachers..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select className="input-field text-xs" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
           <option value="ALL">All Roles</option>
           <option value="CLASS_TEACHER">Class Teacher</option>
           <option value="SUBJECT_TEACHER">Subject Teacher</option>
           <option value="ADMIN">Admin</option>
+          <option value="STAFF">Other Staff</option>
         </select>
         <select className="input-field text-xs" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="ALL">All Status</option>
@@ -896,7 +899,7 @@ function TeachersSection() {
           },
           { key: 'email', header: 'Email', render: t => <span className="text-muted-foreground">{t.profile.email || '—'}</span> },
           { key: 'employee_id', header: 'Employee ID', render: t => <span className="font-mono">{t.employee_id || '—'}</span>, hideOnMobile: true },
-          { key: 'role', header: 'Role', render: t => roleBadge(t.profile.role, t.profile.is_active) },
+          { key: 'role', header: 'Role', render: t => roleBadge(t.profile.role, t.profile.is_active, t.profile.job_title) },
           { key: 'subjects', header: 'Subjects', render: t => t.subjects || '—' },
         ]}
         rows={filtered}
@@ -905,7 +908,7 @@ function TeachersSection() {
         rowActions={t => (
           <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" onClick={() => { setEditingTeacher(t); setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' }); }}><Edit3 size={14} /></button>
         )}
-        emptyState={<><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No teachers found.</p></>}
+        emptyState={<><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No staff found.</p></>}
       />
 
       {editingTeacher && (

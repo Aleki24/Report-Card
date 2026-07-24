@@ -29,7 +29,7 @@ const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSPropertie
 /* Items are named constants and groups reference them directly, so a group
    can never point at a nav item that doesn't exist (the old label-string
    lookup silently dropped items when the strings drifted). */
-const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: staffRoles, icon: icon(LayoutDashboard) };
+const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: [...staffRoles, 'STAFF'], icon: icon(LayoutDashboard) };
 const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', roles: ['STUDENT'], icon: icon(LayoutDashboard) };
 const examsMarks: NavItem = { label: 'Exams & Marks', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(ClipboardList) };
 const reports: NavItem = { label: 'Report Cards', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(FileText) };
@@ -39,7 +39,7 @@ const people: NavItem = { label: 'People', href: '/dashboard/people', roles: ['A
 const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', roles: adminRoles, icon: icon(School) };
 const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: icon(BookOpen) };
 const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(DollarSign) };
-const announcements: NavItem = { label: 'Announcements', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(Bell) };
+const announcements: NavItem = { label: 'Announcements', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'], icon: icon(Bell) };
 const assignments: NavItem = { label: 'Assignments', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(Briefcase) };
 const users: NavItem = { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: icon(UserCircle) };
 const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', roles: adminRoles, icon: icon(Settings) };
@@ -86,6 +86,7 @@ const mobilePrimaryByRole: Record<Exclude<UserRole, 'PENDING'>, NavItem[]> = {
     ADMIN: [dashboard, examsMarks, people, fees],
     CLASS_TEACHER: [dashboard, examsMarks, attendance, reports],
     SUBJECT_TEACHER: [dashboard, examsMarks, assignments, announcements],
+    STAFF: [dashboard, announcements],
     STUDENT: [studentDashboard, myResults, mySubjects],
 };
 
@@ -103,6 +104,7 @@ export const roleBadgeColors: Record<UserRole, string> = {
     ADMIN: '#EF4444',
     CLASS_TEACHER: '#3B82F6',
     SUBJECT_TEACHER: '#8B5CF6',
+    STAFF: '#0EA5E9',
     STUDENT: '#10B981',
     PENDING: '#F59E0B',
 };

@@ -34,6 +34,7 @@ export async function PUT(request: NextRequest) {
             phone,
             role,
             is_active,
+            job_title,
             // New assignment fields
             class_teacher_grade_stream_id,   // string | null | undefined
             subject_teacher_subjects,         // { subject_id, grade_id }[] | undefined
@@ -63,6 +64,10 @@ export async function PUT(request: NextRequest) {
         if (phone !== undefined) updates.phone = phone.trim();
         if (role !== undefined) updates.role = role;
         if (is_active !== undefined) updates.is_active = is_active;
+        // job_title only applies to non-teaching STAFF; clear it for any other role
+        // so a role change (e.g. STAFF → Teacher) doesn't leave a stale title behind.
+        if (role !== undefined) updates.job_title = role === 'STAFF' ? (job_title || null) : null;
+        else if (job_title !== undefined) updates.job_title = job_title || null;
 
         // Update user profile if there are changes
         if (Object.keys(updates).length > 0) {
@@ -87,8 +92,8 @@ export async function PUT(request: NextRequest) {
 
         const effectiveRole = role || targetUser.role;
 
-        // If role is changed to ADMIN or STUDENT, clear all teacher assignments
-        if (role && ['ADMIN', 'STUDENT'].includes(role)) {
+        // If role is changed to a non-teaching role, clear all teacher assignments
+        if (role && ['ADMIN', 'STUDENT', 'STAFF'].includes(role)) {
             // Delete class teacher assignment
             await supabase
                 .from('class_teachers')

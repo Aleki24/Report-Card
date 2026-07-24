@@ -27,7 +27,7 @@ export async function GET(
 
     const { data: user } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id, avatar_url')
+      .select('id, first_name, last_name, email, phone, role, is_active, created_at, school_id, avatar_url, job_title')
       .eq('id', teacherId)
       .maybeSingle();
 
@@ -106,6 +106,7 @@ export async function GET(
         email: user.email,
         phone: user.phone || '—',
         role: user.role,
+        job_title: user.job_title ?? null,
         is_active: user.is_active,
         created_at: user.created_at,
       },

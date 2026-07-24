@@ -12,6 +12,8 @@ interface UserProfile {
     role: UserRole;
     is_active: boolean;
     school_id: string | null;
+    /** Descriptive staff role (Bursar, Secretary, …) for non-teaching STAFF; null otherwise. */
+    job_title?: string | null;
     /** Real profile photo (uploaded or copied from an OAuth provider like Google); null if Clerk would only show its auto-generated placeholder. */
     imageUrl: string | null;
 }
@@ -141,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         role: effective,
                         is_active: u.is_active ?? true,
                         school_id: u.school_id || null,
+                        job_title: u.job_title ?? null,
                         imageUrl: clerkImageUrl,
                     });
                     setBaseRole(dbBaseRole);

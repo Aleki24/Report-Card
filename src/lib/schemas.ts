@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ALL_EXAM_TYPES } from './exam-types';
 
-export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'PENDING']);
+export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PENDING']);
 export type UserRole = z.infer<typeof UserRole>;
 
 // Derived from the single source of truth for exam types (exam-types.ts), which
@@ -152,7 +152,7 @@ export const inviteUserSchema = z.object({
     first_name: z.string().trim().min(1, 'First name is required').max(100),
     last_name: z.string().trim().min(1, 'Last name is required').max(100),
     phone: z.string().trim().min(1, 'Phone is required').max(20),
-    role: z.enum(['STUDENT', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'ADMIN']),
+    role: z.enum(['STUDENT', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'ADMIN', 'STAFF']),
     sequence_number: z.number().int().min(1).max(99999),
     admission_number: z.string().trim().max(50).optional(),
     grade_stream_id: z.string().uuid('Invalid stream ID').optional(),
@@ -164,9 +164,15 @@ export const inviteUserSchema = z.object({
         grade_stream_id: z.string().uuid('Invalid stream ID').optional().nullable(),
     })).optional(),
     is_class_teacher: z.boolean().optional(),
+    // Descriptive title for non-teaching STAFF (Bursar, Secretary, …). Required
+    // for STAFF, ignored for other roles.
+    job_title: z.string().trim().max(100).optional(),
 }).refine(
     data => data.role !== 'STUDENT' || (data.admission_number && data.grade_stream_id && data.academic_level_id),
     { message: 'Students require: admission_number, grade_stream_id, academic_level_id' }
+).refine(
+    data => data.role !== 'STAFF' || !!data.job_title,
+    { message: 'A staff role/title is required for staff members', path: ['job_title'] }
 );
 
 export const pendingInviteSchema = z.object({
