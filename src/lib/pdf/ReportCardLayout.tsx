@@ -46,6 +46,14 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
 
     // Paper columns appear only when a subject actually uses them, and only
     // as many as the widest subject needs (capped so the row stays legible).
+    // CBC reports an achievement LEVEL, not a letter grade. Reading
+    // overallGrade/overallPointsGrade here printed an 8-4-4 symbol ("B-") under
+    // "Level", contradicting the competency bands in the table right above it.
+    // Derive the level from the same bands the table uses so the two agree.
+    const overallLevel = isKCSE
+        ? (data.overallPointsGrade || data.overallGrade || '—')
+        : (bandFor(Math.round(data.overallPercentage))?.code ?? '—');
+
     const paperCount = Math.min(3, Math.max(0, ...data.subjectMarks.map(m => m.paperScores?.length ?? 0)));
     const paperCodes = Array.from({ length: paperCount }, (_, i) => {
         const found = data.subjectMarks.find(m => (m.paperScores?.length ?? 0) > i)?.paperScores?.[i];
@@ -131,7 +139,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                     <View style={c.averageStat}>
                         <Text style={c.averageStatLabel}>{isKCSE ? 'Mean Grade' : 'Level'}</Text>
                         <Text style={[c.averageStatValue, { color: attainmentColor(data.overallPercentage) }]}>
-                            {data.overallPointsGrade || data.overallGrade || '—'}
+                            {overallLevel}
                         </Text>
                     </View>
                 </View>
