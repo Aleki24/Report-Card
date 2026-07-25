@@ -222,7 +222,7 @@ export const c = StyleSheet.create({
     tdCenter: { fontSize: 7.8, color: T.ink, textAlign: 'center' },
     tdCenterBold: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
     tdMuted: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
-    /** A points value that the 8-4-4 best-7 selection left out of the total. */
+    /** A points value the 8-4-4 group rule left out of the points total. */
     tdCenterExcluded: { fontSize: 7.8, color: '#9AA7B8', textAlign: 'center' },
     tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 3.5, paddingHorizontal: 5, lineHeight: 1.25 },
     bandMark: { ...boldFont, fontSize: 8.2, textAlign: 'center' },

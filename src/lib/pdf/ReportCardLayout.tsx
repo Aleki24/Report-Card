@@ -78,12 +78,6 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
     // The deviation column earns its width only when there is an earlier round
     // to compare against — a school's first exam prints the table as before.
     const showDev = data.subjectMarks.some(m => m.previousPercentage != null);
-    // 8-4-4 grades the best 7 subjects, so a learner taking 9 sees nine rows of
-    // points that don't add up to the total. Say so, and grey the two that were
-    // left out, rather than leaving a parent to wonder about the arithmetic.
-    const pointsCounted = isKCSE && data.subjectMarks.some(m => m.includedInPoints === false)
-        ? data.subjectMarks.filter(m => m.includedInPoints !== false).length
-        : null;
 
     return (
         <View style={{ flex: 1, fontFamily: FONT_BODY }}>
@@ -146,7 +140,6 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                     <Text style={c.averageLabel}>Overall Performance</Text>
                     <Text style={c.averageSub}>
                         {data.subjectMarks.length} subjects assessed
-                        {pointsCounted != null ? ` · best ${pointsCounted} count for points` : ''}
                         {data.previousExamLabel ? ` · change vs ${data.previousExamLabel}` : ''}
                     </Text>
                 </View>
