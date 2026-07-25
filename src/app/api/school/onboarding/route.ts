@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { notifyOwnerOfSchoolRequest } from '@/lib/school-approval';
+import { sendSchoolRequestReceivedEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,6 +69,13 @@ export async function POST(request: NextRequest) {
       await supabaseAdmin.from('users').update({
           school_id: schoolId
       }).eq('id', userId);
+
+      // Acknowledge to the requester that the form worked and what happens
+      // next — the school is held, so there is no dashboard to land on.
+      if (userData.email) {
+        sendSchoolRequestReceivedEmail(userData.email, userData.first_name, schoolName.trim())
+          .catch(err => console.error('[onboarding] requester acknowledgement failed:', err));
+      }
 
       notifyOwnerOfSchoolRequest({
           schoolId,

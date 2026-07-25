@@ -183,3 +183,30 @@ export async function sendSchoolRejectedEmail(email: string, firstName: string |
     `,
   });
 }
+
+/**
+ * Acknowledge a school request to the person who made it.
+ *
+ * Before approval existed this moment sent `sendWelcomeEmail`, which told them
+ * their account was ready — no longer true, since the school is held until the
+ * platform owner approves. This says what actually happened instead, so a
+ * requester isn't left wondering whether the form worked.
+ */
+export async function sendSchoolRequestReceivedEmail(email: string, firstName: string | null, schoolName: string) {
+  return sendEmail({
+    to: email,
+    subject: `We received your request for ${schoolName}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #1a1a2e; font-size: 20px;">Request received</h1>
+        <p>Hi ${esc(firstName || 'there')},</p>
+        <p>Thanks for setting up <strong>${esc(schoolName)}</strong> on Skulbase. Your request is
+        with our team for review.</p>
+        <p><strong>What happens next:</strong> we'll email you as soon as it's approved, and your
+        administrator account unlocks at that point. You don't need to do anything in the meantime.</p>
+        <p style="color: #666; font-size: 14px;">Were you trying to join a school that already uses
+        Skulbase? You don't need this request — ask your administrator for an invite code instead.</p>
+      </div>
+    `,
+  });
+}
