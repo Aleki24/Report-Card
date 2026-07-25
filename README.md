@@ -46,7 +46,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 | `AT_USERNAME` | for SMS | Africa's Talking username (defaults to `sandbox`) |
 | `AT_SENDER_ID` | optional | Africa's Talking sender ID |
 | `RESEND_API_KEY` | for email | Resend API key for transactional email |
-| `PLATFORM_OWNER_EMAIL` | yes | Who is emailed to approve new school sign-ups (comma-separated for several). Without it nobody is notified and sign-ups sit pending — see [School sign-up approval](#school-sign-up-approval) |
+| `PLATFORM_OWNER_EMAIL` | optional | Overrides who is emailed to approve new school sign-ups (comma-separated). Defaults to the owner addresses in `src/lib/school-approval.ts` |
+| `PLATFORM_OWNER_PHONE` | optional | Overrides who is texted about new school sign-ups (comma-separated). Defaults as above |
 | `ANTHROPIC_API_KEY` | for scanning | Powers marksheet photo scanning |
 | `ANTHROPIC_SCAN_MODEL` | optional | Overrides the default scan model (`claude-opus-4-8`) |
 
@@ -58,17 +59,25 @@ sign-up cannot use the system until then.
 When someone requests a school, it is stored with `approval_status =
 'PENDING_APPROVAL'` and the requester keeps the `PENDING` role. That role is
 what every route already refuses, so an unapproved school is unusable without
-any per-route gate to maintain. You get an email at `PLATFORM_OWNER_EMAIL`
-with the school and contact details, plus one-click **Approve** / **Reject**
-links. Approving is what promotes the requester to `ADMIN`; the links carry a
-single-use token so they work from your inbox and stop working once used.
+any per-route gate to maintain.
+
+You are notified two ways: an **email** with the school and contact details
+plus one-click **Approve** / **Reject** links, and an **SMS** nudge to go read
+it (the approval token is too long to put in a text). Approving is what
+promotes the requester to `ADMIN`; the links carry a single-use token so they
+work straight from your inbox and stop working once used.
+
+Owner contacts are defaulted in `src/lib/school-approval.ts` so notifications
+work without any deployment config, and `PLATFORM_OWNER_EMAIL` /
+`PLATFORM_OWNER_PHONE` override them when you want to change recipients
+without a code change. SMS additionally needs `AT_API_KEY`; if it is not
+configured the email still goes out on its own.
 
 Schools that already existed when this was introduced were grandfathered to
 `APPROVED` by the migration, so no live school was affected.
 
-> Set `PLATFORM_OWNER_EMAIL`. If it is missing, sign-ups still stay pending and
-> locked (they never auto-approve), but nobody is emailed — the server logs an
-> error instead, and you would have to approve from the database.
+> Notification failures never let a sign-up through: the school stays
+> `PENDING_APPROVAL` and locked regardless, and the server logs the failure.
 
 ### Marksheet scanning (photo mark entry)
 
