@@ -39,6 +39,14 @@ export default function OnboardingWizard() {
   // code is still what proves the account is theirs.
   const [scannedName, setScannedName] = useState<string | null>(null);
 
+  // Approval state of a school this account already requested. A sign-up is
+  // held until the platform owner approves, so someone who already asked must
+  // see that they're waiting rather than be offered the wizard again.
+  const [approval, setApproval] = useState<{
+    status: string | null; schoolName: string | null; note: string | null;
+  } | null>(null);
+  const [approvalChecked, setApprovalChecked] = useState(false);
+
   // Onboarding is only for users who haven't joined a school yet: PENDING
   // accounts, or admins whose school setup is unfinished. Anyone who already
   // activated with an invite code has a real role — send them straight to
@@ -51,6 +59,22 @@ export default function OnboardingWizard() {
       router.replace(nextPath || (role === 'STUDENT' ? '/student/dashboard' : '/dashboard'));
     }
   }, [alreadyOnboarded, role, router, nextPath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/school/approval-status')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (cancelled) return;
+        if (d?.hasSchool) setApproval({ status: d.status, schoolName: d.schoolName, note: d.note });
+      })
+      .catch(() => { /* fall through to the normal wizard */ })
+      .finally(() => { if (!cancelled) setApprovalChecked(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const awaitingApproval = approval?.status === 'PENDING_APPROVAL';
+  const wasRejected = approval?.status === 'REJECTED';
 
   // --- Admin Form State ---
   const [schoolName, setSchoolName] = useState('');
@@ -138,6 +162,15 @@ export default function OnboardingWizard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save onboarding data');
 
+      // A brand-new school is held for the platform owner, and the account is
+      // still PENDING, so the dashboard would have nothing to show. Switch to
+      // the waiting screen instead of navigating.
+      if (data.awaitingApproval) {
+        setApproval({ status: 'PENDING_APPROVAL', schoolName: schoolName.trim(), note: null });
+        setLoading(false);
+        return;
+      }
+
       window.location.href = '/dashboard';
     } catch (err: any) {
       toast.error(err.message);
@@ -181,6 +214,66 @@ export default function OnboardingWizard() {
   }
 
   if (!user) return null;
+
+  // A school sign-up waits for the platform owner. Show that state instead of
+  // the wizard — offering "set up a school" again to someone who already asked
+  // just invites duplicate requests the server would reject anyway.
+  if (awaitingApproval || wasRejected) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
+          <div className={`mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl ${awaitingApproval ? 'bg-amber-500/10' : 'bg-red-500/10'}`}>
+            <span className="text-2xl" aria-hidden>{awaitingApproval ? '⏳' : '🚫'}</span>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-foreground">
+            {awaitingApproval ? 'Waiting for approval' : 'Request not approved'}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {awaitingApproval ? (
+              <>
+                Your request to set up <strong className="text-foreground">{approval?.schoolName || 'your school'}</strong> has
+                been sent to the <Wordmark /> team. We&apos;ll email you as soon as it&apos;s reviewed —
+                your account unlocks the moment it&apos;s approved.
+              </>
+            ) : (
+              <>
+                We couldn&apos;t approve the request for{' '}
+                <strong className="text-foreground">{approval?.schoolName || 'your school'}</strong>.
+              </>
+            )}
+          </p>
+          {wasRejected && approval?.note && (
+            <p className="mt-4 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">{approval.note}</p>
+          )}
+          <p className="mt-6 text-xs text-muted-foreground">
+            Joining a school that already uses <Wordmark />? Ask your administrator for an invite
+            code — you won&apos;t need this request.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => { setApproval(null); setSelectedRole('TEACHER'); }}
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold"
+            >
+              I have an invite code
+            </button>
+            <a href="/logout" className="rounded-xl px-5 py-2.5 text-sm font-semibold text-muted-foreground no-underline">
+              Sign out
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Hold the wizard back until we know whether a request is already pending,
+  // so the create-a-school option never flashes up for someone who has one.
+  if (!approvalChecked) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // --- ROLE SELECTION SCREEN ---
   if (!selectedRole) {

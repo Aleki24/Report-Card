@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { auth, createClerkClient } from '@clerk/nextjs/server';
-import { sendWelcomeEmail } from '@/lib/email';
+import { auth } from '@clerk/nextjs/server';
+import { notifyOwnerOfSchoolRequest } from '@/lib/school-approval';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       schoolId = crypto.randomUUID();
       const teacherInviteCode = crypto.randomUUID().substring(0, 6).toUpperCase();
       const studentInviteCode = crypto.randomUUID().substring(0, 6).toUpperCase();
+      // Single-use secret for the owner's approve/reject links.
+      const approvalToken = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
       const { error: schoolError } = await supabaseAdmin.from('schools').insert({
           id: schoolId,
           name: schoolName.trim(),
@@ -48,22 +50,35 @@ export async function POST(request: NextRequest) {
           onboarding_completed: false,
           teacher_invite_code: teacherInviteCode,
           student_invite_code: studentInviteCode,
+          approval_status: 'PENDING_APPROVAL',
+          approval_requested_at: new Date().toISOString(),
+          approval_token: approvalToken,
+          requested_by: userId,
       });
 
       if (schoolError) throw new Error('Failed to create school: ' + schoolError.message);
 
-      const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-      await clerk.users.updateUser(userId, {
-          publicMetadata: { role: 'ADMIN', school_id: schoolId }
-      });
-
+      // Deliberately NOT promoted to ADMIN here. The account stays PENDING
+      // until the platform owner approves, and because every role check in the
+      // app already rejects PENDING, that single fact is what keeps an
+      // unapproved school unusable — no per-route gate to forget. Approval
+      // (see /api/platform/schools/[schoolId]/decision) does the promotion.
+      // The school_id is attached now so the requester can finish setting up
+      // while they wait, and so they cannot open a second school request.
       await supabaseAdmin.from('users').update({
-          role: 'ADMIN',
           school_id: schoolId
       }).eq('id', userId);
-      
-      // Optionally send welcome email
-      sendWelcomeEmail(userData.email, userData.first_name, schoolName.trim()).catch(() => {});
+
+      notifyOwnerOfSchoolRequest({
+          schoolId,
+          schoolName: schoolName.trim(),
+          schoolEmail: schoolEmail?.trim() || null,
+          schoolPhone: schoolPhone?.trim() || null,
+          schoolAddress: schoolAddress?.trim() || null,
+          requesterName: userData.first_name,
+          requesterEmail: userData.email,
+          approvalToken,
+      }).catch(err => console.error('[onboarding] owner notification failed:', err));
     }
 
     // 2. Insert Academic Year (Global)
@@ -221,7 +236,21 @@ export async function POST(request: NextRequest) {
 
     if (finalErr) throw new Error('Failed to update school onboarding status: ' + finalErr.message);
 
-    return NextResponse.json({ success: true });
+    // Tell the client whether this school is live yet, so a brand-new sign-up
+    // sees "waiting for approval" instead of being sent to a dashboard its
+    // PENDING role cannot load anything from.
+    const { data: schoolRow } = await supabaseAdmin
+      .from('schools')
+      .select('approval_status')
+      .eq('id', schoolId)
+      .maybeSingle();
+
+    const approvalStatus = schoolRow?.approval_status || 'APPROVED';
+    return NextResponse.json({
+      success: true,
+      approvalStatus,
+      awaitingApproval: approvalStatus === 'PENDING_APPROVAL',
+    });
 
   } catch (err: any) {
     console.error('Onboarding Error:', err);

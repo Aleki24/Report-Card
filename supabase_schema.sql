@@ -79,6 +79,15 @@ CREATE TABLE IF NOT EXISTS schools (
     grading_system_cbc_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     grading_system_844_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     onboarding_completed BOOLEAN DEFAULT false NOT NULL,
+    -- A self-service sign-up stays PENDING_APPROVAL until the platform owner
+    -- approves it; the requester is only promoted to ADMIN at that point.
+    approval_status TEXT NOT NULL DEFAULT 'PENDING_APPROVAL'
+        CHECK (approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')),
+    approval_requested_at TIMESTAMPTZ,
+    approval_decided_at TIMESTAMPTZ,
+    approval_note TEXT,
+    approval_token TEXT,
+    requested_by UUID REFERENCES users(id) ON DELETE SET NULL,
     teacher_invite_code TEXT,
     student_invite_code TEXT,
     min_combination_group_size INT DEFAULT 15 NOT NULL, -- CBC ministry minimum learners per subject combination

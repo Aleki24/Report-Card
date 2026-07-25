@@ -46,8 +46,29 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 | `AT_USERNAME` | for SMS | Africa's Talking username (defaults to `sandbox`) |
 | `AT_SENDER_ID` | optional | Africa's Talking sender ID |
 | `RESEND_API_KEY` | for email | Resend API key for transactional email |
+| `PLATFORM_OWNER_EMAIL` | yes | Who is emailed to approve new school sign-ups (comma-separated for several). Without it nobody is notified and sign-ups sit pending — see [School sign-up approval](#school-sign-up-approval) |
 | `ANTHROPIC_API_KEY` | for scanning | Powers marksheet photo scanning |
 | `ANTHROPIC_SCAN_MODEL` | optional | Overrides the default scan model (`claude-opus-4-8`) |
+
+### School sign-up approval
+
+Anyone can sign up, but **creating a school requires your approval** — a
+sign-up cannot use the system until then.
+
+When someone requests a school, it is stored with `approval_status =
+'PENDING_APPROVAL'` and the requester keeps the `PENDING` role. That role is
+what every route already refuses, so an unapproved school is unusable without
+any per-route gate to maintain. You get an email at `PLATFORM_OWNER_EMAIL`
+with the school and contact details, plus one-click **Approve** / **Reject**
+links. Approving is what promotes the requester to `ADMIN`; the links carry a
+single-use token so they work from your inbox and stop working once used.
+
+Schools that already existed when this was introduced were grandfathered to
+`APPROVED` by the migration, so no live school was affected.
+
+> Set `PLATFORM_OWNER_EMAIL`. If it is missing, sign-ups still stay pending and
+> locked (they never auto-approve), but nobody is emailed — the server logs an
+> error instead, and you would have to approve from the database.
 
 ### Marksheet scanning (photo mark entry)
 
