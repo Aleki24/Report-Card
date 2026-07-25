@@ -14,7 +14,9 @@ export async function generateStudentReportCardPDF(data: ReportCardData, templat
     let qrCodeDataUri = undefined;
     if (data.resultUrl) {
         try {
-            qrCodeDataUri = await QRCode.toDataURL(data.resultUrl, { margin: 1, width: 64 });
+            // margin omitted → library's spec-compliant 4-module quiet zone;
+            // width raised so print doesn't upscale a blurry source image.
+            qrCodeDataUri = await QRCode.toDataURL(data.resultUrl, { width: 180 });
         } catch (e) {
             console.error("Failed to generate QR code", e);
         }

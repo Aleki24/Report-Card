@@ -154,18 +154,13 @@ export async function resolveGradingContext(
 /**
  * The URL a report card's QR code points at — the public verification page.
  *
- * The term and round are carried along so the scanned page shows the same
- * sitting the paper card was printed for, not merely the latest one.
+ * Deliberately just the student id, with no term/round query params: every
+ * character here is a QR module at print time, and a printed card is a fixed
+ * physical size, so a longer payload means a denser, harder-to-scan code.
+ * The verify endpoint's "most recently approved exam" default already lines
+ * up with the card in the near-total majority of cases — a card is normally
+ * scanned around when it's printed, not months later against a stale term.
  */
-export function buildVerifyUrl(
-    baseUrl: string,
-    studentId: string,
-    termId?: string | null,
-    examType?: string | null
-): string {
-    const params = new URLSearchParams();
-    if (termId) params.set('term', termId);
-    if (examType) params.set('examType', examType);
-    const query = params.toString();
-    return `${baseUrl}/verify/${studentId}${query ? `?${query}` : ''}`;
+export function buildVerifyUrl(baseUrl: string, studentId: string): string {
+    return `${baseUrl}/verify/${studentId}`;
 }
