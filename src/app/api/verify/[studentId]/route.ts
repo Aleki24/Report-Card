@@ -7,7 +7,7 @@ import {
     getRubricFromScales,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
-import { resolveGradingContext } from '@/lib/reports/grading-context';
+import { expandId, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 import { selectExamRound } from '@/lib/reports/exam-round';
 
 export const runtime = 'nodejs';
@@ -83,12 +83,14 @@ export async function GET(
     { params }: { params: Promise<{ studentId: string }> }
 ) {
     try {
-        const studentId = (await params).studentId;
+        // Ids arrive dashless from the QR to keep the code small; older printed
+        // cards carry no round at all and fall back to the latest approved one.
+        const studentId = expandId((await params).studentId);
         const { searchParams } = new URL(request.url);
-        const rawTerm = searchParams.get('term') || searchParams.get('termId');
-        const rawExamType = searchParams.get('examType');
-        const termId = rawTerm && rawTerm.trim() ? rawTerm : null;
-        const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
+        const rawTerm = searchParams.get('t') || searchParams.get('term') || searchParams.get('termId');
+        const rawExamType = searchParams.get('e') || searchParams.get('examType');
+        const termId = rawTerm && rawTerm.trim() ? expandId(rawTerm.trim()) : null;
+        const examType = rawExamType && rawExamType.trim() ? rawExamType.trim() : null;
 
         // Same response for "no such student" and "nothing approved to show" —
         // a public endpoint should not confirm which ids exist.
@@ -175,7 +177,8 @@ export async function GET(
 
         // Narrow to a single sitting, then one mark per subject — the same
         // collapse the report card does, so the two always agree.
-        const roundMarks = examType ? flat : selectExamRound(flat.map(asRoundInput)).marks;
+        const round = examType ? null : selectExamRound(flat.map(asRoundInput));
+        const roundMarks = round ? round.marks : flat;
         const ordered = [...roundMarks].sort(
             (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
         );
@@ -251,9 +254,15 @@ export async function GET(
             }
         }
 
-        const headExam = scopedExams[0];
-        const termName = one<{ name?: string }>(headExam?.terms)?.name || null;
-        const yearName = one<{ name?: string }>(headExam?.academic_years)?.name || null;
+        // Label the round the displayed marks actually came from. Reading it
+        // off the most recently *approved* exam instead was wrong: the round is
+        // chosen by most recently *created*, so the two can disagree and the
+        // page would title one sitting's marks with another sitting's name.
+        const shownExamType = examType || round?.round || safeMarks[0]?.examType || null;
+        const shownExamIds = new Set(safeMarks.map(m => m.examId));
+        const labelExam = scopedExams.find(e => shownExamIds.has(e.id)) || scopedExams[0];
+        const termName = one<{ name?: string }>(labelExam?.terms)?.name || null;
+        const yearName = one<{ name?: string }>(labelExam?.academic_years)?.name || null;
 
         return NextResponse.json({
             school: { name: schoolName, logoUrl: schoolLogoUrl },
@@ -264,12 +273,15 @@ export async function GET(
             },
             term: termName,
             academicYear: yearName,
-            examType: examType || headExam?.exam_type || null,
-            approvedAt: headExam?.approved_at || null,
+            examType: shownExamType,
+            approvedAt: labelExam?.approved_at || null,
             subjects,
             summary: {
                 mean: Math.round(perf.percentage * 10) / 10,
-                grade: perf.overallGrade || perf.grade || null,
+                // Shared with the report card: for CBC this must read the CBC
+                // bands, not the school's 8-4-4 Overall Grading System, which
+                // would stamp an "A" beside per-subject levels like EE2.
+                grade: resolveOverallGrade(perf, grading) || null,
                 totalPoints: grading.gradingSystemType === 'KCSE' ? perf.totalPoints : null,
                 subjectCount: subjects.length,
                 classRank: classRank || null,

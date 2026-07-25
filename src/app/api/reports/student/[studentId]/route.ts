@@ -17,7 +17,7 @@ import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
-import { buildVerifyUrl, resolveGradingContext } from '@/lib/reports/grading-context';
+import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 
 export const runtime = 'nodejs';
 
@@ -469,14 +469,9 @@ export async function GET(
             combinationSize = info?.size;
         }
 
-        // 7. Resolve overall grade from total points (KCSE) or percentage (CBC)
-        // Use same logic as marksheet: KCSE uses points-based grade, CBC uses percentage-based grade
-        const isKCSE = gradingSystemType === 'KCSE';
-        const overallGradeSymbol = isKCSE 
-            ? studentPerf.overallGrade 
-            : (gradingScales.length > 0 
-                ? getGradeFromScales(studentPerf.percentage, gradingScales) 
-                : studentPerf.grade);
+        // 7. Resolve overall grade from total points (KCSE) or percentage (CBC).
+        // Shared with the QR verification page so the two can't disagree.
+        const overallGradeSymbol = resolveOverallGrade(studentPerf, { gradingSystemType, gradingScales });
 
         // 8. Fetch class teacher and principal comments from report_cards table
         let classTeacherComment = '';
@@ -668,7 +663,7 @@ export async function GET(
             classTeacherComment: classTeacherComment || undefined,
             principalComment: principalComment || undefined,
             gradeBoundaries,
-            resultUrl: buildVerifyUrl(baseUrl, studentId),
+            resultUrl: buildVerifyUrl(baseUrl, studentId, termId, examType),
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
             openingDate,

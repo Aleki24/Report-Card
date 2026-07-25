@@ -73,7 +73,9 @@ export default async function VerifyResultsPage({
     const sp = await searchParams;
 
     const forwarded = new URLSearchParams();
-    for (const key of ['term', 'examType'] as const) {
+    // `t`/`e` are the compact keys the QR uses; the long spellings are kept so
+    // links shared before the switch keep working.
+    for (const key of ['t', 'e', 'term', 'examType'] as const) {
         const value = sp[key];
         if (typeof value === 'string' && value.trim()) forwarded.set(key, value);
     }
@@ -177,6 +179,22 @@ export default async function VerifyResultsPage({
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            {/* Sign-in prompt — this page is a single sitting's snapshot; the
+                student's own account has every term, attendance and fees. */}
+            <section className="mt-6 rounded-xl border border-primary/30 bg-primary/5 px-4 py-4 text-center">
+                <h2 className="font-display text-sm font-bold">Are you {student.name.split(' ')[0]}?</h2>
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                    Sign in to your student account to see every term&apos;s results, your
+                    subjects, attendance and fee statements.
+                </p>
+                <Link
+                    href={`/login?redirect_url=${encodeURIComponent('/student/results')}`}
+                    className="mt-3 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground no-underline"
+                >
+                    Sign in to your account
+                </Link>
             </section>
 
             <footer className="mt-6 text-center text-[11px] leading-relaxed text-muted-foreground">

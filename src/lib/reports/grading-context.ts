@@ -1,5 +1,5 @@
 import type { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { isKCSEGradeLevel } from '@/lib/analytics';
+import { getGradeFromScales, isKCSEGradeLevel } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 
 type Supabase = ReturnType<typeof createSupabaseAdmin>;
@@ -152,15 +152,58 @@ export async function resolveGradingContext(
 }
 
 /**
+ * The single overall grade a student's results carry.
+ *
+ * KCSE uses the points-based grade; CBC reads the average percentage against
+ * the CBC subject bands. CBC deliberately does NOT use `overallGrade`: a
+ * school's opt-in Overall Grading System is an 8-4-4 points/letter table, and
+ * letting it decide here stamps a CBC learner's card with a letter like "A"
+ * beside per-subject levels like EE2.
+ *
+ * Shared by the report-card routes and the public verification page so the
+ * scanned page cannot show a different overall grade from the paper card.
+ */
+export function resolveOverallGrade(
+    perf: { overallGrade: string; grade: string; percentage: number },
+    grading: Pick<GradingContext, 'gradingSystemType' | 'gradingScales'>
+): string {
+    if (grading.gradingSystemType === 'KCSE') return perf.overallGrade;
+    return grading.gradingScales.length > 0
+        ? getGradeFromScales(perf.percentage, grading.gradingScales)
+        : perf.grade;
+}
+
+/** UUID with the dashes stripped — 4 fewer QR characters per id. */
+const compactId = (id: string) => id.replace(/-/g, '');
+
+/** Restore a compact id to canonical UUID form; passes through anything else. */
+export function expandId(value: string): string {
+    return /^[0-9a-f]{32}$/i.test(value)
+        ? `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`
+        : value;
+}
+
+/**
  * The URL a report card's QR code points at — the public verification page.
  *
- * Deliberately just the student id, with no term/round query params: every
- * character here is a QR module at print time, and a printed card is a fixed
- * physical size, so a longer payload means a denser, harder-to-scan code.
- * The verify endpoint's "most recently approved exam" default already lines
- * up with the card in the near-total majority of cases — a card is normally
- * scanned around when it's printed, not months later against a stale term.
+ * The term and round travel with it so the scanned page shows the sitting the
+ * paper card was printed for, rather than whatever was approved most recently.
+ *
+ * Every character here becomes QR modules, and a printed card is a fixed
+ * physical size, so the payload is kept tight: short `t`/`e` keys and dashless
+ * ids hold the code to version 6 (~0.40mm modules at the 56pt print size).
+ * Spelling these out in full pushes it to version 7 and measurably harder to
+ * scan, so keep any future additions short.
  */
-export function buildVerifyUrl(baseUrl: string, studentId: string): string {
-    return `${baseUrl}/verify/${studentId}`;
+export function buildVerifyUrl(
+    baseUrl: string,
+    studentId: string,
+    termId?: string | null,
+    examType?: string | null
+): string {
+    const params = new URLSearchParams();
+    if (termId) params.set('t', compactId(termId));
+    if (examType) params.set('e', examType);
+    const query = params.toString();
+    return `${baseUrl}/verify/${compactId(studentId)}${query ? `?${query}` : ''}`;
 }

@@ -30,6 +30,22 @@ function joinWithOr(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
 }
 
+/**
+ * Where to land after a successful sign-in.
+ *
+ * Honours ?redirect_url= — set by the middleware when it bounces an
+ * unauthenticated request, and by the QR verification page's sign-in prompt.
+ * Only same-site absolute paths are accepted; anything else (protocol-relative
+ * "//evil.com", a full URL, a missing param) falls back to /dashboard, which
+ * routes on to the student area for student accounts.
+ */
+function postLoginDestination(): string {
+  if (typeof window === 'undefined') return '/dashboard';
+  const target = new URLSearchParams(window.location.search).get('redirect_url');
+  if (!target || !target.startsWith('/') || target.startsWith('//')) return '/dashboard';
+  return target;
+}
+
 export default function LoginPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -67,7 +83,7 @@ export default function LoginPage() {
         });
         if (result.status === 'complete') {
           await setActive({ session: result.createdSessionId });
-          router.push('/dashboard');
+          router.push(postLoginDestination());
         } else {
           toast.error(`Verification incomplete: ${result.status}`);
         }
@@ -100,7 +116,7 @@ export default function LoginPage() {
 
         if (result.status === 'complete') {
           await setActive({ session: result.createdSessionId });
-          router.push('/dashboard');
+          router.push(postLoginDestination());
         } else if (result.status === 'needs_second_factor') {
           const hasEmailCode = result.supportedSecondFactors?.some((f) => f.strategy === 'email_code');
           if (hasEmailCode) {
@@ -156,7 +172,7 @@ export default function LoginPage() {
       await signIn.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/dashboard',
+        redirectUrlComplete: postLoginDestination(),
       });
     } catch {
       setGoogleLoading(false);

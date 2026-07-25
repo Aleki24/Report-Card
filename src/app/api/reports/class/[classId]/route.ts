@@ -538,7 +538,7 @@ export async function GET(
                 classTeacherComment: classTeacherComment || undefined,
                 principalComment: principalComment || undefined,
                 gradeBoundaries,
-                resultUrl: buildVerifyUrl(baseUrl, student.id),
+                resultUrl: buildVerifyUrl(baseUrl, student.id, termId, examType),
                 totalScore: computedTotalScore,
                 totalPossible: computedTotalPossible,
                 openingDate,
