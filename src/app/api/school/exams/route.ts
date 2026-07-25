@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const termId = searchParams.get('term_id');
     const examType = searchParams.get('exam_type');
     const subjectId = searchParams.get('subject_id');
+    const status = searchParams.get('status');
 
     const supabase = createSupabaseAdmin();
 
@@ -43,9 +44,12 @@ export async function GET(request: NextRequest) {
       .from('exams')
       .select(`
         id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
-        status, published_by, approved_by,
+        status, published_by, published_at, approved_by,
         subjects:subject_id ( name, code, category ),
-        grades:grade_id ( name_display )
+        grades:grade_id ( name_display ),
+        grade_streams:grade_stream_id ( full_name ),
+        terms:term_id ( name ),
+        publisher:published_by ( first_name, last_name )
       `)
       .eq('school_id', schoolId)
       .order('exam_type', { ascending: true });
@@ -56,6 +60,11 @@ export async function GET(request: NextRequest) {
     if (examType) query = query.eq('exam_type', examType);
     // New: filter by subject
     if (subjectId) query = query.eq('subject_id', subjectId);
+    // New: filter by workflow status — lets the Publish screen pull every exam
+    // awaiting approval across the school in one call, with no class picked.
+    if (status && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(status)) {
+      query = query.eq('status', status);
+    }
 
     // Filter by stream/grade
     if (streamId && gradeId) {
@@ -89,10 +98,14 @@ export async function GET(request: NextRequest) {
       subject_category: e.subjects?.category || '',
       grade_name: e.grades?.name_display || 'N/A',
       grade_stream_id: e.grade_stream_id,
+      grade_stream_name: e.grade_streams?.full_name || null,
       grade_id: e.grade_id,
       term_id: e.term_id,
+      term_name: e.terms?.name || null,
       status: e.status || 'DRAFT',
       published_by: e.published_by,
+      published_by_name: e.publisher ? `${e.publisher.first_name || ''} ${e.publisher.last_name || ''}`.trim() : null,
+      published_at: e.published_at,
       approved_by: e.approved_by,
       created_by_teacher_id: e.created_by_teacher_id,
     }));

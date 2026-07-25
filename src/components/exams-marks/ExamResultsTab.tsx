@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
@@ -29,19 +30,42 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
 export function ExamResultsTab() {
     const { user, profile } = useAuth();
 
+    // Deep link from the Publish screen's "Review marks" action:
+    // ?stream=<grade_stream_id>&exam=<exam_id> opens straight onto that exam's
+    // marks so an admin can look at the results before approving them.
+    const searchParams = useSearchParams();
+    const linkedStreamId = searchParams.get('stream') || '';
+    const linkedExamId = searchParams.get('exam') || '';
+
     // ----- Cascading filters -----
     const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
-    const [selectedStreamId, setSelectedStreamId] = useState('');
+    const [selectedStreamId, setSelectedStreamId] = useState(linkedStreamId);
     const [exams, setExams] = useState<ExamOption[]>([]);
     const [selectedExamId, setSelectedExamId] = useState('');
     const [loadingStreams, setLoadingStreams] = useState(true);
     const [loadingExams, setLoadingExams] = useState(false);
 
+    // The exam the URL asked for, consumed once the exam list arrives. Kept in
+    // a ref so a manual pick afterwards is never overridden by a refetch.
+    const wantedExamIdRef = useRef(linkedExamId);
+
     // ----- Tab + Data -----
-    const [activeTab, setActiveTab] = useState<Tab>('allsubjects');
+    const [activeTab, setActiveTab] = useState<Tab>(linkedExamId ? 'results' : 'allsubjects');
     const [marks, setMarks] = useState<MarkRow[]>([]);
     const [markScheme, setMarkScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [loadingMarks, setLoadingMarks] = useState(false);
+
+    // A later click on another pending exam re-uses this mounted component, so
+    // follow the URL when it changes rather than only reading it on mount.
+    useEffect(() => {
+        if (!linkedStreamId && !linkedExamId) return;
+        wantedExamIdRef.current = linkedExamId;
+        if (linkedStreamId) setSelectedStreamId(linkedStreamId);
+        if (linkedExamId) {
+            setActiveTab('results');
+            setSelectedExamId(linkedExamId);
+        }
+    }, [linkedStreamId, linkedExamId]);
 
     // ----- Reports tab -----
     const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
@@ -108,7 +132,15 @@ export function ExamResultsTab() {
                     created_by_teacher_id: e.created_by_teacher_id,
                 }));
                 setExams(mapped);
-                if (!opts?.keepSelection) setSelectedExamId(mapped[0]?.id || '');
+                if (!opts?.keepSelection) {
+                    // Prefer the exam a "Review marks" link asked for; fall
+                    // back to the first one in the class.
+                    const wanted = wantedExamIdRef.current;
+                    wantedExamIdRef.current = '';
+                    setSelectedExamId(
+                        wanted && mapped.some((e: ExamOption) => e.id === wanted) ? wanted : (mapped[0]?.id || '')
+                    );
+                }
             } else {
                 setExams([]);
                 if (!opts?.keepSelection) setSelectedExamId('');
@@ -120,10 +152,11 @@ export function ExamResultsTab() {
         } finally {
             setLoadingExams(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedStreamId]);
+    }, [selectedStreamId, gradeStreams]);
 
-    useEffect(() => { fetchExams(); }, [selectedStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // gradeStreams is a dependency because the request needs the stream's
+    // grade_id — with a ?stream= deep link the id is set before they load.
+    useEffect(() => { fetchExams(); }, [fetchExams]);
 
     // 3. Fetch marks for selected exam (via server API instead of browser Supabase)
     const fetchMarks = useCallback(async () => {

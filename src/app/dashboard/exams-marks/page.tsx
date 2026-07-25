@@ -1,23 +1,48 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { PenTool, Trophy, Send } from 'lucide-react';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { MarksSetupTab } from '@/components/exams-marks/MarksSetupTab';
 import { ExamResultsTab } from '@/components/exams-marks/ExamResultsTab';
 import { PublishResultsView } from '@/components/exams-marks/PublishResultsView';
 
 type Tab = 'setup' | 'results' | 'publish';
 
+const parseTab = (t: string | null): Tab | null =>
+  t === 'results' || t === 'publish' || t === 'setup' ? t : null;
+
 export default function ExamsMarksPage() {
+  return (
+    <Suspense fallback={<ContentSkeleton />}>
+      <ExamsMarksPageInner />
+    </Suspense>
+  );
+}
+
+function ExamsMarksPageInner() {
   const { role } = useAuth();
-  // Honor a ?tab= deep link (e.g. the admin dashboard's "results awaiting
-  // approval" banner links straight to the Publish tab). Read once on mount.
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window === 'undefined') return 'setup';
-    const t = new URLSearchParams(window.location.search).get('tab');
-    return t === 'results' || t === 'publish' ? t : 'setup';
-  });
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // The tab lives in the URL rather than in state. Deep links between tabs are
+  // same-route client navigations that never remount this page — the admin
+  // dashboard's "results awaiting approval" banner opens the Publish tab, and
+  // the Publish tab's "Review marks" link jumps to the Results tab for one
+  // exam — so reading the URL every render is what keeps those in sync.
+  const tab: Tab = parseTab(searchParams.get('tab')) ?? 'setup';
+
+  const selectTab = (id: Tab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', id);
+    // Leave a deep link's exam selection behind when the tab is switched by hand.
+    params.delete('stream');
+    params.delete('exam');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const tabs = [
     { id: 'setup' as const, label: 'Mark Entry & Setup', icon: <PenTool size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
@@ -38,7 +63,7 @@ export default function ExamsMarksPage() {
 
       <div className="flex flex-wrap gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t.id} onClick={() => selectTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.icon} {t.label}
           </button>
         ))}
