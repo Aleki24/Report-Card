@@ -166,7 +166,7 @@ export const c = StyleSheet.create({
        table below it is already carried by primary blue, and two saturated
        blues stacked at the top of the page fought each other. The blue now
        appears once, as the rule under the masthead. */
-    masthead: { backgroundColor: T.indigo, paddingTop: 11, paddingBottom: 9, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
+    masthead: { backgroundColor: T.indigo, paddingTop: 10, paddingBottom: 8, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
     crestFrame: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.white, padding: 4, alignItems: 'center', justifyContent: 'center' },
     crest: { width: 42, height: 42, objectFit: 'contain' },
     crestFallback: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
@@ -191,7 +191,7 @@ export const c = StyleSheet.create({
     infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     infoCardHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
     infoCardTitle: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
-    infoCardBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 8 },
+    infoCardBody: { backgroundColor: T.white, paddingVertical: 5, paddingHorizontal: 8 },
     infoLine: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 3 },
     infoKey: { fontSize: 7, color: T.muted, width: '36%' },
     infoLeader: { flex: 1, borderBottom: `0.6pt dotted ${T.line}`, marginBottom: 2, marginHorizontal: 3 },
@@ -209,8 +209,8 @@ export const c = StyleSheet.create({
 
     row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
     rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
-    cellPad: { paddingVertical: 4, paddingHorizontal: 4 },
-    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingLeft: 7, paddingRight: 4 },
+    cellPad: { paddingVertical: 3.5, paddingHorizontal: 4 },
+    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5, paddingLeft: 7, paddingRight: 4 },
     subjectDot: { width: 4, height: 4, borderRadius: 2, marginRight: 6 },
     subjectName: { fontSize: 7.8, color: T.ink },
     /** Who teaches the subject — set under the name so no column is spent on it. */
@@ -222,7 +222,9 @@ export const c = StyleSheet.create({
     tdCenter: { fontSize: 7.8, color: T.ink, textAlign: 'center' },
     tdCenterBold: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
     tdMuted: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
-    tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 4, paddingHorizontal: 5, lineHeight: 1.25 },
+    /** A points value that the 8-4-4 best-7 selection left out of the total. */
+    tdCenterExcluded: { fontSize: 7.8, color: '#9AA7B8', textAlign: 'center' },
+    tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 3.5, paddingHorizontal: 5, lineHeight: 1.25 },
     bandMark: { ...boldFont, fontSize: 8.2, textAlign: 'center' },
     bandDash: { fontSize: 7.5, color: '#C7D0DC', textAlign: 'center' },
     totalRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.primarySoft, borderTop: `1pt solid ${T.primary}` },
@@ -279,7 +281,7 @@ export const c = StyleSheet.create({
     commentDivider: { height: 0.6, backgroundColor: T.line, marginVertical: 5 },
 
     /* ── Signatures ── */
-    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 9, gap: 16 },
+    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 7, gap: 16 },
     signBlock: { flex: 1 },
     signLine: { borderBottom: `0.8pt solid ${T.muted}`, height: 12 },
     signLabel: { fontSize: 6.2, color: T.muted, marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
