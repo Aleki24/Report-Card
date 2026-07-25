@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, View, renderToBuffer, pdf } from '@react-pdf/renderer';
-import QRCode from 'qrcode';
 import { s } from './pdf/pdfStyles';
+import { renderQrDataUri } from './pdf/qr';
 import { getTemplateLayout, templateHasPageBars, type ReportTemplateId } from './pdf/templates';
 
 /* ── Data Interface ─────────────────────────────────────── */
@@ -97,14 +97,7 @@ export function ReportCardContent({ data, qrCodeDataUri, template }: { data: Rep
 
 /* ── Generate single student PDF ─────────────────────────── */
 export async function generateStudentReportCardPDF(data: ReportCardData, template?: ReportTemplateId): Promise<Buffer> {
-    let qrCodeDataUri = undefined;
-    if (data.resultUrl) {
-        try {
-            qrCodeDataUri = await QRCode.toDataURL(data.resultUrl, { margin: 1, width: 64 });
-        } catch (e) {
-            console.error("Failed to generate QR code", e);
-        }
-    }
+    const qrCodeDataUri = data.resultUrl ? await renderQrDataUri(data.resultUrl) : undefined;
     const buffer = await renderToBuffer(
         <ReportCardDocument data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
     );
@@ -117,14 +110,7 @@ export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData
 
     for (let i = 0; i < reportCardsData.length; i++) {
         const data = reportCardsData[i];
-        let qrCodeDataUri: string | undefined = undefined;
-        if (data.resultUrl) {
-            try {
-                qrCodeDataUri = await QRCode.toDataURL(data.resultUrl, { margin: 1, width: 64 });
-            } catch (e) {
-                console.error("Failed to generate QR code", e);
-            }
-        }
+        const qrCodeDataUri = data.resultUrl ? await renderQrDataUri(data.resultUrl) : undefined;
 
         pages.push(
             <Page key={`${data.enrollmentNumber || data.studentName}-${i}`} size="A4" orientation="portrait" style={[s.page, { display: 'flex', flexDirection: 'column' }]} fixed>

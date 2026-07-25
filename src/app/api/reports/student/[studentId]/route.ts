@@ -17,6 +17,7 @@ import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { buildPortalUrl } from '@/lib/student/portal-access';
 import { selectExamRound } from '@/lib/reports/exam-round';
 
 export const runtime = 'nodejs';
@@ -765,7 +766,11 @@ export async function GET(
             classTeacherComment: classTeacherComment || undefined,
             principalComment: principalComment || undefined,
             gradeBoundaries,
-            resultUrl: `${baseUrl}/student/${studentId}`,
+            // The QR points at the learner's portal sign-up/sign-in screen, not
+            // at a protected page — a learner who has never logged in has to be
+            // able to get somewhere useful. No token means no QR at all, which
+            // is better than printing a link that goes nowhere.
+            resultUrl: student.portal_token ? buildPortalUrl(baseUrl, student.portal_token) : undefined,
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
             openingDate,

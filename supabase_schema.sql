@@ -138,6 +138,9 @@ CREATE TABLE IF NOT EXISTS students (
     date_enrolled DATE DEFAULT CURRENT_DATE,
     status student_status DEFAULT 'ACTIVE' NOT NULL,
     avatar_url TEXT,
+    -- Stable secret behind the report-card QR code. Survives the id-swap that
+    -- activation performs on this row, so printed QRs never go stale.
+    portal_token TEXT UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text, '-', ''),
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 

@@ -18,6 +18,7 @@ import type { GradingScale } from '@/types';
 import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { buildPortalUrl } from '@/lib/student/portal-access';
 import { selectExamRound } from '@/lib/reports/exam-round';
 export const runtime = 'nodejs';
 
@@ -43,7 +44,7 @@ export async function GET(
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
         const { data: students, error: studentsErr } = await supabase
             .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)')
+            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, portal_token, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)')
             .eq('current_grade_stream_id', classId);
 
         if (studentsErr || !students || students.length === 0) {
@@ -537,7 +538,9 @@ export async function GET(
                 classTeacherComment: classTeacherComment || undefined,
                 principalComment: principalComment || undefined,
                 gradeBoundaries,
-                resultUrl: `${baseUrl}/student/${student.id}`,
+                // See the student report route: the QR has to land on a public
+                // screen the learner can actually sign up from.
+                resultUrl: (student as any).portal_token ? buildPortalUrl(baseUrl, (student as any).portal_token) : undefined,
                 totalScore: computedTotalScore,
                 totalPossible: computedTotalPossible,
                 openingDate,
