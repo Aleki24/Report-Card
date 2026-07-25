@@ -11,7 +11,11 @@ import type { ReportCardData } from '../pdfGenerator';
    The mark is printed in the ONE band it falls into and the others
    show a dash, so a parent reads the attainment level without having
    to decode a symbol. Colours come from the project's chart tokens. */
-const BAR_H = 66;
+const BAR_H = 58;
+
+/** Beyond this many subjects the table alone can fill the sheet, so the
+ *  per-subject teacher line stands down: a second page costs more than a name. */
+const TEACHER_LINE_MAX_SUBJECTS = 10;
 
 const CBC_BANDS = [
     { code: 'EE', name: 'Exceeding Expectations', color: T.green, min: 75 },
@@ -22,6 +26,21 @@ const CBC_BANDS = [
 
 const bandFor = (pct: number | null | undefined) =>
     pct == null ? null : (CBC_BANDS.find(b => pct >= b.min) ?? CBC_BANDS[CBC_BANDS.length - 1]);
+
+type SubjectMark = ReportCardData['subjectMarks'][number];
+
+/** Movement in a subject since the previous round, or null when there is none. */
+function deviation(sm: SubjectMark): number | null {
+    if (sm.percentage == null || sm.previousPercentage == null) return null;
+    return Math.round(sm.percentage - sm.previousPercentage);
+}
+
+/** Signed figures read as movement; unsigned ones read as a total.
+    Kept to ASCII — an en-dash or a ± is a missing glyph away from a blank. */
+const signed = (value: number, unit = '') =>
+    `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value)}${unit}`;
+
+const deltaColor = (value: number) => (value > 0 ? T.green : value < 0 ? T.red : T.muted);
 
 function InfoLine({ label, value }: { label: string; value?: string }) {
     return (
@@ -59,6 +78,11 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
         const found = data.subjectMarks.find(m => (m.paperScores?.length ?? 0) > i)?.paperScores?.[i];
         return found?.code || `PP${i + 1}`;
     });
+
+    // The deviation column earns its width only when there is an earlier round
+    // to compare against — a school's first exam prints the table as before.
+    const showDev = data.subjectMarks.some(m => m.previousPercentage != null);
+    const showTeachers = data.subjectMarks.length <= TEACHER_LINE_MAX_SUBJECTS;
 
     return (
         <View style={{ flex: 1, fontFamily: FONT_BODY }}>
@@ -112,30 +136,55 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
 
             {/* ── Subject table ── */}
             {isKCSE
-                ? <KcseTable data={data} paperCodes={paperCodes} />
-                : <CbcTable data={data} paperCodes={paperCodes} />}
+                ? <KcseTable data={data} paperCodes={paperCodes} showDev={showDev} showTeachers={showTeachers} />
+                : <CbcTable data={data} paperCodes={paperCodes} showDev={showDev} showTeachers={showTeachers} />}
 
-            {/* ── Overall ── */}
+            {/* ── Overall (with movement since the previous round) ── */}
             <View style={c.averageBar}>
                 <View style={c.averageLabelWrap}>
                     <Text style={c.averageLabel}>Overall Performance</Text>
-                    <Text style={c.averageSub}>{data.subjectMarks.length} subjects assessed</Text>
+                    <Text style={c.averageSub}>
+                        {data.subjectMarks.length} subjects assessed
+                        {data.previousExamLabel ? ` · change vs ${data.previousExamLabel}` : ''}
+                    </Text>
                 </View>
                 <View style={c.averageValueWrap}>
                     <View style={c.averageStat}>
                         <Text style={c.averageStatLabel}>Mean Score</Text>
                         <Text style={c.averageHero}>{Math.round(data.overallPercentage)}%</Text>
+                        <Delta
+                            value={data.previousOverallPercentage != null
+                                ? Math.round(data.overallPercentage - data.previousOverallPercentage)
+                                : null}
+                        />
                     </View>
                     {isKCSE && data.totalPoints !== undefined && (
                         <View style={c.averageStat}>
                             <Text style={c.averageStatLabel}>Points</Text>
                             <Text style={c.averageStatValue}>{data.totalPoints}</Text>
+                            <Delta
+                                value={data.previousTotalPoints != null
+                                    ? data.totalPoints - data.previousTotalPoints
+                                    : null}
+                            />
                         </View>
                     )}
                     <View style={c.averageStat}>
                         <Text style={c.averageStatLabel}>Position</Text>
                         <Text style={c.averageStatValue}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text>
+                        {/* Moving from 8th to 5th is +3: a smaller rank is a better one. */}
+                        <Delta
+                            value={data.previousClassRank && data.classRank > 0
+                                ? data.previousClassRank - data.classRank
+                                : null}
+                        />
                     </View>
+                    {data.classMeanPercentage !== undefined && (
+                        <View style={c.averageStat}>
+                            <Text style={c.averageStatLabel}>Class Mean</Text>
+                            <Text style={c.averageStatValue}>{Math.round(data.classMeanPercentage)}%</Text>
+                        </View>
+                    )}
                     <View style={c.averageStat}>
                         <Text style={c.averageStatLabel}>{isKCSE ? 'Mean Grade' : 'Level'}</Text>
                         <Text style={[c.averageStatValue, { color: attainmentColor(data.overallPercentage) }]}>
@@ -189,11 +238,32 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
 
 /* ── Shared row pieces ────────────────────────────────────── */
 
-function SubjectCell({ name, width }: { name: string; width: string }) {
+/** A small signed figure under a headline number. Renders nothing without one. */
+function Delta({ value, unit = '' }: { value: number | null; unit?: string }) {
+    if (value == null) return null;
+    return <Text style={[c.averageStatDelta, { color: deltaColor(value) }]}>{signed(value, unit)}</Text>;
+}
+
+/** Subject name, with the teacher set beneath it when the school records one. */
+function SubjectCell({ name, teacher, width }: { name: string; teacher?: string; width: string }) {
     return (
         <View style={[c.subjectCell, { width }]}>
             <View style={[c.subjectDot, { backgroundColor: T.primary }]} />
-            <Text style={c.subjectName}>{name}</Text>
+            <View style={{ flex: 1 }}>
+                <Text style={c.subjectName}>{name}</Text>
+                {teacher ? <Text style={c.subjectTeacher}>{teacher}</Text> : null}
+            </View>
+        </View>
+    );
+}
+
+/** Movement in this subject since the previous round. */
+function DevCell({ value, width }: { value: number | null; width: string }) {
+    return (
+        <View style={[c.cellPad, { width }]}>
+            {value == null
+                ? <Text style={c.bandDash}>–</Text>
+                : <Text style={value > 0 ? c.devUp : value < 0 ? c.devDown : c.devFlat}>{signed(value)}</Text>}
         </View>
     );
 }
@@ -218,12 +288,13 @@ function PaperCells({ papers, count, width }: {
 }
 
 /* ── CBC table ────────────────────────────────────────────── */
-function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: string[] }) {
+function CbcTable({ data, paperCodes, showDev, showTeachers }: { data: ReportCardData; paperCodes: string[]; showDev: boolean; showTeachers: boolean }) {
     const n = paperCodes.length;
     const paperW = n > 0 ? 7 : 0;
     const subjectW = 26 - (n > 0 ? 2 : 0);
     const totalW = 11;
-    const bandW = (100 - subjectW - n * paperW - totalW) / CBC_BANDS.length;
+    const devW = showDev ? 7 : 0;
+    const bandW = (100 - subjectW - n * paperW - totalW - devW) / CBC_BANDS.length;
     const pct = (v: number) => `${v}%`;
 
     return (
@@ -233,7 +304,7 @@ function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: stri
                 {n > 0 && (
                     <View style={[c.thGroupCell, { width: pct(n * paperW) }]}><Text style={c.thGroupText}>Papers</Text></View>
                 )}
-                <View style={[c.thGroupCell, { width: pct(totalW) }]}><Text style={c.thGroupText}>Total</Text></View>
+                <View style={[c.thGroupCell, { width: pct(totalW + devW) }]}><Text style={c.thGroupText}>Total</Text></View>
                 <View style={[c.thGroupCell, { flex: 1 }]}><Text style={c.thGroupText}>Competency Level</Text></View>
             </View>
             <View style={c.thSubRow}>
@@ -242,6 +313,9 @@ function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: stri
                     <View key={code} style={[c.thSubCell, { width: pct(paperW) }]}><Text style={c.thSubText}>{code}</Text></View>
                 ))}
                 <View style={[c.thSubCell, { width: pct(totalW) }]}><Text style={c.thSubNote}>out of 100</Text></View>
+                {showDev && (
+                    <View style={[c.thSubCell, { width: pct(devW) }]}><Text style={c.thSubText}>Dev.</Text></View>
+                )}
                 {CBC_BANDS.map(b => (
                     <View key={b.code} style={[c.thSubCell, { width: pct(bandW), backgroundColor: b.color }]}>
                         <Text style={c.thSubText}>{b.code}</Text>
@@ -253,11 +327,12 @@ function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: stri
                 const band = bandFor(sm.percentage);
                 return (
                     <View style={i % 2 === 1 ? c.rowAlt : c.row} key={`${sm.subjectName}-${i}`}>
-                        <SubjectCell name={sm.subjectName} width={pct(subjectW)} />
+                        <SubjectCell name={sm.subjectName} teacher={showTeachers ? sm.instructorName : undefined} width={pct(subjectW)} />
                         <PaperCells papers={sm.paperScores} count={n} width={pct(paperW)} />
                         <View style={[c.cellPad, { width: pct(totalW) }]}>
                             <Text style={c.tdCenterBold}>{sm.percentage != null ? sm.percentage : '—'}</Text>
                         </View>
+                        {showDev && <DevCell value={deviation(sm)} width={pct(devW)} />}
                         {CBC_BANDS.map(b => (
                             <View key={b.code} style={[c.cellPad, { width: pct(bandW) }]}>
                                 {band?.code === b.code
@@ -275,6 +350,14 @@ function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: stri
                 <View style={[c.cellPad, { width: pct(totalW) }]}>
                     <Text style={[c.tdCenterBold, { color: T.primary }]}>{Math.round(data.overallPercentage)}</Text>
                 </View>
+                {showDev && (
+                    <DevCell
+                        value={data.previousOverallPercentage != null
+                            ? Math.round(data.overallPercentage - data.previousOverallPercentage)
+                            : null}
+                        width={pct(devW)}
+                    />
+                )}
                 <View style={{ flex: 1 }} />
             </View>
         </View>
@@ -282,14 +365,22 @@ function CbcTable({ data, paperCodes }: { data: ReportCardData; paperCodes: stri
 }
 
 /* ── 8-4-4 table ──────────────────────────────────────────── */
-function KcseTable({ data, paperCodes }: { data: ReportCardData; paperCodes: string[] }) {
+function KcseTable({ data, paperCodes, showDev, showTeachers }: { data: ReportCardData; paperCodes: string[]; showDev: boolean; showTeachers: boolean }) {
     const n = paperCodes.length;
     const paperW = n > 0 ? 7 : 0;
     const subjectW = 23;
     const totalW = 9;
+    const devW = showDev ? 7 : 0;
     const gradeW = 8;
     const pointsW = 7;
-    const rankW = 10;
+    // The rank column gives up a point of width to the deviation column so the
+    // remark keeps the room it needs to stay readable.
+    const rankW = showDev ? 9 : 10;
+    // Every subject carries a class mean once the room has been ranked — but
+    // paper columns are the greedier feature, and with both the remark column
+    // is squeezed to nothing, so the class mean stands down when papers print.
+    const showClassAvg = n === 0 && data.subjectMarks.some(m => m.classAverage != null);
+    const classW = showClassAvg ? 8 : 0;
     const pct = (v: number) => `${v}%`;
 
     return (
@@ -297,7 +388,7 @@ function KcseTable({ data, paperCodes }: { data: ReportCardData; paperCodes: str
             <View style={c.thGroupRow}>
                 <View style={[c.thGroupCell, { width: pct(subjectW) }]}><Text style={c.thGroupText}>Subject</Text></View>
                 {n > 0 && <View style={[c.thGroupCell, { width: pct(n * paperW) }]}><Text style={c.thGroupText}>Papers</Text></View>}
-                <View style={[c.thGroupCell, { width: pct(totalW) }]}><Text style={c.thGroupText}>Total</Text></View>
+                <View style={[c.thGroupCell, { width: pct(totalW + devW + classW) }]}><Text style={c.thGroupText}>Mark</Text></View>
                 <View style={[c.thGroupCell, { width: pct(gradeW + pointsW + rankW) }]}><Text style={c.thGroupText}>Attainment</Text></View>
                 <View style={[c.thGroupCell, { flex: 1 }]}><Text style={c.thGroupText}>Remark</Text></View>
             </View>
@@ -307,6 +398,8 @@ function KcseTable({ data, paperCodes }: { data: ReportCardData; paperCodes: str
                     <View key={code} style={[c.thSubCell, { width: pct(paperW) }]}><Text style={c.thSubText}>{code}</Text></View>
                 ))}
                 <View style={[c.thSubCell, { width: pct(totalW) }]}><Text style={c.thSubNote}>out of 100</Text></View>
+                {showDev && <View style={[c.thSubCell, { width: pct(devW) }]}><Text style={c.thSubText}>Dev.</Text></View>}
+                {showClassAvg && <View style={[c.thSubCell, { width: pct(classW) }]}><Text style={c.thSubText}>Class</Text></View>}
                 <View style={[c.thSubCell, { width: pct(gradeW) }]}><Text style={c.thSubText}>Grade</Text></View>
                 <View style={[c.thSubCell, { width: pct(pointsW) }]}><Text style={c.thSubText}>Pts</Text></View>
                 <View style={[c.thSubCell, { width: pct(rankW) }]}><Text style={c.thSubText}>Rank</Text></View>
@@ -315,11 +408,17 @@ function KcseTable({ data, paperCodes }: { data: ReportCardData; paperCodes: str
 
             {data.subjectMarks.map((sm, i) => (
                 <View style={i % 2 === 1 ? c.rowAlt : c.row} key={`${sm.subjectName}-${i}`}>
-                    <SubjectCell name={sm.subjectName} width={pct(subjectW)} />
+                    <SubjectCell name={sm.subjectName} teacher={showTeachers ? sm.instructorName : undefined} width={pct(subjectW)} />
                     <PaperCells papers={sm.paperScores} count={n} width={pct(paperW)} />
                     <View style={[c.cellPad, { width: pct(totalW) }]}>
                         <Text style={c.tdCenterBold}>{sm.percentage != null ? sm.percentage : '—'}</Text>
                     </View>
+                    {showDev && <DevCell value={deviation(sm)} width={pct(devW)} />}
+                    {showClassAvg && (
+                        <View style={[c.cellPad, { width: pct(classW) }]}>
+                            <Text style={c.tdMuted}>{sm.classAverage != null ? Math.round(sm.classAverage) : '—'}</Text>
+                        </View>
+                    )}
                     <View style={[c.cellPad, { width: pct(gradeW) }]}>
                         <Text style={[c.bandMark, { color: attainmentColor(sm.percentage) }]}>{sm.grade || '—'}</Text>
                     </View>
@@ -341,6 +440,21 @@ function KcseTable({ data, paperCodes }: { data: ReportCardData; paperCodes: str
                 <View style={[c.cellPad, { width: pct(totalW) }]}>
                     <Text style={[c.tdCenterBold, { color: T.primary }]}>{Math.round(data.overallPercentage)}</Text>
                 </View>
+                {showDev && (
+                    <DevCell
+                        value={data.previousOverallPercentage != null
+                            ? Math.round(data.overallPercentage - data.previousOverallPercentage)
+                            : null}
+                        width={pct(devW)}
+                    />
+                )}
+                {showClassAvg && (
+                    <View style={[c.cellPad, { width: pct(classW) }]}>
+                        <Text style={c.tdMuted}>
+                            {data.classMeanPercentage != null ? Math.round(data.classMeanPercentage) : '—'}
+                        </Text>
+                    </View>
+                )}
                 <View style={[c.cellPad, { width: pct(gradeW) }]}>
                     <Text style={[c.bandMark, { color: attainmentColor(data.overallPercentage) }]}>
                         {data.overallPointsGrade || data.overallGrade || '—'}
@@ -364,21 +478,42 @@ function SubjectAnalysis({ data }: { data: ReportCardData }) {
     }
     const charted = marks.slice(0, 10);
     const short = (n: string) => (n.length > 7 ? `${n.substring(0, 6)}.` : n);
+    // The bar says how the learner did; the rule across it says how the room
+    // did. Together they answer the question a bare mark never can.
+    const hasClassMean = charted.some(m => m.classAverage != null);
 
     return (
-        <View style={c.chartRow}>
-            {charted.map((m, i) => {
-                const p = m.percentage || 0;
-                return (
-                    <View key={i} style={c.chartCol}>
-                        <View style={[c.chartTrack, { height: BAR_H }]}>
-                            <View style={[c.chartFill, { height: Math.max(2, (p / 100) * BAR_H), backgroundColor: attainmentColor(p) }]} />
+        <View>
+            <View style={c.chartRow}>
+                {charted.map((m, i) => {
+                    const p = m.percentage || 0;
+                    const avg = m.classAverage;
+                    return (
+                        <View key={i} style={c.chartCol}>
+                            <View style={[c.chartTrack, { height: BAR_H }]}>
+                                <View style={[c.chartFill, { height: Math.max(2, (p / 100) * BAR_H), backgroundColor: attainmentColor(p) }]} />
+                                {avg != null && (
+                                    <View style={[c.chartMeanMark, { bottom: Math.min(BAR_H - 1, (avg / 100) * BAR_H) }]} />
+                                )}
+                            </View>
+                            <Text style={c.chartPct}>{Math.round(p)}</Text>
+                            <Text style={c.chartLabel}>{short(m.subjectName)}</Text>
                         </View>
-                        <Text style={c.chartPct}>{Math.round(p)}</Text>
-                        <Text style={c.chartLabel}>{short(m.subjectName)}</Text>
+                    );
+                })}
+            </View>
+            {hasClassMean && (
+                <View style={c.chartLegend}>
+                    <View style={c.chartLegendItem}>
+                        <View style={[c.chartLegendSwatch, { backgroundColor: T.primary }]} />
+                        <Text style={c.chartLegendText}>Learner</Text>
                     </View>
-                );
-            })}
+                    <View style={c.chartLegendItem}>
+                        <View style={c.chartLegendRule} />
+                        <Text style={c.chartLegendText}>Class mean</Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -396,12 +531,37 @@ function AtAGlance({ data }: { data: ReportCardData }) {
     const atOrAbove = marks.filter(m => (m.percentage || 0) >= mean).length;
     const short = (n: string) => (n.length > 12 ? `${n.substring(0, 11)}.` : n);
 
+    // How the learner sits against the room, subject by subject.
+    const vsClass = marks.filter(m => m.classAverage != null);
+    const aboveClass = vsClass.filter(m => (m.percentage || 0) >= (m.classAverage || 0)).length;
+
+    // Movement since the previous round: the mean, and the subjects that moved.
+    const compared = marks.filter(m => m.previousPercentage != null);
+    const improved = compared.filter(m => (m.percentage || 0) > (m.previousPercentage || 0)).length;
+    const meanChange = data.previousOverallPercentage != null
+        ? Math.round(data.overallPercentage - data.previousOverallPercentage)
+        : null;
+
     const rows: [string, string, string?][] = [
         ['Strongest', `${short(best.subjectName)} · ${Math.round(best.percentage || 0)}%`, attainmentColor(best.percentage)],
         ['Needs focus', `${short(weakest.subjectName)} · ${Math.round(weakest.percentage || 0)}%`, attainmentColor(weakest.percentage)],
-        ['At / above mean', `${atOrAbove} of ${marks.length}`],
-        ['Class position', data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'],
+        ['At / above own mean', `${atOrAbove} of ${marks.length}`],
     ];
+
+    if (data.classMeanPercentage !== undefined) {
+        const gap = Math.round(data.overallPercentage - data.classMeanPercentage);
+        rows.push(['Vs class mean', `${Math.round(data.classMeanPercentage)}% · ${signed(gap)}`, deltaColor(gap)]);
+    }
+    if (vsClass.length > 0) {
+        rows.push(['Above class average', `${aboveClass} of ${vsClass.length}`]);
+    }
+    if (meanChange != null) {
+        rows.push([`Mean vs ${data.previousExamLabel || 'last exam'}`, signed(meanChange, '%'), deltaColor(meanChange)]);
+    }
+    if (compared.length > 0) {
+        rows.push(['Subjects improved', `${improved} of ${compared.length}`]);
+    }
+    rows.push(['Class position', data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—']);
 
     return (
         <View style={c.statList}>

@@ -20,6 +20,13 @@ import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import { buildVerifyUrl } from '@/lib/reports/grading-context';
+import {
+    earliestExamCreatedAt,
+    fetchPreviousRound,
+    fetchSubjectTeachers,
+    overallClassMean,
+    subjectClassAverages,
+} from '@/lib/reports/comparatives';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -281,7 +288,10 @@ export async function GET(
         // Otherwise every round in the term (Mid Term, End Term, ...) would be
         // averaged together and each subject row would keep whichever mark the
         // DB happened to return last — a report of nothing in particular.
-        const allMarks = examType ? fetchedMarks : selectExamRound(fetchedMarks || []).marks;
+        const roundSelection = examType
+            ? { round: examType, marks: fetchedMarks || [] }
+            : selectExamRound(fetchedMarks || []);
+        const allMarks = roundSelection.marks;
 
         if (marksErr) {
             console.error('Error fetching class marks:', marksErr);
@@ -382,6 +392,24 @@ export async function GET(
                 gradingScales,
             });
         }
+
+        // Comparatives shared by every card in the batch: the class mean per
+        // subject, the round before this one (deviation + change figures) and
+        // who teaches each subject. Best-effort — a first-ever exam or a school
+        // with no teacher assignments simply prints no comparison.
+        const subjectClassAverageMap = subjectClassAverages(subjectAggs);
+        const classMeanPercentage = overallClassMean(aggregates);
+        const [previousRound, subjectTeacherNames] = await Promise.all([
+            fetchPreviousRound(supabase, {
+                studentIds,
+                gradeId,
+                before: earliestExamCreatedAt(allMarks || []),
+                current: { termId, examType: roundSelection.round },
+                gradingScales,
+                gradingSystemType,
+            }),
+            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
+        ]);
 
         // Build per-subject rank maps: subjectId -> Map<studentId, rank>
         const subjectRankMaps: Record<string, Map<string, number>> = {};
@@ -495,6 +523,9 @@ export async function GET(
                     totalStudents: subjectStudentCounts[subject.id] ?? undefined,
                     includedInPoints: selectedSubjectIds.has(subject.id),
                     paperScores: paperScoreMap.get(`${m.exams.id}|${student.id}`),
+                    instructorName: subjectTeacherNames.get(subject.id),
+                    classAverage: subjectClassAverageMap.get(subject.id),
+                    previousPercentage: previousRound?.subjectPercentage.get(`${student.id}|${subject.id}`),
                 });
             });
 
@@ -535,6 +566,11 @@ export async function GET(
                 combinationName: ((student as any).subject_combinations as any)?.name || undefined,
                 combinationRank: combinationRankInfo.get(student.id)?.rank,
                 combinationSize: combinationRankInfo.get(student.id)?.size,
+                classMeanPercentage,
+                previousExamLabel: previousRound?.label,
+                previousOverallPercentage: previousRound?.overall.get(student.id)?.percentage,
+                previousTotalPoints: previousRound?.overall.get(student.id)?.totalPoints,
+                previousClassRank: previousRound?.overall.get(student.id)?.rank || undefined,
                 classTeacherComment: classTeacherComment || undefined,
                 principalComment: principalComment || undefined,
                 gradeBoundaries,

@@ -161,18 +161,22 @@ const PAGE_X = 26;
 export const c = StyleSheet.create({
     page: { padding: 0, fontFamily: FONT_BODY, fontSize: 8.5, color: T.ink, backgroundColor: T.white },
 
-    /* ── Masthead ── */
-    masthead: { backgroundColor: T.primary, paddingTop: 13, paddingBottom: 11, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
+    /* ── Masthead ──
+       The band is the deep sidebar indigo, not the product blue: the subject
+       table below it is already carried by primary blue, and two saturated
+       blues stacked at the top of the page fought each other. The blue now
+       appears once, as the rule under the masthead. */
+    masthead: { backgroundColor: T.indigo, paddingTop: 11, paddingBottom: 9, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
     crestFrame: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.white, padding: 4, alignItems: 'center', justifyContent: 'center' },
     crest: { width: 42, height: 42, objectFit: 'contain' },
-    crestFallback: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.primaryDark, alignItems: 'center', justifyContent: 'center' },
+    crestFallback: { width: 50, height: 50, borderRadius: 6, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
     crestFallbackText: { ...displayFont, fontSize: 19, color: T.white },
     mastheadCenter: { flex: 1, paddingHorizontal: 12 },
     mastheadSchool: { ...displayFont, fontSize: 13, color: T.white, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 },
-    mastheadAddress: { fontSize: 6.5, color: '#CFE0FF', marginTop: 3 },
-    mastheadDoc: { fontSize: 7, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 4 },
+    mastheadAddress: { fontSize: 6.5, color: '#C6CBEC', marginTop: 3 },
+    mastheadDoc: { fontSize: 7, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 4 },
     badge: { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 5, paddingHorizontal: 9, alignItems: 'center', minWidth: 54 },
-    badgeLabel: { fontSize: 5.5, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 0.6 },
+    badgeLabel: { fontSize: 5.5, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 0.6 },
     badgeValue: { ...boldFont, fontSize: 14, color: T.white, marginTop: 1 },
     // Sized for scanning, not for looks: the code is ~45 modules across, so
     // 56pt (~19.8mm) keeps each module ~0.44mm — comfortably above the ~0.33mm
@@ -180,15 +184,15 @@ export const c = StyleSheet.create({
     // this, and don't add padding: padding is subtracted from the drawn image,
     // and the PNG already carries its own 4-module white quiet zone.
     qrImg: { width: 56, height: 56, backgroundColor: T.white, borderRadius: 4, marginLeft: 8 },
-    accentRule: { height: 3, backgroundColor: T.indigo },
+    accentRule: { height: 3, backgroundColor: T.primary },
 
     /* ── Info cards ── */
-    infoRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 10, marginBottom: 9 },
+    infoRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 8, marginBottom: 7 },
     infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     infoCardHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
     infoCardTitle: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
     infoCardBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 8 },
-    infoLine: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 3.5 },
+    infoLine: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 3 },
     infoKey: { fontSize: 7, color: T.muted, width: '36%' },
     infoLeader: { flex: 1, borderBottom: `0.6pt dotted ${T.line}`, marginBottom: 2, marginHorizontal: 3 },
     infoVal: { ...boldFont, fontSize: 8, color: T.ink, maxWidth: '62%', textAlign: 'right' },
@@ -205,21 +209,27 @@ export const c = StyleSheet.create({
 
     row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
     rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
-    cellPad: { paddingVertical: 4.5, paddingHorizontal: 4 },
-    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4.5, paddingLeft: 7, paddingRight: 4 },
+    cellPad: { paddingVertical: 4, paddingHorizontal: 4 },
+    subjectCell: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingLeft: 7, paddingRight: 4 },
     subjectDot: { width: 4, height: 4, borderRadius: 2, marginRight: 6 },
     subjectName: { fontSize: 7.8, color: T.ink },
+    /** Who teaches the subject — set under the name so no column is spent on it. */
+    subjectTeacher: { fontSize: 5.6, color: T.muted, marginTop: 0.5 },
+    /** Movement since the previous round: signed, and coloured by direction. */
+    devUp: { ...boldFont, fontSize: 7.2, color: T.green, textAlign: 'center' },
+    devDown: { ...boldFont, fontSize: 7.2, color: T.red, textAlign: 'center' },
+    devFlat: { fontSize: 7.2, color: T.muted, textAlign: 'center' },
     tdCenter: { fontSize: 7.8, color: T.ink, textAlign: 'center' },
     tdCenterBold: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
     tdMuted: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
-    tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 4.5, paddingHorizontal: 5, lineHeight: 1.25 },
+    tdComment: { fontSize: 6.5, color: T.muted, paddingVertical: 4, paddingHorizontal: 5, lineHeight: 1.25 },
     bandMark: { ...boldFont, fontSize: 8.2, textAlign: 'center' },
     bandDash: { fontSize: 7.5, color: '#C7D0DC', textAlign: 'center' },
     totalRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.primarySoft, borderTop: `1pt solid ${T.primary}` },
     totalLabel: { ...boldFont, fontSize: 7.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.8, paddingVertical: 5, paddingLeft: 7 },
 
     /* ── Overall bar ── */
-    averageBar: { flexDirection: 'row', marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden' },
+    averageBar: { flexDirection: 'row', marginHorizontal: PAGE_X, marginTop: 7, borderRadius: 5, overflow: 'hidden' },
     averageLabelWrap: { backgroundColor: T.indigo, paddingVertical: 8, paddingHorizontal: 12, justifyContent: 'center', width: '34%' },
     averageLabel: { ...boldFont, fontSize: 7.5, color: T.white, textTransform: 'uppercase', letterSpacing: 1 },
     averageSub: { fontSize: 5.8, color: '#B9BDE0', marginTop: 2 },
@@ -228,14 +238,16 @@ export const c = StyleSheet.create({
     averageStatLabel: { fontSize: 5.5, color: T.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1.5 },
     averageStatValue: { ...boldFont, fontSize: 11, color: T.ink },
     averageHero: { ...boldFont, fontSize: 19, color: T.primary },
+    /** Change since the previous round, under the figure it belongs to. */
+    averageStatDelta: { ...boldFont, fontSize: 5.5, marginTop: 1 },
 
     /* ── Panels ── */
     grow: { flexGrow: 1, flexShrink: 1 },
-    panelRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 9 },
+    panelRow: { flexDirection: 'row', gap: 9, paddingHorizontal: PAGE_X, marginTop: 7 },
     panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     panelHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
     panelTitle: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
-    panelBody: { backgroundColor: T.white, paddingVertical: 9, paddingHorizontal: 9, flexGrow: 1, justifyContent: 'center' },
+    panelBody: { backgroundColor: T.white, paddingVertical: 7, paddingHorizontal: 9, flexGrow: 1, justifyContent: 'center' },
 
     chartRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
     chartCol: { alignItems: 'center', flex: 1 },
@@ -243,26 +255,33 @@ export const c = StyleSheet.create({
     chartFill: { width: 12, borderRadius: 2 },
     chartPct: { ...boldFont, fontSize: 5.5, color: T.ink, marginTop: 2.5 },
     chartLabel: { fontSize: 5, color: T.muted, textAlign: 'center', marginTop: 1 },
+    /** The class mean for that subject, laid across the learner's own bar. */
+    chartMeanMark: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: T.indigo },
+    chartLegend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10, marginTop: 6 },
+    chartLegendItem: { flexDirection: 'row', alignItems: 'center' },
+    chartLegendSwatch: { width: 7, height: 4, borderRadius: 1, marginRight: 3 },
+    chartLegendRule: { width: 7, height: 1.4, backgroundColor: T.indigo, marginRight: 3 },
+    chartLegendText: { fontSize: 5, color: T.muted },
 
     statList: { justifyContent: 'space-around', flexGrow: 1 },
-    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5, borderBottom: `0.5pt solid ${T.line}` },
-    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5 },
+    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5, borderBottom: `0.5pt solid ${T.line}` },
+    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5 },
     statKey: { fontSize: 6.5, color: T.muted },
     statVal: { ...boldFont, fontSize: 7.5, color: T.ink },
 
     /* ── Remarks ── */
-    commentWrap: { marginHorizontal: PAGE_X, marginTop: 9, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    commentWrap: { marginHorizontal: PAGE_X, marginTop: 7, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     commentHead: { backgroundColor: T.surface, paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.8pt solid ${T.line}` },
     commentHeadText: { ...boldFont, fontSize: 6.5, color: T.primary, textTransform: 'uppercase', letterSpacing: 1 },
-    commentBody: { backgroundColor: T.white, paddingVertical: 8, paddingHorizontal: 10, flexGrow: 1, justifyContent: 'center' },
+    commentBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 10, flexGrow: 1, justifyContent: 'center' },
     commentRole: { ...boldFont, fontSize: 6, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 2.5 },
     commentText: { ...italicFont, fontSize: 7.8, color: T.ink, lineHeight: 1.5 },
-    commentDivider: { height: 0.6, backgroundColor: T.line, marginVertical: 7 },
+    commentDivider: { height: 0.6, backgroundColor: T.line, marginVertical: 5 },
 
     /* ── Signatures ── */
-    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 11, gap: 16 },
+    signRow: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: PAGE_X, marginTop: 9, gap: 16 },
     signBlock: { flex: 1 },
-    signLine: { borderBottom: `0.8pt solid ${T.muted}`, height: 14 },
+    signLine: { borderBottom: `0.8pt solid ${T.muted}`, height: 12 },
     signLabel: { fontSize: 6.2, color: T.muted, marginTop: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
 });
 

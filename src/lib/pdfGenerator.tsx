@@ -33,6 +33,10 @@ export interface ReportCardData {
         includedInPoints?: boolean;
         /** Per-paper scores for multi-paper subjects (display order). */
         paperScores?: { code: string; score: number; maxScore: number }[];
+        /** Mean mark the whole ranking pool scored in this subject, this round. */
+        classAverage?: number;
+        /** The learner's mark in this subject at the previous round (deviation). */
+        previousPercentage?: number;
     }[];
     overallPercentage: number;
     overallGrade: string;
@@ -48,6 +52,16 @@ export interface ReportCardData {
     /** Rank within the grade-wide subject-combination group */
     combinationRank?: number;
     combinationSize?: number;
+    /** Mean percentage of every learner in the ranking pool, this round. */
+    classMeanPercentage?: number;
+    /* ── Comparison with the previous round ──────────────────
+       All optional: a first-ever exam has nothing to compare against, and
+       every layout treats a missing figure as "no deviation to show". */
+    /** Human label for the round the deviation figures compare against. */
+    previousExamLabel?: string;
+    previousOverallPercentage?: number;
+    previousTotalPoints?: number;
+    previousClassRank?: number;
     classTeacherComment?: string;
     principalComment?: string;
     gradeBoundaries: { symbol: string; label: string; min: number; max: number; points?: number }[];

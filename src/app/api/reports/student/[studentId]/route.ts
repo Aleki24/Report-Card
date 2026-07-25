@@ -17,6 +17,13 @@ import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
+import {
+    earliestExamCreatedAt,
+    fetchPreviousRound,
+    fetchSubjectTeachers,
+    overallClassMean,
+    subjectClassAverages,
+} from '@/lib/reports/comparatives';
 import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 
 export const runtime = 'nodejs';
@@ -284,7 +291,10 @@ export async function GET(
         // Without an explicit round, narrow to ONE sitting first — otherwise
         // each subject below would pick its own latest exam and the card would
         // mix Mid Term and End Term marks across subjects.
-        const roundMarks = examType ? (marks || []) : selectExamRound(marks || []).marks;
+        const roundSelection = examType
+            ? { round: examType, marks: marks || [] }
+            : selectExamRound(marks || []);
+        const roundMarks = roundSelection.marks;
 
         const orderedMarks = [...roundMarks].sort((a: any, b: any) =>
             new Date(a.exams?.created_at || 0).getTime() - new Date(b.exams?.created_at || 0).getTime()
@@ -359,6 +369,11 @@ export async function GET(
         const gradeStreamId = student.current_grade_stream_id;
         const subjectRanksMap = new Map<string, number>(); // subjectId -> this student's rank
         const subjectStudentCountMap = new Map<string, number>(); // subjectId -> total students taking this subject
+        // Comparatives printed beside the marks: what the room scored in each
+        // subject, and the pool the previous round is ranked over.
+        let subjectClassAverageMap = new Map<string, number>();
+        let classMeanPercentage: number | undefined;
+        let classmateIds: string[] = [];
 
         if (gradeStreamId) {
             const { data: classmates } = await supabase
@@ -368,7 +383,7 @@ export async function GET(
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;
-                const classmateIds = classmates.map((c: any) => c.id);
+                classmateIds = classmates.map((c: any) => c.id);
 
                 let rankQuery = supabase
                     .from('exam_marks')
@@ -427,6 +442,10 @@ export async function GET(
                     const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
                     classRank = ranks.get(studentId) || 0;
                     totalStudents = aggregates.length;
+
+                    // What the room scored — per subject, and overall.
+                    subjectClassAverageMap = subjectClassAverages(subjectAggs);
+                    classMeanPercentage = overallClassMean(aggregates);
 
                     // Get student counts per subject
                     const subjectStudentCounts = getSubjectStudentCounts(subjectAggs);
@@ -507,6 +526,21 @@ export async function GET(
         const markExamIds = [...new Set(safeMarks.map((m: any) => m.exams?.id).filter(Boolean))] as string[];
         const paperScoreMap = await fetchPaperScores(supabase, markExamIds, [studentId]);
 
+        // 9.6 Comparatives: the round before this one (for the deviation column
+        // and the header's change figures) and who teaches each subject. Both
+        // are best-effort — a first-ever exam simply prints no deviation.
+        const [previousRound, subjectTeacherNames] = await Promise.all([
+            fetchPreviousRound(supabase, {
+                studentIds: classmateIds.length > 0 ? classmateIds : [studentId],
+                gradeId,
+                before: earliestExamCreatedAt(safeMarks),
+                current: { termId, examType: roundSelection.round },
+                gradingScales,
+                gradingSystemType,
+            }),
+            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId, yearId }),
+        ]);
+
         // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
         // Use subject-specific grading when available, otherwise use academic level grading
         const subjMarksMap = new Map<string, any>();
@@ -563,6 +597,9 @@ export async function GET(
                 totalStudents: subjectStudentCountMap.get(subject.id) ?? undefined,
                 includedInPoints: selectedSubjectIds.has(subject.id),
                 paperScores: paperScoreMap.get(`${m.exams.id}|${studentId}`),
+                instructorName: subjectTeacherNames.get(subject.id),
+                classAverage: subjectClassAverageMap.get(subject.id),
+                previousPercentage: previousRound?.subjectPercentage.get(`${studentId}|${subject.id}`),
             });
         });
 
@@ -660,6 +697,11 @@ export async function GET(
             combinationName: ((student as any).subject_combinations as any)?.name || undefined,
             combinationRank,
             combinationSize,
+            classMeanPercentage,
+            previousExamLabel: previousRound?.label,
+            previousOverallPercentage: previousRound?.overall.get(studentId)?.percentage,
+            previousTotalPoints: previousRound?.overall.get(studentId)?.totalPoints,
+            previousClassRank: previousRound?.overall.get(studentId)?.rank || undefined,
             classTeacherComment: classTeacherComment || undefined,
             principalComment: principalComment || undefined,
             gradeBoundaries,
