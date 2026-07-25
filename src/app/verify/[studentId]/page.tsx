@@ -83,6 +83,15 @@ export default async function VerifyResultsPage({
 
     const data = await fetchResults(studentId, query);
 
+    // Sign-in goes via onboarding rather than straight to the results: an
+    // activated student is bounced onward by it immediately, while one who
+    // hasn't redeemed an invite code yet lands directly on the student join
+    // form — no role chooser offering "set up a new school" or "join as
+    // teacher", neither of which makes sense for someone holding a report card.
+    const signInTarget =
+        `/dashboard/onboarding?role=STUDENT&student=${encodeURIComponent(studentId)}`
+        + `&next=${encodeURIComponent('/student/results')}`;
+
     if (!data) {
         return (
             <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
@@ -190,11 +199,14 @@ export default async function VerifyResultsPage({
                     subjects, attendance and fee statements.
                 </p>
                 <Link
-                    href={`/login?redirect_url=${encodeURIComponent('/student/results')}`}
+                    href={`/login?redirect_url=${encodeURIComponent(signInTarget)}`}
                     className="mt-3 inline-flex items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground no-underline"
                 >
                     Sign in to your account
                 </Link>
+                <p className="mx-auto mt-2 max-w-sm text-[11px] leading-relaxed text-muted-foreground">
+                    Not activated yet? You&apos;ll just need the invite code from your school.
+                </p>
             </section>
 
             <footer className="mt-6 text-center text-[11px] leading-relaxed text-muted-foreground">

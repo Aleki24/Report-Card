@@ -8,7 +8,11 @@ export default clerkMiddleware(async (auth, request) => {
 
   if (!userId && isProtected(request)) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect_url', request.nextUrl.pathname);
+    // Keep the query string, not just the path: activation deep links carry
+    // everything that matters in it (?role=STUDENT&code=... from an invite,
+    // ?student=...&next=... from a report-card QR). Dropping it sent the user
+    // back to a bare page with the context they arrived with silently gone.
+    loginUrl.searchParams.set('redirect_url', request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -19,9 +23,17 @@ export default clerkMiddleware(async (auth, request) => {
     // like /login/factor-one, /login/sso-callback, /activate/callback, or /activate/process that need processing
     const pathname = request.nextUrl.pathname;
     if (pathname === '/login' || pathname === '/signup' || pathname === '/activate') {
-      const dest = role === 'STUDENT'
-        ? '/student/dashboard'
-        : '/dashboard';
+      // Honour ?redirect_url= on this bounce too. It was previously dropped, so
+      // an already-signed-in user who followed a link asking for a specific
+      // page (the report-card QR page's "sign in to see your results", or this
+      // middleware's own sign-in bounce above) silently landed on the generic
+      // dashboard instead. Same-site absolute paths only, so the param can't
+      // be used as an open redirect.
+      const requested = request.nextUrl.searchParams.get('redirect_url');
+      const safeRequested = requested && requested.startsWith('/') && !requested.startsWith('//')
+        ? requested
+        : null;
+      const dest = safeRequested ?? (role === 'STUDENT' ? '/student/dashboard' : '/dashboard');
       return NextResponse.redirect(new URL(dest, request.url));
     }
 

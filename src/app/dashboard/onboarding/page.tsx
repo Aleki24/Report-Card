@@ -25,6 +25,20 @@ export default function OnboardingWizard() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Where to go once the account is usable. Set by links that had somewhere
+  // specific in mind — a report-card QR sends the student on to their results
+  // rather than dumping them on the generic dashboard. Same-site paths only.
+  const [nextPath] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = new URLSearchParams(window.location.search).get('next');
+    return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+  });
+
+  // Name of the student a scanned report card identified, shown so they can
+  // see whose account they're linking to. Purely informational — the invite
+  // code is still what proves the account is theirs.
+  const [scannedName, setScannedName] = useState<string | null>(null);
+
   // Onboarding is only for users who haven't joined a school yet: PENDING
   // accounts, or admins whose school setup is unfinished. Anyone who already
   // activated with an invite code has a real role — send them straight to
@@ -34,9 +48,9 @@ export default function OnboardingWizard() {
 
   useEffect(() => {
     if (alreadyOnboarded) {
-      router.replace(role === 'STUDENT' ? '/student/dashboard' : '/dashboard');
+      router.replace(nextPath || (role === 'STUDENT' ? '/student/dashboard' : '/dashboard'));
     }
-  }, [alreadyOnboarded, role, router]);
+  }, [alreadyOnboarded, role, router, nextPath]);
 
   // --- Admin Form State ---
   const [schoolName, setSchoolName] = useState('');
@@ -62,6 +76,16 @@ export default function OnboardingWizard() {
     if (codeParam) setInviteCode(codeParam.toUpperCase());
     if (roleParam === 'ADMIN' || roleParam === 'TEACHER' || roleParam === 'STUDENT') {
       setSelectedRole(roleParam);
+    }
+
+    // Arrived from a report-card QR: name the student being linked. Reads the
+    // same public endpoint the scanned page uses, so no extra data is exposed.
+    const scanned = params.get('student');
+    if (scanned && /^[0-9a-f-]{32,36}$/i.test(scanned)) {
+      fetch(`/api/verify/${scanned}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d?.student?.name) setScannedName(d.student.name); })
+        .catch(() => { /* the name is a nicety; the form works without it */ });
     }
   }, []);
 
@@ -141,7 +165,7 @@ export default function OnboardingWizard() {
       if (!res.ok) throw new Error(data.error || 'Failed to join school');
 
       toast.success('Successfully joined the school!');
-      window.location.href = '/dashboard';
+      window.location.href = nextPath || '/dashboard';
     } catch (err: any) {
       toast.error(err.message);
       setLoading(false);
@@ -230,7 +254,11 @@ export default function OnboardingWizard() {
             {selectedRole === 'ADMIN' ? 'Set up your School' : `Join as a ${selectedRole === 'TEACHER' ? 'Teacher' : 'Student'}`}
           </h1>
           <p className="text-muted-foreground text-lg">
-            {selectedRole === 'ADMIN' ? "Let's get your school's configuration ready." : "Enter your invite details to link your account."}
+            {selectedRole === 'ADMIN'
+              ? "Let's get your school's configuration ready."
+              : scannedName
+                ? `Linking to ${scannedName}'s records. Enter the invite code from your school to finish.`
+                : 'Enter your invite details to link your account.'}
           </p>
         </div>
 
