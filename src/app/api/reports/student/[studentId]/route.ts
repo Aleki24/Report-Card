@@ -11,13 +11,13 @@ import {
     getRubricFromScales,
     getCategoryOrder,
     getSubjectStudentCounts,
-    isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
+import { buildVerifyUrl, resolveGradingContext } from '@/lib/reports/grading-context';
 
 export const runtime = 'nodejs';
 
@@ -159,12 +159,6 @@ export async function GET(
         }
 
         // 3. Determine academic level and grading system
-        let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
-        let gradingScales: GradingScale[] = [];
-
-        // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style
-        // Grade 9 and 10 are CBC
-        const streamName = student.grade_streams?.full_name || '';
         const gradeId = student.grade_streams?.grade_id;
 
         // Gate downloads: report cards can only be generated once every exam
@@ -186,106 +180,15 @@ export async function GET(
             }
         }
 
-        // Fetch grade code from grades table
-        let gradeLevelCode = '';
-        if (gradeId) {
-            const { data: gradeData } = await supabase.from('grades').select('code').eq('id', gradeId).maybeSingle();
-            if (gradeData) gradeLevelCode = gradeData.code || '';
-        }
-        
-        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
-        const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
+        // Grading systems are resolved by a shared helper so the public
+        // verification page a QR code opens shows the same grades as this card.
+        const {
+            gradingSystemType,
+            gradingScales,
+            overallGradingScales,
+            overallGradingKind,
+        } = await resolveGradingContext(supabase, student, targetSchoolId);
 
-        if (student.academic_level_id) {
-            // Fetch the academic level code to determine KCSE vs CBC
-            const { data: academicLevel } = await supabase
-                .from('academic_levels')
-                .select('code')
-                .eq('id', student.academic_level_id)
-                .maybeSingle();
-
-            // Use grade code to determine KCSE vs CBC, fallback to academic level
-            if (isKCSEGrade) {
-                gradingSystemType = 'KCSE';
-            } else if (academicLevel) {
-                gradingSystemType = academicLevel.code === 'CBC' ? 'CBC' : 'KCSE';
-            }
-
-            // Fetch grading systems for this academic level - get the one with
-            // scales. Only SUBJECT-kind systems grade subject marks; an OVERALL
-            // (points-band) system must never be chosen as the subject default.
-            const { data: allGradingSystems } = await supabase
-                .from('grading_systems')
-                .select('id, name')
-                .eq('academic_level_id', student.academic_level_id)
-                .neq('system_kind', 'OVERALL');
-
-            // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
-            let gradingSystemId: string | null = null;
-            if (allGradingSystems && allGradingSystems.length > 0) {
-                for (const gs of allGradingSystems) {
-                    // A head+count query returns the count in `count`, not `data`
-                    // (data is always null) — reading `.length` off data meant
-                    // this "prefer the system that actually has scales" check
-                    // never fired, so the report always fell to the name-based
-                    // fallback and could pick an empty system → blank grades.
-                    const { count: scalesCount } = await supabase
-                        .from('grading_scales')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('grading_system_id', gs.id);
-
-                    if (scalesCount && scalesCount > 0) {
-                        gradingSystemId = gs.id;
-                        break; // Found one with scales
-                    }
-                }
-                // Fallback: prefer system with "KCSE" or "Letter" in name
-                if (!gradingSystemId && allGradingSystems.length > 0) {
-                    const preferred = allGradingSystems.find((gs: any) => 
-                        gs.name?.toLowerCase().includes('kcse') || 
-                        gs.name?.toLowerCase().includes('letter')
-                    );
-                    gradingSystemId = preferred?.id || allGradingSystems[0]?.id;
-                }
-            }
-
-            if (gradingSystemId) {
-                const { data: scales } = await supabase
-                    .from('grading_scales')
-                    .select('*')
-                    .eq('grading_system_id', gradingSystemId)
-                    .order('order_index', { ascending: true });
-
-                if (scales) {
-                    gradingScales = scales as GradingScale[];
-                }
-            }
-        }
-
-        // A school-configured Overall Grading System (Settings > Grading) is
-        // opt-in — most schools won't have one set, in which case this stays
-        // undefined and every existing report card computes exactly as before.
-        let overallGradingScales: GradingScale[] | undefined;
-        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
-        if (targetSchoolId) {
-            const { data: schoolRow } = await supabase
-                .from('schools')
-                .select('overall_grading_system_id')
-                .eq('id', targetSchoolId)
-                .maybeSingle();
-            if (schoolRow?.overall_grading_system_id) {
-                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
-                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
-                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
-                ]);
-                if (overallScales && overallScales.length > 0) {
-                    overallGradingScales = overallScales as GradingScale[];
-                    // An OVERALL-kind system grades total points; a subject-style
-                    // system chosen as overall grades average percentage.
-                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
-                }
-            }
-        }
 
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
         let examsQ = supabase
@@ -765,7 +668,7 @@ export async function GET(
             classTeacherComment: classTeacherComment || undefined,
             principalComment: principalComment || undefined,
             gradeBoundaries,
-            resultUrl: `${baseUrl}/student/${studentId}`,
+            resultUrl: buildVerifyUrl(baseUrl, studentId, termId, examType),
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
             openingDate,

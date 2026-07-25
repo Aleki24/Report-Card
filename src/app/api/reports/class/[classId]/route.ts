@@ -19,6 +19,7 @@ import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
+import { buildVerifyUrl } from '@/lib/reports/grading-context';
 export const runtime = 'nodejs';
 
 export async function GET(
@@ -537,7 +538,7 @@ export async function GET(
                 classTeacherComment: classTeacherComment || undefined,
                 principalComment: principalComment || undefined,
                 gradeBoundaries,
-                resultUrl: `${baseUrl}/student/${student.id}`,
+                resultUrl: buildVerifyUrl(baseUrl, student.id, termId, examType),
                 totalScore: computedTotalScore,
                 totalPossible: computedTotalPossible,
                 openingDate,
