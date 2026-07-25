@@ -32,28 +32,6 @@ export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailP
   });
 }
 
-export async function sendWelcomeEmail(email: string, firstName: string, schoolName: string) {
-  return sendEmail({
-    to: email,
-    subject: `Welcome to Skulbase — ${schoolName}`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #1a1a2e;">Welcome to Skulbase!</h1>
-        <p>Hi ${firstName},</p>
-        <p>Your account for <strong>${schoolName}</strong> has been created successfully.</p>
-        <p>You can now log in to manage report cards, exams, attendance, and more.</p>
-        <div style="margin: 24px 0;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL}/login"
-             style="background: #1a1a2e; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
-            Go to Dashboard
-          </a>
-        </div>
-        <p style="color: #666; font-size: 14px;">If you did not create this account, please ignore this email.</p>
-      </div>
-    `,
-  });
-}
-
 export async function sendInviteEmail(email: string, inviteCode: string, schoolName: string) {
   const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL}/register?code=${inviteCode}`;
   return sendEmail({
@@ -187,10 +165,10 @@ export async function sendSchoolRejectedEmail(email: string, firstName: string |
 /**
  * Acknowledge a school request to the person who made it.
  *
- * Before approval existed this moment sent `sendWelcomeEmail`, which told them
- * their account was ready — no longer true, since the school is held until the
- * platform owner approves. This says what actually happened instead, so a
- * requester isn't left wondering whether the form worked.
+ * Before approval existed this moment sent a welcome email saying the account
+ * was ready — no longer true, since the school is held until the platform
+ * owner approves. This says what actually happened instead, so a requester
+ * isn't left wondering whether the form worked.
  */
 export async function sendSchoolRequestReceivedEmail(email: string, firstName: string | null, schoolName: string) {
   return sendEmail({
