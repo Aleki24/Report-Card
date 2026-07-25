@@ -70,7 +70,8 @@ const t = StyleSheet.create({
     /* Footer */
     footer: { marginTop: 'auto', alignItems: 'center', paddingVertical: 10, borderTop: `0.5pt solid ${RULE}`, marginHorizontal: 40 },
     footerText: { fontSize: 6.5, fontFamily: 'Times-Roman', color: LIGHT, marginBottom: 1.5 },
-    qr: { width: 40, height: 40, marginBottom: 4 },
+    // 56pt keeps each QR module ~0.44mm on paper — see pdfStyles.qrImg.
+    qr: { width: 56, height: 56, marginBottom: 4 },
 });
 
 export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {

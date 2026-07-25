@@ -49,7 +49,8 @@ const p = StyleSheet.create({
     headerText: { flex: 1 },
     schoolName: { fontSize: 19, fontFamily: 'Times-Bold', color: CREAM, letterSpacing: 1.2, textTransform: 'uppercase' },
     headerSub: { fontSize: 10, color: '#BFDAD8', marginTop: 4 },
-    qr: { width: 44, height: 44, borderRadius: 4, backgroundColor: WHITE, padding: 2 },
+    // 56pt keeps each QR module ~0.44mm on paper — see pdfStyles.qrImg.
+    qr: { width: 56, height: 56, borderRadius: 4, backgroundColor: WHITE },
 
     body: { paddingHorizontal: 26, paddingTop: 14 },
 

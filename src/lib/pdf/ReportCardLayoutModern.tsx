@@ -29,7 +29,8 @@ const m = StyleSheet.create({
     schoolName: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: WHITE, letterSpacing: 0.5 },
     schoolAddress: { fontSize: 8, color: '#C7D2FE', marginTop: 2 },
     reportTag: { fontSize: 7, color: '#C7D2FE', textTransform: 'uppercase', letterSpacing: 2, marginTop: 5 },
-    qr: { width: 48, height: 48, borderRadius: 6, backgroundColor: WHITE, padding: 3 },
+    // 56pt keeps each QR module ~0.44mm on paper — see pdfStyles.qrImg.
+    qr: { width: 56, height: 56, borderRadius: 6, backgroundColor: WHITE },
 
     /* Student ribbon */
     studentRibbon: {

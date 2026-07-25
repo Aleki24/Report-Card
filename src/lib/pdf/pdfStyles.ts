@@ -174,7 +174,12 @@ export const c = StyleSheet.create({
     badge: { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 5, paddingHorizontal: 9, alignItems: 'center', minWidth: 54 },
     badgeLabel: { fontSize: 5.5, color: '#CFE0FF', textTransform: 'uppercase', letterSpacing: 0.6 },
     badgeValue: { ...boldFont, fontSize: 14, color: T.white, marginTop: 1 },
-    qrImg: { width: 44, height: 44, backgroundColor: T.white, padding: 2, borderRadius: 4, marginLeft: 8 },
+    // Sized for scanning, not for looks: the code is ~45 modules across, so
+    // 56pt (~19.8mm) keeps each module ~0.44mm — comfortably above the ~0.33mm
+    // floor where phone cameras start failing on printed paper. Don't shrink
+    // this, and don't add padding: padding is subtracted from the drawn image,
+    // and the PNG already carries its own 4-module white quiet zone.
+    qrImg: { width: 56, height: 56, backgroundColor: T.white, borderRadius: 4, marginLeft: 8 },
     accentRule: { height: 3, backgroundColor: T.indigo },
 
     /* ── Info cards ── */
