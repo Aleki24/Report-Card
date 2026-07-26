@@ -1,12 +1,17 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer, Image } from '@react-pdf/renderer';
 import { ReportFooter } from './pdf/ReportFooter';
+import { T, FONT_BODY, boldFont, displayFont, attainmentColor } from './pdf/pdfTheme';
 
 export interface SubjectStats {
     mean: number;
     highest: number;
     lowest: number;
     studentCount: number;
+    /** The class's mean in this subject at the previous round. */
+    previousMean?: number;
+    /** Who teaches it, when the school records subject assignments. */
+    teacher?: string;
 }
 
 export interface SubjectRanking {
@@ -35,350 +40,589 @@ export interface MarkSheetData {
         totalPoints: number;
         overallPointsGrade?: string;
         classRank: number;
+        /** The same learner at the previous round — the sheet's deviation column. */
+        previousPercentage?: number;
+        previousTotalPoints?: number;
+        previousClassRank?: number;
     }[];
     gradeDistribution: Record<string, number>;
     meanGrade: string;
     meanPoints: number;
+    /** Class mean percentage this round, and at the round being compared against. */
+    classMeanPercentage?: number;
+    previousClassMeanPercentage?: number;
+    /** Name of that previous round, e.g. "Mid Term". */
+    previousExamLabel?: string;
     subjectStats: Record<string, SubjectStats>;
     subjectRankings: SubjectRanking[];
 }
 
-const NAVY = '#1A365D';
-const SKY_BLUE = '#87CEEB';
-const ORANGE = '#FF8C00';
-const STEEL_BLUE = '#4682B4';
-const LIGHT_GRAY = '#F2F2F2';
-const GREEN = '#22A86B';
-const GRAY_200 = '#E2E6ED';
-const GRAY_400 = '#9CA3AF';
-const GRAY_700 = '#374151';
-const WHITE = '#FFFFFF';
-const BLACK = '#000000';
+/* ── Figures that read as movement ─────────────────────────── */
 
-const gradeColor = (grade: string) => {
-    const base = grade.replace(/[+-\d]/g, '').toUpperCase();
-    switch (base) {
-        case 'A': case 'EE': return GREEN;
-        case 'B': case 'ME': return '#2563EB';
-        case 'C': case 'AE': return ORANGE;
-        case 'D': case 'BE': return '#DC2626';
-        default: return '#EF4444';
-    }
-};
+const signed = (value: number, unit = '') =>
+    `${value > 0 ? '+' : value < 0 ? '-' : ''}${Math.abs(value)}${unit}`;
 
-const scoreColor = (score: number | null) => {
-    if (score === null) return GRAY_400;
-    if (score >= 80) return GREEN;
-    if (score >= 60) return '#2563EB';
-    if (score >= 40) return ORANGE;
-    return '#EF4444';
-};
+const deltaColor = (value: number) => (value > 0 ? T.green : value < 0 ? T.red : T.muted);
 
+const PAGE_X = 22;
+
+/**
+ * Class marksheet, typeset in the same design language as the report cards —
+ * the product's indigo masthead, primary-blue table bands, Merriweather and
+ * Syne — so a class sheet and the cards cut from it read as one document set.
+ *
+ * It carries the cards' analytics at class scale: every learner's movement
+ * since the previous round, every subject's class mean against what that
+ * subject scored last time, and who teaches it.
+ */
 const s = StyleSheet.create({
-    page: {
-        padding: 0,
-        paddingTop: 8,
-        paddingBottom: 28,
-        fontFamily: 'Helvetica',
-        fontSize: 8,
-        color: GRAY_700,
-    },
-    navyBar: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 8,
-        backgroundColor: NAVY,
-    },
-    navyBarBottom: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 8,
-        backgroundColor: NAVY,
-    },
-    footerWrap: {
-        position: 'absolute',
-        left: 24,
-        right: 24,
-        bottom: 10,
-    },
-    headerBand: { flexDirection: 'row', alignItems: 'center', backgroundColor: WHITE, paddingVertical: 12, paddingHorizontal: 24 },
-    logo: { width: 90, height: 90, borderRadius: 45, objectFit: 'contain', backgroundColor: WHITE },
-    logoPlaceholder: { width: 90, height: 90, borderRadius: 45, backgroundColor: LIGHT_GRAY, alignItems: 'center', justifyContent: 'center' },
-    headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 12 },
-    schoolName: { fontSize: 16, fontWeight: 'bold', color: BLACK, fontFamily: 'Helvetica-Bold', textAlign: 'center', textTransform: 'uppercase', letterSpacing: 0.8 },
-    schoolAddress: { fontSize: 8, color: GRAY_400, marginTop: 3, textAlign: 'center' },
-    bannerRibbon: { backgroundColor: SKY_BLUE, paddingVertical: 6, paddingHorizontal: 16, marginHorizontal: 24, alignItems: 'center', marginBottom: 10, borderRadius: 6 },
-    bannerText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: WHITE, textTransform: 'uppercase', letterSpacing: 2 },
-    summaryStrip: { flexDirection: 'row', backgroundColor: LIGHT_GRAY, borderRadius: 4, padding: 8, marginBottom: 10, marginHorizontal: 24, borderLeft: `3pt solid ${NAVY}` },
-    summaryItem: { flex: 1, alignItems: 'center' },
-    summaryLabel: { fontSize: 7, color: GRAY_400, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', marginBottom: 2 },
-    summaryVal: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: NAVY },
-    table: { marginBottom: 10, marginHorizontal: 24, borderLeft: `1pt solid ${GRAY_200}`, borderRight: `1pt solid ${GRAY_200}`, borderBottom: `1pt solid ${GRAY_200}` },
-    tableHeader: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 5, paddingHorizontal: 2 },
-    tableRow: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: WHITE },
-    tableRowAlt: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: LIGHT_GRAY },
-    tableRowHighlight: { flexDirection: 'row', borderBottom: `0.5pt solid ${GRAY_200}`, paddingVertical: 4, paddingHorizontal: 2, backgroundColor: '#FFF8ED' },
-    colRank: { width: '5%', textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' },
-    colName: { width: '18%', paddingVertical: 3, paddingHorizontal: 3, justifyContent: 'center' },
-    colAdm: { width: '8%', textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' },
-    colSummary: { width: '7%', textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' },
-    thText: { fontSize: 6, fontFamily: 'Helvetica-Bold', color: WHITE },
-    tdText: { fontSize: 6.5 },
-    tdTextBold: { fontSize: 6.5, fontFamily: 'Helvetica-Bold' },
-    bottomRow: { flexDirection: 'row', gap: 8, marginBottom: 12, paddingHorizontal: 24 },
-    bottomRowStack: { marginTop: 8, marginBottom: 10 },
-    summaryCard: { flex: 1, backgroundColor: LIGHT_GRAY, borderRadius: 6, padding: 8, borderLeft: `3pt solid ${NAVY}` },
-    summaryCardTitle: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 6, textTransform: 'uppercase' },
-    summaryCardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
-    summaryCardLabel: { fontSize: 7, color: GRAY_700 },
-    summaryCardValue: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY },
-    gradeDistCard: { flex: 1, backgroundColor: LIGHT_GRAY, borderRadius: 6, padding: 6, borderLeft: `3pt solid ${GREEN}` },
-    gradeDistContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-    gradeRow: { flexDirection: 'row', width: '30%', paddingVertical: 1, alignItems: 'center', gap: 4 },
-    gradeLabel: { fontSize: 7, fontFamily: 'Helvetica-Bold' },
-    gradeCount: { fontSize: 6, color: GRAY_700 },
-    subjectPerfCard: { backgroundColor: '#F0F9FF', borderRadius: 6, padding: 8, border: `1pt solid ${STEEL_BLUE}`, marginHorizontal: 24, marginBottom: 10 },
-    subjectPerfTitle: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: STEEL_BLUE, marginBottom: 6, textTransform: 'uppercase', textAlign: 'center' },
-    subjectPerfHeader: { flexDirection: 'row', backgroundColor: STEEL_BLUE, paddingVertical: 3, paddingHorizontal: 4, borderRadius: 3, marginBottom: 3 },
-    subjectPerfRow: { flexDirection: 'row', paddingVertical: 3, borderBottom: `0.5pt solid ${GRAY_200}`, paddingHorizontal: 3 },
-    subjectPerfColCode: { width: '40%', fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: GRAY_700 },
-    subjectPerfColMean: { width: '30%', fontSize: 6.5, textAlign: 'center', color: GRAY_700 },
-    subjectPerfColRank: { width: '30%', fontSize: 7, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
+    page: { padding: 0, paddingBottom: 34, fontFamily: FONT_BODY, fontSize: 8, color: T.ink, backgroundColor: T.white },
+
+    /* ── Masthead ── */
+    masthead: { backgroundColor: T.indigo, paddingTop: 10, paddingBottom: 8, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
+    crestFrame: { width: 44, height: 44, borderRadius: 6, backgroundColor: T.white, padding: 3, alignItems: 'center', justifyContent: 'center' },
+    crest: { width: 38, height: 38, objectFit: 'contain' },
+    crestFallback: { width: 44, height: 44, borderRadius: 6, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
+    crestFallbackText: { ...displayFont, fontSize: 17, color: T.white },
+    mastheadCenter: { flex: 1, paddingHorizontal: 12 },
+    mastheadSchool: { ...displayFont, fontSize: 12, color: T.white, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 },
+    mastheadAddress: { fontSize: 6.2, color: '#C6CBEC', marginTop: 2.5 },
+    mastheadDoc: { fontSize: 6.6, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 1.3, marginTop: 3 },
+    badge: { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 4, paddingHorizontal: 8, alignItems: 'center', minWidth: 50 },
+    badgeLabel: { fontSize: 5.2, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 0.6 },
+    badgeValue: { ...boldFont, fontSize: 13, color: T.white, marginTop: 1 },
+    accentRule: { height: 3, backgroundColor: T.primary },
+
+    /* ── Info cards ── */
+    infoRow: { flexDirection: 'row', gap: 8, paddingHorizontal: PAGE_X, marginTop: 8, marginBottom: 7 },
+    infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}`, backgroundColor: T.white },
+    infoCardHead: { backgroundColor: T.surface, paddingVertical: 3, paddingHorizontal: 7, borderBottom: `0.8pt solid ${T.line}` },
+    infoCardTitle: { ...boldFont, fontSize: 5.8, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
+    infoCardValue: { ...boldFont, fontSize: 9, color: T.ink, paddingTop: 4, paddingHorizontal: 7, paddingBottom: 2 },
+    infoCardDelta: { ...boldFont, fontSize: 5.4, paddingHorizontal: 7, paddingBottom: 4 },
+
+    /* ── Learner table ── */
+    table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    thGroupRow: { flexDirection: 'row', backgroundColor: T.primary },
+    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center' },
+    thGroupText: { ...boldFont, fontSize: 6, color: T.white, textTransform: 'uppercase', letterSpacing: 0.7 },
+    thSubRow: { flexDirection: 'row', backgroundColor: T.primaryDark },
+    thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
+    thSubText: { ...boldFont, fontSize: 5.4, color: T.white, textAlign: 'center' },
+
+    row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
+    rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
+    rowTop: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.primarySoft },
+    cell: { paddingVertical: 3.5, paddingHorizontal: 2, justifyContent: 'center' },
+    posText: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'center' },
+    posTextTop: { ...boldFont, fontSize: 7, color: T.primary, textAlign: 'center' },
+    nameText: { fontSize: 7, color: T.ink },
+    admText: { fontSize: 6.2, color: T.muted, textAlign: 'center' },
+    markText: { fontSize: 6.8, textAlign: 'center' },
+    markMissing: { fontSize: 6.8, color: '#C7D0DC', textAlign: 'center' },
+    summaryText: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'center' },
+    devText: { ...boldFont, fontSize: 6.4, textAlign: 'center' },
+    gradeText: { ...boldFont, fontSize: 7.2, textAlign: 'center' },
+    meanRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.primarySoft, borderTop: `1pt solid ${T.primary}` },
+    meanLabel: { ...boldFont, fontSize: 6.4, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.7, paddingVertical: 4, paddingLeft: 6 },
+
+    /* ── Analytics panels ── */
+    panelRow: { flexDirection: 'row', gap: 8, paddingHorizontal: PAGE_X, marginTop: 8 },
+    panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    panelHead: { backgroundColor: T.surface, paddingVertical: 3.5, paddingHorizontal: 7, borderBottom: `0.8pt solid ${T.line}` },
+    panelTitle: { ...boldFont, fontSize: 6, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
+    panelBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 7 },
+
+    /* Subject analysis rows: name, teacher, mean bar, movement, rank */
+    subjRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5, borderBottom: `0.5pt solid ${T.line}` },
+    subjRowLast: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5 },
+    subjName: { ...boldFont, fontSize: 6.4, color: T.ink },
+    subjTeacher: { fontSize: 5.2, color: T.muted, marginTop: 0.5 },
+    barTrack: { height: 5, backgroundColor: T.surface, borderRadius: 2.5, overflow: 'hidden' },
+    barFill: { height: 5, borderRadius: 2.5 },
+    barScale: { fontSize: 5, color: T.muted, marginTop: 1 },
+    subjMean: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'right' },
+    subjDelta: { ...boldFont, fontSize: 5.8, textAlign: 'right' },
+    subjRank: { fontSize: 5.8, color: T.muted, textAlign: 'center' },
+
+    /* At a glance */
+    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5, borderBottom: `0.5pt solid ${T.line}` },
+    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5 },
+    statKey: { fontSize: 6, color: T.muted },
+    statVal: { ...boldFont, fontSize: 6.8, color: T.ink, maxWidth: '62%', textAlign: 'right' },
+
+    /* Grade distribution */
+    distRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
+    distCol: { width: 26, alignItems: 'center' },
+    distTrack: { width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
+    distBar: { width: '70%', borderRadius: 1.5 },
+    distCount: { ...boldFont, fontSize: 5.4, color: T.ink, marginBottom: 1 },
+    distLabel: { ...boldFont, fontSize: 5.6, marginTop: 2 },
+
+    footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });
 
-const FIRST_PAGE_ROWS = 18;
-const OTHER_PAGE_ROWS = 26;
-const SUMMARY_ROW_BUFFER = 10;
+/* ── Column widths ─────────────────────────────────────────
+   Fixed columns first; every subject shares what is left, so a sheet with
+   four subjects and one with nine both fill the page evenly. */
+const POS_W = 4.5;
+const NAME_W = 19;
+const ADM_W = 7;
+const TOTAL_W = 6.5;
+const POINTS_W = 5.5;
+const GRADE_W = 6;
+const DEV_W = 6;
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-    const out: T[][] = [];
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-    return out;
+function subjectColumnWidth(subjectCount: number, isKCSE: boolean, showDev: boolean): number {
+    const fixed = POS_W + NAME_W + ADM_W + TOTAL_W + GRADE_W
+        + (isKCSE ? POINTS_W : 0) + (showDev ? DEV_W : 0);
+    return Math.max(4, (100 - fixed) / Math.max(1, subjectCount));
 }
 
-function paginateStudents<T>(students: T[], reserveSummarySpace: boolean) {
-    const first = students.slice(0, FIRST_PAGE_ROWS);
-    const rest = students.slice(FIRST_PAGE_ROWS);
-    const otherPages = chunkArray(rest, OTHER_PAGE_ROWS);
+const pct = (v: number) => `${v}%`;
 
-    let summaryOnSeparatePage = false;
-
-    if (reserveSummarySpace && otherPages.length > 0) {
-        const last = otherPages[otherPages.length - 1];
-        if (last.length > OTHER_PAGE_ROWS - SUMMARY_ROW_BUFFER) {
-            summaryOnSeparatePage = true;
-        }
-    }
-
-    const pages = first.length ? [first, ...otherPages] : otherPages;
-    return { pages, summaryOnSeparatePage };
-}
-
-function TableHeader({ data, colSubjWidth, isKCSE }: { data: MarkSheetData; colSubjWidth: string; isKCSE: boolean }) {
+function TableHeader({ data, subjectW, isKCSE, showDev }: {
+    data: MarkSheetData; subjectW: number; isKCSE: boolean; showDev: boolean;
+}) {
     return (
-        <View style={s.tableHeader}>
-            <View style={s.colRank}><Text style={s.thText}>Pos</Text></View>
-            <View style={s.colName}><Text style={s.thText}>Student Name</Text></View>
-            <View style={s.colAdm}><Text style={s.thText}>Adm No.</Text></View>
-            {data.subjects.map((subj) => (
-                <View key={subj.code} style={{ width: colSubjWidth, textAlign: 'center', paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
-                    <Text style={[s.thText, { textAlign: 'center' }]}>{subj.code}</Text>
+        <>
+            <View style={s.thGroupRow}>
+                <View style={[s.thGroupCell, { width: pct(POS_W + NAME_W + ADM_W) }]}>
+                    <Text style={s.thGroupText}>Learner</Text>
                 </View>
-            ))}
-            <View style={s.colSummary}><Text style={s.thText}>Total %</Text></View>
-            {isKCSE && <View style={s.colSummary}><Text style={s.thText}>Points</Text></View>}
-            <View style={s.colSummary}><Text style={s.thText}>Grade</Text></View>
-        </View>
+                <View style={[s.thGroupCell, { width: pct(data.subjects.length * subjectW) }]}>
+                    <Text style={s.thGroupText}>{isKCSE ? 'Subjects' : 'Learning Areas'}</Text>
+                </View>
+                <View style={[s.thGroupCell, { flex: 1 }]}>
+                    <Text style={s.thGroupText}>Summary</Text>
+                </View>
+            </View>
+            <View style={s.thSubRow}>
+                <View style={[s.thSubCell, { width: pct(POS_W) }]}><Text style={s.thSubText}>Pos</Text></View>
+                <View style={[s.thSubCell, { width: pct(NAME_W), alignItems: 'flex-start', paddingLeft: 5 }]}>
+                    <Text style={s.thSubText}>Name</Text>
+                </View>
+                <View style={[s.thSubCell, { width: pct(ADM_W) }]}><Text style={s.thSubText}>Adm</Text></View>
+                {data.subjects.map(subject => (
+                    <View key={subject.code} style={[s.thSubCell, { width: pct(subjectW) }]}>
+                        <Text style={s.thSubText}>{subject.code}</Text>
+                    </View>
+                ))}
+                <View style={[s.thSubCell, { width: pct(TOTAL_W) }]}><Text style={s.thSubText}>Mean</Text></View>
+                {isKCSE && <View style={[s.thSubCell, { width: pct(POINTS_W) }]}><Text style={s.thSubText}>Pts</Text></View>}
+                {showDev && <View style={[s.thSubCell, { width: pct(DEV_W) }]}><Text style={s.thSubText}>Dev.</Text></View>}
+                <View style={[s.thSubCell, { width: pct(GRADE_W) }]}><Text style={s.thSubText}>Grade</Text></View>
+            </View>
+        </>
     );
 }
 
-function StudentRow({ student, idx, data, colSubjWidth, isKCSE }: { student: MarkSheetData['students'][number]; idx: number; data: MarkSheetData; colSubjWidth: string; isKCSE: boolean }) {
-    const isTop3 = student.classRank <= 3;
-    const rowStyle = isTop3 ? s.tableRowHighlight : idx % 2 === 0 ? s.tableRowAlt : s.tableRow;
+function StudentRow({ student, idx, data, subjectW, isKCSE, showDev }: {
+    student: MarkSheetData['students'][number]; idx: number; data: MarkSheetData;
+    subjectW: number; isKCSE: boolean; showDev: boolean;
+}) {
+    const isTop3 = student.classRank > 0 && student.classRank <= 3;
+    const rowStyle = isTop3 ? s.rowTop : idx % 2 === 1 ? s.rowAlt : s.row;
+    const dev = student.previousPercentage != null
+        ? Math.round(student.overallPercentage - student.previousPercentage)
+        : null;
 
     return (
         <View style={rowStyle} wrap={false}>
-            <View style={[s.colRank, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
-                <Text style={[s.tdTextBold, isTop3 ? { color: ORANGE } : {}]}>{student.classRank}</Text>
+            <View style={[s.cell, { width: pct(POS_W) }]}>
+                <Text style={isTop3 ? s.posTextTop : s.posText}>{student.classRank || '—'}</Text>
             </View>
-            <View style={[s.colName, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
-                <Text style={s.tdTextBold}>{student.studentName}</Text>
+            <View style={[s.cell, { width: pct(NAME_W), paddingLeft: 5 }]}>
+                <Text style={s.nameText}>{student.studentName}</Text>
             </View>
-            <View style={[s.colAdm, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
-                <Text style={s.tdText}>{student.admissionNumber}</Text>
+            <View style={[s.cell, { width: pct(ADM_W) }]}>
+                <Text style={s.admText}>{student.admissionNumber || '—'}</Text>
             </View>
-            {data.subjects.map((subj) => {
-                const val = student.marks[subj.code];
+            {data.subjects.map(subject => {
+                const value = student.marks[subject.code];
                 return (
-                    <View key={subj.code} style={{ width: colSubjWidth, textAlign: 'center', borderRight: `0.5pt solid ${GRAY_200}`, paddingVertical: 3, paddingHorizontal: 1, justifyContent: 'center' }}>
-                        <Text style={[s.tdText, { textAlign: 'center', color: scoreColor(val) }]}>{val !== null && val !== undefined ? val : '-'}</Text>
+                    <View key={subject.code} style={[s.cell, { width: pct(subjectW) }]}>
+                        {value == null
+                            ? <Text style={s.markMissing}>–</Text>
+                            : <Text style={[s.markText, { color: attainmentColor(value) }]}>{Math.round(value)}</Text>}
                     </View>
                 );
             })}
-            <View style={[s.colSummary, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
-                <Text style={[s.tdTextBold, { color: scoreColor(student.overallPercentage) }]}>{Math.round(student.overallPercentage)}</Text>
+            <View style={[s.cell, { width: pct(TOTAL_W) }]}>
+                <Text style={s.summaryText}>{Math.round(student.overallPercentage)}</Text>
             </View>
             {isKCSE && (
-                <View style={[s.colSummary, { borderRight: `0.5pt solid ${GRAY_200}` }]}>
-                    <Text style={s.tdTextBold}>{student.totalPoints}</Text>
+                <View style={[s.cell, { width: pct(POINTS_W) }]}>
+                    <Text style={s.summaryText}>{student.totalPoints}</Text>
                 </View>
             )}
-            <View style={s.colSummary}>
-                <Text style={[s.tdTextBold, { color: gradeColor(student.overallGrade) }]}>{student.overallGrade}</Text>
+            {showDev && (
+                <View style={[s.cell, { width: pct(DEV_W) }]}>
+                    {dev == null
+                        ? <Text style={s.markMissing}>–</Text>
+                        : <Text style={[s.devText, { color: deltaColor(dev) }]}>{signed(dev)}</Text>}
+                </View>
+            )}
+            <View style={[s.cell, { width: pct(GRADE_W) }]}>
+                <Text style={[s.gradeText, { color: attainmentColor(student.overallPercentage) }]}>
+                    {student.overallGrade || '—'}
+                </Text>
             </View>
         </View>
     );
 }
 
-function SummarySection({ data, isKCSE }: { data: MarkSheetData; isKCSE: boolean }) {
+/** The class's own row, closing the table the way the cards close theirs. */
+function ClassMeanRow({ data, subjectW, isKCSE, showDev, classMean }: {
+    data: MarkSheetData; subjectW: number; isKCSE: boolean; showDev: boolean; classMean: number;
+}) {
+    const dev = data.previousClassMeanPercentage != null
+        ? Math.round(classMean - data.previousClassMeanPercentage)
+        : null;
+
     return (
-        <>
-            <View style={s.bottomRow} wrap={false}>
-                <View style={s.summaryCard}>
-                    <Text style={s.summaryCardTitle}>Class Performance</Text>
-                    <View style={s.summaryCardRow}>
-                        <Text style={s.summaryCardLabel}>Total Students</Text>
-                        <Text style={s.summaryCardValue}>{data.students.length}</Text>
+        <View style={s.meanRow}>
+            <Text style={[s.meanLabel, { width: pct(POS_W + NAME_W + ADM_W) }]}>Class mean</Text>
+            {data.subjects.map(subject => {
+                const stat = data.subjectStats[subject.code];
+                return (
+                    <View key={subject.code} style={[s.cell, { width: pct(subjectW) }]}>
+                        <Text style={[s.markText, { color: stat ? attainmentColor(stat.mean) : T.muted }]}>
+                            {stat ? stat.mean : '–'}
+                        </Text>
                     </View>
-                    <View style={s.summaryCardRow}>
-                        <Text style={s.summaryCardLabel}>{isKCSE ? 'Mean Points' : 'Mean %'}</Text>
-                        <Text style={s.summaryCardValue}>{isKCSE ? data.meanPoints : Math.round(data.students.reduce((sum, st) => sum + st.overallPercentage, 0) / data.students.length)}</Text>
-                    </View>
-                    {data.meanGrade ? (
-                        <View style={s.summaryCardRow}>
-                            <Text style={s.summaryCardLabel}>Mean Grade</Text>
-                            <Text style={[s.summaryCardValue, { color: gradeColor(data.meanGrade) }]}>{data.meanGrade}</Text>
-                        </View>
-                    ) : null}
-                </View>
-                {data.gradeDistribution && Object.keys(data.gradeDistribution).length > 0 && (
-                    <View style={s.gradeDistCard}>
-                        <Text style={[s.summaryCardTitle, { color: GREEN }]}>Grade Distribution</Text>
-                        <View style={s.gradeDistContainer}>
-                            {Object.entries(data.gradeDistribution).sort(([a], [b]) => a.localeCompare(b)).map(([grade, count]) => (
-                                <View key={grade} style={s.gradeRow}>
-                                    <Text style={[s.gradeLabel, { color: gradeColor(grade) }]}>{grade}</Text>
-                                    <Text style={s.gradeCount}>{count} ({((count / data.students.length) * 100).toFixed(0)}%)</Text>
-                                </View>
-                            ))}
-                        </View>
-                    </View>
-                )}
+                );
+            })}
+            <View style={[s.cell, { width: pct(TOTAL_W) }]}>
+                <Text style={[s.summaryText, { color: T.primary }]}>{Math.round(classMean)}</Text>
             </View>
-            {data.subjectRankings && data.subjectRankings.length > 0 && (
-                <View style={s.bottomRowStack} wrap={false}>
-                    <View style={s.subjectPerfCard}>
-                        <Text style={s.subjectPerfTitle}>Subject Rankings</Text>
-                        <View style={s.subjectPerfHeader}>
-                            <Text style={[s.subjectPerfColCode, { color: WHITE }]}>Subject</Text>
-                            <Text style={[s.subjectPerfColMean, { color: WHITE }]}>Mean</Text>
-                            <Text style={[s.subjectPerfColRank, { color: WHITE }]}>Rank</Text>
-                        </View>
-                        {data.subjectRankings.map((subj, idx) => {
-                            const stats = data.subjectStats[subj.code];
-                            const isTop3 = subj.rank <= 3;
-                            return (
-                                <View key={subj.code} style={[s.subjectPerfRow, idx % 2 === 0 ? { backgroundColor: LIGHT_GRAY } : { backgroundColor: WHITE }]}>
-                                    <Text style={[s.subjectPerfColCode, isTop3 ? { color: ORANGE } : { color: GRAY_700 }]}>{subj.code}</Text>
-                                    <Text style={s.subjectPerfColMean}>{stats?.mean || '-'}</Text>
-                                    <Text style={[s.subjectPerfColRank, isTop3 ? { color: ORANGE, fontFamily: 'Helvetica-Bold' } : { color: GRAY_700 }]}>#{subj.rank}</Text>
-                                </View>
-                            );
-                        })}
-                    </View>
+            {isKCSE && (
+                <View style={[s.cell, { width: pct(POINTS_W) }]}>
+                    <Text style={[s.summaryText, { color: T.primary }]}>{Math.round(data.meanPoints)}</Text>
                 </View>
             )}
+            {showDev && (
+                <View style={[s.cell, { width: pct(DEV_W) }]}>
+                    {dev == null
+                        ? <Text style={s.markMissing}>–</Text>
+                        : <Text style={[s.devText, { color: deltaColor(dev) }]}>{signed(dev)}</Text>}
+                </View>
+            )}
+            <View style={[s.cell, { width: pct(GRADE_W) }]}>
+                <Text style={[s.gradeText, { color: attainmentColor(classMean) }]}>{data.meanGrade || '—'}</Text>
+            </View>
+        </View>
+    );
+}
+
+function InfoCard({ title, value, delta, deltaSuffix }: {
+    title: string; value: string; delta?: number | null; deltaSuffix?: string;
+}) {
+    return (
+        <View style={s.infoCard}>
+            <View style={s.infoCardHead}><Text style={s.infoCardTitle}>{title}</Text></View>
+            <Text style={s.infoCardValue}>{value}</Text>
+            {delta != null && (
+                <Text style={[s.infoCardDelta, { color: deltaColor(delta) }]}>
+                    {signed(delta)}{deltaSuffix || ''}
+                </Text>
+            )}
+        </View>
+    );
+}
+
+/** Subject means as bars, with movement since the previous round and rank. */
+function SubjectAnalysis({ data }: { data: MarkSheetData }) {
+    const ranked = [...data.subjectRankings].sort((a, b) => a.rank - b.rank);
+    if (ranked.length === 0) return <Text style={{ fontSize: 6, color: T.muted }}>No subject data.</Text>;
+
+    return (
+        <View>
+            {ranked.map((subject, i) => {
+                const stat = data.subjectStats[subject.code];
+                const mean = stat?.mean ?? subject.mean;
+                const dev = stat?.previousMean != null ? Math.round(mean - stat.previousMean) : null;
+                const name = data.subjects.find(entry => entry.code === subject.code)?.name || subject.code;
+                return (
+                    <View key={subject.code} style={i === ranked.length - 1 ? s.subjRowLast : s.subjRow}>
+                        <View style={{ width: '30%', paddingRight: 4 }}>
+                            <Text style={s.subjName}>{name.length > 18 ? `${name.slice(0, 17)}.` : name}</Text>
+                            {stat?.teacher ? <Text style={s.subjTeacher}>{stat.teacher}</Text> : null}
+                        </View>
+                        <View style={{ flex: 1, paddingRight: 5 }}>
+                            <View style={s.barTrack}>
+                                <View style={[s.barFill, { width: `${Math.min(100, Math.max(2, mean))}%`, backgroundColor: attainmentColor(mean) }]} />
+                            </View>
+                            {stat ? <Text style={s.barScale}>high {stat.highest} · low {stat.lowest} · {stat.studentCount} entered</Text> : null}
+                        </View>
+                        <View style={{ width: '11%' }}>
+                            <Text style={s.subjMean}>{mean}</Text>
+                        </View>
+                        <View style={{ width: '11%' }}>
+                            {dev == null
+                                ? <Text style={[s.subjDelta, { color: T.muted }]}>–</Text>
+                                : <Text style={[s.subjDelta, { color: deltaColor(dev) }]}>{signed(dev)}</Text>}
+                        </View>
+                        <View style={{ width: '9%' }}>
+                            <Text style={s.subjRank}>#{subject.rank}</Text>
+                        </View>
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+/** Colour a grade band the way a mark in that band would be coloured. */
+function gradeToApproxPercentage(grade: string): number {
+    const base = grade.trim().toUpperCase();
+    if (base.startsWith('A') || base === 'EE') return 85;
+    if (base.startsWith('B') || base === 'ME') return 68;
+    if (base.startsWith('C') || base === 'AE') return 52;
+    if (base.startsWith('D')) return 35;
+    return 15;
+}
+
+/** Grade distribution as a small column chart rather than a list of chips. */
+function GradeDistribution({ data }: { data: MarkSheetData }) {
+    const entries = Object.entries(data.gradeDistribution);
+    if (entries.length === 0) return <Text style={{ fontSize: 6, color: T.muted }}>No grades yet.</Text>;
+
+    const order = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'E', 'EE', 'ME', 'AE', 'BE'];
+    const sorted = entries.sort(([a], [b]) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+    });
+    const peak = Math.max(...sorted.map(([, count]) => count));
+    const BAR_H = 34;
+    const total = sorted.reduce((sum, [, count]) => sum + count, 0);
+
+    return (
+        <View style={s.distRow}>
+            {sorted.map(([grade, count]) => {
+                const color = attainmentColor(gradeToApproxPercentage(grade));
+                return (
+                    <View key={grade} style={s.distCol}>
+                        <View style={[s.distTrack, { height: BAR_H }]}>
+                            <Text style={s.distCount}>{count}</Text>
+                            <View style={[s.distBar, { height: Math.max(2, (count / peak) * (BAR_H - 9)), backgroundColor: color }]} />
+                        </View>
+                        <Text style={[s.distLabel, { color }]}>{grade}</Text>
+                        <Text style={{ fontSize: 4.8, color: T.muted }}>
+                            {total > 0 ? `${Math.round((count / total) * 100)}%` : ''}
+                        </Text>
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+function AtAGlance({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: boolean; classMean: number }) {
+    const withMarks = data.students.filter(st => st.overallPercentage > 0);
+    const top = [...withMarks].sort((a, b) => (a.classRank || 999) - (b.classRank || 999))[0];
+    const aboveMean = withMarks.filter(st => st.overallPercentage >= classMean).length;
+
+    const moved = withMarks
+        .filter(st => st.previousPercentage != null)
+        .map(st => ({ student: st, change: st.overallPercentage - (st.previousPercentage as number) }));
+    const improved = moved.filter(m => m.change > 0).length;
+    const mostImproved = [...moved].sort((a, b) => b.change - a.change)[0];
+
+    const best = [...data.subjectRankings].sort((a, b) => b.mean - a.mean)[0];
+    const weakest = [...data.subjectRankings].sort((a, b) => a.mean - b.mean)[0];
+    const short = (name: string, limit = 16) => (name.length > limit ? `${name.slice(0, limit - 1)}.` : name);
+
+    const rows: [string, string, string?][] = [
+        ['Learners entered', `${withMarks.length} of ${data.students.length}`],
+        ['Class mean', `${Math.round(classMean)}%${data.meanGrade ? ` · ${data.meanGrade}` : ''}`, attainmentColor(classMean)],
+    ];
+    if (isKCSE) rows.push(['Mean points', `${data.meanPoints}`]);
+    if (top) rows.push(['Top of class', `${short(top.studentName)} · ${Math.round(top.overallPercentage)}%`, attainmentColor(top.overallPercentage)]);
+    rows.push(['At / above class mean', `${aboveMean} of ${withMarks.length}`]);
+    if (best) rows.push(['Strongest subject', `${best.code} · ${best.mean}%`, attainmentColor(best.mean)]);
+    if (weakest && data.subjectRankings.length > 1) {
+        rows.push(['Needs attention', `${weakest.code} · ${weakest.mean}%`, attainmentColor(weakest.mean)]);
+    }
+    if (data.previousClassMeanPercentage != null) {
+        const change = Math.round(classMean - data.previousClassMeanPercentage);
+        rows.push([`Mean vs ${data.previousExamLabel || 'last exam'}`, signed(change, '%'), deltaColor(change)]);
+    }
+    if (moved.length > 0) rows.push(['Learners improved', `${improved} of ${moved.length}`]);
+    if (mostImproved && mostImproved.change > 0) {
+        rows.push(['Most improved', `${short(mostImproved.student.studentName, 13)} · ${signed(Math.round(mostImproved.change))}`, T.green]);
+    }
+
+    return (
+        <View>
+            {rows.map(([key, value, color], i) => (
+                <View key={key} style={i === rows.length - 1 ? s.statLineLast : s.statLine}>
+                    <Text style={s.statKey}>{key}</Text>
+                    <Text style={[s.statVal, color ? { color } : {}]}>{value}</Text>
+                </View>
+            ))}
+        </View>
+    );
+}
+
+/* ── Pagination ────────────────────────────────────────────
+   Measured in points rather than row counts, because how much room the
+   analytics need depends on how many subjects the class sits. The masthead
+   prints on the first page only, so that page holds fewer rows; the analytics
+   ride on the last page whenever the space left there can hold them. */
+const PAGE_H = 842;          // A4 portrait
+const FOOTER_H = 46;         // the fixed footer band
+const ROW_H = 17.5;          // one learner row
+const TABLE_HEAD_H = 24;     // group + sub header
+const MEAN_ROW_H = 18;       // the closing class-mean row
+const FIRST_PAGE_CHROME = 150;  // masthead + rule + info cards + margins
+const OTHER_PAGE_CHROME = 16;
+
+/** Height the two analytics rows need for this class. */
+function analyticsHeight(data: MarkSheetData, glanceRows: number): number {
+    const subjectPanel = 22 + data.subjectRankings.length * 14 + 12;
+    const glancePanel = 22 + glanceRows * 11.5 + 12;
+    const distributionPanel = 22 + 52 + 12;
+    return 8 + Math.max(subjectPanel, glancePanel) + 8 + distributionPanel;
+}
+
+function paginate<T>(students: T[], analytics: number) {
+    const firstCapacity = Math.max(1, Math.floor((PAGE_H - FOOTER_H - FIRST_PAGE_CHROME - TABLE_HEAD_H) / ROW_H));
+    const otherCapacity = Math.max(1, Math.floor((PAGE_H - FOOTER_H - OTHER_PAGE_CHROME - TABLE_HEAD_H) / ROW_H));
+
+    const pages: T[][] = [students.slice(0, firstCapacity)];
+    for (let i = firstCapacity; i < students.length; i += otherCapacity) {
+        pages.push(students.slice(i, i + otherCapacity));
+    }
+
+    const filled = pages.filter(page => page.length > 0);
+    const lastPages = filled.length > 0 ? filled : [[] as T[]];
+    const last = lastPages[lastPages.length - 1];
+    const chrome = lastPages.length === 1 ? FIRST_PAGE_CHROME : OTHER_PAGE_CHROME;
+    const used = chrome + TABLE_HEAD_H + last.length * ROW_H + MEAN_ROW_H;
+
+    return { pages: lastPages, summaryOnOwnPage: PAGE_H - FOOTER_H - used < analytics };
+}
+
+function Analytics({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: boolean; classMean: number }) {
+    return (
+        <>
+            <View style={s.panelRow} wrap={false}>
+                <View style={[s.panel, { flex: 1.55 }]}>
+                    <View style={s.panelHead}><Text style={s.panelTitle}>Subject Performance Analysis</Text></View>
+                    <View style={s.panelBody}><SubjectAnalysis data={data} /></View>
+                </View>
+                <View style={[s.panel, { flex: 1 }]}>
+                    <View style={s.panelHead}><Text style={s.panelTitle}>At a Glance</Text></View>
+                    <View style={s.panelBody}><AtAGlance data={data} isKCSE={isKCSE} classMean={classMean} /></View>
+                </View>
+            </View>
+            <View style={s.panelRow} wrap={false}>
+                <View style={[s.panel, { flex: 1 }]}>
+                    <View style={s.panelHead}><Text style={s.panelTitle}>Grade Distribution</Text></View>
+                    <View style={s.panelBody}><GradeDistribution data={data} /></View>
+                </View>
+            </View>
         </>
     );
 }
 
 export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
-    const numSubjects = data.subjects.length > 0 ? data.subjects.length : 1;
-    const remainingWidth = 48;
-    const colSubjWidth = `${remainingWidth / numSubjects}%`;
     const isKCSE = data.gradingSystemType === 'KCSE';
-    const sortedStudents = [...data.students].sort((a, b) => a.classRank - b.classRank);
+    const showDev = data.students.some(st => st.previousPercentage != null);
+    const subjectW = subjectColumnWidth(data.subjects.length, isKCSE, showDev);
+    const sorted = [...data.students].sort((a, b) => (a.classRank || 999) - (b.classRank || 999));
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    // Rows "At a glance" will print, so the space estimate matches reality.
+    const glanceRows = 3
+        + (isKCSE ? 1 : 0)
+        + (sorted.length > 0 ? 1 : 0)
+        + (data.subjectRankings.length > 0 ? 1 : 0)
+        + (data.subjectRankings.length > 1 ? 1 : 0)
+        + (data.previousClassMeanPercentage != null ? 1 : 0)
+        + (data.students.some(st => st.previousPercentage != null) ? 2 : 0);
+    const { pages, summaryOnOwnPage } = paginate(sorted, analyticsHeight(data, glanceRows));
 
-    const hasSummary = true;
-    const { pages, summaryOnSeparatePage } = paginateStudents(sortedStudents, hasSummary);
+    const classMean = data.classMeanPercentage
+        ?? (sorted.reduce((sum, st) => sum + st.overallPercentage, 0) / Math.max(1, sorted.length));
+    const meanDelta = data.previousClassMeanPercentage != null
+        ? Math.round(classMean - data.previousClassMeanPercentage)
+        : null;
 
     return (
         <Document>
             {pages.map((pageStudents, pageIndex) => {
-                const isFirstPage = pageIndex === 0;
-                const isLastTablePage = pageIndex === pages.length - 1;
-                const showSummaryOnThisPage = isLastTablePage && !summaryOnSeparatePage;
-
+                const isFirst = pageIndex === 0;
+                const isLast = pageIndex === pages.length - 1;
                 return (
                     <Page key={`page-${pageIndex}`} size="A4" orientation="portrait" style={s.page}>
-                        <View style={s.navyBar} fixed />
-                        <View style={s.footerWrap} fixed>
-                            <ReportFooter generatedOn={today} />
-                        </View>
-                        <View style={s.navyBarBottom} fixed />
+                        <View style={s.footerWrap} fixed><ReportFooter generatedOn={today} /></View>
 
-                        {isFirstPage && (
+                        {isFirst && (
                             <>
-                                <View style={s.headerBand}>
-                                    <View>
-                                        {data.schoolLogoUrl ? (
-                                            <Image style={s.logo} src={data.schoolLogoUrl} />
-                                        ) : (
-                                            // Helvetica has no emoji: the school-building glyph printed
-                                            // as tofu on every logo-less sheet. Use the initial, as the
-                                            // report card's crest fallback does.
-                                            <View style={s.logoPlaceholder}>
-                                                <Text style={{ fontSize: 30, fontFamily: 'Helvetica-Bold', color: NAVY }}>
-                                                    {(data.schoolName || 'S').trim().charAt(0).toUpperCase()}
-                                                </Text>
-                                            </View>
-                                        )}
+                                <View style={s.masthead}>
+                                    {data.schoolLogoUrl ? (
+                                        <View style={s.crestFrame}><Image style={s.crest} src={data.schoolLogoUrl} /></View>
+                                    ) : (
+                                        <View style={s.crestFallback}>
+                                            <Text style={s.crestFallbackText}>
+                                                {(data.schoolName || 'S').trim().charAt(0).toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <View style={s.mastheadCenter}>
+                                        <Text style={s.mastheadSchool}>{data.schoolName}</Text>
+                                        {data.schoolAddress && <Text style={s.mastheadAddress}>{data.schoolAddress}</Text>}
+                                        <Text style={s.mastheadDoc}>
+                                            Class Marksheet · {data.examTitle}{data.examRound ? ` ${data.examRound}` : ''} · {data.academicYear}
+                                        </Text>
                                     </View>
-                                    <View style={s.headerCenter}>
-                                        <Text style={s.schoolName}>{data.schoolName}</Text>
-                                        {data.schoolAddress && <Text style={s.schoolAddress}>{data.schoolAddress}</Text>}
+                                    <View style={s.badge}>
+                                        <Text style={s.badgeLabel}>Class Mean</Text>
+                                        <Text style={s.badgeValue}>{Math.round(classMean)}%</Text>
                                     </View>
-                                    <View style={{ width: 52 }} />
                                 </View>
-                                <View style={s.bannerRibbon}>
-                                    <Text style={s.bannerText}>
-                                        {data.examTitle}{data.examRound ? ` ${data.examRound}` : ''} — Class Marksheet
-                                    </Text>
-                                </View>
-                                <View style={s.summaryStrip}>
-                                    <View style={s.summaryItem}><Text style={s.summaryLabel}>Class</Text><Text style={s.summaryVal}>{data.className}</Text></View>
-                                    <View style={s.summaryItem}><Text style={s.summaryLabel}>Year</Text><Text style={s.summaryVal}>{data.academicYear}</Text></View>
-                                    <View style={s.summaryItem}><Text style={s.summaryLabel}>Students</Text><Text style={s.summaryVal}>{data.students.length}</Text></View>
-                                    <View style={s.summaryItem}><Text style={s.summaryLabel}>{isKCSE ? 'Mean Points' : 'Mean %'}</Text><Text style={s.summaryVal}>{isKCSE ? data.meanPoints : Math.round(data.students.reduce((sum, s) => sum + s.overallPercentage, 0) / data.students.length)}</Text></View>
+                                <View style={s.accentRule} />
+                                <View style={s.infoRow}>
+                                    <InfoCard title="Class" value={data.className} />
+                                    <InfoCard title="Learners" value={`${data.students.length}`} />
+                                    <InfoCard
+                                        title={isKCSE ? 'Mean Points' : 'Mean Score'}
+                                        value={isKCSE ? `${data.meanPoints}` : `${Math.round(classMean)}%`}
+                                    />
+                                    <InfoCard
+                                        title="Mean Grade"
+                                        value={data.meanGrade || '—'}
+                                        delta={meanDelta}
+                                        deltaSuffix={data.previousExamLabel ? `% vs ${data.previousExamLabel}` : '%'}
+                                    />
                                 </View>
                             </>
                         )}
 
-                        <View style={s.table}>
-                            <TableHeader data={data} colSubjWidth={colSubjWidth} isKCSE={isKCSE} />
+                        <View style={[s.table, isFirst ? {} : { marginTop: 14 }]}>
+                            <TableHeader data={data} subjectW={subjectW} isKCSE={isKCSE} showDev={showDev} />
                             {pageStudents.map((student, idx) => (
-                                <StudentRow key={`${student.admissionNumber || student.studentName}-${pageIndex}-${idx}`} student={student} idx={idx} data={data} colSubjWidth={colSubjWidth} isKCSE={isKCSE} />
+                                <StudentRow
+                                    key={`${student.admissionNumber || student.studentName}-${pageIndex}-${idx}`}
+                                    student={student} idx={idx} data={data}
+                                    subjectW={subjectW} isKCSE={isKCSE} showDev={showDev}
+                                />
                             ))}
+                            {isLast && (
+                                <ClassMeanRow data={data} subjectW={subjectW} isKCSE={isKCSE} showDev={showDev} classMean={classMean} />
+                            )}
                         </View>
 
-                        {showSummaryOnThisPage && <SummarySection data={data} isKCSE={isKCSE} />}
+                        {isLast && !summaryOnOwnPage && <Analytics data={data} isKCSE={isKCSE} classMean={classMean} />}
                     </Page>
                 );
             })}
 
-            {summaryOnSeparatePage && (
-                <Page size="A4" orientation="portrait" style={s.page}>
-                    <View style={s.navyBar} fixed />
-                    <View style={s.footerWrap} fixed>
-                        <ReportFooter generatedOn={today} />
-                    </View>
-                    <View style={s.navyBarBottom} fixed />
-                    <SummarySection data={data} isKCSE={isKCSE} />
+            {summaryOnOwnPage && (
+                <Page size="A4" orientation="portrait" style={[s.page, { paddingTop: 18 }]}>
+                    <View style={s.footerWrap} fixed><ReportFooter generatedOn={today} /></View>
+                    <Analytics data={data} isKCSE={isKCSE} classMean={classMean} />
                 </Page>
             )}
         </Document>

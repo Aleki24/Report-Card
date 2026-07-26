@@ -14,6 +14,11 @@ import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import { resolveOverallGradingSystem } from '@/lib/reports/grading-context';
+import {
+    earliestExamCreatedAt,
+    fetchPreviousRound,
+    fetchSubjectTeachers,
+} from '@/lib/reports/comparatives';
 
 export const runtime = 'nodejs';
 
@@ -264,6 +269,20 @@ export async function GET(
             return NextResponse.json({ error: 'No marks found for this class and term' }, { status: 404 });
         }
 
+        // The same comparatives the report cards carry, gathered once for the
+        // whole sheet: the round before this one, and who teaches each subject.
+        const [previousRound, subjectTeacherNames] = await Promise.all([
+            fetchPreviousRound(supabase, {
+                studentIds,
+                gradeId,
+                before: earliestExamCreatedAt(allMarks),
+                current: { termId, examType: roundSelection.round },
+                gradingScales,
+                gradingSystemType,
+            }),
+            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
+        ]);
+
         // Collect all distinct subject names and codes for the table columns
         const subjectsMap = new Map<string, { code: string; name: string }>();
         const subjectNamesMap: Record<string, string> = {};
@@ -319,7 +338,10 @@ export async function GET(
 
         // 7. Aggregate data for the specific report format
         // Calculate subject-wise statistics (mean, rank)
-        const subjectStats: Record<string, { mean: number; highest: number; lowest: number; studentCount: number }> = {};
+        const subjectStats: Record<string, {
+            mean: number; highest: number; lowest: number; studentCount: number;
+            previousMean?: number; teacher?: string;
+        }> = {};
         
         // Initialize subject stats
         subjectsArray.forEach(sub => {
@@ -341,16 +363,43 @@ export async function GET(
             });
         }
 
+        // subjectId → code, so the previous round's marks can be folded into
+        // the same per-subject buckets the current round uses.
+        const subjectCodeById = new Map<string, string>();
+        for (const m of allMarks) {
+            const subject = (m as any).exams?.subjects;
+            if (subject?.id) subjectCodeById.set(subject.id, subject.code || subject.name);
+        }
+
+        // What the class scored in each subject last round — the deviation the
+        // report cards print, at class level.
+        const previousSubjectScores: Record<string, number[]> = {};
+        if (previousRound) {
+            for (const [key, pct] of previousRound.subjectPercentage) {
+                const [, subjectId] = key.split('|');
+                const code = subjectCodeById.get(subjectId);
+                if (!code || !(code in subjectScores)) continue;
+                (previousSubjectScores[code] ||= []).push(pct);
+            }
+        }
+
         // Calculate stats for each subject
         for (const sub of subjectsArray) {
             const scores = subjectScores[sub.code];
+            const previousScores = previousSubjectScores[sub.code] || [];
             if (scores.length > 0) {
                 const sum = scores.reduce((a, b) => a + b, 0);
                 subjectStats[sub.code] = {
                     mean: Math.round(sum / scores.length),
                     highest: Math.round(Math.max(...scores)),
                     lowest: Math.round(Math.min(...scores)),
-                    studentCount: scores.length
+                    studentCount: scores.length,
+                    previousMean: previousScores.length > 0
+                        ? Math.round(previousScores.reduce((a, b) => a + b, 0) / previousScores.length)
+                        : undefined,
+                    teacher: subjectTeacherNames.get(
+                        [...subjectCodeById.entries()].find(([, code]) => code === sub.code)?.[0] || ''
+                    ),
                 };
             }
         }
@@ -411,6 +460,8 @@ export async function GET(
             // Check if student has any marks entered (at least one non-null mark)
             const hasAnyMarks = Object.values(marksRecord).some(mark => mark !== null);
             
+            const previous = previousRound?.overall.get(student.id);
+
             return {
                 studentName: `${firstName} ${lastName}`,
                 admissionNumber: student.admission_number || '',
@@ -418,6 +469,9 @@ export async function GET(
                 overallPercentage: displayPercentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints || 0,
+                previousPercentage: previous?.percentage,
+                previousTotalPoints: previous?.totalPoints,
+                previousClassRank: previous?.rank || undefined,
                 // Per-subject mean points (KCSE) — the class mean grade must be
                 // derived from these, not from total points.
                 meanPoints: studentPerf.markCount > 0 ? (studentPerf.totalPoints || 0) / studentPerf.markCount : 0,
@@ -485,8 +539,22 @@ export async function GET(
             .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
             .join(' ');
 
+        const previousClassMeanPercentage = previousRound && studentsWithMarks.length > 0
+            ? (() => {
+                const values = studentsWithMarks
+                    .map(s => s.previousPercentage)
+                    .filter((v): v is number => v != null);
+                return values.length > 0
+                    ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+                    : undefined;
+            })()
+            : undefined;
+
         const markSheetData = {
             examRound: roundLabel || undefined,
+            previousExamLabel: previousRound?.label,
+            classMeanPercentage: Math.round(classMeanPercentage * 10) / 10,
+            previousClassMeanPercentage,
             schoolName,
             schoolLogoUrl,
             schoolAddress,
