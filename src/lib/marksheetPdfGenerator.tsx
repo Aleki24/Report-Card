@@ -64,6 +64,14 @@ const signed = (value: number, unit = '') =>
 
 const deltaColor = (value: number) => (value > 0 ? T.green : value < 0 ? T.red : T.muted);
 
+/** "Rachael Ng'ang'a" → "R. Ng'ang'a", clipped so a subject row stays one line. */
+function shortTeacher(name?: string): string {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    const compact = parts.length > 1 ? `${parts[0].charAt(0)}. ${parts[parts.length - 1]}` : parts[0];
+    return compact.length > 12 ? `${compact.slice(0, 11)}.` : compact;
+}
+
 const PAGE_X = 22;
 
 /**
@@ -104,20 +112,22 @@ const s = StyleSheet.create({
     /* ── Learner table ── */
     table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     thGroupRow: { flexDirection: 'row', backgroundColor: T.primary },
-    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center' },
+    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderRight: '0.5pt solid rgba(255,255,255,0.3)' },
     thGroupText: { ...boldFont, fontSize: 7, color: T.white, textTransform: 'uppercase', letterSpacing: 0.7 },
     thSubRow: { flexDirection: 'row', backgroundColor: T.primaryDark },
-    thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
+    thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center', borderRight: '0.5pt solid rgba(255,255,255,0.25)' },
+    thSubCellLast: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
     thSubText: { ...boldFont, fontSize: 6.4, color: T.white, textAlign: 'center' },
 
     row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
     rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
     rowTop: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.primarySoft },
-    cell: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center' },
+    cell: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center', borderRight: `0.5pt solid ${T.line}` },
+    cellLast: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center' },
     posText: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
     posTextTop: { ...boldFont, fontSize: 8.2, color: T.primary, textAlign: 'center' },
     nameText: { fontSize: 8.4, color: T.ink },
-    admText: { fontSize: 7, color: T.muted, textAlign: 'center' },
+    admText: { fontSize: 6.6, color: T.muted, textAlign: 'center' },
     markText: { fontSize: 8.2, textAlign: 'center' },
     markMissing: { fontSize: 8.2, color: '#C7D0DC', textAlign: 'center' },
     summaryText: { ...boldFont, fontSize: 8.4, color: T.ink, textAlign: 'center' },
@@ -134,16 +144,16 @@ const s = StyleSheet.create({
     panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}`, flexDirection: 'column' },
     panelHead: { backgroundColor: T.surface, paddingVertical: 3.5, paddingHorizontal: 7, borderBottom: `0.8pt solid ${T.line}` },
     panelTitle: { ...boldFont, fontSize: 7, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
-    panelBody: { backgroundColor: T.white, paddingVertical: 7, paddingHorizontal: 8, flexGrow: 1 },
+    panelBody: { backgroundColor: T.white, paddingVertical: 5, paddingHorizontal: 7, flexGrow: 1 },
 
     /* Subject analysis rows: name, teacher, mean bar, movement, rank */
-    subjRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5, borderBottom: `0.5pt solid ${T.line}` },
-    subjRowLast: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5 },
+    subjRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.2, borderBottom: `0.5pt solid ${T.line}` },
+    subjRowLast: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.2 },
     subjName: { ...boldFont, fontSize: 7.8, color: T.ink },
-    subjTeacher: { fontSize: 6.2, color: T.muted, marginTop: 0.5 },
+    subjTeacher: { fontSize: 5.8, color: T.muted },
     barTrack: { height: 6, backgroundColor: T.surface, borderRadius: 2.5, overflow: 'hidden' },
     barFill: { height: 6, borderRadius: 2.5 },
-    barScale: { fontSize: 5.9, color: T.muted, marginTop: 1 },
+    barScale: { fontSize: 5.8, color: T.muted, textAlign: 'right' },
     subjMean: { ...boldFont, fontSize: 8.4, color: T.ink, textAlign: 'right' },
     subjDelta: { ...boldFont, fontSize: 7, textAlign: 'right' },
     subjRank: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
@@ -169,8 +179,8 @@ const s = StyleSheet.create({
    Fixed columns first; every subject shares what is left, so a sheet with
    four subjects and one with nine both fill the page evenly. */
 const POS_W = 4.5;
-const NAME_W = 19;
-const ADM_W = 7;
+const NAME_W = 17;
+const ADM_W = 11;   // "ADM-2026-8736" needs the room
 const TOTAL_W = 6.5;
 const POINTS_W = 5.5;
 const GRADE_W = 6;
@@ -196,7 +206,7 @@ function TableHeader({ data, subjectW, isKCSE, showDev }: {
                 <View style={[s.thGroupCell, { width: pct(data.subjects.length * subjectW) }]}>
                     <Text style={s.thGroupText}>{isKCSE ? 'Subjects' : 'Learning Areas'}</Text>
                 </View>
-                <View style={[s.thGroupCell, { flex: 1 }]}>
+                <View style={[s.thGroupCell, { flex: 1, borderRight: 'none' }]}>
                     <Text style={s.thGroupText}>Summary</Text>
                 </View>
             </View>
@@ -214,7 +224,7 @@ function TableHeader({ data, subjectW, isKCSE, showDev }: {
                 <View style={[s.thSubCell, { width: pct(TOTAL_W) }]}><Text style={s.thSubText}>Mean</Text></View>
                 {isKCSE && <View style={[s.thSubCell, { width: pct(POINTS_W) }]}><Text style={s.thSubText}>Pts</Text></View>}
                 {showDev && <View style={[s.thSubCell, { width: pct(DEV_W) }]}><Text style={s.thSubText}>Dev.</Text></View>}
-                <View style={[s.thSubCell, { width: pct(GRADE_W) }]}><Text style={s.thSubText}>Grade</Text></View>
+                <View style={[s.thSubCellLast, { width: pct(GRADE_W) }]}><Text style={s.thSubText}>Grade</Text></View>
             </View>
         </>
     );
@@ -266,7 +276,7 @@ function StudentRow({ student, idx, data, subjectW, isKCSE, showDev }: {
                         : <Text style={[s.devText, { color: deltaColor(dev) }]}>{signed(dev)}</Text>}
                 </View>
             )}
-            <View style={[s.cell, { width: pct(GRADE_W) }]}>
+            <View style={[s.cellLast, { width: pct(GRADE_W) }]}>
                 <Text style={[s.gradeText, { color: attainmentColor(student.overallPercentage) }]}>
                     {student.overallGrade || '—'}
                 </Text>
@@ -311,7 +321,7 @@ function ClassMeanRow({ data, subjectW, isKCSE, showDev, classMean }: {
                         : <Text style={[s.devText, { color: deltaColor(dev) }]}>{signed(dev)}</Text>}
                 </View>
             )}
-            <View style={[s.cell, { width: pct(GRADE_W) }]}>
+            <View style={[s.cellLast, { width: pct(GRADE_W) }]}>
                 <Text style={[s.gradeText, { color: attainmentColor(classMean) }]}>{data.meanGrade || '—'}</Text>
             </View>
         </View>
@@ -343,20 +353,25 @@ function SubjectAnalysis({ data }: { data: MarkSheetData }) {
         <View style={s.listGrow}>
             {ranked.map((subject, i) => {
                 const stat = data.subjectStats[subject.code];
-                const mean = stat?.mean ?? subject.mean;
+                const mean = Number.isFinite(stat?.mean) ? (stat as SubjectStats).mean : (Number.isFinite(subject.mean) ? subject.mean : 0);
                 const dev = stat?.previousMean != null ? Math.round(mean - stat.previousMean) : null;
                 const name = data.subjects.find(entry => entry.code === subject.code)?.name || subject.code;
                 return (
                     <View key={subject.code} style={i === ranked.length - 1 ? s.subjRowLast : s.subjRow}>
-                        <View style={{ width: '30%', paddingRight: 4 }}>
-                            <Text style={s.subjName}>{name.length > 18 ? `${name.slice(0, 17)}.` : name}</Text>
-                            {stat?.teacher ? <Text style={s.subjTeacher}>{stat.teacher}</Text> : null}
+                        {/* One text run, not two side by side: as separate
+                            elements the teacher's name drew over the subject's. */}
+                        <View style={{ width: '44%', paddingRight: 5 }}>
+                            <Text style={s.subjName}>
+                                {name.length > 14 ? `${name.slice(0, 13)}.` : name}
+                                {stat?.teacher ? (
+                                    <Text style={s.subjTeacher}>{`  ${shortTeacher(stat.teacher)}`}</Text>
+                                ) : null}
+                            </Text>
                         </View>
                         <View style={{ flex: 1, paddingRight: 5 }}>
                             <View style={s.barTrack}>
                                 <View style={[s.barFill, { width: `${Math.min(100, Math.max(2, mean))}%`, backgroundColor: attainmentColor(mean) }]} />
                             </View>
-                            {stat ? <Text style={s.barScale}>high {stat.highest} · low {stat.lowest} · {stat.studentCount} entered</Text> : null}
                         </View>
                         <View style={{ width: '11%' }}>
                             <Text style={s.subjMean}>{mean}</Text>
@@ -437,23 +452,23 @@ function AtAGlance({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: b
     const short = (name: string, limit = 16) => (name.length > limit ? `${name.slice(0, limit - 1)}.` : name);
 
     const rows: [string, string, string?][] = [
-        ['Learners entered', `${withMarks.length} of ${data.students.length}`],
-        ['Class mean', `${Math.round(classMean)}%${data.meanGrade ? ` · ${data.meanGrade}` : ''}`, attainmentColor(classMean)],
+        ['Entered', `${withMarks.length} of ${data.students.length}`],
+        ['Class mean', `${Math.round(classMean)}%${data.meanGrade && !/^[-–—]$/.test(data.meanGrade) ? ` · ${data.meanGrade}` : ''}`, attainmentColor(classMean)],
     ];
     if (isKCSE) rows.push(['Mean points', `${data.meanPoints}`]);
-    if (top) rows.push(['Top of class', `${short(top.studentName)} · ${Math.round(top.overallPercentage)}%`, attainmentColor(top.overallPercentage)]);
-    rows.push(['At / above class mean', `${aboveMean} of ${withMarks.length}`]);
-    if (best) rows.push(['Strongest subject', `${best.code} · ${best.mean}%`, attainmentColor(best.mean)]);
+    if (top) rows.push(['Top', `${short(top.studentName, 14)} · ${Math.round(top.overallPercentage)}%`, attainmentColor(top.overallPercentage)]);
+    rows.push(['At / above mean', `${aboveMean} of ${withMarks.length}`]);
+    if (best) rows.push(['Strongest', `${best.code} · ${best.mean}%`, attainmentColor(best.mean)]);
     if (weakest && data.subjectRankings.length > 1) {
-        rows.push(['Needs attention', `${weakest.code} · ${weakest.mean}%`, attainmentColor(weakest.mean)]);
+        rows.push(['Weakest', `${weakest.code} · ${weakest.mean}%`, attainmentColor(weakest.mean)]);
     }
     if (data.previousClassMeanPercentage != null) {
         const change = Math.round(classMean - data.previousClassMeanPercentage);
         rows.push([`Mean vs ${data.previousExamLabel || 'last exam'}`, signed(change, '%'), deltaColor(change)]);
     }
-    if (moved.length > 0) rows.push(['Learners improved', `${improved} of ${moved.length}`]);
+    if (moved.length > 0) rows.push(['Improved', `${improved} of ${moved.length}`]);
     if (mostImproved && mostImproved.change > 0) {
-        rows.push(['Most improved', `${short(mostImproved.student.studentName, 13)} · ${signed(Math.round(mostImproved.change))}`, T.green]);
+        rows.push(['Top gain', `${short(mostImproved.student.studentName, 13)} · ${signed(Math.round(mostImproved.change))}`, T.green]);
     }
 
     return (
@@ -484,21 +499,21 @@ const OTHER_PAGE_CHROME = 14;
 /** Height the analytics band needs for this class, panel heads included. */
 function analyticsHeight(data: MarkSheetData, glanceRows: number): number {
     const PANEL_CHROME = 38;                  // head + body padding
-    const subjectPanel = PANEL_CHROME + data.subjectRankings.length * 24;
-    const glancePanel = PANEL_CHROME + glanceRows * 17;
+    const subjectPanel = PANEL_CHROME + data.subjectRankings.length * 14.5;
+    const glancePanel = PANEL_CHROME + glanceRows * 15;
     const distributionPanel = PANEL_CHROME + 60;
     return 8 + Math.max(subjectPanel, glancePanel, distributionPanel);
 }
 
 /**
- * Spread the learners over as few pages as possible, then even the pages out
- * by HEIGHT rather than by row count.
+ * Fill each page before starting the next, so the table runs to the foot of
+ * the sheet with only a margin under it.
  *
- * Filling page one to the brim and letting the rest fall through left a last
- * page that was mostly white. Pages don't carry the same fixed load either —
- * the first has the masthead, the last has the class-mean row and the
- * analytics band — so an equal number of rows still ends at different depths.
- * Balancing the ink instead gives sheets that end at roughly the same place.
+ * An earlier version balanced the rows evenly across pages, which left a band
+ * of white at the bottom of every one. A class list is read down the page, so
+ * a full first sheet and a shorter last one is what a school expects.
+ * The analytics band rides under the final table when the room is there, and
+ * takes a page of its own only when it isn't.
  */
 function paginate<T>(students: T[], analytics: number) {
     const usable = PAGE_H - FOOTER_H;
@@ -509,51 +524,23 @@ function paginate<T>(students: T[], analytics: number) {
     const otherCapacity = room(OTHER_PAGE_CHROME);
     const analyticsLoad = MEAN_ROW_H + analytics;
 
-    if (students.length <= room(FIRST_PAGE_CHROME, analyticsLoad)) {
-        return { pages: [students], summaryOnOwnPage: false };
-    }
-
-    for (let pageCount = 2; pageCount <= 24; pageCount++) {
-        // What each page carries before a single learner is printed.
-        const fixed = Array.from({ length: pageCount }, (_, i) =>
-            (i === 0 ? FIRST_PAGE_CHROME : OTHER_PAGE_CHROME)
-            + TABLE_HEAD_H
-            + (i === pageCount - 1 ? analyticsLoad : 0));
-        const capacities = fixed.map((load, i) =>
-            Math.min(i === 0 ? firstCapacity : otherCapacity, Math.floor((usable - load) / ROW_H)));
-        if (students.length > capacities.reduce((a, b) => a + b, 0)) continue;
-
-        // The depth every page would reach if the ink were shared equally.
-        const target = (fixed.reduce((a, b) => a + b, 0) + students.length * ROW_H) / pageCount;
-
-        const counts = fixed.map((load, i) =>
-            Math.max(0, Math.min(capacities[i], Math.round((target - load) / ROW_H))));
-
-        // Rounding leaves a learner or two unplaced (or over-placed); settle up
-        // against whatever room is left, earliest page first.
-        let drift = students.length - counts.reduce((a, b) => a + b, 0);
-        for (let i = 0; drift !== 0 && i < counts.length; i++) {
-            const step = drift > 0 ? Math.min(drift, capacities[i] - counts[i]) : Math.max(drift, -counts[i]);
-            counts[i] += step;
-            drift -= step;
-        }
-        if (drift !== 0) continue;
-
-        const pages: T[][] = [];
-        let taken = 0;
-        for (const count of counts) {
-            pages.push(students.slice(taken, taken + count));
-            taken += count;
-        }
-        return { pages: pages.filter(page => page.length > 0), summaryOnOwnPage: false };
-    }
-
-    // Enormous class: fill pages and give the analytics their own sheet.
     const pages: T[][] = [students.slice(0, firstCapacity)];
     for (let i = firstCapacity; i < students.length; i += otherCapacity) {
         pages.push(students.slice(i, i + otherCapacity));
     }
-    return { pages: pages.filter(page => page.length > 0), summaryOnOwnPage: true };
+    const filled = pages.filter(page => page.length > 0);
+    const lastPages = filled.length > 0 ? filled : [[] as T[]];
+
+    // Does the final page still have room for the band beneath its rows?
+    const last = lastPages[lastPages.length - 1];
+    const chrome = lastPages.length === 1 ? FIRST_PAGE_CHROME : OTHER_PAGE_CHROME;
+    const spare = usable - (chrome + TABLE_HEAD_H + last.length * ROW_H + analyticsLoad);
+
+    // The band rides under the final table when the room is there; when it
+    // isn't it takes a page of its own. Pulling rows off the full page to make
+    // space for it only moved the white space back to page one, which is the
+    // thing a class list must not have.
+    return { pages: lastPages, summaryOnOwnPage: spare < 0 };
 }
 
 function Analytics({ data, isKCSE, classMean, fill }: {
@@ -563,7 +550,7 @@ function Analytics({ data, isKCSE, classMean, fill }: {
     // the table and the foot of the sheet. On a page of its own they grow to
     // fill it, since nothing follows them there.
     return (
-        <View style={[s.panelRow, fill ? { flexGrow: 1 } : {}]} wrap={false}>
+        <View style={[s.panelRow, fill ? { marginTop: 14 } : {}]} wrap={false}>
             <View style={[s.panel, { flex: 1.5 }]}>
                 <View style={s.panelHead}><Text style={s.panelTitle}>Subject Performance</Text></View>
                 <View style={s.panelBody}><SubjectAnalysis data={data} /></View>
