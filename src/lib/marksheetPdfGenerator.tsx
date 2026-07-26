@@ -76,7 +76,7 @@ const PAGE_X = 22;
  * subject scored last time, and who teaches it.
  */
 const s = StyleSheet.create({
-    page: { padding: 0, paddingBottom: 34, fontFamily: FONT_BODY, fontSize: 8, color: T.ink, backgroundColor: T.white },
+    page: { padding: 0, paddingBottom: 38, display: 'flex', flexDirection: 'column', fontFamily: FONT_BODY, fontSize: 9, color: T.ink, backgroundColor: T.white },
 
     /* ── Masthead ── */
     masthead: { backgroundColor: T.indigo, paddingTop: 10, paddingBottom: 8, paddingHorizontal: PAGE_X, flexDirection: 'row', alignItems: 'center' },
@@ -85,79 +85,82 @@ const s = StyleSheet.create({
     crestFallback: { width: 44, height: 44, borderRadius: 6, backgroundColor: T.primary, alignItems: 'center', justifyContent: 'center' },
     crestFallbackText: { ...displayFont, fontSize: 17, color: T.white },
     mastheadCenter: { flex: 1, paddingHorizontal: 12 },
-    mastheadSchool: { ...displayFont, fontSize: 12, color: T.white, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 },
-    mastheadAddress: { fontSize: 6.2, color: '#C6CBEC', marginTop: 2.5 },
-    mastheadDoc: { fontSize: 6.6, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 1.3, marginTop: 3 },
+    mastheadSchool: { ...displayFont, fontSize: 13.5, color: T.white, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.2 },
+    mastheadAddress: { fontSize: 7, color: '#C6CBEC', marginTop: 2.5 },
+    mastheadDoc: { fontSize: 7.4, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 1.3, marginTop: 3 },
     badge: { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 4, paddingHorizontal: 8, alignItems: 'center', minWidth: 50 },
-    badgeLabel: { fontSize: 5.2, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 0.6 },
-    badgeValue: { ...boldFont, fontSize: 13, color: T.white, marginTop: 1 },
+    badgeLabel: { fontSize: 6, color: '#C6CBEC', textTransform: 'uppercase', letterSpacing: 0.6 },
+    badgeValue: { ...boldFont, fontSize: 15, color: T.white, marginTop: 1 },
     accentRule: { height: 3, backgroundColor: T.primary },
 
     /* ── Info cards ── */
     infoRow: { flexDirection: 'row', gap: 8, paddingHorizontal: PAGE_X, marginTop: 8, marginBottom: 7 },
     infoCard: { flex: 1, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}`, backgroundColor: T.white },
     infoCardHead: { backgroundColor: T.surface, paddingVertical: 3, paddingHorizontal: 7, borderBottom: `0.8pt solid ${T.line}` },
-    infoCardTitle: { ...boldFont, fontSize: 5.8, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
-    infoCardValue: { ...boldFont, fontSize: 9, color: T.ink, paddingTop: 4, paddingHorizontal: 7, paddingBottom: 2 },
-    infoCardDelta: { ...boldFont, fontSize: 5.4, paddingHorizontal: 7, paddingBottom: 4 },
+    infoCardTitle: { ...boldFont, fontSize: 6.8, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
+    infoCardValue: { ...boldFont, fontSize: 11, color: T.ink, paddingTop: 4, paddingHorizontal: 7, paddingBottom: 2 },
+    infoCardDelta: { ...boldFont, fontSize: 6.4, paddingHorizontal: 7, paddingBottom: 4 },
 
     /* ── Learner table ── */
     table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
     thGroupRow: { flexDirection: 'row', backgroundColor: T.primary },
     thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center' },
-    thGroupText: { ...boldFont, fontSize: 6, color: T.white, textTransform: 'uppercase', letterSpacing: 0.7 },
+    thGroupText: { ...boldFont, fontSize: 7, color: T.white, textTransform: 'uppercase', letterSpacing: 0.7 },
     thSubRow: { flexDirection: 'row', backgroundColor: T.primaryDark },
     thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
-    thSubText: { ...boldFont, fontSize: 5.4, color: T.white, textAlign: 'center' },
+    thSubText: { ...boldFont, fontSize: 6.4, color: T.white, textAlign: 'center' },
 
     row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
     rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
     rowTop: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.primarySoft },
-    cell: { paddingVertical: 3.5, paddingHorizontal: 2, justifyContent: 'center' },
-    posText: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'center' },
-    posTextTop: { ...boldFont, fontSize: 7, color: T.primary, textAlign: 'center' },
-    nameText: { fontSize: 7, color: T.ink },
-    admText: { fontSize: 6.2, color: T.muted, textAlign: 'center' },
-    markText: { fontSize: 6.8, textAlign: 'center' },
-    markMissing: { fontSize: 6.8, color: '#C7D0DC', textAlign: 'center' },
-    summaryText: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'center' },
-    devText: { ...boldFont, fontSize: 6.4, textAlign: 'center' },
-    gradeText: { ...boldFont, fontSize: 7.2, textAlign: 'center' },
+    cell: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center' },
+    posText: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
+    posTextTop: { ...boldFont, fontSize: 8.2, color: T.primary, textAlign: 'center' },
+    nameText: { fontSize: 8.4, color: T.ink },
+    admText: { fontSize: 7, color: T.muted, textAlign: 'center' },
+    markText: { fontSize: 8.2, textAlign: 'center' },
+    markMissing: { fontSize: 8.2, color: '#C7D0DC', textAlign: 'center' },
+    summaryText: { ...boldFont, fontSize: 8.4, color: T.ink, textAlign: 'center' },
+    devText: { ...boldFont, fontSize: 7.6, textAlign: 'center' },
+    gradeText: { ...boldFont, fontSize: 8.6, textAlign: 'center' },
     meanRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.primarySoft, borderTop: `1pt solid ${T.primary}` },
-    meanLabel: { ...boldFont, fontSize: 6.4, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.7, paddingVertical: 4, paddingLeft: 6 },
+    meanLabel: { ...boldFont, fontSize: 7.4, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.7, paddingVertical: 4, paddingLeft: 6 },
 
     /* ── Analytics panels ── */
+    analytics: { flexDirection: 'column' },
     panelRow: { flexDirection: 'row', gap: 8, paddingHorizontal: PAGE_X, marginTop: 8 },
-    panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    /* Rows spread through a grown panel rather than bunching at the top. */
+    listGrow: { flexGrow: 1, justifyContent: 'space-around' },
+    panel: { borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}`, flexDirection: 'column' },
     panelHead: { backgroundColor: T.surface, paddingVertical: 3.5, paddingHorizontal: 7, borderBottom: `0.8pt solid ${T.line}` },
-    panelTitle: { ...boldFont, fontSize: 6, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
-    panelBody: { backgroundColor: T.white, paddingVertical: 6, paddingHorizontal: 7 },
+    panelTitle: { ...boldFont, fontSize: 7, color: T.primary, textTransform: 'uppercase', letterSpacing: 0.9 },
+    panelBody: { backgroundColor: T.white, paddingVertical: 7, paddingHorizontal: 8, flexGrow: 1 },
 
     /* Subject analysis rows: name, teacher, mean bar, movement, rank */
-    subjRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5, borderBottom: `0.5pt solid ${T.line}` },
-    subjRowLast: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5 },
-    subjName: { ...boldFont, fontSize: 6.4, color: T.ink },
-    subjTeacher: { fontSize: 5.2, color: T.muted, marginTop: 0.5 },
-    barTrack: { height: 5, backgroundColor: T.surface, borderRadius: 2.5, overflow: 'hidden' },
-    barFill: { height: 5, borderRadius: 2.5 },
-    barScale: { fontSize: 5, color: T.muted, marginTop: 1 },
-    subjMean: { ...boldFont, fontSize: 7, color: T.ink, textAlign: 'right' },
-    subjDelta: { ...boldFont, fontSize: 5.8, textAlign: 'right' },
-    subjRank: { fontSize: 5.8, color: T.muted, textAlign: 'center' },
+    subjRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5, borderBottom: `0.5pt solid ${T.line}` },
+    subjRowLast: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5 },
+    subjName: { ...boldFont, fontSize: 7.8, color: T.ink },
+    subjTeacher: { fontSize: 6.2, color: T.muted, marginTop: 0.5 },
+    barTrack: { height: 6, backgroundColor: T.surface, borderRadius: 2.5, overflow: 'hidden' },
+    barFill: { height: 6, borderRadius: 2.5 },
+    barScale: { fontSize: 5.9, color: T.muted, marginTop: 1 },
+    subjMean: { ...boldFont, fontSize: 8.4, color: T.ink, textAlign: 'right' },
+    subjDelta: { ...boldFont, fontSize: 7, textAlign: 'right' },
+    subjRank: { fontSize: 6.8, color: T.muted, textAlign: 'center' },
 
     /* At a glance */
-    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5, borderBottom: `0.5pt solid ${T.line}` },
-    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2.5 },
-    statKey: { fontSize: 6, color: T.muted },
-    statVal: { ...boldFont, fontSize: 6.8, color: T.ink, maxWidth: '62%', textAlign: 'right' },
+    statLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5, borderBottom: `0.5pt solid ${T.line}` },
+    statLineLast: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 3.5 },
+    statKey: { fontSize: 7.2, color: T.muted },
+    statVal: { ...boldFont, fontSize: 8, color: T.ink, maxWidth: '62%', textAlign: 'right' },
 
     /* Grade distribution */
-    distRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
-    distCol: { width: 26, alignItems: 'center' },
+    distRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 },
+    distCol: { flex: 1, alignItems: 'center' },
     distTrack: { width: '100%', justifyContent: 'flex-end', alignItems: 'center' },
-    distBar: { width: '70%', borderRadius: 1.5 },
-    distCount: { ...boldFont, fontSize: 5.4, color: T.ink, marginBottom: 1 },
-    distLabel: { ...boldFont, fontSize: 5.6, marginTop: 2 },
+    distBar: { width: '68%', maxWidth: 13, borderRadius: 1.5 },
+    distCount: { ...boldFont, fontSize: 6.4, color: T.ink, marginBottom: 1 },
+    distLabel: { ...boldFont, fontSize: 7, marginTop: 2 },
 
     footerWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });
@@ -337,7 +340,7 @@ function SubjectAnalysis({ data }: { data: MarkSheetData }) {
     if (ranked.length === 0) return <Text style={{ fontSize: 6, color: T.muted }}>No subject data.</Text>;
 
     return (
-        <View>
+        <View style={s.listGrow}>
             {ranked.map((subject, i) => {
                 const stat = data.subjectStats[subject.code];
                 const mean = stat?.mean ?? subject.mean;
@@ -454,7 +457,7 @@ function AtAGlance({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: b
     }
 
     return (
-        <View>
+        <View style={s.listGrow}>
             {rows.map(([key, value, color], i) => (
                 <View key={key} style={i === rows.length - 1 ? s.statLineLast : s.statLine}>
                     <Text style={s.statKey}>{key}</Text>
@@ -472,58 +475,108 @@ function AtAGlance({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: b
    ride on the last page whenever the space left there can hold them. */
 const PAGE_H = 842;          // A4 portrait
 const FOOTER_H = 46;         // the fixed footer band
-const ROW_H = 17.5;          // one learner row
-const TABLE_HEAD_H = 24;     // group + sub header
-const MEAN_ROW_H = 18;       // the closing class-mean row
-const FIRST_PAGE_CHROME = 150;  // masthead + rule + info cards + margins
-const OTHER_PAGE_CHROME = 16;
+const ROW_H = 20.5;          // one learner row
+const TABLE_HEAD_H = 28;     // group + sub header
+const MEAN_ROW_H = 21;       // the closing class-mean row
+const FIRST_PAGE_CHROME = 136;  // masthead + rule + info cards + margins (measured)
+const OTHER_PAGE_CHROME = 14;
 
-/** Height the two analytics rows need for this class. */
+/** Height the analytics band needs for this class, panel heads included. */
 function analyticsHeight(data: MarkSheetData, glanceRows: number): number {
-    const subjectPanel = 22 + data.subjectRankings.length * 14 + 12;
-    const glancePanel = 22 + glanceRows * 11.5 + 12;
-    const distributionPanel = 22 + 52 + 12;
-    return 8 + Math.max(subjectPanel, glancePanel) + 8 + distributionPanel;
+    const PANEL_CHROME = 38;                  // head + body padding
+    const subjectPanel = PANEL_CHROME + data.subjectRankings.length * 24;
+    const glancePanel = PANEL_CHROME + glanceRows * 17;
+    const distributionPanel = PANEL_CHROME + 60;
+    return 8 + Math.max(subjectPanel, glancePanel, distributionPanel);
 }
 
+/**
+ * Spread the learners over as few pages as possible, then even the pages out
+ * by HEIGHT rather than by row count.
+ *
+ * Filling page one to the brim and letting the rest fall through left a last
+ * page that was mostly white. Pages don't carry the same fixed load either —
+ * the first has the masthead, the last has the class-mean row and the
+ * analytics band — so an equal number of rows still ends at different depths.
+ * Balancing the ink instead gives sheets that end at roughly the same place.
+ */
 function paginate<T>(students: T[], analytics: number) {
-    const firstCapacity = Math.max(1, Math.floor((PAGE_H - FOOTER_H - FIRST_PAGE_CHROME - TABLE_HEAD_H) / ROW_H));
-    const otherCapacity = Math.max(1, Math.floor((PAGE_H - FOOTER_H - OTHER_PAGE_CHROME - TABLE_HEAD_H) / ROW_H));
+    const usable = PAGE_H - FOOTER_H;
+    const room = (chrome: number, reserve = 0) =>
+        Math.max(1, Math.floor((usable - chrome - TABLE_HEAD_H - reserve) / ROW_H));
 
+    const firstCapacity = room(FIRST_PAGE_CHROME);
+    const otherCapacity = room(OTHER_PAGE_CHROME);
+    const analyticsLoad = MEAN_ROW_H + analytics;
+
+    if (students.length <= room(FIRST_PAGE_CHROME, analyticsLoad)) {
+        return { pages: [students], summaryOnOwnPage: false };
+    }
+
+    for (let pageCount = 2; pageCount <= 24; pageCount++) {
+        // What each page carries before a single learner is printed.
+        const fixed = Array.from({ length: pageCount }, (_, i) =>
+            (i === 0 ? FIRST_PAGE_CHROME : OTHER_PAGE_CHROME)
+            + TABLE_HEAD_H
+            + (i === pageCount - 1 ? analyticsLoad : 0));
+        const capacities = fixed.map((load, i) =>
+            Math.min(i === 0 ? firstCapacity : otherCapacity, Math.floor((usable - load) / ROW_H)));
+        if (students.length > capacities.reduce((a, b) => a + b, 0)) continue;
+
+        // The depth every page would reach if the ink were shared equally.
+        const target = (fixed.reduce((a, b) => a + b, 0) + students.length * ROW_H) / pageCount;
+
+        const counts = fixed.map((load, i) =>
+            Math.max(0, Math.min(capacities[i], Math.round((target - load) / ROW_H))));
+
+        // Rounding leaves a learner or two unplaced (or over-placed); settle up
+        // against whatever room is left, earliest page first.
+        let drift = students.length - counts.reduce((a, b) => a + b, 0);
+        for (let i = 0; drift !== 0 && i < counts.length; i++) {
+            const step = drift > 0 ? Math.min(drift, capacities[i] - counts[i]) : Math.max(drift, -counts[i]);
+            counts[i] += step;
+            drift -= step;
+        }
+        if (drift !== 0) continue;
+
+        const pages: T[][] = [];
+        let taken = 0;
+        for (const count of counts) {
+            pages.push(students.slice(taken, taken + count));
+            taken += count;
+        }
+        return { pages: pages.filter(page => page.length > 0), summaryOnOwnPage: false };
+    }
+
+    // Enormous class: fill pages and give the analytics their own sheet.
     const pages: T[][] = [students.slice(0, firstCapacity)];
     for (let i = firstCapacity; i < students.length; i += otherCapacity) {
         pages.push(students.slice(i, i + otherCapacity));
     }
-
-    const filled = pages.filter(page => page.length > 0);
-    const lastPages = filled.length > 0 ? filled : [[] as T[]];
-    const last = lastPages[lastPages.length - 1];
-    const chrome = lastPages.length === 1 ? FIRST_PAGE_CHROME : OTHER_PAGE_CHROME;
-    const used = chrome + TABLE_HEAD_H + last.length * ROW_H + MEAN_ROW_H;
-
-    return { pages: lastPages, summaryOnOwnPage: PAGE_H - FOOTER_H - used < analytics };
+    return { pages: pages.filter(page => page.length > 0), summaryOnOwnPage: true };
 }
 
-function Analytics({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: boolean; classMean: number }) {
+function Analytics({ data, isKCSE, classMean, fill }: {
+    data: MarkSheetData; isKCSE: boolean; classMean: number; fill: boolean;
+}) {
+    // Three panels in one band: stacking them left a strip of white between
+    // the table and the foot of the sheet. On a page of its own they grow to
+    // fill it, since nothing follows them there.
     return (
-        <>
-            <View style={s.panelRow} wrap={false}>
-                <View style={[s.panel, { flex: 1.55 }]}>
-                    <View style={s.panelHead}><Text style={s.panelTitle}>Subject Performance Analysis</Text></View>
-                    <View style={s.panelBody}><SubjectAnalysis data={data} /></View>
-                </View>
-                <View style={[s.panel, { flex: 1 }]}>
-                    <View style={s.panelHead}><Text style={s.panelTitle}>At a Glance</Text></View>
-                    <View style={s.panelBody}><AtAGlance data={data} isKCSE={isKCSE} classMean={classMean} /></View>
-                </View>
+        <View style={[s.panelRow, fill ? { flexGrow: 1 } : {}]} wrap={false}>
+            <View style={[s.panel, { flex: 1.5 }]}>
+                <View style={s.panelHead}><Text style={s.panelTitle}>Subject Performance</Text></View>
+                <View style={s.panelBody}><SubjectAnalysis data={data} /></View>
             </View>
-            <View style={s.panelRow} wrap={false}>
-                <View style={[s.panel, { flex: 1 }]}>
-                    <View style={s.panelHead}><Text style={s.panelTitle}>Grade Distribution</Text></View>
-                    <View style={s.panelBody}><GradeDistribution data={data} /></View>
-                </View>
+            <View style={[s.panel, { flex: 1 }]}>
+                <View style={s.panelHead}><Text style={s.panelTitle}>At a Glance</Text></View>
+                <View style={s.panelBody}><AtAGlance data={data} isKCSE={isKCSE} classMean={classMean} /></View>
             </View>
-        </>
+            <View style={[s.panel, { flex: 0.72 }]}>
+                <View style={s.panelHead}><Text style={s.panelTitle}>Grades</Text></View>
+                <View style={[s.panelBody, { justifyContent: 'center' }]}><GradeDistribution data={data} /></View>
+            </View>
+        </View>
     );
 }
 
@@ -614,7 +667,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                             )}
                         </View>
 
-                        {isLast && !summaryOnOwnPage && <Analytics data={data} isKCSE={isKCSE} classMean={classMean} />}
+                        {isLast && !summaryOnOwnPage && <Analytics data={data} isKCSE={isKCSE} classMean={classMean} fill={false} />}
                     </Page>
                 );
             })}
@@ -622,7 +675,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
             {summaryOnOwnPage && (
                 <Page size="A4" orientation="portrait" style={[s.page, { paddingTop: 18 }]}>
                     <View style={s.footerWrap} fixed><ReportFooter generatedOn={today} /></View>
-                    <Analytics data={data} isKCSE={isKCSE} classMean={classMean} />
+                    <Analytics data={data} isKCSE={isKCSE} classMean={classMean} fill />
                 </Page>
             )}
         </Document>
