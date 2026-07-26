@@ -74,6 +74,11 @@ function shortTeacher(name?: string): string {
 
 const PAGE_X = 22;
 
+/** The grid a marksheet is read across. The theme's hairline is meant for
+ *  card edges and is too faint to separate twelve columns of numbers, so the
+ *  table draws its own, a few shades darker and a shade thicker. */
+const GRID = '#AFBCCE';
+
 /**
  * Class marksheet, typeset in the same design language as the report cards —
  * the product's indigo masthead, primary-blue table bands, Merriweather and
@@ -110,19 +115,19 @@ const s = StyleSheet.create({
     infoCardDelta: { ...boldFont, fontSize: 6.4, paddingHorizontal: 7, paddingBottom: 4 },
 
     /* ── Learner table ── */
-    table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `0.8pt solid ${T.line}` },
+    table: { marginHorizontal: PAGE_X, borderRadius: 5, overflow: 'hidden', border: `1pt solid ${GRID}` },
     thGroupRow: { flexDirection: 'row', backgroundColor: T.primary },
-    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderRight: '0.5pt solid rgba(255,255,255,0.3)' },
+    thGroupCell: { paddingVertical: 4, alignItems: 'center', justifyContent: 'center', borderRight: '0.9pt solid rgba(255,255,255,0.55)' },
     thGroupText: { ...boldFont, fontSize: 7, color: T.white, textTransform: 'uppercase', letterSpacing: 0.7 },
     thSubRow: { flexDirection: 'row', backgroundColor: T.primaryDark },
-    thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center', borderRight: '0.5pt solid rgba(255,255,255,0.25)' },
+    thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center', borderRight: '0.9pt solid rgba(255,255,255,0.5)' },
     thSubCellLast: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
     thSubText: { ...boldFont, fontSize: 6.4, color: T.white, textAlign: 'center' },
 
-    row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.white },
-    rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.surfaceSoft },
-    rowTop: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.5pt solid ${T.line}`, backgroundColor: T.primarySoft },
-    cell: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center', borderRight: `0.5pt solid ${T.line}` },
+    row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.7pt solid ${GRID}`, backgroundColor: T.white },
+    rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.7pt solid ${GRID}`, backgroundColor: T.surfaceSoft },
+    rowTop: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.7pt solid ${GRID}`, backgroundColor: T.primarySoft },
+    cell: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center', borderRight: `0.9pt solid ${GRID}` },
     cellLast: { paddingVertical: 4.5, paddingHorizontal: 2, justifyContent: 'center' },
     posText: { ...boldFont, fontSize: 8.2, color: T.ink, textAlign: 'center' },
     posTextTop: { ...boldFont, fontSize: 8.2, color: T.primary, textAlign: 'center' },
