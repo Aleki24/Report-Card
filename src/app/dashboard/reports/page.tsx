@@ -254,6 +254,8 @@ export default function ReportsPage() {
     try {
       const params = new URLSearchParams(); params.append('yearId', selectedAcademicYear); params.append('termId', selectedTerm);
       if (customReportTitle) params.append('customTitle', customReportTitle);
+      // The marksheet must describe the same sitting as the report cards.
+      if (selectedExamType) params.append('examType', selectedExamType);
       const response = await fetch(`/api/reports/marksheet/${selectedGradeStream}?${params.toString()}`);
       if (!response.ok) { const errJson = await response.json(); throw new Error(errJson.error || 'Failed to fetch mark sheet data'); }
       const markSheetData: MarkSheetData = await response.json();

@@ -133,6 +133,47 @@ export function getGradeFromPointsScales(totalPoints: number, scales: GradingSca
 }
 
 /**
+ * How a school's Overall Grading System reads a student's results.
+ *
+ * Schools express the same table two ways — bands over the TOTAL points a
+ * learner earns (7 subjects × 12 = 1..84), or bands over the MEAN points per
+ * subject (1..12) — and a few point an ordinary percentage table at it.
+ * Which one is in use is decided from the table's own ceiling, never guessed
+ * at the call site.
+ */
+export type OverallGradingKind = 'TOTAL_POINTS' | 'MEAN_POINTS' | 'PERCENTAGE';
+
+/** The highest band any points table can carry before it must be a total. */
+const MAX_POINTS_PER_SUBJECT = 12;
+
+/**
+ * Read an overall table's unit off its own bands: a ceiling at or below the
+ * 12 points a single subject can earn is a mean-points table; anything higher
+ * counts totals.
+ */
+export function overallKindFromScales(scales: GradingScale[]): 'TOTAL_POINTS' | 'MEAN_POINTS' {
+    const ceiling = Math.max(...scales.map(s => Number(s.max_percentage) || 0));
+    return ceiling <= MAX_POINTS_PER_SUBJECT ? 'MEAN_POINTS' : 'TOTAL_POINTS';
+}
+
+/**
+ * One student's (or one class's) overall grade from a school's overall table.
+ *
+ * Shared by report cards, marksheets and the verification page so the same
+ * results can never carry three different overall grades.
+ */
+export function gradeFromOverallScales(
+    values: { totalPoints: number; meanPoints: number; percentage: number },
+    scales: GradingScale[],
+    kind: OverallGradingKind
+): string {
+    if (!scales || scales.length === 0) return '-';
+    if (kind === 'TOTAL_POINTS') return getGradeFromPointsScales(values.totalPoints, scales);
+    if (kind === 'MEAN_POINTS') return getGradeFromPointsScales(values.meanPoints, scales);
+    return getGradeFromScales(values.percentage, scales);
+}
+
+/**
  * Look up CBC rubric symbol (EE1, ME2, etc.) from percent using grading scales.
  * Uses the `symbol` field from the matching scale.
  */
@@ -191,11 +232,11 @@ export function aggregateStudentPerformance(
     // built-in mean-points table — existing schools that haven't set one keep
     // the exact behavior they always had.
     overallScales?: GradingScale[],
-    // How to read those overall scales: 'POINTS' looks the student's TOTAL
-    // POINTS up in the bands (the 8-4-4 flow — this is what an OVERALL-kind
-    // grading system uses); 'PERCENTAGE' looks up the average percentage
-    // (when a normal subject-style system was chosen as the overall one).
-    overallKind: 'POINTS' | 'PERCENTAGE' = 'PERCENTAGE'
+    // How to read those overall scales — see OverallGradingKind. A points
+    // table is weighed against the points the learner actually earned (total
+    // or mean, whichever unit the table is written in); a percentage table is
+    // read against the average percentage.
+    overallKind: OverallGradingKind = 'PERCENTAGE'
 ): AggregateResult {
     if (!marks || marks.length === 0) {
         return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
@@ -279,9 +320,11 @@ export function aggregateStudentPerformance(
     // — so schools that never set one keep the exact behaviour they had.
     let overallGrade: string;
     if (overallScales && overallScales.length > 0) {
-        overallGrade = overallKind === 'POINTS'
-            ? getGradeFromPointsScales(totalPoints, overallScales)
-            : getGradeFromScales(avgPercentage, overallScales);
+        overallGrade = gradeFromOverallScales(
+            { totalPoints, meanPoints, percentage: avgPercentage },
+            overallScales,
+            overallKind
+        );
     } else if (gradingSystemType === 'KCSE') {
         overallGrade = getOverallGradeFromMeanPoints(meanPoints);
     } else {

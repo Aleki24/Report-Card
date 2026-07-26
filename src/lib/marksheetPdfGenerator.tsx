@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer, Image } from '@react-pdf/renderer';
+import { ReportFooter } from './pdf/ReportFooter';
 
 export interface SubjectStats {
     mean: number;
@@ -21,6 +22,8 @@ export interface MarkSheetData {
     examTitle: string;
     academicYear: string;
     className: string;
+    /** The single round of exams this sheet describes, e.g. "End Term". */
+    examRound?: string;
     gradingSystemType: 'KCSE' | 'CBC';
     subjects: { code: string; name: string }[];
     students: {
@@ -145,8 +148,6 @@ const s = StyleSheet.create({
     subjectPerfColCode: { width: '40%', fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: GRAY_700 },
     subjectPerfColMean: { width: '30%', fontSize: 6.5, textAlign: 'center', color: GRAY_700 },
     subjectPerfColRank: { width: '30%', fontSize: 7, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
-    footer: { textAlign: 'center', fontSize: 7, color: GRAY_400, paddingTop: 6, paddingBottom: 2 },
-    footerLine: { marginBottom: 2 },
 });
 
 const FIRST_PAGE_ROWS = 18;
@@ -247,12 +248,12 @@ function SummarySection({ data, isKCSE }: { data: MarkSheetData; isKCSE: boolean
                         <Text style={s.summaryCardLabel}>{isKCSE ? 'Mean Points' : 'Mean %'}</Text>
                         <Text style={s.summaryCardValue}>{isKCSE ? data.meanPoints : Math.round(data.students.reduce((sum, st) => sum + st.overallPercentage, 0) / data.students.length)}</Text>
                     </View>
-                    {isKCSE && (
+                    {data.meanGrade ? (
                         <View style={s.summaryCardRow}>
                             <Text style={s.summaryCardLabel}>Mean Grade</Text>
                             <Text style={[s.summaryCardValue, { color: gradeColor(data.meanGrade) }]}>{data.meanGrade}</Text>
                         </View>
-                    )}
+                    ) : null}
                 </View>
                 {data.gradeDistribution && Object.keys(data.gradeDistribution).length > 0 && (
                     <View style={s.gradeDistCard}>
@@ -317,11 +318,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                     <Page key={`page-${pageIndex}`} size="A4" orientation="portrait" style={s.page}>
                         <View style={s.navyBar} fixed />
                         <View style={s.footerWrap} fixed>
-                            <View style={s.footer}>
-                                <Text style={s.footerLine}>Report generated on {today}</Text>
-                                <Text style={s.footerLine}>Skulbase</Text>
-                                <Text>This document is electronically generated</Text>
-                            </View>
+                            <ReportFooter generatedOn={today} />
                         </View>
                         <View style={s.navyBarBottom} fixed />
 
@@ -332,8 +329,13 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                         {data.schoolLogoUrl ? (
                                             <Image style={s.logo} src={data.schoolLogoUrl} />
                                         ) : (
+                                            // Helvetica has no emoji: the school-building glyph printed
+                                            // as tofu on every logo-less sheet. Use the initial, as the
+                                            // report card's crest fallback does.
                                             <View style={s.logoPlaceholder}>
-                                                <Text style={{ fontSize: 20, color: GRAY_400 }}>🏫</Text>
+                                                <Text style={{ fontSize: 30, fontFamily: 'Helvetica-Bold', color: NAVY }}>
+                                                    {(data.schoolName || 'S').trim().charAt(0).toUpperCase()}
+                                                </Text>
                                             </View>
                                         )}
                                     </View>
@@ -344,7 +346,9 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                                     <View style={{ width: 52 }} />
                                 </View>
                                 <View style={s.bannerRibbon}>
-                                    <Text style={s.bannerText}>{data.examTitle} — Class Marksheet</Text>
+                                    <Text style={s.bannerText}>
+                                        {data.examTitle}{data.examRound ? ` ${data.examRound}` : ''} — Class Marksheet
+                                    </Text>
                                 </View>
                                 <View style={s.summaryStrip}>
                                     <View style={s.summaryItem}><Text style={s.summaryLabel}>Class</Text><Text style={s.summaryVal}>{data.className}</Text></View>
@@ -371,11 +375,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 <Page size="A4" orientation="portrait" style={s.page}>
                     <View style={s.navyBar} fixed />
                     <View style={s.footerWrap} fixed>
-                        <View style={s.footer}>
-                            <Text style={s.footerLine}>Report generated on {today}</Text>
-                            <Text style={s.footerLine}>Skulbase</Text>
-                            <Text>This document is electronically generated</Text>
-                        </View>
+                        <ReportFooter generatedOn={today} />
                     </View>
                     <View style={s.navyBarBottom} fixed />
                     <SummarySection data={data} isKCSE={isKCSE} />

@@ -7,10 +7,13 @@ import {
     getGradeFromScales,
     getGradeFromPercentage,
     getOverallGradeFromMeanPoints,
+    gradeFromOverallScales,
     isKCSEGradeLevel,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { selectExamRound } from '@/lib/reports/exam-round';
+import { resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +26,12 @@ export async function GET(
         const { searchParams } = new URL(request.url);
         const termId = searchParams.get('termId');
         const yearId = searchParams.get('yearId');
+        // A term holds several rounds per subject (Opener, Mid Term, End Term).
+        // The report-card routes narrow to one; this sheet used to average the
+        // lot together, so its marks, means and positions described no single
+        // sitting. Honour an explicit round, and pick one when none is named.
+        const rawExamType = searchParams.get('examType');
+        const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
 
         if (!termId) {
             return NextResponse.json({ error: 'termId is required for marksheet reports' }, { status: 400 });
@@ -65,13 +74,25 @@ export async function GET(
 
         const { data: userProfile } = await supabase
             .from('users')
-            .select('school_id')
+            .select('school_id, role')
             .eq('id', userId)
             .maybeSingle();
 
         const userSchoolId = userProfile?.school_id;
         if (!userSchoolId || (targetSchoolId && targetSchoolId !== userSchoolId)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        // A whole class's marks in one sheet is staff material. Membership of
+        // the school was the only check here, so any signed-in learner could
+        // pull their class's marksheet; match the class-report rule instead.
+        const role = userProfile?.role;
+        if (role !== 'ADMIN') {
+            const { getTeacherPermissions } = await import('@/lib/teacher-utils');
+            const perms = await getTeacherPermissions(userId);
+            if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(classId)) {
+                return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate a class marksheet.' }, { status: 403 });
+            }
         }
 
         if (targetSchoolId) {
@@ -157,27 +178,31 @@ export async function GET(
             }
         }
 
-        // A school-configured Overall Grading System (opt-in) decides the
-        // overall grade from total points (8-4-4). Unset → unchanged behaviour.
-        let overallGradingScales: GradingScale[] | undefined;
-        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
-        if (targetSchoolId) {
-            const { data: schoolRow } = await supabase.from('schools').select('overall_grading_system_id').eq('id', targetSchoolId).maybeSingle();
-            if (schoolRow?.overall_grading_system_id) {
-                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
-                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
-                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
-                ]);
-                if (overallScales && overallScales.length > 0) {
-                    overallGradingScales = (overallScales as any[]).map(s => ({
-                        ...s,
-                        min_percentage: Number(s.min_percentage),
-                        max_percentage: Number(s.max_percentage),
-                        points: s.points != null ? Number(s.points) : undefined,
-                        order_index: Number(s.order_index),
-                    })) as GradingScale[];
-                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
-                }
+        // The school's opt-in Overall Grading System, resolved by the same
+        // helper the report cards use so a learner's grade is the same figure
+        // on the card and in the class sheet.
+        const overall = await resolveOverallGradingSystem(
+            supabase, targetSchoolId || userSchoolId, firstAcademicLevelId
+        );
+        const overallGradingScales = overall.scales;
+        const overallGradingKind = overall.kind;
+
+        // Gate downloads the way the report-card routes do: a marksheet can
+        // only be pulled once every exam feeding it has been approved. Admins
+        // are the approvers, so they always see it.
+        if (role !== 'ADMIN' && gradeId) {
+            let unapprovedQuery = supabase
+                .from('exams')
+                .select('name, status, subjects(name)')
+                .eq('term_id', termId)
+                .eq('grade_id', gradeId)
+                .neq('status', 'APPROVED');
+            if (yearId) unapprovedQuery = unapprovedQuery.eq('academic_year_id', yearId);
+            if (examType) unapprovedQuery = unapprovedQuery.eq('exam_type', examType);
+            const { data: unapproved } = await unapprovedQuery;
+            if (unapproved && unapproved.length > 0) {
+                const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
+                return NextResponse.json({ error: `Marksheet not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
             }
         }
 
@@ -203,7 +228,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, remarks,
-                exams!inner ( id, name, max_score, term_id, academic_year_id,
+                exams!inner ( id, name, max_score, exam_type, created_at, term_id, academic_year_id,
                     subjects ( id, code, name, category, display_order )
                 )
             `)
@@ -211,11 +236,31 @@ export async function GET(
             .eq('exams.term_id', termId);
 
         if (yearId) marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
+        if (examType) marksQuery = marksQuery.eq('exams.exam_type', examType);
 
-        const { data: allMarks, error: marksErr } = await marksQuery;
+        const { data: fetchedMarks, error: marksErr } = await marksQuery;
         if (marksErr) throw marksErr;
 
-        if (!allMarks || allMarks.length === 0) {
+        // Narrow to ONE sitting. Without this the sheet averaged every round in
+        // the term together, and each cell kept whichever exam the database
+        // happened to return last — two learners' rows could describe different
+        // exams. Same rule, same helper as the report cards.
+        const roundSelection = examType
+            ? { round: examType, marks: fetchedMarks || [] }
+            : selectExamRound(fetchedMarks || []);
+
+        // One mark per learner per subject, deterministically the most recent.
+        const orderedMarks = [...roundSelection.marks].sort((a: any, b: any) =>
+            new Date(a.exams?.created_at || 0).getTime() - new Date(b.exams?.created_at || 0).getTime()
+        );
+        const markByStudentSubject = new Map<string, any>();
+        for (const m of orderedMarks) {
+            const subjectId = (m as any).exams?.subjects?.id;
+            if (subjectId) markByStudentSubject.set(`${m.student_id}|${subjectId}`, m);
+        }
+        const allMarks = Array.from(markByStudentSubject.values());
+
+        if (allMarks.length === 0) {
             return NextResponse.json({ error: 'No marks found for this class and term' }, { status: 404 });
         }
 
@@ -271,11 +316,8 @@ export async function GET(
 
         const rankingBy = gradingSystemType === 'KCSE' ? 'points' : 'percentage';
         const ranks = calculateClassRanks(aggregates, rankingBy);
-        const rankedStudentCount = aggregates.length;
 
         // 7. Aggregate data for the specific report format
-        let totalClassPercentage = 0;
-
         // Calculate subject-wise statistics (mean, rank)
         const subjectStats: Record<string, { mean: number; highest: number; lowest: number; studentCount: number }> = {};
         
@@ -366,10 +408,6 @@ export async function GET(
                     ? getGradeFromScales(displayPercentage, gradingScales) 
                     : getGradeFromPercentage(Math.round(displayPercentage)));
 
-            if (studentMarks.length > 0) {
-                totalClassPercentage += displayPercentage;
-            }
-
             // Check if student has any marks entered (at least one non-null mark)
             const hasAnyMarks = Object.values(marksRecord).some(mark => mark !== null);
             
@@ -407,8 +445,26 @@ export async function GET(
         // function, so a straight-A class could read as 'B'.
         const meanPointsSum = studentsWithMarks.reduce((sum, s) => sum + (Number(s.meanPoints) || 0), 0);
         const classMeanPoints = studentsWithMarks.length > 0 ? meanPointsSum / studentsWithMarks.length : 0;
+        const classMeanTotalPoints = studentsWithMarks.length > 0
+            ? studentsWithMarks.reduce((sum, s) => sum + (Number(s.totalPoints) || 0), 0) / studentsWithMarks.length
+            : 0;
+        const classMeanPercentage = studentsWithMarks.length > 0
+            ? studentsWithMarks.reduce((sum, s) => sum + (Number(s.overallPercentage) || 0), 0) / studentsWithMarks.length
+            : 0;
 
-        const meanGrade = gradingSystemType === 'KCSE' ? getOverallGradeFromMeanPoints(classMeanPoints) : '';
+        // The class mean grade comes from the school's own overall table when
+        // one is configured — the same table, read the same way, as the grade
+        // each learner carries. It used to ignore that setting entirely and
+        // always use the built-in mean-points ladder.
+        const meanGrade = overallGradingScales && overallGradingScales.length > 0
+            ? gradeFromOverallScales(
+                { totalPoints: classMeanTotalPoints, meanPoints: classMeanPoints, percentage: classMeanPercentage },
+                overallGradingScales,
+                overallGradingKind
+            )
+            : gradingSystemType === 'KCSE'
+                ? getOverallGradeFromMeanPoints(classMeanPoints)
+                : getGradeFromScales(classMeanPercentage, gradingScales);
         
         // Label a filtered sheet with its combination code / pathway
         let classNameLabel = (students[0].grade_streams as any)?.full_name || 'Class';
@@ -424,7 +480,13 @@ export async function GET(
             classNameLabel = `${classNameLabel} — ${pathwayFilter.replace(/_/g, ' ')}`;
         }
 
+        const roundLabel = (roundSelection.round || '')
+            .split(/[_\s]+/).filter(Boolean)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(' ');
+
         const markSheetData = {
+            examRound: roundLabel || undefined,
             schoolName,
             schoolLogoUrl,
             schoolAddress,

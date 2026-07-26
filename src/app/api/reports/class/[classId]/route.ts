@@ -19,7 +19,7 @@ import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
 import { selectExamRound } from '@/lib/reports/exam-round';
-import { buildVerifyUrl } from '@/lib/reports/grading-context';
+import { buildVerifyUrl, resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
     earliestExamCreatedAt,
     fetchPreviousRound,
@@ -187,28 +187,15 @@ export async function GET(
             }
         }
 
-        // A school-configured Overall Grading System (Settings > Grading) is
-        // opt-in — most schools won't have one set, in which case this stays
-        // undefined and every existing report card computes exactly as before.
-        let overallGradingScales: GradingScale[] | undefined;
-        let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
-        if (targetSchoolId) {
-            const { data: schoolRow } = await supabase
-                .from('schools')
-                .select('overall_grading_system_id')
-                .eq('id', targetSchoolId)
-                .maybeSingle();
-            if (schoolRow?.overall_grading_system_id) {
-                const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
-                    supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
-                    supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
-                ]);
-                if (overallScales && overallScales.length > 0) {
-                    overallGradingScales = overallScales as GradingScale[];
-                    overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
-                }
-            }
-        }
+        // The school's opt-in Overall Grading System, resolved by the same
+        // helper the single-student card and the verification page use — a
+        // class report and one learner's card must never disagree about how
+        // the overall grade is arrived at.
+        const overall = await resolveOverallGradingSystem(
+            supabase, targetSchoolId || userSchoolId, firstAcademicLevelId
+        );
+        const overallGradingScales = overall.scales;
+        const overallGradingKind = overall.kind;
 
         // 4. Build grade boundaries from scales
         const gradeBoundaries = gradingScales.map(s => ({

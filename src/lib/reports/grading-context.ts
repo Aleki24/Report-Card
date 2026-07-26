@@ -1,5 +1,5 @@
 import type { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getGradeFromScales, isKCSEGradeLevel } from '@/lib/analytics';
+import { getGradeFromScales, isKCSEGradeLevel, overallKindFromScales, type OverallGradingKind } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 
 type Supabase = ReturnType<typeof createSupabaseAdmin>;
@@ -12,10 +12,105 @@ export interface GradingContext {
     gradingScales: GradingScale[];
     /** The school's opt-in overall grading system, when one is configured. */
     overallGradingScales?: GradingScale[];
-    /** Whether those overall bands are read against total points or average percentage. */
-    overallGradingKind: 'POINTS' | 'PERCENTAGE';
+    /** Which figure those overall bands are read against. */
+    overallGradingKind: OverallGradingKind;
     gradeLevelCode: string;
     isKCSEGrade: boolean;
+}
+
+interface OverallSystemRow {
+    id: string;
+    system_kind?: string | null;
+    academic_level_id?: string | null;
+}
+
+/**
+ * The overall grading table a school wants applied to one learner's results.
+ *
+ * Settings calls this "Overall grading" and promises it "grades each student's
+ * total points into an overall grade on report cards" — so a points table is
+ * weighed against the points earned, never against the average percentage.
+ * Two things previously stopped that promise being kept:
+ *
+ *   • Schools that chose their overall table before the picker was restricted
+ *     to OVERALL-kind systems have an ordinary subject (percentage) table
+ *     stored. When the school has since built a proper OVERALL points table
+ *     for the learner's level, that is plainly the one they meant, so it wins.
+ *   • A table belongs to an academic level. An 8-4-4 points table must not be
+ *     used to stamp a letter grade on a CBC learner's card, so a table from
+ *     another level is ignored rather than mis-applied.
+ */
+export async function resolveOverallGradingSystem(
+    supabase: Supabase,
+    schoolId?: string | null,
+    academicLevelId?: string | null
+): Promise<{ scales?: GradingScale[]; kind: OverallGradingKind }> {
+    if (!schoolId) return { kind: 'PERCENTAGE' };
+
+    const { data: schoolRow } = await supabase
+        .from('schools')
+        .select('overall_grading_system_id')
+        .eq('id', schoolId)
+        .maybeSingle();
+
+    const chosenId: string | null = schoolRow?.overall_grading_system_id || null;
+
+    let chosen: OverallSystemRow | null = null;
+    if (chosenId) {
+        const { data } = await supabase
+            .from('grading_systems')
+            .select('id, system_kind, academic_level_id')
+            .eq('id', chosenId)
+            .maybeSingle();
+        chosen = (data as OverallSystemRow) || null;
+    }
+
+    // A stored subject-style table is a legacy pick: prefer a real OVERALL
+    // table for this learner's level when the school has built one.
+    if (!chosen || chosen.system_kind !== 'OVERALL') {
+        const { data: overallSystems } = await supabase
+            .from('grading_systems')
+            .select('id, system_kind, academic_level_id')
+            .eq('school_id', schoolId)
+            .eq('system_kind', 'OVERALL');
+        const candidates = (overallSystems || []) as OverallSystemRow[];
+        const preferred = academicLevelId
+            ? candidates.find(s => s.academic_level_id === academicLevelId)
+            : undefined;
+        const fallback = candidates.find(s => !s.academic_level_id);
+        chosen = preferred || fallback || chosen;
+    }
+
+    if (!chosen) return { kind: 'PERCENTAGE' };
+
+    // Never grade a learner against another level's table.
+    if (chosen.academic_level_id && academicLevelId && chosen.academic_level_id !== academicLevelId) {
+        return { kind: 'PERCENTAGE' };
+    }
+
+    const { data: scales } = await supabase
+        .from('grading_scales')
+        .select('*')
+        .eq('grading_system_id', chosen.id)
+        .order('order_index', { ascending: true });
+
+    if (!scales || scales.length === 0) return { kind: 'PERCENTAGE' };
+
+    const overallScales = (scales as Record<string, unknown>[]).map(s => ({
+        ...s,
+        min_percentage: Number(s.min_percentage),
+        max_percentage: Number(s.max_percentage),
+        points: s.points != null ? Number(s.points) : undefined,
+        order_index: Number(s.order_index),
+    })) as unknown as GradingScale[];
+
+    return {
+        scales: overallScales,
+        // An OVERALL table is written in points; its own ceiling says whether
+        // those are totals (1..84) or means (1..12). A subject-style table
+        // still stored as the overall choice keeps grading percentages.
+        kind: chosen.system_kind === 'OVERALL' ? overallKindFromScales(overallScales) : 'PERCENTAGE',
+    };
 }
 
 interface StudentLike {
@@ -119,33 +214,13 @@ export async function resolveGradingContext(
     // A school-configured Overall Grading System (Settings > Grading) is
     // opt-in — most schools won't have one set, in which case this stays
     // undefined and every existing report card computes exactly as before.
-    let overallGradingScales: GradingScale[] | undefined;
-    let overallGradingKind: 'POINTS' | 'PERCENTAGE' = 'POINTS';
-    if (schoolId) {
-        const { data: schoolRow } = await supabase
-            .from('schools')
-            .select('overall_grading_system_id')
-            .eq('id', schoolId)
-            .maybeSingle();
-        if (schoolRow?.overall_grading_system_id) {
-            const [{ data: overallSystem }, { data: overallScales }] = await Promise.all([
-                supabase.from('grading_systems').select('system_kind').eq('id', schoolRow.overall_grading_system_id).maybeSingle(),
-                supabase.from('grading_scales').select('*').eq('grading_system_id', schoolRow.overall_grading_system_id).order('order_index', { ascending: true }),
-            ]);
-            if (overallScales && overallScales.length > 0) {
-                overallGradingScales = overallScales as GradingScale[];
-                // An OVERALL-kind system grades total points; a subject-style
-                // system chosen as overall grades average percentage.
-                overallGradingKind = overallSystem?.system_kind === 'SUBJECT' ? 'PERCENTAGE' : 'POINTS';
-            }
-        }
-    }
+    const overall = await resolveOverallGradingSystem(supabase, schoolId, student.academic_level_id);
 
     return {
         gradingSystemType,
         gradingScales,
-        overallGradingScales,
-        overallGradingKind,
+        overallGradingScales: overall.scales,
+        overallGradingKind: overall.kind,
         gradeLevelCode,
         isKCSEGrade,
     };
