@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
+import { nextAdmissionNumber } from '@/lib/students/admission-number';
 
 export async function POST(request: NextRequest) {
     try {
@@ -83,15 +84,20 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: `A student with admission number "${providedAdmNo}" already exists in your school.` }, { status: 409 });
             }
         } else {
-            // Auto-generate, retrying on the rare random collision so blank entry
-            // never fails with a duplicate error.
-            const year = new Date().getFullYear();
-            for (let attempt = 0; attempt < 10 && !admNo; attempt++) {
-                const candidate = `ADM-${year}-${Math.floor(Math.random() * 90000) + 10000}`;
-                if (!(await admNoExists(candidate))) admNo = candidate;
-            }
+            // Continue the school's own numbering: a short running number, at
+            // most five digits, taken from the highest already in use.
+            const { data: existingAdms } = await supabaseAdmin
+                .from('students')
+                .select('admission_number, users!inner(school_id)')
+                .eq('users.school_id', effectiveSchoolId);
+            const taken = new Set(
+                (existingAdms || [])
+                    .map((r: any) => (r.admission_number || '').trim().toLowerCase())
+                    .filter(Boolean)
+            );
+            admNo = nextAdmissionNumber(taken);
             if (!admNo) {
-                return NextResponse.json({ error: 'Could not generate a unique admission number. Please try again.' }, { status: 500 });
+                return NextResponse.json({ error: 'Could not generate an admission number — all numbers are in use. Enter one manually.' }, { status: 500 });
             }
         }
 

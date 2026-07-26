@@ -4,6 +4,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 
+import { nextAdmissionNumber } from '@/lib/students/admission-number';
+
 export async function POST(request: NextRequest) {
     try {
         const { userId } = await auth();
@@ -126,13 +128,14 @@ export async function POST(request: NextRequest) {
             }
 
             let finalAdmNo = admission_number?.trim() || null;
-            
+
             if (!finalAdmNo) {
-                let randomSequence = Math.floor(Math.random() * 90000) + 10000;
-                finalAdmNo = `ADM-${new Date().getFullYear()}-${randomSequence}`;
-                while (takenAdmNos.has(finalAdmNo.toLowerCase())) {
-                    randomSequence = Math.floor(Math.random() * 90000) + 10000;
-                    finalAdmNo = `ADM-${new Date().getFullYear()}-${randomSequence}`;
+                // takenAdmNos already carries the school's numbers plus the ones
+                // assigned earlier in this batch, so the run stays unbroken.
+                finalAdmNo = nextAdmissionNumber(takenAdmNos);
+                if (!finalAdmNo) {
+                    skippedRows.push({ row: student, reason: 'No admission number left to assign — enter one manually' });
+                    continue;
                 }
             }
 
