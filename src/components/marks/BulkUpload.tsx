@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';
-import Papa from 'papaparse';
+import { parseTabularFile, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { isMultiPaper } from '@/lib/multi-paper';
 
 interface ParsedRow {
@@ -51,37 +51,33 @@ export function BulkUpload({ examId, subjectId }: Props) {
         })();
     }, [examId]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
         setFile(selectedFile);
 
-        Papa.parse(selectedFile, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                const data = results.data as ParsedRow[];
-                const cols = results.meta.fields || [];
-                setParsedData(data);
-                setHeaders(cols);
+        try {
+            // Excel as well as CSV — teachers keep mark sheets in .xlsx.
+            const { rows, headers: cols } = await parseTabularFile(selectedFile);
+            const data = rows as ParsedRow[];
+            setParsedData(data);
+            setHeaders(cols);
 
-                // Smart auto-detect column mapping
-                const autoMap: Partial<ColumnMapping> = {};
-                cols.forEach(col => {
-                    const lower = col.toLowerCase();
-                    if (lower.includes('name') || lower.includes('student')) autoMap.studentName = col;
-                    if (lower.includes('admission') || lower.includes('adm') || lower.includes('number') || lower.includes('id')) autoMap.admissionNumber = col;
-                    if (lower.includes('score') || lower.includes('mark') || lower.includes('raw')) autoMap.score = col;
-                    if (lower.includes('grade') || lower.includes('level') || lower.includes('symbol')) autoMap.grade = col;
-                });
+            // Smart auto-detect column mapping
+            const autoMap: Partial<ColumnMapping> = {};
+            cols.forEach(col => {
+                const lower = col.toLowerCase();
+                if (lower.includes('name') || lower.includes('student')) autoMap.studentName = col;
+                if (lower.includes('admission') || lower.includes('adm') || lower.includes('number') || lower.includes('id')) autoMap.admissionNumber = col;
+                if (lower.includes('score') || lower.includes('mark') || lower.includes('raw')) autoMap.score = col;
+                if (lower.includes('grade') || lower.includes('level') || lower.includes('symbol')) autoMap.grade = col;
+            });
 
-                setMapping(prev => ({ ...prev, ...autoMap }));
-                setStep('map');
-            },
-            error: (err) => {
-                setErrors([`Parse error: ${err.message}`]);
-            },
-        });
+            setMapping(prev => ({ ...prev, ...autoMap }));
+            setStep('map');
+        } catch (err) {
+            setErrors([`Could not read that file. Use a CSV or Excel (.xlsx) file. (${err instanceof Error ? err.message : 'parse error'})`]);
+        }
     };
 
     const validateData = useCallback(() => {
@@ -231,14 +227,14 @@ export function BulkUpload({ examId, subjectId }: Props) {
                         </svg>
                         <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Upload Marks File</h3>
                         <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                            Upload a CSV file with columns for student name, admission number, and score. Columns will be auto-detected.
+                            Upload a CSV or Excel (.xlsx) file with columns for student name, admission number, and score. Columns will be auto-detected.
                         </p>
                     </div>
                     <label className="btn-primary cursor-pointer w-full sm:w-auto justify-center">
                         Choose File
                         <input
                             type="file"
-                            accept=".csv"
+                            accept={IMPORT_FILE_ACCEPT}
                             onChange={handleFileChange}
                             className="hidden"
                         />
