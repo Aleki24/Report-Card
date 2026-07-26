@@ -72,6 +72,32 @@ function shortTeacher(name?: string): string {
     return compact.length > 12 ? `${compact.slice(0, 11)}.` : compact;
 }
 
+/**
+ * A readable column head for a subject in a very narrow cell.
+ *
+ * The sheet used to head each column with the syllabus code alone (121, 232,
+ * 451), which is unreadable to anyone who doesn't have the code list
+ * memorised. The name is abbreviated to fit rather than truncated blindly:
+ * multi-word names keep the significant words' openings ("Computer Studies"
+ * -> "Comp St", "History & Government" -> "Hist Gov"), single words are
+ * clipped ("Mathematics" -> "Mathem").
+ */
+function shortSubject(name: string, code: string): string {
+    const clean = (name || '').trim();
+    if (!clean) return code || '';
+
+    // Drop connectives so "History & Government" keys off the real words.
+    const words = clean.split(/\s+/).filter(w => !/^(and|&|of|the|in|for)$/i.test(w));
+    if (words.length === 0) return code || clean.slice(0, 7);
+
+    if (words.length === 1) {
+        return words[0].length > 7 ? words[0].slice(0, 6) : words[0];
+    }
+    // Two significant words, 4 + 3 characters, keeps within the column.
+    const [a, b] = words;
+    return `${a.slice(0, 4)} ${b.slice(0, 3)}`;
+}
+
 const PAGE_X = 22;
 
 /** The grid a marksheet is read across. The theme's hairline is meant for
@@ -123,6 +149,9 @@ const s = StyleSheet.create({
     thSubCell: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center', borderRight: '0.9pt solid rgba(255,255,255,0.5)' },
     thSubCellLast: { paddingVertical: 2.5, alignItems: 'center', justifyContent: 'center' },
     thSubText: { ...boldFont, fontSize: 6.4, color: T.white, textAlign: 'center' },
+    // The syllabus code stays, one step down the hierarchy, for staff who
+    // read by code and for cross-checking against KNEC paperwork.
+    thSubCode: { fontSize: 5, color: '#C8D8F0', textAlign: 'center', marginTop: 0.5 },
 
     row: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.7pt solid ${GRID}`, backgroundColor: T.white },
     rowAlt: { flexDirection: 'row', alignItems: 'center', borderBottom: `0.7pt solid ${GRID}`, backgroundColor: T.surfaceSoft },
@@ -223,7 +252,10 @@ function TableHeader({ data, subjectW, isKCSE, showDev }: {
                 <View style={[s.thSubCell, { width: pct(ADM_W) }]}><Text style={s.thSubText}>Adm</Text></View>
                 {data.subjects.map(subject => (
                     <View key={subject.code} style={[s.thSubCell, { width: pct(subjectW) }]}>
-                        <Text style={s.thSubText}>{subject.code}</Text>
+                        <Text style={s.thSubText}>{shortSubject(subject.name, subject.code)}</Text>
+                        {subject.code && subject.code !== subject.name && (
+                            <Text style={s.thSubCode}>{subject.code}</Text>
+                        )}
                     </View>
                 ))}
                 <View style={[s.thSubCell, { width: pct(TOTAL_W) }]}><Text style={s.thSubText}>Mean</Text></View>
