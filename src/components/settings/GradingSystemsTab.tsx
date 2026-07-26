@@ -154,6 +154,29 @@ export function GradingSystemsTab({
     const overallCandidates = gradingSystems.filter(gs => gs.system_kind === 'OVERALL' || gs.id === overallGradingSystemId);
     const levelName = (id: string) => academicLevels.find(l => l.id === id)?.name || '';
 
+    // Report cards read the chosen table the way its own bands are written: an
+    // overall table topping out at or below 12 is mean points per subject,
+    // higher counts totals, and a subject-style table grades the average
+    // percentage. Saying so here means a school can see what its cards will do
+    // instead of finding out from a printed grade.
+    const overallChoice = gradingSystems.find(gs => gs.id === overallGradingSystemId);
+    const overallChoiceScales = overallChoice
+        ? gradingScales.filter(sc => sc.grading_system_id === overallChoice.id)
+        : [];
+    const overallCeiling = overallChoiceScales.length > 0
+        ? Math.max(...overallChoiceScales.map(sc => Number(sc.max_percentage) || 0))
+        : 0;
+    const overallFloor = overallChoiceScales.length > 0
+        ? Math.min(...overallChoiceScales.map(sc => Number(sc.min_percentage) || 0))
+        : 0;
+    const overallBasis = !overallChoice || overallChoiceScales.length === 0
+        ? null
+        : overallChoice.system_kind !== 'OVERALL'
+            ? 'the average percentage'
+            : overallCeiling <= 12
+                ? 'mean points per subject'
+                : 'total points';
+
     return (
         <div className="lg:col-span-3 flex flex-col gap-6">
             <InfoGuide title="How grading works — two kinds of grading system:">
@@ -179,6 +202,17 @@ export function GradingSystemsTab({
                     Grades each student&apos;s <strong>total points</strong> into an overall grade on report cards.
                     {overallCandidates.length === 0 && ' Create an "Overall grading" system below to use this.'}
                 </p>
+                {overallBasis ? (
+                    <p className="text-[11px] mt-2 rounded-md bg-muted/60 px-2.5 py-2">
+                        Report cards and marksheets grade <strong>{overallBasis}</strong> against
+                        {' '}<strong>{overallChoice?.name}</strong> (bands {overallFloor}–{overallCeiling}).
+                        {overallChoice?.system_kind !== 'OVERALL' && ' Build an "Overall grading" system to grade points instead.'}
+                    </p>
+                ) : (
+                    <p className="text-[11px] mt-2 rounded-md bg-muted/60 px-2.5 py-2">
+                        Not set — cards fall back to the built-in mean-points ladder (A from 11.5 mean points, A- from 10.5, and so on).
+                    </p>
+                )}
             </div>
 
             {/* ── Grading Systems list (Name | Actions) ── */}
