@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Papa from 'papaparse';
+import { parseTabularFile, normalizeRowKeys, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { DataTable, type DataTableColumn } from '@/components/ui';
@@ -195,42 +195,48 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     } catch (err: any) { showToast(`❌ ${err.message}`); }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header) => header.toLowerCase().replace(/[^a-z0-9]/g, ''),
-      complete: (results) => {
-        const parsed = results.data.map((row: any) => {
-          let first = row.firstname || row.first || '';
-          let last = row.lastname || row.last || row.surname || '';
-          if (!first && !last && (row.name || row.fullname || row.studentname)) {
-            const parts = (row.name || row.fullname || row.studentname).trim().split(' ');
-            first = parts[0];
-            last = parts.slice(1).join(' ');
-          }
-          return {
-            first_name: first,
-            last_name: last,
-            admission_number: row.admissionnumber || row.admissionno || row.admno || row.adm || '',
-            gender: row.gender || row.sex || '',
-            date_of_birth: row.dateofbirth || row.dob || row.birthdate || '',
-            guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
-            guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
-            guardian_email: row.guardianemail || row.parentemail || row.email || '',
-            class: row.class || row.grade || row.form || row.level || '',
-            stream: row.stream || row.section || '',
-            academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
-          };
-        }).filter((r: any) => r.first_name || r.last_name);
-        setImportData(parsed);
-        setSkippedData([]); // Reset skipped data on new file upload
-      },
-      error: () => { showToast('❌ Failed to parse CSV file'); }
-    });
     e.target.value = '';
+    if (!file) return;
+    try {
+      // Accepts Excel as well as CSV — schools keep their rosters in .xlsx and
+      // the "Save As CSV" step was being skipped or done wrong.
+      const { rows } = await parseTabularFile(file);
+      const parsed = rows.map(raw => {
+        const row = normalizeRowKeys(raw);
+        let first = row.firstname || row.first || '';
+        let last = row.lastname || row.last || row.surname || '';
+        if (!first && !last && (row.name || row.fullname || row.studentname)) {
+          const parts = (row.name || row.fullname || row.studentname).trim().split(/\s+/);
+          first = parts[0];
+          last = parts.slice(1).join(' ');
+        }
+        return {
+          first_name: first,
+          last_name: last,
+          admission_number: row.admissionnumber || row.admissionno || row.admno || row.adm || '',
+          gender: row.gender || row.sex || '',
+          date_of_birth: row.dateofbirth || row.dob || row.birthdate || '',
+          guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
+          guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
+          guardian_email: row.guardianemail || row.parentemail || row.email || '',
+          class: row.class || row.grade || row.form || row.level || '',
+          stream: row.stream || row.section || '',
+          academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
+        };
+      }).filter((r: any) => r.first_name || r.last_name);
+
+      if (parsed.length === 0) {
+        showToast('❌ No student rows found. Check the file has a heading row with a name column.');
+        return;
+      }
+      setImportData(parsed);
+      setSkippedData([]); // Reset skipped data on new file upload
+    } catch (err) {
+      console.error('Import parse failed:', err);
+      showToast('❌ Could not read that file. Use a CSV or Excel (.xlsx) file.');
+    }
   };
 
   const handleImportSubmit = async () => {
@@ -383,7 +389,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           </>
         )}
         <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
-          <Upload size={14} /> Import CSV
+          <Upload size={14} /> Import File
         </button>
         {combinations.length > 0 && (
           <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
@@ -601,7 +607,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowImportModal(false)}>
           <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-sm font-bold font-display mb-4">Bulk Import Students</h2>
-            <p className="text-xs text-muted-foreground mb-4">Select a class, upload a CSV file, and import. CSV columns: <strong>first_name, last_name, admission_number, gender</strong></p>
+            <p className="text-xs text-muted-foreground mb-4">Select a class, upload a <strong>CSV or Excel (.xlsx)</strong> file, and import. Columns: <strong>first_name, last_name, admission_number, gender</strong></p>
 
             {/* Class selection */}
             <div className="mb-4">
@@ -615,7 +621,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <div className="flex items-center gap-3 mb-4">
               <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-surface cursor-pointer text-xs font-medium hover:bg-muted transition-colors">
                 <Upload size={14} /> Select CSV File
-                <input type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+                <input type="file" accept={IMPORT_FILE_ACCEPT} className="hidden" onChange={handleFileChange} />
               </label>
               <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
             </div>
