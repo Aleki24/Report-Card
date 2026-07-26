@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { SubjectTeachersTab } from '@/components/subjects/SubjectTeachersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
-import { Search, BookOpen, Plus, RotateCcw, Layers } from 'lucide-react';
+import { Search, BookOpen, Plus, RotateCcw, Layers, Users } from 'lucide-react';
 import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
 import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
@@ -41,7 +42,8 @@ export default function SubjectsPage() {
     const [grades, setGrades] = useState<Grade[]>([]);
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
     const [minGroupSize, setMinGroupSize] = useState(15);
-    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations'>('subjects');
+    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations' | 'teachers'>('subjects');
+    const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string; grade_id: string }[]>([]);
     const [enrollmentSubject, setEnrollmentSubject] = useState<Subject | null>(null);
     const [loading, setLoading] = useState(true);
     const [calSaving, setCalSaving] = useState(false);
@@ -60,6 +62,12 @@ export default function SubjectsPage() {
                 setGradingSystems(json.grading_systems || []);
                 setAcademicLevels(json.academic_levels || []);
                 setGrades(json.grades || []);
+                // Streams let an admin point a subject at a different teacher
+                // in one stream of a class.
+                fetch('/api/school/data?type=grade_streams')
+                    .then(r => r.json())
+                    .then(j => setGradeStreams(j.data || []))
+                    .catch(() => setGradeStreams([]));
                 setCombinations(json.subject_combinations || []);
             }
         } catch (err) { console.error('Failed to fetch subjects:', err); }
@@ -177,9 +185,17 @@ export default function SubjectsPage() {
                     <Layers size={15} /> Subject Combinations
                     {combinations.length > 0 && <span className="badge text-[11px]">{combinations.length}</span>}
                 </button>
+                <button
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'teachers' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('teachers')}
+                >
+                    <Users size={15} /> Subject Teachers
+                </button>
             </div>
 
-            {activeTab === 'combinations' ? (
+            {activeTab === 'teachers' ? (
+                <SubjectTeachersTab grades={grades as any} streams={gradeStreams} />
+            ) : activeTab === 'combinations' ? (
                 <CombinationsManager
                     combinations={combinations as any}
                     subjects={subjects}
