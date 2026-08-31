@@ -5,6 +5,7 @@ import { useAuth } from '@/components/AuthProvider';
 
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { getCategoryLabel, getCategoryOrder } from '@/lib/analytics';
+import { filterSubjectsForGrade } from '@/lib/curriculum-bands';
 import {
   PaperSchemeEditor,
   DEFAULT_SCHEME_DRAFT,
@@ -99,11 +100,17 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const filteredTerms = allTerms.filter(t => t.academic_year_id === selectedAcademicYearId);
   const filteredStreams = allStreams.filter(s => s.grade_id === selectedGradeId);
 
-  // Only show subjects that belong to the selected grade's curriculum (CBC vs 8-4-4 etc.),
-  // grouped by category so the picker isn't one long alphabetical scroll.
+  // Only show subjects that belong to the selected grade's curriculum (CBC vs 8-4-4)
+  // and to its band within that curriculum — CBC shares one academic level across
+  // Pre-Primary to Grade 12, so without the band check a Grade 11 exam could be
+  // created against an Upper Primary learning area. Grouped by category so the
+  // picker isn't one long alphabetical scroll.
   const selectedGrade = grades.find(g => g.id === selectedGradeId);
   const subjectsForGrade = selectedGrade
-    ? subjects.filter(s => s.academic_level_id === selectedGrade.academic_level_id)
+    ? filterSubjectsForGrade(
+      subjects.filter(s => s.academic_level_id === selectedGrade.academic_level_id),
+      selectedGrade
+    )
     : subjects;
   const subjectsByCategory = subjectsForGrade.reduce<Record<string, SubjectItem[]>>((acc, s) => {
     const cat = s.category || 'TECHNICAL';

@@ -11,6 +11,7 @@ import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
 import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
+import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
 
@@ -172,15 +173,24 @@ export function MarksSetupTab() {
   const filteredExamsByType = examsByType
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
     .filter(e => !filterGradeId || e.grade_id === filterGradeId);
+  // The class being filtered on, used to keep subjects from other bands of the
+  // same curriculum out of the picker — CBC shares one academic level across
+  // Pre-Primary to Grade 12, so the level alone would let an Upper Primary
+  // learning area show up under Grade 11.
+  const filterGrade = filterGradeId ? allGrades.find(g => g.id === filterGradeId) : null;
+
   const subjectMap = new Map<string, ExamSlot>();
-  filteredExamsByType.forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
+  filteredExamsByType
+    .filter(e => isSubjectOfferedAtGrade({ name: e.subject_name, code: e.subject_code }, filterGrade))
+    .forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
 
   // Intelligently filter teacher's assigned subjects by the selected level/grade
   const resolvedFilterLevelId = filterGradeId
     ? gradeLevelMap.get(filterGradeId) || ''
     : selectedLevelId;
   const myFilteredSubjects = mySubjects.filter(ms =>
-    !resolvedFilterLevelId || ms.academic_level_id === resolvedFilterLevelId
+    (!resolvedFilterLevelId || ms.academic_level_id === resolvedFilterLevelId)
+    && isSubjectOfferedAtGrade(ms, filterGrade)
   );
   for (const ms of myFilteredSubjects) {
     if (!subjectMap.has(ms.id)) {
