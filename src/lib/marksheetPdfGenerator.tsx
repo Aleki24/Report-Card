@@ -470,9 +470,16 @@ function AtAGlance({ data, isKCSE, classMean }: { data: MarkSheetData; isKCSE: b
     if (isKCSE) rows.push(['Mean points', `${data.meanPoints}`]);
     if (top) rows.push(['Top', `${short(top.studentName, 14)} · ${Math.round(top.overallPercentage)}%`, attainmentColor(top.overallPercentage)]);
     rows.push(['At / above mean', `${aboveMean} of ${withMarks.length}`]);
-    if (best) rows.push(['Strongest', `${best.code} · ${best.mean}%`, attainmentColor(best.mean)]);
+    // Name these the way the table heads them. A raw syllabus code ("102",
+    // "443") tells a reader nothing, which is the whole reason the columns
+    // carry abbreviations.
+    const subjectLabel = (code: string) => {
+        const subject = data.subjects.find(entry => entry.code === code);
+        return subject ? abbreviateSubject(subject.name, subject.code) : code;
+    };
+    if (best) rows.push(['Strongest', `${subjectLabel(best.code)} · ${best.mean}%`, attainmentColor(best.mean)]);
     if (weakest && data.subjectRankings.length > 1) {
-        rows.push(['Weakest', `${weakest.code} · ${weakest.mean}%`, attainmentColor(weakest.mean)]);
+        rows.push(['Weakest', `${subjectLabel(weakest.code)} · ${weakest.mean}%`, attainmentColor(weakest.mean)]);
     }
     if (data.previousClassMeanPercentage != null) {
         const change = Math.round(classMean - data.previousClassMeanPercentage);
