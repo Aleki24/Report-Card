@@ -7,6 +7,7 @@ import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Search, BookOpen, Plus, RotateCcw, Layers, Users } from 'lucide-react';
 import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
+import { isSubjectOfferedAtGrade, subjectBandLabel } from '@/lib/curriculum-bands';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
 import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
 import type { SubjectCombination } from '@/types';
@@ -149,7 +150,11 @@ export default function SubjectsPage() {
         const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.code.toLowerCase().includes(search.toLowerCase());
         const matchCategory = categoryFilter === 'ALL' || (s.category || '').toUpperCase() === categoryFilter;
         const matchLevel = !resolvedLevelId || s.academic_level_id === resolvedLevelId;
-        return matchSearch && matchCategory && matchLevel;
+        // Filtering on a specific class narrows further to its band within the
+        // curriculum: CBC shares one academic level from Pre-Primary to Grade 12,
+        // so the level alone would list every CBC learning area under Grade 11.
+        const matchBand = isSubjectOfferedAtGrade(s, selectedGradeObj);
+        return matchSearch && matchCategory && matchLevel && matchBand;
     });
 
     const categories = [...new Set(subjects.map(s => (s.category || 'TECHNICAL').toUpperCase()))];
@@ -401,7 +406,12 @@ export default function SubjectsPage() {
                                                 </span>
                                             </td>
                                             <td>{typeBadge(s.subject_type)}</td>
-                                            <td className="text-sm text-muted-foreground">{getLevelName(s.academic_level_id)}</td>
+                                            <td className="text-sm text-muted-foreground">
+                                                <div>{getLevelName(s.academic_level_id)}</div>
+                                                {subjectBandLabel(s) && (
+                                                    <div className="text-[11px] opacity-70">{subjectBandLabel(s)}</div>
+                                                )}
+                                            </td>
                                             <td>
                                                 {role === 'ADMIN' ? (
                                                     <select

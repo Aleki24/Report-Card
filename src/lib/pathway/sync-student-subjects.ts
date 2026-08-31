@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SENIOR_CORE_SUBJECT_CODES } from '@/lib/pathway-definitions';
+import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
 
 /**
  * Keeps `student_subjects` in sync with students' assigned subject
@@ -67,15 +68,20 @@ export async function syncStudentsSubjectsBulk(
         if (coresQuery.error) throw new Error(`Failed to load core subjects: ${coresQuery.error.message}`);
         coreIds = (coresQuery.data || []).map((s: { id: string }) => s.id);
         if (coreIds.length === 0) {
-            // Fallback for schools using custom subject codes
+            // Fallback for schools using custom subject codes. Every CBC band
+            // shares one academic level, so this has to drop the cores that
+            // belong to another band — otherwise a senior learner is enrolled
+            // in Lower Primary and Junior School learning areas as well.
             const fallback = await supabase
                 .from('subjects')
-                .select('id')
+                .select('id, name, code')
                 .eq('school_id', schoolId)
                 .in('academic_level_id', coreLevelIds)
                 .eq('subject_type', 'CORE');
             if (fallback.error) throw new Error(`Failed to load core subjects: ${fallback.error.message}`);
-            coreIds = (fallback.data || []).map((s: { id: string }) => s.id);
+            coreIds = (fallback.data || [])
+                .filter((s: { name: string; code: string }) => isSubjectOfferedInBand(s, 'CBC_SENIOR_SCHOOL'))
+                .map((s: { id: string }) => s.id);
         }
     }
 

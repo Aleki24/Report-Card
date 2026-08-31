@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { filterSubjectsForGrade } from '@/lib/curriculum-bands';
 
 /**
  * Who teaches each subject in a class.
@@ -61,18 +62,23 @@ export async function GET(request: NextRequest) {
 
         const yearId = await currentYearId(supabase, schoolId);
 
-        // Subjects offered at this grade's academic level.
+        // Subjects offered at this grade's academic level, then narrowed to the
+        // band the class sits in — CBC shares one academic level from
+        // Pre-Primary to Grade 12, so the level alone would list every CBC
+        // learning area against a Grade 11 class.
         const { data: grade } = await supabase
             .from('grades')
-            .select('academic_level_id')
+            .select('academic_level_id, code, name_display')
             .eq('id', gradeId)
             .maybeSingle();
 
-        const { data: subjects } = await supabase
+        const { data: levelSubjects } = await supabase
             .from('subjects')
             .select('id, name, code, display_order')
             .eq('academic_level_id', grade?.academic_level_id || '')
             .order('display_order');
+
+        const subjects = filterSubjectsForGrade(levelSubjects || [], grade);
 
         // Everyone who could hold a subject.
         const { data: staff } = await supabase
