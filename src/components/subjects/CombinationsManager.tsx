@@ -9,6 +9,7 @@ import {
     MINISTRY_COMBINATION_TEMPLATES,
     type CbcPathway,
 } from '@/lib/pathway-definitions';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 interface SubjectOption { id: string; name: string; code: string; academic_level_id?: string; }
 interface CombinationRow {
@@ -118,7 +119,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                     : { type: 'subject_combination', ...payload }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.details?.join('; ') || data.error || 'Failed');
+            if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
             setMsg(editingId ? 'Combination updated — assigned students were re-synced.' : 'Combination created.');
             resetForm();
             setShowForm(false);

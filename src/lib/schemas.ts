@@ -16,19 +16,35 @@ export type StudentStatus = z.infer<typeof StudentStatus>;
 export const CbcPathway = z.enum(['STEM', 'SOCIAL_SCIENCES', 'ARTS_SPORTS']);
 export type CbcPathway = z.infer<typeof CbcPathway>;
 
+/**
+ * `YYYY-MM-DD` — the wire format every date in this API is sent as, and what
+ * an `<input type="date">` produces. Shared so the rule lives in one place.
+ */
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format');
+
+/**
+ * A date the caller may legitimately leave unset.
+ *
+ * An `<input type="date">` reports an empty string when it is blank or has
+ * been cleared, so `''` means "not set" here and is normalised to `null`.
+ * Without that, submitting a form with an optional date left blank failed the
+ * `YYYY-MM-DD` check and the whole request was rejected as invalid.
+ */
+const optionalDate = z
+    .preprocess(value => (value === '' ? null : value), isoDate.nullable())
+    .optional();
+
 export const academicYearSchema = z.object({
     name: z.string().min(1, 'Name is required').max(100),
-    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
-    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    start_date: isoDate,
+    end_date: isoDate,
 });
-
-const optionalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format').optional().nullable();
 
 export const termSchema = z.object({
     academic_year_id: z.string().uuid('Invalid academic year ID'),
     name: z.string().min(1, 'Name is required').max(100),
-    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
-    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    start_date: isoDate,
+    end_date: isoDate,
     is_current: z.boolean().optional(),
     /** When learners return after the mid-term break. */
     midterm_reopening_date: optionalDate,
@@ -135,7 +151,7 @@ export const examSchema = z.object({
     grade_id: z.string().uuid('Invalid grade ID'),
     grade_stream_id: z.string().uuid('Invalid stream ID').optional(),
     max_score: z.number().positive().max(1000).default(100),
-    exam_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    exam_date: isoDate,
 });
 
 export const examMarkSchema = z.object({
