@@ -61,11 +61,14 @@ function PeoplePageInner() {
 }
 
 /* ───── Students Section ───── */
-interface StudentRow { id: string; admission_number: string; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; pathway: string | null; track: string | null; subject_combination_id: string | null; subject_combinations: { id: string; code: string; name: string } | null; }
+interface StudentRow { id: string; admission_number: string | null; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; pathway: string | null; track: string | null; subject_combination_id: string | null; subject_combinations: { id: string; code: string; name: string } | null; }
 interface CombinationOption { id: string; code: string; name: string; pathway: string; track?: string | null; is_active: boolean; }
 
+/** Admission numbers are optional, so every display falls back to a dash. */
+const admNoLabel = (value: string | null | undefined) => value?.trim() || '—';
+
 const emptyStudentForm = { first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '', pathway: '', track: '', subject_combination_id: '' };
-interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
+interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string | null; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
 
 function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const { profile } = useAuth();
@@ -132,7 +135,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
   const filtered = data.filter(s => {
     const q = search.toLowerCase();
-    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number} ${s.guardian_phone||''}`.toLowerCase().includes(q);
+    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number ?? ''} ${s.guardian_phone||''}`.toLowerCase().includes(q);
     const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
     const matchStream = !gradeStreamFilter || s.current_grade_stream_id === gradeStreamFilter;
     const matchPathway = !pathwayFilter || (pathwayFilter === 'UNASSIGNED' ? !s.pathway : s.pathway === pathwayFilter);
@@ -305,14 +308,14 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const isSeniorStudent = (s: StudentRow) => !!s.current_grade_stream_id && seniorStreamIds.has(s.current_grade_stream_id);
 
   const openEdit = (s: StudentRow) => {
-    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number, gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
+    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number || '', gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
     setEditing(s.id); setShowModal(true);
   };
 
   const bulkFiltered = data.filter(s => {
     if (!isSeniorStudent(s)) return false; // Grades 10-12 (CBC) only
     const q = bulkSearch.toLowerCase();
-    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number}`.toLowerCase().includes(q);
+    const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number ?? ''}`.toLowerCase().includes(q);
     const matchStream = !bulkStreamFilter || s.current_grade_stream_id === bulkStreamFilter;
     return matchSearch && matchStream;
   });
@@ -419,7 +422,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                   </div>
                 ),
               },
-              { key: 'admission_number', header: 'Admission No.', render: s => <span className="font-mono">{s.admission_number}</span> },
+              { key: 'admission_number', header: 'Admission No.', render: s => <span className="font-mono">{admNoLabel(s.admission_number)}</span> },
               { key: 'class', header: 'Class', render: s => s.grade_stream?.full_name || '—' },
               ...(combinations.length > 0 ? [{
                 key: 'pathway', header: 'Pathway', hideOnMobile: true,
@@ -477,7 +480,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full text-xs" value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full text-xs" value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No.</label><input className="input-field w-full text-xs" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} placeholder="Auto-generated if left blank" /><p className="text-[10px] text-muted-foreground mt-1">Leave empty to auto-generate.</p></div>
+              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No.</label><input className="input-field w-full text-xs" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} placeholder="Optional" /><p className="text-[10px] text-muted-foreground mt-1">Leave empty if the school has not assigned one yet.</p></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Gender</label><select className="input-field w-full text-xs" value={formData.gender || ''} onChange={e => setFormData(p => ({ ...p, gender: e.target.value }))}><option value="">—</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Date of Birth</label><input type="date" className="input-field w-full text-xs" value={formData.date_of_birth || ''} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
               <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Name</label><input className="input-field w-full text-xs" value={formData.guardian_name || ''} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></div>
@@ -568,7 +571,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                     checked={bulkSelected.has(s.id)}
                     onChange={() => setBulkSelected(prev => { const next = new Set(prev); if (next.has(s.id)) next.delete(s.id); else next.add(s.id); return next; })}
                   />
-                  <span className="text-xs font-medium flex-1">{s.users?.first_name} {s.users?.last_name} <span className="font-mono text-muted-foreground">({s.admission_number})</span></span>
+                  <span className="text-xs font-medium flex-1">{s.users?.first_name} {s.users?.last_name} <span className="font-mono text-muted-foreground">({admNoLabel(s.admission_number)})</span></span>
                   <span className="text-[11px] text-muted-foreground">{s.grade_stream?.full_name || '—'}</span>
                   <span className={`text-[11px] font-semibold ${s.subject_combinations ? 'text-emerald-400' : 'text-muted-foreground'}`}>
                     {s.subject_combinations?.code || 'Unassigned'}
@@ -653,7 +656,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                             }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" placeholder="Auto-generate" value={row.admission_number || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" placeholder="Optional" value={row.admission_number || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
                             }} />
                           </td>
@@ -689,7 +692,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-sm font-bold text-accent">{getInitials(`${viewStudent.profile.first_name} ${viewStudent.profile.last_name}`)}</div>
-                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewStudent.profile.admission_number} · {viewStudent.profile.grade_stream?.full_name || '—'}</p></div>
+                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{admNoLabel(viewStudent.profile.admission_number)} · {viewStudent.profile.grade_stream?.full_name || '—'}</p></div>
               </div>
               <button onClick={() => setViewStudent(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
             </div>
@@ -986,7 +989,7 @@ function TeachersSection() {
 }
 
 /* ───── Parents Section ───── */
-interface ParentStudent { id: string; admission_number: string; first_name: string; last_name: string; status: string; grade_stream: { full_name: string } | null; }
+interface ParentStudent { id: string; admission_number: string | null; first_name: string; last_name: string; status: string; grade_stream: { full_name: string } | null; }
 interface Parent { id: string; name: string; phone: string; email: string; students: ParentStudent[]; }
 
 function ParentsSection() {
@@ -1047,7 +1050,7 @@ function ParentsSection() {
                   <p className="text-xs font-semibold text-muted-foreground">Linked Children</p>
                   {p.students.map(s => (
                     <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-surface-raised">
-                      <div><span className="text-sm font-medium">{s.first_name} {s.last_name}</span><span className="text-xs text-muted-foreground ml-2">({s.admission_number})</span></div>
+                      <div><span className="text-sm font-medium">{s.first_name} {s.last_name}</span><span className="text-xs text-muted-foreground ml-2">({admNoLabel(s.admission_number)})</span></div>
                       <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{s.grade_stream?.full_name || '—'}</span><span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span></div>
                     </div>
                   ))}

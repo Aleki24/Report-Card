@@ -4,7 +4,6 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
-import { nextAdmissionNumber } from '@/lib/students/admission-number';
 import { writeErrorMessage } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
@@ -64,8 +63,11 @@ export async function POST(request: NextRequest) {
 
         const effectiveSchoolId = adminProfile.school_id;
 
-        // Admission number is optional: schools that auto-number their students
-        // can leave it blank and we generate a unique one for them.
+        // Admission number is optional and is never invented for the school.
+        // Left blank, the student is stored without one and the column stays
+        // NULL: a generated number is a number the school did not choose, and
+        // guessing at their sequence is what hands the same number to two
+        // learners. Schools fill it in when they know it.
         const providedAdmNo = admission_number?.trim() || null;
 
         const admNoExists = async (candidate: string) => {
@@ -78,28 +80,9 @@ export async function POST(request: NextRequest) {
             return !!data;
         };
 
-        let admNo = providedAdmNo;
-        if (providedAdmNo) {
-            // A number the admin typed must be unique — surface a clear conflict.
-            if (await admNoExists(providedAdmNo)) {
-                return NextResponse.json({ error: `A student with admission number "${providedAdmNo}" already exists in your school.` }, { status: 409 });
-            }
-        } else {
-            // Continue the school's own numbering: a short running number, at
-            // most five digits, taken from the highest already in use.
-            const { data: existingAdms } = await supabaseAdmin
-                .from('students')
-                .select('admission_number, users!inner(school_id)')
-                .eq('users.school_id', effectiveSchoolId);
-            const taken = new Set(
-                (existingAdms || [])
-                    .map((r: any) => (r.admission_number || '').trim().toLowerCase())
-                    .filter(Boolean)
-            );
-            admNo = nextAdmissionNumber(taken);
-            if (!admNo) {
-                return NextResponse.json({ error: 'Could not generate an admission number — all numbers are in use. Enter one manually.' }, { status: 500 });
-            }
+        // A number the admin typed must be unique — surface a clear conflict.
+        if (providedAdmNo && await admNoExists(providedAdmNo)) {
+            return NextResponse.json({ error: `A student with admission number "${providedAdmNo}" already exists in your school.` }, { status: 409 });
         }
 
         // Get school name for username generation
@@ -115,7 +98,7 @@ export async function POST(request: NextRequest) {
 
         // 1. Generate a UUID for the new student (temporary until activation)
         const studentUserId = crypto.randomUUID();
-        const finalAdmNo = admNo || null;
+        const finalAdmNo = providedAdmNo;
         const emailBase = (finalAdmNo || studentUserId.substring(0, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
         const placeholderEmail = `${emailBase}@student.local`;
 
