@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { parseTabularFile, normalizeRowKeys, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import { DataTable, type DataTableColumn } from '@/components/ui';
+import { DataTable, type DataTableColumn, FormGrid, FormField, InputField, SelectField } from '@/components/ui';
 import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 
@@ -66,6 +66,11 @@ interface CombinationOption { id: string; code: string; name: string; pathway: s
 
 /** Admission numbers are optional, so every display falls back to a dash. */
 const admNoLabel = (value: string | null | undefined) => value?.trim() || '—';
+
+const GENDER_OPTIONS = [
+  { id: 'MALE', label: 'Male' },
+  { id: 'FEMALE', label: 'Female' },
+];
 
 const emptyStudentForm = { first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '', pathway: '', track: '', subject_combination_id: '' };
 interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string | null; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
@@ -477,25 +482,24 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
           <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-sm font-bold font-display mb-4">{editing ? 'Edit Student' : 'Add Student'}</h2>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full text-xs" value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full text-xs" value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Admission No.</label><input className="input-field w-full text-xs" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} placeholder="Optional" /><p className="text-[10px] text-muted-foreground mt-1">Leave empty if the school has not assigned one yet.</p></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Gender</label><select className="input-field w-full text-xs" value={formData.gender || ''} onChange={e => setFormData(p => ({ ...p, gender: e.target.value }))}><option value="">—</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Date of Birth</label><input type="date" className="input-field w-full text-xs" value={formData.date_of_birth || ''} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Name</label><input className="input-field w-full text-xs" value={formData.guardian_name || ''} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Guardian Phone</label><input className="input-field w-full text-xs" value={formData.guardian_phone || ''} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Class</label><select className="input-field w-full text-xs" value={formData.grade_stream_id || ''} onChange={e => setFormData(p => ({ ...p, grade_stream_id: e.target.value }))}><option value="">—</option>{gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}</select></div>
-              <div className="col-span-2 sm:col-span-1"><label className="block text-xs text-muted-foreground mb-1">Curriculum</label><select className="input-field w-full text-xs" value={formData.academic_level_id || ''} onChange={e => setFormData(p => ({ ...p, academic_level_id: e.target.value }))}><option value="">—</option>{academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}</select></div>
+            <FormGrid className="mb-5">
+              <FormField label="First Name" span="half" required><InputField value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></FormField>
+              <FormField label="Last Name" span="half" required><InputField value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></FormField>
+              <FormField label="Admission No." span="half" hint="Leave empty if the school has not assigned one yet."><InputField placeholder="Optional" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} /></FormField>
+              <FormField label="Gender" span="half"><SelectField placeholder="—" value={formData.gender || ''} onChange={v => setFormData(p => ({ ...p, gender: v }))} options={GENDER_OPTIONS} /></FormField>
+              <FormField label="Date of Birth" span="half"><InputField type="date" value={formData.date_of_birth || ''} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></FormField>
+              <FormField label="Guardian Name" span="half"><InputField value={formData.guardian_name || ''} onChange={e => setFormData(p => ({ ...p, guardian_name: e.target.value }))} /></FormField>
+              <FormField label="Guardian Phone" span="half"><InputField type="tel" value={formData.guardian_phone || ''} onChange={e => setFormData(p => ({ ...p, guardian_phone: e.target.value }))} /></FormField>
+              <FormField label="Class" span="half"><SelectField placeholder="—" value={formData.grade_stream_id || ''} onChange={v => setFormData(p => ({ ...p, grade_stream_id: v }))} options={gradeStreams.map(gs => ({ id: gs.id, label: gs.full_name }))} /></FormField>
+              <FormField label="Curriculum" span="half"><SelectField placeholder="—" value={formData.academic_level_id || ''} onChange={v => setFormData(p => ({ ...p, academic_level_id: v }))} options={academicLevels.map(al => ({ id: al.id, label: al.name }))} /></FormField>
               {combinations.length > 0 && seniorStreamIds.has(formData.grade_stream_id) && (
                 <>
                   <div className="col-span-2 border-t border-border pt-3 mt-1">
                     <p className="text-xs font-semibold text-muted-foreground">CBC Senior School Pathway (Grades 10–12)</p>
                   </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Subject Combination</label>
+                  <FormField label="Subject Combination" span="half">
                     <select
-                      className="input-field w-full text-xs"
+                      className="input-field w-full"
                       value={formData.subject_combination_id || ''}
                       onChange={e => {
                         const combo = combinations.find(c => c.id === e.target.value);
@@ -510,14 +514,13 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                       <option value="">— None —</option>
                       {combinations.filter(c => c.is_active || c.id === formData.subject_combination_id).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
                     </select>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Pathway / Track</label>
-                    <input className="input-field w-full text-xs" readOnly value={formData.pathway ? `${pathwayLabel(formData.pathway)}${formData.track ? ` — ${formData.track}` : ''}` : '—'} title="Set automatically from the chosen combination" />
-                  </div>
+                  </FormField>
+                  <FormField label="Pathway / Track" span="half">
+                    <input className="input-field w-full" readOnly value={formData.pathway ? `${pathwayLabel(formData.pathway)}${formData.track ? ` — ${formData.track}` : ''}` : '—'} title="Set automatically from the chosen combination" />
+                  </FormField>
                 </>
               )}
-            </div>
+            </FormGrid>
             <div className="flex gap-2 justify-end">
               <button className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
