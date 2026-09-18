@@ -291,12 +291,16 @@ h4 {
  * pixels between the text and the frame, which read as the border crowding the
  * value.
  *
- * On phones the control is 44px — the minimum comfortable touch target — and
- * its text is 16px, below which iOS zooms the whole page on focus. Both step
- * down to the desktop scale from `sm` up.
+ * 44px at every width: it is the minimum comfortable touch target on a phone,
+ * and on a desktop it is what stops the frame reading as if it were clipping
+ * the value. An earlier version of this rule stepped down to 40px from `sm`
+ * up, which left desktop — where most of this app is used — barely changed.
+ *
+ * Text is 16px on phones, below which iOS zooms the whole page on focus, and
+ * 14px from `sm` up.
  */
 .input-field {
-  @apply flex w-full h-11 px-3.5 py-2 bg-background border border-input rounded-xl text-foreground font-sans text-base leading-normal transition-[color,background-color,border-color,box-shadow] duration-200 sm:h-10 sm:text-sm;
+  @apply flex w-full h-11 px-3.5 py-2 bg-background border border-input rounded-xl text-foreground font-sans text-base leading-normal transition-[color,background-color,border-color,box-shadow] duration-200 sm:text-sm;
 }
 
 /* Only when the field is idle: hovering a focused field should not fight the
@@ -336,7 +340,7 @@ h4 {
    field would break the row. Same border, radius family and states — only the
    scale differs. */
 .input-field.input-field-sm {
-  @apply h-9 rounded-lg px-2.5 text-xs sm:h-8;
+  @apply h-9 rounded-lg px-2.5 text-xs;
 }
 
 /* .input-field used as the container around an icon plus a borderless input:

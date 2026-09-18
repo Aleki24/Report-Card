@@ -1,4 +1,5 @@
-export { FormField, SelectField, InputField } from './FormField';
+export { FormField, FormGrid, SelectField, InputField, TextareaField } from './FormField';
+export type { SelectOption, InputFieldProps, TextareaFieldProps, SelectFieldProps } from './FormField';
 export { Modal, ConfirmDialog } from './Modal';
 export { Spinner, LoadingScreen, LoadingOverlay } from './Loading';
 export { ToastProvider, useToast, AlertBanner } from './Toast';

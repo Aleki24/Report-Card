@@ -1,71 +1,166 @@
 'use client';
 
-import React from 'react';
+import * as React from 'react';
+import { cn } from '@/lib/utils';
+
+/**
+ * Form primitives.
+ *
+ * Every dashboard form used to spell out its own `<label>` + `<input
+ * className="input-field w-full text-xs">` pair, which is why the spacing
+ * drifted: labels sat four pixels off their box and rows were packed tighter
+ * than the fields themselves. That vertical rhythm lives here now, so changing
+ * it once changes it everywhere.
+ */
+
+type Span = 'half' | 'full';
+
+/** Grid placement is opt-in — these components are also used outside a FormGrid. */
+const SPAN: Record<Span, string> = {
+    half: 'col-span-2 sm:col-span-1',
+    full: 'col-span-2',
+};
 
 interface FormFieldProps {
     label: string;
+    /**
+     * Ties the label to its control so clicking the label focuses it and screen
+     * readers announce the pair. Pass the same value as the control's `id`.
+     */
+    htmlFor?: string;
     required?: boolean;
-    error?: string;
+    /** Shown below the control; an `error` replaces it. */
     hint?: string;
+    error?: string;
+    span?: Span;
+    className?: string;
     children: React.ReactNode;
 }
 
-export function FormField({ label, required, error, hint, children }: FormFieldProps) {
+export function FormField({
+    label,
+    htmlFor,
+    required,
+    hint,
+    error,
+    span,
+    className,
+    children,
+}: FormFieldProps) {
     return (
-        <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">
+        <div className={cn('flex flex-col gap-2', span && SPAN[span], className)}>
+            <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
                 {label}
-                {required && <span className="text-destructive ml-1">*</span>}
+                {required && (
+                    <span aria-hidden="true" className="ml-0.5 text-destructive">
+                        *
+                    </span>
+                )}
             </label>
             {children}
-            {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {(error || hint) && (
+                <p
+                    className={cn(
+                        'text-[11px] leading-snug',
+                        error ? 'text-destructive' : 'text-muted-foreground',
+                    )}
+                >
+                    {error || hint}
+                </p>
+            )}
         </div>
     );
 }
 
-interface SelectOption {
+interface FormGridProps {
+    className?: string;
+    children: React.ReactNode;
+}
+
+/**
+ * Two columns from `sm` up, one below. The row gap is deliberately larger than
+ * the column gap: side-by-side fields read as a pair, stacked ones need the
+ * separation.
+ */
+export function FormGrid({ className, children }: FormGridProps) {
+    return <div className={cn('grid grid-cols-2 gap-x-4 gap-y-5', className)}>{children}</div>;
+}
+
+export type InputFieldProps = React.InputHTMLAttributes<HTMLInputElement> & {
+    error?: boolean;
+};
+
+export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
+    ({ error, className, ...props }, ref) => (
+        <input
+            ref={ref}
+            aria-invalid={error || undefined}
+            className={cn('input-field w-full', error && 'border-destructive', className)}
+            {...props}
+        />
+    ),
+);
+InputField.displayName = 'InputField';
+
+export type TextareaFieldProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+    error?: boolean;
+};
+
+export const TextareaField = React.forwardRef<HTMLTextAreaElement, TextareaFieldProps>(
+    ({ error, className, rows = 3, ...props }, ref) => (
+        <textarea
+            ref={ref}
+            rows={rows}
+            aria-invalid={error || undefined}
+            className={cn('input-field w-full', error && 'border-destructive', className)}
+            {...props}
+        />
+    ),
+);
+TextareaField.displayName = 'TextareaField';
+
+export interface SelectOption {
     id: string;
     label: string;
     disabled?: boolean;
 }
 
-interface SelectFieldProps {
+export type SelectFieldProps = Omit<
+    React.SelectHTMLAttributes<HTMLSelectElement>,
+    'onChange' | 'value'
+> & {
     value: string;
+    /** The selected id, not the event — every caller wanted the id. */
     onChange: (value: string) => void;
-    options: SelectOption[];
-    placeholder?: string;
-    disabled?: boolean;
-    className?: string;
-}
+    options: readonly SelectOption[];
+    /** Label for the empty choice. Pass null to drop it on a required select. */
+    placeholder?: string | null;
+    error?: boolean;
+};
 
-export function SelectField({ value, onChange, options, placeholder, disabled, className = '' }: SelectFieldProps) {
+export function SelectField({
+    value,
+    onChange,
+    options,
+    placeholder = '— Select —',
+    error,
+    className,
+    ...props
+}: SelectFieldProps) {
     return (
         <select
-            className={`input-field w-full ${className}`}
             value={value}
             onChange={e => onChange(e.target.value)}
-            disabled={disabled}
+            aria-invalid={error || undefined}
+            className={cn('input-field w-full', error && 'border-destructive', className)}
+            {...props}
         >
-            <option value="">{placeholder || '-- Select --'}</option>
+            {placeholder !== null && <option value="">{placeholder}</option>}
             {options.map(opt => (
                 <option key={opt.id} value={opt.id} disabled={opt.disabled}>
                     {opt.label}
                 </option>
             ))}
         </select>
-    );
-}
-
-interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-    error?: string;
-}
-
-export function InputField({ error, className = '', ...props }: InputFieldProps) {
-    return (
-        <input
-            className={`input-field w-full ${error ? 'border-[var(--color-danger)]' : ''} ${className}`}
-            {...props}
-        />
     );
 }
