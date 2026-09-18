@@ -136,7 +136,12 @@ CREATE TABLE users (
 -- 7. STUDENTS
 CREATE TABLE IF NOT EXISTS students (
     id UUID REFERENCES users(id) ON DELETE CASCADE PRIMARY KEY,
-    admission_number TEXT UNIQUE NOT NULL,
+    -- Denormalised from users.school_id and maintained by
+    -- trigger_set_student_school_id / trigger_sync_student_school_id (see
+    -- migration 20260918171500). Postgres cannot index across tables, so the
+    -- per-school admission-number constraint below needs the column here.
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
+    admission_number TEXT NOT NULL,
     current_grade_stream_id UUID REFERENCES grade_streams(id) ON DELETE RESTRICT NOT NULL,
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE RESTRICT NOT NULL,
     date_of_birth DATE,
@@ -147,7 +152,10 @@ CREATE TABLE IF NOT EXISTS students (
     date_enrolled DATE DEFAULT CURRENT_DATE,
     status student_status DEFAULT 'ACTIVE' NOT NULL,
     avatar_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    -- Scoped to the school, not global: two schools may each number a student
+    -- "001". Matches academic_years and grade_streams.
+    UNIQUE (school_id, admission_number)
 );
 
 -- 8. ACADEMIC YEARS & TERMS

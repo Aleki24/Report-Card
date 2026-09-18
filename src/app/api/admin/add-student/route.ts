@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 import { nextAdmissionNumber } from '@/lib/students/admission-number';
+import { writeErrorMessage } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
     try {
@@ -192,7 +193,7 @@ export async function POST(request: NextRequest) {
         if (studentError) {
             // Cleanup: delete user row
             await supabaseAdmin.from('users').delete().eq('id', studentUserId);
-            return NextResponse.json({ error: `Student record creation failed: ${studentError.message}` }, { status: 400 });
+            return NextResponse.json({ error: writeErrorMessage(studentError, 'Could not create the student record. Please try again.') }, { status: 400 });
         }
 
         // 3b. Sync subject enrollments from the assigned combination
