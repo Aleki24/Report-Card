@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 
 import { nextAdmissionNumber } from '@/lib/students/admission-number';
+import { writeErrorMessage } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
     try {
@@ -241,7 +242,7 @@ export async function POST(request: NextRequest) {
         if (studentError) {
             const idsToDelete = usersToInsert.map(u => u.id);
             await supabaseAdmin.from('users').delete().in('id', idsToDelete);
-            return NextResponse.json({ error: `Student record batch creation failed: ${studentError.message}` }, { status: 400 });
+            return NextResponse.json({ error: writeErrorMessage(studentError, 'Could not import the student records. Please try again.') }, { status: 400 });
         }
 
         // Generate invite codes for all successfully inserted students
