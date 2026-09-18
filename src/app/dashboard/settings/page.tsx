@@ -11,6 +11,7 @@ import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { SchoolForm } from '@/components/settings/SchoolForm';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -114,7 +115,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/admin/academic-structure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ...payload }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
       toast.success(`${type.replace('_', ' ')} added successfully`);
       await fetchAllData();
       return data.data;
@@ -128,7 +129,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/admin/academic-structure?type=${type}&id=${id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
       toast.success('Deleted successfully');
       await fetchAllData();
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
@@ -140,7 +141,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/admin/academic-structure', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, ...payload }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
       toast.success('Updated successfully');
       await fetchAllData();
       return data.data;
@@ -196,7 +197,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ type: 'term', id: termId, [field]: value || null }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save the reopening date');
+      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed to save the reopening date'));
     } catch (err) {
       setTerms(previous);
       toast.error(err instanceof Error ? err.message : 'Failed to save the reopening date');
