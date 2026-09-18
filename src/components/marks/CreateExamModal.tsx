@@ -403,7 +403,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 <div className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
                   <div className="flex gap-2">
                     <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
-                    <input className="input-field w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                    <input className="input-field input-field-mono w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                   </div>
                   <div className="flex gap-2">
                     <select className="input-field flex-1 text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>

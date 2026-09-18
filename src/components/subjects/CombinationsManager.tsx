@@ -229,7 +229,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                             <div className="flex flex-wrap gap-3 items-end mb-3">
                                 <div className="w-32">
                                     <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Code *</label>
-                                    <input className="input-field w-full text-sm font-mono uppercase" placeholder="SPORTS" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                                    <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="SPORTS" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                                 </div>
                                 <div className="flex-[2] min-w-[180px]">
                                     <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Name *</label>

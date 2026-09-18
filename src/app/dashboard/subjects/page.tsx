@@ -294,7 +294,7 @@ export default function SubjectsPage() {
                         </div>
                         <div className="w-24">
                             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Code *</label>
-                            <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                            <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                         </div>
                         <div className="w-36">
                             <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Category</label>
@@ -340,7 +340,7 @@ export default function SubjectsPage() {
                         <div className="relative flex-1 min-w-[200px] max-w-xs">
                             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <input
-                                className="input-field w-full pl-9 text-sm"
+                                className="input-field input-icon-left w-full"
                                 placeholder="Search subjects..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
@@ -415,7 +415,7 @@ export default function SubjectsPage() {
                                             <td>
                                                 {role === 'ADMIN' ? (
                                                     <select
-                                                        className="text-[11px] bg-transparent border border-border/60 rounded-md px-2 py-1 outline-none text-muted-foreground hover:border-primary/40 transition-colors cursor-pointer max-w-[160px]"
+                                                        className="input-field input-field-sm w-auto hover:border-primary/40 transition-colors cursor-pointer max-w-[160px]"
                                                         value={s.grading_system_id || ''}
                                                         onChange={(e) => setSubjectGradingSystem(s.id, e.target.value)}
                                                         disabled={calSaving}
@@ -441,7 +441,7 @@ export default function SubjectsPage() {
                                                             Learners
                                                         </button>
                                                         <select
-                                                            className="text-[11px] bg-transparent border border-border/60 rounded-md px-2 py-1 outline-none text-muted-foreground hover:border-primary/40 transition-colors cursor-pointer"
+                                                            className="input-field input-field-sm w-auto hover:border-primary/40 transition-colors cursor-pointer"
                                                             value={s.subject_type || 'CORE'}
                                                             onChange={(e) => toggleSubjectType(s.id, e.target.value)}
                                                             disabled={calSaving}

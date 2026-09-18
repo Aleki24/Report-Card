@@ -363,7 +363,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       </div>
 
       <div className="flex flex-col md:flex-row md:flex-wrap gap-3 mb-4">
-        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
@@ -538,7 +538,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                 <option value="">All Senior Streams</option>
                 {seniorStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
               </select>
-              <div className="flex items-center input-field overflow-hidden px-0 flex-1">
+              <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
                 <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
               </div>
@@ -875,7 +875,7 @@ function TeachersSection() {
     <div>
       {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
       <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
@@ -1030,7 +1030,7 @@ function ParentsSection() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <div className="flex items-center input-field overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
+        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search parents..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>

@@ -29,7 +29,7 @@ export function StudentPickerModal({ students, filteredStudents, loading, search
           <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground"><X className="w-4 h-4" /></Button>
         </div>
         <div className="p-5">
-          <div className="flex items-center input-field overflow-hidden px-0 mb-4">
+          <div className="flex items-center input-field input-field-flush overflow-hidden px-0 mb-4">
             <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
               <Search size={16} />
             </span>

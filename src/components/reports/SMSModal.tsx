@@ -63,7 +63,7 @@ export function SMSModal({
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
-            <div className="flex items-center input-field overflow-hidden px-0 flex-1">
+            <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
               <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
                 <Search size={16} />
               </span>

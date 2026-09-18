@@ -411,7 +411,7 @@ export default function OnboardingWizard() {
                         type="text" 
                         value={schoolName}
                         onChange={(e) => setSchoolName(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                         placeholder="e.g. Nairobi Primary School"
                         required
                       />
@@ -422,7 +422,7 @@ export default function OnboardingWizard() {
                         type="email" 
                         value={schoolEmail}
                         onChange={(e) => setSchoolEmail(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                         placeholder="contact@school.edu"
                       />
                     </div>
@@ -432,7 +432,7 @@ export default function OnboardingWizard() {
                         type="tel" 
                         value={schoolPhone}
                         onChange={(e) => setSchoolPhone(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                         placeholder="+254 700 000 000"
                       />
                     </div>
@@ -442,7 +442,7 @@ export default function OnboardingWizard() {
                         type="text" 
                         value={schoolAddress}
                         onChange={(e) => setSchoolAddress(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                         placeholder="P.O. Box 1234, Nairobi"
                       />
                     </div>
@@ -464,7 +464,7 @@ export default function OnboardingWizard() {
                         type="text" 
                         value={academicYear}
                         onChange={(e) => setAcademicYear(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                         placeholder="e.g. 2026"
                       />
                     </div>
@@ -473,7 +473,7 @@ export default function OnboardingWizard() {
                       <select 
                         value={termName}
                         onChange={(e) => setTermName(e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl border border-input bg-transparent"
+                        className="input-field"
                       >
                         <option value="Term 1">Term 1</option>
                         <option value="Term 2">Term 2</option>
@@ -537,7 +537,7 @@ export default function OnboardingWizard() {
                               setClasses(newC);
                             }}
                             placeholder="Grade Name (e.g. Grade 1)"
-                            className="w-full h-11 px-3 rounded-lg border border-input text-sm"
+                            className="input-field"
                           />
                         </div>
                         <div className="flex-[2] space-y-1">
@@ -550,7 +550,7 @@ export default function OnboardingWizard() {
                               setClasses(newC);
                             }}
                             placeholder="Streams (comma separated e.g. 1A, 1B)"
-                            className="w-full h-11 px-3 rounded-lg border border-input text-sm"
+                            className="input-field"
                           />
                         </div>
                         {classes.length > 1 && (
@@ -585,7 +585,7 @@ export default function OnboardingWizard() {
                     <textarea 
                       value={subjects}
                       onChange={(e) => setSubjects(e.target.value)}
-                      className="w-full h-32 p-4 rounded-xl border border-input bg-transparent resize-none leading-relaxed"
+                      className="input-field resize-none"
                       placeholder="Mathematics, English, Kiswahili, Science, Social Studies..."
                     />
                   </div>
@@ -611,7 +611,7 @@ export default function OnboardingWizard() {
                       type="text" 
                       value={inviteCode}
                       onChange={(e) => setInviteCode(e.target.value)}
-                      className="w-full h-11 px-4 rounded-xl border border-input bg-transparent uppercase tracking-widest font-mono"
+                      className="input-field input-field-mono uppercase"
                       placeholder="e.g. T-A1B2C3"
                       required
                     />

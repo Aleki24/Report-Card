@@ -284,16 +284,90 @@ h4 {
   @apply -translate-y-px bg-secondary/80 shadow-sm;
 }
 
+/* --- Form fields ---
+ *
+ * Sized against .btn-primary / .btn-secondary (h-10, rounded-xl) so a field and
+ * the button beside it share one silhouette. The old h-9 with py-1 left four
+ * pixels between the text and the frame, which read as the border crowding the
+ * value.
+ *
+ * On phones the control is 44px — the minimum comfortable touch target — and
+ * its text is 16px, below which iOS zooms the whole page on focus. Both step
+ * down to the desktop scale from `sm` up.
+ */
 .input-field {
-  @apply flex w-full h-9 px-3 py-1 bg-background border border-input rounded-md text-foreground font-sans text-sm transition-colors;
+  @apply flex w-full h-11 px-3.5 py-2 bg-background border border-input rounded-xl text-foreground font-sans text-base leading-normal transition-[color,background-color,border-color,box-shadow] duration-200 sm:h-10 sm:text-sm;
 }
 
+/* Only when the field is idle: hovering a focused field should not fight the
+   focus ring, and a disabled one should not look interactive. */
+.input-field:hover:not(:focus):not(:disabled):not([readonly]) {
+  @apply border-ring/60;
+}
+
+/* A tinted ring rather than the old ring-offset halo, which pushed 4px past the
+   frame and crowded neighbouring fields in the tighter grids. */
 .input-field:focus {
-  @apply outline-none border-primary ring-2 ring-ring ring-offset-2 ring-offset-background;
+  @apply outline-none border-primary ring-[3px] ring-primary/20;
+}
+
+.input-field:disabled,
+.input-field[readonly] {
+  @apply cursor-not-allowed bg-muted/40 opacity-70;
 }
 
 .input-field::placeholder {
-  @apply text-muted-foreground;
+  @apply text-muted-foreground/70;
+}
+
+/* Room for an icon sitting inside the field. These are classes, not utilities,
+   because .input-field is unlayered and so outranks @layer utilities — a pl-*
+   in the markup silently does nothing, which left icons overlapping the text.
+   The doubled selector also keeps them ahead of .input-field itself. */
+.input-field.input-icon-left {
+  padding-left: 2.5rem;
+}
+
+.input-field.input-icon-right {
+  padding-right: 2.5rem;
+}
+
+/* Dense inline control: filter chips and in-table pickers, where a full-height
+   field would break the row. Same border, radius family and states — only the
+   scale differs. */
+.input-field.input-field-sm {
+  @apply h-9 rounded-lg px-2.5 text-xs sm:h-8;
+}
+
+/* .input-field used as the container around an icon plus a borderless input:
+   the padding belongs to the children. The gap is part of the contract — with
+   the container padding gone, the icon would otherwise sit right against the
+   first character. */
+.input-field.input-field-flush {
+  @apply gap-2 px-0;
+}
+
+/* Invite codes and reference numbers, which are read out and typed back in, so
+   the digits need to be unambiguous. .input-field sets font-family, so a
+   font-mono in the markup cannot win. */
+.input-field.input-field-mono {
+  @apply font-mono tracking-wider;
+}
+
+/* `rows` was dead on textareas: the fixed h-9 above clipped every one of them
+   to a single 36px line, so rows={8} rendered as a sliver. */
+textarea.input-field {
+  @apply block h-auto min-h-20 resize-y py-2.5 leading-relaxed;
+}
+
+/* The native picker button is the only affordance on a date field, so give it
+   the same hover feedback as everything else. */
+.input-field::-webkit-calendar-picker-indicator {
+  @apply cursor-pointer rounded opacity-60 transition-opacity duration-200;
+}
+
+.input-field::-webkit-calendar-picker-indicator:hover {
+  @apply opacity-100;
 }
 
 /* --- KPI Stat Card --- */
@@ -369,10 +443,17 @@ h4 {
 /* --- Select --- */
 select.input-field {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
+  background-position: right 14px center;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+
+/* The chevron is a baked-in colour, so the dark theme needs its own. */
+.dark select.input-field,
+[data-theme="dark"] select.input-field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
 }
 
 /* ============================================= */
