@@ -340,7 +340,7 @@ export default function SubjectsPage() {
                         <div className="relative flex-1 min-w-[200px] max-w-xs">
                             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <input
-                                className="input-field w-full pl-9 text-sm"
+                                className="input-field input-icon-left w-full"
                                 placeholder="Search subjects..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}

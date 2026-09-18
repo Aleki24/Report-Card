@@ -849,7 +849,7 @@ export default function FeesPage() {
                                     placeholder="Search student, admission, or receipt..."
                                     value={plSearch}
                                     onChange={e => setPlSearch(e.target.value)}
-                                    className="input-field w-full pl-9"
+                                    className="input-field input-icon-left w-full"
                                 />
                             </div>
                             <select className="input-field min-w-[130px]" value={plMethod} onChange={e => setPlMethod(e.target.value)}>
@@ -966,7 +966,7 @@ export default function FeesPage() {
                                     placeholder="Search student or admission..."
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
-                                    className="input-field w-full pl-9"
+                                    className="input-field input-icon-left w-full"
                                 />
                             </div>
                             <div className="min-w-[140px]">

@@ -126,7 +126,7 @@ function RegisterContent() {
                   onChange={e => setPhone(e.target.value)}
                   placeholder="e.g. +254700000000"
                   required
-                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200"
+                  className="input-field input-icon-left w-full"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -153,7 +153,7 @@ function RegisterContent() {
                   onChange={e => setInviteCode(e.target.value)}
                   placeholder="Enter invite code"
                   required
-                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200 font-mono uppercase"
+                  className="input-field input-icon-left w-full font-mono uppercase"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -180,7 +180,7 @@ function RegisterContent() {
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@school.com"
                   required
-                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-4 text-sm transition-all duration-200"
+                  className="input-field input-icon-left w-full"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -208,7 +208,7 @@ function RegisterContent() {
                   placeholder="At least 6 characters"
                   required
                   minLength={6}
-                  className="input-field h-[46px] w-full rounded-xl pl-10 pr-10 text-sm transition-all duration-200"
+                  className="input-field input-icon-left input-icon-right w-full"
                   style={{
                     border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
