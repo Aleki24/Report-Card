@@ -136,7 +136,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
                             {value.components.map((c, i) => (
                                 <div key={i} className="flex gap-2 items-center">
                                     <input
-                                        className="input-field w-16 text-xs font-mono uppercase"
+                                        className="input-field input-field-mono w-16 text-xs font-mono uppercase"
                                         style={{ padding: '6px 8px' }}
                                         placeholder="P1"
                                         value={c.component_code}

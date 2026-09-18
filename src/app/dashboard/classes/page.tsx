@@ -217,7 +217,7 @@ export default function ClassesPage() {
                 </div>
                 <div className="w-24">
                   <label className="block text-xs text-muted-foreground mb-1">Code *</label>
-                  <input className="input-field w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                  <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
                   <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>

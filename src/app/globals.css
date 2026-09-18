@@ -332,6 +332,28 @@ h4 {
   padding-right: 2.5rem;
 }
 
+/* Dense inline control: filter chips and in-table pickers, where a full-height
+   field would break the row. Same border, radius family and states — only the
+   scale differs. */
+.input-field.input-field-sm {
+  @apply h-9 rounded-lg px-2.5 text-xs sm:h-8;
+}
+
+/* .input-field used as the container around an icon plus a borderless input:
+   the padding belongs to the children. The gap is part of the contract — with
+   the container padding gone, the icon would otherwise sit right against the
+   first character. */
+.input-field.input-field-flush {
+  @apply gap-2 px-0;
+}
+
+/* Invite codes and reference numbers, which are read out and typed back in, so
+   the digits need to be unambiguous. .input-field sets font-family, so a
+   font-mono in the markup cannot win. */
+.input-field.input-field-mono {
+  @apply font-mono tracking-wider;
+}
+
 /* `rows` was dead on textareas: the fixed h-9 above clipped every one of them
    to a single 36px line, so rows={8} rendered as a sliver. */
 textarea.input-field {

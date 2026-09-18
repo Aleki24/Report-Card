@@ -260,7 +260,7 @@ export default function AssignmentsPage() {
             </div>
 
             {/* Search */}
-            <div className="flex items-center input-field overflow-hidden px-0 mb-4" style={{ maxWidth: 400 }}>
+            <div className="flex items-center input-field input-field-flush overflow-hidden px-0 mb-4" style={{ maxWidth: 400 }}>
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
                     <Search size={16} />
                 </span>

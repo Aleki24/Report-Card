@@ -183,13 +183,13 @@ export default function StudyGoalsCard() {
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                         placeholder="e.g. Score 80% in Mathematics"
-                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                        className="input-field"
                     />
                 </div>
                 <div className="mb-4 grid grid-cols-2 gap-3">
                     <div>
                         <label className="mb-1 block text-xs font-semibold text-muted-foreground">Subject (optional)</label>
-                        <select value={subjectId} onChange={e => setSubjectId(e.target.value)} className="w-full rounded-lg border border-border px-3 py-2 text-sm">
+                        <select value={subjectId} onChange={e => setSubjectId(e.target.value)} className="input-field">
                             <option value="">Any subject</option>
                             {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
@@ -200,7 +200,7 @@ export default function StudyGoalsCard() {
                             type="number" min={0} max={100} value={targetValue}
                             onChange={e => setTargetValue(e.target.value)}
                             placeholder="80"
-                            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                            className="input-field"
                         />
                     </div>
                 </div>
@@ -209,7 +209,7 @@ export default function StudyGoalsCard() {
                     <input
                         type="date" value={deadline}
                         onChange={e => setDeadline(e.target.value)}
-                        className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                        className="input-field"
                     />
                 </div>
             </Modal>

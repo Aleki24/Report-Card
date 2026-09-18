@@ -339,7 +339,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <select
-          className="w-full md:max-w-[260px]"
+          className="input-field w-full md:max-w-[260px]"
           style={{
             height: 36,
             padding: '0 32px 0 12px',

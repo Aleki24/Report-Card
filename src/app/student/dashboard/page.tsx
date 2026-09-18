@@ -409,7 +409,7 @@ export default function StudentDashboardPage() {
                         onChange={e => setSubText(e.target.value)}
                         rows={5}
                         placeholder="Type your submission here..."
-                        className="w-full resize-y rounded-lg border border-border px-3 py-2.5 text-sm"
+                        className="input-field"
                     />
                 </div>
                 <div>

@@ -211,7 +211,7 @@ export default function GradeResultsCard() {
               setScopeIdx(v === 'all' ? -1 : streams.findIndex(s => s.id === v));
             }}
             aria-label="Filter by class"
-            className="max-w-[150px] shrink-0 cursor-pointer truncate rounded-lg border border-border/60 bg-card px-2 py-1.5 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/50"
+            className="input-field input-field-sm w-auto max-w-[150px] shrink-0 truncate font-medium text-foreground outline-none transition-colors focus:border-primary/50"
           >
             <option value="all">All classes</option>
             {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}

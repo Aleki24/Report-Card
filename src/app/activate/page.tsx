@@ -195,7 +195,7 @@ export default function ActivatePage() {
                                 type="text"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                className="input-field w-full font-mono uppercase tracking-widest text-center text-lg"
+                                className="input-field input-field-mono w-full font-mono uppercase tracking-widest text-center text-lg"
                                 placeholder="A7X3K9"
                                 maxLength={6}
                                 required

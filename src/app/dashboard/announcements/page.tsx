@@ -150,7 +150,7 @@ export default function AnnouncementsPage() {
                 }
             />
 
-            <div className="flex items-center input-field w-full max-w-md overflow-hidden px-0 mb-6">
+            <div className="flex items-center input-field input-field-flush w-full max-w-md overflow-hidden px-0 mb-6">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
                     <Search size={16} />
                 </span>

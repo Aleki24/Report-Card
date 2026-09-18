@@ -129,7 +129,7 @@ export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: 
                         <option value="">All Classes</option>
                         {streams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </select>
-                    <div className="flex items-center input-field overflow-hidden px-0 flex-1">
+                    <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
                         <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
                         <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search learners..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
