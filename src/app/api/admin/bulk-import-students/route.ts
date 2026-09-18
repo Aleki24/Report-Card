@@ -4,7 +4,6 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 
-import { nextAdmissionNumber } from '@/lib/students/admission-number';
 import { writeErrorMessage } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
@@ -128,23 +127,19 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
-            let finalAdmNo = admission_number?.trim() || null;
+            // Blank stays blank: a number is never invented for the school,
+            // so a row without one imports with no admission number rather than
+            // one guessed from the school's sequence. Only real numbers are
+            // checked for collisions, and NULLs do not collide with each other.
+            const finalAdmNo = admission_number?.trim() || null;
 
-            if (!finalAdmNo) {
-                // takenAdmNos already carries the school's numbers plus the ones
-                // assigned earlier in this batch, so the run stays unbroken.
-                finalAdmNo = nextAdmissionNumber(takenAdmNos);
-                if (!finalAdmNo) {
-                    skippedRows.push({ row: student, reason: 'No admission number left to assign — enter one manually' });
+            if (finalAdmNo) {
+                if (takenAdmNos.has(finalAdmNo.toLowerCase())) {
+                    skippedRows.push({ row: student, reason: `Admission number ${finalAdmNo} is already in use` });
                     continue;
                 }
+                takenAdmNos.add(finalAdmNo.toLowerCase());
             }
-
-            if (takenAdmNos.has(finalAdmNo.toLowerCase())) {
-                skippedRows.push({ row: student, reason: `Admission number ${finalAdmNo} is already in use` });
-                continue;
-            }
-            takenAdmNos.add(finalAdmNo.toLowerCase());
 
             // Resolve grade stream
             let resolvedStreamId = grade_stream_id || default_grade_stream_id || null;

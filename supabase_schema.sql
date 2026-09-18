@@ -141,7 +141,10 @@ CREATE TABLE IF NOT EXISTS students (
     -- migration 20260918171500). Postgres cannot index across tables, so the
     -- per-school admission-number constraint below needs the column here.
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
-    admission_number TEXT NOT NULL,
+    -- Optional: never generated for the school. A learner the school has not
+    -- yet numbered is stored with NULL here, and NULLs do not collide under the
+    -- unique constraint below, so any number of them can coexist.
+    admission_number TEXT,
     current_grade_stream_id UUID REFERENCES grade_streams(id) ON DELETE RESTRICT NOT NULL,
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE RESTRICT NOT NULL,
     date_of_birth DATE,
