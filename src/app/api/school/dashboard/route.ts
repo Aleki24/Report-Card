@@ -3,6 +3,9 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
 
+/** Matches the pass mark used by /api/school/stats, which the mobile app reads. */
+const PASS_MARK = 50;
+
 export async function GET(_request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -32,6 +35,7 @@ export async function GET(_request: NextRequest) {
         totalClasses: 0,
         totalReports: 0,
         attendanceToday: null,
+        academicSummary: { recentAvg: null, passRate: null, passMark: PASS_MARK, markCount: 0 },
         upcomingExams: [],
         recentActivities: [],
         hasLogo: false,
@@ -198,9 +202,19 @@ export async function GET(_request: NextRequest) {
     const unpaidBalance = totalFeeAmount - totalCollected;
 
     // ── Academic Performance ──
+    //
+    // The mean of every mark in the year blends subjects, exam types and paper
+    // difficulty into one number, so on its own it says more about how hard the
+    // papers were than about the school. Pass rate — the share of marks at or
+    // above the pass mark — is what an admin can actually act on, and it is what
+    // the mobile staff dashboard already leads with. Both are returned; the UI
+    // leads with the rate and keeps the mean as context.
     const markRows = (academicMarksRes.data || []) as { percentage: number }[];
     const recentAvg = markRows.length > 0
       ? Math.round(markRows.reduce((s, r) => s + Number(r.percentage || 0), 0) / markRows.length)
+      : null;
+    const passRate = markRows.length > 0
+      ? Math.round((markRows.filter(r => Number(r.percentage || 0) >= PASS_MARK).length / markRows.length) * 100)
       : null;
 
     return NextResponse.json({
@@ -216,7 +230,7 @@ export async function GET(_request: NextRequest) {
       announcementsLast7Days,
       recentEnrollmentsLast7,
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
-      academicSummary: { recentAvg },
+      academicSummary: { recentAvg, passRate, passMark: PASS_MARK, markCount: markRows.length },
       pendingApprovalCount,
       hasLogo,
     });

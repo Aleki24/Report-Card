@@ -25,7 +25,7 @@ interface DashboardData {
   announcementsLast7Days: number;
   recentEnrollmentsLast7: number;
   financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
-  academicSummary: { recentAvg: number | null };
+  academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
   pendingApprovalCount?: number;
   hasLogo: boolean;
 }
@@ -41,7 +41,7 @@ import InsightCard from '@/components/dashboard/InsightCard';
 import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
-import { SetupNotifier } from '@/components/dashboard/SetupNotifier';
+import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 
 function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
@@ -185,12 +185,11 @@ function AdminDashboard({ userName }: { userName: string }) {
 
   return (
     <div className="relative px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
-      <SetupNotifier
+      <SetupChecklist
         hasLogo={data?.hasLogo ?? false}
         totalTeachers={data?.totalTeachers ?? 0}
         totalStudents={data?.totalStudents ?? 0}
         totalUsers={data?.totalUsers ?? 0}
-        role="ADMIN"
       />
       {/* Top Bar — search + profile */}
       <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
@@ -310,7 +309,7 @@ function AdminDashboard({ userName }: { userName: string }) {
               </InsightCard>
 
               <InsightCard title="Academic performance" meta={`${data?.upcomingExams.length ?? 0} upcoming exams`}>
-                <AcademicSummary avg={data?.academicSummary?.recentAvg ?? null} />
+                <AcademicSummary summary={data?.academicSummary ?? null} />
               </InsightCard>
 
               <InsightCard title="Needs attention" action={{ label: 'Review all', href: '/dashboard/analytics' }}>
@@ -439,22 +438,52 @@ function FinanceSnapshot({ collected, unpaid, overdue }: { collected: number; un
   );
 }
 
-function AcademicSummary({ avg }: { avg: number | null }) {
-  if (avg == null) return <div className="py-6 text-center text-sm italic text-muted-foreground">No exam data yet</div>;
-  const sev = avg >= 80 ? 'var(--viz-good)' : avg >= 60 ? 'var(--viz-warn)' : 'var(--viz-bad)';
-  const label = avg >= 80 ? 'Excellent' : avg >= 60 ? 'Good' : avg >= 40 ? 'Fair' : 'Needs improvement';
+/**
+ * Leads with pass rate rather than the mean mark.
+ *
+ * The mean blends every subject, exam type and paper difficulty into one
+ * number, so it mostly reflects how hard the papers were: a perfectly healthy
+ * school reads 46%. It used to be painted with the danger colour below 60,
+ * which turned a normal term into a full-width red bar — and the label
+ * disagreed with it, calling the same 46% "Fair". Pass rate answers a question
+ * an admin can act on: how many learners are at or above the pass mark.
+ */
+function AcademicSummary({ summary }: { summary: DashboardData['academicSummary'] | null }) {
+  if (!summary || summary.markCount === 0 || summary.passRate == null) {
+    return <div className="py-6 text-center text-sm italic text-muted-foreground">No exam data yet</div>;
+  }
+
+  const { passRate, recentAvg, passMark, markCount } = summary;
+
+  // Red is reserved for a result that genuinely needs attention. The old card
+  // went red below 60% of the mean, which is where an ordinary term sits, so a
+  // healthy school was met with a full-width red bar every morning. Below 40%
+  // of learners reaching the pass mark is a real signal; a little under half is
+  // something to watch, not an alarm.
+  const tone = passRate >= 70 ? 'var(--viz-good)' : passRate >= 40 ? 'var(--viz-warn)' : 'var(--viz-bad)';
+  const label = passRate >= 70 ? 'On track' : passRate >= 40 ? 'Room to improve' : 'Needs attention';
+
   return (
     <div>
-      <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-bold leading-none tracking-tight text-foreground sm:text-4xl">{avg}%</span>
-        <span className="text-xs text-muted-foreground">school average, recent exams</span>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-3xl font-bold leading-none tracking-tight text-foreground sm:text-4xl">{passRate}%</span>
+        <span className="text-xs text-muted-foreground">of marks at or above {passMark}%</span>
       </div>
-      <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${sev} 18%, transparent)` }}>
-        <div className="h-full rounded-full" style={{ width: `${Math.min(avg, 100)}%`, background: sev }} />
+
+      <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full" style={{ background: `color-mix(in srgb, ${tone} 18%, transparent)` }}>
+        <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${Math.min(passRate, 100)}%`, background: tone }} />
       </div>
-      <div className="mt-3 flex items-center gap-1.5">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: sev }} />
-        <span className="text-xs font-medium text-foreground">{label}</span>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
+          <span className="text-xs font-medium text-foreground">{label}</span>
+        </span>
+        {recentAvg != null && (
+          <span className="text-xs text-muted-foreground">
+            {recentAvg}% average across {markCount.toLocaleString()} mark{markCount === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
     </div>
   );
