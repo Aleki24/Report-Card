@@ -710,7 +710,7 @@ export default function FeesPage() {
                         <h3 className="font-bold text-sm mb-3">Batch Fee Entry</h3>
                         <div className="flex flex-wrap gap-4 items-end">
                             <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs text-muted-foreground mb-1 font-medium">Class/Stream</label>
+                                <label className="block text-xs text-muted-foreground mb-2 font-medium">Class/Stream</label>
                                 <select className="input-field w-full" value={batchStream} onChange={e => setBatchStream(e.target.value)}>
                                     <option value="">Select class...</option>
                                     {gradeStreams.map(s => (
@@ -719,7 +719,7 @@ export default function FeesPage() {
                                 </select>
                             </div>
                             <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs text-muted-foreground mb-1 font-medium">Term</label>
+                                <label className="block text-xs text-muted-foreground mb-2 font-medium">Term</label>
                                 <select className="input-field w-full" value={batchTerm} onChange={e => setBatchTerm(e.target.value)}>
                                     <option value="">Select term...</option>
                                     {terms.map(t => (
@@ -1099,7 +1099,7 @@ export default function FeesPage() {
                             {!editingFee && (
                                 <>
                                     <div>
-                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Student *</label>
+                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Student *</label>
                                         <select
                                             value={formStudent}
                                             onChange={e => setFormStudent(e.target.value)}
@@ -1117,7 +1117,7 @@ export default function FeesPage() {
                                         )}
                                     </div>
                                     <div>
-                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Term *</label>
+                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
                                         <select
                                             value={formTerm}
                                             onChange={e => { setFormTerm(e.target.value); setFormStudent(''); }}
@@ -1132,7 +1132,7 @@ export default function FeesPage() {
                                 </>
                             )}
                             <div>
-                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
+                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
                                 <input type="number" min="0" step="0.01" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
                                 {editingFee && (
                                     <p className="mt-1 text-[11px] text-muted-foreground">
@@ -1141,11 +1141,11 @@ export default function FeesPage() {
                                 )}
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due Date</label>
+                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Due Date</label>
                                 <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
                             </div>
                             <div>
-                                <label className="mb-1 block text-xs font-semibold text-muted-foreground">Notes</label>
+                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
                                 <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={3} placeholder="Optional notes..." className="input-field w-full resize-y" />
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
@@ -1168,11 +1168,11 @@ export default function FeesPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
                                     <input type="number" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Payment Method</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Payment Method</label>
                                     <select value={payMethod} onChange={e => setPayMethod(e.target.value as FeePaymentMethod)} className="input-field w-full">
                                         {FEE_PAYMENT_METHODS.map(m => (
                                             <option key={m} value={m}>{m === 'MPESA' ? 'M-Pesa' : m.charAt(0) + m.slice(1).toLowerCase()}</option>
@@ -1181,21 +1181,21 @@ export default function FeesPage() {
                                 </div>
                                 {payMethod === 'MPESA' && (
                                     <div>
-                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">M-Pesa Receipt Code</label>
+                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">M-Pesa Receipt Code</label>
                                         <input type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
                                         <p className="mt-1 text-[11px] text-muted-foreground">For a paybill payment confirmed by SMS — enter it here until M-Pesa auto-reconciliation is set up.</p>
                                     </div>
                                 )}
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paid By (optional)</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Paid By (optional)</label>
                                     <input type="text" value={payPayerName} onChange={e => setPayPayerName(e.target.value)} placeholder="Guardian name" className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
                                     <input type="text" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Notes</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
                                     <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} rows={2} className="input-field w-full resize-y" />
                                 </div>
                                 {payError && <p className="text-sm text-destructive">{payError}</p>}

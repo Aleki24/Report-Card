@@ -53,7 +53,7 @@ export default function MigrateClerkPage() {
 
       <div className="card p-5 mb-6 flex flex-col gap-4">
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">Target user ID (optional — test on one account first)</label>
+          <label className="block text-xs text-muted-foreground mb-2">Target user ID (optional — test on one account first)</label>
           <input className="input-field w-full" value={targetUserId} onChange={e => setTargetUserId(e.target.value)} placeholder="Leave blank for everyone" />
         </div>
         <label className="flex items-center gap-2 text-sm">

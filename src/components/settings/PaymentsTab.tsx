@@ -310,22 +310,22 @@ export function PaymentsTab() {
                     <h3 className="font-bold text-sm mb-4">M-Pesa Daraja Credentials</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Environment</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Environment</label>
                             <select className="input-field w-full" value={environment} onChange={e => setEnvironment(e.target.value as 'sandbox' | 'production')}>
                                 <option value="sandbox">Sandbox (testing)</option>
                                 <option value="production">Production (live)</option>
                             </select>
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Paybill / Till Number (Shortcode)</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Paybill / Till Number (Shortcode)</label>
                             <input type="text" className="input-field w-full" value={shortcode} onChange={e => setShortcode(e.target.value)} placeholder="e.g. 174379" />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Consumer Key</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Consumer Key</label>
                             <input type="text" className="input-field w-full" value={consumerKey} onChange={e => setConsumerKey(e.target.value)} />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Consumer Secret</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Consumer Secret</label>
                             <input
                                 type="password"
                                 className="input-field w-full"
@@ -335,7 +335,7 @@ export function PaymentsTab() {
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Passkey</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Passkey</label>
                             <input
                                 type="password"
                                 className="input-field w-full"
@@ -361,7 +361,7 @@ export function PaymentsTab() {
                     <h3 className="font-bold text-sm mb-4">Pesapal Credentials</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Environment</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Environment</label>
                             <select className="input-field w-full" value={pesapalEnvironment} onChange={e => setPesapalEnvironment(e.target.value as 'sandbox' | 'live')}>
                                 <option value="sandbox">Sandbox (testing)</option>
                                 <option value="live">Live</option>
@@ -369,11 +369,11 @@ export function PaymentsTab() {
                         </div>
                         <div />
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Pesapal Consumer Key</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Pesapal Consumer Key</label>
                             <input type="text" className="input-field w-full" value={pesapalConsumerKey} onChange={e => setPesapalConsumerKey(e.target.value)} />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-semibold text-muted-foreground">Pesapal Consumer Secret</label>
+                            <label className="mb-2 block text-xs font-semibold text-muted-foreground">Pesapal Consumer Secret</label>
                             <input
                                 type="password"
                                 className="input-field w-full"
@@ -448,27 +448,27 @@ export function PaymentsTab() {
                         <div className="rounded-xl border border-dashed border-border/60 p-3">
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Bank</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Bank</label>
                                     <select className="input-field w-full" value={newBankChoice} onChange={e => setNewBankChoice(e.target.value)}>
                                         {KENYA_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
                                     </select>
                                 </div>
                                 {newBankChoice === 'Other' && (
                                     <div>
-                                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Bank Name</label>
+                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Bank Name</label>
                                         <input type="text" className="input-field w-full" value={newBankOther} onChange={e => setNewBankOther(e.target.value)} placeholder="e.g. Sidian Bank" />
                                     </div>
                                 )}
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Account Name</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Account Name</label>
                                     <input type="text" className="input-field w-full" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} placeholder="e.g. Green Hills Academy" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Account Number</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Account Number</label>
                                     <input type="text" className="input-field w-full" value={newAccountNumber} onChange={e => setNewAccountNumber(e.target.value)} />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Branch (optional)</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Branch (optional)</label>
                                     <input type="text" className="input-field w-full" value={newBranch} onChange={e => setNewBranch(e.target.value)} placeholder="e.g. Westlands" />
                                 </div>
                             </div>

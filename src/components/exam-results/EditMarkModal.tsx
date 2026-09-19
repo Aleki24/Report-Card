@@ -419,7 +419,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                     {/* Score — one input per paper for multi-paper subjects */}
                     {multiPaper ? (
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">
+                            <label className="block text-xs text-muted-foreground mb-2">
                                 📑 Paper Scores *
                             </label>
                             <div className="flex flex-col gap-2">
@@ -444,7 +444,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                         </div>
                     ) : (
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">
+                            <label className="block text-xs text-muted-foreground mb-2">
                                 Score (max {maxScore}) *
                             </label>
                             <input
@@ -461,7 +461,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
 
                     {/* Grade */}
                     <div>
-                        <label className="block text-xs text-muted-foreground mb-1">
+                        <label className="block text-xs text-muted-foreground mb-2">
                             Grade {isCBC ? '(EE1-BE)' : '*'}
                         </label>
                         <select
@@ -485,7 +485,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                     {/* Rubric - only for CBC */}
                     {isCBC && (
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">Rubric (Points)</label>
+                            <label className="block text-xs text-muted-foreground mb-2">Rubric (Points)</label>
                             <select
                                 className="input-field w-full"
                                 value={rubric}
@@ -503,7 +503,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
 
                     {/* Remarks */}
                     <div>
-                        <label className="block text-xs text-muted-foreground mb-1">Remarks</label>
+                        <label className="block text-xs text-muted-foreground mb-2">Remarks</label>
                         <textarea
                             className="input-field w-full"
                             rows={2}

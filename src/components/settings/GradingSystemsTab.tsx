@@ -278,7 +278,7 @@ export function GradingSystemsTab({
                     {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
 
                     <div className="mb-4">
-                        <label className="block text-xs text-muted-foreground mb-1.5">System type *</label>
+                        <label className="block text-xs text-muted-foreground mb-2">System type *</label>
                         <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => setKind('SUBJECT')} className={`px-3 py-2 rounded-lg border text-sm ${!isOverall ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground'}`}>
                                 Subject grading <span className="block text-[10px] opacity-70">mark % → grade + points</span>
@@ -291,11 +291,11 @@ export function GradingSystemsTab({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">Grading System Name *</label>
+                            <label className="block text-xs text-muted-foreground mb-2">Grading System Name *</label>
                             <input className="input-field w-full" placeholder={isOverall ? 'e.g. Overall Mean Grade' : 'e.g. MAT,GEO,CHEM,PHY'} value={name} onChange={e => setName(e.target.value)} required />
                         </div>
                         <div>
-                            <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
+                            <label className="block text-xs text-muted-foreground mb-2">Academic Level *</label>
                             <select className="input-field w-full" value={academicLevelId} onChange={e => { setAcademicLevelId(e.target.value); setGroupSubjectIds([]); }} required>
                                 <option value="">-- Select --</option>
                                 {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}

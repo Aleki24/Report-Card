@@ -113,7 +113,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
 
                     {/* Aggregation method */}
                     <div>
-                        <label className="block text-xs text-muted-foreground mb-1">Final score calculation *</label>
+                        <label className="block text-xs text-muted-foreground mb-2">Final score calculation *</label>
                         <select
                             className="input-field w-full text-sm"
                             value={value.aggregation_method}
@@ -131,7 +131,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
 
                     {/* Papers */}
                     <div>
-                        <label className="block text-xs text-muted-foreground mb-1">Papers ({value.components.length})</label>
+                        <label className="block text-xs text-muted-foreground mb-2">Papers ({value.components.length})</label>
                         <div className="flex flex-col gap-2">
                             {value.components.map((c, i) => (
                                 <div key={i} className="flex gap-2 items-center">

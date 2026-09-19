@@ -717,7 +717,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             {!examScoped && (
             <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 rounded-lg bg-muted border border-border">
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Level</label>
+                    <label className="block text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Level</label>
                     <select
                         className="input-field w-full"
                         value={selectedLevelId}
@@ -730,7 +730,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Grade / Class</label>
+                    <label className="block text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Grade / Class</label>
                     <select
                         className="input-field w-full"
                         value={selectedGradeId}
@@ -744,7 +744,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider">Stream</label>
+                    <label className="block text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wider">Stream</label>
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}

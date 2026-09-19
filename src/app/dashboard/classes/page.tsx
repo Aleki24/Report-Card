@@ -133,7 +133,7 @@ export default function ClassesPage() {
             <div className="card">
               <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Manage Classes</h3>
               <div className="mb-4">
-                <label className="block text-xs text-muted-foreground mb-1">Select Grade</label>
+                <label className="block text-xs text-muted-foreground mb-2">Select Grade</label>
                 {grades.length === 0 ? (
                   <p className="text-xs text-orange-400">No grades found. Run seed SQL first.</p>
                 ) : (
@@ -153,11 +153,11 @@ export default function ClassesPage() {
                     <p className="text-xs text-muted-foreground">Leave stream name blank to just use the grade name as the class.</p>
                   </div>
                   <div className="flex-1 min-w-[100px]">
-                    <label className="block text-xs text-muted-foreground mb-1">Stream Name (Optional)</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Stream Name (Optional)</label>
                     <input className="input-field w-full" placeholder="e.g. East, A" value={newStream.name} onChange={e => setNewStream(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div className="flex-1 min-w-[160px]">
-                    <label className="block text-xs text-muted-foreground mb-1">Full Name (Auto-filled if blank)</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Full Name (Auto-filled if blank)</label>
                     <input className="input-field w-full" placeholder="e.g. Grade 7A" value={newStream.full_name} onChange={e => setNewStream(p => ({ ...p, full_name: e.target.value }))} />
                   </div>
                   <div className="flex gap-2">
@@ -212,15 +212,15 @@ export default function ClassesPage() {
               
               <div className="bg-muted border border-border rounded-md p-3 flex flex-wrap gap-3 mb-4 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-muted-foreground mb-1">Subject Name *</label>
+                  <label className="block text-xs text-muted-foreground mb-2">Subject Name *</label>
                   <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
                 </div>
                 <div className="w-24">
-                  <label className="block text-xs text-muted-foreground mb-1">Code *</label>
+                  <label className="block text-xs text-muted-foreground mb-2">Code *</label>
                   <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                 </div>
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
+                  <label className="block text-xs text-muted-foreground mb-2">Academic Level *</label>
                   <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
                     <option value="">-- Select --</option>
                     {academicLevels.map(al => (

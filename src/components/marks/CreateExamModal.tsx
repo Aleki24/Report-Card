@@ -263,11 +263,11 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Exam Name + Type */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-muted-foreground mb-1">Exam Name *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Exam Name *</label>
                 <input className="input-field w-full" placeholder="e.g. End of Term 1 Maths" value={examName} onChange={e => setExamName(e.target.value)} autoFocus />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-muted-foreground mb-1">Exam Type *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Exam Type *</label>
                 <select className="input-field w-full" value={examType} onChange={e => setExamType(e.target.value)}>
                   {ALL_EXAM_TYPES.map(t => <option key={t.code} value={t.code}>{t.name}</option>)}
                 </select>
@@ -333,7 +333,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Grade + Stream */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-muted-foreground mb-1">Grade *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Grade *</label>
                 {grades.length === 0 ? (
                   <p className="text-xs text-orange-400">No grades found.</p>
                 ) : (
@@ -430,11 +430,11 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
             {/* Max Score + Date */}
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-xs text-muted-foreground mb-1">Max Score *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Max Score *</label>
                 <input type="number" className="input-field w-full" min={1} max={1000} value={maxScore} onChange={e => setMaxScore(Number(e.target.value))} />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-muted-foreground mb-1">Exam Date *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Exam Date *</label>
                 <input type="date" className="input-field w-full" value={examDate} onChange={e => setExamDate(e.target.value)} />
               </div>
             </div>

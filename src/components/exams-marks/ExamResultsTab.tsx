@@ -332,7 +332,7 @@ export function ExamResultsTab() {
             >
                 {/* Class / Stream */}
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Class / Stream</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Class / Stream</label>
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}
@@ -348,7 +348,7 @@ export function ExamResultsTab() {
 
                 {/* Exam */}
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Exam</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Exam</label>
                     <select
                         className="input-field w-full"
                         value={selectedExamId}
@@ -465,21 +465,21 @@ export function ExamResultsTab() {
                                         <h3 className="text-sm font-semibold mb-4">Report Settings</h3>
                                         <div className="flex flex-col md:flex-row" style={{ gap: 'var(--space-4)' }}>
                                             <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-1">Academic Year</label>
+                                                <label className="block text-xs text-muted-foreground mb-2">Academic Year</label>
                                                 <select className="input-field w-full" value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)}>
                                                     <option value="">-- Select Year --</option>
                                                     {academicYears.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
                                                 </select>
                                             </div>
                                             <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-1">Term</label>
+                                                <label className="block text-xs text-muted-foreground mb-2">Term</label>
                                                 <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)} disabled={!selectedYearId}>
                                                     <option value="">-- Select Term --</option>
                                                     {filteredTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                                 </select>
                                             </div>
                                             <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-1">Exam</label>
+                                                <label className="block text-xs text-muted-foreground mb-2">Exam</label>
                                                 <select
                                                     className="input-field w-full"
                                                     value={selectedReportExamType}
@@ -492,7 +492,7 @@ export function ExamResultsTab() {
                                             </div>
                                         </div>
                                         <div className="mt-4">
-                                            <label className="block text-xs text-muted-foreground mb-1">Custom Report Title (Optional)</label>
+                                            <label className="block text-xs text-muted-foreground mb-2">Custom Report Title (Optional)</label>
                                             <input 
                                                 className="input-field w-full" 
                                                 placeholder="e.g. Mid Term 1 Report (Leave blank to use Term Name)"

@@ -91,15 +91,15 @@ export function AcademicCalendarTab({
                 )}
                 <form onSubmit={onAddYear} className="flex flex-wrap items-end gap-3">
                     <div className="flex-1 min-w-[120px]">
-                        <label className="block text-xs text-muted-foreground mb-1">Year Name *</label>
+                        <label className="block text-xs text-muted-foreground mb-2">Year Name *</label>
                         <input className="input-field w-full" placeholder="e.g. 2026" value={newYear.name} onChange={e => setNewYear(p => ({ ...p, name: e.target.value }))} />
                     </div>
                     <div className="flex-1 min-w-[140px]">
-                        <label className="block text-xs text-muted-foreground mb-1">Start Date *</label>
+                        <label className="block text-xs text-muted-foreground mb-2">Start Date *</label>
                         <input type="date" className="input-field w-full" value={newYear.start_date} onChange={e => setNewYear(p => ({ ...p, start_date: e.target.value }))} />
                     </div>
                     <div className="flex-1 min-w-[140px]">
-                        <label className="block text-xs text-muted-foreground mb-1">End Date *</label>
+                        <label className="block text-xs text-muted-foreground mb-2">End Date *</label>
                         <input type="date" className="input-field w-full" value={newYear.end_date} onChange={e => setNewYear(p => ({ ...p, end_date: e.target.value }))} />
                     </div>
                     <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newYear.name.trim() || !newYear.start_date || !newYear.end_date}>
@@ -112,7 +112,7 @@ export function AcademicCalendarTab({
             <div className="card">
                 <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📋 Terms</h3>
                 <div className="mb-4">
-                    <label className="block text-xs text-muted-foreground mb-1">Select Academic Year</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Select Academic Year</label>
                     {academicYears.length === 0 ? (
                         <p className="text-xs" style={{ color: 'var(--viz-warn)' }}>Add an academic year first.</p>
                     ) : (
@@ -192,23 +192,23 @@ export function AcademicCalendarTab({
                         )}
                         <form onSubmit={onAddTerm} className="flex flex-wrap items-end gap-3">
                             <div className="flex-1 min-w-[120px]">
-                                <label className="block text-xs text-muted-foreground mb-1">Term Name *</label>
+                                <label className="block text-xs text-muted-foreground mb-2">Term Name *</label>
                                 <input className="input-field w-full" placeholder="e.g. Term 1" value={newTerm.name} onChange={e => setNewTerm(p => ({ ...p, name: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-muted-foreground mb-1">Start Date *</label>
+                                <label className="block text-xs text-muted-foreground mb-2">Start Date *</label>
                                 <input type="date" className="input-field w-full" value={newTerm.start_date} onChange={e => setNewTerm(p => ({ ...p, start_date: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-muted-foreground mb-1">End Date *</label>
+                                <label className="block text-xs text-muted-foreground mb-2">End Date *</label>
                                 <input type="date" className="input-field w-full" value={newTerm.end_date} onChange={e => setNewTerm(p => ({ ...p, end_date: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-muted-foreground mb-1">Reopen after mid-term</label>
+                                <label className="block text-xs text-muted-foreground mb-2">Reopen after mid-term</label>
                                 <input type="date" className="input-field w-full" value={newTerm.midterm_reopening_date} onChange={e => setNewTerm(p => ({ ...p, midterm_reopening_date: e.target.value }))} />
                             </div>
                             <div className="flex-1 min-w-[140px]">
-                                <label className="block text-xs text-muted-foreground mb-1">Reopen after term</label>
+                                <label className="block text-xs text-muted-foreground mb-2">Reopen after term</label>
                                 <input type="date" className="input-field w-full" value={newTerm.reopening_date} onChange={e => setNewTerm(p => ({ ...p, reopening_date: e.target.value }))} />
                             </div>
                             <button type="submit" className="btn-primary whitespace-nowrap" disabled={calSaving || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date}>

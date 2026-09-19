@@ -91,11 +91,11 @@ export function StudentCommentsSection({
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1 font-medium">Class Teacher&apos;s Comment</label>
+                        <label className="block text-[11px] text-muted-foreground mb-2 font-medium">Class Teacher&apos;s Comment</label>
                         <textarea className="input-field w-full text-sm" rows={2} placeholder="e.g. Excellent progress this term..." value={sc.comments_class_teacher} onChange={e => onUpdateComment(sc.student_id, 'comments_class_teacher', e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-muted-foreground mb-1 font-medium">Principal&apos;s Comment</label>
+                        <label className="block text-[11px] text-muted-foreground mb-2 font-medium">Principal&apos;s Comment</label>
                         <textarea className="input-field w-full text-sm" rows={2} placeholder="e.g. Keep up the good work..." value={sc.comments_principal} onChange={e => onUpdateComment(sc.student_id, 'comments_principal', e.target.value)} />
                       </div>
                     </div>

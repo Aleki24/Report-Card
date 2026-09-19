@@ -18,7 +18,7 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
       {entries.map((st, i) => (
         <div key={i} className="flex items-start gap-2 mb-2">
           <div className="flex-1">
-            <label className="block text-[10px] text-muted-foreground mb-1">Subject</label>
+            <label className="block text-[10px] text-muted-foreground mb-2">Subject</label>
             <select className="input-field w-full py-1 text-sm" value={st.subject_id} onChange={e => {
               const newSubj = [...entries]; newSubj[i].subject_id = e.target.value; setEntries(newSubj);
             }}>
@@ -27,7 +27,7 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
             </select>
           </div>
           <div className="flex-1">
-            <label className="block text-[10px] text-muted-foreground mb-1">Grade Level</label>
+            <label className="block text-[10px] text-muted-foreground mb-2">Grade Level</label>
             <select className="input-field w-full py-1 text-sm" value={st.grade_id} onChange={e => {
               const newSubj = [...entries]; newSubj[i].grade_id = e.target.value; setEntries(newSubj);
             }}>

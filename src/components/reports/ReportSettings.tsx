@@ -53,28 +53,28 @@ export function ReportSettings({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Academic Year <span className="text-red-500">*</span></label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Academic Year <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
               <option value="">-- Choose Year --</option>
               {academicYears.map(ay => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
             </Select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Term <span className="text-red-500">*</span></label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Term <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
               <option value="">-- Choose Term --</option>
               {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Grade Stream <span className="text-red-500">*</span></label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Grade Stream <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)}>
               <option value="">-- Choose Stream --</option>
               {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
             </Select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Exam</label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Exam</label>
             <Select
               className="w-full h-9 text-sm"
               value={selectedExamType}
@@ -89,11 +89,11 @@ export function ReportSettings({
             <p className="text-[11px] text-muted-foreground mt-1">A term can hold several rounds (CAT, Midterm, End Term, Mock...) — pick which one to report on.</p>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Custom Title (Optional)</label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Custom Title (Optional)</label>
             <Input className="w-full h-9 text-sm" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Card Design</label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Card Design</label>
             <Select
               className="w-full h-9 text-sm"
               value={selectedTemplate}

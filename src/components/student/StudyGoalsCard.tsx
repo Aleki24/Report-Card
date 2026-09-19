@@ -177,7 +177,7 @@ export default function StudyGoalsCard() {
                 )}
             >
                 <div className="mb-4">
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Goal</label>
+                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Goal</label>
                     <input
                         type="text"
                         value={title}
@@ -188,14 +188,14 @@ export default function StudyGoalsCard() {
                 </div>
                 <div className="mb-4 grid grid-cols-2 gap-3">
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Subject (optional)</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Subject (optional)</label>
                         <select value={subjectId} onChange={e => setSubjectId(e.target.value)} className="input-field">
                             <option value="">Any subject</option>
                             {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Target % (optional)</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Target % (optional)</label>
                         <input
                             type="number" min={0} max={100} value={targetValue}
                             onChange={e => setTargetValue(e.target.value)}
@@ -205,7 +205,7 @@ export default function StudyGoalsCard() {
                     </div>
                 </div>
                 <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Deadline (optional)</label>
+                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Deadline (optional)</label>
                     <input
                         type="date" value={deadline}
                         onChange={e => setDeadline(e.target.value)}
