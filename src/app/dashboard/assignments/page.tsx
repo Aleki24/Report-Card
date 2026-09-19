@@ -347,33 +347,33 @@ export default function AssignmentsPage() {
             >
                 <div className="flex flex-col gap-4">
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Title *</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Title *</label>
                         <input type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Assignment title" className="input-field w-full" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Subject *</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Subject *</label>
                         <select value={formSubject} onChange={e => setFormSubject(e.target.value)} className="input-field w-full">
                             <option value="">Select subject...</option>
                             {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Stream (optional)</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Stream (optional)</label>
                         <select value={formStream} onChange={e => setFormStream(e.target.value)} className="input-field w-full">
                             <option value="">All streams</option>
                             {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due Date *</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Due Date *</label>
                         <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Description</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Description</label>
                         <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={8} placeholder="Assignment description..." className="input-field w-full resize-y" />
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Attachment (optional)</label>
+                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Attachment (optional)</label>
                         <input ref={fileInputRef} type="file" onChange={handleFilePick} className="hidden" />
                         {formFile ? (
                             <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">

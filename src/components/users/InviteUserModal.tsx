@@ -43,22 +43,22 @@ export function InviteUserModal(props: InviteUserModalProps) {
       <form onSubmit={onSubmit}>
         {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full" value={props.formFirstName} onChange={e => props.setFormFirstName(e.target.value)} required /></div>
-          <div><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full" value={props.formLastName} onChange={e => props.setFormLastName(e.target.value)} required /></div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+          <div><label className="block text-xs text-muted-foreground mb-2">First Name *</label><input className="input-field w-full" value={props.formFirstName} onChange={e => props.setFormFirstName(e.target.value)} required /></div>
+          <div><label className="block text-xs text-muted-foreground mb-2">Last Name *</label><input className="input-field w-full" value={props.formLastName} onChange={e => props.setFormLastName(e.target.value)} required /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-xs text-muted-foreground mb-1">Phone Number *</label><input className="input-field w-full" type="tel" value={props.formPhone} onChange={e => props.setFormPhone(e.target.value)} placeholder="e.g. 0712345678" required /></div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+          <div><label className="block text-xs text-muted-foreground mb-2">Phone Number *</label><input className="input-field w-full" type="tel" value={props.formPhone} onChange={e => props.setFormPhone(e.target.value)} placeholder="e.g. 0712345678" required /></div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Sequence # *</label>
+            <label className="block text-xs text-muted-foreground mb-2">Sequence # *</label>
             <input className="input-field w-full" type="number" min="1" value={props.formSequenceNumber} onChange={e => props.setFormSequenceNumber(parseInt(e.target.value) || 1)} required />
             <p className="text-[10px] text-muted-foreground mt-1">Increment for same-name users</p>
           </div>
         </div>
 
         <div className="mb-4">
-          <label className="block text-xs text-muted-foreground mb-1">Role *</label>
+          <label className="block text-xs text-muted-foreground mb-2">Role *</label>
           <select className="input-field w-full" value={props.formRole} onChange={e => props.setFormRole(e.target.value as UserRole)}>
             <option value="CLASS_TEACHER">Teacher</option>
             <option value="STUDENT">Student</option>
@@ -69,7 +69,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
 
         {props.formRole === 'STAFF' && (
           <div className="mb-4">
-            <label className="block text-xs text-muted-foreground mb-1">Staff Role / Title *</label>
+            <label className="block text-xs text-muted-foreground mb-2">Staff Role / Title *</label>
             <select className="input-field w-full" value={props.formJobTitle} onChange={e => props.setFormJobTitle(e.target.value)} required>
               <option value="">-- Select --</option>
               {STAFF_JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -81,17 +81,17 @@ export function InviteUserModal(props: InviteUserModalProps) {
         {props.formRole === 'STUDENT' && (
           <div className="border-t border-border pt-4 mt-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Student Details</p>
-            <div className="mb-4"><label className="block text-xs text-muted-foreground mb-1">Admission Number *</label><input className="input-field w-full" value={props.formAdmissionNumber} onChange={e => props.setFormAdmissionNumber(e.target.value)} placeholder="e.g. ADM-001" required /></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="mb-4"><label className="block text-xs text-muted-foreground mb-2">Admission Number *</label><input className="input-field w-full" value={props.formAdmissionNumber} onChange={e => props.setFormAdmissionNumber(e.target.value)} placeholder="e.g. ADM-001" required /></div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Academic Level *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Academic Level *</label>
                 <select className="input-field w-full" value={props.formAcademicLevelId} onChange={e => props.setFormAcademicLevelId(e.target.value)} required>
                   <option value="">-- Select --</option>
                   {props.academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Class *</label>
+                <label className="block text-xs text-muted-foreground mb-2">Class *</label>
                 <select className="input-field w-full" value={props.formGradeStreamId} onChange={e => props.setFormGradeStreamId(e.target.value)} required>
                   <option value="">-- Select --</option>
                   {props.gradeStreams.filter(gs => !props.formAcademicLevelId || gs.grades?.academic_level_id === props.formAcademicLevelId).map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
@@ -104,7 +104,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
         {isTeacherRole(props.formRole) && (
           <div className="border-t border-border pt-4 mt-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment (optional)</p>
-            <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
+            <div><label className="block text-xs text-muted-foreground mb-2">Class</label>
               <select className="input-field w-full" value={props.formClassTeacherStreamId} onChange={e => props.setFormClassTeacherStreamId(e.target.value)}>
                 <option value="">-- Not a class teacher --</option>
                 {props.gradeStreams.map(gs => (

@@ -97,25 +97,25 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
         </div>
       </div>
       <div>
-        <label className="block text-xs text-muted-foreground mb-1">School Name *</label>
+        <label className="block text-xs text-muted-foreground mb-2">School Name *</label>
         <input className="input-field w-full" value={school.name} onChange={e => setSchool((prev) => ({ ...prev, name: e.target.value }))} placeholder="e.g. Sunrise Academy" required />
       </div>
       <div>
-        <label className="block text-xs text-muted-foreground mb-1">Address</label>
+        <label className="block text-xs text-muted-foreground mb-2">Address</label>
         <input className="input-field w-full" value={school.address} onChange={e => setSchool((prev) => ({ ...prev, address: e.target.value }))} placeholder="e.g. 123 School Road, Nairobi" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">Phone</label>
+          <label className="block text-xs text-muted-foreground mb-2">Phone</label>
           <input className="input-field w-full" value={school.phone} onChange={e => setSchool((prev) => ({ ...prev, phone: e.target.value }))} placeholder="e.g. +254 700 000000" />
         </div>
         <div>
-          <label className="block text-xs text-muted-foreground mb-1">Email</label>
+          <label className="block text-xs text-muted-foreground mb-2">Email</label>
           <input className="input-field w-full" type="email" value={school.email} onChange={e => setSchool((prev) => ({ ...prev, email: e.target.value }))} placeholder="e.g. info@school.com" />
         </div>
       </div>
       <div>
-        <label className="block text-xs text-muted-foreground mb-1">Minimum learners per subject combination (CBC Senior School)</label>
+        <label className="block text-xs text-muted-foreground mb-2">Minimum learners per subject combination (CBC Senior School)</label>
         <input
           className="input-field w-full sm:w-40"
           type="number"
@@ -133,7 +133,7 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
         <p className="text-xs text-muted-foreground mb-4">
           Share these codes with teachers and students so they can join your school during signup.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
           <InviteCodeCard label="Teacher Invite Code" code={school.teacher_invite_code} tone="good" />
           <InviteCodeCard label="Student Invite Code" code={school.student_invite_code} tone="info" />
         </div>

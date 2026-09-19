@@ -138,7 +138,7 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Name row */}
             <div className="flex gap-4">
-              <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex flex-1 flex-col gap-2">
                 <label className="text-xs font-semibold"
                   style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                   First Name
@@ -158,7 +158,7 @@ export default function SignupPage() {
                   onBlur={e => { e.target.style.borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; e.target.style.boxShadow = 'none'; }}
                 />
               </div>
-              <div className="flex flex-1 flex-col gap-1.5">
+              <div className="flex flex-1 flex-col gap-2">
                 <label className="text-xs font-semibold"
                   style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                   Last Name
@@ -181,7 +181,7 @@ export default function SignupPage() {
             </div>
 
             {/* Email */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Email
@@ -204,7 +204,7 @@ export default function SignupPage() {
             </div>
 
             {/* Password */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Password

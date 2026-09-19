@@ -258,7 +258,7 @@ export default function LoginPage() {
           )}
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {needsMfa ? (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold"
                   style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                   Verification Code
@@ -285,7 +285,7 @@ export default function LoginPage() {
             ) : (
               <>
                 {/* Identifier */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   <label className="text-xs font-semibold"
                     style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                     Email or Username

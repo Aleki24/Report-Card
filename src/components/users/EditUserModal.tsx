@@ -40,15 +40,15 @@ export function EditUserModal(props: EditUserModalProps) {
       <form onSubmit={onSubmit}>
         {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-xs text-muted-foreground mb-1">First Name *</label><input className="input-field w-full" value={props.editFirstName} onChange={e => props.setEditFirstName(e.target.value)} required /></div>
-          <div><label className="block text-xs text-muted-foreground mb-1">Last Name *</label><input className="input-field w-full" value={props.editLastName} onChange={e => props.setEditLastName(e.target.value)} required /></div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+          <div><label className="block text-xs text-muted-foreground mb-2">First Name *</label><input className="input-field w-full" value={props.editFirstName} onChange={e => props.setEditFirstName(e.target.value)} required /></div>
+          <div><label className="block text-xs text-muted-foreground mb-2">Last Name *</label><input className="input-field w-full" value={props.editLastName} onChange={e => props.setEditLastName(e.target.value)} required /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div><label className="block text-xs text-muted-foreground mb-1">Phone Number</label><input className="input-field w-full" type="tel" value={props.editPhone} onChange={e => props.setEditPhone(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+          <div><label className="block text-xs text-muted-foreground mb-2">Phone Number</label><input className="input-field w-full" type="tel" value={props.editPhone} onChange={e => props.setEditPhone(e.target.value)} /></div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Status</label>
+            <label className="block text-xs text-muted-foreground mb-2">Status</label>
             <select className="input-field w-full" value={props.editIsActive ? 'true' : 'false'} onChange={e => props.setEditIsActive(e.target.value === 'true')}>
               <option value="true">Active</option><option value="false">Inactive</option>
             </select>
@@ -56,7 +56,7 @@ export function EditUserModal(props: EditUserModalProps) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-xs text-muted-foreground mb-1">Role *</label>
+          <label className="block text-xs text-muted-foreground mb-2">Role *</label>
           <select
             className="input-field w-full"
             value={isTeacherRole(props.editRole) ? 'CLASS_TEACHER' : props.editRole}
@@ -72,7 +72,7 @@ export function EditUserModal(props: EditUserModalProps) {
 
         {props.editRole === 'STAFF' && (
           <div className="mb-4">
-            <label className="block text-xs text-muted-foreground mb-1">Staff Role / Title *</label>
+            <label className="block text-xs text-muted-foreground mb-2">Staff Role / Title *</label>
             <select className="input-field w-full" value={props.editJobTitle} onChange={e => props.setEditJobTitle(e.target.value)} required>
               <option value="">-- Select --</option>
               {STAFF_JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -83,7 +83,7 @@ export function EditUserModal(props: EditUserModalProps) {
         {isTeacherRole(props.editRole) && (
           <div className="border-t border-border pt-4 mt-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Class Teacher Assignment (optional)</p>
-            <div><label className="block text-xs text-muted-foreground mb-1">Class</label>
+            <div><label className="block text-xs text-muted-foreground mb-2">Class</label>
               <select className="input-field w-full" value={props.editClassTeacherStreamId} onChange={e => props.setEditClassTeacherStreamId(e.target.value)}>
                 <option value="">-- Not a class teacher --</option>
                 {props.gradeStreams.map(gs => (

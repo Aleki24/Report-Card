@@ -211,7 +211,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                             {!editingId && (
                                 <div className="flex flex-wrap gap-3 mb-4 p-3.5 bg-muted/30 rounded-lg border border-border/50">
                                     <div className="flex-1 min-w-[240px]">
-                                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Prefill from ministry template</label>
+                                        <label className="block text-xs text-muted-foreground mb-2 font-medium">Prefill from ministry template</label>
                                         <select className="input-field w-full text-sm" value={templateChoice} onChange={e => applyTemplate(e.target.value)}>
                                             <option value="">Custom / Select template...</option>
                                             {PATHWAY_ORDER.map(pw => (
@@ -228,21 +228,21 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
 
                             <div className="flex flex-wrap gap-3 items-end mb-3">
                                 <div className="w-32">
-                                    <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Code *</label>
+                                    <label className="block text-xs text-muted-foreground mb-2 font-medium">Code *</label>
                                     <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="SPORTS" value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                                 </div>
                                 <div className="flex-[2] min-w-[180px]">
-                                    <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Name *</label>
+                                    <label className="block text-xs text-muted-foreground mb-2 font-medium">Name *</label>
                                     <input className="input-field w-full text-sm" placeholder="e.g. Sports Science" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                                 </div>
                                 <div className="w-44">
-                                    <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Pathway *</label>
+                                    <label className="block text-xs text-muted-foreground mb-2 font-medium">Pathway *</label>
                                     <select className="input-field w-full text-sm" value={form.pathway} onChange={e => setForm(p => ({ ...p, pathway: e.target.value as CbcPathway, track: '' }))}>
                                         {PATHWAY_ORDER.map(pw => <option key={pw} value={pw}>{PATHWAYS[pw].label}</option>)}
                                     </select>
                                 </div>
                                 <div className="flex-1 min-w-[180px]">
-                                    <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Track</label>
+                                    <label className="block text-xs text-muted-foreground mb-2 font-medium">Track</label>
                                     <select className="input-field w-full text-sm" value={form.track} onChange={e => setForm(p => ({ ...p, track: e.target.value }))}>
                                         <option value="">No track / other</option>
                                         {PATHWAYS[form.pathway].tracks.map(t => <option key={t} value={t}>{t}</option>)}
@@ -253,7 +253,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                             <div className="flex flex-wrap gap-3 items-end">
                                 {[0, 1, 2].map(i => (
                                     <div className="flex-1 min-w-[180px]" key={i}>
-                                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Elective {i + 1} *</label>
+                                        <label className="block text-xs text-muted-foreground mb-2 font-medium">Elective {i + 1} *</label>
                                         <select
                                             className="input-field w-full text-sm"
                                             value={form.subject_ids[i]}

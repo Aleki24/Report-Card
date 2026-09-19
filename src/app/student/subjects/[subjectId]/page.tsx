@@ -289,7 +289,7 @@ export default function SubjectAnalysisPage() {
                     {submitModal.assignment && <div className="mt-0.5 text-xs text-destructive">{getDueLabel(submitModal.assignment.dueDate)}</div>}
                 </div>
                 <div className="mb-4">
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Your Answer / Notes</label>
+                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Your Answer / Notes</label>
                     <textarea
                         value={subText}
                         onChange={e => setSubText(e.target.value)}
@@ -299,7 +299,7 @@ export default function SubjectAnalysisPage() {
                     />
                 </div>
                 <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Upload File (optional)</label>
+                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Upload File (optional)</label>
                     <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)} className="w-full text-sm" />
                     <div className="mt-1 text-[11px] text-muted-foreground">Max 10MB. PDF, DOC, images accepted.</div>
                 </div>

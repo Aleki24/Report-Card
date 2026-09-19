@@ -89,7 +89,7 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
 
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Class *</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Class *</label>
                     <select className="input-field w-full" value={gradeId} onChange={e => setGradeId(e.target.value)}>
                         <option value="">-- Select class --</option>
                         {[...grades].sort((a, b) => a.numeric_order - b.numeric_order).map(g => (
@@ -98,7 +98,7 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
                     </select>
                 </div>
                 <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-1">Stream (optional)</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Stream (optional)</label>
                     <select className="input-field w-full" value={streamId} onChange={e => setStreamId(e.target.value)} disabled={!gradeId || gradeStreams.length === 0}>
                         <option value="">All streams in this class</option>
                         {gradeStreams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}

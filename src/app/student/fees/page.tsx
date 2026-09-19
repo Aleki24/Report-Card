@@ -343,13 +343,13 @@ export default function StudentFeesPage() {
                         {payState === 'form' || payState === 'sending' ? (
                             <>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">
                                         {paymentProvider === 'PESAPAL' ? 'Phone Number (optional)' : 'M-Pesa Phone Number'}
                                     </label>
                                     <input type="tel" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">Amount (KShs)</label>
+                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KShs)</label>
                                     <input type="number" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
                                 </div>
                                 {payError && <p className="text-sm text-destructive">{payError}</p>}

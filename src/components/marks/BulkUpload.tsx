@@ -254,7 +254,7 @@ export function BulkUpload({ examId, subjectId }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((field) => (
                             <div key={field}>
-                                <label className="block text-xs text-muted-foreground mb-1 capitalize">
+                                <label className="block text-xs text-muted-foreground mb-2 capitalize">
                                     {field.replace(/([A-Z])/g, ' $1')}
                                 </label>
                                 <select

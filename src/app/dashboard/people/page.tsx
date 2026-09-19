@@ -543,7 +543,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </select>
               <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
-                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
+                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
               </div>
               <button
                 className="btn-secondary text-xs px-3 py-1.5 shrink-0"
@@ -585,7 +585,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
             <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-4">
               <div className="flex-1 w-full">
-                <label className="block text-xs text-muted-foreground mb-1">Assign to combination</label>
+                <label className="block text-xs text-muted-foreground mb-2">Assign to combination</label>
                 <select className="input-field w-full text-xs" value={bulkCombination} disabled={bulkClear} onChange={e => setBulkCombination(e.target.value)}>
                   <option value="">— Select combination —</option>
                   {combinations.filter(c => c.is_active).map(c => (
@@ -617,7 +617,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
             {/* Class selection */}
             <div className="mb-4">
-              <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Assign to Class *</label>
+              <label className="block text-xs text-muted-foreground mb-2 font-medium">Assign to Class *</label>
               <select className="input-field w-full text-xs" value={importClassId} onChange={e => setImportClassId(e.target.value)}>
                 <option value="">— Select Class —</option>
                 {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
@@ -929,12 +929,12 @@ function TeachersSection() {
             <h2 className="text-sm font-bold font-display mb-4">Edit Teacher</h2>
             <div className="flex flex-col gap-3 mb-4">
               <div className="flex gap-3">
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-1">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
               </div>
-              <div><label className="block text-xs text-muted-foreground mb-1">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><label className="block text-xs text-muted-foreground mb-2">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Photo</label>
+                <label className="block text-xs text-muted-foreground mb-2">Photo</label>
                 <div className="flex items-center gap-2">
                   {editData.avatar_url ? (
                     <div className="relative w-12 h-12 shrink-0"><img src={editData.avatar_url} className="w-12 h-12 rounded-full object-cover" /><button type="button" onClick={() => setEditData(p => ({ ...p, avatar_url: '' }))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white border-none text-xs flex items-center justify-center cursor-pointer">×</button></div>

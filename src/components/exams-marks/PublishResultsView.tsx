@@ -417,21 +417,21 @@ export function PublishResultsView() {
             {/* Scope pickers */}
             <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Class / Stream</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Class / Stream</label>
                     <select className="input-field w-full" value={streamId} onChange={e => setStreamId(e.target.value)}>
                         <option value="">-- Select Class --</option>
                         {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Term (optional)</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Term (optional)</label>
                     <select className="input-field w-full" value={termId} onChange={e => setTermId(e.target.value)} disabled={!streamId}>
                         <option value="">All terms</option>
                         {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs text-muted-foreground mb-1">Exam</label>
+                    <label className="block text-xs text-muted-foreground mb-2">Exam</label>
                     <select className="input-field w-full" value={examType} onChange={e => setExamType(e.target.value)} disabled={!streamId || availableTypes.length === 0}>
                         <option value="">{availableTypes.length === 0 ? 'No exams yet' : 'All exams'}</option>
                         {availableTypes.map(t => <option key={t} value={t}>{EXAM_TYPE_LABELS[t] || t}</option>)}
@@ -506,7 +506,7 @@ export function PublishResultsView() {
                             <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Class ranking preview</h3>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div>
-                                    <label className="block text-[11px] text-muted-foreground mb-1">Ranking criteria</label>
+                                    <label className="block text-[11px] text-muted-foreground mb-2">Ranking criteria</label>
                                     <select className="input-field text-sm" value={rankBy} onChange={e => setRankBy(e.target.value as RankBy)}>
                                         <option value="mean_marks">Rank by Mean marks</option>
                                         <option value="total_points">Rank by Total points</option>
@@ -514,7 +514,7 @@ export function PublishResultsView() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-[11px] text-muted-foreground mb-1">Best subjects</label>
+                                    <label className="block text-[11px] text-muted-foreground mb-2">Best subjects</label>
                                     <input type="number" min={1} max={20} className="input-field text-sm w-20 text-center" value={minSubjects} onChange={e => setMinSubjects(Math.max(1, parseInt(e.target.value) || 1))} />
                                 </div>
                             </div>

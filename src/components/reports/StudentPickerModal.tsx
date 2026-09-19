@@ -33,7 +33,7 @@ export function StudentPickerModal({ students, filteredStudents, loading, search
             <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
               <Search size={16} />
             </span>
-            <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search by name or admission number..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
+            <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search by name or admission number..." value={search} onChange={e => setSearch(e.target.value)} autoFocus />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-5 pb-5">

@@ -99,7 +99,7 @@ export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gra
 
                 <div className="p-5 overflow-y-auto">
                     <div className="mb-5">
-                        <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Grade Stream</label>
+                        <label className="block text-xs text-muted-foreground mb-2 font-medium">Grade Stream</label>
                         <Select className="w-full h-9 text-sm" value={selectedStream} onChange={e => setSelectedStream(e.target.value)}>
                             <option value="">Select Stream...</option>
                             {gradeStreams.map((gs: any) => (

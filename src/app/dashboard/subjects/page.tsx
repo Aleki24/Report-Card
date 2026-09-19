@@ -234,7 +234,7 @@ export default function SubjectsPage() {
                     {/* Grouped fields row 1: System filter + Predefined subject */}
                     <div className="flex flex-wrap gap-3 mb-4 p-3.5 bg-muted/30 rounded-lg border border-border/50">
                         <div className="flex-1 min-w-[200px]">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">System / Level</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">System / Level</label>
                             <select
                                 className="input-field w-full text-sm"
                                 value={selectedLevelFilter}
@@ -252,7 +252,7 @@ export default function SubjectsPage() {
                             </select>
                         </div>
                         <div className="flex-[2] min-w-[240px]">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Predefined Subject</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Predefined Subject</label>
                             <select
                                 className="input-field w-full text-sm"
                                 value={selectedPredefinedSubject}
@@ -289,21 +289,21 @@ export default function SubjectsPage() {
                     {/* Grouped fields row 2: Name, Code, Category, Type, Academic Level */}
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="flex-[2] min-w-[180px]">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Subject Name *</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Subject Name *</label>
                             <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
                         </div>
                         <div className="w-24">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Code *</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Code *</label>
                             <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                         </div>
                         <div className="w-36">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Category</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Category</label>
                             <select className="input-field w-full text-sm" value={newSubject.category || 'TECHNICAL'} onChange={e => setNewSubject(p => ({ ...p, category: e.target.value }))}>
                                 {Object.keys(categoryColors).map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div className="w-32">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Type *</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Type *</label>
                             <select className="input-field w-full text-sm" value={newSubject.subject_type} onChange={e => setNewSubject(p => ({ ...p, subject_type: e.target.value }))}>
                                 <option value="CORE">Core</option>
                                 <option value="ESSENTIAL">Essential</option>
@@ -311,7 +311,7 @@ export default function SubjectsPage() {
                             </select>
                         </div>
                         <div className="flex-1 min-w-[160px]">
-                            <label className="block text-xs text-muted-foreground mb-1.5 font-medium">Academic Level *</label>
+                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Academic Level *</label>
                             <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
                                 <option value="">Select level...</option>
                                 {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
