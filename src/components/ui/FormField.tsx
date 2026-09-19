@@ -15,9 +15,15 @@ import { cn } from '@/lib/utils';
 
 type Span = 'half' | 'full';
 
-/** Grid placement is opt-in — these components are also used outside a FormGrid. */
+/**
+ * Grid placement is opt-in — these components are also used outside a FormGrid.
+ *
+ * Two columns wait for `md` (769px) rather than `sm` (481px): at 481px a half
+ * field is only 200px wide, which is narrower than a phone gets in one column,
+ * so the split made the form harder to use rather than easier.
+ */
 const SPAN: Record<Span, string> = {
-    half: 'col-span-2 sm:col-span-1',
+    half: 'col-span-2 md:col-span-1',
     full: 'col-span-2',
 };
 
