@@ -576,9 +576,13 @@ export default function FeesPage() {
         await Promise.all(promises);
         setBatchSaving(false);
 
+        // Refresh either way: on a partial save the rows that did go through are
+        // already changed on the server, and leaving them off the screen makes
+        // the failure look bigger than it is.
+        await fetchFees();
+
         if (errors.length === 0) {
             setBatchMsg({ type: 'success', text: `${saved} fee record(s) saved successfully.` });
-            await fetchFees();
         } else {
             setBatchMsg({ type: 'error', text: `Saved ${saved}, but ${errors.length} failed. ${errors.slice(0, 3).join('; ')}` });
         }
