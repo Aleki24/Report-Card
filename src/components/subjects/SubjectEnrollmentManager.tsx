@@ -125,7 +125,7 @@ export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: 
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                    <select className="input-field text-xs" style={{ width: "auto", minWidth: "150px" }} value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
+                    <select className="input-field" style={{ width: "auto", minWidth: "150px" }} value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
                         <option value="">All Classes</option>
                         {streams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </select>
@@ -134,7 +134,7 @@ export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: 
                         <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search learners..." value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                     <button
-                        className="btn-secondary text-xs px-3 py-1.5 shrink-0"
+                        className="btn-secondary px-3 py-1.5 shrink-0"
                         onClick={() => {
                             const allSelected = filtered.every(s => selected.has(s.id));
                             setSelected(prev => {
@@ -171,8 +171,8 @@ export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: 
                 <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">{selected.size} enrolled</span>
                     <div className="flex gap-2">
-                        <button className="btn-secondary text-xs" onClick={onClose} disabled={saving}>Close</button>
-                        <button className="btn-primary text-xs" onClick={save} disabled={saving || !dirty}>{saving ? 'Saving...' : 'Save Enrollment'}</button>
+                        <button className="btn-secondary" onClick={onClose} disabled={saving}>Close</button>
+                        <button className="btn-primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Saving...' : 'Save Enrollment'}</button>
                     </div>
                 </div>
             </div>

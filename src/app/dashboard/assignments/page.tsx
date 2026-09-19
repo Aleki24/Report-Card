@@ -447,12 +447,12 @@ export default function AssignmentsPage() {
                                                         className="input-field min-w-0 flex-1" />
                                                 </div>
                                                 <div className="flex gap-1">
-                                                    <button className="btn-primary text-xs px-3 py-1.5" onClick={() => handleGrade(sub.id)}>Save</button>
-                                                    <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => setGradingId(null)}>Cancel</button>
+                                                    <button className="btn-primary px-3 py-1.5" onClick={() => handleGrade(sub.id)}>Save</button>
+                                                    <button className="btn-secondary px-3 py-1.5" onClick={() => setGradingId(null)}>Cancel</button>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => { setGradingId(sub.id); setGradeVal(''); setFeedbackVal(''); }}>
+                                            <button className="btn-secondary px-3 py-1.5" onClick={() => { setGradingId(sub.id); setGradeVal(''); setFeedbackVal(''); }}>
                                                 Grade Submission
                                             </button>
                                         )}

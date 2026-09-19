@@ -146,7 +146,7 @@ export function AcademicCalendarTab({
                                                 <td className="px-4 py-3">
                                                     <input
                                                         type="date"
-                                                        className="input-field text-xs"
+                                                        className="input-field"
                                                         value={t.midterm_reopening_date || ''}
                                                         onChange={e => onUpdateTermDates(t.id, 'midterm_reopening_date', e.target.value)}
                                                         disabled={calSaving}
@@ -155,7 +155,7 @@ export function AcademicCalendarTab({
                                                 <td className="px-4 py-3">
                                                     <input
                                                         type="date"
-                                                        className="input-field text-xs"
+                                                        className="input-field"
                                                         value={t.reopening_date || ''}
                                                         onChange={e => onUpdateTermDates(t.id, 'reopening_date', e.target.value)}
                                                         disabled={calSaving}

@@ -257,7 +257,7 @@ export function GradingSystemsTab({
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-2">
-                                                    <button type="button" className="btn-secondary text-xs" onClick={() => openView(gs)}>👁 View</button>
+                                                    <button type="button" className="btn-secondary" onClick={() => openView(gs)}>👁 View</button>
                                                     {own && (
                                                         <button type="button" className="text-xs font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50" onClick={() => onDelete('grading_system', gs.id)} disabled={saving}>🗑 Delete</button>
                                                     )}
@@ -335,7 +335,7 @@ export function GradingSystemsTab({
                         </table>
                     </div>
                     <p className="text-[11px] text-muted-foreground mb-1 sm:hidden">Swipe the grid sideways to reach every column.</p>
-                    <button type="button" className="btn-secondary text-xs mb-2" onClick={addRow}>+ Add Row</button>
+                    <button type="button" className="btn-secondary mb-2" onClick={addRow}>+ Add Row</button>
                     <p className="text-[11px] text-muted-foreground mb-5">Adding a row auto-fills the next grade{isOverall ? '' : ', high mark, and points (A = 12, A- = 11 …)'} from the row above — just set the low value.</p>
 
                     {!isOverall && (
@@ -370,7 +370,7 @@ export function GradingSystemsTab({
                 <ModalOverlay onClose={() => setViewingId(null)}>
                     <div className="flex items-start justify-between mb-1">
                         <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">{viewing.name}</h2>
-                        <button type="button" className="btn-secondary text-xs" onClick={() => setViewingId(null)}>Close</button>
+                        <button type="button" className="btn-secondary" onClick={() => setViewingId(null)}>Close</button>
                     </div>
                     <p className="text-xs text-muted-foreground mb-4">
                         {levelName(viewing.academic_level_id)} · {viewingOverall ? 'Overall (total points → grade)' : 'Subject (mark % → grade + points)'}
@@ -398,8 +398,8 @@ export function GradingSystemsTab({
                                         </div>
                                     )}
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className="btn-secondary text-xs" onClick={() => setManagingGroup(false)} disabled={saving}>Cancel</button>
-                                        <button type="button" className="btn-primary text-xs" onClick={saveGroup} disabled={saving}>{saving ? 'Saving...' : 'Save group'}</button>
+                                        <button type="button" className="btn-secondary" onClick={() => setManagingGroup(false)} disabled={saving}>Cancel</button>
+                                        <button type="button" className="btn-primary" onClick={saveGroup} disabled={saving}>{saving ? 'Saving...' : 'Save group'}</button>
                                     </div>
                                 </div>
                             )}

@@ -446,7 +446,7 @@ export default function AnalyticsPage() {
                       ? ` — ${gradeStreams.find(g => g.id === selectedStreamId)?.full_name}` : ''}
                   </p>
                 </div>
-                <button className="btn-secondary text-xs px-3 py-1.5" onClick={downloadMeritCsv}>
+                <button className="btn-secondary px-3 py-1.5" onClick={downloadMeritCsv}>
                   ⬇ Export CSV
                 </button>
               </div>

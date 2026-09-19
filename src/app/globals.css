@@ -263,115 +263,122 @@ h4 {
   @apply border-primary/40 shadow-md;
 }
 
-.btn-primary {
-  @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 font-sans text-sm font-medium tracking-tight text-primary-foreground no-underline transition-all duration-200;
-}
+/* Buttons and form fields live in @layer components so that a Tailwind
+   utility written on the element wins, which is the whole point of writing
+   one. Unlayered, these rules outranked every utility: h-[46px], text-xs,
+   pl-10 and font-mono in the markup were all silently discarded, and the
+   only way to change a field was to edit this file. */
+@layer components {
+  .btn-primary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 font-sans text-sm font-medium tracking-tight text-primary-foreground no-underline transition-all duration-200;
+  }
 
-.btn-primary:hover {
-  @apply -translate-y-px bg-primary/90 shadow-md;
-}
+  .btn-primary:hover {
+    @apply -translate-y-px bg-primary/90 shadow-md;
+  }
 
-.btn-primary:focus-visible,
-.btn-secondary:focus-visible {
-  @apply outline-none ring-2 ring-primary/40;
-}
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible {
+    @apply outline-none ring-2 ring-primary/40;
+  }
 
-.btn-secondary {
-  @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border/70 bg-secondary px-4 py-2 font-sans text-sm font-medium tracking-tight text-secondary-foreground no-underline transition-all duration-200;
-}
+  .btn-secondary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border/70 bg-secondary px-4 py-2 font-sans text-sm font-medium tracking-tight text-secondary-foreground no-underline transition-all duration-200;
+  }
 
-.btn-secondary:hover {
-  @apply -translate-y-px bg-secondary/80 shadow-sm;
-}
+  .btn-secondary:hover {
+    @apply -translate-y-px bg-secondary/80 shadow-sm;
+  }
 
-/* --- Form fields ---
- *
- * Sized against .btn-primary / .btn-secondary (h-10, rounded-xl) so a field and
- * the button beside it share one silhouette. The old h-9 with py-1 left four
- * pixels between the text and the frame, which read as the border crowding the
- * value.
- *
- * 44px at every width: it is the minimum comfortable touch target on a phone,
- * and on a desktop it is what stops the frame reading as if it were clipping
- * the value. An earlier version of this rule stepped down to 40px from `sm`
- * up, which left desktop — where most of this app is used — barely changed.
- *
- * Text is 16px on phones, below which iOS zooms the whole page on focus, and
- * 14px from `sm` up.
- */
-.input-field {
-  @apply flex w-full h-11 px-3.5 py-2 bg-background border border-input rounded-xl text-foreground font-sans text-base leading-normal transition-[color,background-color,border-color,box-shadow] duration-200 sm:text-sm;
-}
+  /* --- Form fields ---
+   *
+   * Sized against .btn-primary / .btn-secondary (h-10, rounded-xl) so a field and
+   * the button beside it share one silhouette. The old h-9 with py-1 left four
+   * pixels between the text and the frame, which read as the border crowding the
+   * value.
+   *
+   * 44px at every width: it is the minimum comfortable touch target on a phone,
+   * and on a desktop it is what stops the frame reading as if it were clipping
+   * the value. An earlier version of this rule stepped down to 40px from `sm`
+   * up, which left desktop — where most of this app is used — barely changed.
+   *
+   * Text is 16px on phones, below which iOS zooms the whole page on focus, and
+   * 14px from `sm` up.
+   */
+  .input-field {
+    @apply flex w-full h-11 px-3.5 py-2 bg-background border border-input rounded-xl text-foreground font-sans text-base leading-normal transition-[color,background-color,border-color,box-shadow] duration-200 sm:text-sm;
+  }
 
-/* Only when the field is idle: hovering a focused field should not fight the
-   focus ring, and a disabled one should not look interactive. */
-.input-field:hover:not(:focus):not(:disabled):not([readonly]) {
-  @apply border-ring/60;
-}
+  /* Only when the field is idle: hovering a focused field should not fight the
+     focus ring, and a disabled one should not look interactive. */
+  .input-field:hover:not(:focus):not(:disabled):not([readonly]) {
+    @apply border-ring/60;
+  }
 
-/* A tinted ring rather than the old ring-offset halo, which pushed 4px past the
-   frame and crowded neighbouring fields in the tighter grids. */
-.input-field:focus {
-  @apply outline-none border-primary ring-[3px] ring-primary/20;
-}
+  /* A tinted ring rather than the old ring-offset halo, which pushed 4px past the
+     frame and crowded neighbouring fields in the tighter grids. */
+  .input-field:focus {
+    @apply outline-none border-primary ring-[3px] ring-primary/20;
+  }
 
-.input-field:disabled,
-.input-field[readonly] {
-  @apply cursor-not-allowed bg-muted/40 opacity-70;
-}
+  .input-field:disabled,
+  .input-field[readonly] {
+    @apply cursor-not-allowed bg-muted/40 opacity-70;
+  }
 
-.input-field::placeholder {
-  @apply text-muted-foreground/70;
-}
+  .input-field::placeholder {
+    @apply text-muted-foreground/70;
+  }
 
-/* Room for an icon sitting inside the field. These are classes, not utilities,
-   because .input-field is unlayered and so outranks @layer utilities — a pl-*
-   in the markup silently does nothing, which left icons overlapping the text.
-   The doubled selector also keeps them ahead of .input-field itself. */
-.input-field.input-icon-left {
-  padding-left: 2.5rem;
-}
+  /* Room for an icon sitting inside the field. These are classes, not utilities,
+     because .input-field is unlayered and so outranks @layer utilities — a pl-*
+     in the markup silently does nothing, which left icons overlapping the text.
+     The doubled selector also keeps them ahead of .input-field itself. */
+  .input-field.input-icon-left {
+    padding-left: 2.5rem;
+  }
 
-.input-field.input-icon-right {
-  padding-right: 2.5rem;
-}
+  .input-field.input-icon-right {
+    padding-right: 2.5rem;
+  }
 
-/* Dense inline control: filter chips and in-table pickers, where a full-height
-   field would break the row. Same border, radius family and states — only the
-   scale differs. */
-.input-field.input-field-sm {
-  @apply h-9 rounded-lg px-2.5 text-xs;
-}
+  /* Dense inline control: filter chips and in-table pickers, where a full-height
+     field would break the row. Same border, radius family and states — only the
+     scale differs. */
+  .input-field.input-field-sm {
+    @apply h-9 rounded-lg px-2.5 text-xs;
+  }
 
-/* .input-field used as the container around an icon plus a borderless input:
-   the padding belongs to the children. The gap is part of the contract — with
-   the container padding gone, the icon would otherwise sit right against the
-   first character. */
-.input-field.input-field-flush {
-  @apply gap-2 px-0;
-}
+  /* .input-field used as the container around an icon plus a borderless input:
+     the padding belongs to the children. The gap is part of the contract — with
+     the container padding gone, the icon would otherwise sit right against the
+     first character. */
+  .input-field.input-field-flush {
+    @apply gap-2 px-0;
+  }
 
-/* Invite codes and reference numbers, which are read out and typed back in, so
-   the digits need to be unambiguous. .input-field sets font-family, so a
-   font-mono in the markup cannot win. */
-.input-field.input-field-mono {
-  @apply font-mono tracking-wider;
-}
+  /* Invite codes and reference numbers, which are read out and typed back in, so
+     the digits need to be unambiguous. .input-field sets font-family, so a
+     font-mono in the markup cannot win. */
+  .input-field.input-field-mono {
+    @apply font-mono tracking-wider;
+  }
 
-/* `rows` was dead on textareas: the fixed h-9 above clipped every one of them
-   to a single 36px line, so rows={8} rendered as a sliver. */
-textarea.input-field {
-  @apply block h-auto min-h-20 resize-y py-2.5 leading-relaxed;
-}
+  /* `rows` was dead on textareas: the fixed h-9 above clipped every one of them
+     to a single 36px line, so rows={8} rendered as a sliver. */
+  textarea.input-field {
+    @apply block h-auto min-h-20 resize-y py-2.5 leading-relaxed;
+  }
 
-/* The native picker button is the only affordance on a date field, so give it
-   the same hover feedback as everything else. */
-.input-field::-webkit-calendar-picker-indicator {
-  @apply cursor-pointer rounded opacity-60 transition-opacity duration-200;
-}
+  /* The native picker button is the only affordance on a date field, so give it
+     the same hover feedback as everything else. */
+  .input-field::-webkit-calendar-picker-indicator {
+    @apply cursor-pointer rounded opacity-60 transition-opacity duration-200;
+  }
 
-.input-field::-webkit-calendar-picker-indicator:hover {
-  @apply opacity-100;
+  .input-field::-webkit-calendar-picker-indicator:hover {
+    @apply opacity-100;
+  }
 }
 
 /* --- KPI Stat Card --- */
@@ -444,20 +451,22 @@ textarea.input-field {
   border-radius: 3px;
 }
 
-/* --- Select --- */
-select.input-field {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  padding-right: 2.5rem;
-  cursor: pointer;
-}
+@layer components {
+  /* --- Select --- */
+  select.input-field {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7280' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 2.5rem;
+    cursor: pointer;
+  }
 
-/* The chevron is a baked-in colour, so the dark theme needs its own. */
-.dark select.input-field,
-[data-theme="dark"] select.input-field {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  /* The chevron is a baked-in colour, so the dark theme needs its own. */
+  .dark select.input-field,
+  [data-theme="dark"] select.input-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  }
 }
 
 /* ============================================= */

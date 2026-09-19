@@ -372,39 +372,39 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        <select className="input-field text-xs" style={{ width: "auto", minWidth: "140px" }} value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
+        <select className="input-field" style={{ width: "auto", minWidth: "140px" }} value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
           <option value="">All Streams</option>
           {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
         </select>
-        <select className="input-field text-xs" style={{ width: "auto", minWidth: "120px" }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+        <select className="input-field" style={{ width: "auto", minWidth: "120px" }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
         {combinations.length > 0 && (
           <>
-            <select className="input-field text-xs" style={{ width: "auto", minWidth: "140px" }} value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
+            <select className="input-field" style={{ width: "auto", minWidth: "140px" }} value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
               <option value="">All Pathways</option>
               <option value="STEM">STEM</option>
               <option value="SOCIAL_SCIENCES">Social Sciences</option>
               <option value="ARTS_SPORTS">Arts &amp; Sports Science</option>
               <option value="UNASSIGNED">Unassigned</option>
             </select>
-            <select className="input-field text-xs" style={{ width: "auto", minWidth: "160px" }} value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
+            <select className="input-field" style={{ width: "auto", minWidth: "160px" }} value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
               <option value="">All Combinations</option>
               {combinations.filter(c => !pathwayFilter || pathwayFilter === 'UNASSIGNED' || c.pathway === pathwayFilter).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
           </>
         )}
-        <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
+        <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
           <Upload size={14} /> Import File
         </button>
         {combinations.length > 0 && (
-          <button className="btn-secondary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
+          <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
             <ClipboardList size={14} /> Assign Pathways
           </button>
         )}
-        <button className="btn-primary text-xs px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ ...emptyStudentForm }); setShowModal(true); }}>
+        <button className="btn-primary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ ...emptyStudentForm }); setShowModal(true); }}>
           <UserPlus size={14} /> Add Student
         </button>
       </div>
@@ -469,8 +469,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <div className="mt-3 flex items-center justify-between px-1">
               <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
               <div className="flex gap-2">
-                <button className="btn-secondary text-xs px-3 py-1" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
-                <button className="btn-secondary text-xs px-3 py-1" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
+                <button className="btn-secondary px-3 py-1" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
+                <button className="btn-secondary px-3 py-1" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
               </div>
             </div>
           )}
@@ -522,8 +522,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               )}
             </FormGrid>
             <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-xs" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary text-xs" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
+              <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
             </div>
           </div>
         </div>
@@ -537,7 +537,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <p className="text-xs text-muted-foreground mb-4">Reassign existing CBC Senior School students (Grades 10–12) to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
-              <select className="input-field text-xs" style={{ width: "auto", minWidth: "150px" }} value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
+              <select className="input-field" style={{ width: "auto", minWidth: "150px" }} value={bulkStreamFilter} onChange={e => setBulkStreamFilter(e.target.value)}>
                 <option value="">All Senior Streams</option>
                 {seniorStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
               </select>
@@ -546,7 +546,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                 <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
               </div>
               <button
-                className="btn-secondary text-xs px-3 py-1.5 shrink-0"
+                className="btn-secondary px-3 py-1.5 shrink-0"
                 onClick={() => {
                   const allSelected = bulkFiltered.every(s => bulkSelected.has(s.id));
                   setBulkSelected(prev => {
@@ -586,7 +586,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-4">
               <div className="flex-1 w-full">
                 <label className="block text-xs text-muted-foreground mb-2">Assign to combination</label>
-                <select className="input-field w-full text-xs" value={bulkCombination} disabled={bulkClear} onChange={e => setBulkCombination(e.target.value)}>
+                <select className="input-field w-full" value={bulkCombination} disabled={bulkClear} onChange={e => setBulkCombination(e.target.value)}>
                   <option value="">— Select combination —</option>
                   {combinations.filter(c => c.is_active).map(c => (
                     <option key={c.id} value={c.id}>{c.code} — {c.name} ({pathwayLabel(c.pathway)}{c.track ? ` / ${c.track}` : ''})</option>
@@ -599,8 +599,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             </div>
 
             <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-xs" onClick={() => setShowBulkAssign(false)} disabled={bulkSaving}>Cancel</button>
-              <button className="btn-primary text-xs" onClick={handleBulkAssign} disabled={bulkSaving || bulkSelected.size === 0 || (!bulkClear && !bulkCombination)}>
+              <button className="btn-secondary" onClick={() => setShowBulkAssign(false)} disabled={bulkSaving}>Cancel</button>
+              <button className="btn-primary" onClick={handleBulkAssign} disabled={bulkSaving || bulkSelected.size === 0 || (!bulkClear && !bulkCombination)}>
                 {bulkSaving ? 'Assigning...' : bulkClear ? `Clear ${bulkSelected.size} student(s)` : `Assign ${bulkSelected.size} student(s)`}
               </button>
             </div>
@@ -618,7 +618,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             {/* Class selection */}
             <div className="mb-4">
               <label className="block text-xs text-muted-foreground mb-2 font-medium">Assign to Class *</label>
-              <select className="input-field w-full text-xs" value={importClassId} onChange={e => setImportClassId(e.target.value)}>
+              <select className="input-field w-full" value={importClassId} onChange={e => setImportClassId(e.target.value)}>
                 <option value="">— Select Class —</option>
                 {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
               </select>
@@ -648,23 +648,23 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                       return (
                         <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.first_name || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.first_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
                             }} />
                             {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.last_name || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.last_name || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
                             }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full text-xs border border-border rounded" placeholder="Optional" value={row.admission_number || ''} onChange={e => {
+                            <input className="input-field py-1 px-2 w-full border border-border rounded" placeholder="Optional" value={row.admission_number || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
                             }} />
                           </td>
                           <td className="px-4 py-2 text-xs">
-                            <select className="input-field py-1 px-2 w-full text-xs border border-border rounded" value={row.gender || ''} onChange={e => {
+                            <select className="input-field py-1 px-2 w-full border border-border rounded" value={row.gender || ''} onChange={e => {
                                 const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
                             }}>
                                 <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
@@ -681,8 +681,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               <p className="text-xs text-amber-500 mb-3">⚠️ Please select a class above before importing.</p>
             )}
             <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-xs" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</button>
-              <button className="btn-primary text-xs" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing...' : skippedData.length > 0 ? `Retry Import (${importData.length})` : `Import ${importData.length} Students`}</button>
+              <button className="btn-secondary" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</button>
+              <button className="btn-primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing...' : skippedData.length > 0 ? `Retry Import (${importData.length})` : `Import ${importData.length} Students`}</button>
             </div>
           </div>
         </div>
@@ -774,7 +774,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </div>
             </div>
             <div className="p-6 border-t border-border bg-surface-raised flex justify-end shrink-0">
-              <button className="btn-primary text-xs" onClick={() => setCreatedCredentials(null)}>I have copied the invite codes</button>
+              <button className="btn-primary" onClick={() => setCreatedCredentials(null)}>I have copied the invite codes</button>
             </div>
           </div>
         </div>
@@ -882,14 +882,14 @@ function TeachersSection() {
           <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
           <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="input-field text-xs" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+        <select className="input-field" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
           <option value="ALL">All Roles</option>
           <option value="CLASS_TEACHER">Class Teacher</option>
           <option value="SUBJECT_TEACHER">Subject Teacher</option>
           <option value="ADMIN">Admin</option>
           <option value="STAFF">Other Staff</option>
         </select>
-        <select className="input-field text-xs" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <select className="input-field" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
@@ -929,10 +929,10 @@ function TeachersSection() {
             <h2 className="text-sm font-bold font-display mb-4">Edit Teacher</h2>
             <div className="flex flex-col gap-3 mb-4">
               <div className="flex gap-3">
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">First Name</label><input className="input-field w-full text-xs" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">Last Name</label><input className="input-field w-full text-xs" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">First Name</label><input className="input-field w-full" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
+                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">Last Name</label><input className="input-field w-full" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
               </div>
-              <div><label className="block text-xs text-muted-foreground mb-2">Phone</label><input className="input-field w-full text-xs" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
+              <div><label className="block text-xs text-muted-foreground mb-2">Phone</label><input className="input-field w-full" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
               <div>
                 <label className="block text-xs text-muted-foreground mb-2">Photo</label>
                 <div className="flex items-center gap-2">
@@ -944,8 +944,8 @@ function TeachersSection() {
               </div>
             </div>
             <div className="flex gap-2 justify-end">
-              <button className="btn-secondary text-xs" onClick={() => setEditingTeacher(null)} disabled={savingEdit}>Cancel</button>
-              <button className="btn-primary text-xs disabled:opacity-50" onClick={handleSaveTeacher} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save Changes'}</button>
+              <button className="btn-secondary" onClick={() => setEditingTeacher(null)} disabled={savingEdit}>Cancel</button>
+              <button className="btn-primary disabled:opacity-50" onClick={handleSaveTeacher} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save Changes'}</button>
             </div>
           </div>
         </div>

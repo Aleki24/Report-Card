@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
  * Form primitives.
  *
  * Every dashboard form used to spell out its own `<label>` + `<input
- * className="input-field w-full text-xs">` pair, which is why the spacing
+ * className="input-field w-full">` pair, which is why the spacing
  * drifted: labels sat four pixels off their box and rows were packed tighter
  * than the fields themselves. That vertical rhythm lives here now, so changing
  * it once changes it everywhere.
