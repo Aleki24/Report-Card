@@ -598,101 +598,103 @@ export default function AttendancePage() {
             overflow: 'hidden',
           }}>
             <div ref={tableRef} style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
-              <table className="sm:min-w-[600px]" style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 13,
-              }}>
-                <thead>
-                  <tr style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 10,
-                    background: 'var(--card)',
-                    borderBottom: '2px solid var(--border)',
-                  }}>
-                    <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 40 }}>
-                      #
-                    </th>
-                    <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Student
-                    </th>
-                    <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Adm No
-                    </th>
-                    <th className="hidden md:table-cell" style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 100 }}>
-                      Status
-                    </th>
-                    <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 160 }}>
-                      Mark
-                    </th>
-                    <th style={{ width: 36, padding: '12px 4px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredStudents.map((s, idx) => {
-                    const isPending = pendingChanges.some(p => p.id === s.id);
-                    return (
-                      <tr
-                        key={s.id}
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          background: isPending ? 'color-mix(in oklch, var(--color-warning) 4%, transparent)' : 'transparent',
-                          transition: 'background 0.15s',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isPending) e.currentTarget.style.background = 'color-mix(in oklch, var(--foreground) 2%, transparent)';
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isPending) e.currentTarget.style.background = 'transparent';
-                        }}
-                      >
-                        <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontSize: 12 }}>
-                          {idx + 1}
-                        </td>
-                        <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>
-                          <div>{s.name}</div>
-                          <div className="sm:hidden" style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: 'var(--muted-foreground)' }}>{s.admission_number}</div>
-                        </td>
-                        <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: 12 }}>
-                          {s.admission_number}
-                        </td>
-                        <td className="hidden md:table-cell" style={{ textAlign: 'center', padding: '10px 16px' }}>
-                          <StatusBadge status={s.status} />
-                        </td>
-                        <td style={{ textAlign: 'center', padding: '10px 16px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            <SegmentedControl
-                              value={s.status}
-                              onChange={(status) => updateStatus(s.id, status)}
-                            />
-                          </div>
-                        </td>
-                        <td style={{ padding: '10px 4px', textAlign: 'center' }}>
-                          {isPending && (
-                            <button
-                              type="button"
-                              onClick={() => revertStudent(s.id)}
-                              title="Revert"
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--color-warning)',
-                                padding: 4,
-                                display: 'flex',
-                                borderRadius: 4,
-                              }}
-                            >
-                              <Undo2 size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="w-full overflow-x-auto">
+                <table className="sm:min-w-[600px]" style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: 13,
+                }}>
+                  <thead>
+                    <tr style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10,
+                      background: 'var(--card)',
+                      borderBottom: '2px solid var(--border)',
+                    }}>
+                      <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 40 }}>
+                        #
+                      </th>
+                      <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Student
+                      </th>
+                      <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        Adm No
+                      </th>
+                      <th className="hidden md:table-cell" style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 100 }}>
+                        Status
+                      </th>
+                      <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 160 }}>
+                        Mark
+                      </th>
+                      <th style={{ width: 36, padding: '12px 4px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((s, idx) => {
+                      const isPending = pendingChanges.some(p => p.id === s.id);
+                      return (
+                        <tr
+                          key={s.id}
+                          style={{
+                            borderBottom: '1px solid var(--border)',
+                            background: isPending ? 'color-mix(in oklch, var(--color-warning) 4%, transparent)' : 'transparent',
+                            transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isPending) e.currentTarget.style.background = 'color-mix(in oklch, var(--foreground) 2%, transparent)';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isPending) e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontSize: 12 }}>
+                            {idx + 1}
+                          </td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>
+                            <div>{s.name}</div>
+                            <div className="sm:hidden" style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: 'var(--muted-foreground)' }}>{s.admission_number}</div>
+                          </td>
+                          <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: 12 }}>
+                            {s.admission_number}
+                          </td>
+                          <td className="hidden md:table-cell" style={{ textAlign: 'center', padding: '10px 16px' }}>
+                            <StatusBadge status={s.status} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '10px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <SegmentedControl
+                                value={s.status}
+                                onChange={(status) => updateStatus(s.id, status)}
+                              />
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 4px', textAlign: 'center' }}>
+                            {isPending && (
+                              <button
+                                type="button"
+                                onClick={() => revertStudent(s.id)}
+                                title="Revert"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: 'var(--color-warning)',
+                                  padding: 4,
+                                  display: 'flex',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                <Undo2 size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
               {filteredStudents.length === 0 && searchQuery && (
                 <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--muted-foreground)', fontSize: 13 }}>
                   No students match &ldquo;{searchQuery}&rdquo;

@@ -282,50 +282,52 @@ export default function AssignmentsPage() {
                 </div>
             ) : (
                 <div style={{ overflowX: 'auto' }}>
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Title</th>
-                                <th>Subject</th>
-                                <th>Stream</th>
-                                <th>Due Date</th>
-                                <th>Created By</th>
-                                <th style={{ width: 100 }}>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map(a => {
-                                const isOverdue = new Date(a.dueDate) < new Date();
-                                return (
-                                    <tr key={a.id}>
-                                        <td data-label="Title" className="font-semibold">
-                                            <div className="flex items-center gap-1.5">
-                                                {a.title}
-                                                {a.fileUrl && (
-                                                    <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" title="View attachment" className="text-muted-foreground hover:text-primary">
-                                                        <Paperclip size={12} />
-                                                    </a>
-                                                )}
-                                            </div>
-                                            {a.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xs">{a.description}</div>}
-                                        </td>
-                                        <td data-label="Subject">{a.subject}</td>
-                                        <td data-label="Stream" className="text-muted-foreground">{a.stream || 'All streams'}</td>
-                                        <td data-label="Due Date" className={isOverdue ? 'font-semibold text-destructive' : ''}>
-                                            {new Date(a.dueDate).toLocaleDateString('en-GB')}
-                                        </td>
-                                        <td data-label="Created By" className="text-muted-foreground text-xs">{a.createdBy}</td>
-                                        <td data-label="Actions">
-                                            <div className="flex gap-1">
-                                                <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
-                                                <button className="btn-icon text-destructive" onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                    <div className="w-full overflow-x-auto">
+                      <table className="data-table">
+                          <thead>
+                              <tr>
+                                  <th>Title</th>
+                                  <th>Subject</th>
+                                  <th>Stream</th>
+                                  <th>Due Date</th>
+                                  <th>Created By</th>
+                                  <th style={{ width: 100 }}>Actions</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {filtered.map(a => {
+                                  const isOverdue = new Date(a.dueDate) < new Date();
+                                  return (
+                                      <tr key={a.id}>
+                                          <td data-label="Title" className="font-semibold">
+                                              <div className="flex items-center gap-1.5">
+                                                  {a.title}
+                                                  {a.fileUrl && (
+                                                      <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" title="View attachment" className="text-muted-foreground hover:text-primary">
+                                                          <Paperclip size={12} />
+                                                      </a>
+                                                  )}
+                                              </div>
+                                              {a.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xs">{a.description}</div>}
+                                          </td>
+                                          <td data-label="Subject">{a.subject}</td>
+                                          <td data-label="Stream" className="text-muted-foreground">{a.stream || 'All streams'}</td>
+                                          <td data-label="Due Date" className={isOverdue ? 'font-semibold text-destructive' : ''}>
+                                              {new Date(a.dueDate).toLocaleDateString('en-GB')}
+                                          </td>
+                                          <td data-label="Created By" className="text-muted-foreground text-xs">{a.createdBy}</td>
+                                          <td data-label="Actions">
+                                              <div className="flex gap-1">
+                                                  <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
+                                                  <button className="btn-icon text-destructive" onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
+                          </tbody>
+                      </table>
+                    </div>
                 </div>
             )}
 

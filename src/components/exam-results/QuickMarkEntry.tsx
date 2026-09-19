@@ -360,106 +360,108 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
 
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                <th style={thStyle}>#</th>
-                                <th style={thStyle}>Student</th>
-                                <th style={thStyle}>Admission No</th>
-                                {multiPaper ? (
-                                    <>
-                                        {schemeComponents.map(c => (
-                                            <th key={c.id} style={{ ...thStyle, textAlign: 'center' }} title={c.component_name}>
-                                                {c.component_code} /{Number(c.max_score)}
-                                            </th>
-                                        ))}
-                                        <th style={{ ...thStyle, textAlign: 'center' }}>Final %</th>
-                                    </>
-                                ) : (
-                                    <th style={{ ...thStyle, textAlign: 'center' }}>Score</th>
-                                )}
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {students.map((s, i) => (
-                                <tr
-                                    key={s.id}
-                                    style={{
-                                        borderBottom: '1px solid var(--color-border)',
-                                        background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
-                                    }}
-                                >
-                                    <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{i + 1}</td>
-                                    <td style={tdStyle}>{s.name}</td>
-                                    <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admission_number}</td>
-                                    {multiPaper ? (
-                                        <>
-                                            {schemeComponents.map(c => {
-                                                const v = componentScores[s.id]?.[c.id] || '';
-                                                const num = Number(v);
-                                                const invalid = v !== '' && (isNaN(num) || num < 0 || num > Number(c.max_score));
-                                                return (
-                                                    <td key={c.id} style={{ ...tdStyle, textAlign: 'center' }}>
-                                                        <input
-                                                            type="number"
-                                                            className="input-field"
-                                                            style={{ width: 70, textAlign: 'center', padding: '4px 8px', fontSize: 13, borderColor: invalid ? 'var(--color-danger, #EF4444)' : undefined }}
-                                                            placeholder="—"
-                                                            min={0}
-                                                            max={Number(c.max_score)}
-                                                            value={v}
-                                                            onChange={e => handleComponentScoreChange(s.id, c.id, e.target.value)}
-                                                        />
-                                                    </td>
-                                                );
-                                            })}
-                                            <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
-                                                {(() => {
-                                                    const composite = compositeForStudent(s.id);
-                                                    return composite.enteredCount > 0
-                                                        ? `${composite.finalPercentage.toFixed(1)}%${composite.isComplete ? '' : '*'}`
-                                                        : '—';
-                                                })()}
-                                            </td>
-                                        </>
-                                    ) : (
-                                        <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                            <input
-                                                type="number"
-                                                className="input-field"
-                                                style={{ width: 80, textAlign: 'center', padding: '4px 8px', fontSize: 13 }}
-                                                placeholder="—"
-                                                min={0}
-                                                value={scores[s.id] || ''}
-                                                onChange={e => handleScoreChange(s.id, e.target.value)}
-                                            />
-                                        </td>
-                                    )}
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <select
-                                            className="input-field"
-                                            style={{ width: 100, padding: '4px 8px', fontSize: 13 }}
-                                            value={manualGrades[s.id] || (multiPaper
-                                                ? (() => {
-                                                    const composite = compositeForStudent(s.id);
-                                                    return composite.enteredCount > 0 ? autoResolveGrade(String(composite.finalPercentage), 100) : '';
-                                                })()
-                                                : autoResolveGrade(scores[s.id] || '', examMaxScore))}
-                                            onChange={e => handleGradeChange(s.id, e.target.value)}
-                                        >
-                                            <option value="">—</option>
-                                            {gradingScales.map(g => (
-                                                <option key={g.symbol} value={g.symbol}>
-                                                    {g.symbol}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="w-full overflow-x-auto">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                          <thead>
+                              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                  <th style={thStyle}>#</th>
+                                  <th style={thStyle}>Student</th>
+                                  <th style={thStyle}>Admission No</th>
+                                  {multiPaper ? (
+                                      <>
+                                          {schemeComponents.map(c => (
+                                              <th key={c.id} style={{ ...thStyle, textAlign: 'center' }} title={c.component_name}>
+                                                  {c.component_code} /{Number(c.max_score)}
+                                              </th>
+                                          ))}
+                                          <th style={{ ...thStyle, textAlign: 'center' }}>Final %</th>
+                                      </>
+                                  ) : (
+                                      <th style={{ ...thStyle, textAlign: 'center' }}>Score</th>
+                                  )}
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {students.map((s, i) => (
+                                  <tr
+                                      key={s.id}
+                                      style={{
+                                          borderBottom: '1px solid var(--color-border)',
+                                          background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
+                                      }}
+                                  >
+                                      <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{i + 1}</td>
+                                      <td style={tdStyle}>{s.name}</td>
+                                      <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admission_number}</td>
+                                      {multiPaper ? (
+                                          <>
+                                              {schemeComponents.map(c => {
+                                                  const v = componentScores[s.id]?.[c.id] || '';
+                                                  const num = Number(v);
+                                                  const invalid = v !== '' && (isNaN(num) || num < 0 || num > Number(c.max_score));
+                                                  return (
+                                                      <td key={c.id} style={{ ...tdStyle, textAlign: 'center' }}>
+                                                          <input
+                                                              type="number"
+                                                              className="input-field"
+                                                              style={{ width: 70, textAlign: 'center', padding: '4px 8px', fontSize: 13, borderColor: invalid ? 'var(--color-danger, #EF4444)' : undefined }}
+                                                              placeholder="—"
+                                                              min={0}
+                                                              max={Number(c.max_score)}
+                                                              value={v}
+                                                              onChange={e => handleComponentScoreChange(s.id, c.id, e.target.value)}
+                                                          />
+                                                      </td>
+                                                  );
+                                              })}
+                                              <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
+                                                  {(() => {
+                                                      const composite = compositeForStudent(s.id);
+                                                      return composite.enteredCount > 0
+                                                          ? `${composite.finalPercentage.toFixed(1)}%${composite.isComplete ? '' : '*'}`
+                                                          : '—';
+                                                  })()}
+                                              </td>
+                                          </>
+                                      ) : (
+                                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                              <input
+                                                  type="number"
+                                                  className="input-field"
+                                                  style={{ width: 80, textAlign: 'center', padding: '4px 8px', fontSize: 13 }}
+                                                  placeholder="—"
+                                                  min={0}
+                                                  value={scores[s.id] || ''}
+                                                  onChange={e => handleScoreChange(s.id, e.target.value)}
+                                              />
+                                          </td>
+                                      )}
+                                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                          <select
+                                              className="input-field"
+                                              style={{ width: 100, padding: '4px 8px', fontSize: 13 }}
+                                              value={manualGrades[s.id] || (multiPaper
+                                                  ? (() => {
+                                                      const composite = compositeForStudent(s.id);
+                                                      return composite.enteredCount > 0 ? autoResolveGrade(String(composite.finalPercentage), 100) : '';
+                                                  })()
+                                                  : autoResolveGrade(scores[s.id] || '', examMaxScore))}
+                                              onChange={e => handleGradeChange(s.id, e.target.value)}
+                                          >
+                                              <option value="">—</option>
+                                              {gradingScales.map(g => (
+                                                  <option key={g.symbol} value={g.symbol}>
+                                                      {g.symbol}
+                                                  </option>
+                                              ))}
+                                          </select>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                    </div>
                 </div>
             </div>
 

@@ -640,41 +640,43 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
             {importData.length > 0 && (
               <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md">
-                <table className="data-table w-full">
-                  <thead><tr><th className="px-4 py-2 text-xs">First Name</th><th className="px-4 py-2 text-xs">Last Name</th><th className="px-4 py-2 text-xs">Admission No.</th><th className="px-4 py-2 text-xs">Gender</th></tr></thead>
-                  <tbody>
-                    {importData.map((row, i) => {
-                      const skippedReason = skippedData[i]?.reason;
-                      return (
-                        <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
-                          <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.first_name || ''} onChange={e => {
-                                const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
-                            }} />
-                            {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
-                          </td>
-                          <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.last_name || ''} onChange={e => {
-                                const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
-                            }} />
-                          </td>
-                          <td className="px-4 py-2 text-xs">
-                            <input className="input-field py-1 px-2 w-full border border-border rounded" placeholder="Optional" value={row.admission_number || ''} onChange={e => {
-                                const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
-                            }} />
-                          </td>
-                          <td className="px-4 py-2 text-xs">
-                            <select className="input-field py-1 px-2 w-full border border-border rounded" value={row.gender || ''} onChange={e => {
-                                const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
-                            }}>
-                                <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
-                            </select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="w-full overflow-x-auto">
+                  <table className="data-table w-full">
+                    <thead><tr><th className="px-4 py-2 text-xs">First Name</th><th className="px-4 py-2 text-xs">Last Name</th><th className="px-4 py-2 text-xs">Admission No.</th><th className="px-4 py-2 text-xs">Gender</th></tr></thead>
+                    <tbody>
+                      {importData.map((row, i) => {
+                        const skippedReason = skippedData[i]?.reason;
+                        return (
+                          <tr key={i} className={skippedReason ? 'bg-red-500/5' : ''}>
+                            <td className="px-4 py-2 text-xs">
+                              <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.first_name || ''} onChange={e => {
+                                  const newData = [...importData]; newData[i].first_name = e.target.value; setImportData(newData);
+                              }} />
+                              {skippedReason && <div className="text-[10px] text-red-400 mt-1 font-medium">{skippedReason}</div>}
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <input className="input-field py-1 px-2 w-full border border-border rounded" value={row.last_name || ''} onChange={e => {
+                                  const newData = [...importData]; newData[i].last_name = e.target.value; setImportData(newData);
+                              }} />
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <input className="input-field py-1 px-2 w-full border border-border rounded" placeholder="Optional" value={row.admission_number || ''} onChange={e => {
+                                  const newData = [...importData]; newData[i].admission_number = e.target.value; setImportData(newData);
+                              }} />
+                            </td>
+                            <td className="px-4 py-2 text-xs">
+                              <select className="input-field py-1 px-2 w-full border border-border rounded" value={row.gender || ''} onChange={e => {
+                                  const newData = [...importData]; newData[i].gender = e.target.value; setImportData(newData);
+                              }}>
+                                  <option value="">—</option><option value="MALE">MALE</option><option value="FEMALE">FEMALE</option>
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
             {!importClassId && importData.length > 0 && (
@@ -753,24 +755,26 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               <div className="border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-surface text-muted-foreground text-[10px] uppercase tracking-wider border-b border-border">
-                      <th className="px-4 py-3 font-semibold">Student Name</th>
-                      <th className="px-4 py-3 font-semibold">Username</th>
-                      <th className="px-4 py-3 font-semibold">Invite Code</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {createdCredentials.map((c, i) => (
-                      <tr key={i}>
-                        <td className="px-4 py-3 text-xs font-medium">{c.first_name} {c.last_name}</td>
-                        <td className="px-4 py-3 text-xs font-mono">{c.username}</td>
-                        <td className="px-4 py-3 text-xs font-mono tracking-widest uppercase">{c.invite_code}</td>
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface text-muted-foreground text-[10px] uppercase tracking-wider border-b border-border">
+                        <th className="px-4 py-3 font-semibold">Student Name</th>
+                        <th className="px-4 py-3 font-semibold">Username</th>
+                        <th className="px-4 py-3 font-semibold">Invite Code</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {createdCredentials.map((c, i) => (
+                        <tr key={i}>
+                          <td className="px-4 py-3 text-xs font-medium">{c.first_name} {c.last_name}</td>
+                          <td className="px-4 py-3 text-xs font-mono">{c.username}</td>
+                          <td className="px-4 py-3 text-xs font-mono tracking-widest uppercase">{c.invite_code}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
             <div className="p-6 border-t border-border bg-surface-raised flex justify-end shrink-0">

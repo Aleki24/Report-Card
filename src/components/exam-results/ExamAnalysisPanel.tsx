@@ -81,36 +81,38 @@ export function ExamAnalysisPanel({ marks }: Props) {
                     <h3 style={{ fontSize: 16, fontWeight: 600 }}>Student Rankings</h3>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                <th style={thStyle}>Rank</th>
-                                <th style={thStyle}>Student</th>
-                                <th style={thStyle}>Adm No</th>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Percentage</th>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {stats.ranked.map((s, i) => (
-                                <tr
-                                    key={s.admNo + i}
-                                    style={{
-                                        borderBottom: '1px solid var(--color-border)',
-                                        background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
-                                    }}
-                                >
-                                    <td style={{ ...tdStyle, fontWeight: 700, color: s.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
-                                        {s.rank <= 3 ? ['🥇', '🥈', '🥉'][s.rank - 1] : `#${s.rank}`}
-                                    </td>
-                                    <td style={tdStyle}>{s.name}</td>
-                                    <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admNo}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{Math.round(s.pct)}%</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>{s.grade}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="w-full overflow-x-auto">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                          <thead>
+                              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                  <th style={thStyle}>Rank</th>
+                                  <th style={thStyle}>Student</th>
+                                  <th style={thStyle}>Adm No</th>
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Percentage</th>
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Grade</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {stats.ranked.map((s, i) => (
+                                  <tr
+                                      key={s.admNo + i}
+                                      style={{
+                                          borderBottom: '1px solid var(--color-border)',
+                                          background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
+                                      }}
+                                  >
+                                      <td style={{ ...tdStyle, fontWeight: 700, color: s.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
+                                          {s.rank <= 3 ? ['🥇', '🥈', '🥉'][s.rank - 1] : `#${s.rank}`}
+                                      </td>
+                                      <td style={tdStyle}>{s.name}</td>
+                                      <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admNo}</td>
+                                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{Math.round(s.pct)}%</td>
+                                      <td style={{ ...tdStyle, textAlign: 'center' }}>{s.grade}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                    </div>
                 </div>
             </div>
         </div>
