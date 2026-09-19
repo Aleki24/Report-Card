@@ -135,7 +135,7 @@ export default function ForgotPasswordPage() {
           }}>
           {step === 'request' ? (
             <form onSubmit={handleRequestCode} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold" style={labelColor}>Email</label>
                 <input
                   type="email"
@@ -157,7 +157,7 @@ export default function ForgotPasswordPage() {
             </form>
           ) : (
             <form onSubmit={handleResetPassword} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold" style={labelColor}>Verification Code</label>
                 <input
                   type="text"
@@ -169,7 +169,7 @@ export default function ForgotPasswordPage() {
                   style={inputStyle}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold" style={labelColor}>New Password</label>
                 <div className="relative">
                   <input

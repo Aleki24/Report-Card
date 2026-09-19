@@ -186,7 +186,7 @@ export default function StudyGoalsCard() {
                         className="input-field"
                     />
                 </div>
-                <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-5">
                     <div>
                         <label className="mb-2 block text-xs font-semibold text-muted-foreground">Subject (optional)</label>
                         <select value={subjectId} onChange={e => setSubjectId(e.target.value)} className="input-field">

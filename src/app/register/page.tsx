@@ -114,7 +114,7 @@ function RegisterContent() {
           }}>
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Phone Number */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Phone Number
@@ -141,7 +141,7 @@ function RegisterContent() {
             </div>
 
             {/* Invite Code */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Invite Code
@@ -168,7 +168,7 @@ function RegisterContent() {
             </div>
 
             {/* Email */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Email Address
@@ -195,7 +195,7 @@ function RegisterContent() {
             </div>
 
             {/* Password */}
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold"
                 style={{ color: isDark ? '#94a3b8' : '#475569' }}>
                 Choose Password

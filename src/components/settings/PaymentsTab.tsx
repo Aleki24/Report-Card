@@ -446,7 +446,7 @@ export function PaymentsTab() {
                         )}
 
                         <div className="rounded-xl border border-dashed border-border/60 p-3">
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-2">
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Bank</label>
                                     <select className="input-field w-full" value={newBankChoice} onChange={e => setNewBankChoice(e.target.value)}>

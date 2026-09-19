@@ -189,7 +189,7 @@ export default function ActivatePage() {
                 {/* Step 1: Enter invite code */}
                 {!verified && !success && (
                     <div className="space-y-4">
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Invite Code <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
@@ -279,7 +279,7 @@ export default function ActivatePage() {
                             <span className="font-mono font-bold tracking-widest uppercase text-primary">{code}</span>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Username <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
@@ -300,7 +300,7 @@ export default function ActivatePage() {
                         </div>
 
                         {!isReset && (
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                                 <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
                                 <input
                                     type="email"
@@ -314,7 +314,7 @@ export default function ActivatePage() {
                             </div>
                         )}
 
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">New Password <span className="text-red-500">*</span></label>
                             <input
                                 type="password"
@@ -328,7 +328,7 @@ export default function ActivatePage() {
                             />
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                             <label className="text-sm font-medium text-foreground">Confirm Password <span className="text-red-500">*</span></label>
                             <input
                                 type="password"

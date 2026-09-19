@@ -55,7 +55,7 @@ export function StudentCommentsSection({
                 <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
                   <Search size={16} />
                 </span>
-                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search students by name or admission number..." value={commentSearch} onChange={e => setCommentSearch(e.target.value)} />
+                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students by name or admission number..." value={commentSearch} onChange={e => setCommentSearch(e.target.value)} />
               </div>
               <Button variant="primary" size="sm" onClick={onSaveAllComments} disabled={savingCommentId === 'all' || studentComments.length === 0} className="whitespace-nowrap">
                 {savingCommentId === 'all' ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving All...</> : <><Save className="w-3.5 h-3.5" /> Save All ({studentComments.length})</>}
@@ -89,7 +89,7 @@ export function StudentCommentsSection({
                         {savingCommentId === sc.student_id ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving...</> : <><Save className="w-3 h-3" /> Save</>}
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5">
                       <div>
                         <label className="block text-[11px] text-muted-foreground mb-2 font-medium">Class Teacher&apos;s Comment</label>
                         <textarea className="input-field w-full text-sm" rows={2} placeholder="e.g. Excellent progress this term..." value={sc.comments_class_teacher} onChange={e => onUpdateComment(sc.student_id, 'comments_class_teacher', e.target.value)} />

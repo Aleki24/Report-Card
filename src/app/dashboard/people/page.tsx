@@ -543,7 +543,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </select>
               <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
                 <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
-                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-xs" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
+                <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} />
               </div>
               <button
                 className="btn-secondary text-xs px-3 py-1.5 shrink-0"
