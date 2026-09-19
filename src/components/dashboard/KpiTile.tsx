@@ -3,7 +3,13 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Tone = 'blue' | 'green' | 'purple' | 'red';
+/**
+ * `amber` is the deliberate middle ground between the neutral surface and
+ * `red`. A tile that flags work still to do — marks not yet entered — needs to
+ * stand out without reading as an emergency; red on an ordinary backlog is what
+ * made the old dashboard alarming to open.
+ */
+type Tone = 'blue' | 'green' | 'purple' | 'amber' | 'red';
 
 interface KpiTileProps {
   title: string;
@@ -20,6 +26,7 @@ const TONE_BG: Record<Tone, string> = {
   blue: 'bg-blue-600',
   green: 'bg-green-600',
   purple: 'bg-violet-500',
+  amber: 'bg-amber-500',
   red: 'bg-red-600',
 };
 

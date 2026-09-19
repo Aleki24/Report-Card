@@ -28,6 +28,17 @@ interface DashboardData {
   academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
   pendingApprovalCount?: number;
   examsAwaitingMarks?: number;
+  unmarkedByClass?: { label: string; levelCode: string | null; count: number }[];
+  classPerformance?: ClassPerformance[];
+  subjectsWithoutGradingSystem?: number;
+  /**
+   * Whether the school has ever recorded a fee or an attendance register.
+   * Both features are unused on this instance — every school has zero fee
+   * rows — so their cards are hidden until there is something to show rather
+   * than rendering a permanent row of zeros.
+   */
+  hasFeeData?: boolean;
+  hasAttendanceData?: boolean;
   hasLogo: boolean;
 }
 
@@ -43,6 +54,8 @@ import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
 import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
+import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
+import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 
 function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
@@ -280,8 +293,16 @@ function AdminDashboard({ userName }: { userName: string }) {
           <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
           <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
           <KpiTile title="Reports" value={data?.totalReports ?? 0} icon={<FileText size={17} />} href="/dashboard/reports" tone="purple" />
-          <KpiTile title="Present today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
-          <KpiTile title="Overdue fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={17} />} href="/dashboard/fees" alert={(data?.overdueFeesCount ?? 0) > 0} tone={(data?.overdueFeesCount ?? 0) > 0 ? 'red' : undefined} />
+          {/* Marks outstanding is the one number here that is always real and
+              always actionable, so it takes a permanent slot. Attendance and
+              fees only appear once the school has started using them. */}
+          <KpiTile title="Marks outstanding" value={data?.examsAwaitingMarks ?? 0} icon={<ClipboardList size={17} />} href="/dashboard/exams-marks" tone={(data?.examsAwaitingMarks ?? 0) > 0 ? 'amber' : undefined} />
+          {data?.hasAttendanceData && (
+            <KpiTile title="Present today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
+          )}
+          {data?.hasFeeData && (
+            <KpiTile title="Overdue fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={17} />} href="/dashboard/fees" alert={(data?.overdueFeesCount ?? 0) > 0} tone={(data?.overdueFeesCount ?? 0) > 0 ? 'red' : undefined} />
+          )}
         </KpiCarousel>
       </section>
 
@@ -301,12 +322,12 @@ function AdminDashboard({ userName }: { userName: string }) {
           <section>
             <SectionTitle>Today&apos;s picture</SectionTitle>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 xs:gap-4">
-              <InsightCard title="Attendance today" meta={`${totalAttendance(data)} marked`}>
-                <AttendanceBreakdown present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} excused={data?.attendanceToday?.excused ?? 0} />
+              <InsightCard title="How classes are doing" meta={`${(data?.classPerformance ?? []).filter(c => c.markCount > 0).length} with marks`} action={{ label: 'Analytics', href: '/dashboard/analytics' }}>
+                <ClassPerformanceList classes={data?.classPerformance ?? []} passMark={data?.academicSummary?.passMark ?? 50} />
               </InsightCard>
 
-              <InsightCard title="Fee collection" meta="Current term">
-                <FinanceSnapshot collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
+              <InsightCard title="Marks outstanding" meta="Exams sat, not entered" action={{ label: 'Enter marks', href: '/dashboard/exams-marks' }}>
+                <OutstandingMarks total={data?.examsAwaitingMarks ?? 0} byClass={data?.unmarkedByClass ?? []} />
               </InsightCard>
 
               <InsightCard title="Academic performance" meta={`${data?.upcomingExams.length ?? 0} upcoming exams`}>
@@ -314,8 +335,29 @@ function AdminDashboard({ userName }: { userName: string }) {
               </InsightCard>
 
               <InsightCard title="Needs attention" action={{ label: 'Review all', href: '/dashboard/analytics' }}>
-                <AlertList upcomingExams={data?.upcomingExams ?? []} overdueFees={data?.overdueFeesCount ?? 0} enrollments={data?.recentEnrollmentsLast7 ?? 0} announcements={data?.announcementsLast7Days ?? 0} reports={data?.totalReports ?? 0} awaitingMarks={data?.examsAwaitingMarks ?? 0} />
+                <AlertList
+                  upcomingExams={data?.upcomingExams ?? []}
+                  overdueFees={data?.hasFeeData ? data?.overdueFeesCount ?? 0 : null}
+                  enrollments={data?.recentEnrollmentsLast7 ?? 0}
+                  announcements={data?.announcementsLast7Days ?? 0}
+                  reports={data?.totalReports ?? 0}
+                  awaitingMarks={data?.examsAwaitingMarks ?? 0}
+                  ungradedSubjects={data?.subjectsWithoutGradingSystem ?? 0}
+                />
               </InsightCard>
+
+              {/* Only once the school has actually used these. */}
+              {data?.hasAttendanceData && (
+                <InsightCard title="Attendance today" meta={`${totalAttendance(data)} marked`}>
+                  <AttendanceBreakdown present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} excused={data?.attendanceToday?.excused ?? 0} />
+                </InsightCard>
+              )}
+
+              {data?.hasFeeData && (
+                <InsightCard title="Fee collection" meta="Current term">
+                  <FinanceSnapshot collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
+                </InsightCard>
+              )}
             </div>
           </section>
 
@@ -490,19 +532,32 @@ function AcademicSummary({ summary }: { summary: DashboardData['academicSummary'
   );
 }
 
-function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports, awaitingMarks }: { awaitingMarks: number; upcomingExams: DashboardData['upcomingExams']; overdueFees: number; enrollments: number; announcements: number; reports: number }) {
+/**
+ * Items that need doing, weakest link first.
+ *
+ * Every row here used to render whether or not the underlying feature was in
+ * use, so an admin read "Overdue fees 0 · Announcements 0" every morning —
+ * across all 41 schools on this instance there is not one fee row and not one
+ * announcement. A count of zero for something you have never switched on is
+ * not information. Rows now drop out when they have nothing to say, except the
+ * two that are always worth stating even at zero: marks outstanding (zero
+ * means nobody is behind, which is the good news) and upcoming exams.
+ */
+function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports, awaitingMarks, ungradedSubjects }: { awaitingMarks: number; upcomingExams: DashboardData['upcomingExams']; overdueFees: number | null; enrollments: number; announcements: number; reports: number; ungradedSubjects: number }) {
   const [now] = useState(() => Date.now());
   const soonExams = upcomingExams.filter(e => (new Date(e.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
   const items = [
-    // An exam that has been sat but never marked is the one item here that
-    // names a person to chase, so it leads.
-    { label: 'Awaiting marks', count: awaitingMarks, sub: 'exams sat, not entered', href: '/dashboard/exams-marks' },
-    { label: 'Upcoming exams', count: upcomingExams.length, sub: soonExams > 0 ? `${soonExams} soon` : null, href: '/dashboard/exams-marks' },
-    { label: 'Overdue fees', count: overdueFees, sub: 'past due date', href: '/dashboard/fees' },
-    { label: 'New enrollments', count: enrollments, sub: 'this week', href: '/dashboard/people' },
-    { label: 'Announcements', count: announcements, sub: 'this week', href: '/dashboard/announcements' },
-    { label: 'Report cards', count: reports, sub: 'total generated', href: '/dashboard/reports' },
-  ];
+    // An exam sat but never marked is the thing an admin can act on today.
+    { label: 'Marks outstanding', count: awaitingMarks, sub: 'exams sat, not entered', href: '/dashboard/exams-marks', alwaysShow: true },
+    { label: 'Upcoming exams', count: upcomingExams.length, sub: soonExams > 0 ? `${soonExams} soon` : null, href: '/dashboard/exams-marks', alwaysShow: true },
+    // A subject with no grading system cannot be graded on a report card
+    // either, so this is a setup gap rather than a statistic.
+    { label: 'Subjects without a grading system', count: ungradedSubjects, sub: 'no grade can be awarded', href: '/dashboard/settings?tab=grading', alwaysShow: false },
+    { label: 'New enrollments', count: enrollments, sub: 'this week', href: '/dashboard/people', alwaysShow: false },
+    { label: 'Overdue fees', count: overdueFees ?? 0, sub: 'past due date', href: '/dashboard/fees', alwaysShow: overdueFees !== null },
+    { label: 'Announcements', count: announcements, sub: 'this week', href: '/dashboard/announcements', alwaysShow: false },
+    { label: 'Report cards', count: reports, sub: 'total generated', href: '/dashboard/reports', alwaysShow: false },
+  ].filter(item => item.alwaysShow || item.count > 0);
   return (
     <div className="-mx-1 space-y-0.5">
       {items.map((item, i) => (

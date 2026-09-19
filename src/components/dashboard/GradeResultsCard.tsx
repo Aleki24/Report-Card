@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { gradeSymbolFromScales } from '@/lib/analytics';
+import { shortCurriculumLabel } from '@/lib/curriculum-labels';
 import { cn } from '@/lib/utils';
 import type { GradeBand } from '@/types';
 import EmptyState from './EmptyState';
@@ -54,21 +55,11 @@ interface SeriesOption { key: string; name: string; date: number; examIds: strin
 /** Stable identity so the memos below don't rerun on every loading render. */
 const EMPTY_MARKS: Mark[] = [];
 
-/**
- * Curricula are stored under their full names ("Competency Based Curriculum"),
- * which is too long for a control that sits beside the subject chips.
- */
-const LEVEL_LABELS: Record<string, string> = {
-  CBC: 'CBC',
-  '844': '8-4-4',
-};
-
 const UNKNOWN_LEVEL = '__unknown__';
 
 function levelLabelOf(subject: SubjectMeta | undefined): string {
   if (!subject) return 'Other';
-  const code = (subject.level_code || '').trim();
-  return LEVEL_LABELS[code] || code || subject.level_name || 'Other';
+  return shortCurriculumLabel(subject.level_code, subject.level_name) ?? 'Other';
 }
 
 /**
