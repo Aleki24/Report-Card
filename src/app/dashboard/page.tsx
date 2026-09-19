@@ -27,6 +27,7 @@ interface DashboardData {
   financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
   academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
   pendingApprovalCount?: number;
+  examsAwaitingMarks?: number;
   hasLogo: boolean;
 }
 
@@ -313,7 +314,7 @@ function AdminDashboard({ userName }: { userName: string }) {
               </InsightCard>
 
               <InsightCard title="Needs attention" action={{ label: 'Review all', href: '/dashboard/analytics' }}>
-                <AlertList upcomingExams={data?.upcomingExams ?? []} overdueFees={data?.overdueFeesCount ?? 0} enrollments={data?.recentEnrollmentsLast7 ?? 0} announcements={data?.announcementsLast7Days ?? 0} reports={data?.totalReports ?? 0} />
+                <AlertList upcomingExams={data?.upcomingExams ?? []} overdueFees={data?.overdueFeesCount ?? 0} enrollments={data?.recentEnrollmentsLast7 ?? 0} announcements={data?.announcementsLast7Days ?? 0} reports={data?.totalReports ?? 0} awaitingMarks={data?.examsAwaitingMarks ?? 0} />
               </InsightCard>
             </div>
           </section>
@@ -489,10 +490,13 @@ function AcademicSummary({ summary }: { summary: DashboardData['academicSummary'
   );
 }
 
-function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports }: { upcomingExams: DashboardData['upcomingExams']; overdueFees: number; enrollments: number; announcements: number; reports: number }) {
+function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports, awaitingMarks }: { awaitingMarks: number; upcomingExams: DashboardData['upcomingExams']; overdueFees: number; enrollments: number; announcements: number; reports: number }) {
   const [now] = useState(() => Date.now());
   const soonExams = upcomingExams.filter(e => (new Date(e.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
   const items = [
+    // An exam that has been sat but never marked is the one item here that
+    // names a person to chase, so it leads.
+    { label: 'Awaiting marks', count: awaitingMarks, sub: 'exams sat, not entered', href: '/dashboard/exams-marks' },
     { label: 'Upcoming exams', count: upcomingExams.length, sub: soonExams > 0 ? `${soonExams} soon` : null, href: '/dashboard/exams-marks' },
     { label: 'Overdue fees', count: overdueFees, sub: 'past due date', href: '/dashboard/fees' },
     { label: 'New enrollments', count: enrollments, sub: 'this week', href: '/dashboard/people' },

@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
+import type { GradeBand } from '@/types';
+
+/**
+ * A subject as the dashboard needs to reason about it: which curriculum it
+ * belongs to, and which grading system the school assigned it.
+ *
+ * Marks carry only `subject_id`, and two subjects in the same school can share
+ * a name across curricula — this school has an "Agriculture" under CBC and
+ * another under 8-4-4, on different scales. Anything that groups marks by name
+ * silently merges the two, which is how a CBC learner's EE2 ended up counting
+ * towards an 8-4-4 subject's letter grade.
+ */
+export interface SubjectMeta {
+    id: string;
+    name: string;
+    academic_level_id: string | null;
+    level_code: string | null;
+    level_name: string | null;
+    grading_system_id: string | null;
+}
+
+/** Bands keyed by grading system id, for turning a percentage into a symbol. */
+export type GradeBandsBySystem = Record<string, GradeBand[]>;
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +43,7 @@ export async function GET(request: NextRequest) {
     const role = userProfile?.role;
 
     if (!schoolId || !role) {
-      return NextResponse.json({ marks: [] });
+      return NextResponse.json({ marks: [], subjects: [], gradingScales: {} });
     }
 
     // School-wide analytics is admin-only. Teachers see marks scoped to their
@@ -89,7 +112,7 @@ export async function GET(request: NextRequest) {
       const { data: streamExams } = await examQuery;
       const examIds = (streamExams || []).map((e: { id: string }) => e.id);
       if (examIds.length === 0) {
-        return NextResponse.json({ marks: [] });
+        return NextResponse.json({ marks: [], subjects: [], gradingScales: {} });
       }
       query = query.in('exam_id', examIds);
     }
@@ -99,7 +122,26 @@ export async function GET(request: NextRequest) {
     if (yearId) query = query.eq('exams.academic_year_id', yearId);
     if (termId) query = query.eq('exams.term_id', termId);
 
-    const { data: marks, error } = await query;
+    // The school's subjects and its grading scales, fetched alongside the marks
+    // rather than joined onto each one: both lists are small and shared by every
+    // mark, so sending them once keeps the payload flat.
+    const [marksRes, subjectsRes, systemsRes] = await Promise.all([
+      query,
+      supabaseAdmin
+        .from('subjects')
+        .select('id, name, academic_level_id, grading_system_id, academic_levels ( code, name )')
+        .eq('school_id', schoolId),
+      supabaseAdmin
+        // Seeded defaults ("CBC Standard Grading") carry a null school_id and a
+        // subject may point at one, so they belong here alongside the school's
+        // own. Other schools' systems do not.
+        .from('grading_systems')
+        .select('id, grading_scales ( symbol, min_percentage, max_percentage )')
+        .or(`school_id.eq.${schoolId},school_id.is.null`)
+        .neq('system_kind', 'OVERALL'),
+    ]);
+
+    const { data: marks, error } = marksRes;
 
     if (error) {
       console.error('Analytics query error:', error);
@@ -138,7 +180,32 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ marks: flat });
+    const subjects: SubjectMeta[] = ((subjectsRes.data || []) as Record<string, unknown>[]).map(s => {
+      const level = one(s.academic_levels);
+      return {
+        id: s.id as string,
+        name: ((s.name as string) || '').trim() || 'Unknown',
+        academic_level_id: (s.academic_level_id as string) ?? null,
+        level_code: (level.code as string) ?? null,
+        level_name: (level.name as string) ?? null,
+        grading_system_id: (s.grading_system_id as string) ?? null,
+      };
+    });
+
+    const gradingScales: GradeBandsBySystem = {};
+    for (const system of (systemsRes.data || []) as Record<string, unknown>[]) {
+      const bands = (system.grading_scales as GradeBand[] | null) || [];
+      if (bands.length === 0) continue;
+      gradingScales[system.id as string] = bands
+        .map(b => ({
+          symbol: b.symbol,
+          min_percentage: Number(b.min_percentage),
+          max_percentage: Number(b.max_percentage),
+        }))
+        .sort((a, b) => b.min_percentage - a.min_percentage);
+    }
+
+    return NextResponse.json({ marks: flat, subjects, gradingScales });
   } catch (err) {
     console.error('Analytics route error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

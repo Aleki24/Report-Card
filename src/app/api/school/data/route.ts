@@ -321,12 +321,16 @@ export async function GET(request: NextRequest) {
       }
 
       case 'grading_scales': {
+        // Scoped to this school plus the seeded defaults, which carry a null
+        // school_id and are offered to everyone. Without the filter this
+        // returned every school's grading systems to every signed-in user.
         const { data, error } = await supabase
           .from('grading_systems')
           .select(`
             id, name,
             grading_scales (id, symbol, min_percentage, max_percentage, points, label)
-          `);
+          `)
+          .or(`school_id.eq.${schoolId},school_id.is.null`);
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         return NextResponse.json({ data: data ?? [] });

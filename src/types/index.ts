@@ -139,12 +139,21 @@ export interface GradingSystem {
     description?: string;
 }
 
-export interface GradingScale {
-    id: string;
-    grading_system_id: string;
+/**
+ * One band of a grading scale — the part any caller needs to turn a percentage
+ * into a symbol. Split out from `GradingScale` so payloads that only carry the
+ * bands (the dashboard sends three columns, not the whole row) are still typed
+ * against the same shape the grading helpers read.
+ */
+export interface GradeBand {
     min_percentage: number;
     max_percentage: number;
     symbol: string;
+}
+
+export interface GradingScale extends GradeBand {
+    id: string;
+    grading_system_id: string;
     label: string;
     points?: number;
     order_index: number;

@@ -36,6 +36,7 @@ export async function GET(_request: NextRequest) {
         totalReports: 0,
         attendanceToday: null,
         academicSummary: { recentAvg: null, passRate: null, passMark: PASS_MARK, markCount: 0 },
+        examsAwaitingMarks: 0,
         upcomingExams: [],
         recentActivities: [],
         hasLogo: false,
@@ -74,6 +75,37 @@ export async function GET(_request: NextRequest) {
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
     const hasLogo = Boolean(schoolRes.data?.logo_url);
     const pendingApprovalCount = pendingApprovalRes.count ?? 0;
+
+    // ── Marks still outstanding ──
+    //
+    // An exam that has been sat but has no marks against it is the thing a head
+    // teacher can actually act on: it names a teacher who is behind. Nothing on
+    // the dashboard surfaced it, and on this instance it is the largest single
+    // gap in the data — most exams ever created have never been marked.
+    //
+    // Counted as: exams whose date has passed, in the current year, with no row
+    // in exam_marks. The two ids are fetched separately because PostgREST has no
+    // anti-join; both are id-only columns, so the payload stays small.
+    let examsAwaitingMarks = 0;
+    if (currentYear) {
+      const today = new Date().toISOString().split('T')[0];
+      const [satExamsRes, markedExamsRes] = await Promise.all([
+        supabase
+          .from('exams')
+          .select('id')
+          .eq('school_id', schoolId)
+          .eq('academic_year_id', currentYear.id)
+          .lte('exam_date', today),
+        supabase
+          .from('exam_marks')
+          .select('exam_id, exams!inner(school_id, academic_year_id)')
+          .eq('exams.school_id', schoolId)
+          .eq('exams.academic_year_id', currentYear.id),
+      ]);
+
+      const marked = new Set((markedExamsRes.data || []).map((m: any) => m.exam_id));
+      examsAwaitingMarks = (satExamsRes.data || []).filter((e: any) => !marked.has(e.id)).length;
+    }
 
     let upcomingExams: any[] = [];
     if (currentYear) {
@@ -232,6 +264,7 @@ export async function GET(_request: NextRequest) {
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
       academicSummary: { recentAvg, passRate, passMark: PASS_MARK, markCount: markRows.length },
       pendingApprovalCount,
+      examsAwaitingMarks,
       hasLogo,
     });
   } catch (err: unknown) {

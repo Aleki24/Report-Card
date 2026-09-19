@@ -22,9 +22,37 @@ interface SubjectOption { id: string; name: string; academic_level_id: string; g
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null; }
 
+/**
+ * The settings tabs, and the only strings `?tab=` accepts. Declared `as const`
+ * so the tab union is derived from this list rather than repeated beside it.
+ */
+const SETTINGS_TABS = [
+  { key: 'profile', label: 'School Profile' },
+  { key: 'academic', label: 'Academic Structure' },
+  { key: 'grading', label: 'Grading Systems' },
+  { key: 'calendar', label: '📅 Academic Calendar' },
+  { key: 'payments', label: 'Payments' },
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number]['key'];
+
+const isSettingsTab = (value: string | null): value is SettingsTab =>
+  SETTINGS_TABS.some(t => t.key === value);
+
 export default function SettingsPage() {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'academic' | 'grading' | 'calendar' | 'payments'>('profile');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+
+  /**
+   * Deep links open on the tab they name — /dashboard/settings?tab=grading.
+   * Read straight off the URL rather than through `useSearchParams`, which
+   * would put the whole page behind a Suspense boundary for one optional
+   * string. Unknown values are ignored, leaving the default tab.
+   */
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (isSettingsTab(tab)) setActiveTab(tab);
+  }, []);
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -231,14 +259,6 @@ export default function SettingsPage() {
     }
   };
 
-  const tabs = [
-    { key: 'profile' as const, label: 'School Profile' },
-    { key: 'academic' as const, label: 'Academic Structure' },
-    { key: 'grading' as const, label: 'Grading Systems' },
-    { key: 'calendar' as const, label: '📅 Academic Calendar' },
-    { key: 'payments' as const, label: 'Payments' },
-  ];
-
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
       <PageHeader 
@@ -247,7 +267,7 @@ export default function SettingsPage() {
       />
 
       <div className="flex border-b border-border mb-8 overflow-x-auto">
-        {tabs.map(tab => (
+        {SETTINGS_TABS.map(tab => (
           <button key={tab.key}
             className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
             onClick={() => setActiveTab(tab.key)}>
