@@ -480,8 +480,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
-          <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-sm font-bold font-display mb-4">{editing ? 'Edit Student' : 'Add Student'}</h2>
+          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold font-display mb-5">{editing ? 'Edit Student' : 'Add Student'}</h2>
             <FormGrid className="mb-5">
               <FormField label="First Name" span="half" required><InputField value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></FormField>
               <FormField label="Last Name" span="half" required><InputField value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></FormField>

@@ -15,9 +15,17 @@ import { cn } from '@/lib/utils';
 
 type Span = 'half' | 'full';
 
-/** Grid placement is opt-in — these components are also used outside a FormGrid. */
+/**
+ * Grid placement is opt-in — these components are also used outside a FormGrid.
+ *
+ * The split is a container query, not a viewport one. A field's usable width
+ * depends on the box it sits in, and these forms live in boxes of very
+ * different widths — a 672px dialog, a full-width settings panel, a narrow
+ * drawer. Keyed to the viewport, a 1440px desktop split a 512px dialog into
+ * two 227px columns, narrower than the same field gets on a phone.
+ */
 const SPAN: Record<Span, string> = {
-    half: 'col-span-2 sm:col-span-1',
+    half: 'col-span-2 @xl:col-span-1',
     full: 'col-span-2',
 };
 
@@ -83,7 +91,11 @@ interface FormGridProps {
  * separation.
  */
 export function FormGrid({ className, children }: FormGridProps) {
-    return <div className={cn('grid grid-cols-2 gap-x-4 gap-y-5', className)}>{children}</div>;
+    return (
+        <div className={cn('@container grid grid-cols-2 gap-x-4 gap-y-5', className)}>
+            {children}
+        </div>
+    );
 }
 
 export type InputFieldProps = React.InputHTMLAttributes<HTMLInputElement> & {

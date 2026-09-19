@@ -40,12 +40,12 @@ export function EditUserModal(props: EditUserModalProps) {
       <form onSubmit={onSubmit}>
         {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5 mb-5">
           <div><label className="block text-xs text-muted-foreground mb-2">First Name *</label><input className="input-field w-full" value={props.editFirstName} onChange={e => props.setEditFirstName(e.target.value)} required /></div>
           <div><label className="block text-xs text-muted-foreground mb-2">Last Name *</label><input className="input-field w-full" value={props.editLastName} onChange={e => props.setEditLastName(e.target.value)} required /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5 mb-5">
           <div><label className="block text-xs text-muted-foreground mb-2">Phone Number</label><input className="input-field w-full" type="tel" value={props.editPhone} onChange={e => props.setEditPhone(e.target.value)} /></div>
           <div>
             <label className="block text-xs text-muted-foreground mb-2">Status</label>

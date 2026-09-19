@@ -43,12 +43,12 @@ export function InviteUserModal(props: InviteUserModalProps) {
       <form onSubmit={onSubmit}>
         {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5 mb-5">
           <div><label className="block text-xs text-muted-foreground mb-2">First Name *</label><input className="input-field w-full" value={props.formFirstName} onChange={e => props.setFormFirstName(e.target.value)} required /></div>
           <div><label className="block text-xs text-muted-foreground mb-2">Last Name *</label><input className="input-field w-full" value={props.formLastName} onChange={e => props.setFormLastName(e.target.value)} required /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5 mb-5">
           <div><label className="block text-xs text-muted-foreground mb-2">Phone Number *</label><input className="input-field w-full" type="tel" value={props.formPhone} onChange={e => props.setFormPhone(e.target.value)} placeholder="e.g. 0712345678" required /></div>
           <div>
             <label className="block text-xs text-muted-foreground mb-2">Sequence # *</label>
@@ -82,7 +82,7 @@ export function InviteUserModal(props: InviteUserModalProps) {
           <div className="border-t border-border pt-4 mt-4">
             <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Student Details</p>
             <div className="mb-4"><label className="block text-xs text-muted-foreground mb-2">Admission Number *</label><input className="input-field w-full" value={props.formAdmissionNumber} onChange={e => props.setFormAdmissionNumber(e.target.value)} placeholder="e.g. ADM-001" required /></div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-5">
               <div>
                 <label className="block text-xs text-muted-foreground mb-2">Academic Level *</label>
                 <select className="input-field w-full" value={props.formAcademicLevelId} onChange={e => props.setFormAcademicLevelId(e.target.value)} required>
