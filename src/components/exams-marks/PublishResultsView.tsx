@@ -356,7 +356,7 @@ export function PublishResultsView() {
                         </p>
                     </div>
                     {isAdmin && pending.length > 0 && (
-                        <button type="button" className="btn-primary text-xs disabled:opacity-50" onClick={approveAllPending} disabled={bulkBusy}>
+                        <button type="button" className="btn-primary disabled:opacity-50" onClick={approveAllPending} disabled={bulkBusy}>
                             ✅ Approve all ({pending.length})
                         </button>
                     )}
@@ -400,9 +400,9 @@ export function PublishResultsView() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-2 flex-wrap">
-                                                    {href && <Link href={href} className="btn-secondary text-xs">🔍 Review marks</Link>}
-                                                    {isAdmin && <button className="btn-primary text-xs" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
-                                                    <button className="btn-secondary text-xs" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>
+                                                    {href && <Link href={href} className="btn-secondary">🔍 Review marks</Link>}
+                                                    {isAdmin && <button className="btn-primary" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
+                                                    <button className="btn-secondary" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -448,11 +448,11 @@ export function PublishResultsView() {
                         <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-b border-border">
                             <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Status of subject results</h3>
                             <div className="flex flex-wrap gap-2">
-                                <button type="button" className="btn-secondary text-xs disabled:opacity-50" onClick={() => runBulk('publish', 'DRAFT')} disabled={bulkBusy || draftCount === 0}>
+                                <button type="button" className="btn-secondary disabled:opacity-50" onClick={() => runBulk('publish', 'DRAFT')} disabled={bulkBusy || draftCount === 0}>
                                     📤 Publish all drafts{draftCount ? ` (${draftCount})` : ''}
                                 </button>
                                 {isAdmin && (
-                                    <button type="button" className="btn-primary text-xs disabled:opacity-50" onClick={() => runBulk('approve', 'PENDING_APPROVAL')} disabled={bulkBusy || pendingCount === 0}>
+                                    <button type="button" className="btn-primary disabled:opacity-50" onClick={() => runBulk('approve', 'PENDING_APPROVAL')} disabled={bulkBusy || pendingCount === 0}>
                                         ✅ Approve all pending{pendingCount ? ` (${pendingCount})` : ''}
                                     </button>
                                 )}
@@ -486,9 +486,9 @@ export function PublishResultsView() {
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex justify-end gap-2 flex-wrap">
-                                                            {ex.status === 'DRAFT' && <button className="btn-secondary text-xs" onClick={() => runAction(ex.id, 'publish')} disabled={busy}>{busy ? '…' : 'Publish'}</button>}
-                                                            {ex.status === 'PENDING_APPROVAL' && isAdmin && <button className="btn-primary text-xs" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
-                                                            {(ex.status === 'PENDING_APPROVAL' || (ex.status === 'APPROVED' && isAdmin)) && <button className="btn-secondary text-xs" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>}
+                                                            {ex.status === 'DRAFT' && <button className="btn-secondary" onClick={() => runAction(ex.id, 'publish')} disabled={busy}>{busy ? '…' : 'Publish'}</button>}
+                                                            {ex.status === 'PENDING_APPROVAL' && isAdmin && <button className="btn-primary" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
+                                                            {(ex.status === 'PENDING_APPROVAL' || (ex.status === 'APPROVED' && isAdmin)) && <button className="btn-secondary" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -604,8 +604,8 @@ export function PublishResultsView() {
                         {!confirmExam.readiness.hasIssues && <p className="text-xs text-emerald-400 mb-3">✅ Every student in this class is fully marked.</p>}
 
                         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                            <button type="button" className="btn-secondary text-xs" onClick={() => setConfirmExam(null)} disabled={confirmBusy}>Cancel</button>
-                            <button type="button" className="btn-primary text-xs disabled:opacity-50" onClick={confirmPublish} disabled={confirmBusy}>
+                            <button type="button" className="btn-secondary" onClick={() => setConfirmExam(null)} disabled={confirmBusy}>Cancel</button>
+                            <button type="button" className="btn-primary disabled:opacity-50" onClick={confirmPublish} disabled={confirmBusy}>
                                 {confirmBusy ? 'Publishing…' : confirmExam.readiness.hasIssues ? 'Publish anyway' : 'Publish for review'}
                             </button>
                         </div>

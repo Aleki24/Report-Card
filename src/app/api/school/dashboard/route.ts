@@ -177,7 +177,7 @@ export async function GET(_request: NextRequest) {
         type: 'mark',
         message: `Marks entered for ${examName}${subjectName ? ` (${subjectName})` : ''}`,
         timestamp: m.created_at,
-        href: '/dashboard/marks',
+        href: '/dashboard/exams-marks',
       });
     }
 

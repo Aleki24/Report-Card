@@ -136,7 +136,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
                             {value.components.map((c, i) => (
                                 <div key={i} className="flex gap-2 items-center">
                                     <input
-                                        className="input-field input-field-mono w-16 text-xs font-mono uppercase"
+                                        className="input-field input-field-mono w-16 font-mono uppercase"
                                         style={{ padding: '6px 8px' }}
                                         placeholder="P1"
                                         value={c.component_code}
@@ -144,7 +144,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
                                         onChange={e => updatePaper(i, 'component_code', e.target.value)}
                                     />
                                     <input
-                                        className="input-field flex-1 text-xs"
+                                        className="input-field flex-1"
                                         style={{ padding: '6px 8px' }}
                                         placeholder={`Paper ${i + 1}`}
                                         value={c.component_name}
@@ -153,7 +153,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
                                     />
                                     <input
                                         type="number"
-                                        className="input-field w-20 text-xs"
+                                        className="input-field w-20"
                                         style={{ padding: '6px 8px' }}
                                         placeholder="Max"
                                         min={1}

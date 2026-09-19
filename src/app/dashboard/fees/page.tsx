@@ -576,9 +576,13 @@ export default function FeesPage() {
         await Promise.all(promises);
         setBatchSaving(false);
 
+        // Refresh either way: on a partial save the rows that did go through are
+        // already changed on the server, and leaving them off the screen makes
+        // the failure look bigger than it is.
+        await fetchFees();
+
         if (errors.length === 0) {
             setBatchMsg({ type: 'success', text: `${saved} fee record(s) saved successfully.` });
-            await fetchFees();
         } else {
             setBatchMsg({ type: 'error', text: `Saved ${saved}, but ${errors.length} failed. ${errors.slice(0, 3).join('; ')}` });
         }
@@ -751,83 +755,85 @@ export default function FeesPage() {
                                 </div>
                             ) : (
                                 <div style={{ overflowX: 'auto' }}>
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th style={{ minWidth: 180 }}>Student</th>
-                                                <th>Admission</th>
-                                                <th style={{ minWidth: 120 }}>Total Fee (KShs)</th>
-                                                <th style={{ minWidth: 120 }}>Paid (KShs)</th>
-                                                <th style={{ minWidth: 100 }}>Balance</th>
-                                                <th style={{ minWidth: 140 }}>Due Date</th>
-                                                <th>Notes</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {batchStudents.map(s => {
-                                                const entry = batchEntries[s.id];
-                                                const hasTotal = !!entry?.total && entry.total !== '';
-                                                const total = parseFloat(entry?.total || '0');
-                                                const paid = parseFloat(entry?.paid || '0');
-                                                const balance = total - paid;
-                                                const status = computeFeeStatus(total, paid);
-                                                return (
-                                                    <tr key={s.id}>
-                                                        <td data-label="Student" className="font-semibold">{s.name}</td>
-                                                        <td data-label="Admission" className="text-muted-foreground text-xs">{s.admission}</td>
-                                                        <td data-label="Total Fee">
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.01"
-                                                                className="input-field w-full"
-                                                                style={{ minWidth: 100, height: 32, fontSize: 12 }}
-                                                                placeholder="0"
-                                                                value={entry?.total || ''}
-                                                                onChange={e => updateBatchEntry(s.id, 'total', e.target.value)}
-                                                            />
-                                                        </td>
-                                                        <td data-label="Paid">
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                step="0.01"
-                                                                className="input-field w-full"
-                                                                style={{ minWidth: 100, height: 32, fontSize: 12 }}
-                                                                placeholder="0"
-                                                                value={entry?.paid || ''}
-                                                                onChange={e => updateBatchEntry(s.id, 'paid', e.target.value)}
-                                                            />
-                                                        </td>
-                                                        <td data-label="Balance" style={{ fontFamily: 'monospace', color: balanceColor(balance), fontWeight: 600 }}>
-                                                            {hasTotal ? balance.toLocaleString() : '—'}
-                                                        </td>
-                                                        <td data-label="Due Date">
-                                                            <input
-                                                                type="date"
-                                                                className="input-field"
-                                                                style={{ minWidth: 130, height: 32, fontSize: 12 }}
-                                                                value={entry?.dueDate || ''}
-                                                                onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)}
-                                                            />
-                                                        </td>
-                                                        <td data-label="Notes">
-                                                            <input
-                                                                type="text"
-                                                                className="input-field"
-                                                                style={{ minWidth: 100, height: 32, fontSize: 12 }}
-                                                                placeholder="Notes"
-                                                                value={entry?.notes || ''}
-                                                                onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)}
-                                                            />
-                                                        </td>
-                                                        <td data-label="Status">{hasTotal ? statusBadge(status) : '—'}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                    <div className="w-full overflow-x-auto">
+                                      <table className="data-table">
+                                          <thead>
+                                              <tr>
+                                                  <th style={{ minWidth: 180 }}>Student</th>
+                                                  <th>Admission</th>
+                                                  <th style={{ minWidth: 120 }}>Total Fee (KShs)</th>
+                                                  <th style={{ minWidth: 120 }}>Paid (KShs)</th>
+                                                  <th style={{ minWidth: 100 }}>Balance</th>
+                                                  <th style={{ minWidth: 140 }}>Due Date</th>
+                                                  <th>Notes</th>
+                                                  <th>Status</th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              {batchStudents.map(s => {
+                                                  const entry = batchEntries[s.id];
+                                                  const hasTotal = !!entry?.total && entry.total !== '';
+                                                  const total = parseFloat(entry?.total || '0');
+                                                  const paid = parseFloat(entry?.paid || '0');
+                                                  const balance = total - paid;
+                                                  const status = computeFeeStatus(total, paid);
+                                                  return (
+                                                      <tr key={s.id}>
+                                                          <td data-label="Student" className="font-semibold">{s.name}</td>
+                                                          <td data-label="Admission" className="text-muted-foreground text-xs">{s.admission}</td>
+                                                          <td data-label="Total Fee">
+                                                              <input
+                                                                  type="number"
+                                                                  min="0"
+                                                                  step="0.01"
+                                                                  className="input-field w-full"
+                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  placeholder="0"
+                                                                  value={entry?.total || ''}
+                                                                  onChange={e => updateBatchEntry(s.id, 'total', e.target.value)}
+                                                              />
+                                                          </td>
+                                                          <td data-label="Paid">
+                                                              <input
+                                                                  type="number"
+                                                                  min="0"
+                                                                  step="0.01"
+                                                                  className="input-field w-full"
+                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  placeholder="0"
+                                                                  value={entry?.paid || ''}
+                                                                  onChange={e => updateBatchEntry(s.id, 'paid', e.target.value)}
+                                                              />
+                                                          </td>
+                                                          <td data-label="Balance" style={{ fontFamily: 'monospace', color: balanceColor(balance), fontWeight: 600 }}>
+                                                              {hasTotal ? balance.toLocaleString() : '—'}
+                                                          </td>
+                                                          <td data-label="Due Date">
+                                                              <input
+                                                                  type="date"
+                                                                  className="input-field"
+                                                                  style={{ minWidth: 130, height: 32, fontSize: 12 }}
+                                                                  value={entry?.dueDate || ''}
+                                                                  onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)}
+                                                              />
+                                                          </td>
+                                                          <td data-label="Notes">
+                                                              <input
+                                                                  type="text"
+                                                                  className="input-field"
+                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  placeholder="Notes"
+                                                                  value={entry?.notes || ''}
+                                                                  onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)}
+                                                              />
+                                                          </td>
+                                                          <td data-label="Status">{hasTotal ? statusBadge(status) : '—'}</td>
+                                                      </tr>
+                                                  );
+                                              })}
+                                          </tbody>
+                                      </table>
+                                    </div>
                                 </div>
                             )}
                         </>
@@ -1225,53 +1231,55 @@ export default function FeesPage() {
                                     <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet.</p>
                                 ) : (
                                     <div style={{ overflowX: 'auto' }}>
-                                        <table className="data-table">
-                                            <thead>
-                                                <tr>
-                                                    <th>Receipt</th>
-                                                    <th>Date</th>
-                                                    <th>Method</th>
-                                                    <th>Transaction Code</th>
-                                                    <th>Amount</th>
-                                                    <th>Status</th>
-                                                    <th />
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {historyPayments.map(p => (
-                                                    <tr key={p.id}>
-                                                        <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
-                                                        <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
-                                                        <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
-                                                        <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
-                                                        <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
-                                                        <td data-label="Status">
-                                                            <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
-                                                                {p.status}
-                                                            </span>
-                                                        </td>
-                                                        <td data-label="" className="whitespace-nowrap text-right">
-                                                            {p.status !== 'CANCELLED' && (
-                                                                <>
-                                                                    <a
-                                                                        className="btn-icon text-muted-foreground hover:text-foreground"
-                                                                        href={`/api/school/fees/payments/${p.id}/receipt`}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        title="Download Receipt"
-                                                                    >
-                                                                        <Receipt size={14} />
-                                                                    </a>
-                                                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
-                                                                        <Ban size={14} />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                        <div className="w-full overflow-x-auto">
+                                          <table className="data-table">
+                                              <thead>
+                                                  <tr>
+                                                      <th>Receipt</th>
+                                                      <th>Date</th>
+                                                      <th>Method</th>
+                                                      <th>Transaction Code</th>
+                                                      <th>Amount</th>
+                                                      <th>Status</th>
+                                                      <th />
+                                                  </tr>
+                                              </thead>
+                                              <tbody>
+                                                  {historyPayments.map(p => (
+                                                      <tr key={p.id}>
+                                                          <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
+                                                          <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
+                                                          <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                          <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
+                                                          <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
+                                                          <td data-label="Status">
+                                                              <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                                                                  {p.status}
+                                                              </span>
+                                                          </td>
+                                                          <td data-label="" className="whitespace-nowrap text-right">
+                                                              {p.status !== 'CANCELLED' && (
+                                                                  <>
+                                                                      <a
+                                                                          className="btn-icon text-muted-foreground hover:text-foreground"
+                                                                          href={`/api/school/fees/payments/${p.id}/receipt`}
+                                                                          target="_blank"
+                                                                          rel="noreferrer"
+                                                                          title="Download Receipt"
+                                                                      >
+                                                                          <Receipt size={14} />
+                                                                      </a>
+                                                                      <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
+                                                                          <Ban size={14} />
+                                                                      </button>
+                                                                  </>
+                                                              )}
+                                                          </td>
+                                                      </tr>
+                                                  ))}
+                                              </tbody>
+                                          </table>
+                                        </div>
                                     </div>
                                 )}
                             </div>

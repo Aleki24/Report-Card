@@ -704,7 +704,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     {!studentsLoading && students.length > 0 && (
                         <button
                             onClick={loadAllStudents}
-                            className="btn-secondary text-xs px-3 py-1.5"
+                            className="btn-secondary px-3 py-1.5"
                             title="Add one row per student so you can type straight down the score column (Enter moves to the next student)"
                         >
                             ⚡ Load whole class
@@ -763,7 +763,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                             {studentsLoading ? 'Loading…' : `${students.length} student${students.length !== 1 ? 's' : ''}`}
                         </div>
                         {!studentsLoading && students.length > 0 && (
-                            <button onClick={loadAllStudents} className="btn-secondary text-xs px-3 py-1.5" title="Add one row per student for straight-down score entry">
+                            <button onClick={loadAllStudents} className="btn-secondary px-3 py-1.5" title="Add one row per student for straight-down score entry">
                                 ⚡ Load whole class
                             </button>
                         )}
@@ -817,7 +817,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     {isAdmin && subjectId && activeSystem && activeSystem.id !== subjectGradingSystemId && (
                         <button
                             type="button"
-                            className="btn-secondary text-xs whitespace-nowrap"
+                            className="btn-secondary whitespace-nowrap"
                             onClick={() => linkGradingSystemToSubject(activeSystem.id)}
                             disabled={savingGradingSystemLink}
                         >

@@ -392,7 +392,7 @@ export function MarksSetupTab() {
               </p>
               {profile?.role === 'ADMIN' && (
                 <div className="flex flex-wrap items-center gap-3">
-                  <button onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary text-xs px-4 py-2">
+                  <button onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary px-4 py-2">
                     {seeding ? 'Setting up...' : '🔧 Set Up This Term’s Exams'}
                   </button>
                   <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="text-xs text-primary hover:underline">

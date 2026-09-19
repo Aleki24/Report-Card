@@ -232,8 +232,8 @@ export function ExamStatusBar({ examId, status, isAdmin, onChanged }: Props) {
                         {error && <div className="mb-3 text-xs text-red-400">{error}</div>}
 
                         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                            <button type="button" className="btn-secondary text-xs" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
-                            <button type="button" className="btn-primary text-xs disabled:opacity-50" onClick={confirmPublish} disabled={busy}>
+                            <button type="button" className="btn-secondary" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+                            <button type="button" className="btn-primary disabled:opacity-50" onClick={confirmPublish} disabled={busy}>
                                 {busy ? 'Publishing…' : readiness.hasIssues ? 'Publish anyway' : 'Publish for review'}
                             </button>
                         </div>

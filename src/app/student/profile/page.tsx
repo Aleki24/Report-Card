@@ -130,7 +130,7 @@ export default function StudentProfilePage() {
                             <FormField label="Phone Number">
                                 <div className="flex gap-2">
                                     <InputField type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="flex-1" />
-                                    <button onClick={handleSavePhone} disabled={saving} className="btn-primary inline-flex shrink-0 items-center gap-1.5 px-3 text-xs">
+                                    <button onClick={handleSavePhone} disabled={saving} className="btn-primary inline-flex shrink-0 items-center gap-1.5 px-3">
                                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {saving ? 'Saving...' : 'Save'}
                                     </button>
                                 </div>

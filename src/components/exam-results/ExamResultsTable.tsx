@@ -282,101 +282,103 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             {/* Table */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                        <thead>
-                            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Position</th>
-                                <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleSort('student_name')}>
-                                    Student <SortIcon active={sortKey === 'student_name'} asc={sortAsc} />
-                                </th>
-                                <th style={thStyle}>Adm No</th>
-                                <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('percentage')}>
-                                    Score <SortIcon active={sortKey === 'percentage'} asc={sortAsc} />
-                                </th>
-                                <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('grade_symbol')}>
-                                    Grade <SortIcon active={sortKey === 'grade_symbol'} asc={sortAsc} />
-                                </th>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Total Pts</th>
-                                <th style={{ ...thStyle, textAlign: 'center' }}>Overall</th>
-                                <th style={thStyle}>Remarks</th>
-                                <th style={{ ...thStyle, textAlign: 'center', width: 60 }}>Edit</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sorted.map((mark, i) => (
-                                <tr
-                                    key={mark.id}
-                                    style={{
-                                        borderBottom: '1px solid var(--color-border)',
-                                        background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
-                                    }}
-                                >
-                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: 'var(--color-accent)' }}>{ranks[mark.id] ?? i + 1}</td>
-                                    <td style={tdStyle}>{mark.student_name}</td>
-                                    <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{mark.admission_number}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
-                                        {Math.round(mark.percentage)}%
-                                        {multiPaper && mark.components && (
-                                            <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                                                {breakdownLabel(mark)}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <span style={{
-                                            display: 'inline-block',
-                                            padding: '2px 10px',
-                                            borderRadius: 'var(--radius-full)',
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            background: `${gradeColor(mark.grade_symbol)}20`,
-                                            color: gradeColor(mark.grade_symbol),
-                                            border: `1px solid ${gradeColor(mark.grade_symbol)}40`,
-                                        }}>
-                                            {mark.grade_symbol}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
-                                        {studentPoints[mark.student_id] ?? '—'}
-                                    </td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <span style={{
-                                            display: 'inline-block',
-                                            padding: '2px 10px',
-                                            borderRadius: 'var(--radius-full)',
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            background: `${gradeColor(studentOverallGrades[mark.student_id] || '')}20`,
-                                            color: gradeColor(studentOverallGrades[mark.student_id] || ''),
-                                            border: `1px solid ${gradeColor(studentOverallGrades[mark.student_id] || '')}40`,
-                                        }}>
-                                            {studentOverallGrades[mark.student_id] ?? '—'}
-                                        </span>
-                                    </td>
-                                    <td style={{ ...tdStyle, fontSize: 12, color: 'var(--color-text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {mark.remarks || '—'}
-                                    </td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <button
-                                            onClick={() => openEdit(mark)}
-                                            className="cursor-pointer hover:bg-muted transition-colors"
-                                            style={{
-                                                padding: '4px 8px',
-                                                borderRadius: 'var(--radius-md)',
-                                                fontSize: 14,
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: 'var(--color-accent)',
-                                            }}
-                                            title={`Edit ${mark.student_name}'s result`}
-                                        >
-                                            ✏️
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="w-full overflow-x-auto">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                          <thead>
+                              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Position</th>
+                                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleSort('student_name')}>
+                                      Student <SortIcon active={sortKey === 'student_name'} asc={sortAsc} />
+                                  </th>
+                                  <th style={thStyle}>Adm No</th>
+                                  <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('percentage')}>
+                                      Score <SortIcon active={sortKey === 'percentage'} asc={sortAsc} />
+                                  </th>
+                                  <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('grade_symbol')}>
+                                      Grade <SortIcon active={sortKey === 'grade_symbol'} asc={sortAsc} />
+                                  </th>
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Total Pts</th>
+                                  <th style={{ ...thStyle, textAlign: 'center' }}>Overall</th>
+                                  <th style={thStyle}>Remarks</th>
+                                  <th style={{ ...thStyle, textAlign: 'center', width: 60 }}>Edit</th>
+                              </tr>
+                          </thead>
+                          <tbody>
+                              {sorted.map((mark, i) => (
+                                  <tr
+                                      key={mark.id}
+                                      style={{
+                                          borderBottom: '1px solid var(--color-border)',
+                                          background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
+                                      }}
+                                  >
+                                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color: 'var(--color-accent)' }}>{ranks[mark.id] ?? i + 1}</td>
+                                      <td style={tdStyle}>{mark.student_name}</td>
+                                      <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{mark.admission_number}</td>
+                                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>
+                                          {Math.round(mark.percentage)}%
+                                          {multiPaper && mark.components && (
+                                              <span style={{ display: 'block', fontSize: 10, fontWeight: 400, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                                                  {breakdownLabel(mark)}
+                                              </span>
+                                          )}
+                                      </td>
+                                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                          <span style={{
+                                              display: 'inline-block',
+                                              padding: '2px 10px',
+                                              borderRadius: 'var(--radius-full)',
+                                              fontSize: 12,
+                                              fontWeight: 700,
+                                              background: `${gradeColor(mark.grade_symbol)}20`,
+                                              color: gradeColor(mark.grade_symbol),
+                                              border: `1px solid ${gradeColor(mark.grade_symbol)}40`,
+                                          }}>
+                                              {mark.grade_symbol}
+                                          </span>
+                                      </td>
+                                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
+                                          {studentPoints[mark.student_id] ?? '—'}
+                                      </td>
+                                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                          <span style={{
+                                              display: 'inline-block',
+                                              padding: '2px 10px',
+                                              borderRadius: 'var(--radius-full)',
+                                              fontSize: 12,
+                                              fontWeight: 700,
+                                              background: `${gradeColor(studentOverallGrades[mark.student_id] || '')}20`,
+                                              color: gradeColor(studentOverallGrades[mark.student_id] || ''),
+                                              border: `1px solid ${gradeColor(studentOverallGrades[mark.student_id] || '')}40`,
+                                          }}>
+                                              {studentOverallGrades[mark.student_id] ?? '—'}
+                                          </span>
+                                      </td>
+                                      <td style={{ ...tdStyle, fontSize: 12, color: 'var(--color-text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                          {mark.remarks || '—'}
+                                      </td>
+                                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                          <button
+                                              onClick={() => openEdit(mark)}
+                                              className="cursor-pointer hover:bg-muted transition-colors"
+                                              style={{
+                                                  padding: '4px 8px',
+                                                  borderRadius: 'var(--radius-md)',
+                                                  fontSize: 14,
+                                                  background: 'transparent',
+                                                  border: 'none',
+                                                  color: 'var(--color-accent)',
+                                              }}
+                                              title={`Edit ${mark.student_name}'s result`}
+                                          >
+                                              ✏️
+                                          </button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                    </div>
                 </div>
             </div>
 

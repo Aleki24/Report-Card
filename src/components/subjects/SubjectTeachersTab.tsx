@@ -134,7 +134,7 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
                                         <td className="px-4 py-2.5 text-xs font-mono text-muted-foreground">{subject.code || '—'}</td>
                                         <td className="px-4 py-2.5">
                                             <select
-                                                className="input-field text-xs w-full max-w-[240px]"
+                                                className="input-field w-full max-w-[240px]"
                                                 value={subject.teacher_user_id || ''}
                                                 onChange={e => assign(subject.id, e.target.value)}
                                                 disabled={savingId === subject.id}

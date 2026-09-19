@@ -291,12 +291,12 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 ) : null}
                 {addingYear && (
                   <form onSubmit={handleQuickAddYear} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2">
-                    <input className="input-field w-full text-xs" placeholder="Year name, e.g. 2026" value={qYear.name} onChange={e => setQYear(p => ({ ...p, name: e.target.value }))} />
+                    <input className="input-field w-full" placeholder="Year name, e.g. 2026" value={qYear.name} onChange={e => setQYear(p => ({ ...p, name: e.target.value }))} />
                     <div className="flex gap-2">
-                      <input type="date" className="input-field flex-1 text-xs" value={qYear.start_date} onChange={e => setQYear(p => ({ ...p, start_date: e.target.value }))} />
-                      <input type="date" className="input-field flex-1 text-xs" value={qYear.end_date} onChange={e => setQYear(p => ({ ...p, end_date: e.target.value }))} />
+                      <input type="date" className="input-field flex-1" value={qYear.start_date} onChange={e => setQYear(p => ({ ...p, start_date: e.target.value }))} />
+                      <input type="date" className="input-field flex-1" value={qYear.end_date} onChange={e => setQYear(p => ({ ...p, end_date: e.target.value }))} />
                     </div>
-                    <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qYear.name.trim() || !qYear.start_date || !qYear.end_date}>{quickSaving ? '...' : '✓ Save Year'}</button>
+                    <button type="submit" className="btn-primary py-1" disabled={quickSaving || !qYear.name.trim() || !qYear.start_date || !qYear.end_date}>{quickSaving ? '...' : '✓ Save Year'}</button>
                   </form>
                 )}
               </div>
@@ -319,12 +319,12 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 ) : null}
                 {addingTerm && selectedAcademicYearId && (
                   <form onSubmit={handleQuickAddTerm} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2">
-                    <input className="input-field w-full text-xs" placeholder="e.g. Term 1" value={qTerm.name} onChange={e => setQTerm(p => ({ ...p, name: e.target.value }))} />
+                    <input className="input-field w-full" placeholder="e.g. Term 1" value={qTerm.name} onChange={e => setQTerm(p => ({ ...p, name: e.target.value }))} />
                     <div className="flex gap-2">
-                      <input type="date" className="input-field flex-1 text-xs" value={qTerm.start_date} onChange={e => setQTerm(p => ({ ...p, start_date: e.target.value }))} />
-                      <input type="date" className="input-field flex-1 text-xs" value={qTerm.end_date} onChange={e => setQTerm(p => ({ ...p, end_date: e.target.value }))} />
+                      <input type="date" className="input-field flex-1" value={qTerm.start_date} onChange={e => setQTerm(p => ({ ...p, start_date: e.target.value }))} />
+                      <input type="date" className="input-field flex-1" value={qTerm.end_date} onChange={e => setQTerm(p => ({ ...p, end_date: e.target.value }))} />
                     </div>
-                    <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qTerm.name.trim() || !qTerm.start_date || !qTerm.end_date}>{quickSaving ? '...' : '✓ Save Term'}</button>
+                    <button type="submit" className="btn-primary py-1" disabled={quickSaving || !qTerm.name.trim() || !qTerm.start_date || !qTerm.end_date}>{quickSaving ? '...' : '✓ Save Term'}</button>
                   </form>
                 )}
               </div>
@@ -362,8 +362,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
                 )}
                 {addingStream && selectedGradeId && (
                   <form onSubmit={handleQuickAddStream} className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
-                    <input className="input-field w-full text-xs" placeholder="Stream name, e.g. A" value={qStream.name} onChange={e => setQStream({ name: e.target.value })} />
-                    <button type="submit" className="btn-primary text-xs py-1" disabled={quickSaving || !qStream.name.trim()}>{quickSaving ? '...' : '✓ Save Stream'}</button>
+                    <input className="input-field w-full" placeholder="Stream name, e.g. A" value={qStream.name} onChange={e => setQStream({ name: e.target.value })} />
+                    <button type="submit" className="btn-primary py-1" disabled={quickSaving || !qStream.name.trim()}>{quickSaving ? '...' : '✓ Save Stream'}</button>
                   </form>
                 )}
               </div>
@@ -402,25 +402,25 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
               {addingSubject && !preselectedSubjectId && (
                 <div className="bg-muted border border-border rounded-md p-3 flex flex-col gap-2 mt-1">
                   <div className="flex gap-2">
-                    <input className="input-field flex-1 text-xs" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
-                    <input className="input-field input-field-mono w-28 text-xs font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                    <input className="input-field flex-1" placeholder="Subject Name" value={qSubject.name} onChange={e => setQSubject(p => ({ ...p, name: e.target.value }))} />
+                    <input className="input-field input-field-mono w-28 font-mono uppercase" placeholder="Code" value={qSubject.code} onChange={e => setQSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
                   </div>
                   <div className="flex gap-2">
-                    <select className="input-field flex-1 text-xs" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
+                    <select className="input-field flex-1" value={qSubject.academic_level_id} onChange={e => setQSubject(p => ({ ...p, academic_level_id: e.target.value, grading_system_id: '' }))}>
                       <option value="">-- Select Academic Level --</option>
                       {academicLevels.map(al => <option key={al.id} value={al.id}>{al.name}</option>)}
                     </select>
-                    <select className="input-field w-28 text-xs" value={qSubject.subject_type} onChange={e => setQSubject(p => ({ ...p, subject_type: e.target.value }))}>
+                    <select className="input-field w-28" value={qSubject.subject_type} onChange={e => setQSubject(p => ({ ...p, subject_type: e.target.value }))}>
                       <option value="CORE">Core</option>
                       <option value="ESSENTIAL">Essential</option>
                       <option value="OPTIONAL">Optional</option>
                     </select>
                   </div>
-                  <select className="input-field w-full text-xs" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>
+                  <select className="input-field w-full" value={qSubject.grading_system_id} onChange={e => setQSubject(p => ({ ...p, grading_system_id: e.target.value }))}>
                     <option value="">-- Grading System (Optional) --</option>
                     {gradingSystems.filter(gs => gs.academic_level_id === qSubject.academic_level_id).map(gs => <option key={gs.id} value={gs.id}>{gs.name}</option>)}
                   </select>
-                  <button type="button" onClick={handleQuickAddSubject} className="btn-primary text-xs py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
+                  <button type="button" onClick={handleQuickAddSubject} className="btn-primary py-1" disabled={quickSaving || !qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id}>
                     {quickSaving ? '...' : '✓ Save Subject'}
                   </button>
                 </div>

@@ -379,7 +379,7 @@ export default function ReportsPage() {
                 type="number"
                 min={1}
                 max={200}
-                className="input-field w-16 text-xs text-center"
+                className="input-field w-16 text-center"
                 value={groupThreshold}
                 onChange={e => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v) && v > 0) setGroupThreshold(v); }}
               />

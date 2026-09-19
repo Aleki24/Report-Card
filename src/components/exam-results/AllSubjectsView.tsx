@@ -153,61 +153,63 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                 </p>
             </div>
             <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                        <tr style={{ borderBottom: '2px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
-                            <th style={thStyle}>Rank</th>
-                            <th style={thStyle}>Student</th>
-                            <th style={thStyle}>Adm No</th>
-                            {subjectCodes.map(s => (
-                                <th key={s} style={{ ...thStyle, textAlign: 'center', minWidth: 80 }} title={rows[0]?.subjects[s]?.name || s}>{s}</th>
-                            ))}
-                            <th style={{ ...thStyle, textAlign: 'center' }}>Total</th>
-                            <th style={{ ...thStyle, textAlign: 'center' }}>Avg</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row, i) => (
-                            <tr
-                                key={row.studentId}
-                                style={{
-                                    borderBottom: '1px solid var(--color-border)',
-                                    background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
-                                }}
-                            >
-                                <td style={{ ...tdStyle, fontWeight: 700, color: row.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
-                                    {row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : `#${row.rank}`}
-                                </td>
-                                <td style={{ ...tdStyle, fontWeight: 500 }}>{row.studentName}</td>
-                                <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber || '—'}</td>
-                                {subjectCodes.map(s => {
-                                    const val = row.subjects[s];
-                                    return (
-                                        <td key={s} style={{ ...tdStyle, textAlign: 'center' }}>
-                                            {val ? (
-                                                <span title={`${val.name} - Grade: ${val.grade}`}>
-                                                    <span style={{ fontWeight: 600 }}>{val.score.toFixed(0)}</span>
-                                                    <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 2 }}>{val.grade}</span>
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-                                            )}
-                                        </td>
-                                    );
-                                })}
-                                <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700 }}>{row.total.toFixed(0)}</td>
-                                <td style={{
-                                    ...tdStyle,
-                                    textAlign: 'center',
-                                    fontWeight: 700,
-                                    color: row.average >= 70 ? '#10B981' : row.average >= 50 ? '#F59E0B' : '#EF4444',
-                                }}>
-                                    {Math.round(row.average)}%
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="w-full overflow-x-auto">
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                          <tr style={{ borderBottom: '2px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
+                              <th style={thStyle}>Rank</th>
+                              <th style={thStyle}>Student</th>
+                              <th style={thStyle}>Adm No</th>
+                              {subjectCodes.map(s => (
+                                  <th key={s} style={{ ...thStyle, textAlign: 'center', minWidth: 80 }} title={rows[0]?.subjects[s]?.name || s}>{s}</th>
+                              ))}
+                              <th style={{ ...thStyle, textAlign: 'center' }}>Total</th>
+                              <th style={{ ...thStyle, textAlign: 'center' }}>Avg</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {rows.map((row, i) => (
+                              <tr
+                                  key={row.studentId}
+                                  style={{
+                                      borderBottom: '1px solid var(--color-border)',
+                                      background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
+                                  }}
+                              >
+                                  <td style={{ ...tdStyle, fontWeight: 700, color: row.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
+                                      {row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : `#${row.rank}`}
+                                  </td>
+                                  <td style={{ ...tdStyle, fontWeight: 500 }}>{row.studentName}</td>
+                                  <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber || '—'}</td>
+                                  {subjectCodes.map(s => {
+                                      const val = row.subjects[s];
+                                      return (
+                                          <td key={s} style={{ ...tdStyle, textAlign: 'center' }}>
+                                              {val ? (
+                                                  <span title={`${val.name} - Grade: ${val.grade}`}>
+                                                      <span style={{ fontWeight: 600 }}>{val.score.toFixed(0)}</span>
+                                                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 2 }}>{val.grade}</span>
+                                                  </span>
+                                              ) : (
+                                                  <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                                              )}
+                                          </td>
+                                      );
+                                  })}
+                                  <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700 }}>{row.total.toFixed(0)}</td>
+                                  <td style={{
+                                      ...tdStyle,
+                                      textAlign: 'center',
+                                      fontWeight: 700,
+                                      color: row.average >= 70 ? '#10B981' : row.average >= 50 ? '#F59E0B' : '#EF4444',
+                                  }}>
+                                      {Math.round(row.average)}%
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+                </div>
             </div>
         </div>
     );
