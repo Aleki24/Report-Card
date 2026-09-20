@@ -246,6 +246,9 @@ const BANDS_BY_SUBJECT_NAME: Record<string, CurriculumBand[]> = {
     'creative arts and sports': ['CBC_JUNIOR_SCHOOL'],
 
     // Senior School
+    'essential mathematics': ['CBC_SENIOR_SCHOOL'],
+    'mathematics (essential)': ['CBC_SENIOR_SCHOOL'],
+    'mathematics (stem)': ['CBC_SENIOR_SCHOOL'],
     'community service learning': ['CBC_SENIOR_SCHOOL'],
     'ict skills': ['CBC_SENIOR_SCHOOL'],
     'kiswahili kipevu': ['CBC_SENIOR_SCHOOL'],
@@ -255,6 +258,49 @@ const BANDS_BY_SUBJECT_NAME: Record<string, CurriculumBand[]> = {
     'music and dance': ['CBC_SENIOR_SCHOOL'],
     'theatre and film': ['CBC_SENIOR_SCHOOL'],
 };
+
+/**
+ * Band from the suffix a subject code carries.
+ *
+ * Codes in this application are systematically band-suffixed — `MATH_UP`,
+ * `SCI_JS`, `AGRI_SS` — and the exact-code maps above only recognise the ones
+ * that were seeded. A school that types `AGRIC_UP` where the seed says
+ * `AGRI_UP` loses its band over a single letter, and an unplaced subject is
+ * offered in every band: that is how an Upper Primary Agriculture ended up on
+ * offer to Senior School, and a Senior School subject to Grade 4.
+ *
+ * Reading the suffix turns two fixed lists into a rule that covers every
+ * present and future variant. Only CBC uses these suffixes — no 8-4-4 subject
+ * in this database carries one — and `bandsForSubject` will not apply the rule
+ * to a subject a caller has told it is 8-4-4.
+ */
+const BANDS_BY_CODE_SUFFIX: Record<string, CurriculumBand[]> = {
+    PP: ['CBC_PRE_PRIMARY', 'CBC_LOWER_PRIMARY'],
+    LP: CBC_PRIMARY_BANDS,
+    UP: ['CBC_UPPER_PRIMARY'],
+    JS: ['CBC_JUNIOR_SCHOOL'],
+    SS: ['CBC_SENIOR_SCHOOL'],
+};
+
+function bandsFromCodeSuffix(code: string): CurriculumBand[] | null {
+    // Underscore only: the seeded vocabulary uses hyphens (`CBC-SS` is Social
+    // Studies, not Senior School) and would otherwise be misread.
+    const match = code.match(/_([A-Z]{2})$/);
+    if (!match) return null;
+    return BANDS_BY_CODE_SUFFIX[match[1]] ?? null;
+}
+
+/**
+ * Codes that name their band in words rather than a suffix.
+ *
+ * Kept deliberately short. "Essential Mathematics" is the non-STEM maths of
+ * CBC Senior School and exists at no other level, so a code saying ESSENTIAL
+ * places the subject even when its name is just "Mathematics" — which is how
+ * one school's `MAT(ESSENTIAL)` was being offered to Upper Primary.
+ */
+const BANDS_BY_CODE_PATTERN: { test: RegExp; bands: CurriculumBand[] }[] = [
+    { test: /ESSENTIAL/i, bands: ['CBC_SENIOR_SCHOOL'] },
+];
 
 /** Codes from `subject-definitions`, which already carry a sub-level. */
 const BANDS_BY_PREDEFINED_CODE: Record<string, CurriculumBand[]> = (() => {
@@ -273,6 +319,12 @@ const normalizeName = (name: string) => name.trim().toLowerCase().replace(/\s+/g
 export interface SubjectLike {
     name?: string | null;
     code?: string | null;
+    /**
+     * `academic_levels.code` ("CBC" / "844") when the caller has it. Only used
+     * to suppress the CBC-specific code rules for an 8-4-4 subject; leaving it
+     * out is safe and is what most callers do.
+     */
+    academic_level_code?: string | null;
 }
 
 /**
@@ -292,6 +344,18 @@ export function bandsForSubject(subject: SubjectLike | null | undefined): Curric
         if (seeded) return seeded;
         const predefined = BANDS_BY_PREDEFINED_CODE[code];
         if (predefined) return predefined;
+
+        // The suffix and pattern rules describe CBC only. Skip them when the
+        // caller has said this is an 8-4-4 subject, so a future `PHYS_SS`
+        // meaning "secondary school" is never read as CBC Senior School.
+        const levelCode = (subject.academic_level_code || '').trim().toUpperCase();
+        if (levelCode !== '844') {
+            const bySuffix = bandsFromCodeSuffix(code);
+            if (bySuffix) return bySuffix;
+
+            const byPattern = BANDS_BY_CODE_PATTERN.find(p => p.test.test(code));
+            if (byPattern) return byPattern.bands;
+        }
     }
 
     const name = subject.name ? normalizeName(subject.name) : '';
