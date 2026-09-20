@@ -8,21 +8,12 @@
  * Run: npx tsx scripts/subjects-backup.ts [outputDir]
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createAdminClient } from './lib/admin-client';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !serviceKey) {
-    console.error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before running.');
-    process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-});
+const supabase = createAdminClient();
 
 const DOOMED_SCHOOL_ID = 'b9e20066-0fd3-48ec-b731-56f14bb4413e';
 

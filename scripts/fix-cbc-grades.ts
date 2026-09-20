@@ -1,11 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from './lib/admin-client';
 
-const supabaseUrl = 'https://kdublzpwgnuygjgyxpze.supabase.co';
-const serviceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkdWJsenB3Z251eWdqZ3l4cHplIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjczNjU3MSwiZXhwIjoyMDg4MzEyNTcxfQ.PiK44wgTV2YGf6H6XYR8dF1ixC-j-bkkzu4BWGdt0lM';
-
-const supabase = createClient(supabaseUrl, serviceKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
+// Credentials come from the environment. The service role key used to be a
+// string literal here; it bypasses every row-level security policy, and it
+// was committed.
+const supabase = createAdminClient();
 
 const VALID_CBC_GRADES = ['EE1', 'EE2', 'ME1', 'ME2', 'AE1', 'AE2', 'BE1', 'BE2'];
 
