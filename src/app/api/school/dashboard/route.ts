@@ -124,8 +124,10 @@ export async function GET(_request: NextRequest) {
       }),
       supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('daily_attendance').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+      // How a school grades a subject is a property of its offering now, so
+      // the count comes from there rather than from the shared catalogue row.
       supabase
-        .from('subjects')
+        .from('school_subjects')
         .select('id', { count: 'exact', head: true })
         .eq('school_id', schoolId)
         .is('grading_system_id', null),

@@ -6,6 +6,7 @@
 // ============================================================
 
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { getCurrentStudent } from './get-current-student';
 import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
 import type { CurrentStudent } from '@/types';
@@ -109,8 +110,8 @@ export async function getStudentSubjects(student: CurrentStudent) {
 
     // Default: all subjects at the student's academic level
     const { data, error } = await supabase
-        .from('subjects')
-        .select('id, code, name, subject_type, display_order, category')
+        .from(SCHOOL_SUBJECT_VIEW)
+        .select('id, code, name, subject_type, display_order, category, band')
         .eq('academic_level_id', student.academicLevelId)
         .eq('school_id', student.schoolId)
         .order('display_order', { ascending: true });

@@ -137,28 +137,32 @@ export default function SubjectsPage() {
         }
     };
 
-    const deleteSubject = async (id: string) => {
-        if (!confirm('Delete this subject?')) return;
+    /**
+     * Take a subject off this school's list.
+     *
+     * This used to delete the subject outright, which cascaded its exams and
+     * every mark under them out of the database. Now it removes the offering
+     * and the results survive — so the server answers 409 when exams exist and
+     * we ask the admin to confirm, quoting the number at risk of disappearing
+     * from their subject list.
+     */
+    const removeSubject = async (id: string, name: string) => {
+        if (!confirm(`Remove ${name} from your subject list?`)) return;
         setCalSaving(true); setCalMsg('');
         try {
-            const res = await fetch(`/api/admin/academic-structure?type=subject&id=${id}`, { method: 'DELETE' });
-            if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
-            setCalMsg('Deleted successfully');
-            await fetchSubjects();
-        } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
-        finally { setCalSaving(false); }
-    };
+            let res = await fetch(`/api/admin/academic-structure?type=subject&id=${id}`, { method: 'DELETE' });
 
-    const toggleSubjectType = async (id: string, newStatus: string) => {
-        setCalSaving(true); setCalMsg('');
-        try {
-            const res = await fetch(`/api/admin/academic-structure`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'subject', id, subject_type: newStatus })
-            });
+            if (res.status === 409) {
+                const d = await res.json();
+                const proceed = confirm(
+                    `${name} has ${d.examCount} exam(s) recorded. Those results are kept — the subject just stops appearing on your list. Continue?`,
+                );
+                if (!proceed) { setCalSaving(false); return; }
+                res = await fetch(`/api/admin/academic-structure?type=subject&id=${id}&force=true`, { method: 'DELETE' });
+            }
+
             if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
-            setCalMsg('Updated successfully');
+            setCalMsg('Removed from your subject list');
             await fetchSubjects();
         } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
         finally { setCalSaving(false); }
@@ -495,22 +499,18 @@ export default function SubjectsPage() {
                                                         >
                                                             Learners
                                                         </button>
-                                                        <select
-                                                            className="input-field input-field-sm w-auto hover:border-primary/40 transition-colors cursor-pointer"
-                                                            value={s.subject_type || 'CORE'}
-                                                            onChange={(e) => toggleSubjectType(s.id, e.target.value)}
-                                                            disabled={calSaving}
-                                                        >
-                                                            <option value="CORE">Core</option>
-                                                            <option value="ESSENTIAL">Essential</option>
-                                                            <option value="OPTIONAL">Optional</option>
-                                                        </select>
+                                                        {/* Core vs Optional is a property of the subject in the
+                                                            national catalogue, not of one school's copy, so it is
+                                                            shown rather than edited. */}
+                                                        <span className="rounded-md bg-muted/60 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                                                            {(s.subject_type || 'CORE').charAt(0) + (s.subject_type || 'CORE').slice(1).toLowerCase()}
+                                                        </span>
                                                         <button
                                                             className="text-[11px] text-red-400 hover:text-red-300 font-medium transition-colors"
-                                                            onClick={() => deleteSubject(s.id)}
+                                                            onClick={() => removeSubject(s.id, s.name)}
                                                             disabled={calSaving}
                                                         >
-                                                            Delete
+                                                            Remove
                                                         </button>
                                                     </div>
                                                 )}

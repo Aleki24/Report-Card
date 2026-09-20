@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 type DataType =
@@ -225,8 +226,8 @@ export async function GET(request: NextRequest) {
         // any teacher can see newly created ones in dropdowns. Unlike
         // my_subjects, this isn't scoped to a specific teacher's assignments.
         const { data, error } = await supabase
-          .from('subjects')
-          .select('id, code, name, academic_level_id, category, display_order')
+          .from(SCHOOL_SUBJECT_VIEW)
+          .select('id, code, name, academic_level_id, category, display_order, band')
           .eq('school_id', schoolId)
           .order('display_order');
 
@@ -339,13 +340,30 @@ export async function GET(request: NextRequest) {
       case 'exams': {
         const { data, error } = await supabase
           .from('exams')
-          .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id, grading_system_id), grades(academic_level_id)')
+          .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id), grades(academic_level_id)')
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        
-        let filteredExams = data ?? [];
+
+        // The grading system moved off the subject onto the school's offering,
+        // and PostgREST cannot reach a join table from inside an embed. Look it
+        // up once and put it back under `subjects.grading_system_id`, the key
+        // every caller of this endpoint already reads — the mark-entry grid,
+        // the scan sheet, the bulk upload and the edit-mark modal all take the
+        // subject's grading system from exactly there.
+        const gradingBySubject = await gradingSystemBySubject(supabase, schoolId);
+        const withGrading = (data ?? []).map(exam => {
+          const subject = exam.subjects as { academic_level_id?: string } | null;
+          return {
+            ...exam,
+            subjects: subject
+              ? { ...subject, grading_system_id: gradingBySubject.get(exam.subject_id) ?? null }
+              : subject,
+          };
+        });
+
+        let filteredExams = withGrading;
         if (auth.role !== 'ADMIN') {
            const perms = await getTeacherPermissions(auth.userId);
            filteredExams = filteredExams.filter(exam => isExamVisibleToTeacher(exam, perms, auth.userId));
@@ -368,9 +386,13 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ data: [] });
         }
 
+        // Scoped by school as well as by assignment: an assignment can only
+        // name a subject the school offers, and reading through the view keeps
+        // that true even if an assignment goes stale.
         const { data, error } = await supabase
-          .from('subjects')
-          .select('id, code, name, academic_level_id, category, display_order')
+          .from(SCHOOL_SUBJECT_VIEW)
+          .select('id, code, name, academic_level_id, category, display_order, band')
+          .eq('school_id', schoolId)
           .in('id', subjectIds)
           .order('display_order');
 
