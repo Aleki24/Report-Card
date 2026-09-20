@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { gradeSymbolRank } from '@/lib/analytics';
 import { shortCurriculumLabel } from '@/lib/curriculum-labels';
+import ClassAnalytics from '@/components/analytics/ClassAnalytics';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 import { SubjectComparisonChart } from '@/components/charts/SubjectComparisonChart';
 import { InsightsPanel } from '@/components/charts/InsightsPanel';
@@ -483,6 +484,18 @@ export default function AnalyticsPage() {
         </select>
       </div>
 
+      {/*
+        A class is selected, so show the analysis that is actually valid.
+
+        Everything below this branch aggregates across the whole school —
+        ranking learners of different grades against each other and averaging
+        subjects that share a name across curricula. Inside one class none of
+        that arises, so the class view replaces it rather than sitting beside it.
+      */}
+      {selectedStreamId !== 'all' ? (
+        <ClassAnalytics streamId={selectedStreamId} />
+      ) : (
+      <>
       {/* Curriculum scope — only when the school actually runs both. Every
           figure below is computed within the selected one. */}
       {!loading && levelOptions.length > 1 && (
@@ -766,6 +779,8 @@ export default function AnalyticsPage() {
           <p style={{ fontWeight: 600, fontSize: 15, color: 'var(--foreground)', margin: 0 }}>No mark data available</p>
           <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: 0 }}>Enter marks for exams to see performance analytics here.</p>
         </div>
+      )}
+      </>
       )}
     </div>
   );
