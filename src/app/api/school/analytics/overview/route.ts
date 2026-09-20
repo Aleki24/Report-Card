@@ -1,0 +1,125 @@
+import { NextResponse } from 'next/server';
+import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { auth } from '@clerk/nextjs/server';
+import { PASS_MARK } from '@/lib/pass-mark';
+
+/**
+ * The school, compared class by class.
+ *
+ * This is deliberately the only thing the school-level view offers. The page
+ * used to put a merit list and a subject table here too, which meant ranking a
+ * Grade 1 learner against a Form 4 candidate and averaging a Lower Primary
+ * "Mathematics" with a Senior School one — questions with no answer, presented
+ * as though they had one.
+ *
+ * What survives aggregation across curricula is the share of learners reaching
+ * a percentage threshold, and only when each row says which curriculum it
+ * belongs to. A CBC Grade 4 next to an 8-4-4 Form 4 is a comparison the reader
+ * may choose to make; it is not one to make for them inside a single mean.
+ */
+
+export interface OverviewClass {
+    id: string;
+    name: string;
+    level_code: string | null;
+    students: number;
+    mark_count: number;
+    mean: number | null;
+    pass_rate: number | null;
+    unmarked: number;
+}
+
+export async function GET() {
+    try {
+        const { userId } = await auth();
+        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const supabase = createSupabaseAdmin();
+        const { data: profile } = await supabase
+            .from('users')
+            .select('school_id, role')
+            .eq('id', userId)
+            .maybeSingle();
+
+        const schoolId = profile?.school_id;
+        if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
+        if (profile?.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
+        const { data: currentYear } = await supabase
+            .from('academic_years')
+            .select('id, name')
+            .eq('school_id', schoolId)
+            .order('start_date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        // Both rollups already exist and are already used by the dashboard;
+        // Analytics simply never called them and hand-rolled the same thing in
+        // the browser from a truncated array of marks.
+        const [perfRes, unmarkedRes] = await Promise.all([
+            supabase.rpc('school_class_performance', {
+                p_school_id: schoolId,
+                p_academic_year_id: currentYear?.id ?? null,
+                p_pass_mark: PASS_MARK,
+            }),
+            supabase.rpc('school_unmarked_exams', {
+                p_school_id: schoolId,
+                p_academic_year_id: currentYear?.id ?? null,
+            }),
+        ]);
+
+        if (perfRes.error) {
+            console.error('Analytics overview error:', perfRes.error);
+            return NextResponse.json({ error: 'Failed to load overview' }, { status: 500 });
+        }
+
+        // Unmarked exams are grouped by class label rather than id, so match on
+        // the label the rollup emits.
+        const unmarkedByLabel = new Map<string, number>();
+        for (const row of (unmarkedRes.data ?? []) as Record<string, unknown>[]) {
+            const label = (row.label as string) || '';
+            unmarkedByLabel.set(label, (unmarkedByLabel.get(label) ?? 0) + Number(row.unmarked_count ?? 0));
+        }
+
+        const classes: OverviewClass[] = ((perfRes.data ?? []) as Record<string, unknown>[])
+            .map(row => {
+                const markCount = Number(row.mark_count ?? 0);
+                const name = (row.full_name as string) || 'Unnamed';
+                return {
+                    id: row.grade_stream_id as string,
+                    name,
+                    level_code: (row.level_code as string) ?? null,
+                    students: Number(row.student_count ?? 0),
+                    mark_count: markCount,
+                    mean: markCount > 0 ? Number(row.mean_percentage ?? 0) : null,
+                    pass_rate: markCount > 0
+                        ? Math.round((Number(row.pass_count ?? 0) / markCount) * 100)
+                        : null,
+                    unmarked: unmarkedByLabel.get(name) ?? 0,
+                };
+            })
+            // Weakest first. A class in trouble is the reason to open this page;
+            // it should not be somewhere in the middle of an alphabetical list.
+            .sort((a, b) => (a.pass_rate ?? 101) - (b.pass_rate ?? 101));
+
+        const withMarks = classes.filter(c => c.mark_count > 0);
+        const totalMarks = withMarks.reduce((sum, c) => sum + c.mark_count, 0);
+
+        return NextResponse.json({
+            academic_year: currentYear?.name ?? null,
+            classes,
+            summary: {
+                classes_with_marks: withMarks.length,
+                classes_total: classes.length,
+                learners: classes.reduce((sum, c) => sum + c.students, 0),
+                mark_count: totalMarks,
+                exams_awaiting_marks: [...unmarkedByLabel.values()].reduce((a, b) => a + b, 0),
+            },
+        });
+    } catch (err) {
+        console.error('Analytics overview route error:', err);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+}
