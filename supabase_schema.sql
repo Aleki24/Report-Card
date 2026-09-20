@@ -205,7 +205,13 @@ CREATE TABLE IF NOT EXISTS subject_teachers (
 -- 11. SUBJECTS
 CREATE TABLE IF NOT EXISTS subjects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code TEXT UNIQUE NOT NULL,
+    -- Deliberately NOT globally unique. This file declared UNIQUE here while
+    -- the live database never had such an index, and the two disagreed in a way
+    -- that mattered: subjects are per-school rows, so two schools both offering
+    -- MATH_LP is normal. A fresh bootstrap from this file would have rejected
+    -- the second school's copy and broken "add all standard subjects" for every
+    -- school after the first.
+    code TEXT NOT NULL,
     name TEXT NOT NULL,
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE CASCADE NOT NULL,
     subject_type TEXT DEFAULT 'CORE' NOT NULL,

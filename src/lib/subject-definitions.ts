@@ -89,7 +89,14 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   { name: 'Kiswahili', code: 'KISW_UP', level: 'CBC_UPPER_PRIMARY', category: 'LANGUAGE', isCore: true },
   { name: 'Kenya Sign Language', code: 'KSL_UP', level: 'CBC_UPPER_PRIMARY', category: 'LANGUAGE', isCore: true },
   { name: 'Mathematics', code: 'MATH_UP', level: 'CBC_UPPER_PRIMARY', category: 'MATHEMATICS', isCore: true },
-  { name: 'Integrated Science', code: 'SCI_UP', level: 'CBC_UPPER_PRIMARY', category: 'SCIENCE', isCore: true },
+  // Upper Primary science is "Science and Technology"; "Integrated Science" is
+  // the Junior School subject. The catalogue had the Junior School name under
+  // an Upper Primary code, while a real school had been running the correct
+  // SCI_TECH_UP for 49 exams — the school was right and the catalogue was not.
+  { name: 'Science and Technology', code: 'SCI_TECH_UP', level: 'CBC_UPPER_PRIMARY', category: 'SCIENCE', isCore: true },
+  // Officially "Agriculture and Nutrition"; kept as "Agriculture" to match the
+  // name already printed on report cards for its 67 recorded marks.
+  { name: 'Agriculture', code: 'AGRIC_UP', level: 'CBC_UPPER_PRIMARY', category: 'TECHNICAL', isCore: true },
   { name: 'Social Studies', code: 'SS_UP', level: 'CBC_UPPER_PRIMARY', category: 'HUMANITY', isCore: true },
   { name: 'Religious Education', code: 'RE_UP', level: 'CBC_UPPER_PRIMARY', category: 'HUMANITY', isCore: true },
   { name: 'Creative and Movement Activities', code: 'CMA_UP', level: 'CBC_UPPER_PRIMARY', category: 'CREATIVE', isCore: true },
