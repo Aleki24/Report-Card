@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 
 async function getSession() {
     const { userId } = await auth();
@@ -39,12 +40,12 @@ export async function GET(request: NextRequest) {
         const supabase = createSupabaseAdmin();
 
         const { data: subject } = await supabase
-            .from('subjects')
+            .from(SCHOOL_SUBJECT_VIEW)
             .select('id, name, code, subject_type, academic_level_id')
             .eq('id', subjectId)
             .eq('school_id', session.schoolId)
             .maybeSingle();
-        if (!subject) return NextResponse.json({ error: 'Subject not found in your school.' }, { status: 404 });
+        if (!subject) return NextResponse.json({ error: 'That subject is not offered by your school.' }, { status: 404 });
 
         let studentsQuery = supabase
             .from('students')
@@ -109,12 +110,12 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
 
         const { data: subject } = await supabase
-            .from('subjects')
+            .from(SCHOOL_SUBJECT_VIEW)
             .select('id, subject_type')
             .eq('id', subjectId)
             .eq('school_id', session.schoolId)
             .maybeSingle();
-        if (!subject) return NextResponse.json({ error: 'Subject not found in your school.' }, { status: 404 });
+        if (!subject) return NextResponse.json({ error: 'That subject is not offered by your school.' }, { status: 404 });
 
         // Every touched student must belong to the caller's school
         const touched = [...new Set([...add, ...remove])];

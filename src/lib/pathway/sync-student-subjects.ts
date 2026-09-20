@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SENIOR_CORE_SUBJECT_CODES } from '@/lib/pathway-definitions';
 import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 
 /**
  * Keeps `student_subjects` in sync with students' assigned subject
@@ -49,6 +50,9 @@ export async function syncStudentsSubjectsBulk(
     // academic levels are shared across schools, subjects are not.
     let coreLevelIds: string[] = [];
     if (electiveIds.length > 0) {
+        // Reads the catalogue directly, by id, on purpose: these ids came from
+        // a combination whose electives were checked as offered when it was
+        // saved, and all that is wanted here is their academic level.
         const { data: electiveSubjects, error: electiveError } = await supabase
             .from('subjects')
             .select('id, academic_level_id')
@@ -60,7 +64,7 @@ export async function syncStudentsSubjectsBulk(
     let coreIds: string[] = [];
     if (coreLevelIds.length > 0) {
         const coresQuery = await supabase
-            .from('subjects')
+            .from(SCHOOL_SUBJECT_VIEW)
             .select('id')
             .eq('school_id', schoolId)
             .in('academic_level_id', coreLevelIds)
@@ -73,8 +77,8 @@ export async function syncStudentsSubjectsBulk(
             // belong to another band — otherwise a senior learner is enrolled
             // in Lower Primary and Junior School learning areas as well.
             const fallback = await supabase
-                .from('subjects')
-                .select('id, name, code')
+                .from(SCHOOL_SUBJECT_VIEW)
+                .select('id, name, code, band')
                 .eq('school_id', schoolId)
                 .in('academic_level_id', coreLevelIds)
                 .eq('subject_type', 'CORE');

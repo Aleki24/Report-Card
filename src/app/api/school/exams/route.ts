@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 
 async function getSession() {
   const { userId } = await auth();
@@ -225,9 +226,10 @@ export async function POST(request: NextRequest) {
     // choice for an Upper Primary exam.
     const [{ data: subjectCheck }, { data: gradeCheck }] = await Promise.all([
       supabase
-        .from('subjects')
-        .select('id, name, code, school_id, academic_level_id')
+        .from(SCHOOL_SUBJECT_VIEW)
+        .select('id, name, code, band, school_id, academic_level_id')
         .eq('id', subject_id)
+        .eq('school_id', schoolId)
         .maybeSingle(),
       supabase
         .from('grades')
@@ -236,8 +238,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle(),
     ]);
 
-    if (!subjectCheck || subjectCheck.school_id !== schoolId) {
-      return NextResponse.json({ error: 'Invalid subject for your school' }, { status: 400 });
+    if (!subjectCheck) {
+      return NextResponse.json({ error: 'That subject is not offered by your school' }, { status: 400 });
     }
     if (!gradeCheck) {
       return NextResponse.json({ error: 'Invalid grade' }, { status: 400 });

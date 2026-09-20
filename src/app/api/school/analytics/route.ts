@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { auth } from '@clerk/nextjs/server';
 import type { GradeBand } from '@/types';
 
@@ -128,8 +129,8 @@ export async function GET(request: NextRequest) {
     const [marksRes, subjectsRes, systemsRes] = await Promise.all([
       query,
       supabaseAdmin
-        .from('subjects')
-        .select('id, name, academic_level_id, grading_system_id, academic_levels ( code, name )')
+        .from(SCHOOL_SUBJECT_VIEW)
+        .select('id, name, academic_level_id, band, grading_system_id, academic_levels ( code, name )')
         .eq('school_id', schoolId),
       supabaseAdmin
         // Seeded defaults ("CBC Standard Grading") carry a null school_id and a

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { gradingSystemBySubject } from '@/lib/school-subjects';
 import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { isReportTemplateId } from '@/lib/pdf/templates';
 import {
@@ -200,7 +201,7 @@ export async function GET(
         // 3.5 Fetch all term exams to ensure empty subjects are displayed
         let examsQ = supabase
             .from('exams')
-            .select('id, max_score, exam_type, terms(name), academic_years(name), subjects(id, name, code, category, display_order, grading_system_id)')
+            .select('id, max_score, exam_type, terms(name), academic_years(name), subjects(id, name, code, category, display_order)')
             .eq('term_id', termId);
 
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
@@ -217,7 +218,7 @@ export async function GET(
                 exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id, created_at,
                     terms ( name ),
                     academic_years ( name ),
-                    subjects ( id, name, code, category, display_order, grading_system_id )
+                    subjects ( id, name, code, category, display_order )
                 )
             `)
             .eq('student_id', studentId);
@@ -246,11 +247,24 @@ export async function GET(
         // 4.5 Fetch subject-specific grading systems
         const subjectGradingSystems: Record<string, GradingScale[]> = {};
         const subjectGradingSystemTypes: Record<string, 'KCSE' | 'CBC'> = {};
-        
+
+        // How this school grades each subject. It used to be a column on the
+        // subject, so it came back inside the embeds above; it belongs to the
+        // school's offering now, and PostgREST cannot reach a join table from
+        // inside an embed. Resolved once here and written back onto each
+        // embedded subject, so everything downstream — including the printed
+        // marksheet's band lookup — reads it from where it always did.
+        const gradingBySubject = await gradingSystemBySubject(supabase, targetSchoolId);
+        type EmbeddedSubject = { id?: string; grading_system_id?: string | null } | null | undefined;
+        const attachGrading = (subj: EmbeddedSubject) => {
+            if (subj?.id) subj.grading_system_id = gradingBySubject.get(subj.id) ?? null;
+            return subj;
+        };
+
         const gradingSystemIds = new Set<string>();
         if (termExams) {
             for (const exam of termExams) {
-                const subj = (exam as any).subjects;
+                const subj = attachGrading((exam as any).subjects);
                 if (subj?.grading_system_id) {
                     gradingSystemIds.add(subj.grading_system_id);
                 }
@@ -258,7 +272,7 @@ export async function GET(
         }
         if (marks) {
             for (const m of marks) {
-                const subj = (m as any).exams?.subjects;
+                const subj = attachGrading((m as any).exams?.subjects);
                 if (subj?.grading_system_id) {
                     gradingSystemIds.add(subj.grading_system_id);
                 }

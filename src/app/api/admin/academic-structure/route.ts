@@ -24,8 +24,30 @@ import {
     subjectCombinationUpdateSchema,
 } from '@/lib/schemas';
 import { syncCombinationStudents } from '@/lib/pathway/sync-student-subjects';
+import {
+    SCHOOL_SUBJECT_VIEW,
+    allOffered,
+    clearGradingSystemExcept,
+    offerSubjects,
+    setGradingSystem,
+    stopOffering,
+} from '@/lib/school-subjects';
 
 type CreatePayload = Record<string, unknown>;
+
+/**
+ * The curriculum band each catalogue level belongs to. `academic_levels` has a
+ * single CBC row covering Grade 1 to Grade 12, so the level alone cannot say
+ * whether a subject is Lower Primary or Senior School; this can.
+ */
+const BAND_BY_LEVEL: Record<string, string> = {
+    CBC_PRE_PRIMARY: 'PP',
+    CBC_LOWER_PRIMARY: 'LP',
+    CBC_UPPER_PRIMARY: 'UP',
+    CBC_JUNIOR_SCHOOL: 'JS',
+    CBC_SENIOR_SCHOOL: 'SS',
+    '844_SECONDARY': 'SEC',
+};
 
 // These two tables are GLOBAL, seeded national-curriculum reference data
 // shared by every school (there is no school_id column on them — every
@@ -107,7 +129,7 @@ export async function GET(request: NextRequest) {
                 supabaseAdmin.from('academic_years').select('*').eq('school_id', schoolId).order('start_date', { ascending: false }),
                 supabaseAdmin.from('terms').select('*').eq('school_id', schoolId).order('start_date'),
                 supabaseAdmin.from('grade_streams').select('*').eq('school_id', schoolId).order('name'),
-                supabaseAdmin.from('subjects').select('*').eq('school_id', schoolId).order('display_order'),
+                supabaseAdmin.from(SCHOOL_SUBJECT_VIEW).select('*').eq('school_id', schoolId).order('display_order'),
                 // Global default templates (school_id IS NULL) + this school's own systems
                 supabaseAdmin.from('grading_systems').select('*').or(`school_id.is.null,school_id.eq.${schoolId}`).order('name'),
                 supabaseAdmin.from('subject_combinations')
@@ -287,20 +309,13 @@ export async function POST(request: NextRequest) {
                 // Link the group of subjects chosen at creation time, if any —
                 // this is the "grading system linked to subjects" grouping.
                 if (subjectIds.length > 0) {
-                    const { data: validSubjects } = await supabaseAdmin
-                        .from('subjects')
-                        .select('id')
-                        .eq('school_id', schoolId)
-                        .in('id', subjectIds);
-                    if ((validSubjects ?? []).length !== subjectIds.length) {
+                    if (!(await allOffered(supabaseAdmin, schoolId, subjectIds))) {
                         await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
-                        return NextResponse.json({ error: 'All subjects must belong to your school.' }, { status: 400 });
+                        return NextResponse.json({ error: 'All subjects must be offered by your school.' }, { status: 400 });
                     }
-                    const { error: assignError } = await supabaseAdmin
-                        .from('subjects')
-                        .update({ grading_system_id: result.id })
-                        .eq('school_id', schoolId)
-                        .in('id', subjectIds);
+                    const { error: assignError } = await setGradingSystem(
+                        supabaseAdmin, schoolId, subjectIds, result.id,
+                    );
                     if (assignError) {
                         await supabaseAdmin.from('grading_systems').delete().eq('id', result.id);
                         return handleDatabaseError(assignError, 'grading system');
@@ -310,23 +325,62 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true, data: result });
             },
 
+            /**
+             * Offer one subject.
+             *
+             * A school no longer writes its own copy of a subject that already
+             * exists. If the catalogue has this code, the school starts
+             * offering that row; only a code nothing in the catalogue carries
+             * creates a new row, and that one is marked with origin_school_id
+             * so it stays private to the school that invented it.
+             *
+             * This is what stops two schools ending up with two different
+             * "Chemistry" rows, which is how an 8-4-4 class came to sit a CBC
+             * paper in the first place.
+             */
             subject: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = subjectSchema.parse(payload);
-                const { data: result, error } = await supabaseAdmin
+                const code = data.code.trim();
+
+                // A standard subject with this code, or this school's own.
+                const { data: candidates } = await supabaseAdmin
                     .from('subjects')
-                    .insert({
-                        code: data.code,
-                        name: data.name,
-                        academic_level_id: data.academic_level_id,
-                        subject_type: data.subject_type ?? 'CORE',
-                        display_order: data.display_order ?? 0,
-                        category: data.category ?? 'TECHNICAL',
-                        school_id: schoolId,
-                        grading_system_id: data.grading_system_id ?? null
-                    })
-                    .select().single();
+                    .select('id, code, origin_school_id')
+                    .ilike('code', code)
+                    .or(`origin_school_id.is.null,origin_school_id.eq.${schoolId}`);
+
+                const existing = (candidates ?? []).find(
+                    row => (row.code || '').trim().toUpperCase() === code.toUpperCase(),
+                );
+
+                let result = existing ?? null;
+                if (!result) {
+                    const { data: created, error: createError } = await supabaseAdmin
+                        .from('subjects')
+                        .insert({
+                            code,
+                            name: data.name,
+                            academic_level_id: data.academic_level_id,
+                            subject_type: data.subject_type ?? 'CORE',
+                            display_order: data.display_order ?? 0,
+                            category: data.category ?? 'TECHNICAL',
+                            origin_school_id: schoolId,
+                        })
+                        .select().single();
+                    if (createError) return handleDatabaseError(createError, 'subject');
+                    result = created;
+                }
+                if (!result) {
+                    return NextResponse.json({ error: 'Could not resolve the subject.' }, { status: 500 });
+                }
+                const subjectId = result.id;
+
+                const { error } = await offerSubjects(supabaseAdmin, schoolId, [subjectId]);
                 if (error) return handleDatabaseError(error, 'subject');
+                if (data.grading_system_id !== undefined) {
+                    await setGradingSystem(supabaseAdmin, schoolId, [subjectId], data.grading_system_id ?? null);
+                }
                 return NextResponse.json({ success: true, data: result });
             },
 
@@ -363,38 +417,61 @@ export async function POST(request: NextRequest) {
                 if (wanted.length === 0) {
                     return NextResponse.json({ success: true, created: 0, skipped: 0 });
                 }
+                const wantedCodes = wanted.map(s => s.code.trim().toUpperCase());
 
-                const { data: existing } = await supabaseAdmin
+                // The catalogue rows for this band. Standard subjects only:
+                // one school's invention is not on offer to another.
+                const { data: catalogue } = await supabaseAdmin
                     .from('subjects')
-                    .select('code')
-                    .eq('school_id', schoolId);
-                const have = new Set(
-                    (existing || []).map(row => (row.code || '').trim().toUpperCase()).filter(Boolean),
+                    .select('id, code')
+                    .is('origin_school_id', null);
+
+                const byCode = new Map(
+                    (catalogue ?? []).map(row => [(row.code || '').trim().toUpperCase(), row.id as string]),
                 );
 
-                const toInsert = wanted
-                    .filter(s => !have.has(s.code.trim().toUpperCase()))
-                    .map((s, i) => ({
-                        code: s.code,
-                        name: s.name,
-                        academic_level_id: level.id,
-                        subject_type: s.isCore ? 'CORE' : 'OPTIONAL',
-                        category: s.category || 'TECHNICAL',
-                        display_order: i,
-                        school_id: schoolId,
-                    }));
+                // A catalogue subject this instance has never seen is created
+                // once, here, and then belongs to everybody.
+                const missing = wanted.filter(s => !byCode.has(s.code.trim().toUpperCase()));
+                if (missing.length > 0) {
+                    const { data: added, error: addError } = await supabaseAdmin
+                        .from('subjects')
+                        .insert(missing.map((s, i) => ({
+                            code: s.code,
+                            name: s.name,
+                            academic_level_id: level.id,
+                            subject_type: s.isCore ? 'CORE' : 'OPTIONAL',
+                            category: s.category || 'TECHNICAL',
+                            display_order: i,
+                            band: BAND_BY_LEVEL[data.level],
+                            origin_school_id: null,
+                        })))
+                        .select('id, code');
+                    if (addError) return handleDatabaseError(addError, 'subject');
+                    for (const row of added ?? []) {
+                        byCode.set((row.code || '').trim().toUpperCase(), row.id as string);
+                    }
+                }
 
-                if (toInsert.length === 0) {
+                const subjectIds = wantedCodes
+                    .map(code => byCode.get(code))
+                    .filter((id): id is string => Boolean(id));
+
+                const { data: alreadyOffered } = await supabaseAdmin
+                    .from('school_subjects')
+                    .select('subject_id')
+                    .eq('school_id', schoolId)
+                    .in('subject_id', subjectIds);
+                const have = new Set((alreadyOffered ?? []).map(r => r.subject_id as string));
+
+                const toOffer = subjectIds.filter(id => !have.has(id));
+                if (toOffer.length === 0) {
                     return NextResponse.json({ success: true, created: 0, skipped: wanted.length });
                 }
 
-                const { data: inserted, error } = await supabaseAdmin
-                    .from('subjects')
-                    .insert(toInsert)
-                    .select('id');
+                const { created, error } = await offerSubjects(supabaseAdmin, schoolId, toOffer);
                 if (error) return handleDatabaseError(error, 'subject');
 
-                const created = inserted?.length ?? 0;
                 return NextResponse.json({
                     success: true,
                     created,
@@ -464,14 +541,10 @@ export async function POST(request: NextRequest) {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = subjectCombinationSchema.parse(payload);
 
-                // Electives must be real subjects of this school
-                const { data: validSubjects } = await supabaseAdmin
-                    .from('subjects')
-                    .select('id')
-                    .eq('school_id', schoolId)
-                    .in('id', data.subject_ids);
-                if ((validSubjects ?? []).length !== 3) {
-                    return NextResponse.json({ error: 'All 3 elective subjects must belong to your school.' }, { status: 400 });
+                // Electives must be subjects this school actually offers
+                if (new Set(data.subject_ids).size !== 3
+                    || !(await allOffered(supabaseAdmin, schoolId, data.subject_ids))) {
+                    return NextResponse.json({ error: 'All 3 elective subjects must be offered by your school.' }, { status: 400 });
                 }
 
                 const { data: combination, error } = await supabaseAdmin
@@ -595,32 +668,79 @@ export async function PATCH(request: NextRequest) {
 
             const subjectIds = Array.isArray(payload.subject_ids) ? (payload.subject_ids as string[]) : [];
 
-            if (subjectIds.length > 0) {
-                const { data: validSubjects } = await supabaseAdmin
-                    .from('subjects')
-                    .select('id')
-                    .eq('school_id', schoolId)
-                    .in('id', subjectIds);
-                if ((validSubjects ?? []).length !== subjectIds.length) {
-                    return NextResponse.json({ error: 'All subjects must belong to your school.' }, { status: 400 });
-                }
+            if (subjectIds.length > 0 && !(await allOffered(supabaseAdmin, schoolId, subjectIds))) {
+                return NextResponse.json({ error: 'All subjects must be offered by your school.' }, { status: 400 });
             }
 
-            const { error: clearError } = await supabaseAdmin
-                .from('subjects')
-                .update({ grading_system_id: null })
-                .eq('school_id', schoolId)
-                .eq('grading_system_id', id)
-                .not('id', 'in', `(${subjectIds.length > 0 ? subjectIds.join(',') : '00000000-0000-0000-0000-000000000000'})`);
+            const { error: clearError } = await clearGradingSystemExcept(
+                supabaseAdmin, schoolId, id, subjectIds,
+            );
             if (clearError) return handleDatabaseError(clearError, 'grading system group');
 
-            if (subjectIds.length > 0) {
-                const { error: assignError } = await supabaseAdmin
+            const { error: assignError } = await setGradingSystem(
+                supabaseAdmin, schoolId, subjectIds, id,
+            );
+            if (assignError) return handleDatabaseError(assignError, 'grading system group');
+
+            return NextResponse.json({ success: true });
+        }
+
+        /**
+         * Editing a subject.
+         *
+         * A subject row is shared now, so what a school may change depends on
+         * whose row it is. How the school grades it is the school's own
+         * business and lives on the offering. The subject's name, code and
+         * category are the catalogue's, and changing them would rewrite the
+         * subject for every school offering it — allowed only on a row this
+         * school invented.
+         *
+         * subject_type and display_order are deliberately not editable per
+         * school: they are catalogue facts now. Restoring a per-school
+         * override means one nullable column on school_subjects and a COALESCE
+         * in the view, not another migration.
+         */
+        if (type === 'subject') {
+            const offering = await supabaseAdmin
+                .from('school_subjects')
+                .select('id')
+                .eq('school_id', schoolId)
+                .eq('subject_id', id)
+                .maybeSingle();
+            if (!offering.data) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            if (payload.grading_system_id !== undefined) {
+                const { error } = await setGradingSystem(
+                    supabaseAdmin, schoolId, [id],
+                    (payload.grading_system_id as string | null) || null,
+                );
+                if (error) return handleDatabaseError(error, 'subject');
+            }
+
+            const catalogueEdits: Record<string, unknown> = {};
+            if (payload.name !== undefined) catalogueEdits.name = payload.name;
+            if (payload.code !== undefined) catalogueEdits.code = payload.code;
+            if (payload.category !== undefined) catalogueEdits.category = payload.category;
+
+            if (Object.keys(catalogueEdits).length > 0) {
+                const { data: subjectRow } = await supabaseAdmin
                     .from('subjects')
-                    .update({ grading_system_id: id })
-                    .eq('school_id', schoolId)
-                    .in('id', subjectIds);
-                if (assignError) return handleDatabaseError(assignError, 'grading system group');
+                    .select('origin_school_id')
+                    .eq('id', id)
+                    .maybeSingle();
+                if (subjectRow?.origin_school_id !== schoolId) {
+                    return NextResponse.json({
+                        error: 'This is a standard subject shared with every school, so its name and code cannot be changed here.',
+                    }, { status: 403 });
+                }
+                const { error } = await supabaseAdmin
+                    .from('subjects')
+                    .update(catalogueEdits)
+                    .eq('id', id)
+                    .eq('origin_school_id', schoolId);
+                if (error) return handleDatabaseError(error, 'subject');
             }
 
             return NextResponse.json({ success: true });
@@ -631,7 +751,6 @@ export async function PATCH(request: NextRequest) {
             academic_year: 'academic_years',
             term: 'terms',
             stream: 'grade_streams',
-            subject: 'subjects',
             subject_combination: 'subject_combinations',
             grading_system: 'grading_systems',
         };
@@ -694,13 +813,9 @@ export async function PATCH(request: NextRequest) {
             }
 
             if (data.subject_ids) {
-                const { data: validSubjects } = await supabaseAdmin
-                    .from('subjects')
-                    .select('id')
-                    .eq('school_id', schoolId)
-                    .in('id', data.subject_ids);
-                if ((validSubjects ?? []).length !== 3) {
-                    return NextResponse.json({ error: 'All 3 elective subjects must belong to your school.' }, { status: 400 });
+                if (new Set(data.subject_ids).size !== 3
+                    || !(await allOffered(supabaseAdmin, schoolId, data.subject_ids))) {
+                    return NextResponse.json({ error: 'All 3 elective subjects must be offered by your school.' }, { status: 400 });
                 }
 
                 const { error: deleteError } = await supabaseAdmin
@@ -739,13 +854,6 @@ export async function PATCH(request: NextRequest) {
         } else if (type === 'stream') {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.full_name !== undefined) updateData.full_name = payload.full_name;
-        } else if (type === 'subject') {
-            if (payload.name !== undefined) updateData.name = payload.name;
-            if (payload.code !== undefined) updateData.code = payload.code;
-            if (payload.category !== undefined) updateData.category = payload.category;
-            if (payload.subject_type !== undefined) updateData.subject_type = payload.subject_type;
-            if (payload.display_order !== undefined) updateData.display_order = payload.display_order;
-            if (payload.grading_system_id !== undefined) updateData.grading_system_id = payload.grading_system_id;
         } else if (type === 'grading_system') {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.description !== undefined) updateData.description = payload.description;
@@ -795,7 +903,6 @@ export async function DELETE(request: NextRequest) {
             academic_year: 'academic_years',
             term: 'terms',
             stream: 'grade_streams',
-            subject: 'subjects',
             subject_combination: 'subject_combinations',
             grading_system: 'grading_systems',
         };
@@ -824,6 +931,53 @@ export async function DELETE(request: NextRequest) {
             }
             const { error } = await supabaseAdmin.from('grading_scales').delete().eq('id', id);
             if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+            return NextResponse.json({ success: true });
+        }
+
+        /**
+         * Removing a subject unlists it; it does not destroy it.
+         *
+         * This used to delete the subject row outright, and every FK pointing
+         * at it cascades — so one click on "delete subject" silently took its
+         * exams and every mark under them with it. A school's reason for the
+         * click is almost always "we do not teach this", which is a statement
+         * about the offering, not about the history.
+         *
+         * So: drop the school_subjects row and leave the catalogue, the exams
+         * and the marks intact. Refuse outright while exams exist unless the
+         * caller is explicit, because an unlisted subject with live exams is
+         * confusing in a different way.
+         */
+        if (type === 'subject') {
+            if (!schoolId) {
+                return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
+            }
+            const { data: offering } = await supabaseAdmin
+                .from('school_subjects')
+                .select('id')
+                .eq('school_id', schoolId)
+                .eq('subject_id', id)
+                .maybeSingle();
+            if (!offering) {
+                return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            const force = searchParams.get('force') === 'true';
+            const { count: examCount } = await supabaseAdmin
+                .from('exams')
+                .select('*', { count: 'exact', head: true })
+                .eq('school_id', schoolId)
+                .eq('subject_id', id);
+
+            if ((examCount ?? 0) > 0 && !force) {
+                return NextResponse.json({
+                    error: `This subject has ${examCount} exam(s) recorded. Removing it takes it off your subject list but keeps those results. Pass force=true to confirm.`,
+                    examCount,
+                }, { status: 409 });
+            }
+
+            const { error } = await stopOffering(supabaseAdmin, schoolId, id);
+            if (error) return handleDatabaseError(error, 'subject');
             return NextResponse.json({ success: true });
         }
 

@@ -6,6 +6,7 @@
  * CATs: teachers add manually as needed
  */
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 
 export const STANDARD_EXAM_TYPES = ['OPENER', 'MIDTERM', 'ENDTERM'] as const;
@@ -43,9 +44,13 @@ export async function seedExamSlots(options: SeedOptions) {
   if (gradeIds.length === 0) return { created: 0, skipped: 0, error: 'No grades found for this school' };
 
   // Get all subjects
+  // Only subjects this school actually offers. Seeding from the whole
+  // catalogue would put an exam slot for every subject on the instance into
+  // every class — which is how one school ended up with Agriculture papers
+  // from Grade 1 to Grade 10.
   const { data: subjects } = await supabase
-    .from('subjects')
-    .select('id, name, code, academic_level_id')
+    .from(SCHOOL_SUBJECT_VIEW)
+    .select('id, name, code, academic_level_id, band')
     .eq('school_id', schoolId);
 
   if (!subjects?.length) return { created: 0, skipped: 0, error: 'No subjects found' };

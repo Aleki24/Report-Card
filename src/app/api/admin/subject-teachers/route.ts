@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { filterSubjectsForGrade, isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 
 /**
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
         // school owns 42 — so an admin picked a subject teacher from a list
         // containing other schools' learning areas, and could assign one.
         const { data: levelSubjects } = await supabase
-            .from('subjects')
+            .from(SCHOOL_SUBJECT_VIEW)
             .select('id, name, code, display_order')
             .eq('school_id', schoolId)
             .eq('academic_level_id', grade?.academic_level_id || '')
@@ -156,14 +157,15 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Set up an academic year in Settings first.' }, { status: 400 });
         }
 
-        // The subject must be one of this school's own.
+        // The subject must be one this school offers.
         const { data: subject } = await supabase
-            .from('subjects')
+            .from(SCHOOL_SUBJECT_VIEW)
             .select('id, name, code, school_id, academic_level_id')
             .eq('id', subject_id)
+            .eq('school_id', schoolId)
             .maybeSingle();
-        if (!subject || subject.school_id !== schoolId) {
-            return NextResponse.json({ error: 'That subject is not in your school.' }, { status: 404 });
+        if (!subject) {
+            return NextResponse.json({ error: 'That subject is not offered by your school.' }, { status: 404 });
         }
 
         // …and must be taught at this class. The GET already narrows the picker
