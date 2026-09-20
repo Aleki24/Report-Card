@@ -26,6 +26,55 @@ export interface SubjectMeta {
 /** Bands keyed by grading system id, for turning a percentage into a symbol. */
 export type GradeBandsBySystem = Record<string, GradeBand[]>;
 
+/**
+ * What the returned marks actually cover.
+ *
+ * Shipped so the page can label its own figures honestly instead of guessing.
+ * `truncated` exists to make a silent cap impossible: if it is ever true the
+ * caller knows the numbers are partial rather than presenting them as fact.
+ */
+export interface AnalyticsScope {
+    term_id: string | null;
+    term_name: string | null;
+    academic_year_id: string | null;
+    academic_year_name: string | null;
+    mark_count: number;
+    truncated: boolean;
+}
+
+/**
+ * PostgREST answers with at most 1000 rows unless told otherwise, and it does
+ * so without a word.
+ *
+ * This route had no range at all, so on a school with 1,819 marks it returned
+ * 1,000 of them and the Analytics page computed every figure it displayed —
+ * the overall average, the best and weakest subject, the merit list, the trend
+ * — from an arbitrary 55% of the data. Worse, *which* 1,000 came back depended
+ * on row order, so the numbers moved between page loads with nothing having
+ * changed. The curriculum chips read "CBC 701" and "8-4-4 299"; 701 + 299 is
+ * exactly 1000, which is how this was found.
+ *
+ * Paging until a short page arrives is what makes the result complete. The
+ * hard ceiling is a backstop, not a limit we expect to reach, and reaching it
+ * is reported rather than hidden.
+ */
+const PAGE_SIZE = 1000;
+const MAX_ROWS = 50000;
+
+async function fetchAllRows<T>(
+    build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
+): Promise<{ rows: T[]; error: unknown; truncated: boolean }> {
+    const rows: T[] = [];
+    for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
+        const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+        if (error) return { rows, error, truncated: false };
+        const page = data || [];
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) return { rows, error: null, truncated: false };
+    }
+    return { rows, error: null, truncated: true };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -60,6 +109,48 @@ export async function GET(request: NextRequest) {
     const subjectId = searchParams.get('subject_id');
     const yearId = searchParams.get('year_id');
     const termId = searchParams.get('term_id');
+    const allTerms = searchParams.get('all_terms') === 'true';
+
+    /**
+     * Default to the term the school says it is in.
+     *
+     * With no default this route returned every mark ever recorded, so the
+     * page averaged Term 2 and Term 3 — and, once a second year exists, every
+     * year — into a single figure presented as "the" class average. A school
+     * asking "how are we doing" means now, not since the beginning.
+     *
+     * `all_terms=true` opts out, for a caller that genuinely wants the history.
+     */
+    let effectiveTermId = termId;
+    let effectiveYearId = yearId;
+    let termName: string | null = null;
+    let yearName: string | null = null;
+
+    if (!effectiveTermId && !effectiveYearId && !allTerms) {
+      const { data: current } = await supabaseAdmin
+        .from('terms')
+        .select('id, name, academic_year_id, academic_years ( name )')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .maybeSingle();
+      if (current) {
+        effectiveTermId = current.id as string;
+        effectiveYearId = (current.academic_year_id as string) ?? null;
+        termName = (current.name as string) ?? null;
+        const ay = current.academic_years as { name?: string } | { name?: string }[] | null;
+        yearName = (Array.isArray(ay) ? ay[0]?.name : ay?.name) ?? null;
+      }
+    }
+
+    let scopedExamIds: string[] | null = null;
+    const emptyScope: AnalyticsScope = {
+      term_id: effectiveTermId,
+      term_name: termName,
+      academic_year_id: effectiveYearId,
+      academic_year_name: yearName,
+      mark_count: 0,
+      truncated: false,
+    };
 
     // Scope by exams.school_id directly. Filtering through academic_years with
     // inner joins on grades/academic_years silently drops every mark whose exam
@@ -68,7 +159,11 @@ export async function GET(request: NextRequest) {
     // exam_marks has no subject_id column of its own — the subject is only
     // reachable via exams.subject_id, confirmed against production
     // ("column exam_marks.subject_id does not exist").
-    let query = supabaseAdmin
+    // Built as a factory rather than a single builder: paging re-issues the
+    // query once per page, and a PostgREST builder cannot be reused after it
+    // has been awaited.
+    const buildQuery = () => {
+      let query = supabaseAdmin
       .from('exam_marks')
       .select(`
         id,
@@ -92,6 +187,14 @@ export async function GET(request: NextRequest) {
       `)
       .eq('exams.school_id', schoolId);
 
+      if (scopedExamIds) query = query.in('exam_id', scopedExamIds);
+      if (examId) query = query.eq('exam_id', examId);
+      if (subjectId) query = query.eq('exams.subject_id', subjectId);
+      if (effectiveYearId) query = query.eq('exams.academic_year_id', effectiveYearId);
+      if (effectiveTermId) query = query.eq('exams.term_id', effectiveTermId);
+      return query;
+    };
+
     // Class filter: a stream's exams include both stream-level exams AND
     // whole-grade exams (grade_stream_id null but grade_id matching the
     // stream's grade). Marks are entered at the grade level in many schools,
@@ -113,21 +216,17 @@ export async function GET(request: NextRequest) {
       const { data: streamExams } = await examQuery;
       const examIds = (streamExams || []).map((e: { id: string }) => e.id);
       if (examIds.length === 0) {
-        return NextResponse.json({ marks: [], subjects: [], gradingScales: {} });
+        return NextResponse.json({ marks: [], subjects: [], gradingScales: {}, scope: emptyScope });
       }
-      query = query.in('exam_id', examIds);
+      scopedExamIds = examIds;
     }
-
-    if (examId) query = query.eq('exam_id', examId);
-    if (subjectId) query = query.eq('exams.subject_id', subjectId);
-    if (yearId) query = query.eq('exams.academic_year_id', yearId);
-    if (termId) query = query.eq('exams.term_id', termId);
 
     // The school's subjects and its grading scales, fetched alongside the marks
     // rather than joined onto each one: both lists are small and shared by every
     // mark, so sending them once keeps the payload flat.
     const [marksRes, subjectsRes, systemsRes] = await Promise.all([
-      query,
+      // Paged, so the answer is every matching mark rather than the first 1000.
+      fetchAllRows<Record<string, unknown>>(buildQuery),
       supabaseAdmin
         .from(SCHOOL_SUBJECT_VIEW)
         .select('id, name, academic_level_id, band, grading_system_id, academic_levels ( code, name )')
@@ -142,11 +241,15 @@ export async function GET(request: NextRequest) {
         .neq('system_kind', 'OVERALL'),
     ]);
 
-    const { data: marks, error } = marksRes;
+    const { rows: marks, error, truncated } = marksRes;
 
     if (error) {
       console.error('Analytics query error:', error);
       return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
+    }
+    if (truncated) {
+      // Never silently. The caller is told so it can say so.
+      console.warn(`Analytics: hit the ${MAX_ROWS}-row ceiling for school ${schoolId}`);
     }
 
     // Supabase returns to-one relations as either an object or a single-element
@@ -206,7 +309,16 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.min_percentage - a.min_percentage);
     }
 
-    return NextResponse.json({ marks: flat, subjects, gradingScales });
+    const scope: AnalyticsScope = {
+      term_id: effectiveTermId,
+      term_name: termName,
+      academic_year_id: effectiveYearId,
+      academic_year_name: yearName,
+      mark_count: flat.length,
+      truncated,
+    };
+
+    return NextResponse.json({ marks: flat, subjects, gradingScales, scope });
   } catch (err) {
     console.error('Analytics route error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
