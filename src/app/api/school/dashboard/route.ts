@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { PASS_MARK } from '@/lib/pass-mark';
+
+/** One row of the `school_mark_summary` function; numerics arrive as strings. */
+interface MarkSummaryRow {
+  mark_count: number | string;
+  mean_percentage: number | string | null;
+  pass_count: number | string;
+}
+
+/** One row of `school_class_performance`. */
+interface ClassPerformanceRow {
+  grade_stream_id: string;
+  full_name: string;
+  level_code: string | null;
+  student_count: number | string;
+  mark_count: number | string;
+  mean_percentage: number | string | null;
+  pass_count: number | string;
+}
+
+/** One row of `school_unmarked_exams`. */
+interface UnmarkedExamRow {
+  label: string;
+  level_code: string | null;
+  unmarked_count: number | string;
+}
 
 export async function GET(_request: NextRequest) {
   try {
@@ -32,6 +58,13 @@ export async function GET(_request: NextRequest) {
         totalClasses: 0,
         totalReports: 0,
         attendanceToday: null,
+        academicSummary: { recentAvg: null, passRate: null, passMark: PASS_MARK, markCount: 0 },
+        examsAwaitingMarks: 0,
+        unmarkedByClass: [],
+        classPerformance: [],
+        subjectsWithoutGradingSystem: 0,
+        hasFeeData: false,
+        hasAttendanceData: false,
         upcomingExams: [],
         recentActivities: [],
         hasLogo: false,
@@ -70,6 +103,62 @@ export async function GET(_request: NextRequest) {
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
     const hasLogo = Boolean(schoolRes.data?.logo_url);
     const pendingApprovalCount = pendingApprovalRes.count ?? 0;
+
+    // ── Rollups the dashboard leads with ──
+    //
+    // Three things the old cards could not show, all grouped in the database:
+    // how each class is actually doing, which classes have exams sat but never
+    // marked, and whether the school has ever recorded a fee or an attendance
+    // register. The last two decide whether those cards render at all — every
+    // school on this instance has zero fee rows and almost no attendance, so
+    // the finance and attendance panels were permanently zero.
+    const [classPerfRes, unmarkedRes, feeRowRes, attendanceRowRes, ungradedSubjectsRes] = await Promise.all([
+      supabase.rpc('school_class_performance', {
+        p_school_id: schoolId,
+        p_academic_year_id: currentYear?.id ?? null,
+        p_pass_mark: PASS_MARK,
+      }),
+      supabase.rpc('school_unmarked_exams', {
+        p_school_id: schoolId,
+        p_academic_year_id: currentYear?.id ?? null,
+      }),
+      supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+      supabase.from('daily_attendance').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+      supabase
+        .from('subjects')
+        .select('id', { count: 'exact', head: true })
+        .eq('school_id', schoolId)
+        .is('grading_system_id', null),
+    ]);
+
+    const classPerformance = ((classPerfRes.data ?? []) as ClassPerformanceRow[])
+      .map(row => {
+        const markCount = Number(row.mark_count ?? 0);
+        return {
+          id: row.grade_stream_id,
+          name: row.full_name,
+          levelCode: row.level_code,
+          students: Number(row.student_count ?? 0),
+          markCount,
+          mean: markCount > 0 ? Number(row.mean_percentage ?? 0) : null,
+          passRate: markCount > 0 ? Math.round((Number(row.pass_count ?? 0) / markCount) * 100) : null,
+        };
+      })
+      // Weakest first: a class that is struggling is the reason to look.
+      .sort((a, b) => (a.passRate ?? 101) - (b.passRate ?? 101));
+
+    const unmarkedByClass = ((unmarkedRes.data ?? []) as UnmarkedExamRow[])
+      .map(row => ({
+        label: row.label,
+        levelCode: row.level_code,
+        count: Number(row.unmarked_count ?? 0),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const examsAwaitingMarks = unmarkedByClass.reduce((sum, row) => sum + row.count, 0);
+    const hasFeeData = (feeRowRes.count ?? 0) > 0;
+    const hasAttendanceData = (attendanceRowRes.count ?? 0) > 0;
+    const subjectsWithoutGradingSystem = ungradedSubjectsRes.count ?? 0;
 
     let upcomingExams: any[] = [];
     if (currentYear) {
@@ -141,14 +230,15 @@ export async function GET(_request: NextRequest) {
             .eq('school_id', schoolId)
             .eq('term_id', currentTerm.id)
         : Promise.resolve({ data: [] }),
-      currentYear
-        ? supabase
-            .from('exam_marks')
-            .select('percentage, exams!inner(school_id, academic_year_id)')
-            .eq('exams.school_id', schoolId)
-            .eq('exams.academic_year_id', currentYear.id)
-            .limit(500)
-        : Promise.resolve({ data: [] }),
+      // Counted in the database: aggregate selects are disabled over PostgREST,
+      // so this used to fetch raw percentages capped at 500. A school with
+      // 1,574 marks had its pass rate computed from under a third of them, and
+      // the same figure on the mobile app disagreed.
+      supabase.rpc('school_mark_summary', {
+        p_school_id: schoolId,
+        p_academic_year_id: currentYear?.id ?? null,
+        p_pass_mark: PASS_MARK,
+      }),
     ]);
 
     for (const r of (recentReports.data || []) as any[]) {
@@ -198,9 +288,18 @@ export async function GET(_request: NextRequest) {
     const unpaidBalance = totalFeeAmount - totalCollected;
 
     // ── Academic Performance ──
-    const markRows = (academicMarksRes.data || []) as { percentage: number }[];
-    const recentAvg = markRows.length > 0
-      ? Math.round(markRows.reduce((s, r) => s + Number(r.percentage || 0), 0) / markRows.length)
+    //
+    // The mean of every mark in the year blends subjects, exam types and paper
+    // difficulty into one number, so on its own it says more about how hard the
+    // papers were than about the school. Pass rate — the share of marks at or
+    // above the pass mark — is what an admin can actually act on, and it is what
+    // the mobile staff dashboard already leads with. Both are returned; the UI
+    // leads with the rate and keeps the mean as context.
+    const summary = ((academicMarksRes.data ?? []) as MarkSummaryRow[])[0];
+    const markCount = Number(summary?.mark_count ?? 0);
+    const recentAvg = markCount > 0 ? Number(summary?.mean_percentage ?? 0) : null;
+    const passRate = markCount > 0
+      ? Math.round((Number(summary?.pass_count ?? 0) / markCount) * 100)
       : null;
 
     return NextResponse.json({
@@ -216,8 +315,14 @@ export async function GET(_request: NextRequest) {
       announcementsLast7Days,
       recentEnrollmentsLast7,
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
-      academicSummary: { recentAvg },
+      academicSummary: { recentAvg, passRate, passMark: PASS_MARK, markCount },
       pendingApprovalCount,
+      examsAwaitingMarks,
+      unmarkedByClass,
+      classPerformance,
+      subjectsWithoutGradingSystem,
+      hasFeeData,
+      hasAttendanceData,
       hasLogo,
     });
   } catch (err: unknown) {

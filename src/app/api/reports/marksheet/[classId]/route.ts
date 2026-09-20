@@ -4,8 +4,7 @@ import {
     aggregateStudentPerformance,
     calculateClassRanks,
     calculatePercentage,
-    getGradeFromScales,
-    getGradeFromPercentage,
+    gradeSymbolFromScales,
     getOverallGradeFromMeanPoints,
     gradeFromOverallScales,
     isKCSEGradeLevel,
@@ -451,11 +450,14 @@ export async function GET(
                 : 0;
             
             const displayPercentage = isKCSE && studentPerf.used844Selection ? studentPerf.percentage : averagePercentage;
-            const overallGradeSymbol = isKCSE 
-                ? studentPerf.overallGrade 
-                : (gradingScales.length > 0 
-                    ? getGradeFromScales(displayPercentage, gradingScales) 
-                    : getGradeFromPercentage(Math.round(displayPercentage)));
+            // A CBC class with no configured scale used to fall through to
+            // `getGradeFromPercentage`, a built-in A+/A/B/C/D/F ladder that is
+            // neither CBC nor any 8-4-4 table the school set up — so the mark
+            // sheet printed letters the school had never chosen. Where there is
+            // no scale to read, the percentage stands on its own.
+            const overallGradeSymbol = isKCSE
+                ? studentPerf.overallGrade
+                : (gradeSymbolFromScales(displayPercentage, gradingScales) ?? '-');
 
             // Check if student has any marks entered (at least one non-null mark)
             const hasAnyMarks = Object.values(marksRecord).some(mark => mark !== null);
@@ -518,7 +520,7 @@ export async function GET(
             )
             : gradingSystemType === 'KCSE'
                 ? getOverallGradeFromMeanPoints(classMeanPoints)
-                : getGradeFromScales(classMeanPercentage, gradingScales);
+                : (gradeSymbolFromScales(classMeanPercentage, gradingScales) ?? '-');
         
         // Label a filtered sheet with its combination code / pathway
         let classNameLabel = (students[0].grade_streams as any)?.full_name || 'Class';

@@ -163,11 +163,26 @@ export async function resolveGradingContext(
         // Fetch grading systems for this academic level - get the one with
         // scales. Only SUBJECT-kind systems grade subject marks; an OVERALL
         // (points-band) system must never be chosen as the subject default.
-        const { data: allGradingSystems } = await supabase
+        //
+        // Scoped to this school plus the seeded defaults, which carry a null
+        // school_id and are offered to everyone. Without the school filter this
+        // matched on academic_level_id alone, so a learner could be graded on a
+        // table belonging to a different school entirely — and the table below
+        // is picked by "first one that has scales", with no ORDER BY, so which
+        // school's it was came down to whatever the database returned first.
+        let systemsQuery = supabase
             .from('grading_systems')
             .select('id, name')
             .eq('academic_level_id', student.academic_level_id)
             .neq('system_kind', 'OVERALL');
+
+        systemsQuery = schoolId
+            ? systemsQuery.or(`school_id.eq.${schoolId},school_id.is.null`)
+            : systemsQuery.is('school_id', null);
+
+        // Deterministic order, so the same learner does not get one school's
+        // table on one render and another's on the next.
+        const { data: allGradingSystems } = await systemsQuery.order('name', { ascending: true });
 
         // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
         let gradingSystemId: string | null = null;

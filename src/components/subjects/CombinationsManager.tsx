@@ -9,6 +9,7 @@ import {
     MINISTRY_COMBINATION_TEMPLATES,
     type CbcPathway,
 } from '@/lib/pathway-definitions';
+import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
 import { apiErrorMessage } from '@/lib/api-error-message';
 
 interface SubjectOption { id: string; name: string; code: string; academic_level_id?: string; }
@@ -48,10 +49,21 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
 
-    // Electives can come from any pathway (2+1 blends are legal), but
-    // only CBC-level subjects make sense for senior combinations
+    // Electives can come from any pathway (2+1 blends are legal), but a
+    // combination is a Senior School construct, so only Senior School subjects
+    // belong in it. Filtering on the CBC academic level alone was not enough:
+    // that one level covers Grade 1 to Grade 12, so Lower Primary learning
+    // areas like "Environmental Activities" were offered as Grade 10 electives.
+    // `sync-student-subjects` already narrows to this band when it writes the
+    // student's subject list, so the picker was offering options the sync would
+    // then refuse.
     const electiveOptions = useMemo(
-        () => subjects.filter(s => !cbcLevelId || s.academic_level_id === cbcLevelId),
+        () =>
+            subjects.filter(
+                s =>
+                    (!cbcLevelId || s.academic_level_id === cbcLevelId) &&
+                    isSubjectOfferedInBand(s, 'CBC_SENIOR_SCHOOL')
+            ),
         [subjects, cbcLevelId]
     );
     const subjectByCode = useMemo(() => {

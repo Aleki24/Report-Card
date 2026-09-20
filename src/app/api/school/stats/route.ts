@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { aggregateStudentPerformance, isKCSEGradeLevel, type ExamMarkWithDetails } from '@/lib/analytics';
+import { PASS_MARK } from '@/lib/pass-mark';
+
+/** One row of the `school_mark_summary` function; numerics arrive as strings. */
+interface MarkSummaryRow {
+  mark_count: number | string;
+  mean_percentage: number | string | null;
+  pass_count: number | string;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,32 +87,51 @@ export async function GET(request: NextRequest) {
         .eq('school_id', schoolId);
 
       // ── Exam marks + Reports ──
-      let marks: { percentage: number }[] = [];
+      // Kept in the response for compatibility with older clients that read it;
+      // no caller uses it, and the figures below no longer come from it.
+      const marks: { percentage: number }[] = [];
       let totalReports = 0;
       let schoolAverage: number | null = null;
       let passRate: number | null = null;
 
       if (studentIds.length > 0) {
-        let marksQuery = supabase.from('exam_marks').select('percentage').in('student_id', studentIds);
-        let reportsQuery = supabase.from('report_cards').select('id', { count: 'exact', head: true }).in('student_id', studentIds);
-
-        if (currentYear) {
-          marksQuery = (marksQuery as any).eq('exams.academic_year_id', currentYear.id);
-          reportsQuery = reportsQuery.eq('academic_year_id', currentYear.id);
-        }
-
-        const [marksRes, reportsRes] = await Promise.all([
-          marksQuery,
-          reportsQuery,
+        // The mean and pass rate are computed in the database rather than over
+        // rows fetched here. The previous version filtered on
+        // `exams.academic_year_id` without embedding `exams` in the select,
+        // which PostgREST rejects outright:
+        //
+        //   PGRST108: 'exams' is not an embedded resource in this request
+        //
+        // The error was swallowed by `marksRes.data || []`, so `marks` was
+        // always empty and both figures were always null — the mobile staff
+        // dashboard has been showing "—" for School average and Pass rate on
+        // every load. Scoping through exams.school_id also matches how the
+        // rest of the app reaches marks; exam_marks has no school column.
+        const [summaryRes, reportsRes] = await Promise.all([
+          supabase.rpc('school_mark_summary', {
+            p_school_id: schoolId,
+            p_academic_year_id: currentYear?.id ?? null,
+            p_pass_mark: PASS_MARK,
+          }),
+          currentYear
+            ? supabase
+                .from('report_cards')
+                .select('id', { count: 'exact', head: true })
+                .in('student_id', studentIds)
+                .eq('academic_year_id', currentYear.id)
+            : supabase
+                .from('report_cards')
+                .select('id', { count: 'exact', head: true })
+                .in('student_id', studentIds),
         ]);
-        marks = (marksRes.data || []) as { percentage: number }[];
+
         totalReports = reportsRes.count ?? 0;
 
-        if (marks.length > 0) {
-          const sum = marks.reduce((a, m) => a + Number(m.percentage), 0);
-          schoolAverage = Math.round((sum / marks.length) * 10) / 10;
-          const passed = marks.filter((m) => Number(m.percentage) >= 50).length;
-          passRate = Math.round((passed / marks.length) * 100);
+        const summary = (summaryRes.data ?? [])[0] as MarkSummaryRow | undefined;
+        const markCount = Number(summary?.mark_count ?? 0);
+        if (markCount > 0) {
+          schoolAverage = Number(summary?.mean_percentage ?? 0);
+          passRate = Math.round((Number(summary?.pass_count ?? 0) / markCount) * 100);
         }
       }
 

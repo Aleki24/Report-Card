@@ -122,6 +122,12 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   { name: 'Community Service Learning', code: 'CSL_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', isCore: true },
   { name: 'Physical Education', code: 'PE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', isCore: true },
   { name: 'ICT Skills', code: 'ICT_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', isCore: true },
+  // Senior School runs two mathematics courses: Mathematics (STEM) below, and
+  // Essential Mathematics for the Social Sciences and Arts & Sports pathways.
+  // Only the STEM one was listed, so schools added the other by hand under
+  // codes of their own — and an unlisted code has no band, which put a Grade 10
+  // subject on offer to Upper Primary.
+  { name: 'Essential Mathematics', code: 'MATH_ESS_SS', level: 'CBC_SENIOR_SCHOOL', category: 'MATHEMATICS', isCore: true },
 
   // ── STEM Pathway ──
   { name: 'Mathematics (STEM)', code: 'MATH_SS', level: 'CBC_SENIOR_SCHOOL', category: 'MATHEMATICS', pathway: 'STEM' },

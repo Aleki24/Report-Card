@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
-    getGradeFromScales,
+    gradeSymbolFromScales,
     getRubricFromScales,
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
@@ -213,7 +213,13 @@ export async function GET(
                 score: m.rawScore,
                 outOf: m.maxScore,
                 percentage: Math.round(m.percentage * 10) / 10,
-                grade: m.gradeSymbol || getGradeFromScales(m.percentage, grading.gradingScales),
+                // Never invent a grade here. `getGradeFromScales` falls back to
+                // a built-in A+/A/B/C/D/F ladder when a school has configured no
+                // scale, which is neither CBC nor any 8-4-4 table — and this is
+                // the public page a parent reaches by scanning the QR code on
+                // the card. The printed card shows "-" for an ungraded subject,
+                // so this must too, or the two disagree.
+                grade: m.gradeSymbol || gradeSymbolFromScales(m.percentage, grading.gradingScales) || '-',
                 rubric: getRubricFromScales(m.percentage, grading.gradingScales) || null,
             }));
 

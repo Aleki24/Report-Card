@@ -1,4 +1,4 @@
-import type { ExamMark, GradingScale } from '../types';
+import type { ExamMark, GradeBand, GradingScale } from '../types';
 
 export const GRADE_TO_POINTS: Record<string, number> = {
     'A': 12, 'A-': 11,
@@ -93,6 +93,30 @@ export function getGradeFromScales(percentage: number, scales?: GradingScale[]):
         return '-';
     }
     return getGradeFromPercentage(percentage);
+}
+
+/**
+ * The symbol a school's OWN scale gives a percentage, or null when it cannot
+ * say — the subject has no grading system configured, or the percentage falls
+ * outside every band.
+ *
+ * The difference from `getGradeFromScales` is the absence of a fallback, and
+ * that is the point. A dashboard that prints "A" beside 50% because it guessed
+ * at a generic table is worse than one that prints nothing: the percentage is
+ * a measurement, but the letter is a claim about this school's policy, and a
+ * wrong one is read as the school's own. Callers render null as "no grade set"
+ * rather than inventing one.
+ */
+export function gradeSymbolFromScales(
+    percentage: number,
+    bands: readonly GradeBand[] | null | undefined,
+): string | null {
+    if (!bands || bands.length === 0) return null;
+    const rounded = Math.round(percentage);
+    const match = bands.find(
+        b => rounded >= Number(b.min_percentage) && rounded <= Number(b.max_percentage),
+    );
+    return match?.symbol ?? null;
 }
 
 /**
