@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import { gradeSymbolRank } from '@/lib/analytics';
 import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
 import type { MarkRow } from './ExamResultsTable';
 
@@ -24,13 +25,21 @@ function computeStats(marks: MarkRow[]) {
     const lowest = percentages[0];
     const passRate = (percentages.filter(p => p >= 50).length / n) * 100;
 
-    // Grade distribution
+    // Grade distribution.
+    //
+    // A mark with no recorded symbol is left out rather than counted as an F —
+    // inventing a failing grade for a blank. The bars are ordered best-first by
+    // `gradeSymbolRank`, which understands both the 8-4-4 letters and the CBC
+    // bands; they previously came out in whatever order the marks arrived.
     const gradeCounts: Record<string, number> = {};
     for (const m of marks) {
-        const g = m.grade_symbol || 'F';
+        const g = (m.grade_symbol || '').trim();
+        if (!g) continue;
         gradeCounts[g] = (gradeCounts[g] || 0) + 1;
     }
-    const gradeDistribution = Object.entries(gradeCounts).map(([grade, count]) => ({ grade, count }));
+    const gradeDistribution = Object.entries(gradeCounts)
+        .map(([grade, count]) => ({ grade, count }))
+        .sort((a, b) => gradeSymbolRank(a.grade) - gradeSymbolRank(b.grade));
 
     // Rankings
     const sorted = [...marks].sort((a, b) => b.percentage - a.percentage);
