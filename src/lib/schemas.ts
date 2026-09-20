@@ -80,6 +80,24 @@ export const subjectSchema = z.object({
     grading_system_id: z.string().uuid('Invalid grading system ID').optional().nullable(),
 });
 
+/**
+ * Adding a whole level's standard subjects at once.
+ *
+ * The catalogue in `subject-definitions` already carries the official CBC and
+ * 8-4-4 subjects with their real codes; until now a school could only take them
+ * one at a time, so most typed their own names instead and ended up with codes
+ * like `MAT(ESSENTIAL)` that no curriculum band recognises.
+ */
+export const subjectsBulkSchema = z.object({
+    level: z.enum([
+        'CBC_LOWER_PRIMARY',
+        'CBC_UPPER_PRIMARY',
+        'CBC_JUNIOR_SCHOOL',
+        'CBC_SENIOR_SCHOOL',
+        '844_SECONDARY',
+    ]),
+});
+
 export const subjectCombinationSchema = z.object({
     code: z.string().trim().min(1, 'Code is required').max(20).toUpperCase(),
     name: z.string().trim().min(1, 'Name is required').max(100),

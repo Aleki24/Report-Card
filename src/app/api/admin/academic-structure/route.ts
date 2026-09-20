@@ -5,6 +5,8 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { PREDEFINED_SUBJECTS } from '@/lib/subject-definitions';
+import { subjectsBulkSchema } from '@/lib/schemas';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
@@ -326,6 +328,78 @@ export async function POST(request: NextRequest) {
                     .select().single();
                 if (error) return handleDatabaseError(error, 'subject');
                 return NextResponse.json({ success: true, data: result });
+            },
+
+            /**
+             * Every standard subject for one curriculum band, in one go.
+             *
+             * The official CBC and 8-4-4 subjects already live in
+             * `subject-definitions` with their real codes, and the form above
+             * offers them — one at a time. Most schools did not work through
+             * that list; they typed their own names, which produced codes like
+             * `MAT(ESSENTIAL)` and `AGRIC_UP` that no curriculum band
+             * recognises, so the subject was then offered at every level from
+             * Grade 1 to Grade 12.
+             *
+             * Matching is by code, never by name: `MATH_LP` and `MATH_UP` are
+             * both called "Mathematics" and a school running both bands needs
+             * both rows.
+             */
+            subjects_bulk: async () => {
+                if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
+                const data = subjectsBulkSchema.parse(payload);
+
+                const levelCode = data.level.startsWith('844') ? '844' : 'CBC';
+                const { data: level } = await supabaseAdmin
+                    .from('academic_levels')
+                    .select('id')
+                    .eq('code', levelCode)
+                    .maybeSingle();
+                if (!level) {
+                    return NextResponse.json({ error: `No ${levelCode} academic level exists.` }, { status: 400 });
+                }
+
+                const wanted = PREDEFINED_SUBJECTS.filter(s => s.level === data.level);
+                if (wanted.length === 0) {
+                    return NextResponse.json({ success: true, created: 0, skipped: 0 });
+                }
+
+                const { data: existing } = await supabaseAdmin
+                    .from('subjects')
+                    .select('code')
+                    .eq('school_id', schoolId);
+                const have = new Set(
+                    (existing || []).map(row => (row.code || '').trim().toUpperCase()).filter(Boolean),
+                );
+
+                const toInsert = wanted
+                    .filter(s => !have.has(s.code.trim().toUpperCase()))
+                    .map((s, i) => ({
+                        code: s.code,
+                        name: s.name,
+                        academic_level_id: level.id,
+                        subject_type: s.isCore ? 'CORE' : 'OPTIONAL',
+                        category: s.category || 'TECHNICAL',
+                        display_order: i,
+                        school_id: schoolId,
+                    }));
+
+                if (toInsert.length === 0) {
+                    return NextResponse.json({ success: true, created: 0, skipped: wanted.length });
+                }
+
+                const { data: inserted, error } = await supabaseAdmin
+                    .from('subjects')
+                    .insert(toInsert)
+                    .select('id');
+                if (error) return handleDatabaseError(error, 'subject');
+
+                const created = inserted?.length ?? 0;
+                return NextResponse.json({
+                    success: true,
+                    created,
+                    skipped: wanted.length - created,
+                });
             },
 
             grading_scale: async () => {

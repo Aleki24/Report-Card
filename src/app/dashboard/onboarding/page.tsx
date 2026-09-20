@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Layers, Users, Building, GraduationCap, School } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Wordmark } from '@/components/Wordmark';
 import { toast } from 'sonner';
@@ -14,7 +14,6 @@ const ADMIN_STEPS = [
   { id: 2, title: 'Calendar', icon: Calendar, description: 'Set your current year and term' },
   { id: 3, title: 'Curriculum', icon: BookOpen, description: 'Select academic levels' },
   { id: 4, title: 'Classes', icon: Users, description: 'Create your classes and streams' },
-  { id: 5, title: 'Subjects', icon: Layers, description: 'Add subjects offered' },
 ];
 
 export default function OnboardingWizard() {
@@ -85,7 +84,6 @@ export default function OnboardingWizard() {
   const [termName, setTermName] = useState('Term 1');
   const [curriculum, setCurriculum] = useState({ cbc: true, '844': false });
   const [classes, setClasses] = useState([{ grade: '', streams: '' }]);
-  const [subjects, setSubjects] = useState('Mathematics, English, Kiswahili, Science');
 
   // --- Teacher/Student Form State ---
   const [inviteCode, setInviteCode] = useState('');
@@ -154,8 +152,7 @@ export default function OnboardingWizard() {
           academicYear,
           termName,
           curriculum,
-          classes,
-          subjects
+          classes
         }),
       });
 
@@ -571,26 +568,21 @@ export default function OnboardingWizard() {
                       + Add another grade
                     </button>
                   </div>
+
+                  {/*
+                    Subjects used to be typed here as free text, which produced
+                    rows with invented codes that matched nothing in the
+                    catalogue. They are now chosen — not written — from the
+                    standard list, per level, once the school exists.
+                  */}
+                  <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                    Subjects come next. Once setup is complete, open{' '}
+                    <span className="font-medium text-foreground">Dashboard &rarr; Subjects</span>{' '}
+                    and add the standard subjects for each level in one click, then keep only the ones you offer.
+                  </p>
                 </div>
               )}
 
-              {currentStep === 5 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div>
-                    <h2 className="text-xl font-bold mb-1">Subjects</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Enter the subjects offered at your school, separated by commas.</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <textarea 
-                      value={subjects}
-                      onChange={(e) => setSubjects(e.target.value)}
-                      className="input-field resize-none"
-                      placeholder="Mathematics, English, Kiswahili, Science, Social Studies..."
-                    />
-                  </div>
-                </div>
-              )}
             </>
           )}
 
