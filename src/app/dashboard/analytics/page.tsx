@@ -56,12 +56,27 @@ interface SubjectMeta {
 interface RawMark {
   subject_id: string | null;
   subject_name?: string;
+  // The stable identity of a learner. The route has always sent this; the page
+  // keyed on name and admission number instead, which merges two learners who
+  // share a name and splits one whose admission number is blank.
+  student_id?: string | null;
   student_name?: string;
   admission_number?: string;
   percentage: number;
   grade_symbol?: string | null;
+  exam_id?: string;
   exam_name?: string;
   exam_date?: string | null;
+}
+
+/** Mirrors `AnalyticsScope` from /api/school/analytics. */
+interface AnalyticsScope {
+  term_id: string | null;
+  term_name: string | null;
+  academic_year_id: string | null;
+  academic_year_name: string | null;
+  mark_count: number;
+  truncated: boolean;
 }
 
 const UNKNOWN_LEVEL = '__unknown__';
@@ -127,6 +142,7 @@ export default function AnalyticsPage() {
   // Raw response; every figure on the page is derived from it below.
   const [rawMarks, setRawMarks] = useState<RawMark[]>(EMPTY_MARKS);
   const [subjectMeta, setSubjectMeta] = useState<SubjectMeta[]>([]);
+  const [scope, setScope] = useState<AnalyticsScope | null>(null);
   const [levelId, setLevelId] = useState<string | null>(null);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
   const [showFullMerit, setShowFullMerit] = useState(false);
@@ -165,9 +181,10 @@ export default function AnalyticsPage() {
         if (cancelled) return;
         setRawMarks(res.ok && Array.isArray(json.marks) ? json.marks : EMPTY_MARKS);
         setSubjectMeta(res.ok && Array.isArray(json.subjects) ? json.subjects : []);
+        setScope(res.ok && json.scope ? json.scope : null);
       } catch (err) {
         console.error('Analytics fetch error:', err);
-        if (!cancelled) { setRawMarks(EMPTY_MARKS); setSubjectMeta([]); }
+        if (!cancelled) { setRawMarks(EMPTY_MARKS); setSubjectMeta([]); setScope(null); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -339,7 +356,19 @@ export default function AnalyticsPage() {
     });
   }, [marks]);
 
-  const totalStudents = subjectStats.reduce((sum, s) => sum + s.studentCount, 0);
+  /**
+   * Distinct learners, and separately how many marks they account for.
+   *
+   * The card beneath "Overall Average" used to read `${totalStudents} students`
+   * where the number was `sum(studentCount)` across subjects — one per mark, so
+   * a 182-student school reported "701 students". They are different questions
+   * and now have different answers.
+   */
+  const totalStudents = useMemo(
+    () => new Set(marks.map(m => m.student_id || m.admission_number || m.student_name)).size,
+    [marks],
+  );
+  const totalMarks = marks.length;
 
   const examAverages = trendData.map(row => {
     const scores = trendSubjects.map(s => row[s]).filter((v): v is number => v != null);
@@ -410,6 +439,22 @@ export default function AnalyticsPage() {
           <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: 0 }}>
             Class performance overview and subject insights
           </p>
+          {/*
+            Say which period these figures cover. Without this the page reads as
+            "the" average while silently pooling whichever terms happen to exist.
+          */}
+          {scope?.term_name && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {scope.term_name}
+              {scope.academic_year_name ? ` · ${scope.academic_year_name}` : ''}
+              {scope.mark_count > 0 ? ` · ${scope.mark_count} marks` : ''}
+            </p>
+          )}
+          {scope?.truncated && (
+            <p className="mt-1 text-xs font-medium text-destructive">
+              Showing a partial set — too many marks to load at once. Narrow by class.
+            </p>
+          )}
         </div>
         <select
           className="input-field w-full md:max-w-[260px]"
@@ -457,7 +502,7 @@ export default function AnalyticsPage() {
                 }`}
               >
                 {l.label}
-                <span className="ml-1 opacity-60">{l.count}</span>
+                <span className="ml-1 opacity-60">{l.count} marks</span>
               </button>
             ))}
           </div>
@@ -475,7 +520,7 @@ export default function AnalyticsPage() {
             <KpiCard
               label="Overall Average"
               value={`${classAverage}%`}
-              subtitle={totalStudents > 0 ? `${totalStudents} students` : undefined}
+              subtitle={totalStudents > 0 ? `${totalStudents} learners · ${totalMarks} marks` : undefined}
               color="var(--primary)"
               icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
             />
