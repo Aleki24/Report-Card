@@ -24,6 +24,8 @@ DROP TABLE IF EXISTS exam_marks CASCADE;
 DROP TABLE IF EXISTS exams CASCADE;
 DROP TABLE IF EXISTS grading_scales CASCADE;
 DROP TABLE IF EXISTS subject_teacher_assignments CASCADE;
+DROP VIEW IF EXISTS school_subject_catalogue CASCADE;
+DROP TABLE IF EXISTS school_subjects CASCADE;
 DROP TABLE IF EXISTS subjects CASCADE;
 DROP TABLE IF EXISTS subject_teachers CASCADE;
 DROP TABLE IF EXISTS class_teachers CASCADE;
@@ -217,10 +219,61 @@ CREATE TABLE IF NOT EXISTS subjects (
     subject_type TEXT DEFAULT 'CORE' NOT NULL,
     display_order INT DEFAULT 0 NOT NULL,
     category TEXT DEFAULT 'TECHNICAL' NOT NULL,
+    -- Both of these are legacy and go away with the application cutover:
+    -- grading_system_id moves to school_subjects (two schools offering
+    -- Chemistry must be able to grade it differently), and school_id is
+    -- replaced by a school_subjects row saying the school offers it.
     grading_system_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    -- Curriculum band: PP, LP, UP, JS, SS (CBC) or SEC (8-4-4).
+    -- academic_levels holds a single CBC row spanning Grade 1 to Grade 12, so
+    -- it cannot tell a Grade 4 subject from a Grade 12 one. This can, and it
+    -- replaces inferring the band from the code suffix at runtime.
+    band TEXT CHECK (band IS NULL OR band IN ('PP','LP','UP','JS','SS','SEC')),
+    -- NULL = a standard subject every school may offer. Set = a subject one
+    -- school invented, visible only to that school.
+    origin_school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- 11b. SCHOOL SUBJECTS -- which subjects a school offers, and how it grades them
+CREATE TABLE IF NOT EXISTS school_subjects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    school_id UUID REFERENCES schools(id) ON DELETE CASCADE NOT NULL,
+    subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE NOT NULL,
+    grading_system_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (school_id, subject_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_school_subjects_school ON school_subjects (school_id);
+CREATE INDEX IF NOT EXISTS idx_school_subjects_subject ON school_subjects (subject_id);
+
+-- Reads like the old subjects table filtered by school_id, so the ~20 call
+-- sites that did that change only their table name. Columns are named rather
+-- than s.* because while subjects.school_id still exists, s.* collides with
+-- school_subjects.school_id and the view will not create.
+CREATE OR REPLACE VIEW school_subject_catalogue AS
+SELECT
+    ss.school_id,
+    ss.grading_system_id,
+    ss.id AS offering_id,
+    s.id,
+    s.code,
+    s.name,
+    s.academic_level_id,
+    s.subject_type,
+    s.display_order,
+    s.category,
+    s.band,
+    s.origin_school_id,
+    s.created_at
+FROM school_subjects ss
+JOIN subjects s ON s.id = ss.subject_id;
+
+-- Without this the view runs as its creator and reads past the caller's RLS,
+-- defeating the per-school scoping it exists to provide.
+ALTER VIEW school_subject_catalogue SET (security_invoker = on);
 
 -- 12. SUBJECT TEACHER ASSIGNMENTS
 CREATE TABLE IF NOT EXISTS subject_teacher_assignments (
@@ -372,6 +425,7 @@ ALTER TABLE terms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subject_teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE school_subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subject_teacher_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grading_scales ENABLE ROW LEVEL SECURITY;
@@ -521,6 +575,7 @@ CREATE POLICY "Public read grade_streams" ON grade_streams FOR SELECT USING (aut
 CREATE POLICY "Public read academic_years" ON academic_years FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Public read terms" ON terms FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Public read subjects" ON subjects FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Public read school_subjects" ON school_subjects FOR SELECT USING (auth.role() = 'authenticated');
 
 -- USERS
 CREATE POLICY "Users can read all users (directory)" ON users FOR SELECT USING (auth.role() = 'authenticated');
