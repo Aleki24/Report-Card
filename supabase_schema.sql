@@ -25,6 +25,7 @@ DROP TABLE IF EXISTS exams CASCADE;
 DROP TABLE IF EXISTS grading_scales CASCADE;
 DROP TABLE IF EXISTS subject_teacher_assignments CASCADE;
 DROP VIEW IF EXISTS school_subject_catalogue CASCADE;
+DROP TABLE IF EXISTS subjects_merge_audit CASCADE;
 DROP TABLE IF EXISTS school_subjects CASCADE;
 DROP TABLE IF EXISTS subjects CASCADE;
 DROP TABLE IF EXISTS subject_teachers CASCADE;
@@ -207,24 +208,22 @@ CREATE TABLE IF NOT EXISTS subject_teachers (
 -- 11. SUBJECTS
 CREATE TABLE IF NOT EXISTS subjects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    -- Deliberately NOT globally unique. This file declared UNIQUE here while
-    -- the live database never had such an index, and the two disagreed in a way
-    -- that mattered: subjects are per-school rows, so two schools both offering
-    -- MATH_LP is normal. A fresh bootstrap from this file would have rejected
-    -- the second school's copy and broken "add all standard subjects" for every
-    -- school after the first.
+    -- One row per standard subject, so a code identifies a subject rather than
+    -- one school's copy of it. Not declared UNIQUE here because a school may
+    -- also invent its own subject (origin_school_id below), and two schools
+    -- may independently coin the same code for different things; uniqueness is
+    -- enforced by partial indexes instead — one over standard rows, one per
+    -- school over its own.
     code TEXT NOT NULL,
     name TEXT NOT NULL,
     academic_level_id UUID REFERENCES academic_levels(id) ON DELETE CASCADE NOT NULL,
     subject_type TEXT DEFAULT 'CORE' NOT NULL,
     display_order INT DEFAULT 0 NOT NULL,
     category TEXT DEFAULT 'TECHNICAL' NOT NULL,
-    -- Both of these are legacy and go away with the application cutover:
-    -- grading_system_id moves to school_subjects (two schools offering
-    -- Chemistry must be able to grade it differently), and school_id is
-    -- replaced by a school_subjects row saying the school offers it.
-    grading_system_id UUID REFERENCES grading_systems(id) ON DELETE SET NULL,
-    school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
+    -- No school_id and no grading_system_id. A subject is a catalogue row every
+    -- school can see; which schools offer it, and how each of them grades it,
+    -- live in school_subjects. Those two columns were dropped once the
+    -- application read ownership from there.
     -- Curriculum band: PP, LP, UP, JS, SS (CBC) or SEC (8-4-4).
     -- academic_levels holds a single CBC row spanning Grade 1 to Grade 12, so
     -- it cannot tell a Grade 4 subject from a Grade 12 one. This can, and it
@@ -248,6 +247,29 @@ CREATE TABLE IF NOT EXISTS school_subjects (
 
 CREATE INDEX IF NOT EXISTS idx_school_subjects_school ON school_subjects (school_id);
 CREATE INDEX IF NOT EXISTS idx_school_subjects_subject ON school_subjects (subject_id);
+
+-- A code names one standard subject; a school's own invention is unique only
+-- within that school.
+CREATE UNIQUE INDEX IF NOT EXISTS subjects_standard_code_key
+    ON subjects (upper(trim(code))) WHERE origin_school_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS subjects_custom_code_key
+    ON subjects (origin_school_id, upper(trim(code))) WHERE origin_school_id IS NOT NULL;
+
+-- Audit trail of the one-off merge that collapsed each school's private copy
+-- of a subject onto a single catalogue row. Retained so that merge can be
+-- replayed backwards. RLS on with no policy: denied to every role but the
+-- service role, which is the point.
+CREATE TABLE IF NOT EXISTS subjects_merge_audit (
+    id BIGSERIAL PRIMARY KEY,
+    merged_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    code TEXT NOT NULL,
+    loser_id UUID NOT NULL,
+    winner_id UUID NOT NULL,
+    table_name TEXT NOT NULL,
+    row_id TEXT,
+    loser_name TEXT,
+    loser_school UUID
+);
 
 -- Reads like the old subjects table filtered by school_id, so the ~20 call
 -- sites that did that change only their table name. Columns are named rather
@@ -426,6 +448,7 @@ ALTER TABLE class_teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subject_teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE school_subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subjects_merge_audit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subject_teacher_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exams ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grading_scales ENABLE ROW LEVEL SECURITY;
