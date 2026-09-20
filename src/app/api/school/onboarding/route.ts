@@ -157,6 +157,17 @@ export async function POST(request: NextRequest) {
     const getLevelId = (code: string) => levels?.find(l => l.code === code)?.id;
     const fallbackLevelId = levels?.[0]?.id;
 
+    // The curriculum the school picked during sign-up was read off the request
+    // body and then ignored — every grade and every subject was created as CBC.
+    // A school that signed up as 8-4-4 got a CBC academic level on all of it,
+    // and since one CBC level spans Grade 1 to Grade 12, nothing downstream
+    // could tell its classes apart afterwards.
+    const chosenLevelCode = String(curriculum || '').toUpperCase().includes('844')
+      || String(curriculum || '').includes('8-4-4')
+      ? '844'
+      : 'CBC';
+    const schoolLevelId = getLevelId(chosenLevelCode) || fallbackLevelId;
+
     for (const cls of classes) {
       if (!cls.grade) continue;
       
@@ -172,7 +183,7 @@ export async function POST(request: NextRequest) {
       if (existingGrade) {
         gradeId = existingGrade.id;
       } else {
-        const levelId = getLevelId('CBC') || fallbackLevelId;
+        const levelId = schoolLevelId;
         if (!levelId) continue;
 
         const { count: existingCount } = await supabaseAdmin
@@ -215,22 +226,50 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Insert Subjects
-    if (subjects) {
-      const subjectNames = subjects.split(',').map((s: string) => s.trim()).filter(Boolean);
-      for (let i = 0; i < subjectNames.length; i++) {
-        const sName = subjectNames[i];
-        const code = sName.substring(0, 3).toUpperCase() + String(i + 1).padStart(2, '0');
-        const levelId = getLevelId('CBC') || fallbackLevelId;
-        if (!levelId) continue;
+    //
+    // These rows used to be written with no `school_id` at all, unlike every
+    // other insert in this file. That made them global — visible to every
+    // school on the instance — and because the code was derived from the
+    // subject's position in the list ("English" first became ENG01), two
+    // schools onboarding with the same subjects produced colliding codes on
+    // rows nobody owned. Twelve such rows accumulated before this was found.
+    if (subjects && schoolLevelId) {
+      const seen = new Set<string>();
+      const subjectNames: string[] = subjects
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+
+      // What the school already has, so re-running onboarding is idempotent.
+      const { data: existingSubjects } = await supabaseAdmin
+        .from('subjects')
+        .select('name, code')
+        .eq('school_id', schoolId);
+      for (const row of existingSubjects || []) {
+        if (row.name) seen.add(row.name.trim().toLowerCase());
+      }
+      const takenCodes = new Set((existingSubjects || []).map(r => (r.code || '').toUpperCase()));
+
+      for (const sName of subjectNames) {
+        const key = sName.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        // A code derived from the name rather than the position, with a
+        // numeric suffix only where it would otherwise clash inside this school.
+        const base = sName.replace(/[^A-Za-z]/g, '').substring(0, 4).toUpperCase() || 'SUBJ';
+        let code = base;
+        for (let n = 2; takenCodes.has(code); n++) code = `${base}${n}`;
+        takenCodes.add(code);
 
         await supabaseAdmin
           .from('subjects')
           .insert({
-            code: code,
+            code,
             name: sName,
-            academic_level_id: levelId
+            academic_level_id: schoolLevelId,
+            school_id: schoolId,
           })
-          // Ignore conflicts if subject exists
           .select()
           .maybeSingle();
       }
