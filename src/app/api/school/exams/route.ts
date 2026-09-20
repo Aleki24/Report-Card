@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
@@ -207,6 +208,57 @@ export async function POST(request: NextRequest) {
       if (!streamCheck || streamCheck.school_id !== schoolId) {
         return NextResponse.json({ error: 'Invalid grade stream for your school' }, { status: 400 });
       }
+    }
+
+    // ── The subject must belong to this school, and to this class ──
+    //
+    // Nothing here checked the subject at all, so a CBC learning area could be
+    // attached to a Form 4 exam and an 8-4-4 subject to a Grade 10 one. It
+    // happened: one school ended up with sixteen such exams, and marks entered
+    // against them were graded on the wrong curriculum's table — Form 4
+    // learners' Chemistry letters read as CBC performance levels, and Grade 10
+    // learners' CBC bands sat under 8-4-4 Mathematics.
+    //
+    // Two cuts, because one is not enough. The academic level separates CBC
+    // from 8-4-4. The curriculum band separates Grade 4 from Grade 12, which
+    // share a single CBC level — without it, "Essential Mathematics" is a legal
+    // choice for an Upper Primary exam.
+    const [{ data: subjectCheck }, { data: gradeCheck }] = await Promise.all([
+      supabase
+        .from('subjects')
+        .select('id, name, code, school_id, academic_level_id')
+        .eq('id', subject_id)
+        .maybeSingle(),
+      supabase
+        .from('grades')
+        .select('id, code, name_display, academic_level_id')
+        .eq('id', grade_id)
+        .maybeSingle(),
+    ]);
+
+    if (!subjectCheck || subjectCheck.school_id !== schoolId) {
+      return NextResponse.json({ error: 'Invalid subject for your school' }, { status: 400 });
+    }
+    if (!gradeCheck) {
+      return NextResponse.json({ error: 'Invalid grade' }, { status: 400 });
+    }
+
+    if (
+      subjectCheck.academic_level_id &&
+      gradeCheck.academic_level_id &&
+      subjectCheck.academic_level_id !== gradeCheck.academic_level_id
+    ) {
+      return NextResponse.json(
+        { error: `${subjectCheck.name?.trim() || 'That subject'} is not taught under ${gradeCheck.name_display}'s curriculum.` },
+        { status: 400 },
+      );
+    }
+
+    if (!isSubjectOfferedAtGrade(subjectCheck, gradeCheck)) {
+      return NextResponse.json(
+        { error: `${subjectCheck.name?.trim() || 'That subject'} is not taught at ${gradeCheck.name_display}.` },
+        { status: 400 },
+      );
     }
 
     const { data, error } = await supabase

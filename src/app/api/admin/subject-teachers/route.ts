@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { filterSubjectsForGrade } from '@/lib/curriculum-bands';
+import { filterSubjectsForGrade, isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 
 /**
  * Who teaches each subject in a class.
@@ -156,16 +156,43 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Set up an academic year in Settings first.' }, { status: 400 });
         }
 
-        // The subject must be one of this school's own. The picker used to be
-        // fed an unscoped list, so a foreign subject_id could arrive here and be
-        // written into an assignment row.
+        // The subject must be one of this school's own.
         const { data: subject } = await supabase
             .from('subjects')
-            .select('id, school_id')
+            .select('id, name, code, school_id, academic_level_id')
             .eq('id', subject_id)
             .maybeSingle();
         if (!subject || subject.school_id !== schoolId) {
             return NextResponse.json({ error: 'That subject is not in your school.' }, { status: 404 });
+        }
+
+        // …and must be taught at this class. The GET already narrows the picker
+        // this way; without the same cut here the narrowing is only a
+        // suggestion, and a CBC learning area could still be assigned to a
+        // Form 4 class through a direct request.
+        const { data: patchGrade } = await supabase
+            .from('grades')
+            .select('id, code, name_display, academic_level_id')
+            .eq('id', grade_id)
+            .maybeSingle();
+        if (!patchGrade) {
+            return NextResponse.json({ error: 'Invalid grade.' }, { status: 400 });
+        }
+        if (
+            subject.academic_level_id &&
+            patchGrade.academic_level_id &&
+            subject.academic_level_id !== patchGrade.academic_level_id
+        ) {
+            return NextResponse.json(
+                { error: `${subject.name?.trim() || 'That subject'} is not taught under ${patchGrade.name_display}'s curriculum.` },
+                { status: 400 },
+            );
+        }
+        if (!isSubjectOfferedAtGrade(subject, patchGrade)) {
+            return NextResponse.json(
+                { error: `${subject.name?.trim() || 'That subject'} is not taught at ${patchGrade.name_display}.` },
+                { status: 400 },
+            );
         }
 
         // Replace whatever currently covers this subject for this class, so a
