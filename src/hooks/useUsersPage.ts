@@ -20,8 +20,13 @@ export interface UserRow {
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
 export interface ClassTeacherAssignment { user_id: string; current_grade_stream_id: string; }
 export interface AcademicLevelOption { id: string; code: string; name: string; }
-export interface SubjectOption { id: string; name: string; code: string; }
-export interface GradeOption { id: string; name_display: string; }
+export interface SubjectOption { id: string; name: string; code: string; academic_level_id?: string | null; }
+/**
+ * `code` and `academic_level_id` come back from /api/admin/academic-structure
+ * (it selects `*`) and are what place a class in its curriculum band, so the
+ * subject picker can offer only what that class actually takes.
+ */
+export interface GradeOption { id: string; name_display: string; code?: string | null; academic_level_id?: string | null; }
 
 // CLASS_TEACHER and SUBJECT_TEACHER are one "Teacher" form in the UI — the class
 // assignment is just an optional field on it, not a distinct role to switch to.

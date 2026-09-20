@@ -72,9 +72,14 @@ export async function GET(request: NextRequest) {
             .eq('id', gradeId)
             .maybeSingle();
 
+        // Scoped to this school. Without the school filter this returned every
+        // school's subjects at that academic level — 76 CBC subjects where the
+        // school owns 42 — so an admin picked a subject teacher from a list
+        // containing other schools' learning areas, and could assign one.
         const { data: levelSubjects } = await supabase
             .from('subjects')
             .select('id, name, code, display_order')
+            .eq('school_id', schoolId)
             .eq('academic_level_id', grade?.academic_level_id || '')
             .order('display_order');
 
@@ -88,12 +93,17 @@ export async function GET(request: NextRequest) {
             .in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER', 'ADMIN'])
             .eq('is_active', true);
 
-        let query = supabase
-            .from('subject_teacher_assignments')
-            .select('id, subject_id, grade_stream_id, subject_teacher_id')
-            .eq('grade_id', gradeId);
-        if (yearId) query = query.eq('academic_year_id', yearId);
-        const assignments = (await query).data || [];
+        // `grades` is a shared table — every school's Grade 7 is the same row —
+        // so grade_id alone matches other schools' assignments. The academic
+        // year is what scopes this to one school; without one there is nothing
+        // to read yet, and reading unscoped would cross the tenant boundary.
+        const assignments = yearId
+            ? (await supabase
+                .from('subject_teacher_assignments')
+                .select('id, subject_id, grade_stream_id, subject_teacher_id')
+                .eq('grade_id', gradeId)
+                .eq('academic_year_id', yearId)).data || []
+            : [];
 
         const teacherIds = [...new Set(assignments.map(a => a.subject_teacher_id).filter(Boolean))] as string[];
         const { data: teacherRows } = teacherIds.length
@@ -144,6 +154,18 @@ export async function PATCH(request: NextRequest) {
         const yearId = await currentYearId(supabase, schoolId);
         if (!yearId) {
             return NextResponse.json({ error: 'Set up an academic year in Settings first.' }, { status: 400 });
+        }
+
+        // The subject must be one of this school's own. The picker used to be
+        // fed an unscoped list, so a foreign subject_id could arrive here and be
+        // written into an assignment row.
+        const { data: subject } = await supabase
+            .from('subjects')
+            .select('id, school_id')
+            .eq('id', subject_id)
+            .maybeSingle();
+        if (!subject || subject.school_id !== schoolId) {
+            return NextResponse.json({ error: 'That subject is not in your school.' }, { status: 404 });
         }
 
         // Replace whatever currently covers this subject for this class, so a

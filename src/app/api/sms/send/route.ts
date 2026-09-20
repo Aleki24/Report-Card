@@ -5,6 +5,7 @@ import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
 import {
     getGradeFromScales,
+    gradeSymbolFromScales,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 
@@ -105,10 +106,20 @@ export async function POST(request: Request) {
                 .maybeSingle();
 
             if (firstStudent?.academic_level_id) {
+                // Scoped to this school plus the seeded defaults (null school_id),
+                // and ordered. Matching on academic_level_id alone picked an
+                // arbitrary system — possibly another school's — and these
+                // grades are texted to parents.
+                //
+                // An OVERALL system is a points-band table and must never grade
+                // a subject mark.
                 const { data: gradingSystem } = await supabase
                     .from('grading_systems')
                     .select('id')
                     .eq('academic_level_id', firstStudent.academic_level_id)
+                    .or(`school_id.eq.${schoolId},school_id.is.null`)
+                    .neq('system_kind', 'OVERALL')
+                    .order('name', { ascending: true })
                     .limit(1)
                     .maybeSingle();
 
@@ -190,7 +201,14 @@ export async function POST(request: Request) {
                 .slice(0, 8); // Max 8 subjects to keep SMS short
 
             const avg = report?.average_score ? Number(report.average_score).toFixed(1) : '-';
-            const grade = report?.overall_grade || (report?.average_score ? getGradeFromScales(Number(report.average_score), gradingScales) : '-');
+            // No invented grade in a message to a parent: unlike the subject
+            // lines above, this had no `gradingScales.length` guard, so a school
+            // with no configured scale had a built-in A+/A/B/C/D/F ladder texted
+            // out as if it were its own.
+            const grade = report?.overall_grade
+                || (report?.average_score
+                    ? gradeSymbolFromScales(Number(report.average_score), gradingScales) ?? '-'
+                    : '-');
             const rank = report?.rank || '-';
             const rankStr = totalInClass ? `${rank}/${totalInClass}` : `${rank}`;
 

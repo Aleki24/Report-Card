@@ -1,4 +1,5 @@
 import React from 'react';
+import { gradeSymbolRank } from '@/lib/analytics';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer, Image } from '@react-pdf/renderer';
 import { ReportFooter } from './pdf/ReportFooter';
 import { T, FONT_BODY, boldFont, displayFont, attainmentColor } from './pdf/pdfTheme';
@@ -418,11 +419,14 @@ function GradeDistribution({ data }: { data: MarkSheetData }) {
     const entries = Object.entries(data.gradeDistribution);
     if (entries.length === 0) return <Text style={{ fontSize: 6, color: T.muted }}>No grades yet.</Text>;
 
-    const order = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'E', 'EE', 'ME', 'AE', 'BE'];
-    const sorted = entries.sort(([a], [b]) => {
-        const ia = order.indexOf(a), ib = order.indexOf(b);
-        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
-    });
+    // The CBC bands are EE1/EE2/ME1/ME2/AE1/AE2/BE1/BE2, not bare EE/ME/AE/BE,
+    // so every one of them missed this list, fell to the end as unknown, and
+    // was then ordered alphabetically — which put "Approaching Expectations"
+    // (21-40%) ahead of "Exceeding Expectations" (90-100%) on a printed
+    // marksheet. `gradeSymbolRank` knows both scales.
+    const sorted = entries
+        .filter(([grade]) => grade && grade !== '-')
+        .sort(([a], [b]) => gradeSymbolRank(a) - gradeSymbolRank(b) || a.localeCompare(b));
     const peak = Math.max(...sorted.map(([, count]) => count));
     const BAR_H = 34;
     const total = sorted.reduce((sum, [, count]) => sum + count, 0);

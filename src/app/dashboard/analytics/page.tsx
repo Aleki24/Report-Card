@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { gradeSymbolRank } from '@/lib/analytics';
+import { shortCurriculumLabel } from '@/lib/curriculum-labels';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
 import { SubjectComparisonChart } from '@/components/charts/SubjectComparisonChart';
 import { InsightsPanel } from '@/components/charts/InsightsPanel';
@@ -41,6 +43,29 @@ interface GradeStreamOption {
   id: string;
   full_name: string;
 }
+
+/** Mirrors `SubjectMeta` from /api/school/analytics. */
+interface SubjectMeta {
+  id: string;
+  name: string;
+  academic_level_id: string | null;
+  level_code: string | null;
+  level_name: string | null;
+}
+
+interface RawMark {
+  subject_id: string | null;
+  subject_name?: string;
+  student_name?: string;
+  admission_number?: string;
+  percentage: number;
+  grade_symbol?: string | null;
+  exam_name?: string;
+  exam_date?: string | null;
+}
+
+const UNKNOWN_LEVEL = '__unknown__';
+const EMPTY_MARKS: RawMark[] = [];
 
 function KpiCard({
   label,
@@ -99,13 +124,11 @@ export default function AnalyticsPage() {
   const [selectedStreamId, setSelectedStreamId] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  const [trendData, setTrendData] = useState<Record<string, any>[]>([]);
-  const [trendSubjects, setTrendSubjects] = useState<string[]>([]);
-  const [classAverage, setClassAverage] = useState(0);
-  const [gradeData, setGradeData] = useState<GradeData[]>([]);
-  const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
+  // Raw response; every figure on the page is derived from it below.
+  const [rawMarks, setRawMarks] = useState<RawMark[]>(EMPTY_MARKS);
+  const [subjectMeta, setSubjectMeta] = useState<SubjectMeta[]>([]);
+  const [levelId, setLevelId] = useState<string | null>(null);
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
-  const [meritList, setMeritList] = useState<MeritRow[]>([]);
   const [showFullMerit, setShowFullMerit] = useState(false);
 
   useEffect(() => {
@@ -121,150 +144,200 @@ export default function AnalyticsPage() {
     fetchClasses();
   }, []);
 
+  /**
+   * Fetch once per class, then derive everything below from the result.
+   *
+   * The aggregation used to happen inside the effect and be pushed into six
+   * pieces of state. It now lives in memos keyed on the curriculum as well, so
+   * switching curriculum re-derives without refetching — and, more to the
+   * point, so every figure on the page is computed from the same
+   * curriculum-scoped set of marks rather than from all of them at once.
+   */
   useEffect(() => {
+    let cancelled = false;
     const fetchAnalytics = async () => {
       setLoading(true);
-
       try {
         const params = new URLSearchParams();
         if (selectedStreamId !== 'all') params.set('stream_id', selectedStreamId);
-
         const res = await fetch(`/api/school/analytics?${params.toString()}`);
         const json = await res.json();
-
-        if (!res.ok || !json.marks || json.marks.length === 0) {
-          setTrendData([]);
-          setTrendSubjects([]);
-          setClassAverage(0);
-          setGradeData([]);
-          setSubjectStats([]);
-          setLoading(false);
-          return;
-        }
-
-        const marks = json.marks;
-
-        const gradeCounts: Record<string, number> = {};
-        marks.forEach((m: any) => {
-          const g = m.grade_symbol || 'F';
-          gradeCounts[g] = (gradeCounts[g] || 0) + 1;
-        });
-        const gradeOrder = (g: string) => {
-          const base: Record<string, number> = { 'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6 };
-          const letter = g.charAt(0).toUpperCase();
-          const modifier = g.length > 1 ? g.charAt(1) : '';
-          return (base[letter] || 7) * 10 + (modifier === '+' ? 0 : modifier === '-' ? 2 : 1);
-        };
-        const dbGrades = Object.entries(gradeCounts)
-          .map(([grade, count]) => ({ grade, count }))
-          .sort((a, b) => gradeOrder(a.grade) - gradeOrder(b.grade));
-        setGradeData(dbGrades);
-
-        const examSubjAgg: Record<string, Record<string, { sum: number; count: number }>> = {};
-        const examDates: Record<string, string> = {};
-        const allSubjects = new Set<string>();
-
-        marks.forEach((m: any) => {
-          const eName = m.exam_name || 'Unknown Exam';
-          const sName = m.subject_name || 'Unknown';
-          const eDate = m.exam_date || new Date().toISOString();
-          allSubjects.add(sName);
-          if (!examDates[eName]) examDates[eName] = eDate;
-          if (!examSubjAgg[eName]) examSubjAgg[eName] = {};
-          if (!examSubjAgg[eName][sName]) examSubjAgg[eName][sName] = { sum: 0, count: 0 };
-          examSubjAgg[eName][sName].sum += Number(m.percentage);
-          examSubjAgg[eName][sName].count += 1;
-        });
-
-        const subjects = Array.from(allSubjects).sort();
-        setTrendSubjects(subjects);
-
-        const trendRows = Object.entries(examSubjAgg)
-          .map(([examName, subjMap]) => {
-            const row: Record<string, any> = { examName, _date: new Date(examDates[examName]).getTime() };
-            for (const subj of subjects) {
-              if (subjMap[subj]) {
-                row[subj] = Math.round(subjMap[subj].sum / subjMap[subj].count);
-              }
-            }
-            return row;
-          })
-          .sort((a, b) => a._date - b._date);
-
-        setTrendData(trendRows);
-
-        const allPcts = marks.map((m: any) => Number(m.percentage));
-        const avg = allPcts.length > 0 ? allPcts.reduce((s: number, v: number) => s + v, 0) / allPcts.length : 0;
-        setClassAverage(Math.round(avg));
-
-        const subjAgg: Record<string, StudentMark[]> = {};
-        marks.forEach((m: any) => {
-          const sName = m.subject_name || 'Unknown Subject';
-          if (!subjAgg[sName]) subjAgg[sName] = [];
-          subjAgg[sName].push({
-            studentName: m.student_name || 'Unknown',
-            admissionNumber: m.admission_number || '',
-            percentage: Number(m.percentage),
-            gradeSymbol: m.grade_symbol || '-',
-          });
-        });
-
-        const dbSubjStats: SubjectStat[] = Object.entries(subjAgg).map(([name, students]) => {
-          const scores = students.map(s => s.percentage).sort((a, b) => a - b);
-          const count = scores.length;
-          const sum = scores.reduce((a, b) => a + b, 0);
-          const mean = sum / count;
-          const median = count % 2 === 0
-            ? (scores[count / 2 - 1] + scores[count / 2]) / 2
-            : scores[Math.floor(count / 2)];
-          const passes = scores.filter(s => s >= 50).length;
-          const passRate = (passes / count) * 100;
-          return {
-            name,
-            mean: Math.round(mean),
-            median: Math.round(median),
-            highest: Math.round(scores[count - 1]),
-            lowest: Math.round(scores[0]),
-            passRate: Math.round(passRate),
-            studentCount: count,
-            students: [...students].sort((a, b) => b.percentage - a.percentage),
-          };
-        }).sort((a, b) => b.mean - a.mean);
-
-        setSubjectStats(dbSubjStats);
-
-        // ── Merit list: rank students by mean % across their subjects ──
-        const perStudent: Record<string, { name: string; adm: string; sum: number; count: number }> = {};
-        marks.forEach((m: { admission_number?: string; student_name?: string; percentage: number }) => {
-          const key = m.admission_number || m.student_name || 'unknown';
-          if (!perStudent[key]) {
-            perStudent[key] = { name: m.student_name || 'Unknown', adm: m.admission_number || '', sum: 0, count: 0 };
-          }
-          perStudent[key].sum += Number(m.percentage);
-          perStudent[key].count += 1;
-        });
-        const ranked = Object.values(perStudent)
-          .map(s => ({ studentName: s.name, admissionNumber: s.adm, average: s.sum / s.count, subjectCount: s.count }))
-          .sort((a, b) => b.average - a.average);
-        // Standard competition ranking: ties share a rank
-        let lastAvg = Number.NaN;
-        let lastRank = 0;
-        setMeritList(ranked.map((s, i) => {
-          const rank = s.average === lastAvg ? lastRank : i + 1;
-          lastAvg = s.average;
-          lastRank = rank;
-          return { ...s, rank };
-        }));
-        setShowFullMerit(false);
+        if (cancelled) return;
+        setRawMarks(res.ok && Array.isArray(json.marks) ? json.marks : EMPTY_MARKS);
+        setSubjectMeta(res.ok && Array.isArray(json.subjects) ? json.subjects : []);
       } catch (err) {
         console.error('Analytics fetch error:', err);
+        if (!cancelled) { setRawMarks(EMPTY_MARKS); setSubjectMeta([]); }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      setLoading(false);
     };
-
     fetchAnalytics();
+    return () => { cancelled = true; };
   }, [selectedStreamId]);
+
+  const subjectsById = useMemo(
+    () => new Map(subjectMeta.map(s => [s.id, s])),
+    [subjectMeta],
+  );
+
+  const levelOf = useMemo(
+    () => (m: RawMark) => (m.subject_id ? subjectsById.get(m.subject_id)?.academic_level_id : null) ?? UNKNOWN_LEVEL,
+    [subjectsById],
+  );
+
+  /**
+   * CBC and 8-4-4 are graded on different tables, so every figure here — the
+   * grade distribution, the subject means, the merit order — describes nothing
+   * when the two are pooled. One curriculum at a time; the control only appears
+   * when a school actually runs both.
+   */
+  const levelOptions = useMemo(() => {
+    const byLevel = new Map<string, { id: string; label: string; count: number }>();
+    for (const m of rawMarks) {
+      const id = levelOf(m);
+      const meta = m.subject_id ? subjectsById.get(m.subject_id) : undefined;
+      const label = shortCurriculumLabel(meta?.level_code, meta?.level_name) ?? 'Other';
+      const cur = byLevel.get(id) ?? { id, label, count: 0 };
+      cur.count += 1;
+      byLevel.set(id, cur);
+    }
+    return [...byLevel.values()].sort((a, b) => b.count - a.count);
+  }, [rawMarks, subjectsById, levelOf]);
+
+  const activeLevelId = levelId && levelOptions.some(l => l.id === levelId)
+    ? levelId
+    : levelOptions[0]?.id ?? null;
+
+  const marks = useMemo(
+    () => (activeLevelId ? rawMarks.filter(m => levelOf(m) === activeLevelId) : rawMarks),
+    [rawMarks, activeLevelId, levelOf],
+  );
+
+  // ── Grade distribution ──
+  //
+  // Marks with no recorded symbol are left out rather than counted as an F,
+  // which is what the old code did — inventing a failing grade for a blank.
+  const gradeData = useMemo<GradeData[]>(() => {
+    const counts: Record<string, number> = {};
+    for (const m of marks) {
+      const g = (m.grade_symbol || '').trim();
+      if (!g) continue;
+      counts[g] = (counts[g] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([grade, count]) => ({ grade, count }))
+      .sort((a, b) => gradeSymbolRank(a.grade) - gradeSymbolRank(b.grade));
+  }, [marks]);
+
+  const ungradedCount = useMemo(
+    () => marks.filter(m => !(m.grade_symbol || '').trim()).length,
+    [marks],
+  );
+
+  // ── Trend by exam ──
+  const { trendData, trendSubjects } = useMemo(() => {
+    const examSubjAgg: Record<string, Record<string, { sum: number; count: number }>> = {};
+    const examDates: Record<string, string> = {};
+    const allSubjects = new Set<string>();
+
+    for (const m of marks) {
+      const eName = m.exam_name || 'Unknown Exam';
+      const sName = m.subject_name || 'Unknown';
+      const eDate = m.exam_date || new Date().toISOString();
+      allSubjects.add(sName);
+      if (!examDates[eName]) examDates[eName] = eDate;
+      if (!examSubjAgg[eName]) examSubjAgg[eName] = {};
+      if (!examSubjAgg[eName][sName]) examSubjAgg[eName][sName] = { sum: 0, count: 0 };
+      examSubjAgg[eName][sName].sum += Number(m.percentage);
+      examSubjAgg[eName][sName].count += 1;
+    }
+
+    const subjects = Array.from(allSubjects).sort();
+    const rows = Object.entries(examSubjAgg)
+      .map(([examName, subjMap]) => {
+        const row: Record<string, any> = { examName, _date: new Date(examDates[examName]).getTime() };
+        for (const subj of subjects) {
+          if (subjMap[subj]) row[subj] = Math.round(subjMap[subj].sum / subjMap[subj].count);
+        }
+        return row;
+      })
+      .sort((a, b) => a._date - b._date);
+
+    return { trendData: rows, trendSubjects: subjects };
+  }, [marks]);
+
+  const classAverage = useMemo(() => {
+    if (marks.length === 0) return 0;
+    return Math.round(marks.reduce((s, m) => s + Number(m.percentage), 0) / marks.length);
+  }, [marks]);
+
+  // ── Per-subject ──
+  //
+  // Keyed by subject id, not name: a school running both curricula has two
+  // subjects called "Agriculture", and keying on the name merged them.
+  const subjectStats = useMemo<SubjectStat[]>(() => {
+    const agg = new Map<string, { name: string; students: StudentMark[] }>();
+    for (const m of marks) {
+      const key = m.subject_id ?? `name:${m.subject_name ?? 'Unknown Subject'}`;
+      const name = (subjectsById.get(m.subject_id ?? '')?.name || m.subject_name || 'Unknown Subject').trim();
+      const bucket = agg.get(key) ?? { name, students: [] };
+      bucket.students.push({
+        studentName: m.student_name || 'Unknown',
+        admissionNumber: m.admission_number || '',
+        percentage: Number(m.percentage),
+        gradeSymbol: (m.grade_symbol || '').trim() || '-',
+      });
+      agg.set(key, bucket);
+    }
+
+    return [...agg.values()].map(({ name, students }) => {
+      const scores = students.map(s => s.percentage).sort((a, b) => a - b);
+      const count = scores.length;
+      const sum = scores.reduce((a, b) => a + b, 0);
+      const mean = sum / count;
+      const median = count % 2 === 0
+        ? (scores[count / 2 - 1] + scores[count / 2]) / 2
+        : scores[Math.floor(count / 2)];
+      const passes = scores.filter(s => s >= 50).length;
+      return {
+        name,
+        mean: Math.round(mean),
+        median: Math.round(median),
+        highest: Math.round(scores[count - 1]),
+        lowest: Math.round(scores[0]),
+        passRate: Math.round((passes / count) * 100),
+        studentCount: count,
+        students: [...students].sort((a, b) => b.percentage - a.percentage),
+      };
+    }).sort((a, b) => b.mean - a.mean);
+  }, [marks, subjectsById]);
+
+  // ── Merit list ──
+  const meritList = useMemo<MeritRow[]>(() => {
+    const perStudent: Record<string, { name: string; adm: string; sum: number; count: number }> = {};
+    for (const m of marks) {
+      const key = m.admission_number || m.student_name || 'unknown';
+      if (!perStudent[key]) {
+        perStudent[key] = { name: m.student_name || 'Unknown', adm: m.admission_number || '', sum: 0, count: 0 };
+      }
+      perStudent[key].sum += Number(m.percentage);
+      perStudent[key].count += 1;
+    }
+    const ranked = Object.values(perStudent)
+      .map(s => ({ studentName: s.name, admissionNumber: s.adm, average: s.sum / s.count, subjectCount: s.count }))
+      .sort((a, b) => b.average - a.average);
+
+    // Standard competition ranking: ties share a rank.
+    let lastAvg = Number.NaN;
+    let lastRank = 0;
+    return ranked.map((s, i) => {
+      const rank = s.average === lastAvg ? lastRank : i + 1;
+      lastAvg = s.average;
+      lastRank = rank;
+      return { ...s, rank };
+    });
+  }, [marks]);
 
   const totalStudents = subjectStats.reduce((sum, s) => sum + s.studentCount, 0);
 
@@ -364,6 +437,35 @@ export default function AnalyticsPage() {
           ))}
         </select>
       </div>
+
+      {/* Curriculum scope — only when the school actually runs both. Every
+          figure below is computed within the selected one. */}
+      {!loading && levelOptions.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium text-muted-foreground">Curriculum</span>
+          <div role="group" aria-label="Curriculum" className="inline-flex rounded-full bg-muted/60 p-0.5">
+            {levelOptions.map(l => (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => setLevelId(l.id)}
+                aria-pressed={l.id === activeLevelId}
+                className={`cursor-pointer rounded-full px-3 py-1 text-[11px] font-semibold leading-none transition-colors ${
+                  l.id === activeLevelId
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {l.label}
+                <span className="ml-1 opacity-60">{l.count}</span>
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] leading-snug text-muted-foreground">
+            CBC and 8-4-4 are graded on different scales, so they are read separately.
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <ContentSkeleton message="Analyzing data..." />

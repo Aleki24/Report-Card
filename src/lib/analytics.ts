@@ -209,6 +209,38 @@ export function getRubricFromScales(percentage: number, scales: GradingScale[]):
     return match?.symbol ?? undefined;
 }
 
+/**
+ * Where a grade symbol sits, best first, for sorting a distribution.
+ *
+ * Sorting by first letter — which is what a naive implementation does — puts
+ * CBC exactly backwards. "AE1" (Approaching Expectations, 21–40%) reads as an
+ * A and leads the chart; "EE1" (Exceeding Expectations, 90–100%) reads as an E
+ * and trails it; and every ME band falls past F as an unknown letter. On one
+ * school that mis-sorted 990 marks, 63% of everything it had.
+ *
+ * CBC bands rank ahead of 8-4-4 letters rather than interleaving with them: the
+ * two are different scales, and a chart showing both is already telling the
+ * reader to treat them as separate runs.
+ */
+const CBC_BAND_ORDER = ['EE1', 'EE2', 'ME1', 'ME2', 'AE1', 'AE2', 'BE1', 'BE2'];
+
+export function gradeSymbolRank(symbol: string): number {
+    const s = (symbol || '').trim().toUpperCase();
+
+    const cbc = CBC_BAND_ORDER.indexOf(s);
+    if (cbc !== -1) return cbc;
+
+    // 8-4-4 letters, with the +/- modifier ordering within each letter.
+    const match = s.match(/^([A-E])([+-]?)$/);
+    if (match) {
+        const base: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+        const modifier = match[2] === '+' ? 0 : match[2] === '-' ? 2 : 1;
+        return 100 + (base[match[1]] ?? 5) * 10 + modifier;
+    }
+
+    return 1000; // anything we do not recognise sorts last rather than first
+}
+
 /* ── Legacy fallback functions (used when no DB scales) ── */
 
 export function getGradeFromPercentage(percentage: number): string {
