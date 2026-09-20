@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SubjectTeachersTab } from '@/components/subjects/SubjectTeachersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
@@ -97,6 +97,44 @@ export default function SubjectsPage() {
             await fetchSubjects();
         } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
         finally { setCalSaving(false); }
+    };
+
+    /**
+     * How many of this band's standard subjects the school does not yet have.
+     *
+     * Matched on code, never on name: MATH_LP and MATH_UP are both called
+     * "Mathematics", and a school running both bands needs both rows.
+     */
+    const missingStandard = useMemo(() => {
+        if (!selectedLevelFilter) return [];
+        const have = new Set(subjects.map(s => (s.code || '').trim().toUpperCase()).filter(Boolean));
+        return PREDEFINED_SUBJECTS.filter(
+            s => s.level === selectedLevelFilter && !have.has(s.code.trim().toUpperCase()),
+        );
+    }, [subjects, selectedLevelFilter]);
+
+    const addStandardSubjects = async () => {
+        if (!selectedLevelFilter || missingStandard.length === 0) return;
+        setCalSaving(true); setCalMsg('');
+        try {
+            const res = await fetch('/api/admin/academic-structure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'subjects_bulk', level: selectedLevelFilter }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed');
+            setCalMsg(
+                data.created === 0
+                    ? 'Already up to date — nothing to add.'
+                    : `Added ${data.created} subject${data.created === 1 ? '' : 's'}${data.skipped ? `, skipped ${data.skipped} you already have` : ''}.`,
+            );
+            await fetchSubjects();
+        } catch (err) {
+            setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setCalSaving(false);
+        }
     };
 
     const deleteSubject = async (id: string) => {
@@ -250,6 +288,23 @@ export default function SubjectsPage() {
                                 <option value="CBC_SENIOR_SCHOOL">CBC Senior School</option>
                                 <option value="844_SECONDARY">8-4-4 Secondary</option>
                             </select>
+
+                            {/* The whole band at once. The picker beside this adds
+                                one subject at a time, which is why most schools
+                                typed their own names instead — and hand-typed codes
+                                are what put a Grade 10 subject on offer to Grade 4. */}
+                            {selectedLevelFilter && (
+                                <button
+                                    type="button"
+                                    onClick={addStandardSubjects}
+                                    disabled={calSaving || missingStandard.length === 0}
+                                    className="btn-secondary mt-2 w-full text-xs disabled:opacity-60"
+                                >
+                                    {missingStandard.length === 0
+                                        ? 'All standard subjects added'
+                                        : `Add all ${missingStandard.length} standard subject${missingStandard.length === 1 ? '' : 's'}`}
+                                </button>
+                            )}
                         </div>
                         <div className="flex-[2] min-w-[240px]">
                             <label className="block text-xs text-muted-foreground mb-2 font-medium">Predefined Subject</label>

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // Parse payload
     const body = await request.json();
-    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes, subjects } = body;
+    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes } = body;
 
     let schoolId = userData.school_id;
 
@@ -162,10 +162,15 @@ export async function POST(request: NextRequest) {
     // A school that signed up as 8-4-4 got a CBC academic level on all of it,
     // and since one CBC level spans Grade 1 to Grade 12, nothing downstream
     // could tell its classes apart afterwards.
-    const chosenLevelCode = String(curriculum || '').toUpperCase().includes('844')
-      || String(curriculum || '').includes('8-4-4')
-      ? '844'
-      : 'CBC';
+    // The wizard sends the two checkboxes as an object, so a string test on it
+    // only ever saw "[object Object]" and picked CBC every time. Read the flags.
+    // Both ticked resolves to CBC: the grades typed in the wizard are one flat
+    // list with nothing to say which curriculum each belongs to, and CBC is the
+    // wider of the two, so a Form 1 typed by a dual-curriculum school is
+    // re-levelled on the Classes page rather than silently mis-levelling the
+    // primary grades that make up the rest of the list.
+    const wants = (curriculum ?? {}) as { cbc?: boolean; '844'?: boolean };
+    const chosenLevelCode = wants['844'] && !wants.cbc ? '844' : 'CBC';
     const schoolLevelId = getLevelId(chosenLevelCode) || fallbackLevelId;
 
     for (const cls of classes) {
@@ -225,55 +230,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Insert Subjects
+    // Subjects are deliberately not created here.
     //
-    // These rows used to be written with no `school_id` at all, unlike every
-    // other insert in this file. That made them global — visible to every
-    // school on the instance — and because the code was derived from the
-    // subject's position in the list ("English" first became ENG01), two
-    // schools onboarding with the same subjects produced colliding codes on
-    // rows nobody owned. Twelve such rows accumulated before this was found.
-    if (subjects && schoolLevelId) {
-      const seen = new Set<string>();
-      const subjectNames: string[] = subjects
-        .split(',')
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-
-      // What the school already has, so re-running onboarding is idempotent.
-      const { data: existingSubjects } = await supabaseAdmin
-        .from('subjects')
-        .select('name, code')
-        .eq('school_id', schoolId);
-      for (const row of existingSubjects || []) {
-        if (row.name) seen.add(row.name.trim().toLowerCase());
-      }
-      const takenCodes = new Set((existingSubjects || []).map(r => (r.code || '').toUpperCase()));
-
-      for (const sName of subjectNames) {
-        const key = sName.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-
-        // A code derived from the name rather than the position, with a
-        // numeric suffix only where it would otherwise clash inside this school.
-        const base = sName.replace(/[^A-Za-z]/g, '').substring(0, 4).toUpperCase() || 'SUBJ';
-        let code = base;
-        for (let n = 2; takenCodes.has(code); n++) code = `${base}${n}`;
-        takenCodes.add(code);
-
-        await supabaseAdmin
-          .from('subjects')
-          .insert({
-            code,
-            name: sName,
-            academic_level_id: schoolLevelId,
-            school_id: schoolId,
-          })
-          .select()
-          .maybeSingle();
-      }
-    }
+    // This step took a comma-separated line of free text and invented a code
+    // for each name ("Mathematics" -> MATH, clashing names -> MATH2). Nothing
+    // in that matched the standard catalogue, so a school finished onboarding
+    // with subjects that no grading scale, level rule or report template knew
+    // about. Subjects are now chosen from the catalogue on the Subjects page,
+    // per level, where the codes are the real ones.
 
     // 7. Mark Onboarding as Completed
     const { error: finalErr } = await supabaseAdmin
