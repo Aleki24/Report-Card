@@ -16,6 +16,7 @@ import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { downloadBlob, downloadPdfBytes } from '@/lib/download';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
@@ -192,12 +193,6 @@ export default function ReportsPage() {
 
       const className = gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class';
       const termName = terms.find(t => t.id === selectedTerm)?.name || 'Term';
-      const downloadPdf = (buffer: ArrayBuffer | Uint8Array, filename: string) => {
-        const blob = new Blob([new Uint8Array(buffer)], { type: 'application/pdf' });
-        const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
-      };
 
       if (splitByCombination && reportCardsData.some(r => r.combinationCode)) {
         // Ministry rule: a combination with >= threshold learners runs
@@ -226,14 +221,14 @@ export default function ReportsPage() {
           doc += 1;
           setProgress({ current: doc, total: totalDocs, message: `Step 3 of 3: Generating ${code} document (${members.length} learners)...` });
           const buffer = await generateBulkReportCardsPDF(members, selectedTemplate);
-          downloadPdf(buffer, `${className}_${termName}_${code}_Reports.pdf`);
+          downloadPdfBytes(buffer, `${className}_${termName}_${code}_Reports.pdf`);
           if (doc < totalDocs) await pause(500);
         }
         if (combined.length > 0) {
           doc += 1;
           setProgress({ current: doc, total: totalDocs, message: `Step 3 of 3: Generating combined document (${combined.length} learners)...` });
           const buffer = await generateBulkReportCardsPDF(combined, selectedTemplate);
-          downloadPdf(buffer, `${className}_${termName}_Combined_Reports.pdf`);
+          downloadPdfBytes(buffer, `${className}_${termName}_Combined_Reports.pdf`);
         }
         showToastMsg(totalDocs > 1
           ? `✅ ${totalDocs} documents downloaded (${standalone.length} combination group(s)${combined.length > 0 ? ' + 1 combined' : ''}). If your browser only saved the first file, allow multiple downloads for this site and retry.`
@@ -241,7 +236,7 @@ export default function ReportsPage() {
       } else {
         setProgress({ current: 0, total: reportCardsData.length, message: 'Step 3 of 3: Generating combined PDF...' });
         const pdfBuffer = await generateBulkReportCardsPDF(reportCardsData, selectedTemplate);
-        downloadPdf(pdfBuffer, `${className}_${termName}_Reports.pdf`);
+        downloadPdfBytes(pdfBuffer, `${className}_${termName}_Reports.pdf`);
         showToastMsg('✅ Download complete!');
       }
     } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
@@ -261,9 +256,8 @@ export default function ReportsPage() {
       const markSheetData: MarkSheetData = await response.json();
       setProgress({ current: 0, total: 0, message: 'Generating PDF...' });
       const blob = await pdf(<MarkSheetDocument data={markSheetData} />).toBlob();
-      const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
-      link.download = `${gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class'}_${terms.find(t => t.id === selectedTerm)?.name || 'Term'}_MarkSheet.pdf`;
-      document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(link.href);
+      const sheetName = `${gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class'}_${terms.find(t => t.id === selectedTerm)?.name || 'Term'}_MarkSheet.pdf`;
+      downloadBlob(blob, sheetName);
       showToastMsg('✅ Mark Sheet downloaded!');
     } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
     finally { setGeneratingMarkSheet(false); setProgress({ current: 0, total: 0, message: '' }); }

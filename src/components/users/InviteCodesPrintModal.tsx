@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
+import { downloadBlob, filenameFromResponse } from '@/lib/download';
 
 type Category = 'all' | 'admin' | 'teacher' | 'student';
 type Status = 'active' | 'all';
@@ -37,18 +38,8 @@ export function InviteCodesPrintModal({ onClose }: { onClose: () => void }) {
                 return;
             }
             const blob = await res.blob();
-            const disposition = res.headers.get('Content-Disposition') || '';
-            const match = disposition.match(/filename="?([^"]+)"?/);
-            const filename = match?.[1] || (format === 'zip' ? 'invite_codes.zip' : 'invite_codes.pdf');
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            const fallback = format === 'zip' ? 'invite_codes.zip' : 'invite_codes.pdf';
+            downloadBlob(blob, filenameFromResponse(res, fallback));
             onClose();
         } catch {
             setError('Network error. Please try again.');
