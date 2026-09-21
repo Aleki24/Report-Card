@@ -11,12 +11,10 @@ import { ReportSettings } from '@/components/reports/ReportSettings';
 import { ProgressOverlay } from '@/components/ui/ProgressOverlay';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { useAuth } from '@/components/AuthProvider';
-import { pdf } from '@react-pdf/renderer';
 import { generateBulkReportCardsPDF, ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
-import { MarkSheetDocument, MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { downloadBlob, downloadPdfBytes } from '@/lib/download';
+import { downloadPdfBytes } from '@/lib/download';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
@@ -253,12 +251,28 @@ export default function ReportsPage() {
       if (selectedExamType) params.append('examType', selectedExamType);
       const response = await fetch(`/api/reports/marksheet/${selectedGradeStream}?${params.toString()}`);
       if (!response.ok) { const errJson = await response.json(); throw new Error(errJson.error || 'Failed to fetch mark sheet data'); }
-      const markSheetData: MarkSheetData = await response.json();
-      setProgress({ current: 0, total: 0, message: 'Generating PDF...' });
-      const blob = await pdf(<MarkSheetDocument data={markSheetData} />).toBlob();
-      const sheetName = `${gradeStreams.find(s => s.id === selectedGradeStream)?.full_name || 'Class'}_${terms.find(t => t.id === selectedTerm)?.name || 'Term'}_MarkSheet.pdf`;
-      downloadBlob(blob, sheetName);
-      showToastMsg('✅ Mark Sheet downloaded!');
+      // The call above was the check: it proves the sheet has data and lets a
+      // real problem reach the toast below rather than appearing as raw JSON
+      // in a new tab. Read it so the response is consumed, then let the
+      // browser fetch the file itself.
+      await response.json();
+
+      /*
+        Hand the download to the browser rather than building it here.
+
+        This used to render the PDF in the page with @react-pdf/renderer and
+        pass it over as a blob URL. On a phone that is the slowest possible
+        place to render it and the least reliable way to deliver it, which is
+        how a class teacher came to watch a mark sheet fail to save. Pointing
+        the browser at a URL that answers with Content-Disposition makes it an
+        ordinary download, handled by the download manager like any other.
+
+        Navigating to an attachment does not leave the page.
+      */
+      setProgress({ current: 0, total: 0, message: 'Preparing download...' });
+      params.set('format', 'pdf');
+      window.location.assign(`/api/reports/marksheet/${selectedGradeStream}?${params.toString()}`);
+      showToastMsg('✅ Mark sheet ready — check your downloads.');
     } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
     finally { setGeneratingMarkSheet(false); setProgress({ current: 0, total: 0, message: '' }); }
   };
