@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Link from 'next/link';
-import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
@@ -13,13 +11,6 @@ interface ExamRow {
 }
 
 /** A school-wide exam awaiting approval, shown in the review queue. */
-interface PendingExam {
-    id: string; name: string; exam_type: string; subject_name: string;
-    grade_id: string; grade_name: string;
-    grade_stream_id: string | null; grade_stream_name: string | null;
-    term_id: string | null; term_name: string | null;
-    published_by_name: string | null; published_at: string | null;
-}
 
 interface StudentGap { name: string; admission_number: string; missing?: string[] }
 interface PublishReadiness {
@@ -42,19 +33,26 @@ const EXAM_TYPE_LABELS: Record<string, string> = {
 };
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-    DRAFT: { label: 'Draft', color: 'var(--color-text-muted)' },
-    PENDING_APPROVAL: { label: 'Pending Approval', color: '#F59E0B' },
-    APPROVED: { label: 'Approved', color: '#10B981' },
+    DRAFT: { label: 'Not released', color: 'var(--color-text-muted)' },
+    // Retained so a row still carrying the retired middle state renders
+    // sensibly rather than blank. Nothing produces it any more.
+    PENDING_APPROVAL: { label: 'Released', color: '#10B981' },
+    APPROVED: { label: 'Released', color: '#10B981' },
 };
 
 /**
- * Publish Results — a class-level publish screen: pick a class and exam round,
- * see every subject's publish status, publish / approve / unpublish (per
- * subject or in bulk), and preview the class ranking by a chosen criterion.
+ * Release Results — pick a class and exam round, see which subjects have been
+ * released, release or withdraw them (per subject or in bulk), and preview the
+ * class ranking by a chosen criterion.
+ *
+ * Releasing used to take two people: a teacher published, then an admin
+ * approved. The admin was signing off work they had not seen, while results
+ * sat unavailable — teachers could not even print their own class's reports
+ * until someone else clicked. It is one action by the teacher who entered the
+ * marks now. The flag still gates the public page a parent's QR scan opens,
+ * which is the thing it was always actually protecting.
  */
 export function PublishResultsView() {
-    const { profile } = useAuth();
-    const isAdmin = profile?.role === 'ADMIN';
 
     const [streams, setStreams] = useState<GradeStreamOption[]>([]);
     const [terms, setTerms] = useState<TermOption[]>([]);
@@ -70,8 +68,6 @@ export function PublishResultsView() {
     const [confirmBusy, setConfirmBusy] = useState(false);
 
     // Review queue — everything published and awaiting approval, school-wide.
-    const [pending, setPending] = useState<PendingExam[]>([]);
-    const [loadingPending, setLoadingPending] = useState(true);
 
     // Ranking preview
     const [rankBy, setRankBy] = useState<RankBy>('mean_marks');
@@ -97,40 +93,6 @@ export function PublishResultsView() {
             }
         })();
     }, []);
-
-    // ── Review queue: every exam awaiting approval, no class selection needed ──
-    // The admin dashboard's "Review" banner lands here, so the work waiting for
-    // them has to be visible immediately rather than hidden behind three
-    // dropdowns. Teachers see only the exams the API already scopes to them.
-    const loadPending = useCallback(async () => {
-        setLoadingPending(true);
-        try {
-            const res = await fetch('/api/school/exams?status=PENDING_APPROVAL');
-            const json = await res.json();
-            const rows: PendingExam[] = (json.data || []).map((e: Partial<PendingExam> & { subject_name?: string }) => ({
-                id: e.id, name: e.name, exam_type: e.exam_type,
-                subject_name: e.subject_name || 'N/A',
-                grade_id: e.grade_id, grade_name: e.grade_name || '',
-                grade_stream_id: e.grade_stream_id ?? null,
-                grade_stream_name: e.grade_stream_name ?? null,
-                term_id: e.term_id ?? null, term_name: e.term_name ?? null,
-                published_by_name: e.published_by_name ?? null,
-                published_at: e.published_at ?? null,
-            }));
-            rows.sort((a, b) =>
-                (a.grade_stream_name || a.grade_name).localeCompare(b.grade_stream_name || b.grade_name)
-                || a.subject_name.localeCompare(b.subject_name)
-            );
-            setPending(rows);
-        } catch (err) {
-            console.error('Failed to load pending approvals', err);
-            setPending([]);
-        } finally {
-            setLoadingPending(false);
-        }
-    }, []);
-
-    useEffect(() => { loadPending(); }, [loadPending]);
 
     // ── Load exams for the class (optionally scoped by term + type) ──
     const loadExams = useCallback(async () => {
@@ -228,7 +190,7 @@ export function PublishResultsView() {
                 return;
             }
             if (action === 'approve') toast.success('Results approved.');
-            await Promise.all([loadExams(), loadPending()]);
+            await loadExams();
         } catch { toast.error('Network error'); }
         finally { setBusyExamId(null); }
     };
@@ -244,15 +206,22 @@ export function PublishResultsView() {
             const data = await res.json();
             if (!res.ok) { toast.error(data.error || 'Action failed'); return; }
             setConfirmExam(null);
-            await Promise.all([loadExams(), loadPending()]);
+            await loadExams();
         } catch { toast.error('Network error'); }
         finally { setConfirmBusy(false); }
     };
 
-    const runBulk = async (action: 'publish' | 'approve', fromStatus: 'DRAFT' | 'PENDING_APPROVAL') => {
-        const targets = exams.filter(e => e.status === fromStatus);
-        if (targets.length === 0) { toast.info('Nothing to do.'); return; }
-        if (action === 'publish' && !confirm(`Publish ${targets.length} subject(s) for review? Students with no marks are excluded. Any missing paper counts as 0, so those subject marks stay out of all papers.`)) return;
+    /**
+     * Release every subject still held back, in one go.
+     *
+     * There used to be two bulk buttons — publish, then approve — because
+     * releasing took two people. It takes one now: whoever entered the marks.
+     */
+    const runBulk = async () => {
+        const action = 'publish';
+        const targets = exams.filter(e => e.status === 'DRAFT');
+        if (targets.length === 0) { toast.info('Nothing to release.'); return; }
+        if (!confirm(`Release ${targets.length} subject(s)? Students with no marks are excluded. Any missing paper counts as 0, so those subject marks stay out of all papers.`)) return;
         setBulkBusy(true);
         let ok = 0, fail = 0;
         for (const ex of targets) {
@@ -266,48 +235,11 @@ export function PublishResultsView() {
             } catch { fail++; }
         }
         setBulkBusy(false);
-        toast[fail === 0 ? 'success' : 'warning'](`${action === 'publish' ? 'Published' : 'Approved'} ${ok} subject(s)${fail ? `, ${fail} failed` : ''}.`);
-        await Promise.all([loadExams(), loadPending()]);
+        toast[fail === 0 ? 'success' : 'warning'](`Released ${ok} subject(s)${fail ? `, ${fail} failed` : ''}.`);
+        await loadExams();
     };
 
     // Approve everything in the review queue (all classes) in one go.
-    const approveAllPending = async () => {
-        if (pending.length === 0) return;
-        if (!confirm(`Approve all ${pending.length} exam result(s) awaiting approval? Report cards become downloadable straight away.`)) return;
-        setBulkBusy(true);
-        let ok = 0, fail = 0;
-        for (const ex of pending) {
-            try {
-                const res = await fetch(`/api/school/exams/${ex.id}/status`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approve' }),
-                });
-                if (res.ok) ok++; else fail++;
-            } catch { fail++; }
-        }
-        setBulkBusy(false);
-        toast[fail === 0 ? 'success' : 'warning'](`Approved ${ok} exam result(s)${fail ? `, ${fail} failed` : ''}.`);
-        await Promise.all([loadExams(), loadPending()]);
-    };
-
-    // "Review marks" needs a stream to open the results table with. Grade-wide
-    // exams have no stream of their own, so fall back to the first stream in
-    // that grade — the results endpoint includes grade-wide exams for it.
-    const reviewHref = (ex: PendingExam) => {
-        const stream = ex.grade_stream_id || streams.find(s => s.grade_id === ex.grade_id)?.id;
-        if (!stream) return null;
-        return `/dashboard/exams-marks?tab=results&stream=${stream}&exam=${ex.id}`;
-    };
-
-    // Pull the pickers below onto this exam's class and term. The exam round is
-    // left alone — changing the class resets it anyway.
-    const focusClass = (ex: PendingExam) => {
-        const stream = ex.grade_stream_id || streams.find(s => s.grade_id === ex.grade_id)?.id;
-        if (!stream) { toast.info('This exam is not tied to a class stream.'); return; }
-        setStreamId(stream);
-        setTermId(ex.term_id || '');
-    };
-
     // ── Ranking computation ──
     const ranking = useMemo(() => {
         const byStudent = new Map<string, { name: string; adm: string; pcts: number[]; pts: number[] }>();
@@ -337,82 +269,16 @@ export function PublishResultsView() {
     }, [marks, pointsBySymbol, rankBy, minSubjects]);
 
     const draftCount = exams.filter(e => e.status === 'DRAFT').length;
-    const pendingCount = exams.filter(e => e.status === 'PENDING_APPROVAL').length;
 
     return (
         <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
-            {/* Review queue — the landing spot for the dashboard's
-                "results awaiting your approval" banner. */}
-            <div id="awaiting-approval" className="card overflow-hidden scroll-mt-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-b border-border">
-                    <div>
-                        <h3 className="font-bold text-base font-[family-name:var(--font-display)]">
-                            {isAdmin ? 'Awaiting your approval' : 'Published — awaiting approval'}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {isAdmin
-                                ? 'Open the marks to review them, then approve so report cards can be downloaded.'
-                                : 'These results are with an admin for approval. Unpublish to make corrections.'}
-                        </p>
-                    </div>
-                    {isAdmin && pending.length > 0 && (
-                        <button type="button" className="btn-primary disabled:opacity-50" onClick={approveAllPending} disabled={bulkBusy}>
-                            ✅ Approve all ({pending.length})
-                        </button>
-                    )}
-                </div>
-                {loadingPending ? (
-                    <div className="p-6 text-sm text-muted-foreground">Loading…</div>
-                ) : pending.length === 0 ? (
-                    <div className="p-6 text-sm text-muted-foreground">Nothing is waiting for approval right now.</div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="data-table w-full text-left">
-                            <thead className="bg-muted border-b border-border">
-                                <tr>
-                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Class</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subject</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Exam</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Published by</th>
-                                    <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[var(--color-border)]">
-                                {pending.map(ex => {
-                                    const busy = busyExamId === ex.id;
-                                    const href = reviewHref(ex);
-                                    return (
-                                        <tr key={ex.id} className="hover:bg-muted/50 transition-colors">
-                                            <td className="px-4 py-3 text-sm font-medium">
-                                                <button type="button" className="text-left hover:text-[var(--color-accent)] hover:underline" onClick={() => focusClass(ex)} title="Show this class below">
-                                                    {ex.grade_stream_name || ex.grade_name || '—'}
-                                                </button>
-                                                {ex.term_name && <div className="text-[11px] text-muted-foreground">{ex.term_name}</div>}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm">{ex.subject_name}</td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                                                {ex.name}
-                                                <div className="text-[11px]">{EXAM_TYPE_LABELS[ex.exam_type] || ex.exam_type}</div>
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                                                {ex.published_by_name || '—'}
-                                                {ex.published_at && <div className="text-[11px]">{new Date(ex.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex justify-end gap-2 flex-wrap">
-                                                    {href && <Link href={href} className="btn-secondary">🔍 Review marks</Link>}
-                                                    {isAdmin && <button className="btn-primary" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
-                                                    <button className="btn-secondary" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+            {/*
+              The "awaiting approval" queue stood here. It listed exams in
+              PENDING_APPROVAL so an admin could sign them off. Releasing is a
+              single action by the teacher who entered the marks now, so
+              nothing ever enters that state and this panel could only ever
+              render empty.
+            */}
 
             {/* Scope pickers */}
             <div className="card p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -447,15 +313,11 @@ export function PublishResultsView() {
                     <div className="card overflow-hidden">
                         <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-b border-border">
                             <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Status of subject results</h3>
+                            {/* One button, because releasing takes one person. */}
                             <div className="flex flex-wrap gap-2">
-                                <button type="button" className="btn-secondary disabled:opacity-50" onClick={() => runBulk('publish', 'DRAFT')} disabled={bulkBusy || draftCount === 0}>
-                                    📤 Publish all drafts{draftCount ? ` (${draftCount})` : ''}
+                                <button type="button" className="btn-primary disabled:opacity-50" onClick={() => runBulk()} disabled={bulkBusy || draftCount === 0}>
+                                    Release all{draftCount ? ` (${draftCount})` : ''}
                                 </button>
-                                {isAdmin && (
-                                    <button type="button" className="btn-primary disabled:opacity-50" onClick={() => runBulk('approve', 'PENDING_APPROVAL')} disabled={bulkBusy || pendingCount === 0}>
-                                        ✅ Approve all pending{pendingCount ? ` (${pendingCount})` : ''}
-                                    </button>
-                                )}
                             </div>
                         </div>
                         {loadingExams ? (
@@ -486,9 +348,9 @@ export function PublishResultsView() {
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex justify-end gap-2 flex-wrap">
-                                                            {ex.status === 'DRAFT' && <button className="btn-secondary" onClick={() => runAction(ex.id, 'publish')} disabled={busy}>{busy ? '…' : 'Publish'}</button>}
-                                                            {ex.status === 'PENDING_APPROVAL' && isAdmin && <button className="btn-primary" onClick={() => runAction(ex.id, 'approve')} disabled={busy}>{busy ? '…' : 'Approve'}</button>}
-                                                            {(ex.status === 'PENDING_APPROVAL' || (ex.status === 'APPROVED' && isAdmin)) && <button className="btn-secondary" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Unpublish'}</button>}
+                                                            {ex.status === 'DRAFT'
+                                                                ? <button className="btn-primary" onClick={() => runAction(ex.id, 'publish')} disabled={busy}>{busy ? '…' : 'Release'}</button>
+                                                                : <button className="btn-secondary" onClick={() => runAction(ex.id, 'unpublish')} disabled={busy}>{busy ? '…' : 'Withdraw'}</button>}
                                                         </div>
                                                     </td>
                                                 </tr>

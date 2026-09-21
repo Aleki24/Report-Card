@@ -62,20 +62,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'You can only generate reports for your own class.' }, { status: 403 });
       }
 
-      // Class teachers can only pull reports once every exam feeding this
-      // term has been reviewed and approved by an admin.
-      if (stream?.grade_id) {
-        const { data: unapproved } = await supabase
-          .from('exams')
-          .select('name, status, subjects(name)')
-          .eq('term_id', term_id)
-          .eq('grade_id', stream.grade_id)
-          .neq('status', 'APPROVED');
-        if (unapproved && unapproved.length > 0) {
-          const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
-          return NextResponse.json({ error: `Reports not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
-        }
-      }
+      /*
+        A class teacher generating their own class's reports no longer waits on
+        an admin. The release flag still gates the public QR page a parent
+        scans; it no longer gates the school's own staff.
+      */
     }
 
     // Call the RPC function

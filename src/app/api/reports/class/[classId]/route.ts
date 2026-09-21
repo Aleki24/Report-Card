@@ -104,23 +104,21 @@ export async function GET(
         const streamName = (students[0].grade_streams as any)?.full_name || '';
         const gradeId = (students[0].grade_streams as any)?.grade_id;
 
-        // Gate downloads: bulk class reports can only be generated once every
-        // exam feeding this term's results has been reviewed and approved by
-        // an admin. Admins themselves can always generate (they're the approvers).
-        if (role !== 'ADMIN' && gradeId) {
-            let unapprovedQuery = supabase
-                .from('exams')
-                .select('name, status, subjects(name)')
-                .eq('term_id', termId)
-                .eq('grade_id', gradeId)
-                .neq('status', 'APPROVED');
-            if (examType) unapprovedQuery = unapprovedQuery.eq('exam_type', examType);
-            const { data: unapproved } = await unapprovedQuery;
-            if (unapproved && unapproved.length > 0) {
-                const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
-                return NextResponse.json({ error: `Class reports not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
-            }
-        }
+        /*
+          Staff see results as soon as they are entered.
+
+          This used to refuse a non-admin the report outright — 403 — until
+          every exam feeding the term had been approved. A teacher could not
+          print their own class's report card while waiting on somebody else to
+          click approve, which is the friction that made the whole approval step
+          feel like an obstacle rather than a safeguard.
+
+          The release flag still exists and still matters, but what it gates is
+          the unauthenticated QR page a parent scans (see
+          /api/verify/[studentId]), not what the school's own staff can see
+          about their own learners.
+        */
+
 
         // These lookups are all independent of each other — run them together
         // instead of six sequential round-trips on this batch-generation path.

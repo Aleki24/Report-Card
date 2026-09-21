@@ -74,7 +74,7 @@ export async function GET(_request: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, termsRes, schoolRes, pendingApprovalRes] = await Promise.all([
+    const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, termsRes, schoolRes] = await Promise.all([
       supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId),
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
@@ -87,7 +87,6 @@ export async function GET(_request: NextRequest) {
       supabase.from('terms').select('id, name, start_date, end_date, is_current').eq('school_id', schoolId),
       supabase.from('schools').select('logo_url').eq('id', schoolId).maybeSingle(),
       // Exams published by teachers and awaiting admin approval before report cards can be downloaded.
-      supabase.from('exams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('status', 'PENDING_APPROVAL'),
     ]);
 
     const currentYear = currentYearRes?.data;
@@ -102,7 +101,6 @@ export async function GET(_request: NextRequest) {
     const announcementsLast7Days = announcementsRes.count ?? 0;
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
     const hasLogo = Boolean(schoolRes.data?.logo_url);
-    const pendingApprovalCount = pendingApprovalRes.count ?? 0;
 
     // ── Rollups the dashboard leads with ──
     //
@@ -318,7 +316,6 @@ export async function GET(_request: NextRequest) {
       recentEnrollmentsLast7,
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
       academicSummary: { recentAvg, passRate, passMark: PASS_MARK, markCount },
-      pendingApprovalCount,
       examsAwaitingMarks,
       unmarkedByClass,
       classPerformance,
