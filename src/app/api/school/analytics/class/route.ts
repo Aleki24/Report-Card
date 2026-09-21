@@ -107,19 +107,29 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Class not found' }, { status: 404 });
         }
 
-        // Default to the term the school says it is in, as the marks route does.
+        /*
+          Which term, and the ones to choose from.
+
+          Defaulting to the current term is right, but only offering the
+          current term is not: a school part-way through Term 3 still needs to
+          look back at Term 2, and for a while after a term rolls over the
+          previous one holds all the marks. The list goes to the client so it
+          can offer a picker rather than stranding the reader on whichever term
+          happens to be flagged.
+        */
+        const { data: allTerms } = await supabaseAdmin
+            .from('terms')
+            .select('id, name, start_date, is_current')
+            .eq('school_id', schoolId)
+            .order('start_date', { ascending: false });
+
+        const terms = (allTerms ?? []) as { id: string; name: string; start_date: string; is_current: boolean }[];
+
         let termId = searchParams.get('term_id');
-        let termName: string | null = null;
         if (!termId) {
-            const { data: current } = await supabaseAdmin
-                .from('terms')
-                .select('id, name')
-                .eq('school_id', schoolId)
-                .eq('is_current', true)
-                .maybeSingle();
-            termId = (current?.id as string) ?? null;
-            termName = (current?.name as string) ?? null;
+            termId = terms.find(t => t.is_current)?.id ?? terms[0]?.id ?? null;
         }
+        const termName = terms.find(t => t.id === termId)?.name ?? null;
         const examType = searchParams.get('exam_type');
 
         const [subjectsRes, meritRes, seriesRes, gradingBySubject] = await Promise.all([
@@ -281,6 +291,7 @@ export async function GET(request: NextRequest) {
                 level_name: level?.name ?? null,
             },
             scope: { term_id: termId, term_name: termName, exam_type: examType },
+            terms: terms.map(t => ({ id: t.id, name: t.name, is_current: t.is_current })),
             summary: {
                 mean_percentage: weightedMean,
                 pass_rate: markCount > 0 ? Math.round((passCount / markCount) * 100) : 0,
