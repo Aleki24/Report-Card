@@ -11,6 +11,7 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { generateMarkSheetPDF, type MarkSheetData } from '@/lib/marksheetPdfGenerator';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import { resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
@@ -20,6 +21,11 @@ import {
 } from '@/lib/reports/comparatives';
 
 export const runtime = 'nodejs';
+
+/** Keep a class label like "Grade 6 — STEM" usable as a filename. */
+function safeName(value: string): string {
+    return (value || 'MarkSheet').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'MarkSheet';
+}
 
 export async function GET(
     request: Request,
@@ -36,6 +42,9 @@ export async function GET(
         // sitting. Honour an explicit round, and pick one when none is named.
         const rawExamType = searchParams.get('examType');
         const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
+        // format=pdf returns the rendered sheet; anything else returns the
+        // data, which the term-comparison views still read.
+        const wantsPdf = (searchParams.get('format') || '').toLowerCase() === 'pdf';
 
         if (!termId) {
             return NextResponse.json({ error: 'termId is required for marksheet reports' }, { status: 400 });
@@ -549,7 +558,7 @@ export async function GET(
             })()
             : undefined;
 
-        const markSheetData = {
+        const markSheetData: MarkSheetData = {
             examRound: roundLabel || undefined,
             previousExamLabel: previousRound?.label,
             classMeanPercentage: Math.round(classMeanPercentage * 10) / 10,
@@ -569,6 +578,33 @@ export async function GET(
             subjectStats,
             subjectRankings,
         };
+
+        /*
+          Render the sheet here when asked for the file itself.
+
+          The page used to fetch this JSON, render the PDF in the browser with
+          @react-pdf/renderer, and hand the result over as a blob URL. On a
+          phone that is the worst of both worlds: the rendering is slow and
+          memory-hungry on the device least able to afford it, and a blob
+          download is the least reliable kind there is. Rendering here and
+          sending it with Content-Disposition makes it an ordinary download,
+          the one path every mobile browser handles natively.
+
+          generateMarkSheetPDF renders the very same MarkSheetDocument the
+          browser was rendering, so the file is unchanged.
+        */
+        if (wantsPdf) {
+            const pdfBuffer = await generateMarkSheetPDF(markSheetData);
+            return new NextResponse(new Uint8Array(pdfBuffer), {
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/pdf',
+                    'Content-Disposition': `attachment; filename="${safeName(classNameLabel)}_${safeName(termTitle)}_MarkSheet.pdf"`,
+                    // The sheet moves as marks are entered; never serve a stale one.
+                    'Cache-Control': 'no-store',
+                },
+            });
+        }
 
         return NextResponse.json(markSheetData, { status: 200 });
 
