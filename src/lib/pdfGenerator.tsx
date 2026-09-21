@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, View, renderToBuffer, pdf } from '@react-pdf/renderer';
+import { Document, Page, View, renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { s } from './pdf/pdfStyles';
 import { getTemplateLayout, templateHasPageBars, type ReportTemplateId } from './pdf/templates';
@@ -127,8 +127,18 @@ export async function generateStudentReportCardPDF(data: ReportCardData, templat
     return Buffer.from(buffer);
 }
 
-/* ── Generate bulk PDF for entire class ──────────────────── */
-export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData[], template?: ReportTemplateId): Promise<Uint8Array> {
+/* ── Build the bulk document for an entire class ──────────── */
+/**
+ * The pages, assembled but not yet rendered.
+ *
+ * Rendering used to happen here, in the browser, via pdf().toBlob(). For a
+ * class of thirty-five that is a lot of work to ask of a phone, and the blob
+ * it produced then had to survive being handed to the download manager. Both
+ * steps now happen on the server (see generateBulkReportCardsPDF in
+ * pdfGeneratorServer.tsx); what stays here is the part that is neither client
+ * nor server — the document itself.
+ */
+export async function buildBulkReportCardsDocument(reportCardsData: ReportCardData[], template?: ReportTemplateId): Promise<React.ReactElement<DocumentProps>> {
     const pages: React.ReactElement[] = [];
 
     for (let i = 0; i < reportCardsData.length; i++) {
@@ -149,8 +159,5 @@ export async function generateBulkReportCardsPDF(reportCardsData: ReportCardData
         );
     }
 
-    const doc = <Document>{pages}</Document>;
-    const blob = await pdf(doc).toBlob();
-    const arrayBuffer = await blob.arrayBuffer();
-    return new Uint8Array(arrayBuffer);
+    return <Document>{pages}</Document>;
 }

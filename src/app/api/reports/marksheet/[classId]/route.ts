@@ -22,6 +22,15 @@ import {
 
 export const runtime = 'nodejs';
 
+/*
+  Rendering the sheet measured under two seconds for a class of thirty-five,
+  comfortably inside the default, but the cost grows with the class and a
+  timed-out sheet is indistinguishable from a broken one to the teacher
+  waiting on it. The work is bounded by class size, so a ceiling is cheap
+  insurance.
+*/
+export const maxDuration = 60;
+
 /** Keep a class label like "Grade 6 — STEM" usable as a filename. */
 function safeName(value: string): string {
     return (value || 'MarkSheet').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'MarkSheet';

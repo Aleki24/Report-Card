@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { ReportCardData } from '@/lib/pdfGenerator';
+import type { ReportCardData, ReportTemplateId } from '@/lib/pdfGenerator';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -29,6 +29,84 @@ import {
 } from '@/lib/reports/comparatives';
 export const runtime = 'nodejs';
 
+/*
+  Rendering thirty-five report cards measured about nine seconds, which is
+  past Vercel's default function timeout. The work is bounded by class size,
+  not by anything unbounded, so a generous ceiling is the right shape here —
+  a timed-out report is indistinguishable from a broken one to the teacher
+  waiting on it.
+*/
+export const maxDuration = 60;
+
+/** Keep a class or combination label usable as a filename. */
+function safeName(value: string): string {
+    return (value || 'Class').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Class';
+}
+
+function fileResponse(body: Uint8Array<ArrayBuffer>, contentType: string, filename: string): NextResponse {
+    return new NextResponse(body, {
+        status: 200,
+        headers: {
+            'Content-Type': contentType,
+            'Content-Disposition': `attachment; filename="${filename}"`,
+            // Reports move as marks are entered; never serve a stale one.
+            'Cache-Control': 'no-store',
+        },
+    });
+}
+
+interface ReportGroup {
+    /** Appears in the filename, so it names the combination or the remainder. */
+    label: string;
+    reports: ReportCardData[];
+}
+
+/**
+ * Ministry rule: a combination with at least `threshold` learners runs as its
+ * own class group and gets its own document; smaller groups and unassigned
+ * learners share one. Lifted verbatim from the page that used to do this in
+ * the browser — the rule is unchanged, only where it runs.
+ *
+ * Returns a single unlabelled group when splitting does not apply, so the
+ * caller can treat "one document" and "several" the same way.
+ */
+function splitReportsByCombination(
+    reports: ReportCardData[],
+    split: boolean,
+    threshold: number,
+): ReportGroup[] {
+    if (!split || !reports.some(r => r.combinationCode)) {
+        return [{ label: '', reports }];
+    }
+
+    const byCode = new Map<string, ReportCardData[]>();
+    for (const report of reports) {
+        const key = report.combinationCode || 'UNASSIGNED';
+        const bucket = byCode.get(key);
+        if (bucket) bucket.push(report);
+        else byCode.set(key, [report]);
+    }
+
+    const groups: ReportGroup[] = [];
+    const remainder: ReportCardData[] = [];
+    for (const [code, members] of byCode) {
+        if (code !== 'UNASSIGNED' && members.length >= threshold) {
+            groups.push({ label: safeName(code), reports: members });
+        } else {
+            remainder.push(...members);
+        }
+    }
+
+    remainder.sort((a, b) =>
+        (a.combinationCode || 'zzz').localeCompare(b.combinationCode || 'zzz')
+        || a.studentName.localeCompare(b.studentName));
+    if (remainder.length > 0) groups.push({ label: 'Combined', reports: remainder });
+
+    // Every learner landed in exactly one group, or splitting produced nothing
+    // worth splitting; either way one document is the honest answer.
+    return groups.length > 0 ? groups : [{ label: '', reports }];
+}
+
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ classId: string }> }
@@ -41,6 +119,18 @@ export async function GET(
         const yearId = searchParams.get('yearId');
         const rawExamType = searchParams.get('examType');
         const examType = rawExamType && rawExamType.trim() ? rawExamType : null;
+
+        // format=pdf (or zip) returns the documents themselves; anything else
+        // returns the data, which the term-comparison views still read.
+        const wantsFile = ['pdf', 'zip'].includes((searchParams.get('format') || '').toLowerCase());
+        const template = (searchParams.get('template') || undefined) as ReportTemplateId | undefined;
+        const splitByCombination = searchParams.get('splitByCombination') === 'true';
+        // Guard the threshold: a NaN or a zero from the query string would put
+        // every learner in their own document.
+        const parsedThreshold = Number(searchParams.get('groupThreshold'));
+        const groupThreshold = Number.isFinite(parsedThreshold) && parsedThreshold > 0
+            ? Math.floor(parsedThreshold)
+            : 15;
 
         if (!termId) {
             return NextResponse.json({ error: 'termId is required for class reports' }, { status: 400 });
@@ -568,7 +658,48 @@ export async function GET(
             reportCardsData.push(reportData);
         }
 
-        return NextResponse.json(reportCardsData, { status: 200 });
+        const fileStem = `${safeName(streamName || 'Class')}_${safeName(termTitle)}`;
+
+        if (!wantsFile) {
+            return NextResponse.json(reportCardsData, { status: 200 });
+        }
+
+        if (reportCardsData.length === 0) {
+            return NextResponse.json(
+                { error: 'No students or grades found for this setup. Ensure marks are entered.' },
+                { status: 404 },
+            );
+        }
+
+        /*
+          Render here rather than in the page.
+
+          A class of thirty-five report cards is the heaviest document this app
+          produces, and it was being built in the browser and handed over as a
+          blob URL — the slowest way to make it and the least reliable way to
+          deliver it, especially on a phone.
+
+          Splitting by combination used to fire one browser download per group,
+          spaced 500ms apart, with a note warning the reader that their browser
+          might block the rest. Browsers block exactly that, and mobile ones
+          almost always do. One zip is a single ordinary download instead.
+        */
+        const { generateBulkReportCardsPDF } = await import('@/lib/pdfGeneratorServer');
+        const groups = splitReportsByCombination(reportCardsData, splitByCombination, groupThreshold);
+
+        if (groups.length === 1) {
+            const pdfBuffer = await generateBulkReportCardsPDF(groups[0].reports, template);
+            return fileResponse(new Uint8Array(pdfBuffer), 'application/pdf', `${fileStem}_Reports.pdf`);
+        }
+
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        for (const group of groups) {
+            const pdfBuffer = await generateBulkReportCardsPDF(group.reports, template);
+            zip.file(`${fileStem}_${group.label}_Reports.pdf`, pdfBuffer);
+        }
+        const zipped = await zip.generateAsync({ type: 'arraybuffer' });
+        return fileResponse(new Uint8Array(zipped), 'application/zip', `${fileStem}_Reports.zip`);
 
     } catch (error: any) {
         console.error('Batch Data Generation Error:', error);
