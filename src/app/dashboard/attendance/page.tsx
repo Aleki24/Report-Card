@@ -6,6 +6,7 @@ import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { Card, Input, Select, Button } from '@/components/ui';
 import { toast } from 'sonner';
+import { downloadBlob } from '@/lib/download';
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
@@ -386,13 +387,7 @@ export default function AttendancePage() {
           excusedCount={excusedCount}
         />
       ).toBlob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `Attendance_${currentStreamName.replace(/\s+/g, '_')}_${selectedDate}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
+      downloadBlob(blob, `Attendance_${currentStreamName.replace(/\s+/g, '_')}_${selectedDate}.pdf`);
       toast.success('PDF downloaded');
     } catch (err) {
       toast.error(`PDF failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

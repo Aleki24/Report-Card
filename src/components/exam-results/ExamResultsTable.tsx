@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { EditMarkModal, type EditMarkData } from './EditMarkModal';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { isMultiPaper } from '@/lib/multi-paper';
+import { downloadBlob, filenameFromResponse } from '@/lib/download';
 
 export interface MarkRow {
     id: string;
@@ -210,17 +211,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                 return;
             }
             const blob = await res.blob();
-            const disposition = res.headers.get('Content-Disposition') || '';
-            const match = disposition.match(/filename="?([^"]+)"?/);
-            const filename = match?.[1] || `exam_results_${examId}.${format}`;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            downloadBlob(blob, filenameFromResponse(res, `exam_results_${examId}.${format}`));
         } catch {
             setExportError('Network error. Please try again.');
         } finally {
