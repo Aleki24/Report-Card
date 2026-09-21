@@ -38,6 +38,7 @@ interface ClassPayload {
     subjects: ClassSubjectRow[];
     merit: MeritRow[];
     series: SeriesRow[];
+    terms: { id: string; name: string; is_current: boolean }[];
 }
 
 /** Colour by pass rate, not by mean: it is the figure that survives across scales. */
@@ -65,6 +66,8 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export default function ClassAnalytics({ streamId }: { streamId: string }) {
     const [examType, setExamType] = useState<string | null>(null);
+    // null means "whichever term the school is in"; the server resolves it.
+    const [termId, setTermId] = useState<string | null>(null);
 
     /*
       Responses keyed by the request that produced them, rather than a `data`
@@ -76,7 +79,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
       Undefined means "not fetched yet", null means "fetched and empty" — the
       distinction is what lets loading be derived instead of tracked.
     */
-    const cacheKey = `${streamId}|${examType ?? 'all'}`;
+    const cacheKey = `${streamId}|${termId ?? 'current'}|${examType ?? 'all'}`;
     const [byKey, setByKey] = useState<Record<string, ClassPayload | null>>({});
 
     const data = byKey[cacheKey];
@@ -87,6 +90,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
         let cancelled = false;
 
         const params = new URLSearchParams({ stream_id: streamId });
+        if (termId) params.set('term_id', termId);
         if (examType) params.set('exam_type', examType);
 
         fetch(`/api/school/analytics/class?${params.toString()}`)
@@ -100,7 +104,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
             });
 
         return () => { cancelled = true; };
-    }, [cacheKey, streamId, examType, byKey]);
+    }, [cacheKey, streamId, termId, examType, byKey]);
 
     // Weakest first: the list exists to show where help is needed.
     const weakest = useMemo(
@@ -138,7 +142,27 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                         {curriculum}
                     </span>
                 )}
-                {data.scope.term_name && (
+
+                {/*
+                  A term picker, not just a label. Defaulting to the current
+                  term is right; offering only the current term is not — for a
+                  while after a term rolls over, the previous one still holds
+                  all the marks, and the reader has no way back to it.
+                */}
+                {data.terms.length > 1 ? (
+                    <select
+                        className="rounded-md border border-border bg-card px-2 py-0.5 text-xs text-foreground"
+                        value={data.scope.term_id ?? ''}
+                        onChange={e => { setTermId(e.target.value || null); setExamType(null); }}
+                        aria-label="Term"
+                    >
+                        {data.terms.map(t => (
+                            <option key={t.id} value={t.id}>
+                                {t.name}{t.is_current ? ' (current)' : ''}
+                            </option>
+                        ))}
+                    </select>
+                ) : data.scope.term_name && (
                     <span className="text-xs text-muted-foreground">{data.scope.term_name}</span>
                 )}
             </div>
