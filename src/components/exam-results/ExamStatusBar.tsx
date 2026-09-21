@@ -19,19 +19,18 @@ interface PublishReadiness {
 interface Props {
     examId: string;
     status: ExamStatus;
-    isAdmin: boolean;
     onChanged: () => void;
 }
 
 const STATUS_LABEL: Record<ExamStatus, string> = {
-    DRAFT: 'Draft',
-    PENDING_APPROVAL: 'Pending Approval',
-    APPROVED: 'Approved',
+    DRAFT: 'Not released',
+    PENDING_APPROVAL: 'Released',
+    APPROVED: 'Released',
 };
 
 const STATUS_COLOR: Record<ExamStatus, string> = {
     DRAFT: 'var(--color-text-muted)',
-    PENDING_APPROVAL: '#F59E0B',
+    PENDING_APPROVAL: '#10B981',
     APPROVED: '#10B981',
 };
 
@@ -46,7 +45,7 @@ const STATUS_COLOR: Record<ExamStatus, string> = {
  * excluded) and only then commits — so partial results are never published
  * by surprise.
  */
-export function ExamStatusBar({ examId, status, isAdmin, onChanged }: Props) {
+export function ExamStatusBar({ examId, status, onChanged }: Props) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [readiness, setReadiness] = useState<PublishReadiness | null>(null);
@@ -152,19 +151,16 @@ export function ExamStatusBar({ examId, status, isAdmin, onChanged }: Props) {
                     {error && <span className="text-xs text-red-400">{error}</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                    {status === 'DRAFT' && (
-                        <button type="button" className="btn-secondary" style={{ fontSize: 12, padding: 'var(--space-1) var(--space-3)' }} onClick={startPublish} disabled={busy}>
-                            {busy ? 'Checking…' : '📤 Publish for review'}
+                    {/* Release, or take it back. No second signature in between:
+                        the teacher who entered the marks is the one who knows
+                        whether they are right. */}
+                    {status === 'DRAFT' ? (
+                        <button type="button" className="btn-primary" style={{ fontSize: 12, padding: 'var(--space-1) var(--space-3)' }} onClick={startPublish} disabled={busy}>
+                            {busy ? 'Checking…' : 'Release results'}
                         </button>
-                    )}
-                    {status === 'PENDING_APPROVAL' && isAdmin && (
-                        <button type="button" className="btn-primary" style={{ fontSize: 12, padding: 'var(--space-1) var(--space-3)' }} onClick={() => runAction('approve')} disabled={busy}>
-                            {busy ? 'Approving…' : '✅ Approve'}
-                        </button>
-                    )}
-                    {(status === 'PENDING_APPROVAL' || (status === 'APPROVED' && isAdmin)) && (
+                    ) : (
                         <button type="button" className="btn-secondary" style={{ fontSize: 12, padding: 'var(--space-1) var(--space-3)' }} onClick={() => runAction('unpublish')} disabled={busy}>
-                            {busy ? 'Unpublishing…' : '↩️ Unpublish'}
+                            {busy ? 'Withdrawing…' : 'Withdraw'}
                         </button>
                     )}
                 </div>

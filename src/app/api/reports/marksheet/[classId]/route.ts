@@ -191,24 +191,21 @@ export async function GET(
         const overallGradingScales = overall.scales;
         const overallGradingKind = overall.kind;
 
-        // Gate downloads the way the report-card routes do: a marksheet can
-        // only be pulled once every exam feeding it has been approved. Admins
-        // are the approvers, so they always see it.
-        if (role !== 'ADMIN' && gradeId) {
-            let unapprovedQuery = supabase
-                .from('exams')
-                .select('name, status, subjects(name)')
-                .eq('term_id', termId)
-                .eq('grade_id', gradeId)
-                .neq('status', 'APPROVED');
-            if (yearId) unapprovedQuery = unapprovedQuery.eq('academic_year_id', yearId);
-            if (examType) unapprovedQuery = unapprovedQuery.eq('exam_type', examType);
-            const { data: unapproved } = await unapprovedQuery;
-            if (unapproved && unapproved.length > 0) {
-                const names = unapproved.map((e: any) => `${e.subjects?.name || e.name} (${e.status === 'DRAFT' ? 'not published' : 'pending approval'})`).join(', ');
-                return NextResponse.json({ error: `Marksheet not available yet — the following results still need admin approval: ${names}.` }, { status: 403 });
-            }
-        }
+        /*
+          Staff see results as soon as they are entered.
+
+          This used to refuse a non-admin the report outright — 403 — until
+          every exam feeding the term had been approved. A teacher could not
+          print their own class's report card while waiting on somebody else to
+          click approve, which is the friction that made the whole approval step
+          feel like an obstacle rather than a safeguard.
+
+          The release flag still exists and still matters, but what it gates is
+          the unauthenticated QR page a parent scans (see
+          /api/verify/[studentId]), not what the school's own staff can see
+          about their own learners.
+        */
+
 
         // 4. Term and Year Titles
         let termTitle = 'Term Report';

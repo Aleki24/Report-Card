@@ -386,7 +386,6 @@ export function ExamResultsTab() {
                         <ExamStatusBar
                             examId={selectedExam.id}
                             status={selectedExam.status || 'DRAFT'}
-                            isAdmin={profile?.role === 'ADMIN'}
                             onChanged={() => fetchExams({ keepSelection: true })}
                         />
                     )}

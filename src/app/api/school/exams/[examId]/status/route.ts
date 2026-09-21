@@ -6,6 +6,8 @@ import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-uti
 import { fetchExamComponentScheme } from '@/lib/multi-paper-server';
 import { isMultiPaper } from '@/lib/multi-paper';
 
+// 'approve' is kept as a synonym for 'publish' rather than removed, so a tab
+// left open on the old two-step UI still works instead of erroring.
 const VALID_ACTIONS = ['publish', 'approve', 'unpublish'] as const;
 type Action = typeof VALID_ACTIONS[number];
 
@@ -222,19 +224,35 @@ export async function POST(
             return isExamVisibleToTeacher(exam, perms, userId);
         };
 
-        if (action === 'publish') {
-            if (exam.status !== 'DRAFT') {
-                return NextResponse.json({ error: `Cannot publish — results are already ${exam.status === 'PENDING_APPROVAL' ? 'pending approval' : 'approved'}.` }, { status: 409 });
+        /**
+         * Release results.
+         *
+         * This used to move an exam to PENDING_APPROVAL and wait for an admin
+         * to approve it separately. Nobody was served by the second step: the
+         * teacher who entered the marks is the person who knows whether they
+         * are right, and the admin approving in bulk was rubber-stamping work
+         * they had not seen. It just meant results sat unavailable — teachers
+         * could not even print their own class reports until someone else
+         * acted.
+         *
+         * So releasing is one action by the person who entered the marks, and
+         * it goes straight to APPROVED. The status still matters: it is the
+         * only thing gating the public QR page a parent scans, which must not
+         * show half-entered marks.
+         */
+        if (action === 'publish' || action === 'approve') {
+            if (exam.status === 'APPROVED') {
+                return NextResponse.json({ error: 'These results have already been released.' }, { status: 409 });
             }
             if (!(await canActAsOwner())) {
-                return NextResponse.json({ error: 'Only the teacher who entered these marks (or an admin) can publish them.' }, { status: 403 });
+                return NextResponse.json({ error: 'Only the teacher who entered these marks (or an admin) can release them.' }, { status: 403 });
             }
             const { count: markCount } = await supabase
                 .from('exam_marks')
                 .select('id', { count: 'exact', head: true })
                 .eq('exam_id', examId);
             if (!markCount) {
-                return NextResponse.json({ error: 'Enter at least one student\'s marks before publishing.' }, { status: 400 });
+                return NextResponse.json({ error: 'Enter at least one student\'s marks before releasing them.' }, { status: 400 });
             }
 
             const readiness = await computePublishReadiness(supabase, exam);
@@ -246,9 +264,20 @@ export async function POST(
                 return NextResponse.json({ requiresConfirmation: true, readiness });
             }
 
+            // published_by and approved_by are both the releaser now. They are
+            // kept as separate columns because existing rows distinguish them,
+            // and a report that asks "who signed this off" should still get an
+            // answer for results released from here on.
+            const now = new Date().toISOString();
             const { data: updated, error } = await supabase
                 .from('exams')
-                .update({ status: 'PENDING_APPROVAL', published_by: userId, published_at: new Date().toISOString() })
+                .update({
+                    status: 'APPROVED',
+                    published_by: userId,
+                    published_at: now,
+                    approved_by: userId,
+                    approved_at: now,
+                })
                 .eq('id', examId)
                 .select()
                 .single();
@@ -256,48 +285,30 @@ export async function POST(
             return NextResponse.json({ success: true, data: updated, readiness });
         }
 
-        if (action === 'approve') {
-            if (!isAdmin) {
-                return NextResponse.json({ error: 'Only an admin can approve results.' }, { status: 403 });
-            }
-            if (exam.status !== 'PENDING_APPROVAL') {
-                return NextResponse.json({ error: exam.status === 'DRAFT' ? 'These results have not been published yet.' : 'These results are already approved.' }, { status: 409 });
-            }
-            const { data: updated, error } = await supabase
-                .from('exams')
-                .update({ status: 'APPROVED', approved_by: userId, approved_at: new Date().toISOString() })
-                .eq('id', examId)
-                .select()
-                .single();
-            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-            return NextResponse.json({ success: true, data: updated });
-        }
-
-        // unpublish
+        /**
+         * Withdraw results.
+         *
+         * Whoever can release can withdraw. Undoing used to be admin-only,
+         * which meant a teacher who spotted their own typo had to find an
+         * admin to let them fix it — the same bottleneck the release step had,
+         * arriving at the worst possible moment.
+         */
         if (exam.status === 'DRAFT') {
-            return NextResponse.json({ error: 'These results are already in draft.' }, { status: 409 });
+            return NextResponse.json({ error: 'These results have not been released.' }, { status: 409 });
         }
-        if (exam.status === 'PENDING_APPROVAL') {
-            // Reverting a pending publish — same people who could publish it.
-            if (!(await canActAsOwner())) {
-                return NextResponse.json({ error: 'Only the teacher who published these marks (or an admin) can unpublish them.' }, { status: 403 });
-            }
-            const { data: updated, error } = await supabase
-                .from('exams')
-                .update({ status: 'DRAFT', published_by: null, published_at: null })
-                .eq('id', examId)
-                .select()
-                .single();
-            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-            return NextResponse.json({ success: true, data: updated });
+        if (!(await canActAsOwner())) {
+            return NextResponse.json({ error: 'Only the teacher who released these marks (or an admin) can withdraw them.' }, { status: 403 });
         }
-        // status === 'APPROVED' — undoing an approval is an admin-only action
-        if (!isAdmin) {
-            return NextResponse.json({ error: 'Only an admin can unpublish already-approved results.' }, { status: 403 });
-        }
+        // Back to DRAFT, not to a middle state: there isn't one any more.
         const { data: updated, error } = await supabase
             .from('exams')
-            .update({ status: 'PENDING_APPROVAL', approved_by: null, approved_at: null })
+            .update({
+                status: 'DRAFT',
+                approved_by: null,
+                approved_at: null,
+                published_by: null,
+                published_at: null,
+            })
             .eq('id', examId)
             .select()
             .single();
