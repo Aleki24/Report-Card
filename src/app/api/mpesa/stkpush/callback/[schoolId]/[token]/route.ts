@@ -69,7 +69,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     paid_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                 })
-                .eq('id', payment.id);
+                .eq('id', payment.id)
+                // Only a still-PENDING row moves: a void, or a concurrent
+                // delivery that already settled it, must not be overwritten.
+                .eq('status', 'PENDING');
         } else {
             await supabase
                 .from('fee_payments')
@@ -78,7 +81,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     notes: parsed.resultDesc,
                     updated_at: new Date().toISOString(),
                 })
-                .eq('id', payment.id);
+                .eq('id', payment.id)
+                // Only a still-PENDING row moves: a void, or a concurrent
+                // delivery that already settled it, must not be overwritten.
+                .eq('status', 'PENDING');
         }
 
         return NextResponse.json({ ResultCode: 0, ResultDesc: 'Accepted' });

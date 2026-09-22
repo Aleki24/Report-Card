@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
+import { TEACHING_ROLES } from '@/lib/staff-roles';
 
 export async function GET() {
     try {
@@ -31,16 +32,20 @@ export async function GET() {
                 assignments ( id, title, due_date, subjects ( name ) ),
                 students!inner (
                     id,
-                    users!inner ( school_id, first_name, last_name, admission_number )
+                    admission_number,
+                    users!inner ( school_id, first_name, last_name )
                 )
             `);
 
-        // Students see only their own submissions
+        // Students see only their own submissions; staff see their school's.
+        // A staff account with no school used to fall through with no filter
+        // at all and receive every school's submissions.
         if (role === 'STUDENT') {
             query = query.eq('student_id', userId);
-        } else if (schoolId) {
-            // Non-students scope to their school
+        } else if (schoolId && TEACHING_ROLES.includes(role)) {
             query = query.eq('students.users.school_id', schoolId);
+        } else {
+            return NextResponse.json({ data: [] });
         }
 
         const { data, error } = await query.order('submitted_at', { ascending: false });
@@ -59,7 +64,7 @@ export async function GET() {
             assignmentDueDate: s.assignments?.due_date,
             subjectName: s.assignments?.subjects?.name,
             studentName: s.students?.users ? `${s.students.users.first_name} ${s.students.users.last_name}` : null,
-            admissionNumber: s.students?.users?.admission_number,
+            admissionNumber: s.students?.admission_number,
         }));
 
         return NextResponse.json({ data: mapped });
@@ -106,6 +111,12 @@ export async function POST(request: NextRequest) {
                 student_id: student.userId,
                 file_url: body.file_url || null,
                 submission_text: body.submission_text || null,
+                submitted_at: new Date().toISOString(),
+            }, {
+                // One submission per learner per assignment (UNIQUE in the
+                // schema). Without the conflict target the upsert keyed on the
+                // primary key, so every resubmission hit the unique constraint.
+                onConflict: 'assignment_id,student_id',
             })
             .select()
             .single();

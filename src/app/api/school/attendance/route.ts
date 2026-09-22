@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { TEACHING_ROLES } from '@/lib/staff-roles';
 
 async function getSession() {
   const { userId } = await auth();
@@ -26,6 +27,12 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await getSession();
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // A class register is staff material, same as recording it (POST below).
+    // Learners read their own attendance through /api/school/student/attendance.
+    if (!TEACHING_ROLES.includes(auth.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const { schoolId } = auth;
     if (!schoolId) return NextResponse.json({ data: [] });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /**
  * School-wide payment transactions log — every entry in fee_payments,
@@ -14,11 +15,7 @@ export async function GET(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         // ADMIN (bursar) only: this is the school-wide log with payer phone
         // numbers across every student — class teachers still see per-student

@@ -156,8 +156,11 @@ export async function POST(request: NextRequest) {
             });
 
             if (studentError) {
-                // Rollback: delete users row
+                // Rollback: delete users row and Clerk user. Leaving the Clerk
+                // account behind made every retry fail with "email taken", so
+                // the invite could never be redeemed.
                 await supabaseAdmin.from('users').delete().eq('id', userId);
+                await clerk.users.deleteUser(userId).catch(() => {});
                 return NextResponse.json({ error: `Student error: ${studentError.message}` }, { status: 400 });
             }
         } else if (invite.role === 'SUBJECT_TEACHER') {

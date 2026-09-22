@@ -8,6 +8,7 @@ import {
     gradeSymbolFromScales,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { canStaffReportOnStream } from '@/lib/reports/report-access';
 
 const MAX_STUDENT_IDS = 500;
 
@@ -73,16 +74,24 @@ export async function POST(request: Request) {
         // 1. Fetch students with guardian phone (tenant-scoped to the caller's school)
         const { data: allStudents, error: studentsErr } = await supabase
             .from('students')
-            .select('id, admission_number, guardian_phone, guardian_name, users(first_name, last_name, school_id)')
+            .select('id, admission_number, guardian_phone, guardian_name, current_grade_stream_id, users(first_name, last_name, school_id)')
             .in('id', studentIds);
 
         if (studentsErr) {
             return NextResponse.json({ error: studentsErr.message }, { status: 500 });
         }
 
-        // Tenant-scope: only keep students that belong to the caller's school.
+        // A class teacher texts their own class's parents, not the school's.
+        // School membership was the only check, so any class teacher could
+        // send any learner's results to that learner's guardian.
+        if (!(await canStaffReportOnStream({ role: caller.role, userId }, gradeStreamId))) {
+            return NextResponse.json({ error: 'Only administrators and the class teacher can send results for this class.' }, { status: 403 });
+        }
+
+        // Tenant-scope: only keep students that belong to the caller's school
+        // and to the class named in the request.
         const students = (allStudents || []).filter(
-            (s: any) => s.users?.school_id === schoolId
+            (s: any) => s.users?.school_id === schoolId && s.current_grade_stream_id === gradeStreamId
         );
 
         if (!students.length) {

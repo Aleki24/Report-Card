@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /** Assigns an unmatched (typically M-Pesa Paybill) payment to the correct student's fee record. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
@@ -10,11 +11,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -42,12 +39,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ error: 'Fee record not found in your school' }, { status: 404 });
         }
 
-        const { error } = await supabase
+        // Conditional on the payment still being unassigned: two staff
+        // assigning the same payment at once both passed the check above, and
+        // the second silently moved the money onto a different learner.
+        const { data: assigned, error } = await supabase
             .from('fee_payments')
             .update({ student_fee_id, updated_at: new Date().toISOString() })
-            .eq('id', paymentId);
+            .eq('id', paymentId)
+            .is('student_fee_id', null)
+            .select('id');
 
         if (error) throw error;
+        if (!assigned || assigned.length === 0) {
+            return NextResponse.json({ error: 'Payment is already assigned' }, { status: 409 });
+        }
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {

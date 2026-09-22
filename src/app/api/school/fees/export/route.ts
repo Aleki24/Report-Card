@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import * as XLSX from 'xlsx';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
@@ -12,11 +13,7 @@ export async function GET(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
+import { STAFF_ROLES } from '@/lib/staff-roles';
 
 type DataType =
   | 'students'
@@ -23,6 +24,19 @@ type DataType =
   | 'subjects'
   | 'class_teacher_assignments'
   | 'subject_combinations';
+
+/**
+ * What a non-staff account (a learner) may read here: the school's calendar,
+ * catalogue and grading setup, nothing about other people.
+ */
+const SCHOOL_METADATA_TYPES: ReadonlySet<DataType> = new Set<DataType>([
+  'school_profile',
+  'academic_years',
+  'terms',
+  'subjects',
+  'exam_types',
+  'grading_scales',
+]);
 
 async function getSessionSchoolId(): Promise<{ schoolId: string; userId: string; role: string } | null> {
   const { userId } = await auth();
@@ -53,6 +67,13 @@ export async function GET(request: NextRequest) {
 
     if (!schoolId) {
       return NextResponse.json({ error: 'No school associated with your account' }, { status: 403 });
+    }
+
+    // This route had no role gate, so a signed-in learner could list every
+    // guardian's phone and email (parents), every account's contact details
+    // (users, teachers) and any exam's marks for the whole school.
+    if (!STAFF_ROLES.includes(auth.role) && !SCHOOL_METADATA_TYPES.has(type)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const supabase = createSupabaseAdmin();
@@ -211,10 +232,18 @@ export async function GET(request: NextRequest) {
       case 'exam_marks': {
         const examSlotId = searchParams.get('exam_slot_id');
         if (!examSlotId) return NextResponse.json({ error: 'exam_slot_id required' }, { status: 400 });
-        const { data: schoolUsers } = await supabase.from('users').select('id').eq('school_id', schoolId).eq('role', 'STUDENT');
-        const studentIds = (schoolUsers || []).map(u => u.id);
-        if (studentIds.length === 0) return NextResponse.json({ data: [] });
-        const { data, error } = await supabase.from('exam_marks').select('id, exam_id, student_id, raw_score, percentage, students!inner(admission_number, users(first_name, last_name))').in('exam_id', [examSlotId]).in('student_id', studentIds);
+        // School-scope through the exam and the join. This used to load the
+        // school's student ids first, which PostgREST caps at 1,000 rows, so
+        // in a larger school most learners' marks silently went missing.
+        const { data: exam } = await supabase.from('exams').select('*').eq('id', examSlotId).eq('school_id', schoolId).maybeSingle();
+        if (!exam) return NextResponse.json({ data: [] });
+        if (auth.role !== 'ADMIN') {
+          const perms = await getTeacherPermissions(auth.userId);
+          if (!isExamVisibleToTeacher(exam, perms, auth.userId)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          }
+        }
+        const { data, error } = await supabase.from('exam_marks').select('id, exam_id, student_id, raw_score, percentage, students!inner(admission_number, users!inner(first_name, last_name, school_id))').eq('exam_id', examSlotId).eq('students.users.school_id', schoolId);
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
         const maxScore = searchParams.get('max_score') ? parseInt(searchParams.get('max_score')!) : 100;
         return NextResponse.json({ data: (data ?? []).map((m: any) => ({ id: m.id, exam_id: m.exam_id, student_id: m.student_id, student_name: `${m.students?.users?.first_name || ''} ${m.students?.users?.last_name || ''}`.trim(), admission_number: m.students?.admission_number || '', score: m.raw_score, max_score: maxScore })) });

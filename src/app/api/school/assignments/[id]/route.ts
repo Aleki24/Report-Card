@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { streamBelongsToSchool } from '@/lib/tenant-scope';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -44,7 +45,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (body.due_date !== undefined) updateData.due_date = body.due_date;
         if (body.file_url !== undefined) updateData.file_url = body.file_url;
         if (body.subject_id !== undefined) updateData.subject_id = body.subject_id;
-        if (body.grade_stream_id !== undefined) updateData.grade_stream_id = body.grade_stream_id;
+        if (body.grade_stream_id !== undefined) {
+            if (body.grade_stream_id && !(await streamBelongsToSchool(body.grade_stream_id, currentItem.school_id))) {
+                return NextResponse.json({ error: 'Class not found in your school' }, { status: 404 });
+            }
+            updateData.grade_stream_id = body.grade_stream_id;
+        }
 
         const { data, error } = await supabase
             .from('assignments')

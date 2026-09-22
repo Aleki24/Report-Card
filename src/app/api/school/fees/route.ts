@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { computeFeeStatus } from '@/lib/fees';
+import { FEE_VIEWER_ROLES, computeFeeStatus } from '@/lib/fees';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
     try {
@@ -15,15 +16,19 @@ export async function GET(request: NextRequest) {
         const termId = searchParams.get('term_id');
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
-        const schoolId = userProfile?.school_id;
-        const role = userProfile?.role;
+        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const schoolId = userProfile.school_id;
+        const role = userProfile.role;
         if (!schoolId) return NextResponse.json({ data: [] });
+        // Same audience as every other fee route (payments, receipts, export):
+        // this list previously answered any school member, so a subject
+        // teacher or non-teaching staff account could read every learner's
+        // balance.
+        if (!FEE_VIEWER_ROLES.includes(role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
 
         let query = supabase
             .from('student_fees')
@@ -77,11 +82,7 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .single();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

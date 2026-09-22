@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { STAFF_ROLES } from '@/lib/staff-roles';
 
 export async function GET(_request: NextRequest) {
   try {
@@ -10,9 +11,13 @@ export async function GET(_request: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id, is_active').eq('id', userId).maybeSingle();
+    const { data: userData } = await supabase.from('users').select('school_id, role, is_active').eq('id', userId).maybeSingle();
     if (!userData || userData.is_active === false) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Staff directory, with every teacher's email and phone: not for learners.
+    if (!STAFF_ROLES.includes(userData.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const schoolId = userData?.school_id as string | null;
     if (!schoolId) return NextResponse.json({ data: [] });

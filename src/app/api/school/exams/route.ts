@@ -3,6 +3,7 @@ import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
+import { isUuid } from '@/lib/postgrest';
 
 async function getSession() {
   const { userId } = await auth();
@@ -68,7 +69,11 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
 
-    // Filter by stream/grade
+    // Filter by stream/grade. Both are interpolated into the or() filter
+    // string below, so they must be plain ids, not filter syntax.
+    if ((streamId && !isUuid(streamId)) || (gradeId && !isUuid(gradeId))) {
+      return NextResponse.json({ error: 'Invalid stream or grade id' }, { status: 400 });
+    }
     if (streamId && gradeId) {
       query = query.or(
         `grade_stream_id.eq.${streamId},and(grade_id.eq.${gradeId},grade_stream_id.is.null)`

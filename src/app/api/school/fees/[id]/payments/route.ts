@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
+import { FEE_VIEWER_ROLES, FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 interface FeeRecordAccess {
     ok: true;
@@ -19,11 +20,7 @@ async function getFeeRecordForCaller(
     feeId: string,
     userId: string
 ): Promise<FeeRecordAccess | FeeRecordAccessError> {
-    const { data: userProfile } = await supabase
-        .from('users')
-        .select('role, school_id')
-        .eq('id', userId)
-        .maybeSingle();
+    const userProfile = await getActiveUserProfile(userId);
     if (!userProfile) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
     const { data: fee } = await supabase
@@ -38,7 +35,7 @@ async function getFeeRecordForCaller(
     if (userProfile.role === 'STUDENT' && fee.student_id !== userId) {
         return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
-    if (!['ADMIN', 'CLASS_TEACHER', 'STUDENT'].includes(userProfile.role)) {
+    if (!FEE_VIEWER_ROLES.includes(userProfile.role)) {
         return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
 

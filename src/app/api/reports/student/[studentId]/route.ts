@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/report-access';
+import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
 import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
@@ -91,6 +93,16 @@ export async function GET(
         const templateParam = searchParams.get('template');
         const template = isReportTemplateId(templateParam) ? templateParam : undefined;
 
+        // Authorize before reading anything about the student.
+        const access = await requireSchoolSession();
+        if (!access.ok) return access.response;
+        const { session } = access;
+        const userSchoolId = session.schoolId;
+        const role = session.role;
+        if (!(await termBelongsToSchool(termId, userSchoolId))) {
+            return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+        }
+
         const supabase = createSupabaseAdmin();
 
         // 1. Fetch Student Data
@@ -117,41 +129,26 @@ export async function GET(
         // Try getting school_id from the student's user relation first (if exists)
         const targetSchoolId = student.users?.school_id;
         
-        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
-        const { userId } = await clerkAuth();
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // Strict equality: a student with no school row used to skip this
+        // comparison altogether. Same answer as a missing student, so the
+        // endpoint cannot be used to learn which ids exist elsewhere.
+        if (targetSchoolId !== userSchoolId) {
+            return NextResponse.json({ error: 'Student not found' }, { status: 404 });
         }
-
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role')
-            .eq('id', userId)
-            .maybeSingle();
-
-        const userSchoolId = userProfile?.school_id;
-        if (!userSchoolId) {
-            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
-        }
-
-        if (targetSchoolId && targetSchoolId !== userSchoolId) {
-            return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
-        }
-
-        const role = userProfile?.role;
 
         if (role === 'STUDENT') {
-            if (userId !== studentId) {
+            if (session.userId !== studentId) {
                  return NextResponse.json({ error: 'Unauthorized to view this student report' }, { status: 403 });
             }
-        } else if (role !== 'ADMIN') {
-            const { getTeacherPermissions } = await import('@/lib/teacher-utils');
-            const perms = await getTeacherPermissions(userId);
-            if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(student.current_grade_stream_id)) {
-                return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate student reports.' }, { status: 403 });
-            }
+        } else if (!(await canStaffReportOnStream(session, student.current_grade_stream_id))) {
+            return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate student reports.' }, { status: 403 });
         }
+
+        // Learners only ever see released results. Staff see marks as soon as
+        // they are entered (below), but a student downloading their own card
+        // was shown draft marks the school had not yet signed off — the same
+        // results the public QR page (/api/verify) correctly withholds.
+        const releasedOnly = role === 'STUDENT';
 
         if (targetSchoolId) {
             const { data: schoolData } = await supabase
@@ -199,8 +196,10 @@ export async function GET(
         let examsQ = supabase
             .from('exams')
             .select('id, max_score, exam_type, terms(name), academic_years(name), subjects(id, name, code, category, display_order)')
-            .eq('term_id', termId);
+            .eq('term_id', termId)
+            .eq('school_id', userSchoolId);
 
+        if (releasedOnly) examsQ = examsQ.eq('status', 'APPROVED');
         if (yearId) examsQ = examsQ.eq('academic_year_id', yearId);
         if (gradeId) examsQ = examsQ.eq('grade_id', gradeId);
         if (examType) examsQ = examsQ.eq('exam_type', examType);
@@ -228,6 +227,9 @@ export async function GET(
         }
         if (examType) {
             marksQuery = marksQuery.eq('exams.exam_type', examType);
+        }
+        if (releasedOnly) {
+            marksQuery = marksQuery.eq('exams.status', 'APPROVED');
         }
 
         const { data: marks, error: marksErr } = await marksQuery;
@@ -421,6 +423,7 @@ export async function GET(
                 if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
                 if (yearId) rankQuery = rankQuery.eq('exams.academic_year_id', yearId);
                 if (roundSelection.round) rankQuery = rankQuery.eq('exams.exam_type', roundSelection.round);
+                if (releasedOnly) rankQuery = rankQuery.eq('exams.status', 'APPROVED');
 
                 const { data: allMarks } = await rankQuery;
 
@@ -653,7 +656,7 @@ export async function GET(
         
         try {
             // Get all marks for this student across all terms
-            const { data: allMarks } = await supabase
+            let trendQuery = supabase
                 .from('exam_marks')
                 .select(`
                     percentage,
@@ -663,6 +666,8 @@ export async function GET(
                     )
                 `)
                 .eq('student_id', studentId);
+            if (releasedOnly) trendQuery = trendQuery.eq('exams.status', 'APPROVED');
+            const { data: allMarks } = await trendQuery;
             
             if (allMarks && allMarks.length > 0) {
                 // Group by subject

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { authorizeClassReport } from '@/lib/reports/report-access';
+import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import type { ReportCardData, ReportTemplateId } from '@/lib/pdfGenerator';
 import {
@@ -136,6 +138,17 @@ export async function GET(
             return NextResponse.json({ error: 'termId is required for class reports' }, { status: 400 });
         }
 
+        // Authorize before reading anything about the class.
+        const access = await authorizeClassReport(
+            classId,
+            'Only administrators and the designated class teacher can generate class reports.',
+        );
+        if (!access.ok) return access.response;
+        const userSchoolId = access.session.schoolId;
+        if (!(await termBelongsToSchool(termId, userSchoolId))) {
+            return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+        }
+
         const supabase = createSupabaseAdmin();
 
         // 1. Fetch Students in the grade stream (classId = grade_stream_id)
@@ -155,35 +168,8 @@ export async function GET(
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
-        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
-        const { userId } = await clerkAuth();
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role')
-            .eq('id', userId)
-            .maybeSingle();
-
-        const userSchoolId = userProfile?.school_id;
-        if (!userSchoolId) {
-            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
-        }
-
         if (targetSchoolId && targetSchoolId !== userSchoolId) {
             return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
-        }
-
-        const role = userProfile?.role;
-        if (role !== 'ADMIN') {
-            const { getTeacherPermissions } = await import('@/lib/teacher-utils');
-            const perms = await getTeacherPermissions(userId);
-            if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(classId)) {
-                return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate class reports.' }, { status: 403 });
-            }
         }
 
         // 3. Determine academic level and grading system from first student

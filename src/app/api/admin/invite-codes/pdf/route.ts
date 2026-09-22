@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import {
     generateInviteCodesPDF,
     type InviteCategory,
@@ -45,11 +46,7 @@ export async function GET(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: profile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const profile = await getActiveUserProfile(userId);
 
         if (!profile?.school_id) {
             return NextResponse.json({ error: 'No school associated with your account' }, { status: 403 });

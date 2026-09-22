@@ -4,6 +4,7 @@ import { auth } from '@clerk/nextjs/server';
 import { PASS_MARK } from '@/lib/pass-mark';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
 import type { GradeBand } from '@/types';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /**
  * Analytics for one class.
@@ -78,11 +79,7 @@ export async function GET(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabaseAdmin = createSupabaseAdmin();
-        const { data: profile } = await supabaseAdmin
-            .from('users')
-            .select('school_id, role')
-            .eq('id', userId)
-            .maybeSingle();
+        const profile = await getActiveUserProfile(userId);
 
         const schoolId = profile?.school_id;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });

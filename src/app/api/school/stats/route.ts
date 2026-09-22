@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
     const queryRole = searchParams.get('role') || role.toLowerCase();
 
     // ── ADMIN stats ──────────────────────────────────────────
-    if (queryRole === 'admin' || role === 'ADMIN') {
+    // Decided by the caller's real role only. `?role=admin` used to be
+    // enough on its own, so any signed-in learner could read the school-wide
+    // admin figures and recent-activity feed by adding it to the URL.
+    if (role === 'ADMIN') {
       if (!schoolId) {
         return NextResponse.json({ marks: [], totalReports: 0, totalStudents: 0, activeStudents: 0, totalTeachers: 0, classTeachers: 0, subjectTeachers: 0, totalClasses: 0, upcomingExams: [], recentActivities: [] });
       }
@@ -51,13 +54,15 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
 
       // ── Students ──
-      const { data: schoolUsers } = await supabase
+      // Counted in the database. Loading the ids and taking .length capped
+      // at PostgREST's 1,000-row limit, and passing them all back in an
+      // .in() filter overflowed the request URL well before that.
+      const { count: totalStudentCount } = await supabase
         .from('users')
-        .select('id')
+        .select('id', { count: 'exact', head: true })
         .eq('school_id', schoolId)
         .eq('role', 'STUDENT');
-
-      const studentIds = (schoolUsers || []).map(u => u.id);
+      const totalStudents = totalStudentCount ?? 0;
 
       const { count: activeStudents } = await supabase
         .from('students')
@@ -94,7 +99,7 @@ export async function GET(request: NextRequest) {
       let schoolAverage: number | null = null;
       let passRate: number | null = null;
 
-      if (studentIds.length > 0) {
+      if (totalStudents > 0) {
         // The mean and pass rate are computed in the database rather than over
         // rows fetched here. The previous version filtered on
         // `exams.academic_year_id` without embedding `exams` in the select,
@@ -116,13 +121,13 @@ export async function GET(request: NextRequest) {
           currentYear
             ? supabase
                 .from('report_cards')
-                .select('id', { count: 'exact', head: true })
-                .in('student_id', studentIds)
+                .select('id, students!inner(school_id)', { count: 'exact', head: true })
+                .eq('students.school_id', schoolId)
                 .eq('academic_year_id', currentYear.id)
             : supabase
                 .from('report_cards')
-                .select('id', { count: 'exact', head: true })
-                .in('student_id', studentIds),
+                .select('id, students!inner(school_id)', { count: 'exact', head: true })
+                .eq('students.school_id', schoolId),
         ]);
 
         totalReports = reportsRes.count ?? 0;
@@ -220,7 +225,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         marks,
         totalReports,
-        totalStudents: studentIds.length,
+        totalStudents,
         activeStudents: activeStudents ?? 0,
         totalTeachers,
         classTeachers: classTeachers ?? 0,

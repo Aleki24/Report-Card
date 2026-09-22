@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 const MAX_TITLE_LENGTH = 200;
 const MAX_CONTENT_LENGTH = 5000;
@@ -27,11 +28,7 @@ export async function GET() {
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         const schoolId = userProfile?.school_id;
         if (!schoolId) return NextResponse.json({ data: [] });
@@ -73,11 +70,7 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role, is_active')
-            .eq('id', userId)
-            .single();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });

@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 import { fetchExamComponentScheme } from '@/lib/multi-paper-server';
 import { isMultiPaper } from '@/lib/multi-paper';
+import { TEACHING_ROLES } from '@/lib/staff-roles';
 
 // 'approve' is kept as a synonym for 'publish' rather than removed, so a tab
 // left open on the old two-step UI still works instead of erroring.
@@ -148,6 +149,11 @@ export async function GET(
             .maybeSingle();
         if (!userProfile || userProfile.is_active === false || !userProfile.school_id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        // The readiness report names every unmarked learner in the class;
+        // it is for the staff releasing results, not for students.
+        if (!TEACHING_ROLES.includes(userProfile.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const { data: exam } = await supabase

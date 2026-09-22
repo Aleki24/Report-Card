@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -12,11 +13,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -88,11 +85,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

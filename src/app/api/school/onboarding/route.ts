@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { notifyOwnerOfSchoolRequest } from '@/lib/school-approval';
 import { sendSchoolRequestReceivedEmail } from '@/lib/email';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,13 +12,9 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = createSupabaseAdmin();
 
-    const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('school_id, role, first_name, email')
-      .eq('id', userId)
-      .maybeSingle();
+    const userData = await getActiveUserProfile(userId);
 
-    if (userError || !userData) {
+    if (!userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
+import { escapeLikePattern } from '@/lib/postgrest';
 
 /**
  * POST /api/auth/resolve-identifier
@@ -42,7 +43,10 @@ export async function POST(request: NextRequest) {
         const { data: user } = await supabaseAdmin
             .from('users')
             .select('email, is_active')
-            .ilike('username', value)
+            // Escaped: the raw value used to be a pattern, so an identifier
+            // like `alex%` returned the email of whichever single account it
+            // happened to match — an email lookup by prefix.
+            .ilike('username', escapeLikePattern(value))
             .maybeSingle();
 
         // Don't disclose whether the username exists — the login form falls

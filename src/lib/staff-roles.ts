@@ -17,3 +17,12 @@ export const STAFF_JOB_TITLES = [
 ] as const;
 
 export type StaffJobTitle = (typeof STAFF_JOB_TITLES)[number];
+
+/** Auth roles that teach: they enter marks and see class results. */
+export const TEACHING_ROLES: readonly string[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'];
+
+/**
+ * Every auth role that works in the school (teaching and non-teaching), as
+ * opposed to learners and pending sign-ups.
+ */
+export const STAFF_ROLES: readonly string[] = [...TEACHING_ROLES, 'STAFF'];
