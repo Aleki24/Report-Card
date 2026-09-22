@@ -3,6 +3,7 @@ import HeroSection from '@/components/landing/HeroSection';
 import ShaderBackdrop from '@/components/landing/ShaderBackdrop';
 import ProblemSolutionSection from '@/components/landing/ProblemSolutionSection';
 import ShowcaseSection from '@/components/landing/ShowcaseSection';
+import TestimonialsSection from '@/components/landing/TestimonialsSection';
 import ModulesSection from '@/components/landing/ModulesSection';
 import WorkflowSection from '@/components/landing/WorkflowSection';
 import JoinGuideSection from '@/components/landing/JoinGuideSection';
@@ -29,12 +30,13 @@ export default function Home() {
 
       <Navbar />
 
-      {/* Order tells the buying story: promise → pain → proof → breadth →
+      {/* Order tells the buying story: promise → pain → proof → social proof → breadth →
           ease → who it serves → objections → ask. */}
       <main className="relative z-10">
         <HeroSection />
         <ProblemSolutionSection />
         <ShowcaseSection />
+        <TestimonialsSection />
         <ModulesSection />
         <WorkflowSection />
         <RolesSection />
