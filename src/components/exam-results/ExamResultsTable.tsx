@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { EditMarkModal, type EditMarkData } from './EditMarkModal';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { isMultiPaper } from '@/lib/multi-paper';
+import { isKCSEGradeLevel } from '@/lib/analytics';
 import { downloadBlob, filenameFromResponse } from '@/lib/download';
 
 export interface MarkRow {
@@ -38,6 +39,12 @@ const GRADE_COLORS: Record<string, string> = {
     'E': '#EF4444', 'F': '#EF4444',
 };
 
+/**
+ * The KCSE aggregate bands, used only when an 8-4-4 school has not configured
+ * its own. The range runs to 84 because KCSE aggregates seven subjects at
+ * twelve points each; it describes nothing in CBC, where a learning area is
+ * reported as a performance level and never summed into a letter.
+ */
 const OVERALL_POINTS_GRADES = [
     { symbol: 'A', min: 81, max: 84 },
     { symbol: 'A-', min: 74, max: 80 },
@@ -64,6 +71,11 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
     const [editingMark, setEditingMark] = useState<EditMarkData | null>(null);
     const [studentPoints, setStudentPoints] = useState<Record<string, number>>({});
     const [studentOverallGrades, setStudentOverallGrades] = useState<Record<string, string>>({});
+    /*
+      Null until the class's curriculum is known, so the aggregate columns are
+      withheld rather than guessed at on the first render.
+    */
+    const [aggregatesApply, setAggregatesApply] = useState<boolean | null>(null);
 
     useEffect(() => {
         const fetchTotalPoints = async () => {
@@ -85,6 +97,39 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                 const allMarks = marksData.data || [];
                 const gradingSystems = structureData.grading_systems || [];
                 const gradingScales = structureData.grading_scales || [];
+
+                /*
+                  Does a points aggregate mean anything for this class?
+
+                  Only under 8-4-4. CBC reports each learning area as a
+                  performance level — EE, ME, AE, BE — and never adds them into
+                  an overall letter. Summing them anyway and looking the total
+                  up in the KCSE bands produced grades that were not merely
+                  unfamiliar but unreachable: a CBC subject tops out at 8
+                  points, so eight learning areas cap at 64, while the A band
+                  begins at 81. A CBC learner could not be shown an A no matter
+                  how well they did.
+                */
+                const stream = (structureData.grade_streams || [])
+                    .find((gs: { id: string }) => gs.id === gradeStreamId);
+                const grade = (structureData.grades || [])
+                    .find((g: { id: string }) => g.id === stream?.grade_id);
+
+                /*
+                  isKCSEGradeLevel, not the academic level's code. The two
+                  disagree on purpose: Grades 7, 8, 11 and 12 sit under CBC but
+                  are graded KCSE-style, and the report-card route already
+                  decides it this way. Asking the same question the printed
+                  report asks keeps the screen and the document from
+                  contradicting each other.
+                */
+                const usesPointsAggregate = isKCSEGradeLevel(grade?.code, stream?.full_name);
+                setAggregatesApply(usesPointsAggregate);
+                if (!usesPointsAggregate) {
+                    setStudentPoints({});
+                    setStudentOverallGrades({});
+                    return;
+                }
 
                 // Points come only from SUBJECT-kind scales — OVERALL systems
                 // reuse the same symbols (A, B...) with no per-grade points and
@@ -109,21 +154,44 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                     : OVERALL_POINTS_GRADES;
 
                 const studentTotalPoints: Record<string, number> = {};
+                const subjectsCounted: Record<string, number> = {};
                 const overallGrades: Record<string, string> = {};
 
                 allMarks.forEach((m: any) => {
                     const studentId = m.student_id;
                     if (!studentTotalPoints[studentId]) {
                         studentTotalPoints[studentId] = 0;
+                        subjectsCounted[studentId] = 0;
                     }
 
                     const gradeSymbol = m.grade_symbol;
                     if (gradeSymbol && scalesMap[gradeSymbol]) {
                         studentTotalPoints[studentId] += scalesMap[gradeSymbol].points || 0;
+                        subjectsCounted[studentId] += 1;
                     }
                 });
 
+                /*
+                  An aggregate only means something over a full set of subjects.
+
+                  The bands are calibrated for the whole complement, so a total
+                  built from two subjects out of eight lands near the floor and
+                  reads as a damning grade when it is really just an unfinished
+                  one. Mid-term, before every subject is entered, that describes
+                  the entire class.
+
+                  The class's own fullest learner sets the expected complement —
+                  it needs no assumption about how many subjects a school sits.
+                  The points total still shows, because a sum is a fact; the
+                  grade is withheld, because it would be a verdict.
+                */
+                const fullComplement = Math.max(0, ...Object.values(subjectsCounted));
+
                 Object.entries(studentTotalPoints).forEach(([studentId, totalPoints]) => {
+                    if (fullComplement === 0 || subjectsCounted[studentId] < fullComplement) {
+                        overallGrades[studentId] = '—';
+                        return;
+                    }
                     const overall = (overallBands as { symbol: string; min: number; max: number }[]).find(g => totalPoints >= g.min && totalPoints <= g.max);
                     overallGrades[studentId] = overall?.symbol || '—';
                 });
@@ -288,8 +356,12 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                                   <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('grade_symbol')}>
                                       Grade <SortIcon active={sortKey === 'grade_symbol'} asc={sortAsc} />
                                   </th>
-                                  <th style={{ ...thStyle, textAlign: 'center' }}>Total Pts</th>
-                                  <th style={{ ...thStyle, textAlign: 'center' }}>Overall</th>
+                                  {aggregatesApply && (
+                                      <>
+                                          <th style={{ ...thStyle, textAlign: 'center' }}>Total Pts</th>
+                                          <th style={{ ...thStyle, textAlign: 'center' }}>Overall</th>
+                                      </>
+                                  )}
                                   <th style={thStyle}>Remarks</th>
                                   <th style={{ ...thStyle, textAlign: 'center', width: 60 }}>Edit</th>
                               </tr>
@@ -328,23 +400,27 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                                               {mark.grade_symbol}
                                           </span>
                                       </td>
-                                      <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
-                                          {studentPoints[mark.student_id] ?? '—'}
-                                      </td>
-                                      <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                          <span style={{
-                                              display: 'inline-block',
-                                              padding: '2px 10px',
-                                              borderRadius: 'var(--radius-full)',
-                                              fontSize: 12,
-                                              fontWeight: 700,
-                                              background: `${gradeColor(studentOverallGrades[mark.student_id] || '')}20`,
-                                              color: gradeColor(studentOverallGrades[mark.student_id] || ''),
-                                              border: `1px solid ${gradeColor(studentOverallGrades[mark.student_id] || '')}40`,
-                                          }}>
-                                              {studentOverallGrades[mark.student_id] ?? '—'}
-                                          </span>
-                                      </td>
+                                      {aggregatesApply && (
+                                          <>
+                                              <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600, color: 'var(--color-accent)' }}>
+                                                  {studentPoints[mark.student_id] ?? '—'}
+                                              </td>
+                                              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                                  <span style={{
+                                                      display: 'inline-block',
+                                                      padding: '2px 10px',
+                                                      borderRadius: 'var(--radius-full)',
+                                                      fontSize: 12,
+                                                      fontWeight: 700,
+                                                      background: `${gradeColor(studentOverallGrades[mark.student_id] || '')}20`,
+                                                      color: gradeColor(studentOverallGrades[mark.student_id] || ''),
+                                                      border: `1px solid ${gradeColor(studentOverallGrades[mark.student_id] || '')}40`,
+                                                  }}>
+                                                      {studentOverallGrades[mark.student_id] ?? '—'}
+                                                  </span>
+                                              </td>
+                                          </>
+                                      )}
                                       <td style={{ ...tdStyle, fontSize: 12, color: 'var(--color-text-muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                           {mark.remarks || '—'}
                                       </td>
