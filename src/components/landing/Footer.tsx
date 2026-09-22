@@ -1,32 +1,75 @@
-"use client";
-
 import Link from 'next/link';
 import Image from 'next/image';
 import { Wordmark } from '@/components/Wordmark';
 
+type FooterLink = { label: string; href: string };
+type FooterGroup = { heading: string; links: FooterLink[] };
+
+const GROUPS: FooterGroup[] = [
+  {
+    heading: 'Product',
+    links: [
+      { label: 'Features', href: '/features' },
+      { label: 'Report cards', href: '/features/report-cards' },
+      { label: 'Exams & marks', href: '/features/exams' },
+      { label: 'Pricing', href: '/pricing' },
+    ],
+  },
+  {
+    heading: 'Get started',
+    links: [
+      { label: 'Register your school', href: '/signup' },
+      { label: 'Activate an invite code', href: '/activate' },
+      { label: 'Sign in', href: '/login' },
+    ],
+  },
+  {
+    heading: 'Company',
+    links: [
+      { label: 'Contact', href: '/contact' },
+      { label: 'Dashboard', href: '/dashboard' },
+    ],
+  },
+];
+
 export default function Footer() {
   return (
-    <footer className="relative z-10" style={{ padding: 'clamp(32px, 4vw, 48px) clamp(16px, 5vw, 48px)', borderTop: '1px solid var(--color-border-subtle)' }}>
-      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between" style={{ gap: '32px', marginBottom: '24px' }}>
-          <div className="flex items-center" style={{ gap: '12px' }}>
-            <Image src="/images/logo.png" alt="Skulbase Logo" width={36} height={36} className="rounded-lg object-cover" />
-            <div>
-              <Wordmark style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1.125rem', letterSpacing: '-0.01em', display: 'block' }} />
-              <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>Modern School Management</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center" style={{ gap: '24px' }}>
-            {[{ label: 'Features', href: '/features' }, { label: 'Pricing', href: '/pricing' }, { label: 'Contact', href: '/contact' }, { label: 'Dashboard', href: '/dashboard' }].map((link) => (
-              <Link key={link.href} href={link.href} style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 500, textDecoration: 'none', transition: 'color 0.2s' }} className="hover:text-foreground">{link.label}</Link>
-            ))}
-          </div>
+    <footer className="relative z-10 border-t border-border px-4 py-12 sm:px-6 md:py-16 lg:px-12">
+      <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[1.5fr_repeat(3,1fr)]">
+        <div className="flex flex-col gap-4">
+          <Link href="/" className="flex w-fit items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+            <Image src="/images/logo.png" alt="" width={36} height={36} className="rounded-lg object-cover" />
+            <Wordmark className="font-heading text-lg font-semibold tracking-tight" />
+          </Link>
+          <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+            The school management system built for Kenyan schools — marks, report cards, attendance and parents in one place.
+          </p>
         </div>
-        <div style={{ height: '1px', background: 'var(--color-border-subtle)', marginBottom: '24px' }} />
-        <div className="flex flex-col sm:flex-row items-center justify-between" style={{ gap: '16px' }}>
-          <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.75rem' }}>© {new Date().getFullYear()} <Wordmark style={{ fontWeight: 600 }} /> School Management System. All rights reserved.</span>
-          <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-body)', fontSize: '0.6875rem' }}>Built for Kenyan Schools 🇰🇪</span>
-        </div>
+
+        {GROUPS.map((group) => (
+          <nav key={group.heading} aria-label={group.heading} className="flex flex-col gap-3">
+            <h2 className="text-xs font-semibold tracking-widest text-foreground uppercase">{group.heading}</h2>
+            <ul className="flex flex-col gap-1">
+              {group.links.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="inline-flex min-h-9 items-center text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground focus-visible:text-foreground focus-visible:underline focus-visible:outline-none"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+
+      <div className="mx-auto mt-10 flex max-w-7xl flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
+        <span>
+          © {new Date().getFullYear()} <Wordmark className="font-semibold" /> School Management System. All rights reserved.
+        </span>
+        <span>Built for Kenyan schools 🇰🇪</span>
       </div>
     </footer>
   );
