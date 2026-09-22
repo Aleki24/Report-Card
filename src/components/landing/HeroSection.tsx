@@ -25,11 +25,14 @@ const TRUST_CHIPS = [
   { icon: Smartphone, label: 'Parents kept in the loop' },
 ];
 
-const STATS = [
-  { value: 10, suffix: '+', label: 'Modules on one platform' },
-  { value: 2, suffix: '', label: 'Curricula — CBC & 8-4-4' },
-  { value: 4, suffix: '', label: 'Role-based portals' },
-  { value: 1, suffix: '', label: 'Invite code to join' },
+type Stat = { value: number; prefix?: string; suffix?: string; label: string };
+
+// Outcome-led figures a head teacher weighs when buying — all true of the product today.
+const STATS: Stat[] = [
+  { value: modules.filter((m) => m.status === 'active' && m.slug !== 'settings').length, label: 'Modules under one login' },
+  { value: 1, label: 'Click to print a whole class’s report cards' },
+  { value: 2, label: 'Curricula supported — CBC & 8-4-4' },
+  { value: 5000, prefix: 'KES ', label: 'Per term, every module included' },
 ];
 
 // Grade 8 is CBC junior school — marks map to KNEC performance levels
@@ -52,14 +55,12 @@ function useCountUp(target: number, run: boolean, durationMs = 1400) {
   const [value, setValue] = useState(0);
   useEffect(() => {
     if (!run) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target);
-      return;
-    }
+    // Reduced motion jumps straight to the final value (t = 1 on the first frame).
+    const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : durationMs;
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
-      const t = Math.min((now - start) / durationMs, 1);
+      const t = duration === 0 ? 1 : Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
       setValue(Math.round(target * eased));
       if (t < 1) raf = requestAnimationFrame(tick);
@@ -70,11 +71,12 @@ function useCountUp(target: number, run: boolean, durationMs = 1400) {
   return value;
 }
 
-function StatValue({ value, suffix, run }: { value: number; suffix: string; run: boolean }) {
+function StatValue({ value, prefix = '', suffix = '', run }: Omit<Stat, 'label'> & { run: boolean }) {
   const n = useCountUp(value, run);
   return (
     <>
-      {n}
+      {prefix}
+      {n.toLocaleString('en-KE')}
       {suffix}
     </>
   );
@@ -196,7 +198,7 @@ export default function HeroSection() {
                 boxShadow: '0 8px 32px var(--color-accent-glow), 0 2px 8px rgba(0,0,0,0.1)',
               }}
             >
-              Register Your School — Free
+              Register Your School
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             <Link
@@ -223,6 +225,8 @@ export default function HeroSection() {
             className="text-center lg:text-left"
             style={{ fontFamily: 'var(--font-body)', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}
           >
+            KES 5,000 per term · every module included.{' '}
+            <br className="sm:hidden" />
             Already have an account?{' '}
             <Link href="/login" className="font-semibold" style={{ color: 'var(--color-accent)' }}>
               Sign in
@@ -591,7 +595,7 @@ export default function HeroSection() {
                 letterSpacing: '-0.02em',
               }}
             >
-              <StatValue value={stat.value} suffix={stat.suffix} run={statsInView} />
+              <StatValue value={stat.value} prefix={stat.prefix} suffix={stat.suffix} run={statsInView} />
             </div>
             <div
               style={{

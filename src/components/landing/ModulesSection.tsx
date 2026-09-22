@@ -1,164 +1,91 @@
-"use client";
-
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
-import { modules } from '@/lib/modules';
-import { Wordmark } from '@/components/Wordmark';
+import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { comingSoonModules, modules, type Module } from '@/lib/modules';
+import { cn } from '@/lib/utils';
+import { Section, SectionHeader } from './ui/Section';
 
-const displayModules = modules.filter(m => m.slug !== 'settings').slice(0, 3);
+const liveModules = modules.filter((m) => m.status === 'active' && m.slug !== 'settings');
+
+// Report cards are the product's core promise, so the first tile gets the wide slot.
+const FEATURED_SLUG: Module['slug'] = 'report-cards';
 
 export default function ModulesSection() {
   return (
-    <section style={{ padding: 'clamp(48px, 6vw, 80px) clamp(16px, 5vw, 48px)', maxWidth: '1280px', margin: '0 auto' }}>
-      {/* Section Header */}
-      <div className="text-center" style={{ marginBottom: 'clamp(32px, 4vw, 48px)', maxWidth: '640px', margin: '0 auto' }}>
-        <span
-          className="inline-flex items-center"
-          style={{
-            color: 'var(--color-accent)',
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.2em',
-            gap: '10px',
-            marginBottom: '16px',
-            justifyContent: 'center',
-            display: 'flex',
-          }}
-        >
-          <span style={{ width: '32px', height: '1px', background: 'var(--color-accent)', display: 'inline-block' }} />
-          Platform Modules
-          <span style={{ width: '32px', height: '1px', background: 'var(--color-accent)', display: 'inline-block' }} />
-        </span>
-        <h2
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 700,
-            fontSize: 'clamp(1.5rem, 3.5vw, 2.75rem)',
-            lineHeight: 1.12,
-            letterSpacing: '-0.02em',
-            color: 'var(--color-text-primary)',
-            marginBottom: '20px',
-          }}
-        >
-          One Platform,{' '}
-          <span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>Every Module</span>
-        </h2>
-        <p
-          style={{
-            color: 'var(--color-text-secondary)',
-            fontFamily: 'var(--font-body)',
-            fontSize: 'clamp(0.875rem, 1.4vw, 1rem)',
-            lineHeight: 1.7,
-            maxWidth: '520px',
-            margin: '0 auto',
-          }}
-        >
-          From student enrollment to final report cards, <Wordmark /> covers every aspect of school academic management.
+    <Section id="modules">
+      <SectionHeader
+        eyebrow="Platform modules"
+        title="One platform,"
+        highlight="every module."
+        description={`${liveModules.length} modules live today and all included in one plan — from enrollment on day one to results on closing day.`}
+      />
+
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {liveModules.map((mod) => (
+          <li key={mod.slug} className={cn(mod.slug === FEATURED_SLUG && 'sm:col-span-2')}>
+            <ModuleCard module={mod} featured={mod.slug === FEATURED_SLUG} />
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-10 flex flex-col items-center gap-6 md:mt-14">
+        <p className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">Coming next:</span>
+          {comingSoonModules.map((mod) => (
+            <span key={mod.slug} className="rounded-full border border-dashed border-border px-3 py-1 text-xs">
+              {mod.title}
+            </span>
+          ))}
         </p>
-      </div>
 
-      {/* Module Cards Grid */}
-      <div
-        className="grid sm:grid-cols-2 lg:grid-cols-3"
-        style={{ gap: 'clamp(12px, 2vw, 16px)', maxWidth: '1024px', margin: '0 auto clamp(32px, 4vw, 48px)' }}
-      >
-        {displayModules.map((mod) => {
-          const IconComponent = mod.icon;
-          return (
-            <Link
-              key={mod.slug}
-              href={mod.featureHref}
-              className="group relative rounded-2xl border transition-all duration-500 hover:border-primary hover:shadow-lg"
-              style={{
-                background: 'var(--color-surface)',
-                borderColor: 'var(--color-border-subtle)',
-                padding: 'clamp(20px, 2.5vw, 24px)',
-                textDecoration: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px',
-              }}
-            >
-              {/* Icon */}
-              <div
-                className="transition-transform duration-300 group-hover:scale-110"
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: 'var(--radius-md)',
-                  background: 'var(--color-accent-glow)',
-                  border: '1px solid var(--color-accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <IconComponent style={{ width: '20px', height: '20px', color: 'var(--color-accent)' }} />
-              </div>
-
-              {/* Title */}
-              <h3
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 700,
-                  fontSize: '0.9375rem',
-                  color: 'var(--color-text-primary)',
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {mod.title}
-              </h3>
-
-              {/* Description */}
-              <p
-                style={{
-                  color: 'var(--color-text-muted)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.75rem',
-                  lineHeight: 1.6,
-                  flex: 1,
-                }}
-              >
-                {mod.description}
-              </p>
-
-              {/* Bottom accent line */}
-              <div
-                className="absolute bottom-0 left-0 right-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-                style={{
-                  height: '2px',
-                  borderRadius: '0 0 16px 16px',
-                  background: 'linear-gradient(90deg, var(--color-accent), transparent)',
-                }}
-              />
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* View All CTA */}
-      <div style={{ textAlign: 'center' }}>
         <Link
           href="/features"
-          className="group inline-flex items-center rounded-xl transition-all duration-300 hover:border-primary"
-          style={{
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text-primary)',
-            fontFamily: 'var(--font-body)',
-            fontWeight: 500,
-            fontSize: '0.875rem',
-            padding: '10px 22px',
-            gap: '10px',
-            background: 'transparent',
-            textDecoration: 'none',
-          }}
+          className="group inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-card px-5 text-sm font-medium text-foreground transition-colors duration-200 hover:border-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          View All Features
-          <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" style={{ color: 'var(--color-accent)' }} />
+          Explore all features
+          <ArrowRight className="size-4 text-primary transition-transform duration-200 group-hover:translate-x-1" aria-hidden />
         </Link>
       </div>
-    </section>
+    </Section>
+  );
+}
+
+function ModuleCard({ module: mod, featured }: { module: Module; featured: boolean }) {
+  const Icon = mod.icon;
+
+  return (
+    <Link
+      href={mod.featureHref}
+      className={cn(
+        'group relative flex h-full flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all duration-300',
+        'hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+        featured && 'bg-gradient-to-br from-primary/10 via-card to-card',
+      )}
+    >
+      <div className="flex items-start justify-between">
+        <span className="flex size-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary">
+          <Icon className="size-5" aria-hidden />
+        </span>
+        <ArrowUpRight
+          className="size-5 text-muted-foreground opacity-0 transition-all duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden
+        />
+      </div>
+
+      <h3 className={cn('font-heading font-bold tracking-tight text-foreground', featured ? 'text-xl md:text-2xl' : 'text-base')}>
+        {mod.title}
+      </h3>
+      <p className="flex-1 text-sm leading-relaxed text-muted-foreground">{featured ? mod.longDescription : mod.description}</p>
+
+      {featured && (
+        <ul className="mt-2 flex flex-wrap gap-2">
+          {mod.features.slice(0, 4).map((feature) => (
+            <li key={feature} className="rounded-full bg-background/60 px-3 py-1 text-xs font-medium text-foreground ring-1 ring-border">
+              {feature}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Link>
   );
 }
