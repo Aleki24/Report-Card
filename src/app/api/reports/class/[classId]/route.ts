@@ -333,7 +333,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id, created_at,
+                exams!inner ( id, name, max_score, exam_type, exam_date, term_id, academic_year_id, created_at,
                     subjects ( id, name, code, category, display_order )
                 )
             `)

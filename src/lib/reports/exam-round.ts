@@ -18,10 +18,47 @@
  * supabase-js types an embedded relation as an array in some selects and an
  * object in others, so the exam is read defensively rather than typed.
  */
-function examOf(mark: unknown): { exam_type?: string | null; created_at?: string | null } | null {
+interface ExamStamp {
+    exam_type?: string | null;
+    exam_date?: string | null;
+    created_at?: string | null;
+}
+
+function examOf(mark: unknown): ExamStamp | null {
     const exams = (mark as { exams?: unknown } | null)?.exams;
     if (!exams) return null;
-    return (Array.isArray(exams) ? exams[0] : exams) as { exam_type?: string | null; created_at?: string | null };
+    return (Array.isArray(exams) ? exams[0] : exams) as ExamStamp;
+}
+
+/**
+ * When the sitting happened, not when the row was typed in.
+ *
+ * created_at is a record-keeping timestamp, and exams are routinely created in
+ * one batch: every Form 3 exam for a term — Opener, Mid Term, Mock, End Term —
+ * shares a single created_at to the microsecond. Ordering by it then says
+ * nothing, and the old "first seen wins" tie-break handed the choice to
+ * whatever order the database returned rows in, which no query here fixes. Two
+ * documents for the same class could describe different sittings.
+ */
+function sittingTime(exam: ExamStamp | null): number {
+    const when = exam?.exam_date || exam?.created_at;
+    return when ? new Date(when).getTime() : 0;
+}
+
+/**
+ * Where a round falls within a term, for the rare tie dates cannot settle.
+ *
+ * Only the sequence nobody disputes is ranked. CAT, zonal, county and mock
+ * sittings land wherever a school puts them, so they get no invented place and
+ * fall back to their name — deterministic, which is all a tie-break owes.
+ */
+const TERM_SEQUENCE: Record<string, number> = { OPENER: 1, MIDTERM: 2, ENDTERM: 3 };
+
+/** True when round `a` should be preferred over round `b` at the same time. */
+function laterInTerm(a: string, b: string | null): boolean {
+    if (b === null) return true;
+    const byPlace = (TERM_SEQUENCE[a] ?? 0) - (TERM_SEQUENCE[b] ?? 0);
+    return byPlace !== 0 ? byPlace > 0 : a > b;
 }
 
 export interface ExamRoundSelection<T> {
@@ -41,13 +78,13 @@ export function selectExamRound<T>(marks: T[]): ExamRoundSelection<T> {
     let round: string | null = null;
     let latest = -Infinity;
     for (const m of typed) {
-        // Exams created in the same batch can share a timestamp; ties keep the
-        // first seen, which is stable because the caller's ordering is stable.
         const exam = examOf(m);
-        const created = new Date(exam?.created_at || 0).getTime();
-        if (created > latest) {
-            latest = created;
-            round = exam?.exam_type ?? null;
+        const when = sittingTime(exam);
+        const type = exam?.exam_type ?? null;
+        // A genuine tie still needs an answer that does not depend on row order.
+        if (when > latest || (when === latest && type !== null && laterInTerm(type, round))) {
+            latest = when;
+            round = type;
         }
     }
 

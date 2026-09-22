@@ -212,7 +212,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, exam_type, term_id, academic_year_id, created_at,
+                exams!inner ( id, name, max_score, exam_type, exam_date, term_id, academic_year_id, created_at,
                     terms ( name ),
                     academic_years ( name ),
                     subjects ( id, name, code, category, display_order )
@@ -396,13 +396,31 @@ export async function GET(
                 totalStudents = classmates.length;
                 classmateIds = classmates.map((c: any) => c.id);
 
+                /*
+                  Rank over the same sitting the card reports.
+
+                  This query used to filter by term and year only — it did not
+                  even select exam_type — so the position was computed across
+                  every round in the term while the subject rows above showed
+                  one. The two disagreed by construction, and not evenly: the
+                  8-4-4 selection picks a learner's best seven subjects, so a
+                  classmate who sat both Mid Term and End Term was scored on
+                  the best seven of sixteen marks and climbed past one who sat
+                  only End Term. A learner was pushed down the order for having
+                  sat fewer rounds than his classmates.
+
+                  roundSelection is the round already resolved for this card,
+                  so ranking against it is consistent by construction rather
+                  than by the two queries happening to agree.
+                */
                 let rankQuery = supabase
                     .from('exam_marks')
-                    .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, subjects(id, name, category))')
+                    .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, exam_type, subjects(id, name, category))')
                     .in('student_id', classmateIds);
 
                 if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
                 if (yearId) rankQuery = rankQuery.eq('exams.academic_year_id', yearId);
+                if (roundSelection.round) rankQuery = rankQuery.eq('exams.exam_type', roundSelection.round);
 
                 const { data: allMarks } = await rankQuery;
 
