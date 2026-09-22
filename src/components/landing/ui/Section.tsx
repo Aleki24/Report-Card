@@ -67,13 +67,23 @@ export function SectionHeader({
   );
 }
 
-function Eyebrow({ centered, children }: { centered: boolean; children: ReactNode }) {
+type EyebrowProps = {
+  children: ReactNode;
+  /** Draw the hairline rule on both sides (centred headers) or only before the text. */
+  centered?: boolean;
+  /** Replaces the leading rule, e.g. an icon. */
+  leading?: ReactNode;
+  className?: string;
+};
+
+/** Small uppercase kicker that sits above a heading. */
+export function Eyebrow({ children, centered = false, leading, className }: EyebrowProps) {
   const rule = <span aria-hidden className="h-px w-8 bg-primary" />;
   return (
-    <span className="inline-flex items-center gap-3 text-xs font-semibold tracking-[0.2em] text-primary uppercase">
-      {rule}
+    <span className={cn('inline-flex items-center gap-3 text-xs font-semibold tracking-[0.2em] text-primary uppercase', className)}>
+      {leading ?? rule}
       {children}
-      {centered && rule}
+      {centered && !leading && rule}
     </span>
   );
 }

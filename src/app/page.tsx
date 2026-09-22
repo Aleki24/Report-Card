@@ -1,7 +1,3 @@
-"use client";
-
-import { useTheme } from '@/components/ThemeProvider';
-import { cn } from '@/lib/utils';
 import Navbar from '@/components/landing/Navbar';
 import HeroSection from '@/components/landing/HeroSection';
 import ShaderBackdrop from '@/components/landing/ShaderBackdrop';
@@ -16,9 +12,6 @@ import CTASection from '@/components/landing/CTASection';
 import Footer from '@/components/landing/Footer';
 
 export default function Home() {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-background transition-colors duration-500">
       {/* Scroll progress bar — driven by animation-timeline: scroll(),
@@ -27,18 +20,8 @@ export default function Home() {
 
       {/* AMBIENT LIGHT EFFECTS — static CSS fallback, always present */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div
-          className={cn(
-            'absolute top-[-20%] left-[10%] h-[50vh] w-[50vw] rounded-full bg-[radial-gradient(circle,var(--color-accent-glow)_0%,transparent_70%)] blur-[160px]',
-            isDark ? 'opacity-60' : 'opacity-30',
-          )}
-        />
-        <div
-          className={cn(
-            'absolute right-[-5%] bottom-[10%] h-[35vh] w-[35vw] rounded-full bg-[radial-gradient(circle,rgba(124,107,240,0.08)_0%,transparent_70%)] blur-[120px]',
-            isDark ? 'opacity-50' : 'opacity-20',
-          )}
-        />
+        <div className="absolute top-[-20%] left-[10%] h-[50vh] w-[50vw] rounded-full bg-[radial-gradient(circle,var(--color-accent-glow)_0%,transparent_70%)] opacity-30 blur-[160px] dark:opacity-60" />
+        <div className="absolute right-[-5%] bottom-[10%] h-[35vh] w-[35vw] rounded-full bg-[radial-gradient(circle,rgba(124,107,240,0.08)_0%,transparent_70%)] opacity-20 blur-[120px] dark:opacity-50" />
       </div>
 
       {/* Live WebGL aurora — layers over the static glow, skipped without WebGL2 */}
