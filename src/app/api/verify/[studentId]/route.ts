@@ -22,7 +22,7 @@ function one<T>(relation: unknown): T | undefined {
 }
 
 interface SubjectRel { id?: string; name?: string; code?: string; category?: string; display_order?: number }
-interface ExamRel { id?: string; max_score?: number; exam_type?: string; created_at?: string; subjects?: unknown }
+interface ExamRel { id?: string; max_score?: number; exam_type?: string; exam_date?: string; created_at?: string; subjects?: unknown }
 
 /** A mark flattened out of the nested supabase response. */
 interface FlatMark {
@@ -33,6 +33,7 @@ interface FlatMark {
     maxScore: number;
     gradeSymbol?: string;
     examType?: string;
+    examDate?: string;
     createdAt?: string;
     subject: SubjectRel;
 }
@@ -49,13 +50,14 @@ function flatten(row: unknown, fallbackStudentId: string): FlatMark | null {
         maxScore: Number(exam.max_score ?? 0),
         gradeSymbol: m.grade_symbol || undefined,
         examType: exam.exam_type,
+        examDate: exam.exam_date,
         createdAt: exam.created_at,
         subject: one<SubjectRel>(exam.subjects) || {},
     };
 }
 
-/** Shape selectExamRound() reads: it looks for `exams.exam_type` / `created_at`. */
-const asRoundInput = (m: FlatMark) => ({ ...m, exams: { exam_type: m.examType, created_at: m.createdAt } });
+/** Shape selectExamRound() reads: `exams.exam_type`, and `exam_date` before `created_at`. */
+const asRoundInput = (m: FlatMark) => ({ ...m, exams: { exam_type: m.examType, exam_date: m.examDate, created_at: m.createdAt } });
 
 function toAnalyticsMark(m: FlatMark): ExamMarkWithDetails {
     return {
@@ -157,7 +159,7 @@ export async function GET(
             .from('exam_marks')
             .select(`
                 raw_score, percentage, grade_symbol,
-                exams!inner ( id, max_score, exam_type, created_at,
+                exams!inner ( id, max_score, exam_type, exam_date, created_at,
                     subjects ( id, name, code, category, display_order )
                 )
             `)
