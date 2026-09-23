@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PREDEFINED_SUBJECTS } from '@/lib/subject-definitions';
 import { subjectsBulkSchema } from '@/lib/schemas';
+import { createSchoolCombination, CombinationError } from '@/lib/pathway/combinations';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
@@ -548,35 +549,20 @@ export async function POST(request: NextRequest) {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = subjectCombinationSchema.parse(payload);
 
-                // Electives must be subjects this school actually offers
-                if (new Set(data.subject_ids).size !== 3
-                    || !(await allOffered(supabaseAdmin, schoolId, data.subject_ids))) {
-                    return NextResponse.json({ error: 'All 3 elective subjects must be offered by your school.' }, { status: 400 });
-                }
-
-                const { data: combination, error } = await supabaseAdmin
-                    .from('subject_combinations')
-                    .insert({
-                        school_id: schoolId,
+                try {
+                    const combination = await createSchoolCombination(supabaseAdmin, schoolId, {
                         code: data.code,
                         name: data.name,
                         pathway: data.pathway,
                         track: data.track ?? null,
-                        is_active: data.is_active ?? true,
-                    })
-                    .select().single();
-                if (error) return handleDatabaseError(error, 'subject combination');
-
-                const { error: junctionError } = await supabaseAdmin
-                    .from('subject_combination_subjects')
-                    .insert(data.subject_ids.map(subject_id => ({ combination_id: combination.id, subject_id })));
-                if (junctionError) {
-                    // Manual rollback — keep combination + electives atomic
-                    await supabaseAdmin.from('subject_combinations').delete().eq('id', combination.id);
-                    return handleDatabaseError(junctionError, 'subject combination');
+                        subjectIds: data.subject_ids,
+                        isActive: data.is_active ?? true,
+                    });
+                    return NextResponse.json({ success: true, data: combination });
+                } catch (err) {
+                    if (err instanceof CombinationError) return NextResponse.json({ error: err.message }, { status: 400 });
+                    return handleDatabaseError(err, 'subject combination');
                 }
-
-                return NextResponse.json({ success: true, data: combination });
             },
         };
 

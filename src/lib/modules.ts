@@ -537,3 +537,8 @@ export const comingSoonModules: ComingSoonModule[] = [
 export function getModuleBySlug(slug: string): Module | ComingSoonModule | undefined {
   return modules.find((m) => m.slug === slug) ?? comingSoonModules.find((m) => m.slug === slug);
 }
+
+/** True for a module with a full feature page; false for a coming-soon placeholder. */
+export function isFullModule(mod: Module | ComingSoonModule): mod is Module {
+  return 'features' in mod;
+}
