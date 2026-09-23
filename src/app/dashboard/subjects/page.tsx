@@ -5,10 +5,11 @@ import { SubjectTeachersTab } from '@/components/subjects/SubjectTeachersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
-import { Search, BookOpen, Plus, RotateCcw, Layers, Users } from 'lucide-react';
+import { Search, BookOpen, Plus, RotateCcw, Layers, Users, Sparkles } from 'lucide-react';
 import { isSubjectOfferedAtGrade, subjectBandLabel } from '@/lib/curriculum-bands';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
 import SubjectCatalogueChecklist from '@/components/subjects/SubjectCatalogueChecklist';
+import PlacementManager from '@/components/subjects/PlacementManager';
 import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
 import type { SubjectCombination } from '@/types';
 
@@ -43,7 +44,7 @@ export default function SubjectsPage() {
     const [grades, setGrades] = useState<Grade[]>([]);
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
     const [minGroupSize, setMinGroupSize] = useState(15);
-    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations' | 'teachers'>('subjects');
+    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations' | 'placement' | 'teachers'>('subjects');
     const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string; grade_id: string }[]>([]);
     const [enrollmentSubject, setEnrollmentSubject] = useState<Subject | null>(null);
     const [loading, setLoading] = useState(true);
@@ -190,6 +191,14 @@ export default function SubjectsPage() {
                     <Layers size={15} /> Subject Combinations
                     {combinations.length > 0 && <span className="badge text-[11px]">{combinations.length}</span>}
                 </button>
+                {role === 'ADMIN' && (
+                    <button
+                        className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'placement' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => setActiveTab('placement')}
+                    >
+                        <Sparkles size={15} /> Learner Placement
+                    </button>
+                )}
                 <button
                     className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'teachers' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setActiveTab('teachers')}
@@ -198,7 +207,9 @@ export default function SubjectsPage() {
                 </button>
             </div>
 
-            {activeTab === 'teachers' ? (
+            {activeTab === 'placement' ? (
+                <PlacementManager grades={grades} streams={gradeStreams} academicLevels={academicLevels} />
+            ) : activeTab === 'teachers' ? (
                 <SubjectTeachersTab grades={grades} streams={gradeStreams} />
             ) : activeTab === 'combinations' ? (
                 <CombinationsManager
