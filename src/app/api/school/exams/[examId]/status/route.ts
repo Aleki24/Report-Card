@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { subjectTakers } from '@/lib/subject-roster';
 import { auth } from '@clerk/nextjs/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -37,8 +38,8 @@ async function computePublishReadiness(
     exam: { id: string; school_id: string; grade_id: string; grade_stream_id: string | null; subject_id: string }
 ): Promise<PublishReadiness> {
     // Roster = students in the exam's stream (or across the grade's streams for
-    // a grade-wide exam), narrowed to those enrolled in the subject when the
-    // subject has an explicit roster (electives) — mirrors mark entry.
+    // a grade-wide exam), narrowed to the learners who take the subject —
+    // mirrors mark entry (see subject-roster).
     let streamIds: string[] = [];
     if (exam.grade_stream_id) {
         streamIds = [exam.grade_stream_id];
@@ -60,16 +61,8 @@ async function computePublishReadiness(
             name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
         }));
 
-        // Subject enrollment filter (only when the subject has any enrollment)
-        if (roster.length > 0) {
-            const { data: enrollments } = await supabase
-                .from('student_subjects')
-                .select('student_id')
-                .eq('subject_id', exam.subject_id)
-                .in('student_id', roster.map(s => s.id));
-            const enrolledIds = new Set((enrollments || []).map((e: any) => e.student_id));
-            if (enrolledIds.size > 0) roster = roster.filter(s => enrolledIds.has(s.id));
-        }
+        // Only the learners who take the subject — the same rule as mark entry
+        roster = (await subjectTakers(supabase, exam.subject_id, roster)).students;
     }
 
     const { data: markRows } = await supabase
