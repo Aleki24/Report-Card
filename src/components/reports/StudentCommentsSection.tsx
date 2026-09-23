@@ -25,12 +25,14 @@ interface StudentCommentsSectionProps {
   onSaveComment: (sc: StudentComment) => void;
   onSaveAllComments: () => void;
   onUpdateComment: (studentId: string, field: 'comments_class_teacher' | 'comments_principal', value: string) => void;
+  /** Only an admin writes the principal's comment; others see it read-only. */
+  canEditPrincipalComment: boolean;
 }
 
 export function StudentCommentsSection({
   isConfigured, showComments, setShowComments, loadingComments,
   studentComments, filteredComments, commentSearch, setCommentSearch,
-  savingCommentId, onSaveComment, onSaveAllComments, onUpdateComment,
+  savingCommentId, onSaveComment, onSaveAllComments, onUpdateComment, canEditPrincipalComment,
 }: StudentCommentsSectionProps) {
   if (!isConfigured) return null;
 
@@ -96,7 +98,7 @@ export function StudentCommentsSection({
                       </div>
                       <div>
                         <label className="block text-[11px] text-muted-foreground mb-2 font-medium">Principal&apos;s Comment</label>
-                        <textarea className="input-field w-full text-sm" rows={2} placeholder="e.g. Keep up the good work..." value={sc.comments_principal} onChange={e => onUpdateComment(sc.student_id, 'comments_principal', e.target.value)} />
+                        <textarea className="input-field w-full text-sm read-only:cursor-not-allowed read-only:opacity-70" rows={2} placeholder={canEditPrincipalComment ? 'e.g. Keep up the good work...' : 'Written by the principal'} readOnly={!canEditPrincipalComment} value={sc.comments_principal} onChange={e => onUpdateComment(sc.student_id, 'comments_principal', e.target.value)} />
                       </div>
                     </div>
                   </div>

@@ -54,7 +54,8 @@ export default function ClassesPage() {
     if (profile?.id) fetchAllData();
   }, [profile?.id, fetchAllData]);
 
-  const postStructure = async (type: string, payload: Record<string, unknown>) => {
+  /** Returns whether the save succeeded, so forms clear only on success. */
+  const postStructure = async (type: string, payload: Record<string, unknown>): Promise<boolean> => {
     setCalSaving(true);
     setCalMsg('');
     try {
@@ -67,10 +68,10 @@ export default function ClassesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed');
       setCalMsg(`✅ ${type.replace('_', ' ')} added successfully`);
       await fetchAllData();
-      return data.data;
+      return true;
     } catch (err) {
       setCalMsg(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
-      return null;
+      return false;
     } finally {
       setCalSaving(false);
     }
@@ -81,8 +82,16 @@ export default function ClassesPage() {
     setCalSaving(true);
     setCalMsg('');
     try {
-      const res = await fetch(`/api/admin/academic-structure?type=${type}&id=${id}`, { method: 'DELETE' });
-      const data = await res.json();
+      const url = `/api/admin/academic-structure?type=${type}&id=${id}`;
+      let res = await fetch(url, { method: 'DELETE' });
+      let data = await res.json();
+      // A subject with recorded exams needs a second confirmation; its results
+      // are kept, it just leaves the list (same flow as the Subjects page).
+      if (res.status === 409 && typeof data.examCount === 'number') {
+        if (!confirm(`This subject has ${data.examCount} exam(s) recorded. Those results are kept — the subject just stops appearing on your list. Continue?`)) return;
+        res = await fetch(`${url}&force=true`, { method: 'DELETE' });
+        data = await res.json();
+      }
       if (!res.ok) throw new Error(data.error || 'Failed');
       setCalMsg('✅ Deleted successfully');
       await fetchAllData();
@@ -101,8 +110,9 @@ export default function ClassesPage() {
     const finalName = newStream.name.trim() || grade?.name_display || 'Class';
     const finalFullName = newStream.full_name.trim() || (newStream.name.trim() ? `${grade?.name_display || ''} ${finalName}`.trim() : finalName);
     
-    await postStructure('stream', { grade_id: selectedCalGradeId, name: finalName, full_name: finalFullName });
-    if (!calMsg.startsWith('❌')) {
+    // calMsg read here would be the value from before this save (state is
+    // captured by the closure), so the form used to clear after a failure.
+    if (await postStructure('stream', { grade_id: selectedCalGradeId, name: finalName, full_name: finalFullName })) {
       setNewStream({ name: '', full_name: '' });
     }
   };
@@ -229,8 +239,9 @@ export default function ClassesPage() {
                   </select>
                 </div>
                 <button type="button" onClick={async () => {
-                  await postStructure('subject', newSubject);
-                  setNewSubject({ name: '', code: '', academic_level_id: '' });
+                  if (await postStructure('subject', newSubject)) {
+                    setNewSubject({ name: '', code: '', academic_level_id: '' });
+                  }
                 }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
                   {calSaving ? '...' : '+ Add Subject'}
                 </button>

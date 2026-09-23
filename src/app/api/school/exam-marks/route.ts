@@ -202,25 +202,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    // The exam must be this school's — for admins too, who were never checked.
+    const { data: exam } = await supabase.from('exams').select('*').eq('id', exam_id).maybeSingle();
+    if (!exam || exam.school_id !== schoolId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
-      const { data: exam } = await supabase.from('exams').select('*').eq('id', exam_id).maybeSingle();
-      if (!exam || exam.school_id !== schoolId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
       const perms = await getTeacherPermissions(userId);
       if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    // Get student IDs for this school only to validate
-    const { data: schoolUsers } = await supabase
-      .from('users')
-      .select('id')
-      .eq('school_id', schoolId)
-      .eq('role', 'STUDENT');
-      
-    const validStudentIds = new Set((schoolUsers || []).map(u => u.id));
+    // Validate just the submitted students. Listing every student in the
+    // school first hit PostgREST's 1,000-row cap, after which a large
+    // school's valid learners were rejected as "Invalid student ID".
+    const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
+    const { data: schoolStudents } = submittedIds.length
+      ? await supabase
+          .from('users')
+          .select('id')
+          .eq('school_id', schoolId)
+          .eq('role', 'STUDENT')
+          .in('id', submittedIds)
+      : { data: [] as { id: string }[] };
+
+    const validStudentIds = new Set((schoolStudents || []).map(u => u.id));
     for (const m of marks) {
       if (!validStudentIds.has(m.student_id)) {
          return NextResponse.json({ error: 'Invalid student ID' }, { status: 400 });

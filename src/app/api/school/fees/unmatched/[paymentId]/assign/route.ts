@@ -12,11 +12,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const supabase = createSupabaseAdmin();
         const { data: userProfile } = await supabase
             .from('users')
-            .select('role, school_id')
+            .select('role, school_id, is_active')
             .eq('id', userId)
             .maybeSingle();
 
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+        // Unmatched Paybill money is school-level ledger work, handled from
+        // Settings > Payments, which only admins can open.
+        if (!userProfile || userProfile.role !== 'ADMIN' || userProfile.is_active === false) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

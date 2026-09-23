@@ -1,36 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { canManageStream, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 
+/**
+ * Registers are kept by admins and by each class's own teacher. Reading one
+ * used to need nothing but a school — a student could pull any class's list —
+ * and any teacher could mark any class.
+ */
 async function getSession() {
-  const { userId } = await auth();
-  if (!userId) return null;
-
-  const supabase = createSupabaseAdmin();
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('school_id, role, is_active')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (!userProfile || userProfile.is_active === false) return null;
-
-  return {
-    userId,
-    schoolId: userProfile.school_id as string | null,
-    role: userProfile.role,
-  };
+  const caller = await getCaller();
+  if (!caller || (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER')) return null;
+  return caller;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const auth = await getSession();
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    if (!['ADMIN', 'CLASS_TEACHER'].includes(auth.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { schoolId, userId } = auth;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
@@ -53,6 +40,9 @@ export async function POST(request: NextRequest) {
 
     if (!stream || stream.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid stream for your school' }, { status: 403 });
+    }
+    if (!canManageStream(auth, stream.id)) {
+      return NextResponse.json({ error: 'You can only notify guardians in your own class.' }, { status: 403 });
     }
 
     // Students in this stream, school-scoped

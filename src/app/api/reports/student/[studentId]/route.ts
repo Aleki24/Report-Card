@@ -126,9 +126,14 @@ export async function GET(
 
         const { data: userProfile } = await supabase
             .from('users')
-            .select('school_id, role')
+            .select('school_id, role, is_active')
             .eq('id', userId)
             .maybeSingle();
+
+        // A deactivated account keeps its Clerk session until it expires.
+        if (userProfile?.is_active === false) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
         const userSchoolId = userProfile?.school_id;
         if (!userSchoolId) {

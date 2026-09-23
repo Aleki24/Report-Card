@@ -61,7 +61,7 @@ function PeoplePageInner() {
 }
 
 /* ───── Students Section ───── */
-interface StudentRow { id: string; admission_number: string | null; current_grade_stream_id: string | null; status: string; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; pathway: string | null; track: string | null; subject_combination_id: string | null; subject_combinations: { id: string; code: string; name: string } | null; }
+interface StudentRow { id: string; admission_number: string | null; current_grade_stream_id: string | null; status: string; gender: string | null; date_of_birth: string | null; users: { id: string; first_name: string; last_name: string; email: string | null; phone: string | null } | null; guardian_name: string | null; guardian_phone: string | null; avatar_url: string | null; grade_stream: { full_name: string } | null; pathway: string | null; track: string | null; subject_combination_id: string | null; subject_combinations: { id: string; code: string; name: string } | null; }
 interface CombinationOption { id: string; code: string; name: string; pathway: string; track?: string | null; is_active: boolean; }
 
 /** Admission numbers are optional, so every display falls back to a dash. */
@@ -76,7 +76,9 @@ const emptyStudentForm = { first_name: '', last_name: '', admission_number: '', 
 interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string | null; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
 
 function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
+  // Bulk pathway assignment is admin-only on the server.
+  const isAdmin = role === 'ADMIN';
   const [data, setData] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +143,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const filtered = data.filter(s => {
     const q = search.toLowerCase();
     const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number ?? ''} ${s.guardian_phone||''}`.toLowerCase().includes(q);
-    const matchStatus = statusFilter === 'ALL' || s.status === statusFilter;
+    const matchStatus = statusFilter === 'ALL' || (statusFilter === 'INACTIVE' ? s.status !== 'ACTIVE' : s.status === statusFilter);
     const matchStream = !gradeStreamFilter || s.current_grade_stream_id === gradeStreamFilter;
     const matchPathway = !pathwayFilter || (pathwayFilter === 'UNASSIGNED' ? !s.pathway : s.pathway === pathwayFilter);
     const matchCombination = !combinationFilter || s.subject_combination_id === combinationFilter;
@@ -149,7 +151,9 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   });
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
-  const stats = { total: data.length, active: data.filter(s => s.status !== 'INACTIVE').length, inactive: data.filter(s => s.status === 'INACTIVE').length, streams: gradeStreams.length };
+  // Status is ACTIVE / TRANSFERRED / GRADUATED / DEACTIVATED; there is no
+  // INACTIVE, so the old inactive count was always 0 and the filter empty.
+  const stats = { total: data.length, active: data.filter(s => s.status === 'ACTIVE').length, inactive: data.filter(s => s.status !== 'ACTIVE').length, streams: gradeStreams.length };
 
   const handleSave = async () => {
     // ── Pre-save sanity checks so bad data doesn't silently break SMS later ──
@@ -313,7 +317,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const isSeniorStudent = (s: StudentRow) => !!s.current_grade_stream_id && seniorStreamIds.has(s.current_grade_stream_id);
 
   const openEdit = (s: StudentRow) => {
-    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number || '', gender: '', date_of_birth: '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
+    setFormData({ first_name: s.users?.first_name || '', last_name: s.users?.last_name || '', admission_number: s.admission_number || '', gender: s.gender || '', date_of_birth: s.date_of_birth || '', guardian_name: s.guardian_name || '', guardian_phone: s.guardian_phone || '', grade_stream_id: s.current_grade_stream_id || '', academic_level_id: '', pathway: s.pathway || '', track: s.track || '', subject_combination_id: s.subject_combination_id || '' });
     setEditing(s.id); setShowModal(true);
   };
 
@@ -379,7 +383,10 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <select className="input-field" style={{ width: "auto", minWidth: "120px" }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
+          <option value="INACTIVE">Not active</option>
+          <option value="TRANSFERRED">Transferred</option>
+          <option value="GRADUATED">Graduated</option>
+          <option value="DEACTIVATED">Deactivated</option>
         </select>
         {combinations.length > 0 && (
           <>
@@ -399,7 +406,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
           <Upload size={14} /> Import File
         </button>
-        {combinations.length > 0 && (
+        {isAdmin && combinations.length > 0 && (
           <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
             <ClipboardList size={14} /> Assign Pathways
           </button>
@@ -896,7 +903,10 @@ function TeachersSection() {
         <select className="input-field" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="ALL">All Status</option>
           <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
+          <option value="INACTIVE">Not active</option>
+          <option value="TRANSFERRED">Transferred</option>
+          <option value="GRADUATED">Graduated</option>
+          <option value="DEACTIVATED">Deactivated</option>
         </select>
       </div>
 

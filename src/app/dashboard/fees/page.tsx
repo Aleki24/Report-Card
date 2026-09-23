@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Plus, Search, Edit3, Trash2, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, ChevronDown, CircleDollarSign, History, Download, Ban, Receipt } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { toast } from 'sonner';
+import { requestJson, jsonBody } from '@/lib/api-error-message';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
@@ -98,6 +100,8 @@ const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var
 
 export default function FeesPage() {
     const { profile, role } = useAuth();
+    // Deleting a record and voiding receipts are admin-only on the server.
+    const isAdmin = role === 'ADMIN';
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -292,47 +296,40 @@ export default function FeesPage() {
 
     const handleSave = async () => {
         if (!formTotal) return;
+        if (!editingFee && (!formStudent || !formTerm)) {
+            toast.error('Choose a student and a term.');
+            return;
+        }
         setSaving(true);
         try {
+            const details = {
+                total_fee: parseFloat(formTotal),
+                due_date: formDueDate || null,
+                notes: formNotes || null,
+            };
             if (editingFee) {
-                await fetch(`/api/school/fees/${editingFee.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        total_fee: parseFloat(formTotal),
-                        due_date: formDueDate || null,
-                        notes: formNotes || null,
-                    }),
-                });
+                await requestJson(`/api/school/fees/${editingFee.id}`, jsonBody('PATCH', details));
             } else {
-                if (!formStudent || !formTerm) return;
-                await fetch('/api/school/fees', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        student_id: formStudent,
-                        term_id: formTerm,
-                        total_fee: parseFloat(formTotal),
-                        due_date: formDueDate || null,
-                        notes: formNotes || null,
-                    }),
-                });
+                await requestJson('/api/school/fees', jsonBody('POST', { student_id: formStudent, term_id: formTerm, ...details }));
             }
             setShowAddModal(false);
+            toast.success(editingFee ? 'Fee record updated' : 'Fee record added');
             await fetchFees();
         } catch (err) {
-            console.error('Save failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to save the fee record');
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this fee record?')) return;
         try {
-            await fetch(`/api/school/fees/${id}`, { method: 'DELETE' });
+            await requestJson(`/api/school/fees/${id}`, { method: 'DELETE' });
+            toast.success('Fee record deleted');
             await fetchFees();
         } catch (err) {
-            console.error('Delete failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to delete the fee record');
         }
     };
 
@@ -406,11 +403,11 @@ export default function FeesPage() {
         if (!historyFee) return;
         if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
         try {
-            await fetch(`/api/school/fees/${historyFee.id}/payments/${payment.id}`, { method: 'DELETE' });
+            await requestJson(`/api/school/fees/${historyFee.id}/payments/${payment.id}`, { method: 'DELETE' });
             await openHistory(historyFee);
             await fetchFees();
         } catch (err) {
-            console.error('Void failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
         }
     };
 
@@ -453,10 +450,10 @@ export default function FeesPage() {
         }
         if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
         try {
-            await fetch(`/api/school/fees/${payment.studentFeeId}/payments/${payment.id}`, { method: 'DELETE' });
+            await requestJson(`/api/school/fees/${payment.studentFeeId}/payments/${payment.id}`, { method: 'DELETE' });
             await fetchPaymentsLog();
         } catch (err) {
-            console.error('Void failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
         }
     };
 
@@ -642,7 +639,7 @@ export default function FeesPage() {
                             </button>
                         )}
 
-                        {mode === 'list' && role === 'ADMIN' && (
+                        {mode === 'list' && isAdmin && (
                             <button className="btn-secondary" onClick={openPaymentsLog}>
                                 <Receipt size={14} /> Payments Log
                             </button>
@@ -1093,7 +1090,7 @@ export default function FeesPage() {
                                     <button className="btn-icon text-primary hover:text-primary" onClick={() => openPay(fee)} title="Record Payment"><CircleDollarSign size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment History"><History size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit"><Edit3 size={14} /></button>
-                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete"><Trash2 size={14} /></button>
+                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete"><Trash2 size={14} /></button>}
                                 </span>
                             )}
                             emptyState={<p className="text-sm">No matching records found for the current filters.</p>}
@@ -1269,9 +1266,11 @@ export default function FeesPage() {
                                                                       >
                                                                           <Receipt size={14} />
                                                                       </a>
-                                                                      <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
-                                                                          <Ban size={14} />
-                                                                      </button>
+                                                                      {isAdmin && (
+                                                                          <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
+                                                                              <Ban size={14} />
+                                                                          </button>
+                                                                      )}
                                                                   </>
                                                               )}
                                                           </td>

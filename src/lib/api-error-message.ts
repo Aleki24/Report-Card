@@ -31,3 +31,22 @@ export function apiErrorMessage(body: unknown, fallback = 'Request failed'): str
 
     return details.length ? `${headline}: ${details.join('; ')}` : headline;
 }
+
+/**
+ * `fetch` that treats a 4xx/5xx as the failure it is.
+ *
+ * `fetch` only rejects on network errors, so pages that awaited it and moved on
+ * closed their modals and reported success on a refused save. This throws with
+ * the server's own message instead, ready for a toast.
+ */
+export async function requestJson<T = unknown>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+    const res = await fetch(input, init);
+    const body: unknown = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(apiErrorMessage(body, `Request failed (${res.status})`));
+    return body as T;
+}
+
+/** JSON request options for a body-carrying call. */
+export function jsonBody(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body: unknown): RequestInit {
+    return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}

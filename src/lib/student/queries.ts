@@ -180,6 +180,7 @@ export async function getStudentReportCards(student: CurrentStudent) {
         .from('report_cards')
         .select(`
             id,
+            student_id,
             overall_average,
             overall_position,
             comments_class_teacher,

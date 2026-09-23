@@ -37,7 +37,7 @@ interface ReportSubject {
 
 interface ReportCard {
     id: string;
-    student_id?: string;
+    student_id: string;
     overall_average: number | null;
     overall_position: number | null;
     comments_class_teacher: string | null;
@@ -262,7 +262,7 @@ function ReportCardsTab() {
                                     {isOpen ? 'Collapse' : 'Details'}
                                 </button>
                                 <a
-                                    href={`/api/reports/student/${rc.student_id || ''}?term=${rc.terms?.id || ''}&year=${rc.academic_years?.id || ''}${template !== DEFAULT_TEMPLATE ? `&template=${template}` : ''}`}
+                                    href={`/api/reports/student/${rc.student_id}?term=${rc.terms?.id || ''}&year=${rc.academic_years?.id || ''}${template !== DEFAULT_TEMPLATE ? `&template=${template}` : ''}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="btn-primary inline-flex items-center gap-1.5 no-underline"

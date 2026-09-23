@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { canManageStudent, getCaller } from '@/lib/auth-server';
 
 export async function DELETE(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user_id = userId;
         const { searchParams } = new URL(request.url);
         const student_id = searchParams.get('student_id');
 
@@ -19,29 +13,20 @@ export async function DELETE(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller is an ADMIN or CLASS_TEACHER and get their school_id
-        const { data: adminProfile } = await supabaseAdmin
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', user_id)
-            .maybeSingle();
-
-        if (!adminProfile || adminProfile.is_active === false) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!adminProfile.school_id) {
+        if (!caller.schoolId) {
             return NextResponse.json({ error: 'You must have a school to delete students.' }, { status: 403 });
         }
 
-        const isAdmin = adminProfile.role === 'ADMIN';
-        const isClassTeacher = adminProfile.role === 'CLASS_TEACHER';
-
-        if (!isAdmin && !isClassTeacher) {
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Only admins and class teachers can delete students.' }, { status: 403 });
         }
 
-        const school_id = adminProfile.school_id;
+        const school_id = caller.schoolId;
 
         // Verify the student exists and belongs to the school
         const { data: studentUser } = await supabaseAdmin
@@ -56,26 +41,8 @@ export async function DELETE(request: NextRequest) {
         }
 
         // Class teachers may only delete students in their own assigned stream
-        if (isClassTeacher && !isAdmin) {
-            const { data: teacherAssignment } = await supabaseAdmin
-                .from('class_teachers')
-                .select('current_grade_stream_id')
-                .eq('user_id', user_id)
-                .maybeSingle();
-
-            const { data: studentRecord } = await supabaseAdmin
-                .from('students')
-                .select('current_grade_stream_id')
-                .eq('id', student_id)
-                .maybeSingle();
-
-            if (
-                !teacherAssignment?.current_grade_stream_id ||
-                !studentRecord ||
-                studentRecord.current_grade_stream_id !== teacherAssignment.current_grade_stream_id
-            ) {
-                return NextResponse.json({ error: 'You can only delete students in your own class.' }, { status: 403 });
-            }
+        if (!(await canManageStudent(caller, student_id))) {
+            return NextResponse.json({ error: 'You can only delete students in your own class.' }, { status: 403 });
         }
 
         // Cascade delete all related records before removing the student
