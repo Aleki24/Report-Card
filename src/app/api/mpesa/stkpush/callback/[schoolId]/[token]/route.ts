@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { parseStkCallback, type StkCallbackBody } from '@/lib/mpesa';
 import { verifyWebhookToken } from '@/lib/crypto';
+import { MPESA_RECEIPT_UNIQUE_INDEX, isUniqueViolation } from '@/lib/api-errors';
 
 export const runtime = 'nodejs';
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         if (parsed.success) {
-            await supabase
+            const { error: completeError } = await supabase
                 .from('fee_payments')
                 .update({
                     status: 'COMPLETED',
@@ -73,6 +74,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 // Only a still-PENDING row moves: a void, or a concurrent
                 // delivery that already settled it, must not be overwritten.
                 .eq('status', 'PENDING');
+
+            if (completeError && isUniqueViolation(completeError, MPESA_RECEIPT_UNIQUE_INDEX)) {
+                // This transaction is already on the ledger — a bursar recorded
+                // it by hand before the callback arrived. Counting it again
+                // would double-credit the fee, and leaving this row PENDING
+                // would keep the payer's screen spinning, so close it out.
+                await supabase
+                    .from('fee_payments')
+                    .update({
+                        status: 'CANCELLED',
+                        notes: `M-Pesa receipt ${parsed.mpesaReceiptNumber} was already recorded as a separate payment`,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', payment.id)
+                    .eq('status', 'PENDING');
+            } else if (completeError) {
+                console.error('[mpesa callback] failed to complete payment', payment.id, completeError);
+            }
         } else {
             await supabase
                 .from('fee_payments')

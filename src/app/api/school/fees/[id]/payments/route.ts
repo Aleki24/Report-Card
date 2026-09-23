@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { internalError } from '@/lib/api-errors';
+import { MPESA_RECEIPT_UNIQUE_INDEX, internalError, isUniqueViolation, writeErrorMessage } from '@/lib/api-errors';
 import { canViewStudentRecords, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
@@ -107,13 +107,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 notes: notes || null,
                 payer_name: payer_name || null,
                 phone_number: phone_number || null,
-                mpesa_receipt_number: methodValue === 'MPESA' ? (mpesa_receipt_number || null) : null,
+                // M-Pesa codes are upper-case; normalise what a bursar types so
+                // "qhk1..." and "QHK1..." are the same receipt to the unique index.
+                mpesa_receipt_number: methodValue === 'MPESA' && typeof mpesa_receipt_number === 'string' && mpesa_receipt_number.trim()
+                    ? mpesa_receipt_number.trim().toUpperCase()
+                    : null,
                 recorded_by: result.userId,
             })
             .select()
             .single();
 
-        if (insertError) throw insertError;
+        if (insertError) {
+            // Usually a payment the Paybill already recorded on its own.
+            if (isUniqueViolation(insertError, MPESA_RECEIPT_UNIQUE_INDEX)) {
+                return NextResponse.json(
+                    { error: writeErrorMessage(insertError, 'That M-Pesa receipt number has already been recorded.') },
+                    { status: 409 },
+                );
+            }
+            throw insertError;
+        }
 
         // The DB trigger already rolled paid_amount/status up onto student_fees —
         // return the fresh parent row so the client can update in one round trip.
