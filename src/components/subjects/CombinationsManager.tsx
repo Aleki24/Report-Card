@@ -6,9 +6,10 @@ import {
     PATHWAYS,
     PATHWAY_ORDER,
     pathwayLabel,
-    MINISTRY_COMBINATION_TEMPLATES,
     type CbcPathway,
+    type MinistryCombinationTemplate,
 } from '@/lib/pathway-definitions';
+import MinistryCombinationPicker from './MinistryCombinationPicker';
 import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
 import { apiErrorMessage } from '@/lib/api-error-message';
 
@@ -45,7 +46,6 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({ ...emptyForm });
-    const [templateChoice, setTemplateChoice] = useState('');
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState('');
 
@@ -66,40 +66,56 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
             ),
         [subjects, cbcLevelId]
     );
-    const subjectByCode = useMemo(() => {
-        const map = new Map<string, SubjectOption>();
-        electiveOptions.forEach(s => map.set(s.code, s));
-        return map;
-    }, [electiveOptions]);
+    const offeredIdByCode = useMemo(
+        () => new Map(electiveOptions.map(s => [s.code.trim().toUpperCase(), s.id])),
+        [electiveOptions]
+    );
+    const existingCodes = useMemo(
+        () => new Set(combinations.map(c => c.code.trim().toUpperCase())),
+        [combinations]
+    );
 
     const resetForm = () => {
         setForm({ ...emptyForm });
-        setTemplateChoice('');
         setEditingId(null);
     };
 
-    const applyTemplate = (code: string) => {
-        setTemplateChoice(code);
-        if (!code) return;
-        const tpl = MINISTRY_COMBINATION_TEMPLATES.find(t => t.code === code);
-        if (!tpl) return;
-        const resolved = tpl.subjectCodes.map(sc => subjectByCode.get(sc)?.id || '');
-        const missing = tpl.subjectCodes.filter(sc => !subjectByCode.get(sc));
-        setForm({
-            code: tpl.code,
-            name: tpl.name,
-            pathway: tpl.pathway,
-            track: tpl.track,
-            subject_ids: resolved as [string, string, string],
-        });
-        setMsg(missing.length > 0
-            ? `Note: subject code(s) ${missing.join(', ')} are not in your school yet — add them on the Subjects tab first, or pick different electives.`
-            : '');
+    /** Create each chosen official combination; one failure doesn't stop the rest. */
+    const addOfficial = async (templates: MinistryCombinationTemplate[]) => {
+        setSaving(true);
+        setMsg('');
+        const failed: string[] = [];
+        for (const t of templates) {
+            const subjectIds = t.subjectCodes.map(c => offeredIdByCode.get(c));
+            try {
+                if (subjectIds.some(id => !id)) throw new Error('subject not offered');
+                const res = await fetch('/api/admin/academic-structure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'subject_combination',
+                        code: t.code,
+                        name: t.name,
+                        pathway: t.pathway,
+                        track: t.track,
+                        subject_ids: subjectIds,
+                    }),
+                });
+                if (!res.ok) throw new Error(apiErrorMessage(await res.json(), 'Failed'));
+            } catch {
+                failed.push(t.code);
+            }
+        }
+        const added = templates.length - failed.length;
+        setMsg(failed.length === 0
+            ? `Added ${added} combination${added === 1 ? '' : 's'}.`
+            : `Failed: could not add ${failed.join(', ')}${added > 0 ? ` (${added} others were added)` : ''}.`);
+        setSaving(false);
+        await onChanged();
     };
 
     const startEdit = (combo: CombinationRow) => {
         setEditingId(combo.id);
-        setTemplateChoice('');
         const ids = (combo.subjects ?? []).map(s => s.id);
         setForm({
             code: combo.code,
@@ -207,35 +223,35 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                                 </button>
                             )}
                             {!showForm && (
-                                <button className="btn-primary text-sm h-9 px-4" onClick={() => { resetForm(); setShowForm(true); }}>
-                                    <Plus size={14} /> New Combination
+                                <button className="btn-secondary text-sm h-9 px-4" onClick={() => { resetForm(); setShowForm(true); }}>
+                                    <Plus size={14} /> Custom combination
                                 </button>
                             )}
                         </div>
                     </div>
                     <p className="text-xs text-muted-foreground mb-4">
-                        A combination is a ministry code for a track plus exactly 3 electives (e.g. SPORTS = Biology + Geography + Sports &amp; Recreation).
-                        Learners take these 3 electives alongside the 4 compulsory core subjects. Groups need {minGroupSize}+ learners to run as their own class.
+                        A combination is a Ministry code for a track plus exactly 3 electives (e.g. AS2009 = Biology + Geography + Sports &amp; Recreation).
+                        Learners take these 3 electives alongside English, Kiswahili, Community Service Learning and Mathematics — Essential Mathematics
+                        unless the combination includes Core Mathematics. Groups need {minGroupSize}+ learners to run as their own class.
                     </p>
+
+                    {!showForm && (
+                        <div className="mb-2 rounded-lg border border-border/50 bg-muted/30 p-4">
+                            <MinistryCombinationPicker
+                                offeredIdByCode={offeredIdByCode}
+                                existingCodes={existingCodes}
+                                busy={saving}
+                                onAdd={addOfficial}
+                            />
+                        </div>
+                    )}
 
                     {showForm && (
                         <>
                             {!editingId && (
-                                <div className="flex flex-wrap gap-3 mb-4 p-3.5 bg-muted/30 rounded-lg border border-border/50">
-                                    <div className="flex-1 min-w-[240px]">
-                                        <label className="block text-xs text-muted-foreground mb-2 font-medium">Prefill from ministry template</label>
-                                        <select className="input-field w-full text-sm" value={templateChoice} onChange={e => applyTemplate(e.target.value)}>
-                                            <option value="">Custom / Select template...</option>
-                                            {PATHWAY_ORDER.map(pw => (
-                                                <optgroup key={pw} label={PATHWAYS[pw].label}>
-                                                    {MINISTRY_COMBINATION_TEMPLATES.filter(t => t.pathway === pw).map(t => (
-                                                        <option key={t.code} value={t.code}>{t.code} — {t.name}</option>
-                                                    ))}
-                                                </optgroup>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
+                                <p className="mb-3 text-xs text-muted-foreground">
+                                    A custom combination is for one your school runs that is not on the Ministry list. Official ones are added from the list above.
+                                </p>
                             )}
 
                             <div className="flex flex-wrap gap-3 items-end mb-3">
@@ -307,7 +323,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                         <div className="text-center py-16 text-muted-foreground">
                             <Layers size={40} className="mx-auto mb-3 opacity-30" />
                             <p className="text-sm">No subject combinations yet.</p>
-                            <p className="text-xs mt-1 opacity-60">Create one from a ministry template or from scratch.</p>
+                            <p className="text-xs mt-1 opacity-60">Add the official combinations your school runs from the list above.</p>
                         </div>
                     ) : (
                         <table className="data-table w-full text-left">
