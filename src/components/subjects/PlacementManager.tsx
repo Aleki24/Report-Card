@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CheckCircle2, ChevronDown, CircleAlert, CircleDashed, Layers, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import {
     MATHS_CODES,
@@ -22,7 +23,7 @@ import {
     type SeniorPlacementResponse,
 } from '@/lib/pathway/placement';
 
-type Grade = { id: string; name_display: string; academic_level_id: string; numeric_order: number };
+type Grade = { id: string; code?: string | null; name_display: string; academic_level_id: string; numeric_order: number };
 type Stream = { id: string; full_name: string; grade_id: string };
 type Level = { id: string; code: string };
 
@@ -35,7 +36,7 @@ function placeableStreams({ grades, streams, academicLevels }: Props): Stream[] 
         grades
             .filter(g => {
                 const code = codeByLevel.get(g.academic_level_id);
-                return code === '844' || (code === 'CBC' && g.numeric_order >= 10 && g.numeric_order <= 12);
+                return code === '844' || (code === 'CBC' && isSeniorSchoolGrade(g));
             })
             .map(g => g.id),
     );

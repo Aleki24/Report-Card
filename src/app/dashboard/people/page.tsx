@@ -8,6 +8,7 @@ import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/L
 import { DataTable, type DataTableColumn, FormGrid, FormField, InputField, SelectField } from '@/components/ui';
 import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
 import { pathwayLabel } from '@/lib/pathway-definitions';
+import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 
 type RoleTab = 'students' | 'teachers' | 'parents';
 
@@ -86,7 +87,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [gradeStreamFilter, setGradeStreamFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string; grade_id?: string }[]>([]);
-  const [grades, setGrades] = useState<{ id: string; academic_level_id: string; numeric_order: number }[]>([]);
+  const [grades, setGrades] = useState<{ id: string; code: string | null; name_display: string; academic_level_id: string; numeric_order: number }[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ ...emptyStudentForm });
   const [editing, setEditing] = useState<string | null>(null);
@@ -308,10 +309,9 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     finally { setViewLoading(false); }
   };
 
-  // Pathways/combinations only apply to CBC Senior School (Grades 10-12):
-  // streams whose grade is numeric_order 10-12 under the CBC level
+  // Pathways/combinations only apply to CBC Senior School (Grades 10-12)
   const cbcLevelIds = new Set(academicLevels.filter(l => l.code === 'CBC').map(l => l.id));
-  const seniorGradeIds = new Set(grades.filter(g => g.numeric_order >= 10 && g.numeric_order <= 12 && cbcLevelIds.has(g.academic_level_id)).map(g => g.id));
+  const seniorGradeIds = new Set(grades.filter(g => cbcLevelIds.has(g.academic_level_id) && isSeniorSchoolGrade(g)).map(g => g.id));
   const seniorStreamIds = new Set(gradeStreams.filter(gs => gs.grade_id && seniorGradeIds.has(gs.grade_id)).map(gs => gs.id));
   const seniorStreams = gradeStreams.filter(gs => seniorStreamIds.has(gs.id));
   const isSeniorStudent = (s: StudentRow) => !!s.current_grade_stream_id && seniorStreamIds.has(s.current_grade_stream_id);

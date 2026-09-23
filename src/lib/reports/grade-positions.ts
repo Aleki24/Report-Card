@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { aggregateStudentPerformance, calculateClassRanks, type ExamMarkWithDetails } from '@/lib/analytics';
+import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import type { SeniorRankGroup } from '@/lib/ranking';
 import type { GradingScale } from '@/types';
@@ -72,7 +73,7 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     const empty: GradePositions = { byStudent: new Map(), differsFromStream: false };
 
     const [{ data: grade }, { data: streams }] = await Promise.all([
-        supabase.from('grades').select('name_display, numeric_order').eq('id', opts.gradeId).maybeSingle(),
+        supabase.from('grades').select('code, name_display').eq('id', opts.gradeId).maybeSingle(),
         supabase.from('grade_streams').select('id').eq('grade_id', opts.gradeId).eq('school_id', opts.schoolId),
     ]);
     const streamIds = (streams ?? []).map(s => s.id as string);
@@ -86,8 +87,7 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     if (peers.length === 0) return empty;
 
     const gradeName = (grade?.name_display as string | undefined) ?? 'Grade';
-    const order = Number(grade?.numeric_order);
-    const isSenior = opts.gradingSystemType === 'CBC' && order >= 10 && order <= 12;
+    const isSenior = opts.gradingSystemType === 'CBC' && isSeniorSchoolGrade(grade);
     const group: SeniorRankGroup = isSenior ? opts.seniorRankGroup : 'GRADE';
 
     const groupOf = (peer: PeerRow): { key: string; label: string } => {
