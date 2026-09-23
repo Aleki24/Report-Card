@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 import { writeErrorMessage } from '@/lib/api-errors';
+import { CLASS_REQUIRED_MESSAGE, isSchoolClass } from '@/lib/classes';
 
 export async function POST(request: NextRequest) {
     try {
@@ -16,6 +17,9 @@ export async function POST(request: NextRequest) {
         }
         if (!academic_level_id) {
             return NextResponse.json({ error: 'Academic level is required.' }, { status: 400 });
+        }
+        if (!grade_stream_id) {
+            return NextResponse.json({ error: CLASS_REQUIRED_MESSAGE }, { status: 400 });
         }
 
         const supabaseAdmin = createSupabaseAdmin();
@@ -40,6 +44,9 @@ export async function POST(request: NextRequest) {
         }
 
         const effectiveSchoolId = caller.schoolId;
+        if (!(await isSchoolClass(supabaseAdmin, effectiveSchoolId, grade_stream_id))) {
+            return NextResponse.json({ error: 'That class is not one of your school\'s.' }, { status: 400 });
+        }
 
         // Admission number is optional and is never invented for the school.
         // Left blank, the student is stored without one and the column stays

@@ -133,6 +133,10 @@ export async function POST(request: NextRequest) {
                 skippedRows.push({ row: student, reason: 'Could not resolve a class/stream for this student' });
                 continue;
             }
+            if (!streamLevelMap.has(resolvedStreamId)) {
+                skippedRows.push({ row: student, reason: 'That class is not one of your school\'s' });
+                continue;
+            }
 
             // Class teachers can only import into their own assigned stream
             if (isClassTeacher && !canManageStream(caller, resolvedStreamId)) {

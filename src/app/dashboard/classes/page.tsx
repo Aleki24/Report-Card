@@ -6,6 +6,7 @@ import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { classNames } from '@/lib/classes';
 
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface Stream { id: string; grade_id: string; name: string; full_name: string; }
@@ -94,9 +95,10 @@ export default function ClassesPage() {
     e.preventDefault();
     if (!selectedCalGradeId) return;
     const grade = grades.find(g => g.id === selectedCalGradeId);
-    // If name is left blank, use the grade's default name instead of "General"
-    const finalName = newStream.name.trim() || grade?.name_display || 'Class';
-    const finalFullName = newStream.full_name.trim() || (newStream.name.trim() ? `${grade?.name_display || ''} ${finalName}`.trim() : finalName);
+    // A blank stream name makes the grade's single class, named after the grade.
+    const names = classNames(grade?.name_display || 'Class', newStream.name);
+    const finalName = names.name;
+    const finalFullName = newStream.full_name.trim() || names.full_name;
     
     // calMsg read here would be the value from before this save (state is
     // captured by the closure), so the form used to clear after a failure.
