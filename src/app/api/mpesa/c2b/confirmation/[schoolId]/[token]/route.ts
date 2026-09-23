@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { verifyWebhookToken } from '@/lib/crypto';
 import type { C2BConfirmationBody } from '@/lib/mpesa';
+import { escapeLikePattern } from '@/lib/postgrest';
 
 export const runtime = 'nodejs';
 
@@ -47,6 +48,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const body = (await request.json()) as C2BConfirmationBody;
 
+        // Safaricom re-sends a confirmation it thinks went unanswered (a slow
+        // cold start is enough). Each delivery used to insert another
+        // COMPLETED row, and the ledger trigger counted every one of them, so
+        // a single payment could clear a fee two or three times over. The
+        // M-Pesa transaction id is the natural key: record it once.
+        if (body.TransID) {
+            const { data: alreadyRecorded } = await supabase
+                .from('fee_payments')
+                .select('id')
+                .eq('school_id', schoolId)
+                .eq('mpesa_receipt_number', body.TransID)
+                .limit(1)
+                .maybeSingle();
+            if (alreadyRecorded) {
+                return NextResponse.json({ ResultCode: 0, ResultDesc: 'Success' });
+            }
+        }
+
         const amount = Number(body.TransAmount);
         const rawRef = (body.BillRefNumber || '').trim();
         const payerName = [body.FirstName, body.MiddleName, body.LastName].filter(Boolean).join(' ') || null;
@@ -69,7 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // BillRefNumber is attacker-influenced free text; escape LIKE wildcards
         // so "ADM1_" can't fuzzy-match ADM10/ADM11 — ilike is only used here
         // for case-insensitivity, never pattern matching.
-        const escapedRef = rawRef.replace(/([\\%_])/g, '\\$1');
+        const escapedRef = escapeLikePattern(rawRef);
         const { data: student } = await supabase
             .from('students')
             .select('id, users!inner(school_id)')
@@ -92,7 +111,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
         }
 
-        await supabase.from('fee_payments').insert({
+        const { error: insertError } = await supabase.from('fee_payments').insert({
             school_id: schoolId,
             student_fee_id: matchedFeeId,
             amount,
@@ -104,6 +123,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             unmatched_account_reference: matchedFeeId ? null : rawRef,
             notes: matchedFeeId ? null : (student ? 'No fee record for the current term — assign manually' : 'No student matched this account number'),
         });
+        if (insertError) {
+            // The money has moved regardless; this must reach the logs so the
+            // payment can be recorded by hand rather than vanish.
+            console.error('[mpesa c2b confirmation] failed to record payment', body.TransID, 'for school', schoolId, insertError);
+        }
 
         return NextResponse.json({ ResultCode: 0, ResultDesc: 'Success' });
     } catch (err) {

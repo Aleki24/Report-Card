@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { escapeHtml } from '@/lib/html';
 
 const resendApiKey = process.env.RESEND_API_KEY;
 
@@ -33,22 +34,22 @@ export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailP
 }
 
 export async function sendInviteEmail(email: string, inviteCode: string, schoolName: string) {
-  const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL}/register?code=${inviteCode}`;
+  const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL}/register?code=${encodeURIComponent(inviteCode)}`;
   return sendEmail({
     to: email,
     subject: `You've been invited to ${schoolName} on Skulbase`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h1 style="color: #1a1a2e;">You're Invited!</h1>
-        <p>You have been invited to join <strong>${schoolName}</strong> on Skulbase.</p>
+        <p>You have been invited to join <strong>${escapeHtml(schoolName)}</strong> on Skulbase.</p>
         <p>Click the button below to set up your account:</p>
         <div style="margin: 24px 0;">
-          <a href="${registerUrl}"
+          <a href="${escapeHtml(registerUrl)}"
              style="background: #1a1a2e; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
             Accept Invitation
           </a>
         </div>
-        <p style="color: #666; font-size: 14px;">Your invite code: <code style="background: #f0f0f0; padding: 2px 6px;">${inviteCode}</code></p>
+        <p style="color: #666; font-size: 14px;">Your invite code: <code style="background: #f0f0f0; padding: 2px 6px;">${escapeHtml(inviteCode)}</code></p>
       </div>
     `,
   });
@@ -60,11 +61,7 @@ export async function sendInviteEmail(email: string, inviteCode: string, schoolN
  */
 
 /** Escape untrusted text before dropping it into an email body. */
-function esc(value: string | null | undefined): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+const esc = escapeHtml;
 
 export interface SchoolApprovalRequest {
   schoolId: string;

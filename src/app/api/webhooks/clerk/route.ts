@@ -15,9 +15,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing svix headers' }, { status: 400 });
   }
 
-  let payload: any;
+  // Svix signs the exact bytes it sent. Verifying JSON.stringify(req.json())
+  // instead re-serialises the body, which does not always reproduce those
+  // bytes (escaped unicode in a name, number formatting), so genuine events
+  // were intermittently rejected and the user never synced.
+  let rawBody: string;
   try {
-    payload = await req.json();
+    rawBody = await req.text();
   } catch {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
@@ -29,7 +33,7 @@ export async function POST(req: Request) {
   const wh = new Webhook(webhookSecret);
   let evt: any;
   try {
-    evt = wh.verify(JSON.stringify(payload), {
+    evt = wh.verify(rawBody, {
       'svix-id': svixId,
       'svix-timestamp': svixTimestamp,
       'svix-signature': svixSignature,

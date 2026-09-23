@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { auth } from '@clerk/nextjs/server';
 import type { GradeBand } from '@/types';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /**
  * A subject as the dashboard needs to reason about it: which curriculum it
@@ -83,11 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabaseAdmin = createSupabaseAdmin();
-    const { data: userProfile } = await supabaseAdmin
-      .from('users')
-      .select('school_id, role')
-      .eq('id', userId)
-      .maybeSingle();
+    const userProfile = await getActiveUserProfile(userId);
 
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role;

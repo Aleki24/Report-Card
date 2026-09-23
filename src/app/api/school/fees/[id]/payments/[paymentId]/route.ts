@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /**
  * Void a payment. Financial ledger entries are never hard-deleted — voiding
@@ -17,11 +18,7 @@ export async function DELETE(
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
         if (!userProfile || userProfile.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Only an admin can void a payment' }, { status: 403 });

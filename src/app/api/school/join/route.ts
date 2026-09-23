@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth, createClerkClient } from '@clerk/nextjs/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Invite codes are six characters, so an unthrottled endpoint lets a
+    // signed-up account guess its way into a school. Same limit as the
+    // other code-redeeming routes (activate, activate-google).
+    const limit = rateLimit(`join:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!limit.allowed) {
+      return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
+    }
 
     const body = await request.json();
     const { inviteCode } = body;

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
+import { rateLimit } from '@/lib/rate-limit';
 
 /**
  * POST /api/school/exam-marks/scan
@@ -80,15 +81,17 @@ export async function POST(request: NextRequest) {
     const { userId } = await auth();
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
     if (!userProfile || !['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Each scan is a paid model call with a large image; cap it per user so a
+    // stuck retry loop or a script cannot run up the bill.
+    const limit = rateLimit(`marks-scan:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!limit.allowed) {
+      return NextResponse.json({ error: 'Too many scans. Please wait a minute and try again.' }, { status: 429 });
     }
 
     if (!process.env.ANTHROPIC_API_KEY) {

@@ -85,7 +85,7 @@ export async function GET(
 
       if (terms) {
         for (const term of terms) {
-          const { data: marks } = await supabase
+          let marksQuery = supabase
             .from('exam_marks')
             .select(`
               percentage, grade_symbol, raw_score,
@@ -93,6 +93,10 @@ export async function GET(
             `)
             .eq('student_id', studentId)
             .eq('exams.term_id', term.id);
+          // A learner viewing their own profile sees released results only,
+          // like everywhere else in the student portal.
+          if (role === 'STUDENT') marksQuery = marksQuery.eq('exams.status', 'APPROVED');
+          const { data: marks } = await marksQuery;
 
           const subjects = (marks || []).map((m: any) => ({
             subject_name: m.exams?.subjects?.name || 'Unknown',

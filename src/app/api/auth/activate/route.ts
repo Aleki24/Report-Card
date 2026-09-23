@@ -185,6 +185,23 @@ export async function POST(request: NextRequest) {
         // any failure leaves the code reusable instead of stranding the user.
         const oldUserId = user.id;
 
+        // Undo a half-finished activation so the same code can be retried.
+        // The Clerk account is the part that used to be left behind: it holds
+        // the chosen username, so every retry then failed as "username taken"
+        // and the invite code was dead.
+        const rollback = async (step: 'staged' | 'linked') => {
+            if (step === 'linked') {
+                // Move any teacher rows that did swap back onto the pending
+                // user before removing the new row (the FK cascades).
+                await supabaseAdmin.from('class_teachers').update({ user_id: oldUserId }).eq('user_id', clerkUserId);
+                await supabaseAdmin.from('subject_teachers').update({ user_id: oldUserId }).eq('user_id', clerkUserId);
+                await supabaseAdmin.from('users').delete().eq('id', clerkUserId);
+            }
+            await supabaseAdmin.from('users').update({ email: user.email, username: user.username }).eq('id', oldUserId);
+            await clerkClient.users.deleteUser(clerkUserId).catch(err =>
+                console.error('[activate] rollback: failed to delete Clerk user', clerkUserId, err));
+        };
+
         // Free the unique email/username held by the pending row so the new
         // row can be inserted while the old one still exists.
         const { error: renameErr } = await supabaseAdmin.from('users').update({
@@ -194,6 +211,7 @@ export async function POST(request: NextRequest) {
 
         if (renameErr) {
             console.error('[activate] Failed to stage pending row:', renameErr);
+            await rollback('staged');
             return NextResponse.json({ error: 'Activation failed. Please try again or contact your administrator.' }, { status: 500 });
         }
 
@@ -213,7 +231,7 @@ export async function POST(request: NextRequest) {
         if (upsertErr) {
             console.error('[activate] Failed to create user record:', upsertErr);
             // Restore the pending row so the invite can be retried
-            await supabaseAdmin.from('users').update({ email: user.email, username: user.username }).eq('id', oldUserId);
+            await rollback('staged');
             return NextResponse.json({ error: 'Account created but failed to update records. Contact your administrator.' }, { status: 500 });
         }
 
@@ -227,6 +245,7 @@ export async function POST(request: NextRequest) {
 
             if (swapErr || !swapped || swapped.length === 0) {
                 console.error('[activate] students id-swap failed', { oldUserId, clerkUserId, swapErr });
+                await rollback('linked');
                 return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
             }
         } else {
@@ -234,6 +253,7 @@ export async function POST(request: NextRequest) {
             const { error: stErr } = await supabaseAdmin.from('subject_teachers').update({ user_id: clerkUserId }).eq('user_id', oldUserId);
             if (ctErr || stErr) {
                 console.error('[activate] teacher assignment swap failed', { oldUserId, clerkUserId, ctErr, stErr });
+                await rollback('linked');
                 return NextResponse.json({ error: 'Failed to link your teaching assignments. Please contact your school admin.' }, { status: 500 });
             }
         }

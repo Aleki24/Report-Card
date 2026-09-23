@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import type { CurrentStudent } from '@/types';
 
 export async function getCurrentStudent(): Promise<CurrentStudent | null> {
@@ -9,14 +10,12 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
     const userId = clerkAuth.userId;
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile, error: userError } = await supabase
-        .from('users')
-        .select('role, school_id')
-        .eq('id', userId)
-        .maybeSingle();
+    // A deactivated learner's Clerk session outlives the deactivation, so the
+    // row's is_active flag is the only thing that can shut them out.
+    const userProfile = await getActiveUserProfile(userId);
 
     if (!userProfile) {
-        console.error('[getCurrentStudent] no users row for id', userId, userError);
+        console.error('[getCurrentStudent] no active users row for id', userId);
         return null;
     }
     if (userProfile.role !== 'STUDENT') {

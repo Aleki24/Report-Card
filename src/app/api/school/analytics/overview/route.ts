@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { PASS_MARK } from '@/lib/pass-mark';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 /**
  * The school, compared class by class.
@@ -35,11 +36,7 @@ export async function GET() {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: profile } = await supabase
-            .from('users')
-            .select('school_id, role')
-            .eq('id', userId)
-            .maybeSingle();
+        const profile = await getActiveUserProfile(userId);
 
         const schoolId = profile?.school_id;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });

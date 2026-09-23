@@ -44,12 +44,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({ error: 'Fee record not found in your school' }, { status: 404 });
         }
 
-        const { error } = await supabase
+        // Conditional on the payment still being unassigned: two staff
+        // assigning the same payment at once both passed the check above, and
+        // the second silently moved the money onto a different learner.
+        const { data: assigned, error } = await supabase
             .from('fee_payments')
             .update({ student_fee_id, updated_at: new Date().toISOString() })
-            .eq('id', paymentId);
+            .eq('id', paymentId)
+            .is('student_fee_id', null)
+            .select('id');
 
         if (error) throw error;
+        if (!assigned || assigned.length === 0) {
+            return NextResponse.json({ error: 'Payment is already assigned' }, { status: 409 });
+        }
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {

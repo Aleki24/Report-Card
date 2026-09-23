@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { authorizeClassReport } from '@/lib/reports/report-access';
+import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
     aggregateStudentPerformance,
@@ -59,6 +61,18 @@ export async function GET(
             return NextResponse.json({ error: 'termId is required for marksheet reports' }, { status: 400 });
         }
 
+        // Authorize before reading anything about the class. A whole class's
+        // marks in one sheet is staff material: admins and the class teacher.
+        const access = await authorizeClassReport(
+            classId,
+            'Only administrators and the designated class teacher can generate a class marksheet.',
+        );
+        if (!access.ok) return access.response;
+        const userSchoolId = access.session.schoolId;
+        if (!(await termBelongsToSchool(termId, userSchoolId))) {
+            return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+        }
+
         const supabase = createSupabaseAdmin();
 
         // Optional CBC pathway filters — restrict the sheet (and therefore
@@ -87,39 +101,8 @@ export async function GET(
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
-        const { auth: clerkAuth } = await import('@clerk/nextjs/server');
-        const { userId } = await clerkAuth();
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        // A deactivated account keeps its Clerk session until it expires.
-        if (userProfile?.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const userSchoolId = userProfile?.school_id;
-        if (!userSchoolId || (targetSchoolId && targetSchoolId !== userSchoolId)) {
+        if (targetSchoolId && targetSchoolId !== userSchoolId) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        // A whole class's marks in one sheet is staff material. Membership of
-        // the school was the only check here, so any signed-in learner could
-        // pull their class's marksheet; match the class-report rule instead.
-        const role = userProfile?.role;
-        if (role !== 'ADMIN') {
-            const { getTeacherPermissions } = await import('@/lib/teacher-utils');
-            const perms = await getTeacherPermissions(userId);
-            if (!perms.isClassTeacher || !perms.classTeacherStreams.includes(classId)) {
-                return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate a class marksheet.' }, { status: 403 });
-            }
         }
 
         if (targetSchoolId) {

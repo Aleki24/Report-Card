@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { FEE_VIEWER_ROLES } from '@/lib/fees';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
 import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
 
@@ -39,7 +40,9 @@ export async function POST(request: NextRequest) {
         if (!fee || fee.school_id !== userProfile.school_id) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
-        if (userProfile.role === 'STUDENT' && fee.student_id !== userId) {
+        // Same audience as the rest of the fee routes; a student only for
+        // their own fee.
+        if (!FEE_VIEWER_ROLES.includes(userProfile.role) || (userProfile.role === 'STUDENT' && fee.student_id !== userId)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

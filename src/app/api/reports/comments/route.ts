@@ -130,6 +130,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Student not found in this class' }, { status: 403 });
         }
 
+        // The term and year come from the body too; they must be this school's.
+        const { data: term } = await supabase
+            .from('terms')
+            .select('id')
+            .eq('id', term_id)
+            .eq('academic_year_id', academic_year_id)
+            .eq('school_id', schoolId)
+            .maybeSingle();
+        if (!term) {
+            return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+        }
+
         // The principal's comment is the admin's to write; a class teacher's
         // save leaves whatever the admin wrote untouched.
         const comments: { comments_class_teacher: string | null; comments_principal?: string | null } = {

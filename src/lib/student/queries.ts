@@ -154,6 +154,9 @@ export async function getStudentResults(
         `)
         .eq('student_id', student.studentId)
         .eq('exams.school_id', student.schoolId)
+        // Released results only — the release step is what the school signs
+        // off; draft marks may still be corrected.
+        .eq('exams.status', 'APPROVED')
         .order('created_at', { ascending: false });
 
     if (filters?.academicYearId) {
@@ -269,7 +272,8 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
             )
         `)
         .eq('student_id', student.studentId)
-        .eq('exams.school_id', student.schoolId);
+        .eq('exams.school_id', student.schoolId)
+        .eq('exams.status', 'APPROVED');
 
     if (error) throw error;
     if (!marks || marks.length === 0) return [];

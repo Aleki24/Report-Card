@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
+import { streamBelongsToSchool } from '@/lib/tenant-scope';
 
 export async function GET() {
     try {
@@ -102,6 +103,9 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         if (!body.title || !body.subject_id || !body.due_date) {
             return NextResponse.json({ error: 'title, subject_id, and due_date are required' }, { status: 400 });
+        }
+        if (body.grade_stream_id && !(await streamBelongsToSchool(body.grade_stream_id, schoolId))) {
+            return NextResponse.json({ error: 'Class not found in your school' }, { status: 404 });
         }
 
         const { data, error } = await supabase

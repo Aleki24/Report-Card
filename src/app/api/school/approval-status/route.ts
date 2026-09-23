@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
@@ -15,13 +16,10 @@ export async function GET() {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: user } = await supabase
-        .from('users')
-        .select('school_id, role')
-        .eq('id', userId)
-        .maybeSingle();
+    const user = await getActiveUserProfile(userId);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!user?.school_id) {
+    if (!user.school_id) {
         return NextResponse.json({ status: null, hasSchool: false });
     }
 

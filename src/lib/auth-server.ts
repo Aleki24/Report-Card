@@ -191,3 +191,17 @@ export async function getUserDbRecord(clerkUserId: string) {
   if (error || !data) return null;
   return data;
 }
+
+export type UserDbRecord = NonNullable<Awaited<ReturnType<typeof getUserDbRecord>>>;
+
+/**
+ * The caller's users row, or null when there is none or the account has been
+ * deactivated. Routes that read the row themselves (rather than going through
+ * getAuthSession) must use this instead of a bare select: a deactivated
+ * user's Clerk session stays valid until it expires, so the row is the only
+ * place the deactivation is visible.
+ */
+export async function getActiveUserProfile(clerkUserId: string): Promise<UserDbRecord | null> {
+  const dbUser = await getUserDbRecord(clerkUserId);
+  return dbUser && dbUser.is_active !== false ? dbUser : null;
+}
