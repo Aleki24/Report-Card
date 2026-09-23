@@ -1,121 +1,129 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { Card, EmptyState, ErrorBanner, LoadingView, Screen, ScreenHeader } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
+import { useCurrentUser } from '@/lib/UserContext';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
+import { errorMessage, getTimeAgo } from '@/lib/format';
+import { colors, spacing } from '@/lib/theme';
+import { Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, LoadingView, Notice, Screen, ScreenHeader, TextField, ToggleRow } from '@/components/ui';
 import type { StaffAnnouncement } from '@/lib/types';
 
-function getTimeAgo(dateStr: string): string {
-    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+interface Draft {
+    id: string | null;
+    title: string;
+    content: string;
+    isImportant: boolean;
+    sendSms: boolean;
 }
+
+const EMPTY: Draft = { id: null, title: '', content: '', isImportant: false, sendSms: false };
 
 export default function AnnouncementsScreen() {
     const api = useApi();
+    const { role, profile } = useCurrentUser();
+    const canPost = isRoleIn(role, STAFF_TEACHING_ROLES);
     const { data, loading, error, refresh, refreshing } = useApiQuery<StaffAnnouncement[]>('/api/school/announcements');
-    const announcements = data ?? [];
+    const [draft, setDraft] = useState<Draft | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-    const [composing, setComposing] = useState(false);
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [posting, setPosting] = useState(false);
-    const [postError, setPostError] = useState<string | null>(null);
+    // Admins and class teachers manage any post; a subject teacher only their own (as on the server).
+    const canManage = (a: StaffAnnouncement) => role === 'ADMIN' || role === 'CLASS_TEACHER' || (role === 'SUBJECT_TEACHER' && a.postedById === profile?.id);
 
-    const handlePost = async () => {
-        if (!title.trim() || !content.trim()) return;
-        setPosting(true);
-        setPostError(null);
+    const submit = async () => {
+        if (!draft || !draft.title.trim() || !draft.content.trim()) return;
+        setSaving(true);
+        setMessage(null);
         try {
-            await api.post('/api/school/announcements', { title: title.trim(), content: content.trim() });
-            setTitle('');
-            setContent('');
-            setComposing(false);
+            const body = { title: draft.title.trim(), content: draft.content.trim(), is_important: draft.isImportant };
+            if (draft.id) await api.patch(`/api/school/announcements/${draft.id}`, body);
+            else await api.post('/api/school/announcements', { ...body, send_sms: draft.sendSms });
+            setMessage({ tone: 'success', text: draft.id ? 'Announcement updated.' : draft.sendSms ? 'Posted and sent by SMS.' : 'Announcement posted.' });
+            setDraft(null);
             refresh();
         } catch (err) {
-            setPostError(err instanceof Error ? err.message : 'Failed to post announcement');
+            setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save announcement') });
         } finally {
-            setPosting(false);
+            setSaving(false);
         }
     };
 
+    const remove = (a: StaffAnnouncement) =>
+        Alert.alert('Delete announcement?', a.title, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await api.del(`/api/school/announcements/${a.id}`);
+                        refresh();
+                    } catch (err) {
+                        setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to delete') });
+                    }
+                },
+            },
+        ]);
+
+    const announcements = data ?? [];
+
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
-            <ScreenHeader title="Announcements" description="School-wide news and updates." />
+            <ScreenHeader
+                title="Announcements"
+                description="School-wide news and updates."
+                action={canPost && !draft ? <Button size="sm" label="+ New" onPress={() => setDraft(EMPTY)} /> : undefined}
+            />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+            {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-            {composing ? (
+            {draft ? (
                 <Card style={{ marginBottom: spacing.lg }}>
-                    {postError ? <ErrorBanner message={postError} /> : null}
-                    <TextInput value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={colors.muted} style={styles.input} />
-                    <TextInput
-                        value={content}
-                        onChangeText={setContent}
-                        placeholder="What's the announcement?"
-                        placeholderTextColor={colors.muted}
-                        multiline
-                        numberOfLines={4}
-                        style={[styles.input, styles.textArea]}
-                    />
-                    <View style={styles.composeActions}>
-                        <Pressable onPress={() => setComposing(false)} style={styles.secondaryButton}>
-                            <Text style={styles.secondaryButtonText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable onPress={handlePost} disabled={posting || !title.trim() || !content.trim()} style={styles.primaryButton}>
-                            <Text style={styles.primaryButtonText}>{posting ? 'Posting…' : 'Post'}</Text>
-                        </Pressable>
-                    </View>
+                    <TextField label="Title" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} />
+                    <TextField label="Message" value={draft.content} onChangeText={(content) => setDraft({ ...draft, content })} multiline />
+                    <ToggleRow label="Mark as important" value={draft.isImportant} onValueChange={(isImportant) => setDraft({ ...draft, isImportant })} />
+                    {draft.id ? null : (
+                        <ToggleRow label="Also send by SMS" description="Texts every active learner's guardian (first 300 characters)." value={draft.sendSms} onValueChange={(sendSms) => setDraft({ ...draft, sendSms })} />
+                    )}
+                    <ButtonRow>
+                        <Button variant="secondary" label="Cancel" onPress={() => setDraft(null)} />
+                        <Button label={draft.id ? 'Save' : 'Post'} onPress={submit} loading={saving} disabled={!draft.title.trim() || !draft.content.trim()} />
+                    </ButtonRow>
                 </Card>
-            ) : (
-                <Pressable onPress={() => setComposing(true)} style={styles.newButton}>
-                    <Text style={styles.newButtonText}>+ New Announcement</Text>
-                </Pressable>
-            )}
+            ) : null}
 
             {loading ? (
                 <LoadingView />
             ) : announcements.length === 0 ? (
                 <EmptyState title="No announcements yet" />
             ) : (
-                <Card style={styles.listCard}>
-                    {announcements.map((a) => (
-                        <View key={a.id} style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.rowTitle}>{a.title}</Text>
-                                <Text style={styles.rowContent}>{a.content}</Text>
-                                <Text style={styles.rowMeta}>
-                                    {a.postedBy} · {getTimeAgo(a.createdAt)}
-                                </Text>
-                            </View>
-                            {a.isImportant ? <View style={styles.importantDot} /> : null}
+                announcements.map((a) => (
+                    <Card key={a.id} style={[{ marginBottom: spacing.sm }, a.isImportant && { borderColor: colors.danger }]}>
+                        <View style={styles.titleRow}>
+                            <Text style={styles.title}>{a.title}</Text>
+                            {a.isImportant ? <Badge label="Important" variant="danger" /> : null}
                         </View>
-                    ))}
-                </Card>
+                        <Text style={styles.content}>{a.content}</Text>
+                        <Text style={styles.meta}>
+                            {a.postedBy} · {getTimeAgo(a.createdAt)}
+                        </Text>
+                        {canManage(a) ? (
+                            <ButtonRow>
+                                <Button size="sm" variant="ghost" label="Edit" onPress={() => setDraft({ id: a.id, title: a.title, content: a.content, isImportant: a.isImportant, sendSms: false })} />
+                                <Button size="sm" variant="ghost" label="Delete" onPress={() => remove(a)} />
+                            </ButtonRow>
+                        ) : null}
+                    </Card>
+                ))
             )}
         </Screen>
     );
 }
 
 const styles = StyleSheet.create({
-    newButton: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center', marginBottom: spacing.lg, backgroundColor: colors.card },
-    newButtonText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm, fontSize: 14, color: colors.foreground, marginBottom: spacing.sm },
-    textArea: { minHeight: 90, textAlignVertical: 'top' },
-    composeActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
-    primaryButton: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingVertical: 10, paddingHorizontal: spacing.lg },
-    primaryButtonText: { color: colors.white, fontWeight: '700', fontSize: 13 },
-    secondaryButton: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingVertical: 10, paddingHorizontal: spacing.lg },
-    secondaryButtonText: { color: colors.foreground, fontWeight: '700', fontSize: 13 },
-    listCard: { padding: 0, overflow: 'hidden' },
-    row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-    rowTitle: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    rowContent: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    rowMeta: { fontSize: 11, color: colors.muted, marginTop: 4 },
-    importantDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger, marginTop: 4 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, justifyContent: 'space-between' },
+    title: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.foreground },
+    content: { fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
+    meta: { fontSize: 11, color: colors.muted, marginTop: spacing.sm },
 });

@@ -1,144 +1,285 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { Card, EmptyState, ErrorBanner, LoadingView, Screen, ScreenHeader } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
-import type { StaffAssignment, Subject } from '@/lib/types';
+import { useGradeStreams } from '@/lib/useSchoolData';
+import { errorMessage, formatDate, getDueLabel, pluralize, shiftISODate, toISODate } from '@/lib/format';
+import { colors, spacing } from '@/lib/theme';
+import {
+    Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Screen, ScreenHeader, SegmentedTabs, TextField,
+} from '@/components/ui';
+import { RequireScreen } from '@/components/RequireScreen';
+import type { StaffAssignment, TeacherSubject } from '@/lib/types';
 
-function getDueLabel(dateStr: string): string {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const due = new Date(dateStr);
-    due.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return 'Overdue';
-    if (diffDays === 0) return 'Due today';
-    if (diffDays === 1) return 'Due tomorrow';
-    return `Due in ${diffDays} days`;
+interface Draft {
+    id: string | null;
+    title: string;
+    description: string;
+    subjectId: string | null;
+    streamId: string;
+    dueDate: string;
+    fileUrl: string | null;
 }
 
+interface Submission {
+    id: string;
+    fileUrl: string | null;
+    submissionText: string | null;
+    submittedAt: string;
+    grade: number | null;
+    feedback: string | null;
+    assignmentTitle: string | null;
+    subjectName: string | null;
+    studentName: string | null;
+    admissionNumber: string | null;
+}
+
+const ALL_CLASSES = '__all__';
+
+const newDraft = (): Draft => ({ id: null, title: '', description: '', subjectId: null, streamId: ALL_CLASSES, dueDate: shiftISODate(toISODate(), 7), fileUrl: null });
+
 export default function AssignmentsScreen() {
-    const api = useApi();
-    const { data, loading, error, refresh, refreshing } = useApiQuery<StaffAssignment[]>('/api/school/assignments');
-    const assignments = data ?? [];
-
-    const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [composing, setComposing] = useState(false);
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [subjectId, setSubjectId] = useState<string | null>(null);
-    const [dueDate, setDueDate] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]);
-    const [posting, setPosting] = useState(false);
-    const [postError, setPostError] = useState<string | null>(null);
-
-    useEffect(() => {
-        api
-            .get<{ data: Subject[] }>('/api/school/data?type=subjects')
-            .then((res) => setSubjects(res.data ?? []))
-            .catch(() => {});
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const handlePost = async () => {
-        if (!title.trim() || !subjectId) return;
-        setPosting(true);
-        setPostError(null);
-        try {
-            await api.post('/api/school/assignments', { title: title.trim(), subject_id: subjectId, due_date: dueDate, description: description.trim() || undefined });
-            setTitle('');
-            setDescription('');
-            setComposing(false);
-            refresh();
-        } catch (err) {
-            setPostError(err instanceof Error ? err.message : 'Failed to create assignment');
-        } finally {
-            setPosting(false);
-        }
-    };
-
     return (
-        <Screen onRefresh={refresh} refreshing={refreshing}>
+        <RequireScreen screen="assignments">
+            <AssignmentsContent />
+        </RequireScreen>
+    );
+}
+
+function AssignmentsContent() {
+    const [tab, setTab] = useState<'list' | 'submissions'>('list');
+    return (
+        <Screen>
             <ScreenHeader title="Assignments" description="Homework and coursework for your classes." />
-            {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-
-            {composing ? (
-                <Card style={{ marginBottom: spacing.lg }}>
-                    {postError ? <ErrorBanner message={postError} /> : null}
-                    <TextInput value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={colors.muted} style={styles.input} />
-                    <TextInput
-                        value={description}
-                        onChangeText={setDescription}
-                        placeholder="Description (optional)"
-                        placeholderTextColor={colors.muted}
-                        multiline
-                        numberOfLines={3}
-                        style={[styles.input, styles.textArea]}
-                    />
-                    <Text style={styles.label}>Subject</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
-                        {subjects.map((s) => (
-                            <Pressable key={s.id} onPress={() => setSubjectId(s.id)} style={[styles.chip, subjectId === s.id && styles.chipActive]}>
-                                <Text style={[styles.chipText, subjectId === s.id && styles.chipTextActive]}>{s.name}</Text>
-                            </Pressable>
-                        ))}
-                    </ScrollView>
-                    <Text style={styles.label}>Due date (YYYY-MM-DD)</Text>
-                    <TextInput value={dueDate} onChangeText={setDueDate} placeholder="2026-08-01" placeholderTextColor={colors.muted} style={styles.input} />
-                    <View style={styles.composeActions}>
-                        <Pressable onPress={() => setComposing(false)} style={styles.secondaryButton}>
-                            <Text style={styles.secondaryButtonText}>Cancel</Text>
-                        </Pressable>
-                        <Pressable onPress={handlePost} disabled={posting || !title.trim() || !subjectId} style={styles.primaryButton}>
-                            <Text style={styles.primaryButtonText}>{posting ? 'Creating…' : 'Create'}</Text>
-                        </Pressable>
-                    </View>
-                </Card>
-            ) : (
-                <Pressable onPress={() => setComposing(true)} style={styles.newButton}>
-                    <Text style={styles.newButtonText}>+ New Assignment</Text>
-                </Pressable>
-            )}
-
-            {loading ? (
-                <LoadingView />
-            ) : assignments.length === 0 ? (
-                <EmptyState title="No assignments yet" />
-            ) : (
-                <Card style={styles.listCard}>
-                    {assignments.map((a) => (
-                        <View key={a.id} style={styles.row}>
-                            <Text style={styles.rowTitle}>{a.title}</Text>
-                            <Text style={styles.rowSub}>
-                                {a.subject} · {a.stream || 'All classes'}
-                            </Text>
-                            <Text style={styles.rowDue}>{getDueLabel(a.dueDate)}</Text>
-                        </View>
-                    ))}
-                </Card>
-            )}
+            <SegmentedTabs
+                tabs={[
+                    { value: 'list', label: 'Assignments' },
+                    { value: 'submissions', label: 'Submissions' },
+                ]}
+                value={tab}
+                onChange={setTab}
+            />
+            {tab === 'list' ? <AssignmentList /> : <Submissions />}
         </Screen>
     );
 }
 
+function AssignmentList() {
+    const api = useApi();
+    const { data, loading, error, refresh } = useApiQuery<StaffAssignment[]>('/api/school/assignments');
+    const subjects = useApiQuery<TeacherSubject[]>('/api/school/data?type=subjects');
+    const { streams } = useGradeStreams();
+    const [draft, setDraft] = useState<Draft | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+    const save = async () => {
+        if (!draft || !draft.title.trim() || !draft.subjectId) return;
+        setSaving(true);
+        setMessage(null);
+        const body = {
+            title: draft.title.trim(),
+            description: draft.description.trim() || null,
+            subject_id: draft.subjectId,
+            grade_stream_id: draft.streamId === ALL_CLASSES ? null : draft.streamId,
+            due_date: draft.dueDate,
+            file_url: draft.fileUrl,
+        };
+        try {
+            if (draft.id) await api.patch(`/api/school/assignments/${draft.id}`, body);
+            else await api.post('/api/school/assignments', body);
+            setMessage({ tone: 'success', text: draft.id ? 'Assignment updated.' : 'Assignment created.' });
+            setDraft(null);
+            refresh();
+        } catch (err) {
+            setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save assignment') });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const attach = async () => {
+        if (!draft) return;
+        setUploading(true);
+        try {
+            const url = await api.pickAndUploadImage();
+            if (url) setDraft({ ...draft, fileUrl: url });
+        } catch (err) {
+            setMessage({ tone: 'danger', text: errorMessage(err, 'Upload failed') });
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const remove = (a: StaffAssignment) =>
+        Alert.alert('Delete this assignment?', a.title, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await api.del(`/api/school/assignments/${a.id}`);
+                        refresh();
+                    } catch (err) {
+                        setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to delete') });
+                    }
+                },
+            },
+        ]);
+
+    const assignments = data ?? [];
+
+    return (
+        <View>
+            {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+            {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
+
+            {draft ? (
+                <Card style={{ marginBottom: spacing.lg }}>
+                    <TextField label="Title" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} />
+                    <TextField label="Instructions (optional)" value={draft.description} onChangeText={(description) => setDraft({ ...draft, description })} multiline />
+                    <ChipSelect label="Subject" wrap options={(subjects.data ?? []).map((s) => ({ value: s.id, label: s.name }))} value={draft.subjectId} onChange={(subjectId) => setDraft({ ...draft, subjectId })} />
+                    <ChipSelect
+                        label="Class"
+                        options={[{ value: ALL_CLASSES, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]}
+                        value={draft.streamId}
+                        onChange={(streamId) => setDraft({ ...draft, streamId })}
+                    />
+                    <TextField label="Due date (YYYY-MM-DD)" value={draft.dueDate} onChangeText={(dueDate) => setDraft({ ...draft, dueDate })} />
+                    <ButtonRow>
+                        {[1, 3, 7, 14].map((d) => (
+                            <Button key={d} size="sm" variant="ghost" label={`+${d}d`} onPress={() => setDraft({ ...draft, dueDate: shiftISODate(toISODate(), d) })} />
+                        ))}
+                    </ButtonRow>
+                    <ButtonRow>
+                        {draft.fileUrl ? <Button size="sm" variant="ghost" label="Remove attachment" onPress={() => setDraft({ ...draft, fileUrl: null })} /> : null}
+                        <Button size="sm" variant="secondary" label={draft.fileUrl ? 'Replace image' : 'Attach image'} onPress={attach} loading={uploading} />
+                    </ButtonRow>
+                    <ButtonRow>
+                        <Button variant="secondary" label="Cancel" onPress={() => setDraft(null)} />
+                        <Button label={draft.id ? 'Update' : 'Create'} onPress={save} loading={saving} disabled={!draft.title.trim() || !draft.subjectId || uploading} />
+                    </ButtonRow>
+                </Card>
+            ) : (
+                <ButtonRow>
+                    <Button label="+ New assignment" onPress={() => setDraft(newDraft())} />
+                </ButtonRow>
+            )}
+
+            <View style={{ marginTop: spacing.md }}>
+                {loading ? (
+                    <LoadingView />
+                ) : assignments.length === 0 ? (
+                    <EmptyState title="No assignments yet" />
+                ) : (
+                    assignments.map((a) => {
+                        const due = getDueLabel(a.dueDate);
+                        return (
+                            <Card key={a.id} style={{ marginBottom: spacing.sm }}>
+                                <View style={styles.titleRow}>
+                                    <Text style={styles.title}>{a.title}</Text>
+                                    <Badge label={due} variant={due === 'Overdue' ? 'danger' : due === 'Due today' || due === 'Due tomorrow' ? 'warning' : 'info'} />
+                                </View>
+                                <Text style={styles.sub}>
+                                    {a.subject} · {a.stream ?? 'All classes'} · due {formatDate(a.dueDate)} · by {a.createdBy}
+                                </Text>
+                                {a.description ? <Text style={styles.body}>{a.description}</Text> : null}
+                                <ButtonRow>
+                                    {a.fileUrl ? <Button size="sm" variant="ghost" label="Open attachment" onPress={() => void Linking.openURL(a.fileUrl as string)} /> : null}
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        label="Edit"
+                                        onPress={() =>
+                                            setDraft({ id: a.id, title: a.title, description: a.description ?? '', subjectId: a.subjectId, streamId: a.streamId ?? ALL_CLASSES, dueDate: a.dueDate.slice(0, 10), fileUrl: a.fileUrl })
+                                        }
+                                    />
+                                    <Button size="sm" variant="ghost" label="Delete" onPress={() => remove(a)} />
+                                </ButtonRow>
+                            </Card>
+                        );
+                    })
+                )}
+            </View>
+        </View>
+    );
+}
+
+function Submissions() {
+    const api = useApi();
+    const { data, loading, error, refresh } = useApiQuery<Submission[]>('/api/school/submissions');
+    const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+
+    const save = async () => {
+        if (!grading) return;
+        setSaving(true);
+        try {
+            const grade = parseFloat(grading.grade);
+            await api.patch(`/api/school/submissions/${grading.id}`, { grade: Number.isNaN(grade) ? null : grade, feedback: grading.feedback.trim() || null });
+            setGrading(null);
+            refresh();
+        } catch (err) {
+            setMessage(errorMessage(err, 'Failed to save the grade'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <LoadingView />;
+    const subs = data ?? [];
+    const ungraded = subs.filter((s) => s.grade === null).length;
+
+    return (
+        <View>
+            {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+            {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
+            {subs.length === 0 ? (
+                <EmptyState title="No submissions yet" description="Work students hand in appears here for grading." />
+            ) : (
+                <>
+                    <Text style={[styles.sub, { marginBottom: spacing.sm }]}>
+                        {pluralize(subs.length, 'submission')} · {ungraded} to grade
+                    </Text>
+                    <ListCard>
+                        {subs.map((s) =>
+                            grading?.id === s.id ? (
+                                <View key={s.id} style={{ padding: spacing.md }}>
+                                    <Text style={styles.title}>{s.studentName}</Text>
+                                    <Text style={styles.sub}>{s.assignmentTitle}</Text>
+                                    {s.submissionText ? <Text style={styles.body}>{s.submissionText}</Text> : null}
+                                    <TextField label="Grade" value={grading.grade} onChangeText={(grade) => setGrading({ ...grading, grade })} keyboardType="decimal-pad" />
+                                    <TextField label="Feedback" value={grading.feedback} onChangeText={(feedback) => setGrading({ ...grading, feedback })} multiline />
+                                    <ButtonRow>
+                                        {s.fileUrl ? <Button size="sm" variant="ghost" label="Open file" onPress={() => void Linking.openURL(s.fileUrl as string)} /> : null}
+                                        <Button size="sm" variant="secondary" label="Cancel" onPress={() => setGrading(null)} />
+                                        <Button size="sm" label="Save grade" onPress={save} loading={saving} />
+                                    </ButtonRow>
+                                </View>
+                            ) : (
+                                <ListRow
+                                    key={s.id}
+                                    title={`${s.studentName ?? '—'} · ${s.assignmentTitle ?? ''}`}
+                                    subtitle={`${s.subjectName ?? ''} · ${formatDate(s.submittedAt)}${s.feedback ? ` · “${s.feedback}”` : ''}`}
+                                    right={s.grade !== null ? <Badge label={String(s.grade)} variant="success" /> : <Badge label="To grade" variant="warning" />}
+                                    onPress={() => setGrading({ id: s.id, grade: s.grade === null ? '' : String(s.grade), feedback: s.feedback ?? '' })}
+                                />
+                            ),
+                        )}
+                    </ListCard>
+                </>
+            )}
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
-    newButton: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingVertical: 12, alignItems: 'center', marginBottom: spacing.lg, backgroundColor: colors.card },
-    newButtonText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.sm, fontSize: 14, color: colors.foreground, marginBottom: spacing.sm },
-    textArea: { minHeight: 70, textAlignVertical: 'top' },
-    label: { fontSize: 11, fontWeight: '700', color: colors.muted, marginBottom: 6 },
-    chip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm },
-    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: 12, fontWeight: '600', color: colors.foreground },
-    chipTextActive: { color: colors.white },
-    composeActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
-    primaryButton: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingVertical: 10, paddingHorizontal: spacing.lg },
-    primaryButtonText: { color: colors.white, fontWeight: '700', fontSize: 13 },
-    secondaryButton: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingVertical: 10, paddingHorizontal: spacing.lg },
-    secondaryButtonText: { color: colors.foreground, fontWeight: '700', fontSize: 13 },
-    listCard: { padding: 0, overflow: 'hidden' },
-    row: { padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-    rowTitle: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    rowSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    rowDue: { fontSize: 11, fontWeight: '700', color: colors.danger, marginTop: 4 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    title: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.foreground },
+    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    body: { fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
 });

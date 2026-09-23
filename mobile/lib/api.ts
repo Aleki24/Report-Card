@@ -1,6 +1,7 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { useMemo } from 'react';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -62,7 +63,16 @@ export interface Api {
      * phone app has to fetch them itself because the URL needs auth.
      */
     downloadAndShare: (path: string, fileName: string, mimeType?: string) => Promise<void>;
+    /**
+     * Lets the user pick an image and uploads it to `/api/school/upload`
+     * (the endpoint the web uses for assignment files, photos and logos).
+     * Resolves to the public URL, or null if the user cancelled.
+     */
+    pickAndUploadImage: (path?: string) => Promise<string | null>;
 }
+
+const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 // Same backend the web app talks to — every route accepts a Clerk Bearer
 // token the same way it accepts the web session cookie, since `auth()` from
@@ -107,6 +117,27 @@ export function useApi(): Api {
                     throw new ApiError('Sharing is not available on this device.', 0);
                 }
                 await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: fileName });
+            },
+            pickAndUploadImage: async (path = '/api/school/upload') => {
+                const picked = await DocumentPicker.getDocumentAsync({ type: UPLOAD_TYPES, copyToCacheDirectory: true });
+                if (picked.canceled || picked.assets.length === 0) return null;
+                const asset = picked.assets[0];
+                const type = asset.mimeType ?? 'image/jpeg';
+                if (!UPLOAD_TYPES.includes(type)) throw new ApiError('Choose a JPEG, PNG, GIF or WebP image.', 400);
+                if ((asset.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Images must be 10 MB or smaller.', 400);
+
+                const form = new FormData();
+                // React Native's FormData takes a { uri, name, type } descriptor for files.
+                form.append('file', { uri: asset.uri, name: asset.name, type } as unknown as Blob);
+                const token = await getToken();
+                const res = await fetch(`${API_URL}${path}`, {
+                    method: 'POST',
+                    body: form,
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                const json = (await res.json().catch(() => ({}))) as ErrorBody & { url?: string };
+                if (!res.ok || !json.url) throw new ApiError(json.error ?? 'Upload failed', res.status, json.code ?? null);
+                return json.url;
             },
         };
     }, [getToken]);

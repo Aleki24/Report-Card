@@ -1,153 +1,199 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useApi } from '@/lib/api';
-import { Badge, Card, EmptyState, ErrorBanner, LoadingView, Screen, ScreenHeader } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
-import type { AttendanceStatus, ClassAttendanceRow, GradeStream } from '@/lib/types';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useApi, withQuery } from '@/lib/api';
+import { useGradeStreams } from '@/lib/useSchoolData';
+import { errorMessage, pluralize, toISODate } from '@/lib/format';
+import { colors, spacing } from '@/lib/theme';
+import {
+    Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, StatGrid, StatTile,
+} from '@/components/ui';
+import { RequireScreen } from '@/components/RequireScreen';
+import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
 
-const STATUS_OPTIONS: { value: AttendanceStatus; label: string; variant: 'success' | 'danger' | 'warning' | 'info' }[] = [
-    { value: 'present', label: 'P', variant: 'success' },
-    { value: 'absent', label: 'A', variant: 'danger' },
-    { value: 'late', label: 'L', variant: 'warning' },
-    { value: 'excused', label: 'E', variant: 'info' },
+const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
+    { value: 'present', label: 'P', color: colors.success },
+    { value: 'absent', label: 'A', color: colors.danger },
+    { value: 'late', label: 'L', color: colors.warning },
+    { value: 'excused', label: 'E', color: colors.info },
 ];
 
-function todayISO(): string {
-    return new Date().toISOString().split('T')[0];
+export default function AttendanceScreen() {
+    return (
+        <RequireScreen screen="attendance">
+            <AttendanceContent />
+        </RequireScreen>
+    );
 }
 
-export default function AttendanceScreen() {
+function AttendanceContent() {
     const api = useApi();
-    const [streams, setStreams] = useState<GradeStream[]>([]);
+    const { streams, loading: streamsLoading, error: streamsError } = useGradeStreams();
     const [streamId, setStreamId] = useState<string | null>(null);
-    const [date, setDate] = useState(todayISO());
+    const [date, setDate] = useState(toISODate());
     const [rows, setRows] = useState<ClassAttendanceRow[]>([]);
     const [pending, setPending] = useState<Record<string, AttendanceStatus>>({});
-    const [loading, setLoading] = useState(true);
-    const [rosterLoading, setRosterLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [notifying, setNotifying] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
 
-    useEffect(() => {
-        api
-            .get<{ data: GradeStream[] }>('/api/school/data?type=grade_streams')
-            .then((res) => {
-                const list = res.data ?? [];
-                setStreams(list);
-                if (list.length > 0) setStreamId(list[0].id);
-            })
-            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load classes'))
-            .finally(() => setLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const effectiveStreamId = streamId ?? streams[0]?.id ?? null;
 
-    const loadRoster = useCallback(() => {
-        if (!streamId) return;
-        setRosterLoading(true);
+    const loadRoster = useCallback(async () => {
+        if (!effectiveStreamId) return;
+        setLoading(true);
+        setError(null);
         setPending({});
-        api
-            .get<{ data: ClassAttendanceRow[] }>(`/api/school/attendance?stream_id=${streamId}&date=${date}`)
-            .then((res) => setRows(res.data ?? []))
-            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load attendance'))
-            .finally(() => setRosterLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [streamId, date]);
+        try {
+            const res = await api.get<{ data: ClassAttendanceRow[] }>(withQuery('/api/school/attendance', { stream_id: effectiveStreamId, date }));
+            setRows(res.data ?? []);
+        } catch (err) {
+            setRows([]);
+            setError(errorMessage(err, 'Failed to load attendance'));
+        } finally {
+            setLoading(false);
+        }
+    }, [api, effectiveStreamId, date]);
 
     useEffect(() => {
-        loadRoster();
+        void loadRoster();
     }, [loadRoster]);
 
-    const dirtyCount = Object.keys(pending).length;
+    const statusOf = (r: ClassAttendanceRow): AttendanceStatus | null => pending[r.id] ?? r.status;
+    const counts = useMemo(() => {
+        const c = { present: 0, absent: 0, late: 0, excused: 0, unmarked: 0 };
+        for (const r of rows) {
+            const s = pending[r.id] ?? r.status;
+            if (s) c[s] += 1;
+            else c.unmarked += 1;
+        }
+        return c;
+    }, [rows, pending]);
+    const changed = Object.keys(pending).filter((id) => rows.find((r) => r.id === id)?.status !== pending[id]).length;
+    const unsaved = changed > 0 || counts.unmarked > 0;
 
-    const handleSave = async () => {
-        if (!streamId || dirtyCount === 0) return;
+    const markAllPresent = () => setPending(Object.fromEntries(rows.map((r) => [r.id, 'present' as const])));
+
+    const save = async () => {
+        if (!effectiveStreamId || rows.length === 0) return;
         setSaving(true);
+        setMessage(null);
         try {
-            const records = Object.entries(pending).map(([student_id, status]) => ({ student_id, status }));
-            await api.post('/api/school/attendance', { date, stream_id: streamId, records });
-            loadRoster();
+            // Like the web, the whole register is saved; anyone unmarked counts as present.
+            const records = rows.map((r) => ({ student_id: r.id, status: statusOf(r) ?? 'present', notes: r.notes }));
+            const res = await api.post<{ count?: number }>('/api/school/attendance', { date, stream_id: effectiveStreamId, records });
+            setMessage({ tone: 'success', text: `Attendance saved for ${pluralize(res.count ?? records.length, 'student')}.` });
+            await loadRoster();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save attendance');
+            setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save attendance') });
         } finally {
             setSaving(false);
         }
     };
 
-    const shiftDate = (deltaDays: number) => {
-        const d = new Date(date);
-        d.setDate(d.getDate() + deltaDays);
-        setDate(d.toISOString().split('T')[0]);
-    };
+    const notify = () =>
+        Alert.alert('Text guardians of absent learners?', 'Each guardian with a phone number gets one SMS for this date. Already-notified guardians are skipped.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Send',
+                onPress: async () => {
+                    if (!effectiveStreamId) return;
+                    setNotifying(true);
+                    try {
+                        const r = await api.post<AttendanceNotifyResult>('/api/school/attendance/notify', { date, stream_id: effectiveStreamId });
+                        const parts = [
+                            r.sent > 0 ? `${r.sent} sent` : null,
+                            r.alreadyNotified > 0 ? `${r.alreadyNotified} already notified` : null,
+                            r.skipped > 0 ? `${r.skipped} skipped (no phone)` : null,
+                            r.failed > 0 ? `${r.failed} failed` : null,
+                        ].filter(Boolean);
+                        setMessage(parts.length === 0 ? { tone: 'info', text: 'No absent students to notify for this date.' } : { tone: r.failed > 0 ? 'danger' : 'success', text: `Guardian SMS: ${parts.join(', ')}` });
+                    } catch (err) {
+                        setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to notify guardians') });
+                    } finally {
+                        setNotifying(false);
+                    }
+                },
+            },
+        ]);
 
-    if (loading) return <LoadingView />;
+    if (streamsLoading) return <LoadingView />;
 
     return (
-        <Screen>
-            <ScreenHeader title="Attendance" description="Mark or review daily attendance for a class." />
-            {error ? <ErrorBanner message={error} onRetry={loadRoster} /> : null}
+        <Screen
+            footer={
+                rows.length > 0 ? (
+                    <Button block label={saving ? 'Saving…' : unsaved ? `Save register${changed ? ` (${changed} changed)` : ''}` : 'Register saved ✓'} onPress={save} loading={saving} disabled={!unsaved} />
+                ) : undefined
+            }
+        >
+            <ScreenHeader title="Attendance" description="Take or review the daily register for a class." />
+            {streamsError ? <ErrorBanner message={streamsError} /> : null}
 
             {streams.length === 0 ? (
-                <EmptyState title="No classes assigned" description="You don't have any classes assigned yet." />
+                <EmptyState title="No classes assigned" description="Registers are kept by admins and each class's own teacher." />
             ) : (
                 <>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
-                        {streams.map((s) => (
-                            <Pressable
-                                key={s.id}
-                                onPress={() => setStreamId(s.id)}
-                                style={[styles.chip, streamId === s.id && styles.chipActive]}
-                            >
-                                <Text style={[styles.chipText, streamId === s.id && styles.chipTextActive]}>{s.full_name}</Text>
-                            </Pressable>
-                        ))}
-                    </ScrollView>
+                    <ChipSelect options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} />
+                    <DateStepper value={date} onChange={setDate} max={toISODate()} />
+                    {error ? <ErrorBanner message={error} onRetry={loadRoster} /> : null}
+                    {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-                    <View style={styles.dateRow}>
-                        <Pressable onPress={() => shiftDate(-1)} style={styles.dateArrow}>
-                            <Text style={styles.dateArrowText}>‹</Text>
-                        </Pressable>
-                        <Text style={styles.dateText}>{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
-                        <Pressable onPress={() => shiftDate(1)} style={styles.dateArrow}>
-                            <Text style={styles.dateArrowText}>›</Text>
-                        </Pressable>
-                    </View>
-
-                    {rosterLoading ? (
-                        <LoadingView />
-                    ) : rows.length === 0 ? (
-                        <EmptyState title="No students in this class" />
-                    ) : (
-                        <Card style={styles.listCard}>
-                            {rows.map((r) => {
-                                const current = pending[r.id] ?? r.status;
-                                return (
-                                    <View key={r.id} style={styles.row}>
-                                        <View style={{ flex: 1, minWidth: 0 }}>
-                                            <Text style={styles.rowTitle}>{r.name}</Text>
-                                            <Text style={styles.rowSub}>{r.admission_number}</Text>
-                                        </View>
-                                        <View style={styles.statusRow}>
-                                            {STATUS_OPTIONS.map((opt) => (
-                                                <Pressable
-                                                    key={opt.value}
-                                                    onPress={() => setPending((prev) => ({ ...prev, [r.id]: opt.value }))}
-                                                    style={[styles.statusChip, current === opt.value && { backgroundColor: colors[opt.variant] }]}
-                                                >
-                                                    <Text style={[styles.statusChipText, current === opt.value && { color: colors.white }]}>{opt.label}</Text>
-                                                </Pressable>
-                                            ))}
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </Card>
-                    )}
-
-                    {dirtyCount > 0 ? (
-                        <Pressable onPress={handleSave} disabled={saving} style={[styles.saveButton, saving && { opacity: 0.6 }]}>
-                            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : `Save ${dirtyCount} change${dirtyCount === 1 ? '' : 's'}`}</Text>
-                        </Pressable>
+                    {rows.length > 0 ? (
+                        <>
+                            <StatGrid>
+                                <StatTile label="Present" value={counts.present} tone={colors.success} />
+                                <StatTile label="Absent" value={counts.absent} tone={counts.absent ? colors.danger : undefined} />
+                                <StatTile label="Late / excused" value={`${counts.late} / ${counts.excused}`} />
+                                <StatTile label="Not marked" value={counts.unmarked} />
+                            </StatGrid>
+                            <ButtonRow>
+                                <Button size="sm" variant="secondary" label="Mark all present" onPress={markAllPresent} />
+                                {changed > 0 ? <Button size="sm" variant="ghost" label="Undo changes" onPress={() => setPending({})} /> : null}
+                                <Button size="sm" variant="secondary" label="SMS absentees' guardians" onPress={notify} loading={notifying} disabled={counts.absent === 0 || unsaved} />
+                            </ButtonRow>
+                        </>
                     ) : null}
+
+                    <View style={{ marginTop: spacing.md }}>
+                        {loading ? (
+                            <LoadingView />
+                        ) : rows.length === 0 ? (
+                            <EmptyState title="No students in this class" />
+                        ) : (
+                            <ListCard>
+                                {rows.map((r) => {
+                                    const current = statusOf(r);
+                                    return (
+                                        <View key={r.id} style={styles.row}>
+                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                                <Text style={styles.rowTitle} numberOfLines={1}>{r.name}</Text>
+                                                <Text style={styles.rowSub}>{r.admission_number}</Text>
+                                            </View>
+                                            <View style={styles.statusRow}>
+                                                {STATUS_OPTIONS.map((opt) => {
+                                                    const active = current === opt.value;
+                                                    return (
+                                                        <Pressable
+                                                            key={opt.value}
+                                                            onPress={() => setPending((prev) => ({ ...prev, [r.id]: opt.value }))}
+                                                            accessibilityRole="button"
+                                                            accessibilityLabel={`${r.name} ${opt.value}`}
+                                                            accessibilityState={{ selected: active }}
+                                                            style={[styles.statusChip, active && { backgroundColor: opt.color, borderColor: opt.color }]}
+                                                        >
+                                                            <Text style={[styles.statusChipText, active && { color: colors.white }]}>{opt.label}</Text>
+                                                        </Pressable>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                            </ListCard>
+                        )}
+                    </View>
                 </>
             )}
         </Screen>
@@ -155,21 +201,10 @@ export default function AttendanceScreen() {
 }
 
 const styles = StyleSheet.create({
-    chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, borderWidth: 1, borderColor: colors.border, marginRight: spacing.sm, backgroundColor: colors.card },
-    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: 13, fontWeight: '600', color: colors.foreground },
-    chipTextActive: { color: colors.white },
-    dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.md },
-    dateArrow: { padding: spacing.sm },
-    dateArrowText: { fontSize: 22, color: colors.primary, fontWeight: '700' },
-    dateText: { fontSize: 14, fontWeight: '700', color: colors.foreground, minWidth: 140, textAlign: 'center' },
-    listCard: { padding: 0, overflow: 'hidden' },
-    row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm },
+    row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: spacing.sm },
     rowTitle: { fontSize: 13, fontWeight: '700', color: colors.foreground },
     rowSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: 6 },
-    statusChip: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    statusChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     statusChipText: { fontSize: 12, fontWeight: '800', color: colors.muted },
-    saveButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center', marginTop: spacing.lg },
-    saveButtonText: { color: colors.white, fontWeight: '700', fontSize: 14 },
 });
