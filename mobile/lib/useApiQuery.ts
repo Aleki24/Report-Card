@@ -1,40 +1,69 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from './api';
+import { errorMessage } from './format';
 
-export function useApiQuery<T>(path: string) {
+export interface ApiQuery<T> {
+    data: T | null;
+    loading: boolean;
+    refreshing: boolean;
+    error: string | null;
+    /** Reload in place, keeping current data visible (pull-to-refresh). */
+    refresh: () => void;
+    /** Reload showing the loading state. */
+    reload: () => void;
+}
+
+/**
+ * Loads `path` and unwraps it with `select`. Most list endpoints answer
+ * `{ data: T }`, which is the default; endpoints that answer with the payload
+ * itself pass `raw`. A null path skips the request (for dependent queries).
+ */
+export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): ApiQuery<T> {
     const api = useApi();
+    const raw = opts?.raw ?? false;
     const [data, setData] = useState<T | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(path !== null);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const mounted = useRef(true);
+    // Ignore responses for a path the screen has already moved away from.
+    const latest = useRef(path);
+    latest.current = path;
 
-    const load = useCallback(async (opts?: { silent?: boolean }) => {
-        if (opts?.silent) setRefreshing(true); else setLoading(true);
-        setError(null);
-        try {
-            const json = await api.get<{ data: T }>(path);
-            if (mounted.current) setData(json.data);
-        } catch (err) {
-            if (mounted.current) setError(err instanceof Error ? err.message : 'Failed to load');
-        } finally {
-            if (mounted.current) {
+    const load = useCallback(
+        async (silent: boolean) => {
+            if (path === null) {
+                setData(null);
                 setLoading(false);
-                setRefreshing(false);
+                return;
             }
-        }
-        // path is the only real dependency we key requests on
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [path]);
+            if (silent) setRefreshing(true);
+            else setLoading(true);
+            setError(null);
+            try {
+                const json = await api.get<T | { data: T }>(path);
+                if (latest.current === path) setData(raw ? (json as T) : (json as { data: T }).data);
+            } catch (err) {
+                if (latest.current === path) setError(errorMessage(err, 'Failed to load'));
+            } finally {
+                if (latest.current === path) {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }
+        },
+        [api, path, raw],
+    );
 
     useEffect(() => {
-        mounted.current = true;
-        load();
-        return () => {
-            mounted.current = false;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [path]);
+        void load(false);
+    }, [load]);
 
-    return { data, loading, refreshing, error, refresh: () => load({ silent: true }), reload: load };
+    return {
+        data,
+        loading,
+        refreshing,
+        error,
+        refresh: () => void load(true),
+        reload: () => void load(false),
+    };
 }

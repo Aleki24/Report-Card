@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { Badge, Card, EmptyState, ErrorBanner, LoadingView, Screen, ScreenHeader, StatTile } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { formatDate, toISODate } from '@/lib/format';
+import { colors } from '@/lib/theme';
+import { Badge, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, ScreenHeader, SectionLabel, StatGrid, StatTile } from '@/components/ui';
 import type { AttendanceRecord, AttendanceStatus } from '@/lib/types';
 
 const STATUS_META: Record<AttendanceStatus, { label: string; variant: 'success' | 'danger' | 'warning' | 'info' }> = {
@@ -12,66 +13,63 @@ const STATUS_META: Record<AttendanceStatus, { label: string; variant: 'success' 
     excused: { label: 'Excused', variant: 'info' },
 };
 
+/** The last six months as YYYY-MM, newest first — the web's month filter. */
+function recentMonths(): { value: string; label: string }[] {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        return { value: toISODate(d).slice(0, 7), label: d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) };
+    });
+}
+
+function monthRange(month: string): { from: string | null; to: string | null } {
+    if (!month) return { from: null, to: null };
+    const [y, m] = month.split('-').map(Number);
+    return { from: toISODate(new Date(y, m - 1, 1)), to: toISODate(new Date(y, m, 0)) };
+}
+
 export default function AttendanceScreen() {
-    const { data, loading, error, refresh, refreshing } = useApiQuery<AttendanceRecord[]>('/api/school/student/attendance');
+    const [month, setMonth] = useState('');
+    const { data, loading, error, refresh, refreshing } = useApiQuery<AttendanceRecord[]>(withQuery('/api/school/student/attendance', monthRange(month)));
     const records = data ?? [];
+    const months = useMemo(recentMonths, []);
 
     const stats = useMemo(() => {
-        const total = records.length;
-        const present = records.filter((r) => r.status === 'present').length;
-        const absent = records.filter((r) => r.status === 'absent').length;
-        const late = records.filter((r) => r.status === 'late').length;
-        const excused = records.filter((r) => r.status === 'excused').length;
-        const rate = total > 0 ? Math.round((present / total) * 1000) / 10 : 0;
-        return { total, present, absent, late, excused, rate };
+        const count = (s: AttendanceStatus) => records.filter((r) => r.status === s).length;
+        const present = count('present');
+        return { present, absent: count('absent'), late: count('late'), excused: count('excused'), rate: records.length > 0 ? Math.round((present / records.length) * 1000) / 10 : null };
     }, [records]);
 
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
             <ScreenHeader title="Attendance" description="Your daily attendance history." />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+            <ChipSelect options={[{ value: '', label: 'All time' }, ...months]} value={month} onChange={setMonth} />
 
-            <View style={styles.statGrid}>
-                <StatTile label="Attendance Rate" value={`${stats.rate}%`} />
+            <StatGrid>
+                <StatTile label="Attendance rate" value={stats.rate != null ? `${stats.rate}%` : '—'} tone={stats.rate != null && stats.rate < 80 ? colors.danger : colors.success} />
                 <StatTile label="Present" value={stats.present} />
-                <StatTile label="Absent" value={stats.absent} />
-                <StatTile label="Late / Excused" value={`${stats.late} / ${stats.excused}`} />
-            </View>
+                <StatTile label="Absent" value={stats.absent} tone={stats.absent > 0 ? colors.danger : undefined} />
+                <StatTile label="Late / excused" value={`${stats.late} / ${stats.excused}`} />
+            </StatGrid>
 
+            <SectionLabel>Days</SectionLabel>
             {loading ? (
                 <LoadingView />
             ) : records.length === 0 ? (
                 <EmptyState title="No attendance records" description="Your attendance history will appear here." />
             ) : (
-                <Card style={styles.listCard}>
+                <ListCard>
                     {records.map((r) => (
-                        <View key={r.id} style={styles.row}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.date}>
-                                    {new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </Text>
-                                {r.notes ? <Text style={styles.notes}>{r.notes}</Text> : null}
-                            </View>
-                            <Badge label={STATUS_META[r.status]?.label ?? r.status} variant={STATUS_META[r.status]?.variant ?? 'success'} />
-                        </View>
+                        <ListRow
+                            key={r.id}
+                            title={formatDate(r.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                            subtitle={r.notes}
+                            right={<Badge label={STATUS_META[r.status]?.label ?? r.status} variant={STATUS_META[r.status]?.variant ?? 'info'} />}
+                        />
                     ))}
-                </Card>
+                </ListCard>
             )}
         </Screen>
     );
 }
-
-const styles = StyleSheet.create({
-    statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
-    listCard: { padding: 0, overflow: 'hidden' },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    date: { fontSize: 14, fontWeight: '600', color: colors.foreground },
-    notes: { fontSize: 12, color: colors.muted, marginTop: 2 },
-});

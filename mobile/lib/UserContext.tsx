@@ -1,29 +1,19 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { useApi } from './api';
-
-export type UserRole = 'ADMIN' | 'CLASS_TEACHER' | 'SUBJECT_TEACHER' | 'STUDENT' | 'PENDING';
-
-export interface CurrentUserProfile {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    role: UserRole;
-    school_id: string | null;
-    is_active: boolean;
-}
-
-interface MeResponse {
-    profile: CurrentUserProfile;
-    schoolName: string | null;
-    schoolOnboardingCompleted: boolean;
-}
+import { ApiError, useApi } from './api';
+import { errorMessage } from './format';
+import { resolveEffectiveRole, type UserRole } from './roles';
+import type { CurrentUserProfile, MeResponse } from './types';
 
 interface UserContextValue {
     loading: boolean;
     error: string | null;
+    /** True when the backend locked this account out (ACCOUNT_DEACTIVATED). */
+    deactivated: boolean;
     profile: CurrentUserProfile | null;
+    /** The role this account acts as — a subject teacher may act as class teacher. */
     role: UserRole | null;
+    /** The stored role, before any class-teacher switch. */
+    baseRole: UserRole | null;
     schoolName: string | null;
     reload: () => void;
 }
@@ -32,35 +22,45 @@ const UserContext = createContext<UserContextValue | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const api = useApi();
-    const [profile, setProfile] = useState<CurrentUserProfile | null>(null);
-    const [schoolName, setSchoolName] = useState<string | null>(null);
+    const [me, setMe] = useState<MeResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deactivated, setDeactivated] = useState(false);
 
+    // /api/auth/me resolves the real role from the database rather than the
+    // possibly-stale Clerk JWT claim, the same way the web's AuthProvider does.
     const load = useCallback(() => {
         setLoading(true);
         setError(null);
-        api
-            .get<MeResponse>('/api/auth/me')
+        api.get<MeResponse>('/api/auth/me')
             .then((res) => {
-                setProfile(res.profile);
-                setSchoolName(res.schoolName);
+                setMe(res);
+                setDeactivated(false);
             })
-            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load your account'))
+            .catch((err: unknown) => {
+                setDeactivated(err instanceof ApiError && err.code === 'ACCOUNT_DEACTIVATED');
+                setError(errorMessage(err, 'Failed to load your account'));
+            })
             .finally(() => setLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [api]);
 
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [load]);
 
-    return (
-        <UserContext.Provider value={{ loading, error, profile, role: profile?.role ?? null, schoolName, reload: load }}>
-            {children}
-        </UserContext.Provider>
-    );
+    const baseRole = me?.profile.role ?? null;
+    const value: UserContextValue = {
+        loading,
+        error,
+        deactivated,
+        profile: me?.profile ?? null,
+        role: resolveEffectiveRole(baseRole, me?.activeRole),
+        baseRole,
+        schoolName: me?.schoolName ?? null,
+        reload: load,
+    };
+
+    return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 
 export function useCurrentUser(): UserContextValue {
