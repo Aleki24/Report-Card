@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffAssignment, TeacherSubject } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 interface Draft {
     id: string | null;
@@ -114,7 +115,7 @@ function AssignmentList() {
     };
 
     const remove = (a: StaffAssignment) =>
-        Alert.alert('Delete this assignment?', a.title, [
+        confirmAlert('Delete this assignment?', a.title, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete',

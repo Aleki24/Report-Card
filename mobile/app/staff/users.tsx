@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
@@ -11,6 +11,7 @@ import {
     Screen, ScreenHeader, SearchField, StatGrid, StatTile, TextField, ToggleRow,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
+import { confirmAlert } from '@/lib/confirm';
 
 interface SchoolUser {
     id: string;
@@ -68,7 +69,7 @@ function UsersContent() {
     }, [users, search, filter]);
 
     const resetCode = (u: SchoolUser) =>
-        Alert.alert('Issue a new invite code?', `${fullName(u)} will use it to sign in again. Their old code stops working.`, [
+        confirmAlert('Issue a new invite code?', `${fullName(u)} will use it to sign in again. Their old code stops working.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Issue code',

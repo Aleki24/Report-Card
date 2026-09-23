@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure, useAcademicYears, useTerms } from '@/lib/useSchoolData';
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { PaymentSettingsStatus, Term } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 interface SchoolProfile {
     id: string;
@@ -197,7 +198,7 @@ function CalendarTab() {
     };
 
     const deleteTerm = (t: Term) =>
-        Alert.alert(`Delete ${t.name}?`, 'Exams and marks linked to this term may stop resolving.', [
+        confirmAlert(`Delete ${t.name}?`, 'Exams and marks linked to this term may stop resolving.', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Delete', style: 'destructive', onPress: () => void run(() => api.del(withQuery('/api/admin/academic-structure', { type: 'term', id: t.id })), 'Term deleted.') },
         ]);

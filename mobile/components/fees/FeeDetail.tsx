@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 const METHODS: { value: FeePaymentMethod; label: string }[] = [
     { value: 'CASH', label: 'Cash' },
@@ -82,7 +83,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
     };
 
     const voidPayment = (p: FeePayment) =>
-        Alert.alert('Void this payment?', `${formatCurrency(p.amount)} · receipt ${p.receiptNumber}. The balance goes back up.`, [
+        confirmAlert('Void this payment?', `${formatCurrency(p.amount)} · receipt ${p.receiptNumber}. The balance goes back up.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Void',
@@ -108,7 +109,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
         );
 
     const deleteBill = () =>
-        Alert.alert('Delete this fee record?', `${fee.studentName ?? ''} · ${fee.termName ?? ''}`, [
+        confirmAlert('Delete this fee record?', `${fee.studentName ?? ''} · ${fee.termName ?? ''}`, [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Delete', style: 'destructive', onPress: () => void act('delete', async () => { await api.del(`/api/school/fees/${fee.id}`); onChanged(); }) },
         ]);

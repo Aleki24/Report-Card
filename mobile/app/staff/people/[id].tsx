@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui';
 import { StudentForm, type StudentStatus } from '@/components/people/StudentForm';
 import type { StudentDetail, TeacherDetail } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 export default function PersonDetailScreen() {
     const { id, type } = useLocalSearchParams<{ id: string; type?: 'student' | 'teacher' }>();
@@ -35,7 +36,7 @@ function StudentView({ id }: { id: string }) {
     const p = data.profile;
 
     const remove = () =>
-        Alert.alert('Delete this student?', `${fullName(p)} and their records will be removed. This cannot be undone.`, [
+        confirmAlert('Delete this student?', `${fullName(p)} and their records will be removed. This cannot be undone.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete',

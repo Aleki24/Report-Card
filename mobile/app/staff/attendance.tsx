@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
     { value: 'present', label: 'P', color: colors.success },
@@ -93,7 +94,7 @@ function AttendanceContent() {
     };
 
     const notify = () =>
-        Alert.alert('Text guardians of absent learners?', 'Each guardian with a phone number gets one SMS for this date. Already-notified guardians are skipped.', [
+        confirmAlert('Text guardians of absent learners?', 'Each guardian with a phone number gets one SMS for this date. Already-notified guardians are skipped.', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Send',

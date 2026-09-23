@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -8,6 +8,7 @@ import { errorMessage, getTimeAgo } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 import { Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, LoadingView, Notice, Screen, ScreenHeader, TextField, ToggleRow } from '@/components/ui';
 import type { StaffAnnouncement } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 interface Draft {
     id: string | null;
@@ -50,7 +51,7 @@ export default function AnnouncementsScreen() {
     };
 
     const remove = (a: StaffAnnouncement) =>
-        Alert.alert('Delete announcement?', a.title, [
+        confirmAlert('Delete announcement?', a.title, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete',

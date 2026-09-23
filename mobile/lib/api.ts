@@ -3,6 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useMemo } from 'react';
+import { Platform } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -71,6 +72,27 @@ export interface Api {
     pickAndUploadImage: (path?: string) => Promise<string | null>;
 }
 
+/**
+ * Web build (deployed to Vercel): there is no file system or share sheet, so
+ * fetch the file with the token and hand it to the browser as a download.
+ */
+async function downloadInBrowser(url: string, token: string | null, fileName: string): Promise<void> {
+    const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as ErrorBody;
+        throw new ApiError(body.error ?? `Download failed (${res.status})`, res.status, body.code ?? null);
+    }
+    const href = URL.createObjectURL(await res.blob());
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Revoke after the browser has had the chance to read it.
+    setTimeout(() => URL.revokeObjectURL(href), 60_000);
+}
+
 const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -93,6 +115,7 @@ export function useApi(): Api {
             del: (path) => send('DELETE', path),
             downloadAndShare: async (path, fileName, mimeType = 'application/pdf') => {
                 const token = await getToken();
+                if (Platform.OS === 'web') return downloadInBrowser(`${API_URL}${path}`, token, fileName);
                 const target = new File(Paths.cache, fileName);
                 if (target.exists) target.delete();
                 let file: File;
@@ -128,7 +151,8 @@ export function useApi(): Api {
 
                 const form = new FormData();
                 // React Native's FormData takes a { uri, name, type } descriptor for files.
-                form.append('file', { uri: asset.uri, name: asset.name, type } as unknown as Blob);
+                if (Platform.OS === 'web' && asset.file) form.append('file', asset.file, asset.name);
+                else form.append('file', { uri: asset.uri, name: asset.name, type } as unknown as Blob);
                 const token = await getToken();
                 const res = await fetch(`${API_URL}${path}`, {
                     method: 'POST',

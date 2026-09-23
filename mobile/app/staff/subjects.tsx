@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { ApiError, useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AcademicStructure, StructureSubject } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 /** The standard bands the backend can add in one go (`subjects_bulk`). */
 const BANDS = [
@@ -90,7 +91,7 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
 
     const remove = (s: StructureSubject) => {
         const del = (force: boolean) => api.del(withQuery('/api/admin/academic-structure', { type: 'subject', id: s.id, force: force || null }));
-        Alert.alert(`Remove ${s.name}?`, 'It comes off your subject list. Existing results are kept.', [
+        confirmAlert(`Remove ${s.name}?`, 'It comes off your subject list. Existing results are kept.', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Remove',

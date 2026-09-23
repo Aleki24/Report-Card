@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { PaperSetup } from './PaperSetup';
 import type { AcademicStructure, ExamMark, ExamPaperScheme, ExamSlot, MarkEntryInput, StudentListItem } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 interface Entry {
     score: string;
@@ -211,7 +212,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const handleDelete = (student: StudentListItem) => {
         const mark = marksByStudent.get(student.id);
         if (!mark) return;
-        Alert.alert('Remove mark?', `Delete ${student.users?.first_name}'s mark for ${exam.subject_name}?`, [
+        confirmAlert('Remove mark?', `Delete ${student.users?.first_name}'s mark for ${exam.subject_name}?`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Remove',

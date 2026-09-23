@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage, pluralize } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 import { Button, ButtonRow, Card, ErrorBanner } from '@/components/ui';
 import { StatusBadge } from './ExamPicker';
 import type { ExamSlot, PublishReadiness, PublishResponse } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 /**
  * Release / withdraw results, as on the web. Releasing is two calls: the
@@ -38,7 +39,7 @@ export function ReleaseControl({ exam, onChanged, compact }: { exam: ExamSlot; o
     };
 
     const withdraw = () =>
-        Alert.alert('Withdraw results?', 'Students and parents will stop seeing these marks until they are released again.', [
+        confirmAlert('Withdraw results?', 'Students and parents will stop seeing these marks until they are released again.', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Withdraw', style: 'destructive', onPress: () => void call({ action: 'unpublish' }) },
         ]);

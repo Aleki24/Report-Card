@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { GradeStream, StudentListItem } from '@/lib/types';
+import { confirmAlert } from '@/lib/confirm';
 
 export default function ClassesScreen() {
     return (
@@ -80,7 +81,7 @@ function ClassesContent() {
     };
 
     const remove = (s: GradeStream) =>
-        Alert.alert(`Delete ${s.full_name}?`, 'Only empty classes can be deleted safely. Move learners out first.', [
+        confirmAlert(`Delete ${s.full_name}?`, 'Only empty classes can be deleted safely. Move learners out first.', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Delete', style: 'destructive', onPress: () => void run(() => api.del(withQuery('/api/admin/academic-structure', { type: 'stream', id: s.id })), `${s.full_name} deleted.`) },
         ]);
