@@ -385,7 +385,8 @@ export async function POST(request: NextRequest) {
             },
 
             /**
-             * Every standard subject for one curriculum band, in one go.
+             * Standard subjects for one curriculum band, in one go: the whole
+             * band, or just the `codes` ticked in the catalogue checklist.
              *
              * The official CBC and 8-4-4 subjects already live in
              * `subject-definitions` with their real codes, and the form above
@@ -413,7 +414,13 @@ export async function POST(request: NextRequest) {
                     return NextResponse.json({ error: `No ${levelCode} academic level exists.` }, { status: 400 });
                 }
 
-                const wanted = PREDEFINED_SUBJECTS.filter(s => s.level === data.level);
+                // `codes` narrows to the subjects ticked in the catalogue
+                // checklist. Only codes the band really lists are honoured, so
+                // this can never mint a catalogue row nobody defined.
+                const requested = data.codes ? new Set(data.codes.map(c => c.toUpperCase())) : null;
+                const wanted = PREDEFINED_SUBJECTS.filter(
+                    s => s.level === data.level && (!requested || requested.has(s.code.toUpperCase())),
+                );
                 if (wanted.length === 0) {
                     return NextResponse.json({ success: true, created: 0, skipped: 0 });
                 }

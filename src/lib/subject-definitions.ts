@@ -122,30 +122,34 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   // CBC Senior School (Grades 10–12)
   // ═══════════════════════════════════════════════════════════════
 
-  // ── Core / Compulsory (all pathways) ──
+  // Structure per the Ministry of Education's Grade 10 selection documents
+  // (KEMIS, updated 11 Aug 2026): every learner takes English, Kiswahili (or
+  // Kenyan Sign Language), Community Service Learning and Mathematics, plus
+  // three electives. Core Mathematics is itself one of the electives — it
+  // appears inside the official combinations (e.g. ST1004: Core Mathematics,
+  // Biology, Chemistry) — and a learner without it takes Essential
+  // Mathematics instead. Codes are stable identifiers: renaming a subject here
+  // must never change its code, or its recorded exams stop matching.
+
+  // ── Compulsory (all pathways) ──
   { name: 'English', code: 'ENG_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', isCore: true },
   { name: 'Kiswahili', code: 'KISW_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', isCore: true },
-  { name: 'Kenya Sign Language', code: 'KSL_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', isCore: true },
   { name: 'Community Service Learning', code: 'CSL_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', isCore: true },
-  { name: 'Physical Education', code: 'PE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', isCore: true },
-  { name: 'ICT Skills', code: 'ICT_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', isCore: true },
-  // Senior School runs two mathematics courses: Mathematics (STEM) below, and
-  // Essential Mathematics for the Social Sciences and Arts & Sports pathways.
-  // Only the STEM one was listed, so schools added the other by hand under
-  // codes of their own — and an unlisted code has no band, which put a Grade 10
-  // subject on offer to Upper Primary.
   { name: 'Essential Mathematics', code: 'MATH_ESS_SS', level: 'CBC_SENIOR_SCHOOL', category: 'MATHEMATICS', isCore: true },
 
+  // ── Offered outside the combinations (not compulsory) ──
+  { name: 'Physical Education', code: 'PE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE' },
+  { name: 'ICT Skills', code: 'ICT_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL' },
+
   // ── STEM Pathway ──
-  { name: 'Mathematics (STEM)', code: 'MATH_SS', level: 'CBC_SENIOR_SCHOOL', category: 'MATHEMATICS', pathway: 'STEM' },
+  { name: 'Core Mathematics', code: 'MATH_SS', level: 'CBC_SENIOR_SCHOOL', category: 'MATHEMATICS', pathway: 'STEM' },
   { name: 'Biology', code: 'BIO_SS', level: 'CBC_SENIOR_SCHOOL', category: 'SCIENCE', pathway: 'STEM' },
   { name: 'Chemistry', code: 'CHEM_SS', level: 'CBC_SENIOR_SCHOOL', category: 'SCIENCE', pathway: 'STEM' },
   { name: 'Physics', code: 'PHY_SS', level: 'CBC_SENIOR_SCHOOL', category: 'SCIENCE', pathway: 'STEM' },
   { name: 'General Science', code: 'GSCI_SS', level: 'CBC_SENIOR_SCHOOL', category: 'SCIENCE', pathway: 'STEM' },
-  { name: 'Computer Science', code: 'COMP_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
+  { name: 'Computer Studies', code: 'COMP_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Agriculture', code: 'AGRI_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Home Science', code: 'HOME_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
-  { name: 'Drawing and Design', code: 'DD_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Aviation Technology', code: 'AVI_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Building and Construction', code: 'BC_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Electrical Technology', code: 'ELEC_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
@@ -155,20 +159,27 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   { name: 'Media Technology', code: 'MED_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
   { name: 'Marine and Fisheries Technology', code: 'MAR_SS', level: 'CBC_SENIOR_SCHOOL', category: 'TECHNICAL', pathway: 'STEM' },
 
+  // ── Social Sciences Pathway ──
+  { name: 'Business Studies', code: 'BS_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Geography', code: 'GEO_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'History and Citizenship', code: 'HC_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Christian Religious Education', code: 'CRE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Islamic Religious Education', code: 'IRE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Hindu Religious Education', code: 'HRE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Literature in English', code: 'LIT_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Fasihi ya Kiswahili', code: 'KK_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Indigenous Language', code: 'IND_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  // An elective in the Languages & Literature track (e.g. SS1059), and the
+  // alternative to Kiswahili for learners who need it — never auto-enrolled.
+  { name: 'Kenya Sign Language', code: 'KSL_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Arabic', code: 'ARB_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'French', code: 'FRE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'German', code: 'GER_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Mandarin Chinese', code: 'MAN_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
+
   // ── Arts & Sports Science Pathway ──
-  { name: 'Sports and Recreation', code: 'SR_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
+  { name: 'Fine Arts', code: 'FA_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
   { name: 'Music and Dance', code: 'MD_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
   { name: 'Theatre and Film', code: 'TF_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
-  { name: 'Fine Arts', code: 'FA_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
-
-  // ── Social Sciences Pathway ──
-  { name: 'Advanced English', code: 'AENG_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Literature in English', code: 'LIT_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Indigenous Languages', code: 'IND_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Kiswahili Kipevu', code: 'KK_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Foreign Languages', code: 'FL_SS', level: 'CBC_SENIOR_SCHOOL', category: 'LANGUAGE', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'History and Citizenship', code: 'HC_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Geography', code: 'GEO_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Business Studies', code: 'BS_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
-  { name: 'Religious Education', code: 'RE_SS', level: 'CBC_SENIOR_SCHOOL', category: 'HUMANITY', pathway: 'SOCIAL_SCIENCES' },
+  { name: 'Sports and Recreation', code: 'SR_SS', level: 'CBC_SENIOR_SCHOOL', category: 'CREATIVE', pathway: 'ARTS_SPORTS' },
 ];

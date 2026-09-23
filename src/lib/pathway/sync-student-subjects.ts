@@ -1,12 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { SENIOR_CORE_SUBJECT_CODES } from '@/lib/pathway-definitions';
+import { seniorCoreCodes } from '@/lib/pathway-definitions';
 import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 
 /**
  * Keeps `student_subjects` in sync with students' assigned subject
  * combination: the combination's 3 electives plus the compulsory
- * senior-school cores. Idempotent — safe to call again after any
+ * senior-school subjects (English, Kiswahili, CSL, and Essential
+ * Mathematics unless the combination includes Core Mathematics). Idempotent — safe to call again after any
  * combination or subject change. Passing `combinationId: null`
  * clears the students' enrollments entirely, returning them to the
  * default "all subjects at their academic level" behaviour.
@@ -49,16 +50,18 @@ export async function syncStudentsSubjectsBulk(
     // level must not enroll cores from another curriculum). School-scoped:
     // academic levels are shared across schools, subjects are not.
     let coreLevelIds: string[] = [];
+    let electiveCodes: string[] = [];
     if (electiveIds.length > 0) {
         // Reads the catalogue directly, by id, on purpose: these ids came from
         // a combination whose electives were checked as offered when it was
         // saved, and all that is wanted here is their academic level.
         const { data: electiveSubjects, error: electiveError } = await supabase
             .from('subjects')
-            .select('id, academic_level_id')
+            .select('id, code, academic_level_id')
             .in('id', electiveIds);
         if (electiveError) throw new Error(`Failed to load elective subjects: ${electiveError.message}`);
         coreLevelIds = [...new Set((electiveSubjects || []).map(s => s.academic_level_id).filter(Boolean))];
+        electiveCodes = (electiveSubjects || []).map(s => s.code as string);
     }
 
     let coreIds: string[] = [];
@@ -68,7 +71,7 @@ export async function syncStudentsSubjectsBulk(
             .select('id')
             .eq('school_id', schoolId)
             .in('academic_level_id', coreLevelIds)
-            .in('code', SENIOR_CORE_SUBJECT_CODES);
+            .in('code', seniorCoreCodes(electiveCodes));
         if (coresQuery.error) throw new Error(`Failed to load core subjects: ${coresQuery.error.message}`);
         coreIds = (coresQuery.data || []).map((s: { id: string }) => s.id);
         if (coreIds.length === 0) {

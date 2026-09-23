@@ -96,6 +96,8 @@ export const subjectsBulkSchema = z.object({
         'CBC_SENIOR_SCHOOL',
         '844_SECONDARY',
     ]),
+    /** Only these standard codes from the band; omitted means the whole band. */
+    codes: z.array(z.string().trim().min(1).max(20)).min(1).max(100).optional(),
 });
 
 export const subjectCombinationSchema = z.object({

@@ -4,19 +4,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
-interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface Stream { id: string; grade_id: string; name: string; full_name: string; }
-interface Subject { id: string; name: string; code: string; academic_level_id: string; }
 
 export default function ClassesPage() {
   const { profile } = useAuth();
   
-  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [selectedCalGradeId, setSelectedCalGradeId] = useState('');
@@ -24,7 +22,6 @@ export default function ClassesPage() {
   const [calMsg, setCalMsg] = useState('');
   const [calSaving, setCalSaving] = useState(false);
   const [newStream, setNewStream] = useState({ name: '', full_name: '' });
-  const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '' });
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
@@ -38,9 +35,7 @@ export default function ClassesPage() {
         streamsRes.json(),
       ]);
 
-      setAcademicLevels(structureData.academic_levels || []);
       setGrades(structureData.grades || []);
-      setSubjects(structureData.subjects || []);
       setStreams(streamsData.data || []);
       
     } catch (err) {
@@ -83,15 +78,8 @@ export default function ClassesPage() {
     setCalMsg('');
     try {
       const url = `/api/admin/academic-structure?type=${type}&id=${id}`;
-      let res = await fetch(url, { method: 'DELETE' });
-      let data = await res.json();
-      // A subject with recorded exams needs a second confirmation; its results
-      // are kept, it just leaves the list (same flow as the Subjects page).
-      if (res.status === 409 && typeof data.examCount === 'number') {
-        if (!confirm(`This subject has ${data.examCount} exam(s) recorded. Those results are kept — the subject just stops appearing on your list. Continue?`)) return;
-        res = await fetch(`${url}&force=true`, { method: 'DELETE' });
-        data = await res.json();
-      }
+      const res = await fetch(url, { method: 'DELETE' });
+      const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setCalMsg('✅ Deleted successfully');
       await fetchAllData();
@@ -125,7 +113,7 @@ export default function ClassesPage() {
     <div className="w-full max-w-7xl mx-auto pb-10">
       <PageHeader
         title="Manage Classes"
-        description="Select a grade to add or remove its class streams, and manage the subjects taught at your school."
+        description="Select a grade to add or remove its class streams."
         breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Classes' }]}
       />
 
@@ -216,69 +204,23 @@ export default function ClassesPage() {
               </div>
             )}
 
-            {/* Subjects Card */}
-            <div className="card">
-              <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📚 Subjects</h3>
-              
-              <div className="bg-muted border border-border rounded-md p-3 flex flex-wrap gap-3 mb-4 items-end">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-muted-foreground mb-2">Subject Name *</label>
-                  <input className="input-field w-full text-sm" placeholder="e.g. Mathematics" value={newSubject.name} onChange={e => setNewSubject(p => ({ ...p, name: e.target.value }))} />
-                </div>
-                <div className="w-24">
-                  <label className="block text-xs text-muted-foreground mb-2">Code *</label>
-                  <input className="input-field input-field-mono w-full text-sm font-mono uppercase" placeholder="MAT" value={newSubject.code} onChange={e => setNewSubject(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
-                </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-muted-foreground mb-2">Academic Level *</label>
-                  <select className="input-field w-full text-sm" value={newSubject.academic_level_id} onChange={e => setNewSubject(p => ({ ...p, academic_level_id: e.target.value }))}>
-                    <option value="">-- Select --</option>
-                    {academicLevels.map(al => (
-                      <option key={al.id} value={al.id}>{al.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <button type="button" onClick={async () => {
-                  if (await postStructure('subject', newSubject)) {
-                    setNewSubject({ name: '', code: '', academic_level_id: '' });
-                  }
-                }} className="btn-primary text-sm py-2 px-4 whitespace-nowrap" disabled={calSaving || !newSubject.name.trim() || !newSubject.code.trim() || !newSubject.academic_level_id}>
-                  {calSaving ? '...' : '+ Add Subject'}
-                </button>
+            {/* Subjects are chosen from the national catalogue on their own page —
+                a free-text form here used to invent codes that matched nothing. */}
+            <Link
+              href="/dashboard/subjects"
+              className="card group flex flex-col gap-3 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <h3 className="font-bold text-lg font-[family-name:var(--font-display)]">📚 Subjects</h3>
+                <p className="text-sm text-muted-foreground">
+                  Pick the subjects your school offers, set up senior school combinations and assign subject teachers.
+                </p>
               </div>
-
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <table className="data-table w-full sm:whitespace-nowrap text-left">
-                  <thead className="bg-muted border-b border-border">
-                    <tr>
-                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Code</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Subject Name</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Curriculum</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-muted-foreground"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]">
-                    {subjects.map(sub => (
-                      <tr key={sub.id} className="hover:bg-muted transition-colors">
-                        <td className="px-4 py-3 font-mono text-sm">{sub.code}</td>
-                        <td className="px-4 py-3 font-medium">{sub.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-sm">
-                          {academicLevels.find(l => l.id === sub.academic_level_id)?.code || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button className="text-xs text-red-400 hover:text-red-300" onClick={() => deleteStructure('subject', sub.id)} disabled={calSaving}>🗑 Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {subjects.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-4 text-center text-muted-foreground text-sm">No subjects found.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                Manage subjects
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden />
+              </span>
+            </Link>
           </div>
         </div>
       )}

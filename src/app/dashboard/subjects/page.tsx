@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SubjectTeachersTab } from '@/components/subjects/SubjectTeachersTab';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Search, BookOpen, Plus, RotateCcw, Layers, Users } from 'lucide-react';
-import { PREDEFINED_SUBJECTS, EducationLevel } from '@/lib/subject-definitions';
 import { isSubjectOfferedAtGrade, subjectBandLabel } from '@/lib/curriculum-bands';
 import CombinationsManager from '@/components/subjects/CombinationsManager';
+import SubjectCatalogueChecklist from '@/components/subjects/SubjectCatalogueChecklist';
 import SubjectEnrollmentManager from '@/components/subjects/SubjectEnrollmentManager';
 import type { SubjectCombination } from '@/types';
 
@@ -50,9 +50,7 @@ export default function SubjectsPage() {
     const [calSaving, setCalSaving] = useState(false);
     const [calMsg, setCalMsg] = useState('');
     const [newSubject, setNewSubject] = useState({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL', subject_type: 'CORE' });
-    const [selectedLevelFilter, setSelectedLevelFilter] = useState<EducationLevel | ''>('');
     const [tableLevelFilter, setTableLevelFilter] = useState('');
-    const [selectedPredefinedSubject, setSelectedPredefinedSubject] = useState('');
 
     const fetchSubjects = async () => {
         try {
@@ -97,44 +95,6 @@ export default function SubjectsPage() {
             await fetchSubjects();
         } catch (err) { setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`); }
         finally { setCalSaving(false); }
-    };
-
-    /**
-     * How many of this band's standard subjects the school does not yet have.
-     *
-     * Matched on code, never on name: MATH_LP and MATH_UP are both called
-     * "Mathematics", and a school running both bands needs both rows.
-     */
-    const missingStandard = useMemo(() => {
-        if (!selectedLevelFilter) return [];
-        const have = new Set(subjects.map(s => (s.code || '').trim().toUpperCase()).filter(Boolean));
-        return PREDEFINED_SUBJECTS.filter(
-            s => s.level === selectedLevelFilter && !have.has(s.code.trim().toUpperCase()),
-        );
-    }, [subjects, selectedLevelFilter]);
-
-    const addStandardSubjects = async () => {
-        if (!selectedLevelFilter || missingStandard.length === 0) return;
-        setCalSaving(true); setCalMsg('');
-        try {
-            const res = await fetch('/api/admin/academic-structure', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'subjects_bulk', level: selectedLevelFilter }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed');
-            setCalMsg(
-                data.created === 0
-                    ? 'Already up to date — nothing to add.'
-                    : `Added ${data.created} subject${data.created === 1 ? '' : 's'}${data.skipped ? `, skipped ${data.skipped} you already have` : ''}.`,
-            );
-            await fetchSubjects();
-        } catch (err) {
-            setCalMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        } finally {
-            setCalSaving(false);
-        }
     };
 
     /**
@@ -203,8 +163,6 @@ export default function SubjectsPage() {
 
     const resetForm = () => {
         setNewSubject({ name: '', code: '', academic_level_id: '', category: 'TECHNICAL', subject_type: 'CORE' });
-        setSelectedPredefinedSubject('');
-        setSelectedLevelFilter('');
     };
 
     if (loading) return <ContentSkeleton message="Loading subjects..." />;
@@ -213,7 +171,7 @@ export default function SubjectsPage() {
         <div>
             <PageHeader
                 title="Subject Management"
-                description="Manage subjects, assign categories, and organize by curriculum level."
+                description="Choose the subjects your school offers, set up senior school combinations and assign subject teachers."
                 breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Academic Structure', href: '/dashboard/settings' }, { label: 'Subjects' }]}
             />
 
@@ -241,10 +199,10 @@ export default function SubjectsPage() {
             </div>
 
             {activeTab === 'teachers' ? (
-                <SubjectTeachersTab grades={grades as any} streams={gradeStreams} />
+                <SubjectTeachersTab grades={grades} streams={gradeStreams} />
             ) : activeTab === 'combinations' ? (
                 <CombinationsManager
-                    combinations={combinations as any}
+                    combinations={combinations}
                     subjects={subjects}
                     cbcLevelId={academicLevels.find(l => l.code === 'CBC')?.id}
                     minGroupSize={minGroupSize}
@@ -259,92 +217,24 @@ export default function SubjectsPage() {
                 </div>
             )}
 
-            {/* Add Subject Form */}
             {role === 'ADMIN' && (
-                <div className="card p-5 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-sm flex items-center gap-2">
-                            <BookOpen size={16} className="text-primary" /> Add Subject
-                        </h3>
-                        {newSubject.name || newSubject.code || selectedPredefinedSubject ? (
-                            <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={resetForm} title="Reset form">
-                                <RotateCcw size={14} />
-                            </button>
-                        ) : null}
-                    </div>
+                <>
+                    <SubjectCatalogueChecklist offered={subjects} onChanged={fetchSubjects} onMessage={setCalMsg} />
 
-                    {/* Grouped fields row 1: System filter + Predefined subject */}
-                    <div className="flex flex-wrap gap-3 mb-4 p-3.5 bg-muted/30 rounded-lg border border-border/50">
-                        <div className="flex-1 min-w-[200px]">
-                            <label className="block text-xs text-muted-foreground mb-2 font-medium">System / Level</label>
-                            <select
-                                className="input-field w-full text-sm"
-                                value={selectedLevelFilter}
-                                onChange={e => {
-                                    setSelectedLevelFilter(e.target.value as EducationLevel);
-                                    setSelectedPredefinedSubject('');
-                                }}
-                            >
-                                <option value="">All Levels</option>
-                                <option value="CBC_LOWER_PRIMARY">CBC Lower Primary</option>
-                                <option value="CBC_UPPER_PRIMARY">CBC Upper Primary</option>
-                                <option value="CBC_JUNIOR_SCHOOL">CBC Junior School</option>
-                                <option value="CBC_SENIOR_SCHOOL">CBC Senior School</option>
-                                <option value="844_SECONDARY">8-4-4 Secondary</option>
-                            </select>
-
-                            {/* The whole band at once. The picker beside this adds
-                                one subject at a time, which is why most schools
-                                typed their own names instead — and hand-typed codes
-                                are what put a Grade 10 subject on offer to Grade 4. */}
-                            {selectedLevelFilter && (
-                                <button
-                                    type="button"
-                                    onClick={addStandardSubjects}
-                                    disabled={calSaving || missingStandard.length === 0}
-                                    className="btn-secondary mt-2 w-full text-xs disabled:opacity-60"
-                                >
-                                    {missingStandard.length === 0
-                                        ? 'All standard subjects added'
-                                        : `Add all ${missingStandard.length} standard subject${missingStandard.length === 1 ? '' : 's'}`}
+                    {/* A subject the national list doesn't have stays private to
+                        this school (origin_school_id), so it can't leak elsewhere. */}
+                    <details className="card mb-6 p-5 group">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-bold [&::-webkit-details-marker]:hidden">
+                            <span className="flex items-center gap-2"><Plus size={16} className="text-primary" /> Add a subject that isn&apos;t in the national list</span>
+                            {(newSubject.name || newSubject.code) && (
+                                <button type="button" className="btn-icon text-muted-foreground hover:text-foreground" onClick={e => { e.preventDefault(); resetForm(); }} title="Reset form">
+                                    <RotateCcw size={14} />
                                 </button>
                             )}
-                        </div>
-                        <div className="flex-[2] min-w-[240px]">
-                            <label className="block text-xs text-muted-foreground mb-2 font-medium">Predefined Subject</label>
-                            <select
-                                className="input-field w-full text-sm"
-                                value={selectedPredefinedSubject}
-                                onChange={e => {
-                                    setSelectedPredefinedSubject(e.target.value);
-                                    if (!e.target.value) return;
-                                    const [name, code] = e.target.value.split('|');
-                                    const subj = PREDEFINED_SUBJECTS.find(s => s.name === name && s.code === code);
-                                    if (subj) {
-                                        const levelCode = subj.level.startsWith('CBC') ? 'CBC' : subj.level.startsWith('844') ? '844' : '';
-                                        const matchedLevel = academicLevels.find(al => al.code === levelCode);
-                                        setNewSubject(p => ({
-                                            ...p,
-                                            name: subj.name,
-                                            code: subj.code,
-                                            category: subj.category || 'TECHNICAL',
-                                            subject_type: subj.isCore ? 'CORE' : 'OPTIONAL',
-                                            academic_level_id: matchedLevel?.id || p.academic_level_id,
-                                        }));
-                                    }
-                                }}
-                            >
-                                <option value="">Custom / Select predefined...</option>
-                                {PREDEFINED_SUBJECTS.filter(s => !selectedLevelFilter || s.level === selectedLevelFilter).map(s => {
-                                    const pathwayLabel = s.pathway === 'STEM' ? ' — STEM' : s.pathway === 'ARTS_SPORTS' ? ' — Arts & Sports' : s.pathway === 'SOCIAL_SCIENCES' ? ' — Social Sciences' : s.isCore && s.level === 'CBC_SENIOR_SCHOOL' ? ' — Core' : '';
-                                    return (
-                                        <option key={s.name + s.code} value={`${s.name}|${s.code}`}>{s.name} ({s.code}){pathwayLabel}</option>
-                                    );
-                                })}
-                            </select>
-                        </div>
-                    </div>
-
+                        </summary>
+                        <p className="mt-2 mb-4 text-xs text-muted-foreground">
+                            Only for something your school teaches that has no official code. Official subjects are ticked in the list above.
+                        </p>
                     {/* Grouped fields row 2: Name, Code, Category, Type, Academic Level */}
                     <div className="flex flex-wrap gap-3 items-end">
                         <div className="flex-[2] min-w-[180px]">
@@ -388,7 +278,8 @@ export default function SubjectsPage() {
                             {calSaving ? 'Saving...' : <><Plus size={14} /> Add Subject</>}
                         </button>
                     </div>
-                </div>
+                    </details>
+                </>
             )}
 
             {/* Subject Table */}
