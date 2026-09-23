@@ -247,17 +247,21 @@ export function ReportCardLayoutProgress({ data, qrCodeDataUri }: { data: Report
                             <Text style={p.statValue}>{overallGrade || `${Math.round(data.overallPercentage)}%`}</Text>
                             <Text style={p.statLabel}>Mean Grade</Text>
                         </View>
-                        <View style={p.statDivider} />
-                        <View style={p.statCell}>
-                            <Text style={p.statValue}>{data.classRank > 0 ? data.classRank : '—'}</Text>
-                            <Text style={p.statLabel}>Class Rank{data.totalStudents ? ` of ${data.totalStudents}` : ''}</Text>
-                        </View>
-                        {data.combinationRank !== undefined && (
+                        {data.showPositions && (
                             <>
                                 <View style={p.statDivider} />
                                 <View style={p.statCell}>
-                                    <Text style={p.statValue}>{data.combinationRank}</Text>
-                                    <Text style={p.statLabel}>Pathway Rank{data.combinationSize ? ` of ${data.combinationSize}` : ''}</Text>
+                                    <Text style={p.statValue}>{data.classRank > 0 ? data.classRank : '—'}</Text>
+                                    <Text style={p.statLabel}>Class Rank{data.totalStudents ? ` of ${data.totalStudents}` : ''}</Text>
+                                </View>
+                            </>
+                        )}
+                        {data.showPositions && data.overallRank !== undefined && (
+                            <>
+                                <View style={p.statDivider} />
+                                <View style={p.statCell}>
+                                    <Text style={p.statValue}>{data.overallRank}</Text>
+                                    <Text style={p.statLabel}>Overall Rank{data.overallSize ? ` of ${data.overallSize}` : ''}</Text>
                                 </View>
                             </>
                         )}

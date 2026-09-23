@@ -19,7 +19,8 @@ import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
-import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { computeGradePositions } from '@/lib/reports/grade-positions';
+import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import { buildVerifyUrl, resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
@@ -434,25 +435,26 @@ export async function GET(
         const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
         const rankedStudentCount = aggregates.length;
 
-        // 7.5 CBC senior pathway ranking: rank each assigned student
-        // within their grade-wide subject-combination group (all streams
-        // of the same grade, same combination) — 8-4-4 is untouched.
-        let combinationRankInfo = new Map<string, { rank: number; size: number }>();
-        const streamCombinationIds = [...new Set(
-            students.map((s: any) => s.subject_combination_id).filter(Boolean)
-        )] as string[];
-
-        if (gradingSystemType === 'CBC' && streamCombinationIds.length > 0 && gradeId && termId) {
-            combinationRankInfo = await computeCombinationRanks(supabase, {
-                schoolId: targetSchoolId || userSchoolId,
+        // 7.5 Overall positions: every stream of the grade ranked together
+        // (CBC Senior School optionally by pathway or combination). CBC cards
+        // print positions only when the school has switched ranking on.
+        const rankingSchoolId = targetSchoolId || userSchoolId;
+        const rankingSettings = await loadRankingSettings(supabase, rankingSchoolId);
+        const showPositions = ranksCurriculum(rankingSettings, gradingSystemType);
+        const gradePositions = showPositions && gradeId
+            ? await computeGradePositions(supabase, {
+                schoolId: rankingSchoolId,
                 gradeId,
-                fallbackStreamId: classId,
-                combinationIds: streamCombinationIds,
                 termId,
                 yearId,
+                round: roundSelection.round,
                 gradingScales,
-            });
-        }
+                gradingSystemType,
+                seniorRankGroup: rankingSettings.seniorRankGroup,
+            })
+            : null;
+        const overallPositionOf = (studentId: string) =>
+            gradePositions?.differsFromStream ? gradePositions.byStudent.get(studentId) : undefined;
 
         // Comparatives shared by every card in the batch: the class mean per
         // subject, the round before this one (deviation + change figures) and
@@ -625,8 +627,10 @@ export async function GET(
                 trackName: (student as any).track || undefined,
                 combinationCode: ((student as any).subject_combinations as any)?.code || undefined,
                 combinationName: ((student as any).subject_combinations as any)?.name || undefined,
-                combinationRank: combinationRankInfo.get(student.id)?.rank,
-                combinationSize: combinationRankInfo.get(student.id)?.size,
+                showPositions,
+                overallRank: overallPositionOf(student.id)?.rank,
+                overallSize: overallPositionOf(student.id)?.size,
+                overallRankLabel: overallPositionOf(student.id)?.label,
                 classMeanPercentage,
                 previousExamLabel: previousRound?.label,
                 previousOverallPercentage: previousRound?.overall.get(student.id)?.percentage,

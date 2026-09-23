@@ -72,6 +72,8 @@ const m = StyleSheet.create({
     cPoints: { width: '9%', textAlign: 'center' },
     cRank: { width: '9%', textAlign: 'center' },
     cComment: { width: '24%' },
+    /** Remarks take the rank column's width when the card prints no positions. */
+    cCommentWide: { width: '33%' },
 
     /* Comments */
     commentsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 28, marginBottom: 12 },
@@ -90,6 +92,7 @@ const m = StyleSheet.create({
 
 export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
     const isKCSE = data.gradingSystemType === 'KCSE';
+    const commentCol = data.showPositions ? m.cComment : m.cCommentWide;
     const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, mk) => sum + (mk.score || 0), 0);
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const overallGrade = data.overallPointsGrade || data.overallGrade;
@@ -133,16 +136,18 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                     <Text style={m.statLabel}>Grade</Text>
                     <Text style={[m.statValue, { color: gradeColor(overallGrade) }]}>{overallGrade || '—'}</Text>
                 </View>
-                {data.combinationRank !== undefined && (
+                {data.showPositions && (
                     <View style={m.statTile}>
-                        <Text style={m.statLabel}>Pathway Rank</Text>
-                        <Text style={m.statValue}>{`${data.combinationRank}/${data.combinationSize}`}</Text>
+                        <Text style={m.statLabel}>Class Rank</Text>
+                        <Text style={m.statValue}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text>
                     </View>
                 )}
-                <View style={m.statTile}>
-                    <Text style={m.statLabel}>Class Rank</Text>
-                    <Text style={m.statValue}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text>
-                </View>
+                {data.showPositions && data.overallRank !== undefined && (
+                    <View style={m.statTile}>
+                        <Text style={m.statLabel}>Overall Rank</Text>
+                        <Text style={m.statValue}>{`${data.overallRank}/${data.overallSize}`}</Text>
+                    </View>
+                )}
                 <View style={m.statTile}>
                     <Text style={m.statLabel}>{isKCSE && data.totalPoints !== undefined ? 'Points' : 'Total Marks'}</Text>
                     <Text style={m.statValue}>{isKCSE && data.totalPoints !== undefined ? data.totalPoints : totalScore}</Text>
@@ -157,8 +162,8 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                     <Text style={[m.th, m.cScore]}>Score</Text>
                     <Text style={[m.th, m.cGrade]}>Grade</Text>
                     <Text style={[m.th, m.cPoints]}>Pts</Text>
-                    <Text style={[m.th, m.cRank]}>Rank</Text>
-                    <Text style={[m.th, m.cComment]}>Remarks</Text>
+                    {data.showPositions && <Text style={[m.th, m.cRank]}>Rank</Text>}
+                    <Text style={[m.th, commentCol]}>Remarks</Text>
                 </View>
                 {data.subjectMarks.map((sm, idx) => {
                     const pct = sm.percentage ?? 0;
@@ -179,8 +184,8 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                                 </View>
                             </View>
                             <Text style={[m.td, m.cPoints]}>{sm.points ?? '—'}</Text>
-                            <Text style={[m.td, m.cRank]}>{rankText}</Text>
-                            <Text style={[m.tdMuted, m.cComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
+                            {data.showPositions && <Text style={[m.td, m.cRank]}>{rankText}</Text>}
+                            <Text style={[m.tdMuted, commentCol]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                         </View>
                     );
                 })}
@@ -190,8 +195,8 @@ export function ReportCardLayoutModern({ data, qrCodeDataUri }: { data: ReportCa
                     <Text style={[m.tdBold, m.cScore, { color: INDIGO_DARK }]}>{Math.round(data.overallPercentage)}%</Text>
                     <Text style={[m.tdBold, m.cGrade, { color: gradeColor(overallGrade) }]}>{overallGrade || '—'}</Text>
                     <Text style={[m.tdBold, m.cPoints, { color: INDIGO_DARK }]}>{data.totalPoints ?? '—'}</Text>
-                    <Text style={[m.tdBold, m.cRank, { color: INDIGO_DARK }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                    <Text style={[m.tdBold, m.cComment]}></Text>
+                    {data.showPositions && <Text style={[m.tdBold, m.cRank, { color: INDIGO_DARK }]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>}
+                    <Text style={[m.tdBold, commentCol]}></Text>
                 </View>
             </View>
 

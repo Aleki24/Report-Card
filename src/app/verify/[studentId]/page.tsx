@@ -153,10 +153,12 @@ export default async function VerifyResultsPage({
                 <SummaryTile label="Mean score" value={`${summary.mean}%`} />
                 <SummaryTile label="Grade" value={summary.grade || '—'} />
                 {summary.totalPoints != null && <SummaryTile label="Points" value={String(summary.totalPoints)} />}
-                <SummaryTile
-                    label="Position"
-                    value={summary.classRank ? `${summary.classRank}${summary.totalStudents ? ` / ${summary.totalStudents}` : ''}` : '—'}
-                />
+                {summary.classRank != null && (
+                    <SummaryTile
+                        label="Position"
+                        value={`${summary.classRank}${summary.totalStudents ? ` / ${summary.totalStudents}` : ''}`}
+                    />
+                )}
                 <SummaryTile label="Subjects" value={String(summary.subjectCount)} />
             </section>
 

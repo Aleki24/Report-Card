@@ -278,10 +278,12 @@ function ReportCardsTab() {
                                 <span className="mb-1 block text-xs font-semibold text-muted-foreground">Overall Average</span>
                                 <strong className={`text-lg ${(rc.overall_average || 0) >= 50 ? 'text-emerald-600' : 'text-destructive'}`}>{rc.overall_average != null ? `${rc.overall_average}%` : '—'}</strong>
                             </div>
-                            <div>
-                                <span className="mb-1 block text-xs font-semibold text-muted-foreground">Class Position</span>
-                                <strong className="text-lg text-foreground">{rc.overall_position || '—'}</strong>
-                            </div>
+                            {rc.overall_position != null && (
+                                <div>
+                                    <span className="mb-1 block text-xs font-semibold text-muted-foreground">Class Position</span>
+                                    <strong className="text-lg text-foreground">{rc.overall_position}</strong>
+                                </div>
+                            )}
                             {attendPct != null && (
                                 <div>
                                     <span className="mb-1 block text-xs font-semibold text-muted-foreground">Attendance</span>
