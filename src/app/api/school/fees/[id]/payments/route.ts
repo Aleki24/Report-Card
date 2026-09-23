@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
+import { canViewStudentRecords, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { FEE_VIEWER_ROLES, FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
 
 interface FeeRecordAccess {
     ok: true;
     role: string;
+    userId: string;
     fee: { id: string; school_id: string; student_id: string; total_fee: number; paid_amount: number; status: string };
 }
 interface FeeRecordAccessError {
@@ -18,10 +18,9 @@ interface FeeRecordAccessError {
 async function getFeeRecordForCaller(
     supabase: ReturnType<typeof createSupabaseAdmin>,
     feeId: string,
-    userId: string
 ): Promise<FeeRecordAccess | FeeRecordAccessError> {
-    const userProfile = await getActiveUserProfile(userId);
-    if (!userProfile) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    const caller = await getCaller();
+    if (!caller) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
     const { data: fee } = await supabase
         .from('student_fees')
@@ -29,27 +28,22 @@ async function getFeeRecordForCaller(
         .eq('id', feeId)
         .maybeSingle();
 
-    if (!fee || fee.school_id !== userProfile.school_id) {
+    if (!fee || fee.school_id !== caller.schoolId) {
         return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
     }
-    if (userProfile.role === 'STUDENT' && fee.student_id !== userId) {
-        return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-    }
-    if (!FEE_VIEWER_ROLES.includes(userProfile.role)) {
+    // Students see their own fees, class teachers their class's, admins all.
+    if (!(await canViewStudentRecords(caller, fee.student_id))) {
         return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
 
-    return { ok: true, role: userProfile.role, fee };
+    return { ok: true, role: caller.role, userId: caller.userId, fee };
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
         const supabase = createSupabaseAdmin();
         const { id } = await params;
-        const result = await getFeeRecordForCaller(supabase, id, userId);
+        const result = await getFeeRecordForCaller(supabase, id);
         if (!result.ok) return result.response;
 
         const { data, error } = await supabase
@@ -68,13 +62,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
         const supabase = createSupabaseAdmin();
         const { id } = await params;
 
-        const result = await getFeeRecordForCaller(supabase, id, userId);
+        const result = await getFeeRecordForCaller(supabase, id);
         if (!result.ok) return result.response;
         if (result.role === 'STUDENT') {
             return NextResponse.json({ error: 'Only staff can record payments' }, { status: 403 });
@@ -117,7 +108,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 payer_name: payer_name || null,
                 phone_number: phone_number || null,
                 mpesa_receipt_number: methodValue === 'MPESA' ? (mpesa_receipt_number || null) : null,
-                recorded_by: userId,
+                recorded_by: result.userId,
             })
             .select()
             .single();

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
@@ -8,7 +8,6 @@ import {
     gradeSymbolFromScales,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
-import { canStaffReportOnStream } from '@/lib/reports/report-access';
 
 const MAX_STUDENT_IDS = 500;
 
@@ -23,30 +22,19 @@ interface SendSMSBody {
 
 export async function POST(request: Request) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-
-        const supabase = createSupabaseAdmin();
-
-        // Resolve and authorize the caller
-        const { data: caller } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!caller || caller.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER'].includes(caller.role)) {
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
-        const schoolId = caller.school_id;
+        const { userId, schoolId } = caller;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
+
+        const supabase = createSupabaseAdmin();
 
         // Rate-limit SMS sends per caller
         const limit = rateLimit(`sms-send:${userId}`, { maxRequests: 5, windowMs: 60_000 });
@@ -62,6 +50,11 @@ export async function POST(request: Request) {
                 { error: 'studentIds, termId, academicYearId, and gradeStreamId are required' },
                 { status: 400 }
             );
+        }
+
+        // A class teacher texts their own class's guardians, nobody else's.
+        if (caller.role === 'CLASS_TEACHER' && !caller.classStreamIds.includes(gradeStreamId)) {
+            return NextResponse.json({ error: 'You can only send results for your own class.' }, { status: 403 });
         }
 
         if (studentIds.length > MAX_STUDENT_IDS) {
@@ -81,15 +74,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: studentsErr.message }, { status: 500 });
         }
 
-        // A class teacher texts their own class's parents, not the school's.
-        // School membership was the only check, so any class teacher could
-        // send any learner's results to that learner's guardian.
-        if (!(await canStaffReportOnStream({ role: caller.role, userId }, gradeStreamId))) {
-            return NextResponse.json({ error: 'Only administrators and the class teacher can send results for this class.' }, { status: 403 });
-        }
-
-        // Tenant-scope: only keep students that belong to the caller's school
-        // and to the class named in the request.
+        // Tenant-scope: only keep students that belong to the caller's school.
+        // Class-scope too: the results sent are this class's, so a student
+        // from another class would get a message about the wrong ranking.
         const students = (allStudents || []).filter(
             (s: any) => s.users?.school_id === schoolId && s.current_grade_stream_id === gradeStreamId
         );

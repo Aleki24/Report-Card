@@ -202,36 +202,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    // The exam must belong to the caller's school whatever their role. Only
-    // teachers were checked before, so an admin could write marks against
-    // another school's exam by id.
-    const { data: examRow } = await supabase.from('exams').select('*').eq('id', exam_id).maybeSingle();
-    if (!examRow || examRow.school_id !== schoolId) {
+    // The exam must be this school's — for admins too, who were never checked.
+    const { data: exam } = await supabase.from('exams').select('*').eq('id', exam_id).maybeSingle();
+    if (!exam || exam.school_id !== schoolId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
       const perms = await getTeacherPermissions(userId);
-      if (!isExamVisibleToTeacher(examRow, perms, userId)) {
+      if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    // Validate only the students in this payload. This used to load every
-    // student in the school, which PostgREST caps at 1,000 rows, so in a
-    // larger school valid learners past the cap were refused as invalid.
-    const payloadStudentIds = Array.from(new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id))));
-    const { data: schoolUsers, error: schoolUsersError } = payloadStudentIds.length > 0
+    // Validate just the submitted students. Listing every student in the
+    // school first hit PostgREST's 1,000-row cap, after which a large
+    // school's valid learners were rejected as "Invalid student ID".
+    const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
+    const { data: schoolStudents } = submittedIds.length
       ? await supabase
           .from('users')
           .select('id')
           .eq('school_id', schoolId)
           .eq('role', 'STUDENT')
-          .in('id', payloadStudentIds)
-      : { data: [], error: null };
-    if (schoolUsersError) return NextResponse.json({ error: schoolUsersError.message }, { status: 400 });
+          .in('id', submittedIds)
+      : { data: [] as { id: string }[] };
 
-    const validStudentIds = new Set((schoolUsers || []).map(u => u.id));
+    const validStudentIds = new Set((schoolStudents || []).map(u => u.id));
     for (const m of marks) {
       if (!validStudentIds.has(m.student_id)) {
          return NextResponse.json({ error: 'Invalid student ID' }, { status: 400 });
@@ -241,6 +237,11 @@ export async function POST(request: NextRequest) {
     // Multi-paper exams: resolve per-paper scores into the final subject
     // score server-side (the stored exam_marks row stays the single
     // resolved score every downstream consumer already uses).
+    const { data: examRow } = await supabase
+      .from('exams')
+      .select('id, max_score')
+      .eq('id', exam_id)
+      .maybeSingle();
     const scheme = await fetchActiveMultiPaperScheme(supabase, exam_id);
     const componentRows: { exam_id: string; subject_id?: string; student_id: string; component_id: string; raw_score: number }[] = [];
 

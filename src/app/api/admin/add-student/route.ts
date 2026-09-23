@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { canManageStream, getCaller } from '@/lib/auth-server';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
@@ -8,12 +8,6 @@ import { writeErrorMessage } from '@/lib/api-errors';
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user_id = userId;
         const body = await request.json();
         const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth, avatar_url, pathway, track, subject_combination_id } = body;
 
@@ -26,42 +20,26 @@ export async function POST(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller is an ADMIN or CLASS_TEACHER
-        const { data: adminProfile } = await supabaseAdmin
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', user_id)
-            .maybeSingle();
-
-        if (!adminProfile || adminProfile.is_active === false) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!adminProfile.school_id) {
+        if (!caller.schoolId) {
             return NextResponse.json({ error: 'You must have a school to add students.' }, { status: 403 });
         }
 
-        const isAdmin = adminProfile.role === 'ADMIN';
-        const isClassTeacher = adminProfile.role === 'CLASS_TEACHER';
-
-        if (!isAdmin && !isClassTeacher) {
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Only admins and class teachers can add students.' }, { status: 403 });
         }
 
-        // If class teacher, verify they're adding a student to their assigned stream
-        if (isClassTeacher && grade_stream_id) {
-            const { data: teacherAssignment } = await supabaseAdmin
-                .from('class_teachers')
-                .select('current_grade_stream_id')
-                .eq('user_id', user_id)
-                .maybeSingle();
-            
-            if (!teacherAssignment || teacherAssignment.current_grade_stream_id !== grade_stream_id) {
-                return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
-            }
+        // A class teacher adds students to their own class only — including
+        // not leaving one unassigned, which put it outside every class.
+        if (!canManageStream(caller, grade_stream_id)) {
+            return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
         }
 
-        const effectiveSchoolId = adminProfile.school_id;
+        const effectiveSchoolId = caller.schoolId;
 
         // Admission number is optional and is never invented for the school.
         // Left blank, the student is stored without one and the column stays

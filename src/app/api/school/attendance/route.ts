@@ -1,38 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { canManageStream, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { TEACHING_ROLES } from '@/lib/staff-roles';
 
+/**
+ * Registers are kept by admins and by each class's own teacher. Reading one
+ * used to need nothing but a school — a student could pull any class's list —
+ * and any teacher could mark any class.
+ */
 async function getSession() {
-  const { userId } = await auth();
-  if (!userId) return null;
-
-  const supabase = createSupabaseAdmin();
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('school_id, role, is_active')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (!userProfile || userProfile.is_active === false) return null;
-
-  return {
-    userId,
-    schoolId: userProfile.school_id as string | null,
-    role: userProfile.role,
-  };
+  const caller = await getCaller();
+  if (!caller || (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER')) return null;
+  return caller;
 }
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await getSession();
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    // A class register is staff material, same as recording it (POST below).
-    // Learners read their own attendance through /api/school/student/attendance.
-    if (!TEACHING_ROLES.includes(auth.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { schoolId } = auth;
     if (!schoolId) return NextResponse.json({ data: [] });
@@ -56,6 +40,9 @@ export async function GET(request: NextRequest) {
 
     if (!stream || stream.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid stream for your school' }, { status: 403 });
+    }
+    if (!canManageStream(auth, stream.id)) {
+      return NextResponse.json({ error: 'You can only take attendance for your own class.' }, { status: 403 });
     }
 
     // Get all students in this stream (school-scoped)
@@ -112,11 +99,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await getSession();
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(auth.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { schoolId, userId } = auth;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
@@ -140,6 +123,9 @@ export async function POST(request: NextRequest) {
     if (!stream || stream.school_id !== schoolId) {
       return NextResponse.json({ error: 'Invalid stream for your school' }, { status: 403 });
     }
+    if (!canManageStream(auth, stream.id)) {
+      return NextResponse.json({ error: 'You can only take attendance for your own class.' }, { status: 403 });
+    }
 
     // Validate all student IDs belong to this school
     const studentIds = records.map((r: any) => r.student_id);
@@ -147,6 +133,7 @@ export async function POST(request: NextRequest) {
       .from('students')
       .select('id, users!inner(school_id)')
       .in('id', studentIds)
+      .eq('current_grade_stream_id', stream_id)
       .eq('users.school_id', schoolId);
 
     const validIds = new Set((validStudents || []).map((s: any) => s.id));
@@ -154,6 +141,12 @@ export async function POST(request: NextRequest) {
       if (!validIds.has(r.student_id)) {
         return NextResponse.json({ error: `Invalid student ID: ${r.student_id}` }, { status: 400 });
       }
+    }
+
+    const STATUSES = new Set(['present', 'absent', 'late', 'excused']);
+    const badStatus = records.find((r: { status?: unknown }) => typeof r.status !== 'string' || !STATUSES.has(r.status));
+    if (badStatus) {
+      return NextResponse.json({ error: 'Each record needs a status of present, absent, late or excused' }, { status: 400 });
     }
 
     // Upsert attendance records
@@ -185,11 +178,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const auth = await getSession();
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    if (!['ADMIN', 'CLASS_TEACHER'].includes(auth.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { schoolId, userId } = auth;
     if (!schoolId) return NextResponse.json({ error: 'No school associated' }, { status: 403 });
@@ -207,13 +196,16 @@ export async function DELETE(request: NextRequest) {
     // Verify the student belongs to this school
     const { data: student } = await supabase
       .from('students')
-      .select('id, users!inner(school_id)')
+      .select('id, current_grade_stream_id, users!inner(school_id)')
       .eq('id', studentId)
       .eq('users.school_id', schoolId)
       .maybeSingle();
 
     if (!student) {
       return NextResponse.json({ error: 'Student not found in your school' }, { status: 404 });
+    }
+    if (!canManageStream(auth, student.current_grade_stream_id)) {
+      return NextResponse.json({ error: 'You can only change attendance for your own class.' }, { status: 403 });
     }
 
     const { error } = await supabase

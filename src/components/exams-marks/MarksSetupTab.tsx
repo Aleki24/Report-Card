@@ -26,8 +26,7 @@ interface ExamSlot {
 }
 
 export function MarksSetupTab() {
-  const { profile, availableRoles } = useAuth();
-  const isAlsoSubjectTeacher = profile?.role === 'CLASS_TEACHER' && availableRoles.includes('SUBJECT_TEACHER');
+  const { profile } = useAuth();
 
   // State
   const [terms, setTerms] = useState<Term[]>([]);

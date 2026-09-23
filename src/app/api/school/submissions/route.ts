@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
-import { TEACHING_ROLES } from '@/lib/staff-roles';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 export async function GET() {
     try {
@@ -42,7 +42,7 @@ export async function GET() {
         // at all and receive every school's submissions.
         if (role === 'STUDENT') {
             query = query.eq('student_id', userId);
-        } else if (schoolId && TEACHING_ROLES.includes(role)) {
+        } else if (schoolId && isRoleIn(role, STAFF_TEACHING_ROLES)) {
             query = query.eq('students.users.school_id', schoolId);
         } else {
             return NextResponse.json({ data: [] });

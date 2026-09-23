@@ -3,7 +3,6 @@ import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { mapFeePaymentRow } from '@/lib/fees';
-import { getActiveUserProfile } from '@/lib/auth-server';
 
 /** Payments (usually M-Pesa Paybill) that couldn't be auto-matched to a student's current-term fee record. */
 export async function GET() {
@@ -12,9 +11,15 @@ export async function GET() {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
+        const { data: userProfile } = await supabase
+            .from('users')
+            .select('role, school_id, is_active')
+            .eq('id', userId)
+            .maybeSingle();
 
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+        // Unmatched Paybill money is school-level ledger work, handled from
+        // Settings > Payments, which only admins can open.
+        if (!userProfile || userProfile.role !== 'ADMIN' || userProfile.is_active === false) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

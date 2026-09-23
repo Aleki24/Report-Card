@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import * as XLSX from 'xlsx';
-import { getActiveUserProfile } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-        const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
-        const schoolId = userProfile.school_id;
+        const schoolId = caller.schoolId;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
+
+        const supabase = createSupabaseAdmin();
 
         const { searchParams } = new URL(request.url);
         const termId = searchParams.get('term_id');
@@ -38,6 +35,8 @@ export async function GET(request: NextRequest) {
         if (termId) query = query.eq('term_id', termId);
         if (status) query = query.eq('status', status);
         if (gradeStreamId) query = query.eq('students.current_grade_stream_id', gradeStreamId);
+        // A class teacher's export covers their own class only.
+        if (caller.role === 'CLASS_TEACHER') query = query.in('students.current_grade_stream_id', caller.classStreamIds);
 
         const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;

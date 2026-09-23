@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Sun, Moon, PanelLeftClose, PanelLeft, MoreHorizontal } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
-import { getNavGroups, getPinnedItems, getMobileNav, type NavItem } from "./sidebar/navItems";
+import { getNavGroups, getPinnedItems, getMobileNav, EXACT_MATCH_HREFS, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
 import { Wordmark } from "@/components/Wordmark";
@@ -17,8 +17,6 @@ interface SidebarProps {
     collapsed?: boolean;
     setCollapsed?: (val: boolean) => void;
 }
-
-const EXACT_MATCH_HREFS = new Set(["/dashboard", "/student/dashboard"]);
 
 function isActivePath(pathname: string, href: string) {
     return pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(href));

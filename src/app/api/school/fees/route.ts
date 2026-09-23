@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
+import { canManageStudent, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { FEE_VIEWER_ROLES, computeFeeStatus } from '@/lib/fees';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { computeFeeStatus } from '@/lib/fees';
 
 export async function GET(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -16,18 +15,15 @@ export async function GET(request: NextRequest) {
         const termId = searchParams.get('term_id');
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const schoolId = userProfile.school_id;
-        const role = userProfile.role;
+        const { userId, schoolId, role } = caller;
         if (!schoolId) return NextResponse.json({ data: [] });
-        // Same audience as every other fee route (payments, receipts, export):
-        // this list previously answered any school member, so a subject
-        // teacher or non-teaching staff account could read every learner's
-        // balance.
-        if (!FEE_VIEWER_ROLES.includes(role)) {
+        // Students read their own fees, class teachers their class's, admins
+        // everyone's. Other staff have no fee view at all.
+        if (role !== 'ADMIN' && role !== 'CLASS_TEACHER' && role !== 'STUDENT') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        if (role === 'CLASS_TEACHER' && caller.classStreamIds.length === 0) {
+            return NextResponse.json({ data: [] });
         }
 
         let query = supabase
@@ -35,13 +31,15 @@ export async function GET(request: NextRequest) {
             .select(`
                 id, total_fee, paid_amount, due_date, status, notes, created_at, updated_at,
                 terms ( id, name ),
-                students ( id, admission_number, users ( first_name, last_name ) )
+                students!inner ( id, admission_number, current_grade_stream_id, users ( first_name, last_name ) )
             `)
             .eq('school_id', schoolId);
 
         // Students see only their own fees
         if (role === 'STUDENT') {
             query = query.eq('student_id', userId);
+        } else if (role === 'CLASS_TEACHER') {
+            query = query.in('students.current_grade_stream_id', caller.classStreamIds);
         }
 
         if (termId) {
@@ -76,19 +74,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
-        const schoolId = userProfile.school_id;
+        const schoolId = caller.schoolId;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
 
         const body = await request.json();
@@ -115,6 +110,9 @@ export async function POST(request: NextRequest) {
         ]);
         if (!studentRow) {
             return NextResponse.json({ error: 'Student not found in your school' }, { status: 404 });
+        }
+        if (!(await canManageStudent(caller, student_id))) {
+            return NextResponse.json({ error: 'You can only manage fees for your own class.' }, { status: 403 });
         }
         if (!termRow) {
             return NextResponse.json({ error: 'Term not found in your school' }, { status: 404 });

@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { PASS_MARK } from '@/lib/pass-mark';
-import { STAFF_ROLES } from '@/lib/staff-roles';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -51,9 +51,8 @@ export async function GET(_request: NextRequest) {
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role as string;
 
-    // The staff dashboard (fee arrears, class performance, activity feed).
-    // Learners have their own at /api/school/student/dashboard.
-    if (!STAFF_ROLES.includes(role)) {
+    // School-wide figures are for the people running the school.
+    if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

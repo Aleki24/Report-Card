@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { canManageStream, canManageStudent, getCaller } from '@/lib/auth-server';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 
 export async function PATCH(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const body = await request.json();
         const { 
             student_id, 
@@ -35,20 +30,17 @@ export async function PATCH(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller is an admin or teacher
-        const { data: profile } = await supabaseAdmin
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!profile || profile.is_active === false) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(profile.role) || !profile.school_id) {
-            return NextResponse.json({ error: 'Only admins and teachers can update students.' }, { status: 403 });
+        // Admins edit anyone; a class teacher edits their own class. Any teacher
+        // used to be able to edit — and move — any student in the school.
+        if ((caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') || !caller.schoolId) {
+            return NextResponse.json({ error: 'Only admins and class teachers can update students.' }, { status: 403 });
         }
+        const profile = { school_id: caller.schoolId };
 
         // Verify the student belongs to this school
         const { data: student } = await supabaseAdmin
@@ -60,6 +52,13 @@ export async function PATCH(request: NextRequest) {
 
         if (!student) {
             return NextResponse.json({ error: 'Student not found in your school.' }, { status: 404 });
+        }
+        if (!(await canManageStudent(caller, student_id))) {
+            return NextResponse.json({ error: 'You can only update students in your own class.' }, { status: 403 });
+        }
+        // Moving a student is only allowed into a class the caller also runs.
+        if (grade_stream_id !== undefined && !canManageStream(caller, grade_stream_id || null)) {
+            return NextResponse.json({ error: 'You can only move students into your own class.' }, { status: 403 });
         }
 
         // Build update object for student table

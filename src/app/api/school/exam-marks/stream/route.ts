@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import { getTeacherPermissions, isStreamVisibleToTeacher } from '@/lib/teacher-utils';
-import { TEACHING_ROLES } from '@/lib/staff-roles';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     // check here at all, so any signed-in student could read their whole
     // class's results, released or not.
     const role = userProfile.role;
-    if (!TEACHING_ROLES.includes(role)) {
+    if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

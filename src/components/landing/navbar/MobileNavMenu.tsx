@@ -1,105 +1,81 @@
-"use client";
-
-import React from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useAuth } from '@clerk/nextjs';
-import { modules } from '@/lib/modules';
+import { cn } from '@/lib/utils';
+import { FEATURE_MODULES, NAV_ITEMS } from './navConfig';
 
-const featureModules = modules.filter(m => m.slug !== 'settings');
+type MobileNavMenuProps = {
+  id: string;
+  isOpen: boolean;
+  onClose: () => void;
+  featuresOpen: boolean;
+  onToggleFeatures: () => void;
+  cta: { href: string; label: string };
+};
 
-interface MobileNavMenuProps {
-    isOpen: boolean;
-    onClose: () => void;
-    mobileFeaturesOpen: boolean;
-    setMobileFeaturesOpen: (val: boolean) => void;
-}
+const ROW = 'flex min-h-11 w-full items-center rounded-lg px-4 text-[0.9375rem] font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none';
 
-export function MobileNavMenu({ isOpen, onClose, mobileFeaturesOpen, setMobileFeaturesOpen }: MobileNavMenuProps) {
-    const { isSignedIn } = useAuth();
-    if (!isOpen) return null;
+export function MobileNavMenu({ id, isOpen, onClose, featuresOpen, onToggleFeatures, cta }: MobileNavMenuProps) {
+  if (!isOpen) return null;
 
-    const mobileLinkStyle = {
-        color: 'var(--color-text-secondary)',
-        fontFamily: 'var(--font-body)',
-        fontSize: '0.9375rem',
-        fontWeight: 500 as const,
-        padding: '12px 16px',
-        display: 'block' as const,
-        textDecoration: 'none',
-    };
-
-    return (
-        <div
-            className="sm:hidden"
-            style={{
-                marginTop: '16px', padding: '12px', background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)', borderRadius: '12px',
-                display: 'flex', flexDirection: 'column', gap: '4px',
-                maxHeight: '70vh', overflowY: 'auto',
-            }}
-        >
-            <Link href="/" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Home</Link>
-
-            {/* Features (Expandable) */}
+  return (
+    <div id={id} className="mt-4 flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-xl border border-border bg-card p-3 lg:hidden">
+      {NAV_ITEMS.map((item) =>
+        item.kind === 'link' ? (
+          <Link key={item.label} href={item.href} onClick={onClose} className={ROW}>
+            {item.label}
+          </Link>
+        ) : (
+          <div key={item.label}>
             <button
-                onClick={() => setMobileFeaturesOpen(!mobileFeaturesOpen)}
-                style={{
-                    ...mobileLinkStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    width: '100%', background: mobileFeaturesOpen ? 'var(--color-surface-raised)' : 'transparent',
-                    border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
-                }}
+              type="button"
+              onClick={onToggleFeatures}
+              aria-expanded={featuresOpen}
+              className={cn(ROW, 'justify-between text-left', featuresOpen && 'bg-muted text-foreground')}
             >
-                Features
-                <ChevronDown style={{ width: '16px', height: '16px', transition: 'transform 0.2s', transform: mobileFeaturesOpen ? 'rotate(180deg)' : 'rotate(0)' }} />
+              {item.label}
+              <ChevronDown className={cn('size-4 transition-transform duration-200', featuresOpen && 'rotate-180')} aria-hidden />
             </button>
 
-            {mobileFeaturesOpen && (
-                <div style={{ paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {featureModules.map((mod) => {
-                        const IconComponent = mod.icon;
-                        return (
-                            <Link
-                                key={mod.slug} href={mod.featureHref}
-                                onClick={() => { onClose(); setMobileFeaturesOpen(false); }}
-                                className="rounded-lg transition-all duration-150 hover:bg-muted"
-                                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', textDecoration: 'none', color: 'var(--color-text-secondary)', fontSize: '0.8125rem', fontWeight: 500 }}
-                            >
-                                <IconComponent style={{ width: '16px', height: '16px', color: 'var(--color-accent)', flexShrink: 0 }} />
-                                {mod.title}
-                            </Link>
-                        );
-                    })}
-                    <Link
-                        href="/features"
-                        onClick={() => { onClose(); setMobileFeaturesOpen(false); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', textDecoration: 'none', color: 'var(--color-accent)', fontSize: '0.8125rem', fontWeight: 600 }}
-                    >
-                        View All Features
-                        <ChevronRight style={{ width: '14px', height: '14px' }} />
-                    </Link>
-                </div>
+            {featuresOpen && (
+              <ul className="flex flex-col gap-0.5 pt-1 pl-2">
+                {FEATURE_MODULES.map((mod) => {
+                  const Icon = mod.icon;
+                  return (
+                    <li key={mod.slug}>
+                      <Link href={mod.featureHref} onClick={onClose} className={cn(ROW, 'gap-3 px-3 text-[0.8125rem]')}>
+                        <Icon className="size-4 shrink-0 text-primary" aria-hidden />
+                        {mod.title}
+                      </Link>
+                    </li>
+                  );
+                })}
+                <li>
+                  <Link href="/features" onClick={onClose} className={cn(ROW, 'gap-2 px-3 text-[0.8125rem] font-semibold text-primary hover:text-primary')}>
+                    View all features
+                    <ChevronRight className="size-3.5" aria-hidden />
+                  </Link>
+                </li>
+              </ul>
             )}
+          </div>
+        ),
+      )}
 
-            <Link href="/contact" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Contact</Link>
-            <Link href="/pricing" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Pricing</Link>
+      <hr className="my-1 border-border/60" />
 
-            <div style={{ height: '1px', background: 'var(--color-border-subtle)', margin: '4px 0' }} />
-
-            <Link href="/login" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Sign In</Link>
-            <Link href="/activate" onClick={onClose} className="rounded-lg transition-all duration-200" style={mobileLinkStyle}>Activate with Invite Code</Link>
-            {/* Signed-out visitors get guided into joining; signed-in users keep their dashboard shortcut */}
-            <Link
-                href={isSignedIn ? '/dashboard' : '/signup'} onClick={onClose}
-                className="rounded-lg transition-all duration-200 text-center"
-                style={{
-                    background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-                    color: '#1A1816', fontFamily: 'var(--font-body)', fontSize: '0.9375rem',
-                    fontWeight: 600, padding: '12px 16px', display: 'block', textDecoration: 'none',
-                }}
-            >
-                {isSignedIn ? 'Dashboard' : 'Get Started'}
-            </Link>
-        </div>
-    );
+      <Link href="/login" onClick={onClose} className={ROW}>
+        Sign In
+      </Link>
+      <Link href="/activate" onClick={onClose} className={ROW}>
+        Activate with Invite Code
+      </Link>
+      <Link
+        href={cta.href}
+        onClick={onClose}
+        className="mt-1 flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-[0.9375rem] font-semibold text-primary-foreground transition-colors duration-200 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        {cta.label}
+      </Link>
+    </div>
+  );
 }

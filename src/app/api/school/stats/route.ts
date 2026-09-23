@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
+import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { aggregateStudentPerformance, isKCSEGradeLevel, type ExamMarkWithDetails } from '@/lib/analytics';
 import { PASS_MARK } from '@/lib/pass-mark';
@@ -11,35 +12,37 @@ interface MarkSummaryRow {
   pass_count: number | string;
 }
 
+/** Stats views each role may request; the first is its default. */
+const STATS_VIEWS_BY_ROLE: Partial<Record<UserRole, readonly string[]>> = {
+  ADMIN: ['admin'],
+  CLASS_TEACHER: ['class_teacher', 'subject_teacher'],
+  SUBJECT_TEACHER: ['subject_teacher'],
+  STUDENT: ['student'],
+};
+
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const caller = await getCaller();
+    if (!caller) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('school_id, role, is_active')
-      .eq('id', userId)
-      .maybeSingle();
+    const { userId, schoolId, role } = caller;
 
-    if (!userProfile || userProfile.is_active === false) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // ?role= picks a view, but only among the views this caller is entitled
+    // to. It used to be honoured as given, so any account — a student
+    // included — could ask for ?role=admin and read the school's admin stats.
+    const { searchParams } = new URL(request.url);
+    const requestedView = searchParams.get('role');
+    const entitledViews = STATS_VIEWS_BY_ROLE[role] ?? [];
+    const queryRole = requestedView && entitledViews.includes(requestedView) ? requestedView : entitledViews[0];
+    if (!queryRole) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const schoolId = userProfile?.school_id as string | null;
-    const role = userProfile?.role as string;
-
-    const { searchParams } = new URL(request.url);
-    const queryRole = searchParams.get('role') || role.toLowerCase();
-
     // ── ADMIN stats ──────────────────────────────────────────
-    // Decided by the caller's real role only. `?role=admin` used to be
-    // enough on its own, so any signed-in learner could read the school-wide
-    // admin figures and recent-activity feed by adding it to the URL.
-    if (role === 'ADMIN') {
+    if (queryRole === 'admin') {
       if (!schoolId) {
         return NextResponse.json({ marks: [], totalReports: 0, totalStudents: 0, activeStudents: 0, totalTeachers: 0, classTeachers: 0, subjectTeachers: 0, totalClasses: 0, upcomingExams: [], recentActivities: [] });
       }

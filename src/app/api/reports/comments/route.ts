@@ -1,28 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { authorizeClassReport } from '@/lib/reports/report-access';
-import { internalError } from '@/lib/api-errors';
+import { forbidden, getCaller, type Caller } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
-const COMMENTS_FORBIDDEN = 'Only administrators and the designated class teacher can manage report comments.';
+/**
+ * Report comments belong to the admin (principal's comment) and the class's
+ * own teacher (class teacher's comment). This route used to check nothing but
+ * the school, so any signed-in account — a student included — could read the
+ * whole class's comments and rewrite their own report card.
+ */
+type StudentNameRow = { users: { first_name: string | null; last_name: string | null } | { first_name: string | null; last_name: string | null }[] | null };
 
-interface StudentName {
-    first_name: string | null;
-    last_name: string | null;
+/** PostgREST types a to-one embed as an array; read it either way. */
+function studentUser(row: StudentNameRow) {
+    return Array.isArray(row.users) ? row.users[0] : row.users;
 }
 
-interface ReportCommentRow {
-    student_id: string;
-    term_id: string;
-    academic_year_id: string;
-    grade_stream_id: string;
-    comments_class_teacher: string | null;
-    comments_principal?: string | null;
+function canCommentOnStream(caller: Caller, gradeStreamId: string): boolean {
+    return caller.role === 'ADMIN' || (caller.role === 'CLASS_TEACHER' && caller.classStreamIds.includes(gradeStreamId));
 }
 
 export async function GET(request: NextRequest) {
     try {
+        const caller = await getCaller();
+        if (!caller) return forbidden('Unauthorized', 401);
+
+        const supabase = createSupabaseAdmin();
+        const schoolId = caller.schoolId;
+        if (!schoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
         const { searchParams } = new URL(request.url);
         const gradeStreamId = searchParams.get('grade_stream_id');
         const termId = searchParams.get('term_id');
@@ -31,14 +40,9 @@ export async function GET(request: NextRequest) {
         if (!gradeStreamId || !termId || !academicYearId) {
             return NextResponse.json({ error: 'grade_stream_id, term_id, and academic_year_id are required' }, { status: 400 });
         }
-
-        // Report comments belong to the people who write report cards: the
-        // same audience as the class report itself.
-        const access = await authorizeClassReport(gradeStreamId, COMMENTS_FORBIDDEN);
-        if (!access.ok) return access.response;
-        const schoolId = access.session.schoolId;
-
-        const supabase = createSupabaseAdmin();
+        if (!canCommentOnStream(caller, gradeStreamId)) {
+            return forbidden('Only administrators and the class teacher can view report comments.');
+        }
 
         // Fetch students in the class (scoped to school)
         const { data: students, error: studentsErr } = await supabase
@@ -75,29 +79,34 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const result = students.map(s => {
-            // PostgREST types a to-one embed as an array; it is one row here.
-            const user = (Array.isArray(s.users) ? s.users[0] : s.users) as StudentName | null | undefined;
-            return {
-                student_id: s.id,
-                admission_number: s.admission_number,
-                student_name: `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
-                comments_class_teacher: commentsMap.get(s.id)?.comments_class_teacher || '',
-                comments_principal: commentsMap.get(s.id)?.comments_principal || '',
-            };
-        });
+        const result = students.map(s => ({
+            student_id: s.id,
+            admission_number: s.admission_number,
+            student_name: `${studentUser(s)?.first_name || ''} ${studentUser(s)?.last_name || ''}`.trim(),
+            comments_class_teacher: commentsMap.get(s.id)?.comments_class_teacher || '',
+            comments_principal: commentsMap.get(s.id)?.comments_principal || '',
+        }));
 
         // Sort by name
         result.sort((a, b) => a.student_name.localeCompare(b.student_name));
 
         return NextResponse.json({ data: result });
     } catch (err: unknown) {
-        return internalError('report comments', err);
+        return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to fetch comments' }, { status: 500 });
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
+        const caller = await getCaller();
+        if (!caller) return forbidden('Unauthorized', 401);
+
+        const supabase = createSupabaseAdmin();
+        const schoolId = caller.schoolId;
+        if (!schoolId) {
+            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
+        }
+
         const body = await request.json();
         const { student_id, term_id, academic_year_id, grade_stream_id, comments_class_teacher, comments_principal } = body;
 
@@ -105,57 +114,51 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'student_id, term_id, academic_year_id, and grade_stream_id are required' }, { status: 400 });
         }
 
-        // There was no role check here, so any member of the school — a
-        // learner included — could write the class teacher's and principal's
-        // remarks onto a report card.
-        const access = await authorizeClassReport(grade_stream_id, COMMENTS_FORBIDDEN);
-        if (!access.ok) return access.response;
-        const schoolId = access.session.schoolId;
+        if (!canCommentOnStream(caller, grade_stream_id)) {
+            return forbidden('Only administrators and the class teacher can edit report comments.');
+        }
 
-        const supabase = createSupabaseAdmin();
-
-        // The student must be in the class being commented on, and the term
-        // and year must be this school's.
-        const [{ data: student }, { data: term }] = await Promise.all([
-            supabase
-                .from('students')
-                .select('id, current_grade_stream_id, users!inner(school_id)')
-                .eq('id', student_id)
-                .eq('users.school_id', schoolId)
-                .maybeSingle(),
-            supabase
-                .from('terms')
-                .select('id')
-                .eq('id', term_id)
-                .eq('academic_year_id', academic_year_id)
-                .eq('school_id', schoolId)
-                .maybeSingle(),
-        ]);
+        // Verify the student belongs to the caller's school and to this class
+        const { data: student } = await supabase
+            .from('students')
+            .select('id, current_grade_stream_id, users!inner(school_id)')
+            .eq('id', student_id)
+            .eq('users.school_id', schoolId)
+            .maybeSingle();
 
         if (!student || student.current_grade_stream_id !== grade_stream_id) {
-            return NextResponse.json({ error: 'Student not found in this class' }, { status: 404 });
+            return NextResponse.json({ error: 'Student not found in this class' }, { status: 403 });
         }
+
+        // The term and year come from the body too; they must be this school's.
+        const { data: term } = await supabase
+            .from('terms')
+            .select('id')
+            .eq('id', term_id)
+            .eq('academic_year_id', academic_year_id)
+            .eq('school_id', schoolId)
+            .maybeSingle();
         if (!term) {
             return NextResponse.json({ error: 'Term not found' }, { status: 404 });
         }
 
-        // The principal's remark is the admin's to write. A class teacher's
-        // save leaves it out of the upsert, which keeps whatever is stored
-        // instead of overwriting it with the value their page loaded.
-        const row: ReportCommentRow = {
-            student_id,
-            term_id,
-            academic_year_id,
-            grade_stream_id,
+        // The principal's comment is the admin's to write; a class teacher's
+        // save leaves whatever the admin wrote untouched.
+        const comments: { comments_class_teacher: string | null; comments_principal?: string | null } = {
             comments_class_teacher: comments_class_teacher || null,
         };
-        if (access.session.role === 'ADMIN') {
-            row.comments_principal = comments_principal || null;
-        }
+        if (caller.role === 'ADMIN') comments.comments_principal = comments_principal || null;
 
+        // Upsert into report_cards
         const { error } = await supabase
             .from('report_cards')
-            .upsert(row, {
+            .upsert({
+                student_id,
+                term_id,
+                academic_year_id,
+                grade_stream_id,
+                ...comments,
+            }, {
                 onConflict: 'student_id,term_id,academic_year_id',
             });
 
@@ -165,6 +168,6 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        return internalError('report comments', err);
+        return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to save comments' }, { status: 500 });
     }
 }

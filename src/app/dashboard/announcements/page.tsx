@@ -8,6 +8,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { FormattedTextarea } from '@/components/ui/FormattedTextarea';
 import { renderFormattedText } from '@/lib/formatted-text';
 import { useAuth } from '@/components/AuthProvider';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 interface Announcement {
     id: string;
@@ -24,6 +25,8 @@ export default function AnnouncementsPage() {
     // Admins and class teachers manage every announcement; a subject teacher
     // can only edit/delete the ones they posted (the API enforces the same).
     const canManageAll = role === 'ADMIN' || role === 'CLASS_TEACHER';
+    // Non-teaching staff read announcements; posting is for admins and teachers.
+    const canPost = isRoleIn(role, STAFF_TEACHING_ROLES);
     const canManage = (a: Announcement) => canManageAll || (!!profile && a.postedById === profile.id);
 
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -141,13 +144,13 @@ export default function AnnouncementsPage() {
         <div>
             <PageHeader
                 title="Announcements"
-                description="Create and manage school-wide announcements"
+                description={canPost ? 'Create and manage school-wide announcements' : 'Stay up to date with school-wide announcements'}
                 breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Announcements' }]}
-                action={
+                action={canPost ? (
                     <button className="btn-primary" onClick={openAdd}>
                         <Plus size={14} /> New Announcement
                     </button>
-                }
+                ) : undefined}
             />
 
             <div className="flex items-center input-field input-field-flush w-full max-w-md overflow-hidden px-0 mb-6">
@@ -168,7 +171,7 @@ export default function AnnouncementsPage() {
             ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
                     <Bell size={28} className="opacity-40" />
-                    {search ? 'No matching announcements.' : 'No announcements yet. Click "New Announcement" to create one.'}
+                    {search ? 'No matching announcements.' : canPost ? 'No announcements yet. Click "New Announcement" to create one.' : 'No announcements yet.'}
                 </div>
             ) : (
                 <div className="flex flex-col gap-3">

@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
+import { canViewStudentRecords, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { generateFeeReceiptPDF } from '@/lib/pdf/feeReceiptServer';
-import { FEE_VIEWER_ROLES } from '@/lib/fees';
-import { getActiveUserProfile } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { paymentId } = await params;
 
@@ -35,13 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (error) throw error;
 
         const fee = payment?.student_fees as any;
-        if (!payment || !fee || fee.school_id !== userProfile.school_id) {
+        if (!payment || !fee || fee.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
-        if (userProfile.role === 'STUDENT' && fee.student_id !== userId) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-        if (!FEE_VIEWER_ROLES.includes(userProfile.role)) {
+        if (!(await canViewStudentRecords(caller, fee.student_id))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         if (payment.status === 'CANCELLED') {

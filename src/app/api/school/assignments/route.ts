@@ -41,9 +41,11 @@ export async function GET() {
         // Students see only assignments for their stream
         if (role === 'STUDENT') {
             const student = await getCurrentStudent();
-            if (student?.gradeStreamId) {
-                query = query.or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`);
-            }
+            // A student with no class sees only school-wide work, never every
+            // class's assignments.
+            query = student?.gradeStreamId
+                ? query.or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`)
+                : query.is('grade_stream_id', null);
         }
 
         const { data, error } = await query;

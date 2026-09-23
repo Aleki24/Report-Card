@@ -1,126 +1,154 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Sun, Moon, Menu, X, ChevronDown } from 'lucide-react';
+import { ChevronDown, Menu, Moon, Sun, X } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
 import { useTheme } from '@/components/ThemeProvider';
+import { Wordmark } from '@/components/Wordmark';
+import { cn } from '@/lib/utils';
+import { CtaLink } from './ui/CtaLink';
 import { FeaturesDropdown } from './navbar/FeaturesDropdown';
 import { MobileNavMenu } from './navbar/MobileNavMenu';
-import { Wordmark } from '@/components/Wordmark';
+import { DESKTOP_NAV_QUERY, NAV_ITEMS } from './navbar/navConfig';
+
+const NAV_LINK =
+  'inline-flex min-h-10 items-center gap-1 rounded-lg px-3.5 text-[0.8125rem] font-medium tracking-wide text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+
+const ICON_BUTTON =
+  'inline-flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  const Icon = isDark ? Sun : Moon;
+
+  return (
+    <button type="button" onClick={toggleTheme} className={ICON_BUTTON} aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}>
+      <Icon className="size-4.5" aria-hidden />
+    </button>
+  );
+}
 
 export default function Navbar() {
-  const { theme, toggleTheme } = useTheme();
   const { isSignedIn } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileFeaturesOpen, setMobileFeaturesOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownId = useId();
+  const mobileMenuId = useId();
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 640) { setMobileOpen(false); setMobileFeaturesOpen(false); }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  const closeMobile = useCallback(() => {
+    setMobileOpen(false);
+    setMobileFeaturesOpen(false);
   }, []);
 
+  // The mobile menu has no place on desktop — drop it when the viewport widens.
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setFeaturesOpen(false);
+    const mq = window.matchMedia(DESKTOP_NAV_QUERY);
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) closeMobile();
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [closeMobile]);
 
-  const navLinkStyle = {
-    color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)',
-    fontSize: '0.8125rem', fontWeight: 500 as const, padding: '8px 14px',
-    letterSpacing: '0.01em', textDecoration: 'none', borderRadius: '8px',
-    transition: 'all 0.2s ease', display: 'inline-flex', alignItems: 'center', gap: '4px',
-  };
+  // Features dropdown closes on outside click or Escape.
+  useEffect(() => {
+    if (!featuresOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!dropdownRef.current?.contains(e.target as Node)) setFeaturesOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFeaturesOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [featuresOpen]);
+
+  // Signed-out visitors get guided into joining; signed-in users keep their dashboard shortcut.
+  const cta = isSignedIn ? { href: '/dashboard', label: 'Dashboard' } : { href: '/signup', label: 'Get Started' };
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 w-full z-50 backdrop-blur-xl"
-      style={{
-        padding: 'clamp(16px, 3vw, 24px) clamp(16px, 5vw, 48px)',
-        background: 'var(--color-bg)',
-        backgroundColor: 'color-mix(in srgb, var(--color-bg) 80%, transparent)',
-        borderBottom: '1px solid var(--color-border-subtle)',
-      }}
+      aria-label="Main"
+      className="fixed inset-x-0 top-0 z-50 w-full border-b border-border/60 bg-background/80 px-4 py-4 backdrop-blur-xl sm:px-6 md:py-5 lg:px-12"
     >
-      <div className="flex items-center justify-between" style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <Image src="/images/logo.png" alt="Skulbase Logo" width={44} height={44}
-            className="rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
-            style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)' }}
+      <div className="mx-auto flex max-w-7xl items-center justify-between">
+        <Link href="/" className="group flex items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+          <Image
+            src="/images/logo.png"
+            alt=""
+            width={44}
+            height={44}
+            className="rounded-lg object-cover shadow-lg shadow-black/15 transition-transform duration-300 group-hover:scale-105"
           />
-          <Wordmark style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(1.25rem, 2.5vw, 1.5rem)', letterSpacing: '-0.01em' }} />
+          <Wordmark className="font-heading text-xl font-semibold tracking-tight md:text-2xl" />
         </Link>
 
-        {/* Desktop Nav */}
-        <div className="hidden sm:flex items-center" style={{ gap: '4px' }}>
-          <Link href="/" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Home</Link>
+        {/* Desktop */}
+        <div className="hidden items-center gap-1 lg:flex">
+          {NAV_ITEMS.map((item) =>
+            item.kind === 'link' ? (
+              <Link key={item.label} href={item.href} className={NAV_LINK}>
+                {item.label}
+              </Link>
+            ) : (
+              <div key={item.label} ref={dropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setFeaturesOpen((open) => !open)}
+                  aria-expanded={featuresOpen}
+                  aria-controls={dropdownId}
+                  className={cn(NAV_LINK, 'cursor-pointer', featuresOpen && 'bg-muted text-foreground')}
+                >
+                  {item.label}
+                  <ChevronDown className={cn('size-3.5 transition-transform duration-200', featuresOpen && 'rotate-180')} aria-hidden />
+                </button>
+                <FeaturesDropdown id={dropdownId} isOpen={featuresOpen} onClose={() => setFeaturesOpen(false)} />
+              </div>
+            ),
+          )}
 
-          {/* Features Dropdown */}
-          <div ref={dropdownRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setFeaturesOpen(!featuresOpen)}
-              className="rounded-lg transition-all duration-200 hover:bg-muted cursor-pointer"
-              style={{ ...navLinkStyle, background: featuresOpen ? 'var(--color-surface-raised)' : 'transparent', border: 'none' }}
-            >
-              Features
-              <ChevronDown style={{ width: '14px', height: '14px', transition: 'transform 0.2s', transform: featuresOpen ? 'rotate(180deg)' : 'rotate(0)' }} />
-            </button>
-            <FeaturesDropdown isOpen={featuresOpen} onClose={() => setFeaturesOpen(false)} />
-          </div>
-
-          <Link href="/contact" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Contact</Link>
-          <Link href="/pricing" className="rounded-lg transition-all duration-200 hover:bg-muted" style={navLinkStyle}>Pricing</Link>
-
-          <div style={{ width: '1px', height: '20px', background: 'var(--color-border-subtle)', margin: '0 4px' }} />
-
-          <button onClick={toggleTheme} className="rounded-lg transition-all duration-200 hover:bg-muted"
-            style={{ color: 'var(--color-text-muted)', padding: '10px', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Toggle Theme">
-            {theme === 'dark' ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-          </button>
-
-          <Link href="/login" className="inline-flex items-center rounded-lg transition-all duration-200 hover:bg-muted"
-            style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 500, padding: '8px 16px', letterSpacing: '0.01em' }}>
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+          <ThemeToggle />
+          <Link href="/login" className={cn(NAV_LINK, 'px-4')}>
             Sign In
           </Link>
-
-          {/* Signed-out visitors get guided into joining; signed-in users keep their dashboard shortcut */}
-          <Link href={isSignedIn ? '/dashboard' : '/signup'} className="inline-flex items-center rounded-lg transition-all duration-200 hover:opacity-90"
-            style={{
-              background: 'linear-gradient(145deg, var(--color-accent), var(--color-accent-light))',
-              color: '#1A1816', fontFamily: 'var(--font-body)', fontSize: '0.8125rem', fontWeight: 600,
-              padding: '8px 16px', gap: '8px', letterSpacing: '0.01em', boxShadow: '0 2px 12px rgba(212, 168, 83, 0.2)',
-            }}>
-            {isSignedIn ? 'Dashboard' : 'Get Started'} <ArrowRight className="w-4 h-4" />
-          </Link>
+          <CtaLink href={cta.href} size="md" className="min-h-10 gap-2 px-4 py-2 text-[0.8125rem] shadow-none hover:translate-y-0">
+            {cta.label}
+          </CtaLink>
         </div>
 
-        {/* Mobile: Theme toggle + Hamburger */}
-        <div className="flex sm:hidden items-center" style={{ gap: '8px' }}>
-          <button onClick={toggleTheme} className="rounded-lg transition-all duration-200"
-            style={{ color: 'var(--color-text-muted)', padding: '10px', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Toggle Theme">
-            {theme === 'dark' ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-          </button>
-          <button onClick={() => { setMobileOpen(!mobileOpen); setMobileFeaturesOpen(false); }}
-            className="rounded-lg transition-all duration-200"
-            style={{ color: 'var(--color-text-primary)', padding: '10px', background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Toggle Menu">
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        {/* Mobile & tablet */}
+        <div className="flex items-center gap-1 lg:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => (mobileOpen ? closeMobile() : setMobileOpen(true))}
+            aria-expanded={mobileOpen}
+            aria-controls={mobileMenuId}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            className={cn(ICON_BUTTON, 'text-foreground')}
+          >
+            {mobileOpen ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
           </button>
         </div>
       </div>
 
       <MobileNavMenu
-        isOpen={mobileOpen} onClose={() => setMobileOpen(false)}
-        mobileFeaturesOpen={mobileFeaturesOpen} setMobileFeaturesOpen={setMobileFeaturesOpen}
+        id={mobileMenuId}
+        isOpen={mobileOpen}
+        onClose={closeMobile}
+        featuresOpen={mobileFeaturesOpen}
+        onToggleFeatures={() => setMobileFeaturesOpen((open) => !open)}
+        cta={cta}
       />
     </nav>
   );
