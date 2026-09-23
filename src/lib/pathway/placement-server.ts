@@ -153,6 +153,16 @@ async function loadSchoolCombinations(supabase: Db, schoolId: string): Promise<S
     }));
 }
 
+async function loadOfferedSeniorCodes(supabase: Db, schoolId: string): Promise<string[]> {
+    const { data, error } = await supabase
+        .from(SCHOOL_SUBJECT_VIEW)
+        .select('code')
+        .eq('school_id', schoolId)
+        .eq('band', 'SS');
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(s => (s.code as string).trim().toUpperCase());
+}
+
 // ── Suggestions ─────────────────────────────────────────────────────────
 
 async function seniorSuggestions(
@@ -161,7 +171,10 @@ async function seniorSuggestions(
     students: ClassStudent[],
     marked: Map<string, SubjectRef[]>
 ): Promise<SeniorPlacementResponse> {
-    const combinations = await loadSchoolCombinations(supabase, schoolId);
+    const [combinations, offeredCodes] = await Promise.all([
+        loadSchoolCombinations(supabase, schoolId),
+        loadOfferedSeniorCodes(supabase, schoolId),
+    ]);
     const combinationBySet = new Map(combinations.map(c => [setKey(c.electiveCodes), c.id]));
 
     const currentMaths = new Map<string, MathsCode>();
@@ -181,6 +194,7 @@ async function seniorSuggestions(
     return {
         mode: 'senior',
         combinations,
+        offeredCodes,
         learners: students.map(s => {
             const markedSubjects = marked.get(s.id) ?? [];
             const suggestion = suggestSeniorPlacement(markedSubjects.map(m => m.code));

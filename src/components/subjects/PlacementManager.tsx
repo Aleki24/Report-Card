@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CheckCircle2, CircleAlert, CircleDashed, Sparkles, Users } from 'lucide-react';
+import { CheckCircle2, ChevronDown, CircleAlert, CircleDashed, Layers, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/api-error-message';
-import { MATHS_LABELS, SENIOR_CORE_SUBJECT_CODES, type MathsCode } from '@/lib/pathway-definitions';
+import {
+    MATHS_CODES,
+    MATHS_LABELS,
+    MINISTRY_COMBINATION_TEMPLATES,
+    SENIOR_CORE_SUBJECT_CODES,
+    type MathsCode,
+} from '@/lib/pathway-definitions';
+import CombinationChooser, { type ChoiceOption } from '@/components/subjects/CombinationChooser';
 import {
     customCombinationCode,
     type ElectivePlacementResponse,
     type PlacementResponse,
     type PlacementTarget,
+    type SchoolCombinationOption,
     type SeniorLearnerRow,
     type SeniorPlacementResponse,
 } from '@/lib/pathway/placement';
@@ -120,6 +128,11 @@ const COMPULSORY = new Set<string>(SENIOR_CORE_SUBJECT_CODES);
 type ApplyFn = (body: object, summary: string) => Promise<void>;
 type TableProps<T> = { data: T; onApply: ApplyFn; onError: (msg: string) => void };
 
+const OFFICIAL_BY_CODE = new Map(MINISTRY_COMBINATION_TEMPLATES.map(t => [t.code as string, t]));
+
+/** Columns shared by the header and every row from `lg` up; below that each learner is a stacked card. */
+const SENIOR_COLUMNS = 'lg:grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_13rem_minmax(0,1fr)] lg:gap-x-4';
+
 /** Select values: "existing:<id>", "official:<code>", or "custom:<code,code,code>". */
 function suggestedChoice(row: SeniorLearnerRow): string {
     if (row.matchingCombinationId) return `existing:${row.matchingCombinationId}`;
@@ -146,6 +159,34 @@ function toTarget(choice: string, row: SeniorLearnerRow): PlacementTarget | null
     return null;
 }
 
+/** What a learner's marks point to, as a chooser option — null when they point nowhere. */
+function suggestionOption(row: SeniorLearnerRow, combinations: SchoolCombinationOption[]): ChoiceOption | null {
+    const s = row.suggestion;
+    if (s.kind !== 'official' && s.kind !== 'custom') return null;
+    const existing = combinations.find(c => c.id === row.matchingCombinationId);
+    if (existing) return { value: `existing:${existing.id}`, code: existing.code, name: existing.name, detail: 'Already set up at your school' };
+    return s.kind === 'official'
+        ? { value: `official:${s.code}`, code: s.code, name: s.name, detail: `Official · ${s.track} — added to your school when you place` }
+        : { value: `custom:${s.electiveCodes.join(',')}`, code: customCombinationCode(s.electiveCodes), name: s.name, detail: 'Not on the Ministry list — added as a custom combination when you place' };
+}
+
+/** "CODE · name" for a choice, or null when nothing is chosen. */
+function choiceLabel(choice: string, row: SeniorLearnerRow | null, combinations: SchoolCombinationOption[]): string | null {
+    const value = choice.slice(choice.indexOf(':') + 1);
+    if (choice.startsWith('existing:')) {
+        const c = combinations.find(x => x.id === value);
+        return c ? `${c.code} · ${c.name}` : null;
+    }
+    if (choice.startsWith('official:')) {
+        const t = OFFICIAL_BY_CODE.get(value);
+        return t ? `${t.code} · ${t.name}` : value;
+    }
+    if (choice.startsWith('custom:') && row?.suggestion.kind === 'custom') {
+        return `${customCombinationCode(row.suggestion.electiveCodes)} · ${row.suggestion.name} (custom)`;
+    }
+    return null;
+}
+
 function SeniorStatus({ row, draft }: { row: SeniorLearnerRow; draft: SeniorDraft }) {
     const s = row.suggestion;
     if (row.currentCombinationId && draft.choice === `existing:${row.currentCombinationId}` && !draft.include) {
@@ -153,13 +194,32 @@ function SeniorStatus({ row, draft }: { row: SeniorLearnerRow; draft: SeniorDraf
     }
     if (s.kind === 'official') return <Badge tone="positive" icon={CheckCircle2}>Official {s.code}</Badge>;
     if (s.kind === 'custom') return <Badge tone="caution" icon={CircleAlert}>Not on Ministry list</Badge>;
-    if (s.kind === 'review') return <Badge tone="destructive" icon={CircleAlert}>{s.reason}</Badge>;
+    if (s.kind === 'review') return <Badge tone="destructive" icon={CircleAlert} wrap>{s.reason}</Badge>;
     return <Badge tone="muted" icon={CircleDashed}>No marks yet — choose</Badge>;
 }
 
+function MathsSelect({ value, onChange, label, placeholder = 'Default' }: {
+    value: MathsCode | '';
+    onChange: (value: MathsCode | '') => void;
+    label: string;
+    placeholder?: string;
+}) {
+    return (
+        <select className="input-field w-full text-sm" value={value} aria-label={label} onChange={e => onChange(e.target.value as MathsCode | '')}>
+            <option value="">{placeholder}</option>
+            {MATHS_CODES.map(code => <option key={code} value={code}>{MATHS_LABELS[code]}</option>)}
+        </select>
+    );
+}
+
+/** Chooser open for one learner, or for every ticked learner at once. */
+type ChooserFor = { kind: 'row'; row: SeniorLearnerRow } | { kind: 'bulk' } | null;
+
 function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementResponse>) {
     const [drafts, setDrafts] = useState<Record<string, SeniorDraft>>({});
+    const [chooser, setChooser] = useState<ChooserFor>(null);
     const [saving, setSaving] = useState(false);
+    const offeredCodes = useMemo(() => new Set(data.offeredCodes), [data.offeredCodes]);
 
     useEffect(() => {
         setDrafts(Object.fromEntries(data.learners.map(l => [l.studentId, initialDraft(l)])));
@@ -168,10 +228,17 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
     const update = (id: string, patch: Partial<SeniorDraft>) =>
         setDrafts(d => ({ ...d, [id]: { ...d[id], ...patch, include: patch.include ?? true } }));
 
-    const chosen = data.learners.filter(l => drafts[l.studentId]?.include && drafts[l.studentId]?.choice);
-    const newCustom = new Set(
-        chosen.filter(l => drafts[l.studentId].choice.startsWith('custom:')).map(l => drafts[l.studentId].choice),
-    );
+    const ticked = data.learners.filter(l => drafts[l.studentId]?.include);
+    const chosen = ticked.filter(l => drafts[l.studentId].choice);
+    const missingChoice = ticked.length - chosen.length;
+    const allTicked = data.learners.length > 0 && ticked.length === data.learners.length;
+    const newCustom = new Set(chosen.map(l => drafts[l.studentId].choice).filter(c => c.startsWith('custom:')));
+
+    const setForTicked = (patch: Partial<SeniorDraft>) =>
+        setDrafts(d => Object.fromEntries(Object.entries(d).map(([id, draft]) => [id, draft.include ? { ...draft, ...patch } : draft])));
+
+    const tickAll = (include: boolean) =>
+        setDrafts(d => Object.fromEntries(Object.entries(d).map(([id, draft]) => [id, { ...draft, include }])));
 
     const submit = async () => {
         setSaving(true);
@@ -190,105 +257,119 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
     };
 
     const counts = data.learners.reduce<Record<string, number>>((acc, l) => ({ ...acc, [l.suggestion.kind]: (acc[l.suggestion.kind] ?? 0) + 1 }), {});
+    const chooserRow = chooser?.kind === 'row' ? chooser.row : null;
 
     return (
         <div className="card overflow-hidden">
-            <div className="flex flex-wrap gap-2 border-b border-border px-5 py-3 text-xs">
+            <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3 text-xs sm:px-5">
                 <Badge tone="positive" icon={CheckCircle2}>{counts.official ?? 0} official match</Badge>
                 <Badge tone="caution" icon={CircleAlert}>{counts.custom ?? 0} not on Ministry list</Badge>
                 <Badge tone="destructive" icon={CircleAlert}>{counts.review ?? 0} need review</Badge>
                 <Badge tone="muted" icon={CircleDashed}>{counts['no-marks'] ?? 0} no marks yet</Badge>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="data-table w-full min-w-[56rem] text-left">
-                    <thead>
-                        <tr>
-                            <th className="w-10"><span className="sr-only">Include</span></th>
-                            <th>Learner</th>
-                            <th>Electives &amp; maths with marks</th>
-                            <th>Combination</th>
-                            <th>Maths</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.learners.map(row => {
-                            const draft = drafts[row.studentId];
-                            if (!draft) return null;
-                            const s = row.suggestion;
-                            const suggestionOption = draft.choice.startsWith('official:') || draft.choice.startsWith('custom:')
-                                ? draft.choice
-                                : s.kind === 'official' && !row.matchingCombinationId ? `official:${s.code}`
-                                : s.kind === 'custom' && !row.matchingCombinationId ? `custom:${s.electiveCodes.join(',')}` : null;
-                            return (
-                                <tr key={row.studentId} className={cn(draft.include && 'bg-primary/5')}>
-                                    <td>
-                                        <input
-                                            type="checkbox"
-                                            className="size-4 accent-primary"
-                                            aria-label={`Include ${row.name}`}
-                                            checked={draft.include}
-                                            disabled={!draft.choice}
-                                            onChange={e => update(row.studentId, { include: e.target.checked })}
-                                        />
-                                    </td>
-                                    <td>
-                                        <span className="block text-sm font-medium">{row.name}</span>
-                                        <span className="font-mono text-xs text-muted-foreground">{row.admissionNumber}</span>
-                                    </td>
-                                    <td className="max-w-64 text-xs text-muted-foreground">
-                                        {row.markedSubjects.filter(m => !COMPULSORY.has(m.code)).map(m => m.name).join(', ') || '—'}
-                                    </td>
-                                    <td>
-                                        <select
-                                            className="input-field w-full min-w-56 text-sm"
-                                            value={draft.choice}
-                                            aria-label={`Combination for ${row.name}`}
-                                            onChange={e => update(row.studentId, { choice: e.target.value })}
-                                        >
-                                            <option value="">Choose…</option>
-                                            {suggestionOption && s.kind !== 'no-marks' && s.kind !== 'review' && (
-                                                <option value={suggestionOption}>
-                                                    New: {s.kind === 'official' ? s.code : customCombinationCode(s.electiveCodes)} · {s.name}
-                                                    {s.kind === 'custom' ? ' (custom)' : ''}
-                                                </option>
-                                            )}
-                                            {data.combinations.map(c => (
-                                                <option key={c.id} value={`existing:${c.id}`}>{c.code} · {c.name}</option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <select
-                                            className="input-field w-full min-w-40 text-sm"
-                                            value={draft.maths}
-                                            aria-label={`Maths for ${row.name}`}
-                                            onChange={e => update(row.studentId, { maths: e.target.value as MathsCode | '' })}
-                                        >
-                                            <option value="">Default</option>
-                                            {(Object.keys(MATHS_LABELS) as MathsCode[]).map(code => (
-                                                <option key={code} value={code}>{MATHS_LABELS[code]}</option>
-                                            ))}
-                                        </select>
-                                    </td>
-                                    <td><SeniorStatus row={row} draft={draft} /></td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+            {/* Bulk actions — ticking learners without marks and setting one combination is the fast path. */}
+            <div className="flex flex-col gap-3 border-b border-border bg-muted/30 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+                <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" className="size-5 accent-primary" checked={allTicked} onChange={e => tickAll(e.target.checked)} />
+                    {ticked.length > 0 ? `${ticked.length} ticked` : 'Tick all'}
+                </label>
+                <div className="grid gap-2 sm:ml-auto sm:flex sm:items-center">
+                    <button type="button" className="btn-secondary h-9 px-3 text-sm" disabled={ticked.length === 0} onClick={() => setChooser({ kind: 'bulk' })}>
+                        <Layers size={14} aria-hidden /> Set combination for ticked
+                    </button>
+                    <div className="sm:w-52">
+                        <MathsSelect
+                            value=""
+                            label="Set maths for ticked learners"
+                            placeholder="Set maths for ticked…"
+                            onChange={maths => { if (maths) setForTicked({ maths }); }}
+                        />
+                    </div>
+                </div>
             </div>
 
-            <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4">
+            <div className={cn('hidden border-b border-border px-5 py-2 text-[11px] font-bold tracking-wide text-muted-foreground uppercase lg:grid', SENIOR_COLUMNS)}>
+                <span aria-hidden />
+                <span>Learner</span>
+                <span>Electives &amp; maths with marks</span>
+                <span>Combination</span>
+                <span>Maths</span>
+                <span>Status</span>
+            </div>
+
+            <ul className="divide-y divide-border">
+                {data.learners.map(row => {
+                    const draft = drafts[row.studentId];
+                    if (!draft) return null;
+                    const label = choiceLabel(draft.choice, row, data.combinations);
+                    const marked = row.markedSubjects.filter(m => !COMPULSORY.has(m.code)).map(m => m.name).join(', ');
+                    return (
+                        <li
+                            key={row.studentId}
+                            className={cn('grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 px-4 py-4 sm:px-5 lg:items-center', SENIOR_COLUMNS, draft.include && 'bg-primary/5')}
+                        >
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 size-5 accent-primary lg:mt-0"
+                                aria-label={`Tick ${row.name}`}
+                                checked={draft.include}
+                                onChange={e => update(row.studentId, { include: e.target.checked })}
+                            />
+                            <div className="min-w-0">
+                                <span className="block text-sm font-medium">{row.name}</span>
+                                <span className="font-mono text-xs text-muted-foreground">{row.admissionNumber}</span>
+                            </div>
+                            <p className="col-start-2 text-xs text-muted-foreground lg:col-start-auto">
+                                <span className="font-semibold lg:hidden">Marks in: </span>{marked || '—'}
+                            </p>
+                            <div className="col-start-2 lg:col-start-auto">
+                                <button
+                                    type="button"
+                                    onClick={() => setChooser({ kind: 'row', row })}
+                                    aria-label={`Combination for ${row.name}: ${label ?? 'none chosen'}`}
+                                    className="input-field flex min-h-10 w-full items-center justify-between gap-2 text-left text-sm"
+                                >
+                                    <span className={cn('min-w-0 truncate', !label && 'text-muted-foreground')}>{label ?? 'Choose a combination…'}</span>
+                                    <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden />
+                                </button>
+                                {draft.include && !draft.choice && (
+                                    <p className="mt-1 text-xs text-caution">Pick a combination to place this learner.</p>
+                                )}
+                            </div>
+                            <div className="col-start-2 lg:col-start-auto">
+                                <MathsSelect value={draft.maths} label={`Maths for ${row.name}`} onChange={maths => update(row.studentId, { maths })} />
+                            </div>
+                            <div className="col-start-2 lg:col-start-auto"><SeniorStatus row={row} draft={draft} /></div>
+                        </li>
+                    );
+                })}
+            </ul>
+
+            <footer className="flex flex-col gap-3 border-t border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <p className="text-xs text-muted-foreground">
+                    {missingChoice > 0 && <span className="text-caution">{missingChoice} ticked learner(s) still need a combination. </span>}
                     {newCustom.size > 0 && `${newCustom.size} custom combination(s) not on the Ministry list will be added to your school. `}
                     &ldquo;Default&rdquo; maths keeps what the learner takes now, else Core for STEM and Essential otherwise.
                 </p>
-                <button type="button" className="btn-primary h-9 px-4 text-sm" disabled={saving || chosen.length === 0} onClick={submit}>
+                <button type="button" className="btn-primary h-10 w-full shrink-0 px-4 text-sm sm:h-9 sm:w-auto" disabled={saving || chosen.length === 0} onClick={submit}>
                     <Users size={14} aria-hidden /> {saving ? 'Placing…' : `Place ${chosen.length} learner${chosen.length === 1 ? '' : 's'}`}
                 </button>
             </footer>
+
+            <CombinationChooser
+                open={chooser !== null}
+                subject={chooserRow ? chooserRow.name : `${ticked.length} ticked learner${ticked.length === 1 ? '' : 's'}`}
+                current={chooserRow ? drafts[chooserRow.studentId]?.choice ?? '' : ''}
+                suggestion={chooserRow ? suggestionOption(chooserRow, data.combinations) : null}
+                schoolCombinations={data.combinations}
+                offeredCodes={offeredCodes}
+                onPick={choice => {
+                    if (chooserRow) update(chooserRow.studentId, { choice, include: choice !== '' });
+                    else setForTicked({ choice });
+                }}
+                onClose={() => setChooser(null)}
+            />
         </div>
     );
 }
@@ -335,58 +416,46 @@ function ElectiveTable({ data, onApply, onError }: TableProps<ElectivePlacementR
 
     return (
         <div className="card overflow-hidden">
-            <p className="border-b border-border px-5 py-3 text-xs text-muted-foreground">
+            <p className="border-b border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
                 Compulsory subjects list the whole class automatically. Tick the electives each student takes — pre-filled from the marks
                 already recorded (<span className="font-semibold text-primary">•</span> marks a subject the student has marks in).
             </p>
-            <div className="overflow-x-auto">
-                <table className="data-table w-full min-w-[40rem] text-left">
-                    <thead>
-                        <tr>
-                            <th>Student</th>
-                            <th>Electives taken</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.learners.map(l => {
-                            const set = picked[l.studentId] ?? new Set<string>();
-                            const marked = new Set(l.markedSubjectIds);
-                            return (
-                                <tr key={l.studentId} className={cn(changed.includes(l) && 'bg-primary/5')}>
-                                    <td className="whitespace-nowrap">
-                                        <span className="block text-sm font-medium">{l.name}</span>
-                                        <span className="font-mono text-xs text-muted-foreground">{l.admissionNumber}</span>
-                                    </td>
-                                    <td>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {data.electives.map(e => {
-                                                const on = set.has(e.id);
-                                                return (
-                                                    <button
-                                                        key={e.id}
-                                                        type="button"
-                                                        aria-pressed={on}
-                                                        onClick={() => toggle(l.studentId, e.id)}
-                                                        className={cn(
-                                                            'min-h-8 rounded-full border px-2.5 text-xs transition-colors',
-                                                            on ? 'border-primary bg-primary/15 font-semibold text-primary' : 'border-border text-muted-foreground hover:border-primary/50',
-                                                        )}
-                                                    >
-                                                        {marked.has(e.id) && <span aria-label="has marks" className="mr-1 text-primary">•</span>}
-                                                        {e.name}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <footer className="flex justify-end border-t border-border px-5 py-4">
-                <button type="button" className="btn-primary h-9 px-4 text-sm" disabled={saving || changed.length === 0} onClick={submit}>
+            <ul className="divide-y divide-border">
+                {data.learners.map(l => {
+                    const set = picked[l.studentId] ?? new Set<string>();
+                    const marked = new Set(l.markedSubjectIds);
+                    return (
+                        <li key={l.studentId} className={cn('grid gap-2 px-4 py-4 sm:px-5 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-center lg:gap-4', changed.includes(l) && 'bg-primary/5')}>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-medium">{l.name}</span>
+                                <span className="font-mono text-xs text-muted-foreground">{l.admissionNumber}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Electives for ${l.name}`}>
+                                {data.electives.map(e => {
+                                    const on = set.has(e.id);
+                                    return (
+                                        <button
+                                            key={e.id}
+                                            type="button"
+                                            aria-pressed={on}
+                                            onClick={() => toggle(l.studentId, e.id)}
+                                            className={cn(
+                                                'min-h-9 rounded-full border px-3 text-xs transition-colors',
+                                                on ? 'border-primary bg-primary/15 font-semibold text-primary' : 'border-border text-muted-foreground hover:border-primary/50',
+                                            )}
+                                        >
+                                            {marked.has(e.id) && <span aria-label="has marks" className="mr-1 text-primary">•</span>}
+                                            {e.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+            <footer className="flex justify-end border-t border-border px-4 py-4 sm:px-5">
+                <button type="button" className="btn-primary h-10 w-full px-4 text-sm sm:h-9 sm:w-auto" disabled={saving || changed.length === 0} onClick={submit}>
                     {saving ? 'Saving…' : `Save electives for ${changed.length} student${changed.length === 1 ? '' : 's'}`}
                 </button>
             </footer>
@@ -403,10 +472,16 @@ const BADGE_TONES = {
     muted: 'bg-muted text-muted-foreground',
 } as const;
 
-function Badge({ tone, icon: Icon, children }: { tone: keyof typeof BADGE_TONES; icon: typeof CheckCircle2; children: ReactNode }) {
+function Badge({ tone, icon: Icon, wrap = false, children }: {
+    tone: keyof typeof BADGE_TONES;
+    icon: typeof CheckCircle2;
+    /** Let a long message wrap instead of running out of its column. */
+    wrap?: boolean;
+    children: ReactNode;
+}) {
     return (
-        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap', BADGE_TONES[tone])}>
-            <Icon size={12} aria-hidden /> {children}
+        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold', wrap ? 'rounded-lg' : 'whitespace-nowrap', BADGE_TONES[tone])}>
+            <Icon size={12} className="shrink-0" aria-hidden /> {children}
         </span>
     );
 }
