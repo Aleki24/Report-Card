@@ -5,6 +5,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
+import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import type { PlacementApplyInput } from '@/lib/schemas';
 import { MATHS_CODES, MINISTRY_COMBINATION_TEMPLATES, isMathsCode, type CbcPathway, type MathsCode } from '@/lib/pathway-definitions';
 import { createSchoolCombination, CombinationError } from '@/lib/pathway/combinations';
@@ -61,7 +62,7 @@ export async function applyPlacement(supabase: Db, schoolId: string, input: Plac
 async function placementModeFor(supabase: Db, schoolId: string, streamId: string): Promise<PlacementMode | null> {
     const { data } = await supabase
         .from('grade_streams')
-        .select('id, school_id, grades ( numeric_order, academic_levels ( code ) )')
+        .select('id, school_id, grades ( code, name_display, academic_levels ( code ) )')
         .eq('id', streamId)
         .maybeSingle();
     if (!data || data.school_id !== schoolId) return null;
@@ -69,7 +70,7 @@ async function placementModeFor(supabase: Db, schoolId: string, streamId: string
     const grade = Array.isArray(data.grades) ? data.grades[0] : data.grades;
     const level = Array.isArray(grade?.academic_levels) ? grade?.academic_levels[0] : grade?.academic_levels;
     if (level?.code === '844') return '844';
-    if (level?.code === 'CBC' && grade && grade.numeric_order >= 10 && grade.numeric_order <= 12) return 'senior';
+    if (level?.code === 'CBC' && isSeniorSchoolGrade(grade)) return 'senior';
     return null;
 }
 

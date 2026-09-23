@@ -6,7 +6,7 @@ import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
-import { getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
+import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 type DataType =
   | 'students'
@@ -95,15 +95,22 @@ export async function GET(request: NextRequest) {
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
         let filteredStudents = data ?? [];
+        const subjectId = searchParams.get('subject_id');
         if (auth.role !== 'ADMIN') {
           const perms = await getTeacherPermissions(auth.userId);
-          filteredStudents = filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
+          // Mark entry: only the streams this teacher teaches the subject in
+          // (or their own class), not every learner they can see elsewhere.
+          filteredStudents = subjectId
+            ? filteredStudents.filter(student => canTeacherMarkStudent(perms, subjectId, {
+                current_grade_stream_id: student.current_grade_stream_id,
+                grade_id: (Array.isArray(student.grade_streams) ? student.grade_streams[0] : student.grade_streams)?.grade_id ?? null,
+              }))
+            : filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
         }
 
         // Mark entry passes the exam's subject: only the learners who take it
         // are returned, and `roster` says why, so an empty elective list can
         // explain itself instead of looking like a bug.
-        const subjectId = searchParams.get('subject_id');
         if (subjectId) {
           const { students: takers, mode } = await subjectTakers(supabase, subjectId, filteredStudents);
           return NextResponse.json({ data: takers, roster: mode });
@@ -319,7 +326,7 @@ export async function GET(request: NextRequest) {
       case 'school_profile': {
         const { data, error } = await supabase
           .from('schools')
-          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code, min_combination_group_size, overall_grading_system_id')
+          .select('id, name, address, phone, email, logo_url, teacher_invite_code, student_invite_code, min_combination_group_size, overall_grading_system_id, cbc_ranking_enabled, senior_rank_group')
           .eq('id', schoolId)
           .maybeSingle();
 

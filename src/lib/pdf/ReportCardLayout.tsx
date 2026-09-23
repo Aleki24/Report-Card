@@ -120,11 +120,13 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                     <View style={c.infoCardHead}><Text style={c.infoCardTitle}>Assessment</Text></View>
                     <View style={c.infoCardBody}>
                         <InfoLine label="Examination" value={data.examTitle} />
-                        <InfoLine label="Position in Class" value={data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'} />
-                        <InfoLine label="Subjects" value={`${data.subjectMarks.length}`} />
-                        {data.combinationRank !== undefined && (
-                            <InfoLine label="Pathway Position" value={`${data.combinationRank} of ${data.combinationSize}`} />
+                        {data.showPositions && (
+                            <InfoLine label="Position in Class" value={data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'} />
                         )}
+                        {data.showPositions && data.overallRank !== undefined && (
+                            <InfoLine label="Overall Position" value={`${data.overallRank} of ${data.overallSize}`} />
+                        )}
+                        <InfoLine label="Subjects" value={`${data.subjectMarks.length}`} />
                     </View>
                 </View>
             </View>
@@ -164,7 +166,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                             />
                         </View>
                     )}
-                    <View style={c.averageStat}>
+                    {data.showPositions && <View style={c.averageStat}>
                         <Text style={c.averageStatLabel}>Position</Text>
                         <Text style={c.averageStatValue}>{data.classRank > 0 ? `${data.classRank}/${data.totalStudents}` : '—'}</Text>
                         {/* Moving from 8th to 5th is +3: a smaller rank is a better one. */}
@@ -173,7 +175,7 @@ export function ReportCardLayout({ data, qrCodeDataUri }: { data: ReportCardData
                                 ? data.previousClassRank - data.classRank
                                 : null}
                         />
-                    </View>
+                    </View>}
                     {data.classMeanPercentage !== undefined && (
                         <View style={c.averageStat}>
                             <Text style={c.averageStatLabel}>Class Mean</Text>
@@ -562,7 +564,12 @@ function AtAGlance({ data }: { data: ReportCardData }) {
     if (compared.length > 0) {
         rows.push(['Subjects improved', `${improved} of ${compared.length}`]);
     }
-    rows.push(['Class position', data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—']);
+    if (data.showPositions) {
+        rows.push(['Class position', data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—']);
+        if (data.overallRank !== undefined) {
+            rows.push([data.overallRankLabel ?? 'Overall position', `${data.overallRank} of ${data.overallSize}`]);
+        }
+    }
 
     return (
         <View style={c.statList}>

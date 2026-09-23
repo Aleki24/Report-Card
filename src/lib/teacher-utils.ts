@@ -130,9 +130,10 @@ export function isExamVisibleToTeacher(exam: any, perms: TeacherPermissions, use
     // Subject teacher sees an exam if they teach the same subject
     // for the same grade (regardless of specific stream assignment)
     const matchesAssignment = perms.subjectTeacherAssignments.some(a => {
-      if (a.subject_id !== exam.subject_id) return false;
-      // Grade must match
-      return a.grade_id === exam.grade_id;
+      if (a.subject_id !== exam.subject_id || a.grade_id !== exam.grade_id) return false;
+      // A single-stream exam belongs to that stream's teacher; a stream
+      // assignment elsewhere in the grade doesn't reach it.
+      return !exam.grade_stream_id || !a.grade_stream_id || a.grade_stream_id === exam.grade_stream_id;
     });
     if (matchesAssignment) return true;
   }
@@ -174,4 +175,45 @@ export function isSubjectVisibleToTeacher(subject: any, perms: TeacherPermission
   }
 
   return false;
+}
+
+/** Where a learner sits: their stream and that stream's grade. */
+export type StudentPlacement = { current_grade_stream_id: string | null; grade_id: string | null };
+
+/**
+ * Whether a teacher records this subject's marks for this learner.
+ *
+ * In a streamed grade each stream usually has its own subject teacher, so a
+ * teacher gets the learners of the streams they teach the subject in — every
+ * stream when they were assigned the whole grade — plus their own class as
+ * class teacher. A grade with one stream is the same rule with one stream.
+ */
+export function canTeacherMarkStudent(perms: TeacherPermissions, subjectId: string, student: StudentPlacement): boolean {
+  const streamId = student.current_grade_stream_id;
+  if (streamId && perms.classTeacherStreams.includes(streamId)) return true;
+  return perms.subjectTeacherAssignments.some(a =>
+    a.subject_id === subjectId &&
+    (a.grade_stream_id ? a.grade_stream_id === streamId : a.grade_id === student.grade_id),
+  );
+}
+
+/** The ids, of those given, whose `subjectId` marks this teacher may record. */
+export async function markableStudentIds(perms: TeacherPermissions, subjectId: string, studentIds: string[]): Promise<Set<string>> {
+  if (studentIds.length === 0) return new Set();
+  const { data, error } = await createSupabaseAdmin()
+    .from('students')
+    .select('id, current_grade_stream_id, grade_streams ( grade_id )')
+    .in('id', studentIds);
+  if (error) throw new Error(`Failed to load learners' classes: ${error.message}`);
+  return new Set(
+    (data ?? [])
+      .filter(s => {
+        const stream = Array.isArray(s.grade_streams) ? s.grade_streams[0] : s.grade_streams;
+        return canTeacherMarkStudent(perms, subjectId, {
+          current_grade_stream_id: s.current_grade_stream_id as string | null,
+          grade_id: (stream?.grade_id as string | undefined) ?? null,
+        });
+      })
+      .map(s => s.id as string),
+  );
 }

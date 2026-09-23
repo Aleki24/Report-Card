@@ -9,6 +9,7 @@ import {
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import { expandId, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 import { selectExamRound } from '@/lib/reports/exam-round';
+import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 
 export const runtime = 'nodejs';
 
@@ -225,10 +226,14 @@ export async function GET(
                 rubric: getRubricFromScales(m.percentage, grading.gradingScales) || null,
             }));
 
-        // Class position, computed over the same approved exams.
+        // Class position, computed over the same approved exams — and only
+        // where the card itself prints one (CBC only when the school ranks).
         let classRank = 0;
         let totalStudents = 0;
-        if (student.current_grade_stream_id) {
+        const showPositions = schoolId
+            ? ranksCurriculum(await loadRankingSettings(supabase, schoolId), grading.gradingSystemType)
+            : grading.gradingSystemType === 'KCSE';
+        if (showPositions && student.current_grade_stream_id) {
             const { data: classmates } = await supabase
                 .from('students')
                 .select('id')

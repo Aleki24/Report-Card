@@ -5,6 +5,7 @@
 // Uses admin client since NextAuth (not Supabase Auth) is used.
 // ============================================================
 
+import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { getCurrentStudent } from './get-current-student';
@@ -235,7 +236,15 @@ export async function getStudentReportCards(student: CurrentStudent) {
         .order('generated_at', { ascending: false });
 
     if (error) throw error;
-    return data ?? [];
+
+    // The portal shows a position only where the printed card does: CBC
+    // only when the school ranks (KNEC does not rank CBC learners).
+    const [{ data: level }, settings] = await Promise.all([
+        supabase.from('academic_levels').select('code').eq('id', student.academicLevelId).maybeSingle(),
+        loadRankingSettings(supabase, student.schoolId),
+    ]);
+    const showPositions = ranksCurriculum(settings, level?.code === 'CBC' ? 'CBC' : 'KCSE');
+    return (data ?? []).map(rc => (showPositions ? rc : { ...rc, overall_position: null }));
 }
 
 // ── Attendance ──────────────────────────────────────────────

@@ -46,6 +46,8 @@ const t = StyleSheet.create({
     cPoints: { width: '9%', textAlign: 'center' },
     cRank: { width: '10%', textAlign: 'center' },
     cComment: { width: '27%' },
+    /** Remarks take the rank column's width when the card prints no positions. */
+    cCommentWide: { width: '37%' },
 
     /* Summary line */
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, marginBottom: 12 },
@@ -76,6 +78,7 @@ const t = StyleSheet.create({
 
 export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportCardData; qrCodeDataUri?: string }) {
     const isKCSE = data.gradingSystemType === 'KCSE';
+    const commentCol = data.showPositions ? t.cComment : t.cCommentWide;
     const totalScore = data.totalScore ?? data.subjectMarks.reduce((sum, mk) => sum + (mk.score || 0), 0);
     const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const overallGrade = data.overallPointsGrade || data.overallGrade;
@@ -107,9 +110,11 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                     <View style={t.detailCol}>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Examination</Text><Text style={t.detailValue}>{data.examTitle}</Text></View>
                         <View style={t.detailLine}><Text style={t.detailLabel}>Year</Text><Text style={t.detailValue}>{data.academicYear}</Text></View>
-                        <View style={t.detailLine}><Text style={t.detailLabel}>Class Rank</Text><Text style={t.detailValue}>{data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'}</Text></View>
-                        {data.combinationRank !== undefined && (
-                            <View style={t.detailLine}><Text style={t.detailLabel}>Pathway Rank</Text><Text style={t.detailValue}>{`${data.combinationRank} of ${data.combinationSize}`}</Text></View>
+                        {data.showPositions && (
+                            <View style={t.detailLine}><Text style={t.detailLabel}>Class Rank</Text><Text style={t.detailValue}>{data.classRank > 0 ? `${data.classRank} of ${data.totalStudents}` : '—'}</Text></View>
+                        )}
+                        {data.showPositions && data.overallRank !== undefined && (
+                            <View style={t.detailLine}><Text style={t.detailLabel}>Overall Rank</Text><Text style={t.detailValue}>{`${data.overallRank} of ${data.overallSize}`}</Text></View>
                         )}
                     </View>
                 </View>
@@ -121,8 +126,8 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                     <Text style={[t.th, t.cScore]}>Score</Text>
                     <Text style={[t.th, t.cGrade]}>Grade</Text>
                     <Text style={[t.th, t.cPoints]}>Pts</Text>
-                    <Text style={[t.th, t.cRank]}>Rank</Text>
-                    <Text style={[t.th, t.cComment]}>Remarks</Text>
+                    {data.showPositions && <Text style={[t.th, t.cRank]}>Rank</Text>}
+                    <Text style={[t.th, commentCol]}>Remarks</Text>
                 </View>
                 {data.subjectMarks.map((sm, idx) => {
                     const rankText = sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : '—';
@@ -133,8 +138,8 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                             <Text style={[t.td, t.cScore]}>{sm.percentage != null ? `${sm.percentage}%` : '—'}</Text>
                             <Text style={[t.tdBold, t.cGrade]}>{sm.grade || '—'}</Text>
                             <Text style={[t.td, t.cPoints]}>{sm.points ?? '—'}</Text>
-                            <Text style={[t.td, t.cRank]}>{rankText}</Text>
-                            <Text style={[t.tdItalic, t.cComment]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
+                            {data.showPositions && <Text style={[t.td, t.cRank]}>{rankText}</Text>}
+                            <Text style={[t.tdItalic, commentCol]}>{sm.teacherComment || generateShortFeedback(sm.percentage, sm.grade)}</Text>
                         </View>
                     );
                 })}
@@ -144,8 +149,8 @@ export function ReportCardLayoutMinimal({ data, qrCodeDataUri }: { data: ReportC
                     <Text style={[t.tdBold, t.cScore]}>{Math.round(data.overallPercentage)}%</Text>
                     <Text style={[t.tdBold, t.cGrade]}>{overallGrade || '—'}</Text>
                     <Text style={[t.tdBold, t.cPoints]}>{data.totalPoints ?? '—'}</Text>
-                    <Text style={[t.tdBold, t.cRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>
-                    <Text style={[t.tdBold, t.cComment]}></Text>
+                    {data.showPositions && <Text style={[t.tdBold, t.cRank]}>{data.classRank > 0 ? `${data.classRank}` : '—'}</Text>}
+                    <Text style={[t.tdBold, commentCol]}></Text>
                 </View>
 
                 {/* Summary line */}
