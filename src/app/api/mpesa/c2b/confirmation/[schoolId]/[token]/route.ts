@@ -4,6 +4,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { verifyWebhookToken } from '@/lib/crypto';
 import type { C2BConfirmationBody } from '@/lib/mpesa';
 import { escapeLikePattern } from '@/lib/postgrest';
+import { MPESA_RECEIPT_UNIQUE_INDEX, isUniqueViolation } from '@/lib/api-errors';
 
 export const runtime = 'nodejs';
 
@@ -123,7 +124,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             unmatched_account_reference: matchedFeeId ? null : rawRef,
             notes: matchedFeeId ? null : (student ? 'No fee record for the current term — assign manually' : 'No student matched this account number'),
         });
-        if (insertError) {
+        if (insertError && isUniqueViolation(insertError, MPESA_RECEIPT_UNIQUE_INDEX)) {
+            // A concurrent delivery of the same confirmation got there first;
+            // the unique index kept this copy out, which is the point of it.
+            console.info('[mpesa c2b confirmation] duplicate delivery ignored', body.TransID, 'for school', schoolId);
+        } else if (insertError) {
             // The money has moved regardless; this must reach the logs so the
             // payment can be recorded by hand rather than vanish.
             console.error('[mpesa c2b confirmation] failed to record payment', body.TransID, 'for school', schoolId, insertError);

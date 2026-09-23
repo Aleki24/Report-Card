@@ -23,6 +23,8 @@ const UNIQUE_VIOLATION = '23505';
 const UNIQUE_CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
     students_school_id_admission_number_key:
         'That admission number is already used by another student in your school.',
+    idx_fee_payments_school_mpesa_receipt:
+        'That M-Pesa receipt number has already been recorded for this school.',
 };
 
 /** The subset of a PostgREST/Postgres error this module reads. */
@@ -35,6 +37,19 @@ interface PostgresErrorLike {
 function asPostgresError(err: unknown): PostgresErrorLike | null {
     return typeof err === 'object' && err !== null ? (err as PostgresErrorLike) : null;
 }
+
+/**
+ * Whether a failed write broke a unique constraint, optionally a specific one
+ * (matched by name, as Postgres puts it in the message).
+ */
+export function isUniqueViolation(err: unknown, constraint?: string): boolean {
+    const pgError = asPostgresError(err);
+    if (!pgError || pgError.code !== UNIQUE_VIOLATION) return false;
+    return !constraint || Boolean(pgError.message?.includes(constraint));
+}
+
+/** The unique index that keeps one ledger row per M-Pesa transaction per school. */
+export const MPESA_RECEIPT_UNIQUE_INDEX = 'idx_fee_payments_school_mpesa_receipt';
 
 /**
  * Maps a failed write to a message worth showing, falling back to `fallback`
