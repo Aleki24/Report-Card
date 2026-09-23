@@ -4,25 +4,17 @@ import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicYears, useExams, useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
-import { errorMessage, fullName, pluralize } from '@/lib/format';
+import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
+import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam as toTemplateParam, type ReportTemplateId } from '@/lib/reportTemplates';
 import type { StudentListItem } from '@/lib/types';
 
 type Tab = 'download' | 'comments' | 'sms';
-type TemplateId = 'classic' | 'modern' | 'minimal' | 'progress';
-
-/** Same templates as the web (`src/lib/pdf/templateMeta.ts`). */
-const TEMPLATES: { value: TemplateId; label: string; hint: string }[] = [
-    { value: 'classic', label: 'Classic', hint: 'Navy & orange, performance graph' },
-    { value: 'modern', label: 'Modern', hint: 'Stat tiles, grade pills' },
-    { value: 'minimal', label: 'Minimal', hint: 'Ink-friendly letterhead' },
-    { value: 'progress', label: 'Progress', hint: 'Per-paper columns, signatures' },
-];
 
 interface Scope {
     yearId: string;
@@ -115,13 +107,9 @@ function ReportsContent() {
 
 // ── Downloads ──────────────────────────────────────────────
 
-function fileSafe(text: string): string {
-    return text.replace(/[^a-zA-Z0-9-]+/g, '_');
-}
-
 function DownloadPanel({ scope }: { scope: Scope }) {
     const api = useApi();
-    const [template, setTemplate] = useState<TemplateId>('classic');
+    const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
     const [title, setTitle] = useState('');
     const [busy, setBusy] = useState<'cards' | 'sheet' | string | null>(null);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
@@ -129,7 +117,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
     const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', grade_stream_id: scope.streamId }));
 
     const baseQuery = { yearId: scope.yearId, termId: scope.termId, examType: scope.examType, customTitle: title.trim() || null };
-    const templateParam = template === 'classic' ? null : template;
+    const templateParam = toTemplateParam(template);
 
     const run = async (key: string, work: () => Promise<void>) => {
         setBusy(key);
@@ -180,7 +168,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
     return (
         <View>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
-            <ChipSelect label="Template" options={TEMPLATES.map((t) => ({ value: t.value, label: t.label, hint: t.hint }))} value={template} onChange={setTemplate} />
+            <ChipSelect label="Template" options={REPORT_TEMPLATES} value={template} onChange={setTemplate} />
             <TextField label="Custom title (optional)" value={title} onChangeText={setTitle} placeholder="e.g. End of Term 2 Report" />
             <Card>
                 <Text style={styles.cardTitle}>{scope.streamName} · {scope.termName}{scope.examType ? ` · ${examTypeLabel(scope.examType)}` : ''}</Text>

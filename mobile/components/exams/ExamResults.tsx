@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { PASS_MARK, errorMessage, formatPercent, pluralize, scoreColor } from '@/lib/format';
+import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
 import { colors, spacing } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar, SearchField, StatGrid, StatTile,
@@ -48,7 +48,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         setExporting(format);
         setExportError(null);
         try {
-            const safe = `${exam.subject_name}-${exam.grade_stream_name ?? exam.grade_name}-${exam.exam_type}`.replace(/[^a-zA-Z0-9-]+/g, '_');
+            const safe = fileSafe(`${exam.subject_name}-${exam.grade_stream_name ?? exam.grade_name}-${exam.exam_type}`);
             await api.downloadAndShare(`/api/school/exam-marks/export?exam_id=${exam.id}&format=${format}`, `${safe}.${format}`, format === 'pdf' ? 'application/pdf' : 'text/csv');
         } catch (err) {
             setExportError(errorMessage(err, 'Export failed'));

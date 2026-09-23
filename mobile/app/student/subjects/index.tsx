@@ -1,54 +1,65 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { Badge, Card, EmptyState, ErrorBanner, LoadingView, Screen, ScreenHeader } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
+import { Badge, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, ScreenHeader } from '@/components/ui';
+import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
+import { colors, spacing } from '@/lib/theme';
 import type { Subject } from '@/lib/types';
 
-function typeBadge(type: Subject['subject_type']) {
-    if (type === 'CORE') return <Badge label="Core" variant="success" />;
-    if (type === 'ESSENTIAL') return <Badge label="Essential" variant="info" />;
-    return <Badge label="Optional" variant="default" />;
-}
+type Filter = 'ALL' | 'CORE' | 'ELECTIVE';
 
 export default function SubjectsScreen() {
     const router = useRouter();
     const { data, loading, error, refresh, refreshing } = useApiQuery<Subject[]>('/api/school/student/subjects');
-    const subjects = data ?? [];
+    const [filter, setFilter] = useState<Filter>('ALL');
+    const subjects = (data ?? []).filter((s) => filter === 'ALL' || (filter === 'ELECTIVE' ? s.enrollment_role === 'ELECTIVE' : s.enrollment_role !== 'ELECTIVE'));
 
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
-            <ScreenHeader title="My Subjects" description="Tap a subject to see performance and materials." />
+            <ScreenHeader title="My Subjects" description="Tap a subject to see your performance, assignments and materials." />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+            {(data ?? []).some((s) => s.enrollment_role === 'ELECTIVE') ? (
+                <ChipSelect
+                    options={[
+                        { value: 'ALL', label: 'All' },
+                        { value: 'CORE', label: 'Core' },
+                        { value: 'ELECTIVE', label: 'My electives' },
+                    ]}
+                    value={filter}
+                    onChange={setFilter}
+                />
+            ) : null}
             {loading ? (
                 <LoadingView />
             ) : subjects.length === 0 ? (
-                <EmptyState title="No subjects found" description="Subjects assigned to your level will appear here." />
+                <EmptyState title="No subjects found" description="Subjects assigned to your class will appear here." />
             ) : (
-                <View style={styles.grid}>
-                    {subjects.map((s) => (
-                        <Pressable key={s.id} onPress={() => router.push(`/student/subjects/${s.id}`)} style={styles.cardWrap}>
-                            <Card>
-                                <Text style={styles.subjectName}>{s.name}</Text>
-                                <Text style={styles.subjectCode}>{s.code ?? 'No code'}</Text>
-                                <View style={styles.badgeRow}>
-                                    {typeBadge(s.subject_type)}
-                                    {s.enrollment_role === 'ELECTIVE' ? <Badge label="My Elective" variant="info" /> : null}
-                                </View>
-                            </Card>
-                        </Pressable>
-                    ))}
-                </View>
+                <>
+                    <Text style={styles.count}>{subjects.length} subjects</Text>
+                    <ListCard>
+                        {subjects.map((s) => (
+                            <ListRow
+                                key={s.id}
+                                title={s.name}
+                                subtitle={s.code ?? 'No code'}
+                                right={
+                                    <View style={styles.badges}>
+                                        <SubjectTypeBadge type={s.subject_type} />
+                                        {s.enrollment_role === 'ELECTIVE' ? <Badge label="Elective" variant="info" /> : null}
+                                    </View>
+                                }
+                                onPress={() => router.push(`/student/subjects/${s.id}`)}
+                            />
+                        ))}
+                    </ListCard>
+                </>
             )}
         </Screen>
     );
 }
 
 const styles = StyleSheet.create({
-    grid: { gap: spacing.md },
-    cardWrap: {},
-    subjectName: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-    subjectCode: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.sm },
-    badgeRow: { flexDirection: 'row', gap: spacing.xs },
+    count: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+    badges: { alignItems: 'flex-end', gap: 4 },
 });

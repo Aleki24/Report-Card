@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -40,6 +40,11 @@ function PeopleContent() {
     const params = useLocalSearchParams<{ tab?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
+
+    // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
+    useEffect(() => {
+        if (isAdmin && (params.tab === 'teachers' || params.tab === 'parents' || params.tab === 'students')) setTab(params.tab);
+    }, [isAdmin, params.tab]);
 
     return (
         <Screen>

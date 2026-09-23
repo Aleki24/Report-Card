@@ -153,3 +153,8 @@ export function pluralize(count: number, singular: string, plural = `${singular}
 export function errorMessage(err: unknown, fallback: string): string {
     return err instanceof Error && err.message ? err.message : fallback;
 }
+
+/** A string safe to use in a downloaded file's name. */
+export function fileSafe(text: string): string {
+    return text.replace(/[^a-zA-Z0-9-]+/g, '_');
+}

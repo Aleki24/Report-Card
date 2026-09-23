@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -40,6 +40,11 @@ function ExamsContent() {
     const [exam, setExam] = useState<ExamSlot | null>(null);
     const [pickerKey, setPickerKey] = useState(0);
     const structure = useAcademicStructure();
+
+    // Tab screens stay mounted, so a later deep link (?tab=results) must switch tabs too.
+    useEffect(() => {
+        if (params.tab) setTab(parseTab(params.tab));
+    }, [params.tab]);
 
     const selectTab = (t: Tab) => {
         setTab(t);

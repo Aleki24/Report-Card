@@ -114,3 +114,20 @@ export function getStaffNav(role: UserRole | null): { primary: StaffScreen[]; ov
     const overflow = STAFF_SCREEN_ORDER.filter((s) => !primary.includes(s) && canAccessStaffScreen(s, role));
     return { primary, overflow };
 }
+
+// ── Student screens ──────────────────────────────────────────
+
+export type StudentScreen = 'index' | 'results' | 'subjects/index' | 'attendance' | 'fees' | 'profile';
+
+export const STUDENT_SCREENS: Record<StudentScreen, Omit<StaffScreenMeta, 'roles' | 'href'> & { href: `/student${string}` }> = {
+    index: { title: 'Dashboard', tabLabel: 'Home', icon: '🏠', description: 'Your day at a glance', href: '/student' },
+    results: { title: 'My Results', tabLabel: 'Results', icon: '🎓', description: 'Exam marks and report cards', href: '/student/results' },
+    'subjects/index': { title: 'My Subjects', tabLabel: 'Subjects', icon: '📚', description: 'Performance, homework and notes per subject', href: '/student/subjects' },
+    fees: { title: 'Fees', tabLabel: 'Fees', icon: '💰', description: 'Balance, payments and paying online', href: '/student/fees' },
+    attendance: { title: 'Attendance', tabLabel: 'Attendance', icon: '📅', description: 'Your attendance history', href: '/student/attendance' },
+    profile: { title: 'My Profile', tabLabel: 'Profile', icon: '👤', description: 'Your details and account', href: '/student/profile' },
+};
+
+/** The web's phone bar shows Dashboard, Results and Subjects; Fees is added as the one thing families act on. */
+export const STUDENT_PRIMARY: readonly StudentScreen[] = ['index', 'results', 'subjects/index', 'fees'];
+export const STUDENT_OVERFLOW: readonly StudentScreen[] = ['attendance', 'profile'];
