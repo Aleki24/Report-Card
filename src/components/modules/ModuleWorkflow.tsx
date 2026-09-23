@@ -1,106 +1,35 @@
+import { cn } from '@/lib/utils';
+import { Section, SectionHeader } from '@/components/landing/ui/Section';
+import { TONES, type Tone } from '@/components/landing/ui/tones';
+
 interface ModuleWorkflowProps {
   steps: string[];
   title?: string;
 }
 
-export default function ModuleWorkflow({ steps, title }: ModuleWorkflowProps) {
-  const stepColors = [
-    'var(--color-accent)',
-    'var(--color-success)',
-    'var(--color-warning)',
-    'var(--color-danger)',
-    'var(--color-purple-500)',
-  ];
+/** Each step gets the next accent so a long workflow still reads as a sequence. */
+const STEP_TONES: Tone[] = ['primary', 'positive', 'caution', 'violet'];
 
+export default function ModuleWorkflow({ steps, title = 'From setup to results' }: ModuleWorkflowProps) {
   return (
-    <section style={{ padding: 'clamp(48px, 6vw, 80px) clamp(16px, 5vw, 48px)', maxWidth: '1280px', margin: '0 auto' }}>
-      {/* Divider */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: 'clamp(32px, 4vw, 48px)' }}>
-        <div style={{ flex: 1, height: '1px', background: 'var(--color-border-subtle)' }} />
-        <span
-          style={{
-            color: 'var(--color-text-muted)',
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.6875rem',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.3em',
-          }}
-        >
-          {title || 'How It Works'}
-        </span>
-        <div style={{ flex: 1, height: '1px', background: 'var(--color-border-subtle)' }} />
-      </div>
-
-      {/* Steps */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: 'clamp(16px, 2vw, 20px)',
-          maxWidth: '1024px',
-          margin: '0 auto',
-        }}
-      >
+    <Section aria-label="How it works">
+      <SectionHeader eyebrow="How it works" title={title} />
+      <ol className="mx-auto grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-5">
         {steps.map((step, idx) => {
-          const color = stepColors[idx % stepColors.length];
-          const stepNum = String(idx + 1).padStart(2, '0');
-
+          const tone = TONES[STEP_TONES[idx % STEP_TONES.length]];
           return (
-            <div
-              key={idx}
-              style={{
-                position: 'relative',
-                padding: 'clamp(20px, 3vw, 28px)',
-                borderRadius: 'var(--radius-lg)',
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border-subtle)',
-                transition: 'border-color 0.3s ease',
-              }}
-            >
-              {/* Step Number */}
-              <span
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'clamp(2rem, 3.5vw, 2.5rem)',
-                  fontWeight: 900,
-                  lineHeight: 1,
-                  color: 'var(--color-text-primary)',
-                  opacity: 0.06,
-                  display: 'block',
-                  marginBottom: '12px',
-                }}
-              >
-                {stepNum}
+            <li key={step} className="relative flex flex-col gap-3 rounded-2xl border border-border bg-card p-6">
+              <span className="flex items-center gap-3">
+                <span className={cn('flex size-9 items-center justify-center rounded-xl border font-mono text-sm font-bold', tone.tile, tone.text)}>
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
+                <span aria-hidden className={cn('h-px flex-1 bg-gradient-to-r to-transparent opacity-40', tone.bar)} />
               </span>
-
-              {/* Color dot */}
-              <div
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: color,
-                  marginBottom: '12px',
-                }}
-              />
-
-              {/* Step Text */}
-              <p
-                style={{
-                  color: 'var(--color-text-secondary)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '0.8125rem',
-                  lineHeight: 1.7,
-                  letterSpacing: '0.01em',
-                }}
-              >
-                {step}
-              </p>
-            </div>
+              <p className="text-sm leading-relaxed text-muted-foreground">{step}</p>
+            </li>
           );
         })}
-      </div>
-    </section>
+      </ol>
+    </Section>
   );
 }

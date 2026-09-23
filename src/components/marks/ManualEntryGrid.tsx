@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
+import type { RosterMode } from '@/lib/subject-roster';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -71,6 +72,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // Students for the selected class
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [studentsLoading, setStudentsLoading] = useState(false);
+    // 'enrolled' when the subject is an elective: only its takers are listed.
+    const [rosterMode, setRosterMode] = useState<RosterMode>('whole-class');
 
     // Raw grading systems/scales — filtered below to the ones for this exam's
     // academic level, since a school can run CBC and 8-4-4 side by side and
@@ -260,7 +263,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         setStudentsLoading(true);
         try {
             const res = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
-            const { data } = await res.json();
+            const { data, roster } = (await res.json()) as { data?: unknown[]; roster?: RosterMode };
+            setRosterMode(roster ?? 'whole-class');
 
             const filteredStudents = (data || []).filter((s: any) => {
                 if (examScoped) {
@@ -1012,7 +1016,15 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             {/* Class/Stream selected but no students */}
             {entryReady && !studentsLoading && students.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">
-                    No students found in this class. Add students in the <strong>Students</strong> page first.
+                    {rosterMode === 'enrolled' ? (
+                        <>
+                            Nobody in this class is enrolled in this subject yet, so there is no one to enter marks for.
+                            An admin sets who takes it on the <strong>Subjects</strong> page
+                            (Placement tab, or &ldquo;who takes this&rdquo; on the subject).
+                        </>
+                    ) : (
+                        <>No students found in this class. Add students in the <strong>Students</strong> page first.</>
+                    )}
                 </div>
             )}
         </div>

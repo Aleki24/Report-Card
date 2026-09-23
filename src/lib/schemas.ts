@@ -227,3 +227,40 @@ export const pendingInviteSchema = z.object({
     grade_stream_id: z.string().uuid('Invalid stream ID').optional(),
     academic_level_id: z.string().uuid('Invalid academic level ID').optional(),
 });
+
+// ── Learner placement (CBC Senior School combinations, 8-4-4 electives) ──
+
+const mathsCodeSchema = z.enum(['MATH_SS', 'MATH_ESS_SS']);
+
+const placementTargetSchema = z.discriminatedUnion('type', [
+    z.object({ type: z.literal('existing'), combinationId: z.string().uuid() }),
+    z.object({ type: z.literal('official'), code: z.string().trim().min(1).max(20) }),
+    z.object({
+        type: z.literal('custom'),
+        electiveCodes: z.array(z.string().trim().min(1).max(20)).length(3),
+        pathway: CbcPathway,
+        name: z.string().trim().min(1).max(100),
+    }),
+]);
+
+// student_ids are NOT validated as UUIDs: production stores TEXT Clerk IDs
+export const placementApplySchema = z.discriminatedUnion('mode', [
+    z.object({
+        mode: z.literal('senior'),
+        grade_stream_id: z.string().uuid(),
+        placements: z.array(z.object({
+            student_id: z.string().min(1),
+            target: placementTargetSchema,
+            maths: mathsCodeSchema.nullable(),
+        })).min(1).max(300),
+    }),
+    z.object({
+        mode: z.literal('844'),
+        grade_stream_id: z.string().uuid(),
+        enrolments: z.array(z.object({
+            student_id: z.string().min(1),
+            subject_ids: z.array(z.string().uuid()).max(20),
+        })).min(1).max(300),
+    }),
+]);
+export type PlacementApplyInput = z.infer<typeof placementApplySchema>;

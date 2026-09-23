@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { subjectTakers } from '@/lib/subject-roster';
 import { getCaller } from '@/lib/auth-server';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
@@ -99,22 +100,13 @@ export async function GET(request: NextRequest) {
           filteredStudents = filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
         }
 
-        // Optional subject roster filter (mark entry): when any of these
-        // students are explicitly enrolled in the subject (8-4-4 electives
-        // like CRE, or CBC pathway electives via student_subjects), return
-        // only the enrolled takers. Subjects with no enrollment data keep
-        // returning the whole class (backwards compatible).
+        // Mark entry passes the exam's subject: only the learners who take it
+        // are returned, and `roster` says why, so an empty elective list can
+        // explain itself instead of looking like a bug.
         const subjectId = searchParams.get('subject_id');
-        if (subjectId && filteredStudents.length > 0) {
-          const { data: enrollments } = await supabase
-            .from('student_subjects')
-            .select('student_id')
-            .eq('subject_id', subjectId)
-            .in('student_id', filteredStudents.map((s: any) => s.id));
-          const enrolledIds = new Set((enrollments ?? []).map(e => e.student_id));
-          if (enrolledIds.size > 0) {
-            filteredStudents = filteredStudents.filter((s: any) => enrolledIds.has(s.id));
-          }
+        if (subjectId) {
+          const { students: takers, mode } = await subjectTakers(supabase, subjectId, filteredStudents);
+          return NextResponse.json({ data: takers, roster: mode });
         }
 
         return NextResponse.json({ data: filteredStudents });

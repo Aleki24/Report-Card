@@ -85,20 +85,41 @@ export async function getCurrentStudentProfile(student: CurrentStudent) {
 export async function getStudentSubjects(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
-    // CBC senior pathway: students with subject enrollments see only
-    // their 7 subjects (4 compulsory cores + 3 combination electives)
+    // A learner with enrolments sees exactly what they take: their
+    // enrolments (CBC senior: combination electives, maths and cores; 8-4-4:
+    // the electives they were put in) plus every CORE subject of the same
+    // band. 8-4-4 enrolments only list electives, so without the cores a
+    // student enrolled in CRE alone would see nothing but CRE.
     const { data: enrollments, error: enrollError } = await supabase
         .from('student_subjects')
-        .select('role, subjects ( id, code, name, subject_type, display_order, category )')
+        .select('role, subjects ( id, code, name, subject_type, display_order, category, band )')
         .eq('student_id', student.studentId);
 
     if (!enrollError && enrollments && enrollments.length > 0) {
-        const enrolled = enrollments
-            .map((e: any) => {
-                const subject = Array.isArray(e.subjects) ? e.subjects[0] : e.subjects;
-                return subject ? { ...subject, enrollment_role: e.role as 'CORE' | 'ELECTIVE' } : null;
-            })
-            .filter(Boolean) as any[];
+        type EnrolledSubject = {
+            id: string; code: string; name: string; subject_type: string | null;
+            display_order: number | null; category: string | null; band: string | null;
+            enrollment_role: 'CORE' | 'ELECTIVE';
+        };
+        const enrolled: EnrolledSubject[] = enrollments.flatMap(e => {
+            const subject = Array.isArray(e.subjects) ? e.subjects[0] : e.subjects;
+            return subject ? [{ ...(subject as Omit<EnrolledSubject, 'enrollment_role'>), enrollment_role: e.role as 'CORE' | 'ELECTIVE' }] : [];
+        });
+
+        const bands = [...new Set(enrolled.map(s => s.band).filter((b): b is string => Boolean(b)))];
+        if (bands.length > 0) {
+            const { data: cores } = await supabase
+                .from(SCHOOL_SUBJECT_VIEW)
+                .select('id, code, name, subject_type, display_order, category, band')
+                .eq('school_id', student.schoolId)
+                .eq('subject_type', 'CORE')
+                .in('band', bands);
+            const have = new Set(enrolled.map(s => s.id));
+            for (const core of cores ?? []) {
+                if (!have.has(core.id)) enrolled.push({ ...(core as Omit<EnrolledSubject, 'enrollment_role'>), enrollment_role: 'CORE' });
+            }
+        }
+
         if (enrolled.length > 0) {
             enrolled.sort((a, b) => {
                 if (a.enrollment_role !== b.enrollment_role) return a.enrollment_role === 'CORE' ? -1 : 1;

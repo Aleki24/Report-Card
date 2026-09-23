@@ -53,7 +53,7 @@ export function pathwayLabel(pathway?: string | null): string {
 
 /**
  * Compulsory subjects every senior learner is enrolled in, matched against
- * `subjects.code`. Mathematics is handled separately (see seniorCoreCodes).
+ * `subjects.code`. Mathematics is chosen per learner (see MathsCode).
  *
  * Kenya Sign Language is deliberately absent: it is an elective in its own
  * right (e.g. SS1059) and the alternative to Kiswahili only for learners who
@@ -62,19 +62,35 @@ export function pathwayLabel(pathway?: string | null): string {
  */
 export const SENIOR_CORE_SUBJECT_CODES = ['ENG_SS', 'KISW_SS', 'CSL_SS'] as const;
 
-export const CORE_MATHEMATICS_CODE: SeniorElectiveCode = 'MATH_SS';
+export const CORE_MATHEMATICS_CODE = 'MATH_SS' satisfies SeniorElectiveCode;
 export const ESSENTIAL_MATHEMATICS_CODE = 'MATH_ESS_SS';
 
+/** Every senior learner takes exactly one of these. */
+export type MathsCode = typeof CORE_MATHEMATICS_CODE | typeof ESSENTIAL_MATHEMATICS_CODE;
+export const MATHS_CODES: readonly MathsCode[] = [CORE_MATHEMATICS_CODE, ESSENTIAL_MATHEMATICS_CODE];
+
+export const MATHS_LABELS: Record<MathsCode, string> = {
+    MATH_SS: 'Core Mathematics',
+    MATH_ESS_SS: 'Essential Mathematics',
+};
+
+export function isMathsCode(code: string): code is MathsCode {
+    return (MATHS_CODES as readonly string[]).includes(code.trim().toUpperCase());
+}
+
 /**
- * The compulsory codes for a learner whose combination has these electives.
- * Core Mathematics is one of the official electives; a learner who does not
- * take it takes Essential Mathematics, never both.
+ * The maths a learner takes when nobody has said otherwise.
+ *
+ * Maths is a per-learner choice, not a property of the combination: at a
+ * real school two learners on the same STEM combination (ST2011) took
+ * different maths. Core Mathematics can also be one of a combination's three
+ * electives (e.g. ST1004), in which case it already covers the requirement
+ * and this returns null. Otherwise STEM learners default to Core, everyone
+ * else to Essential.
  */
-export function seniorCoreCodes(electiveCodes: readonly string[]): string[] {
-    const takesCoreMaths = electiveCodes.some(c => c.trim().toUpperCase() === CORE_MATHEMATICS_CODE);
-    return takesCoreMaths
-        ? [...SENIOR_CORE_SUBJECT_CODES]
-        : [...SENIOR_CORE_SUBJECT_CODES, ESSENTIAL_MATHEMATICS_CODE];
+export function defaultMathsCode(electiveCodes: readonly string[], pathway: CbcPathway | null): MathsCode | null {
+    if (electiveCodes.some(c => c.trim().toUpperCase() === CORE_MATHEMATICS_CODE)) return null;
+    return pathway === 'STEM' ? CORE_MATHEMATICS_CODE : ESSENTIAL_MATHEMATICS_CODE;
 }
 
 export interface MinistryCombinationTemplate {
