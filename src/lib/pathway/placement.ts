@@ -52,6 +52,8 @@ export type SeniorPlacementResponse = {
     mode: 'senior';
     learners: SeniorLearnerRow[];
     combinations: SchoolCombinationOption[];
+    /** Senior subject codes the school offers — official combinations are runnable only when all three are here. */
+    offeredCodes: string[];
 };
 
 export type ElectiveLearnerRow = {
