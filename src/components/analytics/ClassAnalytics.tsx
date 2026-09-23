@@ -106,11 +106,23 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
         return () => { cancelled = true; };
     }, [cacheKey, streamId, termId, examType, byKey]);
 
-    // Weakest first: the list exists to show where help is needed.
-    const weakest = useMemo(
-        () => (data?.subjects ?? []).slice().sort((a, b) => a.pass_rate - b.pass_rate),
-        [data],
-    );
+    // Best first, by mean score (the figure subjects are ranked on in a
+    // class's results), pass rate breaking ties. Equal scores share a rank.
+    const subjectRanking = useMemo(() => {
+        const sorted = (data?.subjects ?? [])
+            .slice()
+            .sort((a, b) => b.mean_percentage - a.mean_percentage || b.pass_rate - a.pass_rate);
+        return sorted.map(subject => ({
+            ...subject,
+            rank: sorted.findIndex(other => other.mean_percentage === subject.mean_percentage) + 1,
+        }));
+    }, [data]);
+
+    // The merit list opens on the top 15; "Show all" is remembered per
+    // class/term/exam, so switching class collapses it again.
+    const [meritExpandedFor, setMeritExpandedFor] = useState<string | null>(null);
+    const showAllMerit = meritExpandedFor === cacheKey;
+    const MERIT_PREVIEW = 15;
 
     if (loading) {
         return <div className="h-64 animate-pulse rounded-xl border border-border bg-muted/40" />;
@@ -210,40 +222,42 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                 <Stat label="Subjects" value={String(data.summary.subject_count)} sub="assessed" />
             </div>
 
-            {/* ── Subjects, weakest first ─────────────────────────────────── */}
+            {/* ── Subject ranking, best first ──────────────────────────────── */}
             <section className="rounded-xl border border-border bg-card p-4">
-                <h3 className="text-sm font-semibold text-foreground">Subjects needing attention</h3>
+                <h3 className="text-sm font-semibold text-foreground">Subject ranking</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                    Ranked by pass rate. Grades come from this school&apos;s own scale.
+                    Ranked from highest to lowest mean score. Colour shows the pass rate; grades come from this school&apos;s own scale.
                 </p>
 
-                <ul className="mt-4 space-y-3">
-                    {weakest.map(s => (
+                <ol className="mt-4 space-y-3">
+                    {subjectRanking.map(s => (
                         <li key={s.subject_id} className="flex items-center gap-3">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                                {s.rank}
+                            </span>
                             <div className="min-w-0 flex-1">
                                 <div className="flex items-baseline justify-between gap-2">
                                     <span className="truncate text-sm font-medium text-foreground">
                                         {s.subject_name}
                                     </span>
                                     <span className={`shrink-0 text-xs font-semibold ${toneFor(s.pass_rate)}`}>
-                                        {s.pass_rate}%
+                                        {s.mean_percentage}%{s.grade_symbol ? ` · ${s.grade_symbol}` : ''}
                                     </span>
                                 </div>
                                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
                                     <div
                                         className={`h-full rounded-full ${barFor(s.pass_rate)}`}
-                                        style={{ width: `${Math.max(s.pass_rate, 2)}%` }}
+                                        style={{ width: `${Math.min(Math.max(s.mean_percentage, 2), 100)}%` }}
                                     />
                                 </div>
                                 <p className="mt-1 text-[11px] text-muted-foreground">
-                                    mean {s.mean_percentage}%
-                                    {s.grade_symbol ? ` · ${s.grade_symbol}` : ''}
+                                    {s.pass_rate}% passed
                                     {` · ${s.student_count} learner${s.student_count === 1 ? '' : 's'}`}
                                 </p>
                             </div>
                         </li>
                     ))}
-                </ul>
+                </ol>
             </section>
 
             {/* ── Merit list ──────────────────────────────────────────────── */}
@@ -260,7 +274,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
 
                 {/* Stacks on narrow screens rather than scrolling sideways. */}
                 <ul className="divide-y divide-border">
-                    {data.merit.slice(0, 15).map(m => (
+                    {(showAllMerit ? data.merit : data.merit.slice(0, MERIT_PREVIEW)).map(m => (
                         <li key={m.student_id} className="flex items-center gap-3 p-3 xs:px-4">
                             <span className="w-7 shrink-0 text-xs font-semibold text-muted-foreground">
                                 {m.rank ?? '—'}
@@ -283,10 +297,15 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                     ))}
                 </ul>
 
-                {data.merit.length > 15 && (
-                    <p className="border-t border-border p-3 text-center text-xs text-muted-foreground">
-                        {data.merit.length - 15} more
-                    </p>
+                {data.merit.length > MERIT_PREVIEW && (
+                    <button
+                        type="button"
+                        onClick={() => setMeritExpandedFor(showAllMerit ? null : cacheKey)}
+                        aria-expanded={showAllMerit}
+                        className="w-full border-t border-border p-3 text-center text-xs font-semibold text-primary transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                    >
+                        {showAllMerit ? 'Show top 15 only' : `Show all ${data.merit.length} learners (${data.merit.length - MERIT_PREVIEW} more)`}
+                    </button>
                 )}
             </section>
         </div>
