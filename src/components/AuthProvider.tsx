@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import { useUser, useAuth as useClerkAuth, useSession } from '@clerk/nextjs';
 import type { UserRole } from '@/types';
+import { resolveActiveRole } from '@/lib/roles';
 
 interface UserProfile {
     id: string;
@@ -40,18 +41,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEFAULT_ROLES: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
-
-/**
- * A class teacher already covers subject-teacher work with broader access and
- * is never dropped into the narrower subject-teacher view. Ignore any
- * SUBJECT_TEACHER active_role sitting on a class-teacher account (left over
- * from before this rule, or set out-of-band) so the effective role stays
- * CLASS_TEACHER. Mirrors the same guard in /api/auth/me.
- */
-function sanitizeActiveRole(baseRole: UserRole | null, activeRole: UserRole | null): UserRole | null {
-    if (baseRole === 'CLASS_TEACHER' && activeRole === 'SUBJECT_TEACHER') return null;
-    return activeRole;
-}
 
 async function fetchRoles(): Promise<{ roles: UserRole[]; baseRole: UserRole | null }> {
     try {
@@ -99,11 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // placeholder, so only trust imageUrl when a real photo (uploaded or
         // copied from an OAuth provider like Google) is set.
         const clerkImageUrl = clerkUser?.hasImage ? clerkUser.imageUrl : null;
-        const metadata = (clerkUser?.publicMetadata as any) || {};
+        const metadata = (clerkUser?.publicMetadata ?? {}) as { role?: UserRole; active_role?: unknown; school_id?: string; schoolId?: string };
         // Base role from Clerk metadata (synced from DB)
-        const clerkBaseRole = (metadata.role as UserRole) || 'STUDENT';
+        const clerkBaseRole: UserRole = metadata.role || 'STUDENT';
         // Active role from Clerk metadata (set by role switching)
-        const clerkActiveRole = sanitizeActiveRole(clerkBaseRole, (metadata.active_role as UserRole) || null);
+        const clerkActiveRole = resolveActiveRole(clerkBaseRole, metadata.active_role);
         // Effective role: active_role overrides base role when switching
         const effectiveRole = clerkActiveRole || clerkBaseRole;
 
@@ -122,8 +111,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBaseRole(clerkBaseRole);
 
         fetch('/api/auth/me')
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            .then(async res => {
+                if (!res.ok) {
+                    const body = await res.json().catch(() => null) as { code?: string } | null;
+                    // A deactivated account must not keep using the app on the
+                    // role cached in its Clerk metadata: sign it out.
+                    if (body?.code === 'ACCOUNT_DEACTIVATED') {
+                        await clerkAuth.signOut();
+                        window.location.replace('/login?deactivated=1');
+                    }
+                    throw new Error(`HTTP ${res.status}`);
+                }
                 return res.json();
             })
             .then(data => {
@@ -131,8 +129,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const u = data.profile || data.user;
                 if (u) {
                     // The DB role is the base role; effective role may differ if active_role is set
-                    const dbBaseRole = u.role || clerkBaseRole;
-                    const activeRole = sanitizeActiveRole(dbBaseRole, data.activeRole || clerkActiveRole);
+                    const dbBaseRole: UserRole = u.role || clerkBaseRole;
+                    // The server has already validated the switch against the
+                    // DB role and the class assignment; trust only its answer.
+                    const activeRole = resolveActiveRole(dbBaseRole, data.activeRole);
                     const effective = activeRole || dbBaseRole;
 
                     setProfile({

@@ -11,6 +11,7 @@ const ROLE_LABELS: Record<string, string> = {
     ADMIN: 'Admin',
     CLASS_TEACHER: 'Class Teacher',
     SUBJECT_TEACHER: 'Subject Teacher',
+    STAFF: 'Staff',
 };
 
 function formatPostedBy(poster: { first_name: string; last_name: string; role: string } | null | undefined) {

@@ -102,7 +102,7 @@ function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] })
   );
 }
 
-function RecentActivitiesCard({ activities }: { activities: DashboardData['recentActivities'] }) {
+function RecentActivitiesCard({ activities, viewAllHref }: { activities: DashboardData['recentActivities']; viewAllHref?: string }) {
   if (activities.length === 0) {
     return (
       <ListPanel title="Recent Activity" className="h-full">
@@ -114,7 +114,7 @@ function RecentActivitiesCard({ activities }: { activities: DashboardData['recen
   const displayActivities = activities.slice(0, 5);
 
   return (
-    <ListPanel title="Recent Activity" actionLabel="View all" actionHref="/dashboard/reports" className="h-full">
+    <ListPanel title="Recent Activity" actionLabel={viewAllHref ? 'View all' : undefined} actionHref={viewAllHref} className="h-full">
       <div className="flex flex-col gap-3">
         {displayActivities.map((act, i) => {
           const date = new Date(act.timestamp);
@@ -699,12 +699,12 @@ function ClassTeacherDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="flex flex-col gap-6 lg:col-span-2">
           <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
-          <RecentActivitiesCard activities={data?.recentActivities ?? []} />
+          <RecentActivitiesCard activities={data?.recentActivities ?? []} viewAllHref="/dashboard/reports" />
         </div>
         <div className="flex flex-col gap-4">
           <h3 className="text-[15px] font-semibold mb-1 font-body">Quick Actions</h3>
           <QuickAction label="Generate Reports" desc="Report cards for your class" href="/dashboard/reports" icon={<FileText size={18} />} />
-          <QuickAction label="Class Analytics" desc="Performance trends" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
+          <QuickAction label="Class Results" desc="Broadsheet and rankings" href="/dashboard/exams-marks?tab=results" icon={<BarChart3 size={18} />} />
           <QuickAction label="Track Attendance" desc="Daily class attendance" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
           <QuickAction label="My Students" desc="View class roster" href="/dashboard/people" icon={<GraduationCap size={18} />} />
         </div>
@@ -757,7 +757,7 @@ function SubjectTeacherDashboard() {
     <>
       <InfoGuide title="Subject Teacher Guide — how to assess your subjects">
         <ol className="list-decimal space-y-1.5 pl-5">
-          <li><strong>Create an exam:</strong> in <strong>Exams &amp; Marks</strong> → <em>Mark Entry &amp; Setup</em>, add an exam for a subject you teach. For multi-paper subjects, set the paper structure (P1/P2/P3) once.</li>
+          <li><strong>Find your exam:</strong> in <strong>Exams &amp; Marks</strong> → <em>Mark Entry &amp; Setup</em>, pick the term, exam and a subject you teach. Exams are set up by your admin — ask them if one is missing. For multi-paper subjects, set the paper structure (P1/P2/P3) once.</li>
           <li><strong>Enter marks:</strong> load the whole class and type scores down the column — <em>Enter</em> jumps to the next student. Entries autosave locally and sync automatically when you&apos;re back online.</li>
           <li><strong>Review results:</strong> open <em>Results &amp; Reports</em> to see the broadsheet, subject averages and rankings.</li>
           <li><strong>Communicate:</strong> set <strong>Assignments</strong> and post <strong>Announcements</strong> for the classes you teach.</li>
@@ -778,9 +778,9 @@ function SubjectTeacherDashboard() {
         <div className="flex flex-col gap-4">
           <h3 className="text-[15px] font-semibold mb-1 font-body">Quick Actions</h3>
           <QuickAction label="Enter Marks" desc="Record exam scores" href="/dashboard/exams-marks" icon={<ClipboardList size={18} />} />
-          <QuickAction label="Subject Analytics" desc="Subject performance" href="/dashboard/analytics" icon={<BarChart3 size={18} />} />
-          <QuickAction label="View Exams" desc="Manage assessments" href="/dashboard/exams-marks" icon={<Calendar size={18} />} />
-          <QuickAction label="Exam Results" desc="View broadsheet" href="/dashboard/exams-marks" icon={<FileText size={18} />} />
+          <QuickAction label="Exam Results" desc="Broadsheet and subject averages" href="/dashboard/exams-marks?tab=results" icon={<BarChart3 size={18} />} />
+          <QuickAction label="Publish Results" desc="Send marks for approval" href="/dashboard/exams-marks?tab=publish" icon={<Calendar size={18} />} />
+          <QuickAction label="Assignments" desc="Set work for your classes" href="/dashboard/assignments" icon={<FileText size={18} />} />
         </div>
       </div>
     </>
@@ -817,8 +817,7 @@ export default function DashboardPage() {
 
   // STAFF (non-teaching staff: bursar, secretary, etc.) is not an admin — it
   // only ever sees the light staff landing below, never the admin dashboard.
-  // (role === 'ADMIN' || !role) already excludes STAFF, which renders its own card.
-  const isAdmin = role === 'ADMIN' || !role;
+  const isAdmin = role === 'ADMIN';
 
   return (
     <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">

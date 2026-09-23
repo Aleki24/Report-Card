@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
 
 export async function PUT(request: NextRequest) {
     try {
@@ -55,6 +56,15 @@ export async function PUT(request: NextRequest) {
 
         if (!targetUser || targetUser.school_id !== adminProfile.school_id) {
             return NextResponse.json({ error: 'User not found in your school' }, { status: 404 });
+        }
+
+        if (role !== undefined && !isRoleIn(role, ASSIGNABLE_ROLES)) {
+            return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
+        }
+        // An admin demoting or deactivating their own account can leave the
+        // school with nobody able to manage it.
+        if (user_id === userId && ((role !== undefined && role !== 'ADMIN') || is_active === false)) {
+            return NextResponse.json({ error: 'You cannot remove your own admin access. Ask another admin to do it.' }, { status: 400 });
         }
 
         // Build update payload (only include fields that were provided)

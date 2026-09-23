@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
         }
 
         if (school_id) {
-            // Guard against cross-tenant school updates
-            if (userProfile.school_id && userProfile.school_id !== school_id) {
+            // Guard against cross-tenant school updates. An admin with no school
+            // used to skip this check entirely and could edit any school by id.
+            if (userProfile.school_id !== school_id) {
                 return NextResponse.json({ error: 'You can only update your own school profile.' }, { status: 403 });
             }
 
@@ -67,6 +68,12 @@ export async function POST(request: NextRequest) {
 
             return NextResponse.json({ success: true, school_id, message: 'School updated' });
         } else {
+            // Creating a second school would silently detach this admin from
+            // the one they run; new schools go through onboarding instead.
+            if (userProfile.school_id) {
+                return NextResponse.json({ error: 'Your account already belongs to a school.' }, { status: 409 });
+            }
+
             // Create new school
             const { data, error } = await supabaseAdmin.from('schools').insert({
                 name: name.trim(),

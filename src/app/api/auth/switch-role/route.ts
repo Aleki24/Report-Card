@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getClassTeacherStreamIds } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,13 +53,9 @@ export async function POST(request: NextRequest) {
     } else if (role === 'CLASS_TEACHER') {
       // The only allowed non-base switch: a subject teacher who also holds a
       // class-teacher record upgrading to the broader class-teacher view.
-      const { data: ctRecord } = await supabase
-        .from('class_teachers')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-      if (ctRecord) isAllowed = true;
+      // Same current-year check /api/auth/available-roles offers the switch on.
+      const streams = dbUser.school_id ? await getClassTeacherStreamIds(supabase, userId, dbUser.school_id) : [];
+      if (streams.length > 0) isAllowed = true;
     }
     // Switching *into* SUBJECT_TEACHER is intentionally not allowed unless it is
     // the user's base role (handled above). A class teacher already covers

@@ -1,27 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const userProfile = await getCaller();
+        if (!userProfile) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
+        if (!isRoleIn(userProfile.role, STAFF_TEACHING_ROLES)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
+        const { userId } = userProfile;
+
+        const supabase = createSupabaseAdmin();
 
         const { id } = await params;
 
@@ -32,7 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             .eq('id', id)
             .maybeSingle();
 
-        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
+        if (!currentItem || currentItem.school_id !== userProfile.schoolId) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -67,24 +60,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const userProfile = await getCaller();
+        if (!userProfile) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .single();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
+        if (!isRoleIn(userProfile.role, STAFF_TEACHING_ROLES)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
+        const { userId } = userProfile;
+
+        const supabase = createSupabaseAdmin();
 
         const { id } = await params;
 
@@ -95,7 +80,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             .eq('id', id)
             .single();
 
-        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
+        if (!currentItem || currentItem.school_id !== userProfile.schoolId) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

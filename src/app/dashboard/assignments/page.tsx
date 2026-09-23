@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Search, Edit3, Trash2, Eye, FileText, ClockAlert, Paperclip, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { requestJson, jsonBody } from '@/lib/api-error-message';
 import PageHeader from '@/components/dashboard/PageHeader';
 import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
@@ -96,10 +97,7 @@ export default function AssignmentsPage() {
     };
 
     useEffect(() => {
-        Promise.all([
-            fetchAssignments(),
-            fetch('/api/school/data?type=grade_streams').then(r => r.json()).catch(() => ({})),
-        ]);
+        fetchAssignments();
         (async () => {
             const [subjRes, strRes] = await Promise.all([
                 fetch('/api/school/data?type=subjects'),
@@ -182,31 +180,31 @@ export default function AssignmentsPage() {
                 file_url: fileUrl || null,
             });
 
+            const init = { headers: { 'Content-Type': 'application/json' }, body: payload };
             if (editing) {
-                await fetch(`/api/school/assignments/${editing.id}`, {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: payload,
-                });
+                await requestJson(`/api/school/assignments/${editing.id}`, { method: 'PATCH', ...init });
             } else {
-                await fetch('/api/school/assignments', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload,
-                });
+                await requestJson('/api/school/assignments', { method: 'POST', ...init });
             }
             setShowModal(false);
+            toast.success(editing ? 'Assignment updated' : 'Assignment created');
             await fetchAssignments();
         } catch (err) {
-            console.error('Save failed:', err);
-            toast.error('Failed to save assignment');
+            toast.error(err instanceof Error ? err.message : 'Failed to save assignment');
+        } finally {
+            setUploading(false);
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleDelete = async (id: string) => {
         if (!confirm('Delete this assignment?')) return;
         try {
-            await fetch(`/api/school/assignments/${id}`, { method: 'DELETE' });
+            await requestJson(`/api/school/assignments/${id}`, { method: 'DELETE' });
+            toast.success('Assignment deleted');
             await fetchAssignments();
         } catch (err) {
-            console.error('Delete failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to delete assignment');
         }
     };
 
@@ -217,20 +215,16 @@ export default function AssignmentsPage() {
 
     const handleGrade = async (submissionId: string) => {
         try {
-            await fetch(`/api/school/submissions/${submissionId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    grade: parseFloat(gradeVal) || null,
-                    feedback: feedbackVal || null,
-                }),
-            });
+            await requestJson(`/api/school/submissions/${submissionId}`, jsonBody('PATCH', {
+                grade: parseFloat(gradeVal) || null,
+                feedback: feedbackVal || null,
+            }));
             setGradingId(null);
             setGradeVal('');
             setFeedbackVal('');
             await fetchSubmissions();
         } catch (err) {
-            console.error('Grade failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Failed to save the grade');
         }
     };
 

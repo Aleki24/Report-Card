@@ -1,34 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
+    const caller = await getCaller();
+    if (!caller) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('school_id, role, is_active')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (!userProfile || userProfile.is_active === false) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const schoolId = userProfile.school_id;
-    const role = userProfile.role;
+    const { schoolId, role } = caller;
     if (!schoolId) {
       return NextResponse.json({ error: 'No school associated' }, { status: 403 });
     }
     // This RPC deletes and regenerates a stream's report cards — staff only.
-    if (!['ADMIN', 'CLASS_TEACHER'].includes(role)) {
+    if (role !== 'ADMIN' && role !== 'CLASS_TEACHER') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const supabase = createSupabaseAdmin();
 
     const body = await request.json();
     const term_id = body.term_id || body.p_term_id;
@@ -52,13 +42,7 @@ export async function POST(request: NextRequest) {
     // A class teacher may only regenerate their own stream's reports; the RPC's
     // internal guard is bypassed under the service-role client.
     if (role === 'CLASS_TEACHER') {
-      const { data: assignment } = await supabase
-        .from('class_teachers')
-        .select('user_id')
-        .eq('user_id', userId)
-        .eq('current_grade_stream_id', grade_stream_id)
-        .maybeSingle();
-      if (!assignment) {
+      if (!caller.classStreamIds.includes(grade_stream_id)) {
         return NextResponse.json({ error: 'You can only generate reports for your own class.' }, { status: 403 });
       }
 

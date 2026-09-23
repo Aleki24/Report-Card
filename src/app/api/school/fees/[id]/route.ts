@@ -1,37 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
+import { canManageStudent, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || !['ADMIN', 'CLASS_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
         const { id } = await params;
-        
-        // Verify ownership
+
+        // Verify ownership: same school, and the class teacher's own class
         const { data: currentFee } = await supabase
             .from('student_fees')
-            .select('school_id')
+            .select('school_id, student_id')
             .eq('id', id)
             .maybeSingle();
 
-        if (!currentFee || currentFee.school_id !== userProfile.school_id) {
+        if (!currentFee || currentFee.school_id !== caller.schoolId || !(await canManageStudent(caller, currentFee.student_id))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -82,22 +75,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        if (caller.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only an admin can delete a fee record' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
         const { id } = await params;
 
         // Verify ownership
@@ -107,7 +93,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
             .eq('id', id)
             .maybeSingle();
 
-        if (!currentFee || currentFee.school_id !== userProfile.school_id) {
+        if (!currentFee || currentFee.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

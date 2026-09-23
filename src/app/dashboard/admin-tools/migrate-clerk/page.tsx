@@ -11,6 +11,9 @@ import { useAuth } from '@/components/AuthProvider';
 export default function MigrateClerkPage() {
   const { role } = useAuth();
   const [targetUserId, setTargetUserId] = useState('');
+  // The endpoint refuses every request without the operator secret
+  // (MIGRATION_SECRET); this page never sent it, so it could only ever fail.
+  const [operatorSecret, setOperatorSecret] = useState('');
   const [sendNotifications, setSendNotifications] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<unknown>(null);
@@ -23,7 +26,7 @@ export default function MigrateClerkPage() {
     try {
       const res = await fetch('/api/admin/migrate-clerk-production', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-migration-secret': operatorSecret },
         body: JSON.stringify({
           dryRun,
           sendNotifications,
@@ -56,13 +59,17 @@ export default function MigrateClerkPage() {
           <label className="block text-xs text-muted-foreground mb-2">Target user ID (optional — test on one account first)</label>
           <input className="input-field w-full" value={targetUserId} onChange={e => setTargetUserId(e.target.value)} placeholder="Leave blank for everyone" />
         </div>
+        <div>
+          <label htmlFor="migration-secret" className="block text-xs text-muted-foreground mb-2">Operator secret (MIGRATION_SECRET)</label>
+          <input id="migration-secret" type="password" autoComplete="off" className="input-field w-full" value={operatorSecret} onChange={e => setOperatorSecret(e.target.value)} placeholder="Required" />
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={sendNotifications} onChange={e => setSendNotifications(e.target.checked)} />
           Send SMS/email invite codes (leave off to just generate codes without notifying anyone yet)
         </label>
         <div className="flex flex-wrap gap-3">
-          <button className="btn-secondary" disabled={loading} onClick={() => run(true)}>{loading ? 'Running...' : 'Dry Run (no changes)'}</button>
-          <button className="btn-primary" disabled={loading} onClick={() => run(false)}>{loading ? 'Running...' : 'Migrate for Real'}</button>
+          <button className="btn-secondary" disabled={loading || !operatorSecret} onClick={() => run(true)}>{loading ? 'Running...' : 'Dry Run (no changes)'}</button>
+          <button className="btn-primary" disabled={loading || !operatorSecret} onClick={() => run(false)}>{loading ? 'Running...' : 'Migrate for Real'}</button>
         </div>
       </div>
 

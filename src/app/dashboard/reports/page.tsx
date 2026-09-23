@@ -9,7 +9,7 @@ import { StudentPickerModal } from '@/components/reports/StudentPickerModal';
 import { ReportActionCards } from '@/components/reports/ReportActionCards';
 import { ReportSettings } from '@/components/reports/ReportSettings';
 import { ProgressOverlay } from '@/components/ui/ProgressOverlay';
-import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { useAuth } from '@/components/AuthProvider';
 import type { ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
@@ -23,7 +23,7 @@ interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
 export default function ReportsPage() {
-  const { schoolName } = useAuth();
+  const { schoolName, role } = useAuth();
 
   const [selectedGradeStream, setSelectedGradeStream] = useState('');
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
@@ -59,7 +59,6 @@ export default function ReportsPage() {
   const [splitByCombination, setSplitByCombination] = useState(false);
   const [groupThreshold, setGroupThreshold] = useState(15);
 
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
   const showToastMsg = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 5000); };
 
@@ -173,9 +172,15 @@ export default function ReportsPage() {
     if (!isConfigured) { showToastMsg('Please select Academic Year, Term, and Grade Stream.'); return; }
     setGenerating(true); setProgress({ current: 0, total: 0, message: 'Step 1 of 3: Aggregating database grades...' });
     try {
+      // Aggregate through the server route, which checks the caller is the
+      // admin or this class's teacher. This used to call the RPC straight from
+      // the browser with the anonymous key, where no such check can run.
       try {
-        const { error } = await supabase.rpc('generate_term_reports', { p_academic_year_id: selectedAcademicYear, p_term_id: selectedTerm, p_grade_stream_id: selectedGradeStream });
-        if (error) console.warn('Grade aggregation RPC warning:', error.message);
+        const aggRes = await fetch('/api/school/generate-reports', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ term_id: selectedTerm, grade_stream_id: selectedGradeStream }),
+        });
+        if (!aggRes.ok) console.warn('Grade aggregation warning:', apiErrorMessage(await aggRes.json().catch(() => null)));
       } catch (aggErr) {
         console.warn('Grade aggregation step skipped (non-blocking):', aggErr);
       }
@@ -397,7 +402,7 @@ export default function ReportsPage() {
 
       <ReportActionCards isConfigured={!!isConfigured} generating={generating} generatingMarkSheet={generatingMarkSheet} onSelectStudent={() => setShowStudentPicker(true)} onBulkGenerate={handleGenerateAndDownload} onTermComparison={() => setShowTermComparison(true)} onMarkSheet={handleGenerateMarkSheet} onSMS={() => setShowSMSModal(true)} />
 
-      <StudentCommentsSection isConfigured={!!isConfigured} showComments={showComments} setShowComments={setShowComments} loadingComments={loadingComments} studentComments={studentComments} filteredComments={filteredComments} commentSearch={commentSearch} setCommentSearch={setCommentSearch} savingCommentId={savingCommentId} onSaveComment={handleSaveComment} onSaveAllComments={handleSaveAllComments} onUpdateComment={(id, field, val) => setStudentComments(prev => prev.map(sc => sc.student_id === id ? { ...sc, [field]: val } : sc))} />
+      <StudentCommentsSection isConfigured={!!isConfigured} showComments={showComments} setShowComments={setShowComments} loadingComments={loadingComments} studentComments={studentComments} filteredComments={filteredComments} commentSearch={commentSearch} setCommentSearch={setCommentSearch} savingCommentId={savingCommentId} onSaveComment={handleSaveComment} onSaveAllComments={handleSaveAllComments} onUpdateComment={(id, field, val) => setStudentComments(prev => prev.map(sc => sc.student_id === id ? { ...sc, [field]: val } : sc))} canEditPrincipalComment={role === 'ADMIN'} />
 
       {(generating || generatingMarkSheet) && progress.message && <ProgressOverlay message={progress.message} current={progress.current} total={progress.total} />}
 

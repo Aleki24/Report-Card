@@ -67,8 +67,33 @@ const groups: NavGroup[] = [
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
 const pinnedItems: NavItem[] = [users, settings, myProfile];
 
+/* No role yet (still loading, or signed out) shows nothing rather than
+   briefly showing every signed-in user the admin menu. */
 const forRole = (item: NavItem, role: UserRole | null) =>
-    item.roles.includes(role ?? 'ADMIN');
+    !!role && item.roles.includes(role);
+
+/** Home links match only themselves, not every page nested below them. */
+export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href]);
+
+/** Pages outside the menu that still belong to particular roles. */
+const unlistedRoutes: Pick<NavItem, 'href' | 'roles'>[] = [
+    { href: '/dashboard/admin-tools', roles: adminRoles },
+];
+
+const routeMatches = (pathname: string, href: string) =>
+    pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(`${href}/`));
+
+/**
+ * Whether `role` may open `pathname`, judged by the most specific menu entry
+ * that covers it. Pages with no entry (onboarding, redirects) stay open; the
+ * page or its API still enforces anything finer.
+ */
+export function canAccessPath(pathname: string, role: UserRole | null): boolean {
+    const match = [...navItems, ...unlistedRoutes]
+        .filter(item => routeMatches(pathname, item.href))
+        .sort((a, b) => b.href.length - a.href.length)[0];
+    return !match || (!!role && match.roles.includes(role));
+}
 
 export function getNavGroups(role: UserRole | null): NavGroup[] {
     return groups
@@ -91,7 +116,8 @@ const mobilePrimaryByRole: Record<Exclude<UserRole, 'PENDING'>, NavItem[]> = {
 };
 
 export function getMobileNav(role: UserRole | null): { primary: NavItem[]; overflow: NavItem[] } {
-    const effective = role && role !== 'PENDING' ? role : 'ADMIN';
+    if (!role || role === 'PENDING') return { primary: [], overflow: [] };
+    const effective = role;
     const primary = mobilePrimaryByRole[effective].filter(i => forRole(i, effective));
     const primaryHrefs = new Set(primary.map(i => i.href));
     const overflow = [...navItems, ...pinnedItems]

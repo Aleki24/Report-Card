@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { resolveActiveRole } from '@/lib/roles';
+import { getClassTeacherStreamIds } from '@/lib/auth-server';
 
 export async function GET() {
   try {
@@ -98,16 +100,14 @@ export async function GET() {
       schoolOnboardingCompleted = school?.onboarding_completed || false;
     }
 
-    // Get active_role from Clerk metadata (set by role switching)
-    let activeRole = (user?.publicMetadata as any)?.active_role || null;
-    // A class teacher already does everything a subject teacher can, with more
-    // access — they are never dropped into the narrower subject-teacher view.
-    // Ignore any SUBJECT_TEACHER active_role left over from before this rule (or
-    // set out-of-band) so a class teacher always renders as a class teacher.
-    // Subject-teacher base users are unaffected.
-    if (dbUser.role === 'CLASS_TEACHER' && activeRole === 'SUBJECT_TEACHER') {
-      activeRole = null;
-    }
+    // active_role (Clerk metadata, set by role switching) only ever upgrades a
+    // subject teacher to class teacher; anything else is stale and ignored.
+    // The switch also lapses once the class assignment it relied on is removed.
+    const requestedRole = resolveActiveRole(dbUser.role, (user?.publicMetadata as { active_role?: unknown } | undefined)?.active_role);
+    const activeRole = requestedRole && dbUser.school_id
+      && (await getClassTeacherStreamIds(supabase, dbUser.id, dbUser.school_id)).length > 0
+      ? requestedRole
+      : null;
 
     return NextResponse.json({
       profile: dbUser,

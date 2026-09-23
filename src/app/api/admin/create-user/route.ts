@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { canManageStream, getCaller } from '@/lib/auth-server';
+import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { inviteUserSchema } from '@/lib/schemas';
@@ -33,8 +35,7 @@ export async function POST(request: NextRequest) {
         } = parsed.data;
 
         // Validate role is one of the allowed values (prevents arbitrary role strings)
-        const ALLOWED_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT', 'STAFF'];
-        if (!ALLOWED_ROLES.includes(role)) {
+        if (!isRoleIn(role, ASSIGNABLE_ROLES)) {
             return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
         }
 
@@ -48,46 +49,31 @@ export async function POST(request: NextRequest) {
 
         const supabaseAdmin = createSupabaseAdmin();
 
-        // Verify the caller can create users and get their school_id
-        const { data: adminProfile } = await supabaseAdmin
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!adminProfile || adminProfile.is_active === false) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!adminProfile.school_id) {
+        if (!caller.schoolId) {
             return NextResponse.json({ error: 'User must have a school to create users.' }, { status: 403 });
         }
 
-        const canCreateUsers = adminProfile.role === 'ADMIN' || adminProfile.role === 'CLASS_TEACHER';
-        if (!canCreateUsers) {
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Only admins and class teachers can create users.' }, { status: 403 });
         }
 
         // Class teachers may only create STUDENT accounts — never teachers or admins.
         // (Only ADMINs can create privileged accounts.) Prevents privilege escalation.
-        if (adminProfile.role === 'CLASS_TEACHER' && role !== 'STUDENT') {
+        if (caller.role === 'CLASS_TEACHER' && role !== 'STUDENT') {
             return NextResponse.json({ error: 'Class teachers can only add students.' }, { status: 403 });
         }
 
         // If class teacher, verify they're creating a student for their assigned stream
-        if (adminProfile.role === 'CLASS_TEACHER' && role === 'STUDENT') {
-            const { data: teacherAssignment } = await supabaseAdmin
-                .from('class_teachers')
-                .select('current_grade_stream_id')
-                .eq('user_id', userId)
-                .maybeSingle();
-
-            if (!teacherAssignment || teacherAssignment.current_grade_stream_id !== grade_stream_id) {
-                return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
-            }
+        if (!canManageStream(caller, grade_stream_id)) {
+            return NextResponse.json({ error: 'You can only add students to your assigned class stream.' }, { status: 403 });
         }
 
-        const school_id = adminProfile.school_id;
+        const school_id = caller.schoolId;
 
         // Get school name for username generation
         const { data: school } = await supabaseAdmin

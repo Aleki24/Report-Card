@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getClassTeacherStreamIds } from '@/lib/auth-server';
 
 export async function GET() {
     try {
@@ -37,37 +38,13 @@ export async function GET() {
             });
         }
 
-        // Get current academic year
-        let currentYearId: string | null = null;
-        if (schoolId) {
-            const { data: currentYear } = await supabase
-                .from('academic_years')
-                .select('id')
-                .eq('school_id', schoolId)
-                .order('start_date', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            currentYearId = currentYear?.id ?? null;
-        }
-
         const availableRoles = new Set<string>();
 
         // Always include the user's base role so they can switch back
         availableRoles.add(baseRole);
 
-        // Check if they are a class teacher (for current academic year)
-        let classQuery = supabase
-            .from('class_teachers')
-            .select('id')
-            .eq('user_id', userId);
-        
-        if (currentYearId) {
-            classQuery = classQuery.eq('academic_year_id', currentYearId);
-        }
-
-        const { data: classAssigned } = await classQuery.limit(1).maybeSingle();
-
-        if (classAssigned) {
+        // A class-teacher assignment this academic year unlocks the class-teacher view
+        if (schoolId && (await getClassTeacherStreamIds(supabase, userId, schoolId)).length > 0) {
             availableRoles.add('CLASS_TEACHER');
         }
 
@@ -84,7 +61,7 @@ export async function GET() {
             baseRole,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching available roles:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
@@ -22,30 +22,19 @@ interface SendSMSBody {
 
 export async function POST(request: Request) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
+        const caller = await getCaller();
+        if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-
-        const supabase = createSupabaseAdmin();
-
-        // Resolve and authorize the caller
-        const { data: caller } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!caller || caller.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER'].includes(caller.role)) {
+        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
-        const schoolId = caller.school_id;
+        const { userId, schoolId } = caller;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
+
+        const supabase = createSupabaseAdmin();
 
         // Rate-limit SMS sends per caller
         const limit = rateLimit(`sms-send:${userId}`, { maxRequests: 5, windowMs: 60_000 });
@@ -63,6 +52,11 @@ export async function POST(request: Request) {
             );
         }
 
+        // A class teacher texts their own class's guardians, nobody else's.
+        if (caller.role === 'CLASS_TEACHER' && !caller.classStreamIds.includes(gradeStreamId)) {
+            return NextResponse.json({ error: 'You can only send results for your own class.' }, { status: 403 });
+        }
+
         if (studentIds.length > MAX_STUDENT_IDS) {
             return NextResponse.json(
                 { error: `Too many students. Maximum ${MAX_STUDENT_IDS} per request.` },
@@ -73,7 +67,7 @@ export async function POST(request: Request) {
         // 1. Fetch students with guardian phone (tenant-scoped to the caller's school)
         const { data: allStudents, error: studentsErr } = await supabase
             .from('students')
-            .select('id, admission_number, guardian_phone, guardian_name, users(first_name, last_name, school_id)')
+            .select('id, admission_number, guardian_phone, guardian_name, current_grade_stream_id, users(first_name, last_name, school_id)')
             .in('id', studentIds);
 
         if (studentsErr) {
@@ -81,8 +75,10 @@ export async function POST(request: Request) {
         }
 
         // Tenant-scope: only keep students that belong to the caller's school.
+        // Class-scope too: the results sent are this class's, so a student
+        // from another class would get a message about the wrong ranking.
         const students = (allStudents || []).filter(
-            (s: any) => s.users?.school_id === schoolId
+            (s: any) => s.users?.school_id === schoolId && s.current_grade_stream_id === gradeStreamId
         );
 
         if (!students.length) {

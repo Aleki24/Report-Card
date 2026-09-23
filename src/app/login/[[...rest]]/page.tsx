@@ -52,6 +52,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { isLoaded, signIn, setActive } = useSignIn();
   const [showSuccess] = useState(typeof window !== 'undefined' && window.location.search.includes('created=1'));
+  const [wasDeactivated] = useState(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deactivated') === '1');
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -235,6 +236,11 @@ export default function LoginPage() {
               }}>
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
               Account created! Sign in with your credentials.
+            </div>
+          )}
+          {wasDeactivated && (
+            <div role="alert" className="mb-2 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium leading-relaxed text-destructive">
+              Your account has been deactivated. Please contact your school administrator.
             </div>
           )}
           {wrongStrategy && (
