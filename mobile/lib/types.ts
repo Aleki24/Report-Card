@@ -297,6 +297,8 @@ export interface Term {
     start_date?: string | null;
     end_date?: string | null;
     is_current: boolean;
+    midterm_reopening_date?: string | null;
+    reopening_date?: string | null;
 }
 
 export interface AcademicYear {
