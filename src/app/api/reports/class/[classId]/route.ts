@@ -6,6 +6,7 @@ import type { ReportCardData, ReportTemplateId } from '@/lib/pdfGenerator';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
+    rankingBasisFor,
     generateFeedback,
     getGradeFromScales,
     getPointsFromScales,
@@ -431,8 +432,10 @@ export async function GET(
             return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
-        // KCSE (8-4-4) ranks by total points; CBC ranks by percentage.
-        const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
+        // 8-4-4 ranks by total points; every CBC learner by their marks,
+        // including the CBC grades that are graded KCSE-style.
+        const rankingBasis = rankingBasisFor(gradingSystemType, academicLevelRes.data?.code);
+        const ranks = calculateClassRanks(aggregates, rankingBasis);
         const rankedStudentCount = aggregates.length;
 
         // 7.5 Overall positions: every stream of the grade ranked together
@@ -450,6 +453,7 @@ export async function GET(
                 round: roundSelection.round,
                 gradingScales,
                 gradingSystemType,
+                rankingBasis,
                 seniorRankGroup: rankingSettings.seniorRankGroup,
             })
             : null;
@@ -470,6 +474,7 @@ export async function GET(
                 current: { termId, examType: roundSelection.round },
                 gradingScales,
                 gradingSystemType,
+                rankingBasis,
             }),
             fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
         ]);

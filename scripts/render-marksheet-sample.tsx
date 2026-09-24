@@ -67,6 +67,7 @@ return {
     subjectStats,
     subjectRankings: SUBJECTS.map(([code]) => ({ code, mean: subjectStats[code].mean, rank: 0 }))
         .sort((a, b) => b.mean - a.mean).map((r, i) => ({ ...r, rank: i + 1 })),
+    rankedBy: curriculum === 'KCSE' ? 'points' : 'percentage',
     gradeBands: curriculum === 'KCSE'
         ? [[80, 100, 'A'], [75, 79, 'A-'], [70, 74, 'B+'], [65, 69, 'B'], [60, 64, 'B-'], [55, 59, 'C+'], [50, 54, 'C'], [45, 49, 'C-'], [40, 44, 'D+'], [35, 39, 'D'], [30, 34, 'D-'], [0, 29, 'E']]
             .map(([min_percentage, max_percentage, symbol]) => ({ symbol: String(symbol), min_percentage: Number(min_percentage), max_percentage: Number(max_percentage) }))

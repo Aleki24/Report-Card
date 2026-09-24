@@ -405,9 +405,30 @@ export function aggregateStudentPerformance(
 
 /* ── Class Ranking ──────────────────────────────────────── */
 
+/** What learners are ordered on when they are given a position. */
+export type RankingBasis = 'percentage' | 'points';
+
+/**
+ * CBC learners are ranked by their marks (mean percentage); only 8-4-4
+ * learners are ranked by total points.
+ *
+ * Grading style and ranking basis are separate questions. Grades 7, 8, 11
+ * and 12 sit under the CBC level but are graded KCSE-style (see
+ * isKCSEGradeLevel), so `gradingSystemType` alone reads 'KCSE' for them. They
+ * are still CBC learners, and a CBC learner is ranked on marks, so the
+ * academic level decides here whenever it is known.
+ */
+export function rankingBasisFor(
+    gradingSystemType: 'KCSE' | 'CBC',
+    academicLevelCode?: string | null,
+): RankingBasis {
+    if (academicLevelCode) return academicLevelCode.trim().toUpperCase() === 'CBC' ? 'percentage' : 'points';
+    return gradingSystemType === 'CBC' ? 'percentage' : 'points';
+}
+
 export function calculateClassRanks(
     studentAggregates: { studentId: string, percentage: number, totalPoints?: number }[],
-    rankingBy: 'percentage' | 'points' = 'percentage'
+    rankingBy: RankingBasis = 'percentage'
 ) {
     if (!studentAggregates || studentAggregates.length === 0) {
         return new Map<string, number>();

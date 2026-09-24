@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
-import { gradeSymbolFromScales, gradeSymbolRank } from '@/lib/analytics';
+import { gradeSymbolFromScales, gradeSymbolRank, type RankingBasis } from '@/lib/analytics';
 import type { GradeBand } from '@/types';
 import { FONTS } from './pdf/pdfTheme';
 import { Crest, BrandFooter } from './pdf/primitives';
@@ -63,6 +63,8 @@ export interface MarkSheetData {
     subjectRankings: SubjectRanking[];
     /** The school's grading bands, so every mark can print its grade beside it. */
     gradeBands?: GradeBand[];
+    /** What the class positions were ordered on: marks for CBC, points for 8-4-4. */
+    rankedBy: RankingBasis;
 }
 
 type Learner = MarkSheetData['students'][number];
@@ -267,7 +269,7 @@ function Masthead({ d }: { d: MarkSheetData }) {
                 <View style={s.tag}><Text style={s.tagText}>Class mark sheet</Text></View>
                 <Text style={s.docTitle}>{d.className} · {roundLabel(d)}</Text>
                 <Text style={s.docSub}>
-                    Ranked by {d.gradingSystemType === 'KCSE' ? 'total points' : 'mean score'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
+                    Ranked by {d.rankedBy === 'points' ? 'total points' : 'mean marks'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
                 </Text>
             </View>
         </View>

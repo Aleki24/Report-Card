@@ -1,5 +1,5 @@
 import type { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getGradeFromScales, isKCSEGradeLevel, overallKindFromScales, type OverallGradingKind } from '@/lib/analytics';
+import { getGradeFromScales, isKCSEGradeLevel, overallKindFromScales, rankingBasisFor, type OverallGradingKind, type RankingBasis } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 
 type Supabase = ReturnType<typeof createSupabaseAdmin>;
@@ -16,6 +16,8 @@ export interface GradingContext {
     overallGradingKind: OverallGradingKind;
     gradeLevelCode: string;
     isKCSEGrade: boolean;
+    /** Marks for CBC learners, points for 8-4-4 — see rankingBasisFor. */
+    rankingBasis: RankingBasis;
 }
 
 interface OverallSystemRow {
@@ -145,6 +147,7 @@ export async function resolveGradingContext(
 
     let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
     let gradingScales: GradingScale[] = [];
+    let academicLevelCode: string | null = null;
 
     if (student.academic_level_id) {
         const { data: academicLevel } = await supabase
@@ -152,6 +155,8 @@ export async function resolveGradingContext(
             .select('code')
             .eq('id', student.academic_level_id)
             .maybeSingle();
+
+        academicLevelCode = academicLevel?.code ?? null;
 
         // Use grade code to determine KCSE vs CBC, fallback to academic level
         if (isKCSEGrade) {
@@ -238,6 +243,7 @@ export async function resolveGradingContext(
         overallGradingKind: overall.kind,
         gradeLevelCode,
         isKCSEGrade,
+        rankingBasis: rankingBasisFor(gradingSystemType, academicLevelCode),
     };
 }
 

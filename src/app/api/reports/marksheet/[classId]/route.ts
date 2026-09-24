@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
+    rankingBasisFor,
     calculatePercentage,
     gradeSymbolFromScales,
     getOverallGradeFromMeanPoints,
@@ -117,6 +118,7 @@ export async function GET(
         // 3. Grading info
         let gradingSystemType: 'KCSE' | 'CBC' = 'KCSE';
         let gradingScales: GradingScale[] = [];
+        let academicLevelCode: string | null = null;
 
         // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
         // G1-G6, G9-G10 use CBC style (rubric-based)
@@ -136,6 +138,7 @@ export async function GET(
 
         if (firstAcademicLevelId) {
             const { data: academicLevel } = await supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle();
+            academicLevelCode = academicLevel?.code ?? null;
             // Use grade code to determine KCSE vs CBC, fallback to academic level
             if (isKCSEGrade) {
                 gradingSystemType = 'KCSE';
@@ -271,6 +274,10 @@ export async function GET(
             return NextResponse.json({ error: 'No marks found for this class and term' }, { status: 404 });
         }
 
+        // 8-4-4 ranks by total points; every CBC learner by their marks,
+        // including the CBC grades that are graded KCSE-style.
+        const rankingBasis = rankingBasisFor(gradingSystemType, academicLevelCode);
+
         // The same comparatives the report cards carry, gathered once for the
         // whole sheet: the round before this one, and who teaches each subject.
         const [previousRound, subjectTeacherNames] = await Promise.all([
@@ -281,6 +288,7 @@ export async function GET(
                 current: { termId, examType: roundSelection.round },
                 gradingScales,
                 gradingSystemType,
+                rankingBasis,
             }),
             fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
         ]);
@@ -329,14 +337,10 @@ export async function GET(
                 ? subjectPercentages.reduce((a, b) => a + b, 0) / subjectPercentages.length
                 : 0;
             
-            const rankingValue = (gradingSystemType === 'KCSE' && perf.totalPoints !== undefined) 
-                ? perf.totalPoints 
-                : avgPercentage;
-            return { studentId: sid, percentage: avgPercentage, totalPoints: perf.totalPoints, rankingValue };
+            return { studentId: sid, percentage: avgPercentage, totalPoints: perf.totalPoints };
         });
 
-        const rankingBy = gradingSystemType === 'KCSE' ? 'points' : 'percentage';
-        const ranks = calculateClassRanks(aggregates, rankingBy);
+        const ranks = calculateClassRanks(aggregates, rankingBasis);
 
         // 7. Aggregate data for the specific report format
         // Calculate subject-wise statistics (mean, rank)
@@ -574,6 +578,7 @@ export async function GET(
             meanPoints: Math.round(classMeanPoints * 100) / 100,
             subjectStats,
             subjectRankings,
+            rankedBy: rankingBasis,
             gradeBands: gradingScales.map(({ symbol, min_percentage, max_percentage }) => ({ symbol, min_percentage, max_percentage })),
         };
 

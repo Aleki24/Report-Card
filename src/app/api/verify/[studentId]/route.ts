@@ -261,7 +261,7 @@ export async function GET(
                     const p = aggregateStudentPerformance(marks, grading.gradingScales, grading.gradingSystemType, rankNames, rankCategories);
                     return { studentId: sid, percentage: p.percentage, totalPoints: p.totalPoints };
                 });
-                const ranks = calculateClassRanks(aggregates, grading.gradingSystemType === 'KCSE' ? 'points' : 'percentage');
+                const ranks = calculateClassRanks(aggregates, grading.rankingBasis);
                 classRank = ranks.get(studentId) || 0;
                 totalStudents = aggregates.length;
             }

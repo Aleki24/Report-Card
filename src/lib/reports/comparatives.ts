@@ -18,6 +18,7 @@ import {
     aggregateStudentPerformance,
     calculateClassRanks,
     type ExamMarkWithDetails,
+    type RankingBasis,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -180,6 +181,7 @@ export async function fetchPreviousRound(
         current,
         gradingScales,
         gradingSystemType,
+        rankingBasis,
     }: {
         studentIds: string[];
         gradeId?: string | null;
@@ -189,6 +191,8 @@ export async function fetchPreviousRound(
         current: { termId?: string | null; examType?: string | null };
         gradingScales: GradingScale[];
         gradingSystemType: 'KCSE' | 'CBC';
+        /** Marks for CBC learners, points for 8-4-4 — see rankingBasisFor. */
+        rankingBasis: RankingBasis;
     }
 ): Promise<PreviousRoundStats | null> {
     if (!gradeId || !before || studentIds.length === 0) return null;
@@ -270,9 +274,7 @@ export async function fetchPreviousRound(
             return { studentId, percentage: perf.percentage, totalPoints: perf.totalPoints };
         });
 
-        const ranks = calculateClassRanks(
-            aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage'
-        );
+        const ranks = calculateClassRanks(aggregates, rankingBasis);
 
         const overall = new Map<string, { percentage: number; totalPoints: number; rank: number }>();
         for (const aggregate of aggregates) {
