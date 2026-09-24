@@ -181,7 +181,7 @@ function columns(m: ReportModel): Column[] {
             total: x => x.grade,
         });
     }
-    cols.push({ key: 'rank', title: 'Rank', width: 7, cell: r => muted(r.rank), total: x => (x.position ? `${x.position.rank}/${x.position.of}` : '') });
+    if (m.showPositions) cols.push({ key: 'rank', title: 'Rank', width: 7, cell: r => muted(r.rank), total: x => (x.position ? `${x.position.rank}/${x.position.of}` : '') });
     cols.push({ key: 'remark', title: 'Remark', width: 0, align: 'left', cell: r => <Text style={s.remark}>{r.remark}</Text> });
 
     // Subject and remark share what the fixed columns leave, 55 / 45.
@@ -251,6 +251,7 @@ function Stats({ m }: { m: ReportModel }) {
             <Stat label="Mean score" value={`${m.mean}%`}>{up(m.meanChange, `vs ${m.previousLabel}`)}</Stat>
             <Stat label={m.isKCSE ? 'Mean grade' : 'Overall level'} value={m.grade} valueStyle={symbolFont(m.grade)}><Text style={s.statSub}>{m.gradeCaption}</Text></Stat>
             {m.isKCSE && m.points != null && <Stat label="Total points" value={`${m.points}`}>{up(m.pointsChange, 'points')}</Stat>}
+            {m.overallPosition && <Stat label="Overall position" value={`${m.overallPosition.rank}/${m.overallPosition.of}`}><Text style={s.statSub}>{m.overallPosition.label}</Text></Stat>}
             {m.position && <Stat label="Class position" value={`${m.position.rank}/${m.position.of}`}>{up(m.positionChange, 'places')}</Stat>}
             {m.classMean != null && (
                 <Stat label="Class mean" value={`${m.classMean}%`}>

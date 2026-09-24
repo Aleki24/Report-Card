@@ -75,10 +75,17 @@ export interface ReportModel {
     gradeCaption: string;
     points?: number;
     pointsChange: number | null;
+    /**
+     * Whether positions print at all. 8-4-4 always ranks; CBC only when the
+     * school opts in. When false, class, overall and subject ranks all hide.
+     */
+    showPositions: boolean;
+    /** Position within the learner's stream. */
     position?: { rank: number; of: number };
     /** Places gained since the previous round (a smaller rank is better). */
     positionChange: number | null;
-    pathwayPosition?: { rank: number; of: number };
+    /** Position across every stream (or the CBC pathway/combination), when it differs. */
+    overallPosition?: { rank: number; of: number; label: string };
     classMean?: number;
     vsClassMean: number | null;
     previousLabel: string;
@@ -174,7 +181,7 @@ const COMPACT_FROM = 10;
 /** Below this many subjects the layouts open their rows up. */
 const ROOMY_BELOW = 9;
 
-function subjectRow(sm: SubjectMark, paperCount: number): SubjectRow {
+function subjectRow(sm: SubjectMark, paperCount: number, showPositions: boolean): SubjectRow {
     const mark = sm.percentage == null || !Number.isFinite(sm.percentage) ? null : Math.round(sm.percentage);
     return {
         name: sm.subjectName,
@@ -187,7 +194,7 @@ function subjectRow(sm: SubjectMark, paperCount: number): SubjectRow {
         classAverage: sm.classAverage != null ? Math.round(sm.classAverage) : undefined,
         previous: sm.previousPercentage != null ? Math.round(sm.previousPercentage) : undefined,
         change: mark != null && sm.previousPercentage != null ? Math.round(mark - sm.previousPercentage) : null,
-        rank: sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : undefined,
+        rank: showPositions && sm.subjectRank && sm.totalStudents ? `${sm.subjectRank}/${sm.totalStudents}` : undefined,
         papers: Array.from({ length: paperCount }, (_, i) => sm.paperScores?.[i]?.score ?? null),
         remark: sm.teacherComment?.trim() || generateShortFeedback(mark, sm.grade),
     };
@@ -200,7 +207,8 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
     const paperCodes = Array.from({ length: paperCount }, (_, i) =>
         data.subjectMarks.find(m => (m.paperScores?.length ?? 0) > i)?.paperScores?.[i]?.code || `PP${i + 1}`);
 
-    const subjects = data.subjectMarks.map(sm => subjectRow(sm, paperCount));
+    const showPositions = data.showPositions;
+    const subjects = data.subjectMarks.map(sm => subjectRow(sm, paperCount, showPositions));
     const marked = subjects.filter(s => s.mark != null);
     const ranked = [...marked].sort((a, b) => (b.mark ?? 0) - (a.mark ?? 0));
     const movers = marked.filter(s => s.change != null).sort((a, b) => (b.change ?? 0) - (a.change ?? 0));
@@ -228,7 +236,7 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         };
     });
 
-    const hasRank = data.classRank > 0 && data.totalStudents > 0;
+    const hasRank = showPositions && data.classRank > 0 && data.totalStudents > 0;
     const classMean = data.classMeanPercentage != null ? Math.round(data.classMeanPercentage) : undefined;
 
     return {
@@ -275,9 +283,10 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
             ? data.totalPoints - data.previousTotalPoints
             : null,
         position: hasRank ? { rank: data.classRank, of: data.totalStudents } : undefined,
+        showPositions,
         positionChange: hasRank && data.previousClassRank ? data.previousClassRank - data.classRank : null,
-        pathwayPosition: data.combinationRank != null && data.combinationSize
-            ? { rank: data.combinationRank, of: data.combinationSize }
+        overallPosition: showPositions && data.overallRank != null && data.overallSize
+            ? { rank: data.overallRank, of: data.overallSize, label: data.overallRankLabel || 'Overall position' }
             : undefined,
         classMean,
         vsClassMean: classMean != null ? mean - classMean : null,

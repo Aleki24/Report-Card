@@ -8,16 +8,17 @@ import { StatusBar } from 'expo-status-bar';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ErrorBanner, LoadingView } from '@/components/ui';
 import { colors, radius, spacing } from '@/lib/theme';
+import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const SUPPORTED_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STUDENT'];
+const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT'] as const;
 
-function UnsupportedAccountScreen({ reason }: { reason: string }) {
+function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
     const { signOut } = useAuth();
     return (
         <View style={styles.centered}>
-            <Text style={styles.title}>Account not ready</Text>
+            <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{reason}</Text>
             <Pressable onPress={() => signOut()} style={styles.signOutButton}>
                 <Text style={styles.signOutText}>Sign Out</Text>
@@ -27,13 +28,17 @@ function UnsupportedAccountScreen({ reason }: { reason: string }) {
 }
 
 function RoleGate() {
-    const { loading, error, role, reload } = useCurrentUser();
+    const { loading, error, deactivated, role, reload } = useCurrentUser();
 
     useEffect(() => {
         if (!loading) SplashScreen.hideAsync().catch(() => {});
     }, [loading]);
 
     if (loading) return <LoadingView />;
+
+    if (deactivated) {
+        return <UnsupportedAccountScreen title="Account deactivated" reason={error ?? 'Your account has been deactivated. Please contact your administrator.'} />;
+    }
 
     if (error) {
         return (
@@ -43,7 +48,7 @@ function RoleGate() {
         );
     }
 
-    if (!role || !SUPPORTED_ROLES.includes(role)) {
+    if (!isRoleIn(role, SUPPORTED_ROLES)) {
         return (
             <UnsupportedAccountScreen reason="Your account is pending setup with your school administrator. Once your role is assigned, sign out and back in here." />
         );

@@ -1,67 +1,78 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
+import { useApi } from '@/lib/api';
+import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
-import { Card, Screen, ScreenHeader } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
+import { roleLabel, type UserRole } from '@/lib/roles';
+import { errorMessage, fullName, initials } from '@/lib/format';
+import { colors, spacing } from '@/lib/theme';
+import { Avatar, Button, Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
-const ROLE_LABELS: Record<string, string> = {
-    ADMIN: 'Administrator',
-    CLASS_TEACHER: 'Class Teacher',
-    SUBJECT_TEACHER: 'Subject Teacher',
-};
-
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
-    return (
-        <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{label}</Text>
-            <Text style={styles.infoValue}>{value || '—'}</Text>
-        </View>
-    );
+interface AvailableRoles {
+    roles: UserRole[];
+    baseRole: UserRole;
 }
 
 export default function StaffProfileScreen() {
     const { signOut } = useAuth();
-    const { profile, schoolName } = useCurrentUser();
-    const initials = profile ? `${profile.first_name?.[0] ?? ''}${profile.last_name?.[0] ?? ''}` : '—';
+    const api = useApi();
+    const { profile, role, baseRole, schoolName, reload } = useCurrentUser();
+    const isTeacher = baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER';
+    const available = useApiQuery<AvailableRoles>(isTeacher ? '/api/auth/available-roles' : null, { raw: true });
+    const [switching, setSwitching] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Only a subject teacher who also runs a class gets a second view, as on the web.
+    const roles = available.data?.roles ?? [];
+
+    const switchTo = async (next: UserRole) => {
+        if (next === role) return;
+        setSwitching(true);
+        setError(null);
+        try {
+            await api.post('/api/auth/switch-role', { role: next });
+            reload();
+        } catch (err) {
+            setError(errorMessage(err, 'Could not switch view'));
+        } finally {
+            setSwitching(false);
+        }
+    };
 
     return (
         <Screen>
             <ScreenHeader title="Profile" />
-
             <View style={styles.avatarRow}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{initials}</Text>
-                </View>
-                <View>
-                    <Text style={styles.name}>
-                        {profile?.first_name} {profile?.last_name}
-                    </Text>
+                <Avatar label={initials(profile)} />
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{fullName(profile)}</Text>
                     <Text style={styles.email}>{profile?.email ?? '—'}</Text>
                 </View>
             </View>
 
+            {error ? <Notice tone="danger" message={error} onDismiss={() => setError(null)} /> : null}
+
             <Card style={{ marginBottom: spacing.lg }}>
-                <InfoRow label="Role" value={profile ? ROLE_LABELS[profile.role] ?? profile.role : null} />
+                <InfoRow label="Role" value={profile?.job_title ?? roleLabel(baseRole)} />
+                {role !== baseRole ? <InfoRow label="Viewing as" value={roleLabel(role)} /> : null}
                 <InfoRow label="School" value={schoolName} />
             </Card>
 
-            <Pressable onPress={() => signOut()} style={styles.signOutButton}>
-                <Text style={styles.signOutText}>Sign Out</Text>
-            </Pressable>
+            {roles.length > 1 ? (
+                <Card style={{ marginBottom: spacing.lg }}>
+                    <ChipSelect label="View the app as" options={roles.map((r) => ({ value: r, label: roleLabel(r) }))} value={role} onChange={(r) => void switchTo(r)} />
+                    <Text style={styles.email}>{switching ? 'Switching…' : 'You also run a class, so you can switch to the class-teacher view.'}</Text>
+                </Card>
+            ) : null}
+
+            <Button variant="danger" block label="Sign out" onPress={() => void signOut()} />
         </Screen>
     );
 }
 
 const styles = StyleSheet.create({
     avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-    avatarText: { color: colors.white, fontSize: 20, fontWeight: '800' },
     name: { fontSize: 17, fontWeight: '800', color: colors.foreground },
     email: { fontSize: 13, color: colors.muted, marginTop: 2 },
-    infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-    infoLabel: { fontSize: 13, color: colors.muted, fontWeight: '600' },
-    infoValue: { fontSize: 13, color: colors.foreground, fontWeight: '700' },
-    signOutButton: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingVertical: 14, alignItems: 'center', marginTop: spacing.md },
-    signOutText: { color: colors.danger, fontWeight: '700', fontSize: 14 },
 });

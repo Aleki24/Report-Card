@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
+import { isSeniorRankGroup } from '@/lib/ranking';
 
 export async function POST(request: NextRequest) {
     try {
@@ -11,7 +12,18 @@ export async function POST(request: NextRequest) {
         
         const user_id = userId;
         const body = await request.json();
-        const { name, address, phone, email, school_id, logo_url, min_combination_group_size, overall_grading_system_id } = body;
+        const { name, address, phone, email, school_id, logo_url, min_combination_group_size, overall_grading_system_id, cbc_ranking_enabled, senior_rank_group } = body;
+
+        if (cbc_ranking_enabled !== undefined && typeof cbc_ranking_enabled !== 'boolean') {
+            return NextResponse.json({ error: 'cbc_ranking_enabled must be true or false' }, { status: 400 });
+        }
+        if (senior_rank_group !== undefined && !isSeniorRankGroup(senior_rank_group)) {
+            return NextResponse.json({ error: 'senior_rank_group must be GRADE, PATHWAY or COMBINATION' }, { status: 400 });
+        }
+        const rankingUpdate = {
+            ...(cbc_ranking_enabled !== undefined ? { cbc_ranking_enabled } : {}),
+            ...(senior_rank_group !== undefined ? { senior_rank_group } : {}),
+        };
 
         // CBC ministry minimum learners per subject combination (optional)
         let minGroupSize: number | undefined;
@@ -60,6 +72,7 @@ export async function POST(request: NextRequest) {
                 logo_url: logo_url || null,
                 ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
                 ...(overall_grading_system_id !== undefined ? { overall_grading_system_id: overall_grading_system_id || null } : {}),
+                ...rankingUpdate,
             }).eq('id', school_id);
 
             if (error) {
@@ -82,6 +95,7 @@ export async function POST(request: NextRequest) {
                 email: email?.trim() || null,
                 logo_url: logo_url || null,
                 ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
+                ...rankingUpdate,
             }).select('id').single();
 
             if (error) {

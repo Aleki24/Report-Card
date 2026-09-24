@@ -165,7 +165,7 @@ function columns(m: ReportModel): Column[] {
     }
     cols.push({ key: 'grade', title: m.gradeNoun, width: 7.5, cell: r => <View style={s.grade}><Text style={s.gradeText}>{r.grade}</Text></View> });
     if (m.isKCSE) cols.push({ key: 'pts', title: 'Pts', width: 5, cell: r => <Text style={[s.n, r.countsForPoints ? {} : { color: C.dotPrev }]}>{r.points ?? '-'}</Text> });
-    cols.push({ key: 'rank', title: 'Rank', width: 7, cell: r => <Text style={s.nm}>{r.rank ?? '-'}</Text> });
+    if (m.showPositions) cols.push({ key: 'rank', title: 'Rank', width: 7, cell: r => <Text style={s.nm}>{r.rank ?? '-'}</Text> });
     cols[0].width = 100 - cols.reduce((sum, c) => sum + c.width, 0);
     return cols;
 }
@@ -354,7 +354,9 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                         <View style={s.storyCell}>
                             <Text style={s.small}>Position</Text>
                             <Text style={s.mini}>{m.position.rank}<Text style={s.miniUnit}>/{m.position.of}</Text></Text>
-                            {m.positionChange != null
+                            {m.overallPosition
+                                ? <Text style={s.miniSub}>overall {m.overallPosition.rank}/{m.overallPosition.of}</Text>
+                                : m.positionChange != null
                                 ? <Trend value={m.positionChange} size={6.4} colors={TREND} fontFamily={font} suffix="places" />
                                 : <Text style={s.miniSub}>in the class</Text>}
                         </View>

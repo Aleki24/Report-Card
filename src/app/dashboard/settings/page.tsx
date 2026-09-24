@@ -10,6 +10,7 @@ import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { SchoolForm } from '@/components/settings/SchoolForm';
+import { isSeniorRankGroup, type SeniorRankGroup } from '@/lib/ranking';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
 
@@ -17,7 +18,7 @@ interface AcademicLevel { id: string; code: string; name: string; }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL'; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; }
+interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; cbc_ranking_enabled?: boolean; senior_rank_group?: SeniorRankGroup; }
 interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
 interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
 interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null; }
@@ -105,6 +106,8 @@ export default function SettingsPage() {
           student_invite_code: schoolData.data.student_invite_code || '',
           min_combination_group_size: schoolData.data.min_combination_group_size ?? 15,
           overall_grading_system_id: schoolData.data.overall_grading_system_id || null,
+          cbc_ranking_enabled: schoolData.data.cbc_ranking_enabled === true,
+          senior_rank_group: isSeniorRankGroup(schoolData.data.senior_rank_group) ? schoolData.data.senior_rank_group : 'GRADE',
         });
       }
     } catch (err) {
@@ -125,7 +128,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/admin/school', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: school.name.trim(), address: school.address.trim() || null, phone: school.phone.trim() || null, email: school.email.trim() || null, logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null, school_id: school.id || null, user_id: profile?.id }),
+        body: JSON.stringify({ name: school.name.trim(), address: school.address.trim() || null, phone: school.phone.trim() || null, email: school.email.trim() || null, logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null, cbc_ranking_enabled: school.cbc_ranking_enabled ?? false, senior_rank_group: school.senior_rank_group ?? 'GRADE', school_id: school.id || null, user_id: profile?.id }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error); }

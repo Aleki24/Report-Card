@@ -18,7 +18,8 @@ import {
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
-import { computeCombinationRanks } from '@/lib/pathway/combination-rank';
+import { computeGradePositions } from '@/lib/reports/grade-positions';
+import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import {
     earliestExamCreatedAt,
@@ -498,27 +499,26 @@ export async function GET(
             }
         }
 
-        // 6.5 CBC senior pathway ranking: rank within the grade-wide
-        // subject-combination group (all streams of the same grade,
-        // same combination). 8-4-4 students are untouched.
-        let combinationRank: number | undefined;
-        let combinationSize: number | undefined;
-        const studentCombinationId = (student as any).subject_combination_id as string | null;
-
-        if (gradingSystemType === 'CBC' && studentCombinationId && gradeId && termId) {
-            const combinationRanks = await computeCombinationRanks(supabase, {
-                schoolId: targetSchoolId || userSchoolId,
+        // 6.5 Overall position across every stream of the grade (CBC Senior
+        // School optionally by pathway or combination). CBC cards print
+        // positions only when the school has switched ranking on.
+        const rankingSchoolId = targetSchoolId || userSchoolId;
+        const rankingSettings = await loadRankingSettings(supabase, rankingSchoolId);
+        const showPositions = ranksCurriculum(rankingSettings, gradingSystemType);
+        const gradePositions = showPositions && gradeId && termId
+            ? await computeGradePositions(supabase, {
+                schoolId: rankingSchoolId,
                 gradeId,
-                fallbackStreamId: student.current_grade_stream_id,
-                combinationIds: [studentCombinationId],
                 termId,
                 yearId,
+                round: roundSelection.round,
+                releasedOnly,
                 gradingScales,
-            });
-            const info = combinationRanks.get(studentId);
-            combinationRank = info?.rank;
-            combinationSize = info?.size;
-        }
+                gradingSystemType,
+                seniorRankGroup: rankingSettings.seniorRankGroup,
+            })
+            : null;
+        const overallPosition = gradePositions?.differsFromStream ? gradePositions.byStudent.get(studentId) : undefined;
 
         // 7. Resolve overall grade from total points (KCSE) or percentage (CBC).
         // Shared with the QR verification page so the two can't disagree.
@@ -729,8 +729,10 @@ export async function GET(
             trackName: (student as any).track || undefined,
             combinationCode: ((student as any).subject_combinations as any)?.code || undefined,
             combinationName: ((student as any).subject_combinations as any)?.name || undefined,
-            combinationRank,
-            combinationSize,
+            showPositions,
+            overallRank: overallPosition?.rank,
+            overallSize: overallPosition?.size,
+            overallRankLabel: overallPosition?.label,
             classMeanPercentage,
             previousExamLabel: previousRound?.label,
             previousOverallPercentage: previousRound?.overall.get(studentId)?.percentage,

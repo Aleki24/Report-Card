@@ -62,6 +62,15 @@ const BANDS_BY_EDUCATION_LEVEL: Record<EducationLevel, CurriculumBand[]> = {
 
 // ─────────────────────────────────────────────────────────────
 // Grade → band
+/**
+ * CBC Senior School (Grades 10-12) — where pathways and combinations apply.
+ * Read the grade's code or name, never `numeric_order`: CBC orders start at
+ * PP1, so Grade 10 is stored as 12.
+ */
+export function isSeniorSchoolGrade(grade: GradeLike | null | undefined): boolean {
+    return bandForGrade(grade) === 'CBC_SENIOR_SCHOOL';
+}
+
 // ─────────────────────────────────────────────────────────────
 
 function cbcBandForGradeNumber(n: number): CurriculumBand | null {

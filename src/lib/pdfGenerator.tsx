@@ -44,16 +44,28 @@ export interface ReportCardData {
     overallGrade: string;
     totalPoints?: number;
     overallPointsGrade?: string;
+    /**
+     * Whether this card prints positions at all. 8-4-4 always does; CBC only
+     * when the school opts in (KNEC does not rank CBC learners).
+     */
+    showPositions: boolean;
+    /** Position within the learner's stream. */
     classRank: number;
     totalStudents: number;
+    /**
+     * Position across every stream of the grade — or, for CBC Senior School,
+     * within the learner's pathway or combination when the school ranks that
+     * way. Absent when it would only repeat the stream position.
+     */
+    overallRank?: number;
+    overallSize?: number;
+    /** Who the overall position counts against, e.g. "Form 3, all streams". */
+    overallRankLabel?: string;
     /** CBC senior pathway info (undefined for 8-4-4 / unassigned students) */
     pathwayName?: string;
     trackName?: string;
     combinationCode?: string;
     combinationName?: string;
-    /** Rank within the grade-wide subject-combination group */
-    combinationRank?: number;
-    combinationSize?: number;
     /** Mean percentage of every learner in the ranking pool, this round. */
     classMeanPercentage?: number;
     /* ── Comparison with the previous round ──────────────────

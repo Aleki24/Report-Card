@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Trophy } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { SENIOR_RANK_GROUPS, SENIOR_RANK_GROUP_OPTIONS, type SeniorRankGroup } from '@/lib/ranking';
 
 interface SchoolShape {
   id?: string;
@@ -14,6 +16,8 @@ interface SchoolShape {
   teacher_invite_code?: string;
   student_invite_code?: string;
   min_combination_group_size?: number;
+  cbc_ranking_enabled?: boolean;
+  senior_rank_group?: SeniorRankGroup;
 }
 
 interface SchoolFormProps {
@@ -127,6 +131,8 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
         <p className="text-xs text-muted-foreground mt-1">Ministry default is 15 — combinations with at least this many learners get their own report document when splitting class reports by combination.</p>
       </div>
 
+      <RankingSettings school={school} setSchool={setSchool} />
+
       {/* Invite Codes */}
       <div className="mt-8 pt-6 border-t border-border">
         <h3 className="text-sm font-bold mb-1 flex items-center gap-2">🔗 Invite Codes</h3>
@@ -139,5 +145,73 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Whether CBC cards print positions, and who Senior School learners are ranked against. */
+function RankingSettings({ school, setSchool }: SchoolFormProps) {
+  const enabled = school.cbc_ranking_enabled ?? false;
+  const group = school.senior_rank_group ?? 'GRADE';
+
+  return (
+    <fieldset className="mt-8 border-t border-border pt-6">
+      <legend className="sr-only">Report card positions</legend>
+      <h3 className="mb-1 flex items-center gap-2 text-sm font-bold">
+        <Trophy size={16} className="text-primary" aria-hidden /> Report card positions
+      </h3>
+      <p className="mb-4 text-xs text-muted-foreground">
+        8-4-4 report cards always show positions: in the stream, and overall across every stream of the form.
+        KNEC does not rank CBC learners (KPSEA and KJSEA report performance levels, not positions), so CBC cards show
+        no positions unless you switch them on.
+      </p>
+
+      <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-border p-4">
+        <span>
+          <span className="block text-sm font-medium">Show positions on CBC report cards</span>
+          <span className="block text-xs text-muted-foreground">Stream position, plus an overall position across all streams of the grade.</span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="mt-1 size-5 shrink-0 accent-primary"
+          checked={enabled}
+          onChange={e => setSchool(prev => ({ ...prev, cbc_ranking_enabled: e.target.checked }))}
+        />
+      </label>
+
+      {enabled && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Senior School (Grades 10–12): rank learners</p>
+          <div className="grid gap-2" role="radiogroup" aria-label="Senior School ranking group">
+            {SENIOR_RANK_GROUPS.map(value => {
+              const option = SENIOR_RANK_GROUP_OPTIONS[value];
+              const checked = group === value;
+              return (
+                <label
+                  key={value}
+                  className={cn(
+                    'flex cursor-pointer flex-col gap-1 rounded-xl border p-3 transition-colors',
+                    checked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40',
+                  )}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="radio"
+                      name="senior_rank_group"
+                      className="size-4 accent-primary"
+                      value={value}
+                      checked={checked}
+                      onChange={() => setSchool(prev => ({ ...prev, senior_rank_group: value }))}
+                    />
+                    {option.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </fieldset>
   );
 }

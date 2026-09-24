@@ -132,7 +132,7 @@ function columns(m: ReportModel): Column[] {
             total: <Text style={s.nb}>{m.points ?? ''}</Text>,
         });
     }
-    cols.push({
+    if (m.showPositions) cols.push({
         key: 'rank', title: 'Rank', width: 7, cell: r => <Text style={s.nm}>{r.rank ?? '-'}</Text>,
         total: <Text style={s.n}>{m.position ? `${m.position.rank}/${m.position.of}` : ''}</Text>,
     });
@@ -236,7 +236,7 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <Figure first big label="Mean score" value={`${m.mean}%`} sub={m.meanChange != null ? `${signed(m.meanChange)} since ${m.previousLabel}` : undefined} />
                 <Figure label={m.isKCSE ? 'Mean grade' : 'Level'} value={m.grade} sub={m.gradeCaption} />
                 {m.isKCSE && m.points != null && <Figure label="Points" value={`${m.points}`} sub={m.pointsChange != null ? `${signed(m.pointsChange)} since ${m.previousLabel}` : 'Best-seven total'} />}
-                {m.position && <Figure label="Position" value={`${m.position.rank}`} sub={`of ${m.position.of} learners`} />}
+                {m.position && <Figure label="Position" value={`${m.position.rank}`} sub={`of ${m.position.of} learners${m.overallPosition ? ` · overall ${m.overallPosition.rank}/${m.overallPosition.of}` : ''}`} />}
                 {m.classMean != null && <Figure label="Class mean" value={`${m.classMean}`} sub={m.vsClassMean != null ? `${signed(m.vsClassMean)} difference` : undefined} />}
             </View>
 

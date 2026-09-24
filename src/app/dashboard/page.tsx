@@ -39,6 +39,7 @@ interface DashboardData {
   hasFeeData?: boolean;
   hasAttendanceData?: boolean;
   hasLogo: boolean;
+  setup: SetupStatus | null;
 }
 
 
@@ -53,6 +54,7 @@ import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { getCurrentTermName } from '@/lib/term-calendar';
 import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
+import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
 import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
 import { InfoGuide } from '@/components/ui/InfoGuide';
@@ -203,6 +205,7 @@ function AdminDashboard({ userName }: { userName: string }) {
         totalTeachers={data?.totalTeachers ?? 0}
         totalStudents={data?.totalStudents ?? 0}
         totalUsers={data?.totalUsers ?? 0}
+        setup={data?.setup ?? null}
       />
       {/* Top Bar — search + profile */}
       <div className="mb-3 flex shrink-0 items-center justify-between gap-4">

@@ -210,7 +210,9 @@ function kpis(m: ReportModel): Kpi[] {
     const list: Kpi[] = [
         { label: m.isKCSE ? 'Mean grade' : 'Overall level', value: m.grade, sub: m.gradeCaption },
         m.position
-            ? { label: 'Class position', value: `${m.position.rank}`, unit: `/${m.position.of}`, sub: trend(m.positionChange, `places since ${m.previousLabel}`, 'In the class') }
+            ? { label: 'Class position', value: `${m.position.rank}`, unit: `/${m.position.of}`, sub: m.overallPosition
+                ? `Overall ${m.overallPosition.rank}/${m.overallPosition.of}`
+                : trend(m.positionChange, `places since ${m.previousLabel}`, 'In the class') }
             : { label: m.subjectNounPlural, value: `${m.subjects.length}`, sub: 'Assessed this exam' },
         m.isKCSE && m.points != null
             ? { label: 'Total points', value: `${m.points}`, sub: trend(m.pointsChange, 'points', 'Best-seven total') }
@@ -256,7 +258,7 @@ function subLine(r: SubjectRow, codes: string[]): string {
 
 function SubjectTable({ m }: { m: ReportModel }) {
     // Flex weights of the columns; the ones a report has no data for drop out.
-    const w = { subject: 2.1, score: 1.7, dev: m.hasPrevious ? 0.8 : 0, grade: 0.6, pts: m.isKCSE ? 0.5 : 0, rank: 0.6 };
+    const w = { subject: 2.1, score: 1.7, dev: m.hasPrevious ? 0.8 : 0, grade: 0.6, pts: m.isKCSE ? 0.5 : 0, rank: m.showPositions ? 0.6 : 0 };
     const pad = m.compact ? 2.4 : 3.8 * m.rowScale;
     return (
         <View style={s.table}>
@@ -266,7 +268,7 @@ function SubjectTable({ m }: { m: ReportModel }) {
                 {w.dev > 0 && <Text style={[s.th, { flex: w.dev, textAlign: 'center' }]}>vs {m.previousLabel}</Text>}
                 <Text style={[s.th, { flex: w.grade, textAlign: 'center' }]}>{m.gradeNoun}</Text>
                 {w.pts > 0 && <Text style={[s.th, { flex: w.pts, textAlign: 'center' }]}>Pts</Text>}
-                <Text style={[s.th, { flex: w.rank, textAlign: 'center' }]}>Rank</Text>
+                {w.rank > 0 && <Text style={[s.th, { flex: w.rank, textAlign: 'center' }]}>Rank</Text>}
             </View>
             {m.subjects.map((r, i) => {
                 const color = tone(r.mark);
@@ -300,7 +302,7 @@ function SubjectTable({ m }: { m: ReportModel }) {
                             <View style={[s.pill, { backgroundColor: tint(color, 0.12) }]}><Text style={[s.pillText, { color }]}>{r.grade}</Text></View>
                         </View>
                         {w.pts > 0 && <Text style={[s.center, { flex: w.pts, color: r.countsForPoints ? C.ink : C.faintest }]}>{r.points ?? '-'}</Text>}
-                        <Text style={[s.center, { flex: w.rank, color: C.muted }]}>{r.rank ?? '-'}</Text>
+                        {w.rank > 0 && <Text style={[s.center, { flex: w.rank, color: C.muted }]}>{r.rank ?? '-'}</Text>}
                     </View>
                 );
             })}

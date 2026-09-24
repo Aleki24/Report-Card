@@ -44,7 +44,8 @@ const kcse: ReportCardData = {
     schoolName: 'Riverside Heights High School', schoolAddress: 'P.O. Box 1234-00100, Nairobi · info@riverside.ac.ke',
     examTitle: 'End of Term 2 Examination', academicYear: '2026', studentName: 'Amani Wanjiku Mwangi', enrollmentNumber: 'RHS/2023/0417',
     className: 'Form 3 East', gradingSystemType: 'KCSE', subjectMarks: kcseMarks, overallPercentage: 73.2, overallGrade: 'B+',
-    totalPoints: 76, overallPointsGrade: 'B+', classRank: 4, totalStudents: 42, classMeanPercentage: 59.7,
+    totalPoints: 76, overallPointsGrade: 'B+', showPositions: true, classRank: 4, totalStudents: 42,
+    overallRank: 9, overallSize: 126, overallRankLabel: 'Form 3, all streams', classMeanPercentage: 59.7,
     previousExamLabel: 'Term 1', previousOverallPercentage: 69.8, previousTotalPoints: 71, previousClassRank: 7,
     gradeBoundaries: [], resultUrl: 'https://skulbase.app/r/abc123', openingDate: '5 January 2027',
     totalScore: 659, totalPossible: 900,
@@ -58,7 +59,7 @@ const cbcRaw: [string, number, number, number][] = [
 const cbc: ReportCardData = {
     ...kcse, gradingSystemType: 'CBC', className: 'Grade 8 Blue', examTitle: 'End of Term 2 Assessment', studentName: 'Baraka Otieno Odhiambo',
     enrollmentNumber: 'RHS/JS/0921', totalPoints: undefined, overallPointsGrade: undefined, overallGrade: 'ME',
-    overallPercentage: 69.6, classRank: 6, totalStudents: 38, classMeanPercentage: 60.1, previousOverallPercentage: 64.3, previousClassRank: 9,
+    overallPercentage: 69.6, showPositions: false, overallRank: undefined, overallSize: undefined, classRank: 6, totalStudents: 38, classMeanPercentage: 60.1, previousOverallPercentage: 64.3, previousClassRank: 9,
     subjectMarks: cbcRaw.map(([name, pct, avg, prev], i) => ({
         subjectName: name, category: 'Core', score: pct, totalPossible: 100, percentage: pct,
         grade: pct >= 75 ? 'EE' : pct >= 50 ? 'ME' : pct >= 25 ? 'AE' : 'BE', teacherComment: '',
@@ -89,7 +90,7 @@ const cbcScale = [['EE1', 'Exceeding Expectations', 90, 100, 8], ['EE2', 'Exceed
     ['ME2', 'Meeting Expectations', 41, 57, 5], ['AE1', 'Approaching Expectations', 31, 40, 4], ['AE2', 'Approaching Expectations', 21, 30, 3],
     ['BE1', 'Below Expectations', 11, 20, 2], ['BE2', 'Below Expectations', 0, 10, 1]] as const;
 const cbc8: ReportCardData = {
-    ...cbc,
+    ...cbc, showPositions: true,
     gradeBoundaries: cbcScale.map(([symbol, label, min, max, points]) => ({ symbol, label, min, max, points })),
     subjectMarks: cbc.subjectMarks.map(m => ({ ...m, grade: cbcScale.find(([, , min, max]) => m.percentage >= min && m.percentage <= max)![0] })),
 };

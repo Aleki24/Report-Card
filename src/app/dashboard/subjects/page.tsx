@@ -34,6 +34,11 @@ const typeBadge = (type?: string) => {
     return <span className="text-xs text-muted-foreground">—</span>;
 };
 
+const SUBJECTS_TABS = ['subjects', 'combinations', 'placement', 'teachers'] as const;
+type SubjectsTab = (typeof SUBJECTS_TABS)[number];
+const isSubjectsTab = (value: string | null): value is SubjectsTab =>
+    (SUBJECTS_TABS as readonly (string | null)[]).includes(value);
+
 export default function SubjectsPage() {
     const { role } = useAuth();
     const [search, setSearch] = useState('');
@@ -44,7 +49,14 @@ export default function SubjectsPage() {
     const [grades, setGrades] = useState<Grade[]>([]);
     const [combinations, setCombinations] = useState<SubjectCombination[]>([]);
     const [minGroupSize, setMinGroupSize] = useState(15);
-    const [activeTab, setActiveTab] = useState<'subjects' | 'combinations' | 'placement' | 'teachers'>('subjects');
+    // Deep links (the setup checklist's ?tab=teachers) open on the tab they
+    // name. Safe to read the URL here: the page shows a skeleton until its
+    // data loads, so the server and first client render agree regardless.
+    const [activeTab, setActiveTab] = useState<SubjectsTab>(() => {
+        if (typeof window === 'undefined') return 'subjects';
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        return isSubjectsTab(tab) ? tab : 'subjects';
+    });
     const [gradeStreams, setGradeStreams] = useState<{ id: string; full_name: string; grade_id: string }[]>([]);
     const [enrollmentSubject, setEnrollmentSubject] = useState<Subject | null>(null);
     const [loading, setLoading] = useState(true);

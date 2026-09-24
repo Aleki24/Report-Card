@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
+import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher, markableStudentIds, type TeacherPermissions } from '@/lib/teacher-utils';
 import { fetchActiveMultiPaperScheme } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
@@ -70,6 +70,24 @@ function validateSinglePaperScore(
     return { raw_score: score, percentage: Math.round((score / max) * 10000) / 100 };
 }
 
+/**
+ * A stream's subject teacher records that stream's marks — not the stream
+ * next door, even on an exam set for the whole grade. The exam's creator
+ * keeps full access to it. Returns the 403 to send, or null when allowed.
+ */
+async function streamDenial(
+  perms: TeacherPermissions,
+  exam: { subject_id: string; created_by_teacher_id: string | null },
+  userId: string,
+  studentIds: string[],
+): Promise<NextResponse | null> {
+  if (exam.created_by_teacher_id === userId) return null;
+  const allowed = await markableStudentIds(perms, exam.subject_id, studentIds);
+  return studentIds.every(id => allowed.has(id))
+    ? null
+    : NextResponse.json({ error: 'You can only enter marks for learners in the streams you teach this subject in.' }, { status: 403 });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -103,7 +121,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'exam_id is required' }, { status: 400 });
     }
 
-    // If teacher, verify exam visibility
+    // If teacher, verify exam visibility, and remember whose marks they keep
+    // so a grade-wide exam shows them their own streams only.
+    let teacherScope: { perms: TeacherPermissions; subjectId: string } | null = null;
     if (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER') {
       const { data: exam } = await supabase.from('exams').select('*').eq('id', examId).maybeSingle();
       if (!exam || exam.school_id !== schoolId) {
@@ -113,17 +133,19 @@ export async function GET(request: NextRequest) {
       if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+      if (exam.created_by_teacher_id !== userId) teacherScope = { perms, subjectId: exam.subject_id };
     }
 
     // School-scope through the join rather than pre-fetching every student id
     // in the school (which was unbounded and could be thousands of ids).
-    const { data, error } = await supabase
+    const { data: schoolMarks, error } = await supabase
       .from('exam_marks')
       .select(`
         id, student_id, raw_score, percentage, grade_symbol, rubric, remarks,
         students!inner (
-          admission_number,
-          users!inner ( first_name, last_name, school_id )
+          admission_number, current_grade_stream_id,
+          users!inner ( first_name, last_name, school_id ),
+          grade_streams ( grade_id )
         )
       `)
       .eq('exam_id', examId)
@@ -132,6 +154,18 @@ export async function GET(request: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    type MarkPlacement = { students: { current_grade_stream_id: string | null; grade_streams: { grade_id: string } | { grade_id: string }[] | null } | null };
+    const placementOf = (m: MarkPlacement) => {
+      const stream = m.students?.grade_streams;
+      return {
+        current_grade_stream_id: m.students?.current_grade_stream_id ?? null,
+        grade_id: (Array.isArray(stream) ? stream[0] : stream)?.grade_id ?? null,
+      };
+    };
+    const data = teacherScope
+      ? (schoolMarks || []).filter(m => canTeacherMarkStudent(teacherScope.perms, teacherScope.subjectId, placementOf(m as unknown as MarkPlacement)))
+      : schoolMarks;
 
     // Attach per-paper scores when this exam uses a multi-paper scheme. The
     // exam is already school-scoped, so filtering components by exam_id (and the
@@ -207,17 +241,20 @@ export async function POST(request: NextRequest) {
     if (!exam || exam.school_id !== schoolId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
+
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
       const perms = await getTeacherPermissions(userId);
       if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+      const denial = await streamDenial(perms, exam, userId, submittedIds);
+      if (denial) return denial;
     }
 
     // Validate just the submitted students. Listing every student in the
     // school first hit PostgREST's 1,000-row cap, after which a large
     // school's valid learners were rejected as "Invalid student ID".
-    const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
     const { data: schoolStudents } = submittedIds.length
       ? await supabase
           .from('users')
@@ -356,6 +393,8 @@ export async function PATCH(request: NextRequest) {
       if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+      const denial = await streamDenial(perms, exam, userId, [markCheck.student_id as string]);
+      if (denial) return denial;
     }
     
     const updateData: Record<string, any> = { grade_symbol, remarks };
