@@ -214,7 +214,7 @@ function kpis(m: ReportModel): Kpi[] {
                 ? `Overall ${m.overallPosition.rank}/${m.overallPosition.of}`
                 : trend(m.positionChange, `places since ${m.previousLabel}`, 'In the class') }
             : { label: m.subjectNounPlural, value: `${m.subjects.length}`, sub: 'Assessed this exam' },
-        m.isKCSE && m.points != null
+        m.isKCSE && m.points != null && !m.ranksByTotal
             ? { label: 'Total points', value: `${m.points}`, sub: trend(m.pointsChange, 'points', 'Best-seven total') }
             : { label: 'Total marks', value: `${m.totalMarks}`, unit: `/${m.totalMarksOutOf}`, sub: trend(m.meanChange, `mean vs ${m.previousLabel}`, `Across ${m.ranked.length} ${m.subjectNounPlural}`) },
         m.vsClassMean != null

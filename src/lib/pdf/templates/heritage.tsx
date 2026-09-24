@@ -347,10 +347,10 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                             : <Field label={m.subjectNounPlural} value={`${m.subjects.length}`} />}
                         {m.learner.pathway
                             ? <Field label="Pathway" value={m.learner.pathway} />
-                            : m.isKCSE && m.points != null
-                                ? <Field label="Total points" value={`${m.points}`} />
-                                : m.ranksByTotal
-                                    ? <Field label="Total marks" value={`${m.totalMarks}`} small={`of ${m.totalMarksOutOf}`} />
+                            : m.ranksByTotal
+                                ? <Field label="Total marks" value={`${m.totalMarks}`} small={`of ${m.totalMarksOutOf}`} />
+                                : m.isKCSE && m.points != null
+                                    ? <Field label="Total points" value={`${m.points}`} />
                                     : <Field label={m.subjectNounPlural} value={`${m.subjects.length}`} />}
                     </View>
                 </View>
