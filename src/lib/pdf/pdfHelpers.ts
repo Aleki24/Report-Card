@@ -1,16 +1,3 @@
-import { GREEN } from './pdfStyles';
-
-export function gradeColor(grade: string): string {
-    const base = grade.replace(/[+-\d]/g, '').toUpperCase();
-    switch (base) {
-        case 'A': case 'EE': return GREEN;
-        case 'B': case 'ME': return '#2563EB';
-        case 'C': case 'AE': return '#FF8C00';
-        case 'D': case 'BE': return '#DC2626';
-        default: return '#EF4444';
-    }
-}
-
 /* ── Auto-generated remarks ──────────────────────────────────
    These are the fallback remarks printed when a teacher hasn't written
    their own. They are read by the learner and their parents, so they stay
@@ -45,11 +32,4 @@ export function generatePrincipalComment(percentage: number, grade: string, tota
     if (percentage >= 40) return 'You are on your way. Keep working and use the support available.';
     if (percentage >= 30) return 'Improvement is possible with steady effort. The school is here to help.';
     return 'Do not lose heart. With guidance and regular practice you can do better next term.';
-}
-
-export function barColor(score: number): string {
-    if (score >= 80) return '#22A86B';
-    if (score >= 60) return '#2563EB';
-    if (score >= 40) return '#FF8C00';
-    return '#DC2626';
 }

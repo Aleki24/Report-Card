@@ -1,22 +1,23 @@
 # Report card fonts
 
-The project's own typefaces, bundled so report card PDFs are typeset in the
-same faces as the app UI (`--font-sans` / `--font-display` in globals.css):
+Typefaces for the report card templates and the class mark sheet, bundled as
+`.ttf` so PDFs render the same everywhere. They are registered in
+`src/lib/pdf/pdfTheme.ts`.
 
-| File | Family | Used for |
+| Files | Family | Used by |
 |---|---|---|
-| `merriweather-400.ttf` | Merriweather Regular | body copy |
-| `merriweather-700.ttf` | Merriweather Bold | labels, figures, headings |
-| `merriweather-400i.ttf` | Merriweather Italic | teacher / principal remarks |
-| `syne-800.ttf` | Syne ExtraBold | the school name on the masthead |
+| `playfair-700` | Playfair Display Bold | Heritage display, mark sheet school name |
+| `sourcesans-400/600/700` | Source Sans 3 | Heritage body |
+| `sourceserif-400i` | Source Serif 4 Italic | Heritage remarks |
+| `jakarta-400/600/700/800` | Plus Jakarta Sans | Aurora |
+| `instrumentserif-400`, `-400i` | Instrument Serif | Editorial display |
+| `inter-400/600/700/800` | Inter | Editorial body, mark sheet, footers |
+| `manrope-400/600/700/800` | Manrope | Growth body |
+| `dmserif-400` | DM Serif Display | Growth display |
 
-Both families are licensed under the **SIL Open Font License 1.1**, which
-permits bundling and redistribution:
+Every family is licensed under the **SIL Open Font License 1.1**, which permits
+bundling and redistribution (see <https://fonts.google.com> for each specimen).
 
-- Merriweather — © Sorkin Type Co, <https://fonts.google.com/specimen/Merriweather>
-- Syne — © Bonjour Monde, <https://fonts.google.com/specimen/Syne>
-
-They are read from disk at render time by `../pdfTheme.ts`, so they must be
-traced into the serverless bundle — see `outputFileTracingIncludes` in
-`next.config.ts`. If the files are ever missing, font registration falls back
-to the built-in Times/Helvetica families and report cards still generate.
+They are read from disk at render time, so they must be traced into the
+serverless bundle — see `outputFileTracingIncludes` in `next.config.ts`. If a
+file is ever missing, registration fails quietly and PDFs still generate.

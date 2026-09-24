@@ -66,13 +66,43 @@ const cbc: ReportCardData = {
     })),
 };
 
+/* Edge cases: a long subject list with long names, and a first exam with
+   nothing to compare against and no class figures yet. */
+const extraSubjects: [string, number][] = [
+    ['Computer Studies', 71], ['Home Science', 63], ['French', 57], ['Art & Design', 80], ['Music', 66],
+];
+const kcseLong: ReportCardData = {
+    ...kcse, studentName: 'Wanjiku Nyambura Chepkoech-Kariuki', className: 'Form 4 North',
+    subjectMarks: [...kcseMarks, ...extraSubjects.map(([name, pct], i) => {
+        const [grade, points] = kcseGrade(pct);
+        return { subjectName: name, category: 'Technical', score: pct, totalPossible: 100, percentage: pct, grade, points,
+            teacherComment: '', subjectRank: 3 + i, totalStudents: 42, instructorName: 'Mr. B. Omondi', includedInPoints: false,
+            classAverage: 60, previousPercentage: pct - 2 };
+    })],
+};
+const firstExam: ReportCardData = {
+    ...kcse, previousExamLabel: undefined, previousOverallPercentage: undefined, previousTotalPoints: undefined,
+    previousClassRank: undefined, classMeanPercentage: undefined, resultUrl: undefined,
+    subjectMarks: kcseMarks.slice(0, 6).map(m => ({ ...m, previousPercentage: undefined, classAverage: undefined, paperScores: undefined, instructorName: undefined })),
+};
+const cbcScale = [['EE1', 'Exceeding Expectations', 90, 100, 8], ['EE2', 'Exceeding Expectations', 75, 89, 7], ['ME1', 'Meeting Expectations', 58, 74, 6],
+    ['ME2', 'Meeting Expectations', 41, 57, 5], ['AE1', 'Approaching Expectations', 31, 40, 4], ['AE2', 'Approaching Expectations', 21, 30, 3],
+    ['BE1', 'Below Expectations', 11, 20, 2], ['BE2', 'Below Expectations', 0, 10, 1]] as const;
+const cbc8: ReportCardData = {
+    ...cbc,
+    gradeBoundaries: cbcScale.map(([symbol, label, min, max, points]) => ({ symbol, label, min, max, points })),
+    subjectMarks: cbc.subjectMarks.map(m => ({ ...m, grade: cbcScale.find(([, , min, max]) => m.percentage >= min && m.percentage <= max)![0] })),
+};
+
+const CASES: [string, ReportCardData][] = [['kcse', kcse], ['cbc', cbc], ['cbc8', cbc8], ['kcse-long', kcseLong], ['first-exam', firstExam]];
+
 async function main() {
     const out = process.argv[2] ?? 'render-out';
     mkdirSync(out, { recursive: true });
     const only = process.argv[3]?.split(',');
     for (const t of REPORT_TEMPLATES) {
         if (only && !only.includes(t.id)) continue;
-        for (const [label, data] of [['kcse', kcse], ['cbc', cbc]] as const) {
+        for (const [label, data] of CASES) {
             writeFileSync(join(out, `${t.id}-${label}.pdf`), await generateStudentReportCardPDF(data, t.id));
             console.log('rendered', t.id, label);
         }

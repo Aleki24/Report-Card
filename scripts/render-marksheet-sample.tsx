@@ -24,7 +24,8 @@ const kcse = (p: number): [string, number] => {
     return [hit[1], hit[2]];
 };
 
-const students = Array.from({ length: 42 }, (_, i) => {
+function buildClass(size: number, curriculum: 'KCSE' | 'CBC'): MarkSheetData {
+const students = Array.from({ length: size }, (_, i) => {
     const ability = 35 + rand() * 50;
     const marks: Record<string, number | null> = {};
     for (const [code] of SUBJECTS) marks[code] = i === 17 && code === '443' ? null : Math.round(Math.min(98, Math.max(12, ability + (rand() - 0.5) * 30)));
@@ -51,22 +52,36 @@ const gradeDistribution: Record<string, number> = {};
 for (const s of students) gradeDistribution[s.overallGrade] = (gradeDistribution[s.overallGrade] ?? 0) + 1;
 const classMean = students.reduce((a, s) => a + s.overallPercentage, 0) / students.length;
 
-const data: MarkSheetData = {
+const cbcLevel = (p: number) => (p >= 75 ? 'EE' : p >= 50 ? 'ME' : p >= 25 ? 'AE' : 'BE');
+if (curriculum === 'CBC') {
+    for (const s of students) s.overallGrade = cbcLevel(s.overallPercentage);
+    for (const k of Object.keys(gradeDistribution)) delete gradeDistribution[k];
+    for (const s of students) gradeDistribution[s.overallGrade] = (gradeDistribution[s.overallGrade] ?? 0) + 1;
+}
+return {
     schoolName: 'Riverside Heights High School', schoolAddress: 'P.O. Box 1234-00100, Nairobi · info@riverside.ac.ke',
-    examTitle: 'End of Term 2 Examination', academicYear: '2026', className: 'Form 3 East', gradingSystemType: 'KCSE',
+    examTitle: 'End of Term 2 Examination', academicYear: '2026', className: curriculum === 'KCSE' ? 'Form 3 East' : 'Grade 9 Blue', gradingSystemType: curriculum,
     subjects: SUBJECTS.map(([code, name]) => ({ code, name })), students, gradeDistribution,
-    meanGrade: kcse(classMean)[0], meanPoints: Math.round(students.reduce((a, s) => a + s.totalPoints, 0) / students.length * 10) / 10,
+    meanGrade: curriculum === 'KCSE' ? kcse(classMean)[0] : cbcLevel(classMean), meanPoints: Math.round(students.reduce((a, s) => a + s.totalPoints, 0) / students.length * 10) / 10,
     classMeanPercentage: classMean, previousClassMeanPercentage: classMean - 2.4, previousExamLabel: 'Term 1',
     subjectStats,
     subjectRankings: SUBJECTS.map(([code]) => ({ code, mean: subjectStats[code].mean, rank: 0 }))
         .sort((a, b) => b.mean - a.mean).map((r, i) => ({ ...r, rank: i + 1 })),
+    gradeBands: curriculum === 'KCSE'
+        ? [[80, 100, 'A'], [75, 79, 'A-'], [70, 74, 'B+'], [65, 69, 'B'], [60, 64, 'B-'], [55, 59, 'C+'], [50, 54, 'C'], [45, 49, 'C-'], [40, 44, 'D+'], [35, 39, 'D'], [30, 34, 'D-'], [0, 29, 'E']]
+            .map(([min_percentage, max_percentage, symbol]) => ({ symbol: String(symbol), min_percentage: Number(min_percentage), max_percentage: Number(max_percentage) }))
+        : [[75, 100, 'EE'], [50, 74, 'ME'], [25, 49, 'AE'], [0, 24, 'BE']]
+            .map(([min_percentage, max_percentage, symbol]) => ({ symbol: String(symbol), min_percentage: Number(min_percentage), max_percentage: Number(max_percentage) })),
 };
+}
 
 async function main() {
     const out = process.argv[2] ?? 'render-out';
     mkdirSync(out, { recursive: true });
-    writeFileSync(join(out, 'marksheet.pdf'), await generateMarkSheetPDF(data));
-    writeFileSync(join(out, 'marksheet-data.json'), JSON.stringify(data));
-    console.log('rendered marksheet');
+    // A full class, one learner over a page, a small class and a CBC class.
+    for (const [size, curriculum] of [[42, 'KCSE'], [27, 'KCSE'], [8, 'KCSE'], [35, 'CBC']] as const) {
+        writeFileSync(join(out, `marksheet-${curriculum.toLowerCase()}-${size}.pdf`), await generateMarkSheetPDF(buildClass(size, curriculum)));
+        console.log('rendered marksheet', curriculum, size);
+    }
 }
 main().catch(e => { console.error(e); process.exit(1); });
