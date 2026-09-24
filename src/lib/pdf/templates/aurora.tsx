@@ -210,13 +210,13 @@ function kpis(m: ReportModel): Kpi[] {
     const list: Kpi[] = [
         { label: m.isKCSE ? 'Mean grade' : 'Overall level', value: m.grade, sub: m.gradeCaption },
         m.position
-            ? { label: 'Class position', value: `${m.position.rank}`, unit: `/${m.position.of}`, sub: m.overallPosition
+            ? { label: m.ranksByTotal ? 'Position · total marks' : 'Class position', value: `${m.position.rank}`, unit: `/${m.position.of}`, sub: m.overallPosition
                 ? `Overall ${m.overallPosition.rank}/${m.overallPosition.of}`
                 : trend(m.positionChange, `places since ${m.previousLabel}`, 'In the class') }
             : { label: m.subjectNounPlural, value: `${m.subjects.length}`, sub: 'Assessed this exam' },
-        m.isKCSE && m.points != null
+        m.isKCSE && m.points != null && !m.ranksByTotal
             ? { label: 'Total points', value: `${m.points}`, sub: trend(m.pointsChange, 'points', 'Best-seven total') }
-            : { label: 'Mean change', value: m.meanChange == null ? '-' : `${m.meanChange > 0 ? '+' : ''}${m.meanChange}`, unit: m.meanChange == null ? '' : '%', sub: `vs ${m.previousLabel}` },
+            : { label: 'Total marks', value: `${m.totalMarks}`, unit: `/${m.totalMarksOutOf}`, sub: trend(m.meanChange, `mean vs ${m.previousLabel}`, `Across ${m.ranked.length} ${m.subjectNounPlural}`) },
         m.vsClassMean != null
             ? { label: 'vs Class mean', value: `${m.vsClassMean > 0 ? '+' : ''}${m.vsClassMean}`, unit: '%', sub: `Class averaged ${m.classMean}%` }
             : { label: 'Strongest', value: m.ranked[0] ? `${m.ranked[0].mark}` : '-', unit: '%', sub: m.ranked[0]?.name ?? '' },

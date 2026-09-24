@@ -528,7 +528,7 @@ export async function GET(
             }));
 
             const studentPerf = // only base on available marks
-                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+                 (mapped.length > 0) ? aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, totalPoints: 0, totalMarks: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
             const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
 
@@ -625,6 +625,8 @@ export async function GET(
                 overallPercentage: studentPerf.percentage,
                 overallGrade: overallGradeSymbol,
                 totalPoints: studentPerf.totalPoints,
+                totalMarks: Math.round(studentPerf.totalMarks),
+                rankedBy: rankingBasis,
                 overallPointsGrade: studentPerf.overallGrade,
                 classRank: ranks.get(student.id) || 0,
                 totalStudents: rankedStudentCount,
