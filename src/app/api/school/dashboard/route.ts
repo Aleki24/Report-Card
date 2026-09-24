@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
@@ -74,6 +75,7 @@ export async function GET(_request: NextRequest) {
         upcomingExams: [],
         recentActivities: [],
         hasLogo: false,
+        setup: null,
       });
     }
 
@@ -107,6 +109,29 @@ export async function GET(_request: NextRequest) {
     const announcementsLast7Days = announcementsRes.count ?? 0;
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
     const hasLogo = Boolean(schoolRes.data?.logo_url);
+
+    // What a school must have in place before marks and report cards work —
+    // the dashboard's setup checklist walks an admin through it in order.
+    const [offeredRes, classTeachersRes, assignmentsRes, unplacedRes] = await Promise.all([
+      supabase.from('school_subjects').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+      currentYear
+        ? supabase.from('class_teachers').select('current_grade_stream_id, grade_streams!inner(school_id)').eq('grade_streams.school_id', schoolId).eq('academic_year_id', currentYear.id)
+        : Promise.resolve({ data: [] as { current_grade_stream_id: string }[] }),
+      currentYear
+        ? supabase.from('subject_teacher_assignments').select('id', { count: 'exact', head: true }).eq('academic_year_id', currentYear.id)
+        : Promise.resolve({ count: 0 }),
+      supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true })
+        .eq('users.school_id', schoolId).eq('status', 'ACTIVE').is('current_grade_stream_id', null),
+    ]);
+    const classesWithTeacher = new Set((classTeachersRes.data ?? []).map(r => r.current_grade_stream_id as string)).size;
+    const setup: SetupStatus = {
+      hasCurrentTerm: Boolean(currentTerm),
+      classes: totalClasses,
+      subjectsOffered: offeredRes.count ?? 0,
+      classesWithoutClassTeacher: Math.max(0, totalClasses - classesWithTeacher),
+      subjectTeacherAssignments: assignmentsRes.count ?? 0,
+      learnersWithoutClass: unplacedRes.count ?? 0,
+    };
 
     // ── Rollups the dashboard leads with ──
     //
@@ -329,6 +354,7 @@ export async function GET(_request: NextRequest) {
       hasFeeData,
       hasAttendanceData,
       hasLogo,
+      setup,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStream, canManageStudent, getCaller } from '@/lib/auth-server';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
+import { CLASS_REQUIRED_MESSAGE, isSchoolClass } from '@/lib/classes';
 
 export async function PATCH(request: NextRequest) {
     try {
@@ -45,7 +46,7 @@ export async function PATCH(request: NextRequest) {
         // Verify the student belongs to this school
         const { data: student } = await supabaseAdmin
             .from('students')
-            .select('id, users!inner(school_id)')
+            .select('id, status, users!inner(school_id)')
             .eq('id', student_id)
             .eq('users.school_id', profile.school_id)
             .maybeSingle();
@@ -55,6 +56,16 @@ export async function PATCH(request: NextRequest) {
         }
         if (!(await canManageStudent(caller, student_id))) {
             return NextResponse.json({ error: 'You can only update students in your own class.' }, { status: 403 });
+        }
+        // An active learner always sits in a class; only one who has left may be without.
+        if (grade_stream_id !== undefined) {
+            const staysActive = (status ?? student.status ?? 'ACTIVE') === 'ACTIVE';
+            if (!grade_stream_id && staysActive) {
+                return NextResponse.json({ error: CLASS_REQUIRED_MESSAGE }, { status: 400 });
+            }
+            if (grade_stream_id && !(await isSchoolClass(supabaseAdmin, profile.school_id, grade_stream_id))) {
+                return NextResponse.json({ error: 'That class is not one of your school\'s.' }, { status: 400 });
+            }
         }
         // Moving a student is only allowed into a class the caller also runs.
         if (grade_stream_id !== undefined && !canManageStream(caller, grade_stream_id || null)) {

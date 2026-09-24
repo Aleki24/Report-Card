@@ -2,10 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School, Library } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Wordmark } from '@/components/Wordmark';
 import { toast } from 'sonner';
+import ClassesStep, { gradesMissingStreams, type ClassPlan, type StandardGrade } from '@/components/onboarding/ClassesStep';
+import SubjectsStep from '@/components/onboarding/SubjectsStep';
+import { parseStreamNames } from '@/lib/classes';
+import { CURRICULA, ONBOARDING_TERMS, type Curriculum, type OnboardingInput } from '@/lib/schemas';
 
 type OnboardingRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | null;
 
@@ -13,8 +17,14 @@ const ADMIN_STEPS = [
   { id: 1, title: 'School Details', icon: Building, description: 'Basic school information' },
   { id: 2, title: 'Calendar', icon: Calendar, description: 'Set your current year and term' },
   { id: 3, title: 'Curriculum', icon: BookOpen, description: 'Select academic levels' },
-  { id: 4, title: 'Classes', icon: Users, description: 'Create your classes and streams' },
+  { id: 4, title: 'Classes', icon: Users, description: 'Your grades, as one class or streams' },
+  { id: 5, title: 'Subjects', icon: Library, description: 'The subjects every learner takes' },
 ];
+
+const CURRICULUM_OPTIONS: Record<Curriculum, { label: string; description: string }> = {
+  CBC: { label: 'CBC', description: 'Competency Based Curriculum' },
+  '844': { label: '8-4-4 System', description: 'Traditional Curriculum' },
+};
 
 export default function OnboardingWizard() {
   const router = useRouter();
@@ -81,9 +91,41 @@ export default function OnboardingWizard() {
   const [schoolPhone, setSchoolPhone] = useState('');
   const [schoolAddress, setSchoolAddress] = useState('');
   const [academicYear, setAcademicYear] = useState(new Date().getFullYear().toString());
-  const [termName, setTermName] = useState('Term 1');
-  const [curriculum, setCurriculum] = useState({ cbc: true, '844': false });
-  const [classes, setClasses] = useState([{ grade: '', streams: '' }]);
+  const [term, setTerm] = useState<OnboardingInput['term']>({ name: 'Term 1', start_date: '', end_date: '' });
+  const [curricula, setCurricula] = useState<Curriculum[]>(['CBC']);
+  const [standardGrades, setStandardGrades] = useState<StandardGrade[]>([]);
+  const [classPlans, setClassPlans] = useState<Record<string, ClassPlan>>({});
+  const [offerSubjects, setOfferSubjects] = useState(true);
+
+  // The standard grades, fetched once the admin starts setting a school up.
+  useEffect(() => {
+    if (selectedRole !== 'ADMIN' || standardGrades.length > 0) return;
+    fetch('/api/school/onboarding')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('Could not load the grade list'))))
+      .then((d: { grades: StandardGrade[] }) => setStandardGrades(d.grades))
+      .catch((err: Error) => toast.error(err.message));
+  }, [selectedRole, standardGrades.length]);
+
+  /** Ticked grades still inside the chosen curricula (unticking a curriculum drops its grades). */
+  const chosenGrades = standardGrades.filter(g => classPlans[g.id] && curricula.includes(g.curriculum));
+
+  /** Why the current step can't continue yet, or null. */
+  const stepProblem = (step: number): string | null => {
+    if (step === 1 && !schoolName.trim()) return 'School name is required';
+    if (step === 2) {
+      if (!/^\d{4}$/.test(academicYear)) return 'Enter the academic year, e.g. 2026';
+      if (!term.start_date || !term.end_date) return `Enter when ${term.name} starts and ends`;
+      if (term.end_date <= term.start_date) return 'The term must end after it starts';
+      if (!term.start_date.startsWith(academicYear)) return 'The term should start in the academic year you entered';
+    }
+    if (step === 3 && curricula.length === 0) return 'Pick at least one curriculum';
+    if (step === 4) {
+      if (chosenGrades.length === 0) return 'Tick at least one grade';
+      const missing = gradesMissingStreams(classPlans).filter(id => chosenGrades.some(g => g.id === id));
+      if (missing.length > 0) return `Name the streams for ${standardGrades.find(g => g.id === missing[0])?.name}, or choose "One class"`;
+    }
+    return null;
+  };
 
   // --- Teacher/Student Form State ---
   const [inviteCode, setInviteCode] = useState('');
@@ -115,8 +157,9 @@ export default function OnboardingWizard() {
 
   const handleNext = () => {
     if (selectedRole === 'ADMIN') {
-      if (currentStep === 1 && !schoolName) {
-        toast.error('School name is required');
+      const problem = stepProblem(currentStep);
+      if (problem) {
+        toast.error(problem);
         return;
       }
       if (currentStep < ADMIN_STEPS.length) {
@@ -150,10 +193,14 @@ export default function OnboardingWizard() {
           schoolPhone,
           schoolAddress,
           academicYear,
-          termName,
-          curriculum,
-          classes
-        }),
+          term,
+          curricula,
+          classes: chosenGrades.map(g => ({
+            grade_id: g.id,
+            streams: classPlans[g.id].hasStreams ? parseStreamNames(classPlans[g.id].streams) : [],
+          })),
+          offerCompulsorySubjects: offerSubjects,
+        } satisfies OnboardingInput),
       });
 
       const data = await res.json();
@@ -169,8 +216,8 @@ export default function OnboardingWizard() {
       }
 
       window.location.href = '/dashboard';
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
       setLoading(false);
     }
   };
@@ -196,8 +243,8 @@ export default function OnboardingWizard() {
 
       toast.success('Successfully joined the school!');
       window.location.href = nextPath || '/dashboard';
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Something went wrong');
       setLoading(false);
     }
   };
@@ -451,32 +498,42 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Academic Calendar</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Set up the current academic year and term. You can change this later in settings.</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      The current year and term, with the term&apos;s real dates — exams, attendance and report cards are filed under them.
+                      Add the other terms later in Settings.
+                    </p>
                   </div>
-                  
-                  <div className="grid gap-5">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">Academic Year</label>
-                      <input 
-                        type="text" 
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="block text-sm font-semibold">Academic Year</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
                         value={academicYear}
-                        onChange={(e) => setAcademicYear(e.target.value)}
-                        className="input-field"
+                        onChange={(e) => setAcademicYear(e.target.value.trim())}
+                        className="input-field w-full"
                         placeholder="e.g. 2026"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">Current Term</label>
-                      <select 
-                        value={termName}
-                        onChange={(e) => setTermName(e.target.value)}
-                        className="input-field"
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-sm font-semibold">Current Term</span>
+                      <select
+                        value={term.name}
+                        onChange={(e) => setTerm(t => ({ ...t, name: e.target.value as OnboardingInput['term']['name'] }))}
+                        className="input-field w-full"
                       >
-                        <option value="Term 1">Term 1</option>
-                        <option value="Term 2">Term 2</option>
-                        <option value="Term 3">Term 3</option>
+                        {ONBOARDING_TERMS.map(name => <option key={name} value={name}>{name}</option>)}
                       </select>
-                    </div>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-sm font-semibold">{term.name} starts <span className="text-destructive">*</span></span>
+                      <input type="date" value={term.start_date} onChange={(e) => setTerm(t => ({ ...t, start_date: e.target.value }))} className="input-field w-full" />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-sm font-semibold">{term.name} ends <span className="text-destructive">*</span></span>
+                      <input type="date" value={term.end_date} min={term.start_date || undefined} onChange={(e) => setTerm(t => ({ ...t, end_date: e.target.value }))} className="input-field w-full" />
+                    </label>
                   </div>
                 </div>
               )}
@@ -485,101 +542,44 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Curriculum</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Select the academic levels offered at your school.</p>
+                    <p className="text-sm text-muted-foreground mb-4">Tick every curriculum your school runs — both, if you are still teaching 8-4-4 classes.</p>
                   </div>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${curriculum.cbc ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                      <input type="checkbox" className="hidden" checked={curriculum.cbc} onChange={() => setCurriculum({...curriculum, cbc: !curriculum.cbc})} />
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${curriculum.cbc ? 'bg-primary border-primary' : 'border-input'}`}>
-                        {curriculum.cbc && <CheckCircle2 size={14} className="text-white" />}
-                      </div>
-                      <div>
-                        <div className="font-semibold">CBC</div>
-                        <div className="text-xs text-muted-foreground">Competency Based Curriculum</div>
-                      </div>
-                    </label>
 
-                    <label className={`cursor-pointer flex items-center p-4 rounded-xl border-2 transition-all ${curriculum['844'] ? 'border-primary bg-primary/5' : 'border-border'}`}>
-                      <input type="checkbox" className="hidden" checked={curriculum['844']} onChange={() => setCurriculum({...curriculum, '844': !curriculum['844']})} />
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${curriculum['844'] ? 'bg-primary border-primary' : 'border-input'}`}>
-                        {curriculum['844'] && <CheckCircle2 size={14} className="text-white" />}
-                      </div>
-                      <div>
-                        <div className="font-semibold">8-4-4 System</div>
-                        <div className="text-xs text-muted-foreground">Traditional Curriculum</div>
-                      </div>
-                    </label>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {CURRICULA.map(code => {
+                      const on = curricula.includes(code);
+                      return (
+                        <label key={code} className={`cursor-pointer flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${on ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                          <input
+                            type="checkbox"
+                            className="size-5 shrink-0 accent-primary"
+                            checked={on}
+                            onChange={() => setCurricula(list => on ? list.filter(c => c !== code) : [...list, code])}
+                          />
+                          <span>
+                            <span className="block font-semibold">{CURRICULUM_OPTIONS[code].label}</span>
+                            <span className="block text-xs text-muted-foreground">{CURRICULUM_OPTIONS[code].description}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
               {currentStep === 4 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div>
-                    <h2 className="text-xl font-bold mb-1">Classes & Streams</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Add your grades and their respective streams (e.g., Grade 1: East, West).</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {classes.map((cls, idx) => (
-                      <div key={idx} className="flex gap-3 items-start">
-                        <div className="flex-1 space-y-1">
-                          <input 
-                            type="text" 
-                            value={cls.grade}
-                            onChange={(e) => {
-                              const newC = [...classes];
-                              newC[idx].grade = e.target.value;
-                              setClasses(newC);
-                            }}
-                            placeholder="Grade Name (e.g. Grade 1)"
-                            className="input-field"
-                          />
-                        </div>
-                        <div className="flex-[2] space-y-1">
-                          <input 
-                            type="text" 
-                            value={cls.streams}
-                            onChange={(e) => {
-                              const newC = [...classes];
-                              newC[idx].streams = e.target.value;
-                              setClasses(newC);
-                            }}
-                            placeholder="Streams (comma separated e.g. 1A, 1B)"
-                            className="input-field"
-                          />
-                        </div>
-                        {classes.length > 1 && (
-                          <button 
-                            onClick={() => setClasses(classes.filter((_, i) => i !== idx))}
-                            className="h-11 px-3 text-red-500 hover:bg-destructive/10 rounded-lg text-sm font-medium"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    
-                    <button 
-                      onClick={() => setClasses([...classes, { grade: '', streams: '' }])}
-                      className="text-sm font-semibold text-primary flex items-center gap-1 hover:underline"
-                    >
-                      + Add another grade
-                    </button>
-                  </div>
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  {standardGrades.length === 0 ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading grades…</div>
+                  ) : (
+                    <ClassesStep grades={standardGrades} curricula={curricula} plans={classPlans} onChange={setClassPlans} />
+                  )}
+                </div>
+              )}
 
-                  {/*
-                    Subjects used to be typed here as free text, which produced
-                    rows with invented codes that matched nothing in the
-                    catalogue. They are now chosen — not written — from the
-                    standard list, per level, once the school exists.
-                  */}
-                  <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-                    Subjects come next. Once setup is complete, open{' '}
-                    <span className="font-medium text-foreground">Dashboard &rarr; Subjects</span>{' '}
-                    and add the standard subjects for each level in one click, then keep only the ones you offer.
-                  </p>
+              {currentStep === 5 && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <SubjectsStep grades={chosenGrades} offer={offerSubjects} onOfferChange={setOfferSubjects} />
                 </div>
               )}
 

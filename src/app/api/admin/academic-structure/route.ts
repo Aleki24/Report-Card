@@ -5,7 +5,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { PREDEFINED_SUBJECTS } from '@/lib/subject-definitions';
+import { offerStandardSubjects, StandardSubjectsError } from '@/lib/standard-subjects';
 import { subjectsBulkSchema } from '@/lib/schemas';
 import { createSchoolCombination, CombinationError } from '@/lib/pathway/combinations';
 import { auth } from '@clerk/nextjs/server';
@@ -36,19 +36,6 @@ import {
 
 type CreatePayload = Record<string, unknown>;
 
-/**
- * The curriculum band each catalogue level belongs to. `academic_levels` has a
- * single CBC row covering Grade 1 to Grade 12, so the level alone cannot say
- * whether a subject is Lower Primary or Senior School; this can.
- */
-const BAND_BY_LEVEL: Record<string, string> = {
-    CBC_PRE_PRIMARY: 'PP',
-    CBC_LOWER_PRIMARY: 'LP',
-    CBC_UPPER_PRIMARY: 'UP',
-    CBC_JUNIOR_SCHOOL: 'JS',
-    CBC_SENIOR_SCHOOL: 'SS',
-    '844_SECONDARY': 'SEC',
-};
 
 // These two tables are GLOBAL, seeded national-curriculum reference data
 // shared by every school (there is no school_id column on them — every
@@ -404,87 +391,13 @@ export async function POST(request: NextRequest) {
             subjects_bulk: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = subjectsBulkSchema.parse(payload);
-
-                const levelCode = data.level.startsWith('844') ? '844' : 'CBC';
-                const { data: level } = await supabaseAdmin
-                    .from('academic_levels')
-                    .select('id')
-                    .eq('code', levelCode)
-                    .maybeSingle();
-                if (!level) {
-                    return NextResponse.json({ error: `No ${levelCode} academic level exists.` }, { status: 400 });
+                try {
+                    const result = await offerStandardSubjects(supabaseAdmin, schoolId, data.level, data.codes);
+                    return NextResponse.json({ success: true, ...result });
+                } catch (err) {
+                    if (err instanceof StandardSubjectsError) return NextResponse.json({ error: err.message }, { status: 400 });
+                    return handleDatabaseError(err, 'subject');
                 }
-
-                // `codes` narrows to the subjects ticked in the catalogue
-                // checklist. Only codes the band really lists are honoured, so
-                // this can never mint a catalogue row nobody defined.
-                const requested = data.codes ? new Set(data.codes.map(c => c.toUpperCase())) : null;
-                const wanted = PREDEFINED_SUBJECTS.filter(
-                    s => s.level === data.level && (!requested || requested.has(s.code.toUpperCase())),
-                );
-                if (wanted.length === 0) {
-                    return NextResponse.json({ success: true, created: 0, skipped: 0 });
-                }
-                const wantedCodes = wanted.map(s => s.code.trim().toUpperCase());
-
-                // The catalogue rows for this band. Standard subjects only:
-                // one school's invention is not on offer to another.
-                const { data: catalogue } = await supabaseAdmin
-                    .from('subjects')
-                    .select('id, code')
-                    .is('origin_school_id', null);
-
-                const byCode = new Map(
-                    (catalogue ?? []).map(row => [(row.code || '').trim().toUpperCase(), row.id as string]),
-                );
-
-                // A catalogue subject this instance has never seen is created
-                // once, here, and then belongs to everybody.
-                const missing = wanted.filter(s => !byCode.has(s.code.trim().toUpperCase()));
-                if (missing.length > 0) {
-                    const { data: added, error: addError } = await supabaseAdmin
-                        .from('subjects')
-                        .insert(missing.map((s, i) => ({
-                            code: s.code,
-                            name: s.name,
-                            academic_level_id: level.id,
-                            subject_type: s.isCore ? 'CORE' : 'OPTIONAL',
-                            category: s.category || 'TECHNICAL',
-                            display_order: i,
-                            band: BAND_BY_LEVEL[data.level],
-                            origin_school_id: null,
-                        })))
-                        .select('id, code');
-                    if (addError) return handleDatabaseError(addError, 'subject');
-                    for (const row of added ?? []) {
-                        byCode.set((row.code || '').trim().toUpperCase(), row.id as string);
-                    }
-                }
-
-                const subjectIds = wantedCodes
-                    .map(code => byCode.get(code))
-                    .filter((id): id is string => Boolean(id));
-
-                const { data: alreadyOffered } = await supabaseAdmin
-                    .from('school_subjects')
-                    .select('subject_id')
-                    .eq('school_id', schoolId)
-                    .in('subject_id', subjectIds);
-                const have = new Set((alreadyOffered ?? []).map(r => r.subject_id as string));
-
-                const toOffer = subjectIds.filter(id => !have.has(id));
-                if (toOffer.length === 0) {
-                    return NextResponse.json({ success: true, created: 0, skipped: wanted.length });
-                }
-
-                const { created, error } = await offerSubjects(supabaseAdmin, schoolId, toOffer);
-                if (error) return handleDatabaseError(error, 'subject');
-
-                return NextResponse.json({
-                    success: true,
-                    created,
-                    skipped: wanted.length - created,
-                });
             },
 
             grading_scale: async () => {
@@ -537,6 +450,17 @@ export async function POST(request: NextRequest) {
             stream: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = streamSchema.parse(payload);
+                // One class per name per grade: a second "East" makes two
+                // rooms nobody can tell apart on a mark sheet.
+                const { data: sameName } = await supabaseAdmin
+                    .from('grade_streams')
+                    .select('id')
+                    .eq('school_id', schoolId)
+                    .eq('grade_id', data.grade_id)
+                    .ilike('name', data.name.trim());
+                if (sameName && sameName.length > 0) {
+                    return NextResponse.json({ error: `This grade already has a class named "${data.name.trim()}".` }, { status: 409 });
+                }
                 const { data: result, error } = await supabaseAdmin
                     .from('grade_streams')
                     .insert({ grade_id: data.grade_id, name: data.name, full_name: data.full_name || data.name, school_id: schoolId })

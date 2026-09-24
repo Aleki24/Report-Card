@@ -4,6 +4,10 @@ import { auth } from '@clerk/nextjs/server';
 import { notifyOwnerOfSchoolRequest } from '@/lib/school-approval';
 import { sendSchoolRequestReceivedEmail } from '@/lib/email';
 import { getActiveUserProfile } from '@/lib/auth-server';
+import { onboardingSchema, type Curriculum } from '@/lib/schemas';
+import { ensureClasses } from '@/lib/classes';
+import { catalogueLevelForGrade, compulsoryCodes, offerStandardSubjects } from '@/lib/standard-subjects';
+import type { EducationLevel } from '@/lib/subject-definitions';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,8 +27,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse payload
-    const body = await request.json();
-    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, termName, curriculum, classes } = body;
+    const parsed = onboardingSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid setup details' }, { status: 400 });
+    }
+    const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, term, curricula, classes, offerCompulsorySubjects } = parsed.data;
 
     let schoolId = userData.school_id;
 
@@ -87,154 +94,80 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Insert Academic Year (Global)
-    let academicYearId;
+    // Academic year (Kenyan school years run January to December) and the
+    // current term with the dates the school gave — never invented ones.
+    let academicYearId: string;
     const { data: existingYear } = await supabaseAdmin
       .from('academic_years')
       .select('id')
       .eq('name', academicYear)
       .eq('school_id', schoolId)
       .maybeSingle();
-
     if (existingYear) {
       academicYearId = existingYear.id;
     } else {
       const { data: newYear, error: yrErr } = await supabaseAdmin
         .from('academic_years')
-        .insert({
-          name: academicYear,
-          school_id: schoolId,
-          start_date: `${academicYear}-01-01`,
-          end_date: `${academicYear}-12-31`
-        })
+        .insert({ name: academicYear, school_id: schoolId, start_date: `${academicYear}-01-01`, end_date: `${academicYear}-12-31` })
         .select('id')
         .single();
-      
-      if (yrErr) throw new Error('Failed to setup academic year: ' + yrErr.message);
+      if (yrErr) throw new Error('Failed to set up the academic year: ' + yrErr.message);
       academicYearId = newYear.id;
     }
 
-    // 3. Insert Term (Global)
-    let termId;
+    // Exactly one current term.
+    await supabaseAdmin.from('terms').update({ is_current: false }).eq('school_id', schoolId);
+    const termRow = { start_date: term.start_date, end_date: term.end_date, is_current: true };
     const { data: existingTerm } = await supabaseAdmin
       .from('terms')
       .select('id')
       .eq('academic_year_id', academicYearId)
-      .eq('name', termName)
+      .eq('name', term.name)
       .eq('school_id', schoolId)
       .maybeSingle();
+    const { error: termErr } = existingTerm
+      ? await supabaseAdmin.from('terms').update(termRow).eq('id', existingTerm.id)
+      : await supabaseAdmin.from('terms').insert({ ...termRow, academic_year_id: academicYearId, school_id: schoolId, name: term.name });
+    if (termErr) throw new Error('Failed to set up the term: ' + termErr.message);
 
-    if (existingTerm) {
-      termId = existingTerm.id;
-      // Ensure it is current
-      await supabaseAdmin.from('terms').update({ is_current: true }).eq('id', termId);
-    } else {
-      const { data: newTerm, error: termErr } = await supabaseAdmin
-        .from('terms')
-        .insert({
-          academic_year_id: academicYearId,
-          school_id: schoolId,
-          name: termName,
-          start_date: `${academicYear}-01-01`,
-          end_date: `${academicYear}-04-30`,
-          is_current: true
-        })
-        .select('id')
-        .single();
-        
-      if (termErr) throw new Error('Failed to setup term: ' + termErr.message);
-      termId = newTerm.id;
-    }
-
-    // 4. Update School Curriculum
-    // In a real app, you would dynamically find the grading_system IDs for CBC / 844
-    // For now, we just update onboarding_completed.
-    
-    // 5. Insert Grades and Streams
-    const { data: levels } = await supabaseAdmin.from('academic_levels').select('id, code');
-    const getLevelId = (code: string) => levels?.find(l => l.code === code)?.id;
-    const fallbackLevelId = levels?.[0]?.id;
-
-    // The curriculum the school picked during sign-up was read off the request
-    // body and then ignored — every grade and every subject was created as CBC.
-    // A school that signed up as 8-4-4 got a CBC academic level on all of it,
-    // and since one CBC level spans Grade 1 to Grade 12, nothing downstream
-    // could tell its classes apart afterwards.
-    // The wizard sends the two checkboxes as an object, so a string test on it
-    // only ever saw "[object Object]" and picked CBC every time. Read the flags.
-    // Both ticked resolves to CBC: the grades typed in the wizard are one flat
-    // list with nothing to say which curriculum each belongs to, and CBC is the
-    // wider of the two, so a Form 1 typed by a dual-curriculum school is
-    // re-levelled on the Classes page rather than silently mis-levelling the
-    // primary grades that make up the rest of the list.
-    const wants = (curriculum ?? {}) as { cbc?: boolean; '844'?: boolean };
-    const chosenLevelCode = wants['844'] && !wants.cbc ? '844' : 'CBC';
-    const schoolLevelId = getLevelId(chosenLevelCode) || fallbackLevelId;
+    // Classes: standard grades only, from the curricula the school picked.
+    const { data: gradeRows, error: gradeErr } = await supabaseAdmin
+      .from('grades')
+      .select('id, code, name_display, academic_levels ( code )')
+      .in('id', classes.map(c => c.grade_id));
+    if (gradeErr) throw new Error('Failed to read grades: ' + gradeErr.message);
+    const gradeById = new Map((gradeRows ?? []).map(g => [g.id as string, g]));
 
     for (const cls of classes) {
-      if (!cls.grade) continue;
-      
-      // Ensure Grade exists globally
-      let gradeId;
-      const { data: existingGrade } = await supabaseAdmin
-        .from('grades')
-        .select('id')
-        .eq('name_display', cls.grade)
-        .limit(1)
-        .maybeSingle();
-        
-      if (existingGrade) {
-        gradeId = existingGrade.id;
-      } else {
-        const levelId = schoolLevelId;
-        if (!levelId) continue;
-
-        const { count: existingCount } = await supabaseAdmin
-          .from('grades')
-          .select('*', { count: 'exact', head: true });
-
-        const { data: newGrade, error: grErr } = await supabaseAdmin
-          .from('grades')
-          .insert({
-            academic_level_id: levelId,
-            code: cls.grade.toUpperCase().replace(/\s+/g, '_'),
-            name_display: cls.grade,
-            numeric_order: (existingCount ?? 0) + 1
-          })
-          .select('id')
-          .single();
-
-        if (grErr) continue;
-        gradeId = newGrade?.id;
-      }
-
-      // Create Streams for this school
-      if (gradeId && cls.streams) {
-        const streamNames = cls.streams.split(',').map((s: string) => s.trim()).filter(Boolean);
-        for (const sName of streamNames) {
-          const fullName = `${cls.grade} ${sName}`;
-          await supabaseAdmin
-            .from('grade_streams')
-            .insert({
-              grade_id: gradeId,
-              name: sName,
-              full_name: fullName,
-              school_id: schoolId
-            })
-            // Ignore conflicts
-            .select()
-            .maybeSingle();
-        }
+      const grade = gradeById.get(cls.grade_id);
+      const level = grade && (Array.isArray(grade.academic_levels) ? grade.academic_levels[0] : grade.academic_levels);
+      if (!grade || !curricula.includes(level?.code as Curriculum)) {
+        return NextResponse.json({ error: 'A class you picked is not part of the curriculum you chose.' }, { status: 400 });
       }
     }
 
-    // Subjects are deliberately not created here.
-    //
-    // This step took a comma-separated line of free text and invented a code
-    // for each name ("Mathematics" -> MATH, clashing names -> MATH2). Nothing
-    // in that matched the standard catalogue, so a school finished onboarding
-    // with subjects that no grading scale, level rule or report template knew
-    // about. Subjects are now chosen from the catalogue on the Subjects page,
-    // per level, where the codes are the real ones.
+    for (const cls of classes) {
+      const grade = gradeById.get(cls.grade_id)!;
+      await ensureClasses(supabaseAdmin, {
+        schoolId,
+        gradeId: cls.grade_id,
+        gradeName: grade.name_display as string,
+        streamNames: cls.streams,
+      });
+    }
+
+    // Compulsory subjects for every level taught, so exams can be set on
+    // day one. Electives and optional subjects are picked on the Subjects page.
+    if (offerCompulsorySubjects) {
+      const levels = new Set(
+        [...gradeById.values()]
+          .map(g => catalogueLevelForGrade({ code: g.code as string, name_display: g.name_display as string }))
+          .filter((l): l is EducationLevel => l !== null),
+      );
+      for (const level of levels) {
+        await offerStandardSubjects(supabaseAdmin, schoolId, level, compulsoryCodes(level));
+      }
+    }
 
     // 7. Mark Onboarding as Completed
     const { error: finalErr } = await supabaseAdmin
@@ -260,8 +193,28 @@ export async function POST(request: NextRequest) {
       awaitingApproval: approvalStatus === 'PENDING_APPROVAL',
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Onboarding Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Setup failed' }, { status: 500 });
   }
+}
+
+/** The standard grades a new school picks its classes from, by curriculum. */
+export async function GET() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data, error } = await createSupabaseAdmin()
+    .from('grades')
+    .select('id, code, name_display, numeric_order, academic_levels ( code )')
+    .order('numeric_order');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const grades = (data ?? []).flatMap(g => {
+    const level = Array.isArray(g.academic_levels) ? g.academic_levels[0] : g.academic_levels;
+    return level?.code === 'CBC' || level?.code === '844'
+      ? [{ id: g.id as string, code: g.code as string, name: g.name_display as string, curriculum: level.code as 'CBC' | '844' }]
+      : [];
+  });
+  return NextResponse.json({ grades });
 }

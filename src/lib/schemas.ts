@@ -264,3 +264,41 @@ export const placementApplySchema = z.discriminatedUnion('mode', [
     }),
 ]);
 export type PlacementApplyInput = z.infer<typeof placementApplySchema>;
+
+// ── Onboarding ───────────────────────────────────────────────
+
+
+export const ONBOARDING_TERMS = ['Term 1', 'Term 2', 'Term 3'] as const;
+export const CURRICULA = ['CBC', '844'] as const;
+export type Curriculum = (typeof CURRICULA)[number];
+
+/**
+ * What a new school sets up before its first login. Grades are picked from
+ * the standard list (never typed, which minted grades no curriculum rule
+ * recognised); each grade gets named streams, or none for a school with one
+ * class per grade.
+ */
+export const onboardingSchema = z.object({
+    schoolName: z.string().trim().min(1, 'School name is required').max(200),
+    schoolEmail: z.union([z.string().trim().email('Enter a valid school email').max(200), z.literal('')]).optional(),
+    schoolPhone: z.string().trim().max(50).optional(),
+    schoolAddress: z.string().trim().max(300).optional(),
+    academicYear: z.string().regex(/^\d{4}$/, 'Enter the academic year, e.g. 2026'),
+    term: z.object({
+        name: z.enum(ONBOARDING_TERMS),
+        start_date: isoDate,
+        end_date: isoDate,
+    }).refine(t => t.end_date > t.start_date, { message: 'The term must end after it starts', path: ['end_date'] }),
+    curricula: z.array(z.enum(CURRICULA)).min(1, 'Pick at least one curriculum'),
+    classes: z.array(z.object({
+        grade_id: z.string().uuid(),
+        /** Empty: the grade's single class, named after the grade. */
+        streams: z.array(z.string().trim().min(1).max(50)).max(26),
+    })).min(1, 'Add at least one class').max(40)
+        .refine(list => new Set(list.map(c => c.grade_id)).size === list.length, 'Each grade can only be added once'),
+    offerCompulsorySubjects: z.boolean(),
+}).refine(d => d.term.start_date.startsWith(d.academicYear), {
+    message: 'The term should start in the academic year you entered',
+    path: ['term', 'start_date'],
+});
+export type OnboardingInput = z.infer<typeof onboardingSchema>;

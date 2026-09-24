@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { SetupStatus } from '@/lib/setup-status';
 
 /**
  * Setup progress for a new school.
@@ -24,6 +25,8 @@ interface SetupChecklistProps {
     totalTeachers: number;
     totalStudents: number;
     totalUsers: number;
+    /** Classes, subjects and teacher assignments; null until the school exists. */
+    setup: SetupStatus | null;
     /** Dismissal is remembered per school, so switching schools starts fresh. */
     schoolId?: string | null;
 }
@@ -44,6 +47,7 @@ export function SetupChecklist({
     totalTeachers,
     totalStudents,
     totalUsers,
+    setup,
     schoolId,
 }: SetupChecklistProps) {
     const [dismissed, setDismissed] = useState(true); // assume hidden until storage is read
@@ -59,6 +63,10 @@ export function SetupChecklist({
         }
     }, [storageKey]);
 
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+    // In the order a school actually has to do them: each step is something
+    // the next one depends on.
     const steps: Step[] = [
         {
             id: 'logo',
@@ -68,6 +76,32 @@ export function SetupChecklist({
             href: '/dashboard/settings',
             cta: 'Open settings',
         },
+        ...(setup ? [
+            {
+                id: 'term',
+                done: setup.hasCurrentTerm,
+                label: 'Set the current term and its dates',
+                hint: 'Exams, attendance and report cards are filed under a term.',
+                href: '/dashboard/settings?tab=calendar',
+                cta: 'Open calendar',
+            },
+            {
+                id: 'classes',
+                done: setup.classes > 0,
+                label: 'Create your classes',
+                hint: 'One class per grade, or several streams — learners and teachers belong to a class.',
+                href: '/dashboard/classes',
+                cta: 'Add classes',
+            },
+            {
+                id: 'subjects',
+                done: setup.subjectsOffered > 0,
+                label: 'Choose the subjects you offer',
+                hint: 'Exams and mark sheets are set per subject.',
+                href: '/dashboard/subjects',
+                cta: 'Choose subjects',
+            },
+        ] : []),
         {
             id: 'teachers',
             done: totalTeachers > 0,
@@ -76,6 +110,26 @@ export function SetupChecklist({
             href: '/dashboard/people?tab=teachers',
             cta: 'Add teachers',
         },
+        ...(setup ? [
+            {
+                id: 'class-teachers',
+                done: setup.classes > 0 && setup.classesWithoutClassTeacher === 0,
+                label: 'Give every class a class teacher',
+                hint: setup.classesWithoutClassTeacher > 0
+                    ? `${plural(setup.classesWithoutClassTeacher, 'class')} without one. Class teachers write report-card remarks.`
+                    : 'Class teachers write report-card remarks.',
+                href: '/dashboard/users',
+                cta: 'Assign',
+            },
+            {
+                id: 'subject-teachers',
+                done: setup.subjectTeacherAssignments > 0,
+                label: 'Assign subject teachers',
+                hint: 'Per stream, or for the whole grade — each teacher then sees only their own learners.',
+                href: '/dashboard/subjects?tab=teachers',
+                cta: 'Assign',
+            },
+        ] : []),
         {
             id: 'students',
             done: totalStudents > 0,
@@ -84,6 +138,14 @@ export function SetupChecklist({
             href: '/dashboard/people',
             cta: 'Add students',
         },
+        ...(setup && setup.learnersWithoutClass > 0 ? [{
+            id: 'unplaced',
+            done: false,
+            label: `Put ${plural(setup.learnersWithoutClass, 'learner')} in a class`,
+            hint: 'Learners without a class get no mark sheets or report cards.',
+            href: '/dashboard/people',
+            cta: 'Fix',
+        }] : []),
         {
             id: 'users',
             done: totalUsers > totalTeachers + 1,
