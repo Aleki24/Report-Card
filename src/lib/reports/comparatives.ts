@@ -351,9 +351,9 @@ const roundKey = (termId: string | null | undefined, examType: string | null | u
  * Earlier rounds a sheet can compare with, nearest first.
  *
  * Rounds (a term's exams of one kind) are ordered by the school calendar:
- * the term's start date, then the round's first exam date. The previous exam
- * is simply the round before this one in that order, whatever its kind, so a
- * Term 3 Midterm follows the Term 2 End Term. When the term of the round being
+ * the term's start date, the round's first exam date, then when it was
+ * recorded. The previous exam is simply the round before this one in that
+ * order, whatever its kind, so a Term 3 Midterm follows the Term 2 End Term. When the term of the round being
  * printed is not known, rounds created before `before` count as earlier.
  */
 export async function findPreviousRounds(
@@ -388,8 +388,12 @@ export async function findPreviousRounds(
         if (createdAt && (!round.createdAt || createdAt < round.createdAt)) round.createdAt = createdAt;
     }
 
+    // Exams entered through the form default to today's date, so two rounds
+    // can share a sitting date: the one recorded first counts as earlier.
     const byCalendar = (a: Round, b: Round) =>
-        a.termStart.localeCompare(b.termStart) || a.firstDate.localeCompare(b.firstDate);
+        a.termStart.localeCompare(b.termStart)
+        || a.firstDate.localeCompare(b.firstDate)
+        || a.createdAt.localeCompare(b.createdAt);
 
     const currentKey = roundKey(current.termId, current.examType);
     const currentRound = current.termId && current.examType ? rounds.get(currentKey) : undefined;
