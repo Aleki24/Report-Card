@@ -15,18 +15,24 @@ import { useSignIn, useSSO } from '@clerk/clerk-expo';
 import { isClerkAPIResponseError } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
 import { colors, radius, spacing } from '@/lib/theme';
+import { describeCodeError, useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
+
+const CODE_LENGTH = 6;
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
-    const { isLoaded, signIn, setActive } = useSignIn();
+    const { isLoaded, signIn } = useSignIn();
     const { startSSOFlow } = useSSO();
+    const verification = useSignInCodeVerification();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [code, setCode] = useState('');
+    const [notice, setNotice] = useState<string | null>(null);
 
     const handleSignIn = useCallback(async () => {
         if (!isLoaded || !signIn) return;
@@ -34,12 +40,11 @@ export default function SignInScreen() {
         setLoading(true);
         try {
             const result = await signIn.create({ identifier: email.trim(), password });
-            if (result.status === 'complete') {
-                await setActive({ session: result.createdSessionId });
-            } else if (result.status === 'needs_second_factor') {
-                setError('This account requires extra verification (MFA). Please sign in on the web for now.');
-            } else {
-                setError(`Sign in incomplete: ${result.status}`);
+            const outcome = await verification.continueSignIn(result);
+            if (outcome === 'verify') {
+                setCode('');
+            } else if (outcome === 'unsupported') {
+                setError('This account needs a verification method the app doesn’t support yet. Please sign in on the web.');
             }
         } catch (err) {
             if (isClerkAPIResponseError(err)) {
@@ -50,7 +55,41 @@ export default function SignInScreen() {
         } finally {
             setLoading(false);
         }
-    }, [isLoaded, signIn, email, password, setActive]);
+    }, [isLoaded, signIn, email, password, verification]);
+
+    const handleVerify = useCallback(async () => {
+        setError(null);
+        setNotice(null);
+        setLoading(true);
+        try {
+            if (!(await verification.verifyCode(code))) {
+                setError('Verification could not be completed. Request a new code and try again.');
+            }
+        } catch (err) {
+            setError(describeCodeError(err));
+        } finally {
+            setLoading(false);
+        }
+    }, [verification, code]);
+
+    const handleResend = useCallback(async () => {
+        setError(null);
+        setNotice(null);
+        try {
+            await verification.resendCode();
+            setCode('');
+            setNotice('A new code is on its way.');
+        } catch (err) {
+            setError(describeCodeError(err));
+        }
+    }, [verification]);
+
+    const handleBack = useCallback(() => {
+        verification.reset();
+        setCode('');
+        setError(null);
+        setNotice(null);
+    }, [verification]);
 
     const handleGoogleSignIn = useCallback(async () => {
         setError(null);
@@ -87,63 +126,114 @@ export default function SignInScreen() {
                         </View>
                     ) : null}
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Email</Text>
-                        <TextInput
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            keyboardType="email-address"
-                            textContentType="emailAddress"
-                            placeholder="you@example.com"
-                            placeholderTextColor={colors.muted}
-                            style={styles.input}
-                        />
-                    </View>
+                    {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>Password</Text>
-                        <TextInput
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                            textContentType="password"
-                            placeholder="••••••••"
-                            placeholderTextColor={colors.muted}
-                            style={styles.input}
-                        />
-                    </View>
+                    {verification.pending ? (
+                        <>
+                            <Text style={styles.codeHeading}>
+                                Check your {verification.pending.strategy === 'email_code' ? 'email' : 'phone'}
+                            </Text>
+                            <Text style={styles.codeHint}>
+                                We sent a {CODE_LENGTH}-digit verification code to{' '}
+                                <Text style={styles.codeTarget}>{verification.pending.safeIdentifier}</Text>.
+                            </Text>
 
-                    <Pressable
-                        onPress={handleSignIn}
-                        disabled={loading || !email || !password}
-                        style={[styles.primaryButton, (loading || !email || !password) && styles.buttonDisabled]}
-                    >
-                        {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Sign In</Text>}
-                    </Pressable>
+                            <View style={styles.field}>
+                                <Text style={styles.label}>Verification code</Text>
+                                <TextInput
+                                    value={code}
+                                    onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, CODE_LENGTH))}
+                                    keyboardType="number-pad"
+                                    textContentType="oneTimeCode"
+                                    autoComplete="one-time-code"
+                                    maxLength={CODE_LENGTH}
+                                    autoFocus
+                                    placeholder="••••••"
+                                    placeholderTextColor={colors.muted}
+                                    style={[styles.input, styles.codeInput]}
+                                />
+                            </View>
 
-                    <View style={styles.divider}>
-                        <View style={styles.dividerLine} />
-                        <Text style={styles.dividerText}>or</Text>
-                        <View style={styles.dividerLine} />
-                    </View>
+                            <Pressable
+                                onPress={handleVerify}
+                                disabled={loading || code.length !== CODE_LENGTH}
+                                style={[styles.primaryButton, (loading || code.length !== CODE_LENGTH) && styles.buttonDisabled]}
+                            >
+                                {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Verify and continue</Text>}
+                            </Pressable>
 
-                    <Pressable
-                        onPress={handleGoogleSignIn}
-                        disabled={googleLoading}
-                        style={[styles.secondaryButton, googleLoading && styles.buttonDisabled]}
-                    >
-                        {googleLoading ? (
-                            <ActivityIndicator color={colors.foreground} />
-                        ) : (
-                            <Text style={styles.secondaryButtonText}>Continue with Google</Text>
-                        )}
-                    </Pressable>
+                            <View style={styles.codeActions}>
+                                <Pressable onPress={handleBack} hitSlop={8}>
+                                    <Text style={styles.linkMuted}>Back</Text>
+                                </Pressable>
+                                <Pressable onPress={handleResend} disabled={verification.cooldown > 0} hitSlop={8}>
+                                    <Text style={verification.cooldown > 0 ? styles.linkMuted : styles.link}>
+                                        {verification.cooldown > 0 ? `Resend code in ${verification.cooldown}s` : 'Resend code'}
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </>
+                    ) : (
+                        <>
+                            <View style={styles.field}>
+                                <Text style={styles.label}>Email</Text>
+                                <TextInput
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    autoCapitalize="none"
+                                    autoCorrect={false}
+                                    keyboardType="email-address"
+                                    textContentType="emailAddress"
+                                    placeholder="you@example.com"
+                                    placeholderTextColor={colors.muted}
+                                    style={styles.input}
+                                />
+                            </View>
 
-                    <Text style={styles.footnote}>
-                        New here? Ask your school admin for an invite, then finish setting up your account on the web app first.
-                    </Text>
+                            <View style={styles.field}>
+                                <Text style={styles.label}>Password</Text>
+                                <TextInput
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                    textContentType="password"
+                                    placeholder="••••••••"
+                                    placeholderTextColor={colors.muted}
+                                    style={styles.input}
+                                />
+                            </View>
+
+                            <Pressable
+                                onPress={handleSignIn}
+                                disabled={loading || !email || !password}
+                                style={[styles.primaryButton, (loading || !email || !password) && styles.buttonDisabled]}
+                            >
+                                {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Sign In</Text>}
+                            </Pressable>
+
+                            <View style={styles.divider}>
+                                <View style={styles.dividerLine} />
+                                <Text style={styles.dividerText}>or</Text>
+                                <View style={styles.dividerLine} />
+                            </View>
+
+                            <Pressable
+                                onPress={handleGoogleSignIn}
+                                disabled={googleLoading}
+                                style={[styles.secondaryButton, googleLoading && styles.buttonDisabled]}
+                            >
+                                {googleLoading ? (
+                                    <ActivityIndicator color={colors.foreground} />
+                                ) : (
+                                    <Text style={styles.secondaryButtonText}>Continue with Google</Text>
+                                )}
+                            </Pressable>
+
+                            <Text style={styles.footnote}>
+                                New here? Ask your school admin for an invite, then finish setting up your account on the web app first.
+                            </Text>
+                        </>
+                    )}
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -199,5 +289,13 @@ const styles = StyleSheet.create({
         backgroundColor: colors.card,
     },
     secondaryButtonText: { color: colors.foreground, fontSize: 15, fontWeight: '700' },
+    notice: { color: colors.muted, fontSize: 13, textAlign: 'center', marginBottom: spacing.md },
+    codeHeading: { fontSize: 18, fontWeight: '800', color: colors.foreground, textAlign: 'center' },
+    codeHint: { fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
+    codeTarget: { fontWeight: '700', color: colors.foreground },
+    codeInput: { fontSize: 22, letterSpacing: 8, textAlign: 'center' },
+    codeActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg },
+    link: { color: colors.primary, fontSize: 14, fontWeight: '700' },
+    linkMuted: { color: colors.muted, fontSize: 14, fontWeight: '600' },
     footnote: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: spacing.xl },
 });
