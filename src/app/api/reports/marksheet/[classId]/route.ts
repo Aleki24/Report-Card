@@ -574,6 +574,7 @@ export async function GET(
             meanPoints: Math.round(classMeanPoints * 100) / 100,
             subjectStats,
             subjectRankings,
+            gradeBands: gradingScales.map(({ symbol, min_percentage, max_percentage }) => ({ symbol, min_percentage, max_percentage })),
         };
 
         /*

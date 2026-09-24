@@ -1,8 +1,10 @@
 import React from 'react';
 import { Document, Page, View, renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
-import { s } from './pdf/pdfStyles';
-import { getTemplateLayout, templateHasPageBars, type ReportTemplateId } from './pdf/templates';
+import { getTemplateLayout, type ReportTemplateId } from './pdf/templates';
+
+/** Every template draws edge to edge; its own padding lives in the layout. */
+const PAGE_STYLE = { padding: 0, display: 'flex', flexDirection: 'column' } as const;
 
 /* ── Data Interface ─────────────────────────────────────── */
 
@@ -92,15 +94,10 @@ export type { ReportTemplateId };
 /* ── One rendered report card page body ───────────────────── */
 function ReportCardPageBody({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     const Layout = getTemplateLayout(template);
-    const withBars = templateHasPageBars(template);
     return (
-        <>
-            {withBars && <View style={s.navyBar} />}
-            <View style={{ flex: 1 }}>
-                <Layout data={data} qrCodeDataUri={qrCodeDataUri} />
-            </View>
-            {withBars && <View style={s.navyBarBottom} />}
-        </>
+        <View style={{ flex: 1 }}>
+            <Layout data={data} qrCodeDataUri={qrCodeDataUri} />
+        </View>
     );
 }
 
@@ -108,7 +105,7 @@ function ReportCardPageBody({ data, qrCodeDataUri, template }: { data: ReportCar
 export function ReportCardDocument({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     return (
         <Document>
-            <Page size="A4" style={[s.page, { display: 'flex', flexDirection: 'column' }]}>
+            <Page size="A4" style={PAGE_STYLE}>
                 <ReportCardPageBody data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
             </Page>
         </Document>
@@ -165,7 +162,7 @@ export async function buildBulkReportCardsDocument(reportCardsData: ReportCardDa
         }
 
         pages.push(
-            <Page key={`${data.enrollmentNumber || data.studentName}-${i}`} size="A4" orientation="portrait" style={[s.page, { display: 'flex', flexDirection: 'column' }]} fixed>
+            <Page key={`${data.enrollmentNumber || data.studentName}-${i}`} size="A4" orientation="portrait" style={PAGE_STYLE} fixed>
                 <ReportCardPageBody data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
             </Page>
         );
