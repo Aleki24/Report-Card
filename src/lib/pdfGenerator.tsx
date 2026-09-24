@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, View, renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { getTemplateLayout, type ReportTemplateId } from './pdf/templates';
+import type { RankingBasis } from './analytics';
 
 /** Every template draws edge to edge; its own padding lives in the layout. */
 const PAGE_STYLE = { padding: 0, display: 'flex', flexDirection: 'column' } as const;
@@ -43,6 +44,10 @@ export interface ReportCardData {
     overallPercentage: number;
     overallGrade: string;
     totalPoints?: number;
+    /** Every subject's mark added up — what CBC positions follow. */
+    totalMarks?: number;
+    /** What positions on this card were ordered on: total marks (CBC) or points (8-4-4). */
+    rankedBy: RankingBasis;
     overallPointsGrade?: string;
     /**
      * Whether this card prints positions at all. 8-4-4 always does; CBC only

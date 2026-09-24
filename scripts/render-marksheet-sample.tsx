@@ -142,7 +142,7 @@ function buildGrade9(): MarkSheetData {
     const classMean = learners.reduce((a, l) => a + l.overallPercentage, 0) / learners.length;
     const allPairs = learners.flatMap(l => AREAS.filter(([c]) => l.marks[c] != null).map(([c]) => (l.marks[c] as number) - l.before[c]));
     return {
-        schoolName: 'Sathya Sai School - Kisaju', schoolAddress: 'P. O. Box 333 Kajiado Kenya',
+        schoolName: 'SATHYA SAI SCHOOL - KISAJU', schoolAddress: 'P. O. Box 333 Kajiado Kenya', schoolLogoUrl: join(process.cwd(), 'public/images/logo.png'),
         examTitle: 'Term 3', examRound: 'Midterm', academicYear: '2026', className: 'Grade 9', gradingSystemType: 'CBC',
         subjects: AREAS.map(([code, name]) => ({ code, name })),
         students: learners.map(({ before: _before, previousTotal: _previousTotal, ...l }) => l),

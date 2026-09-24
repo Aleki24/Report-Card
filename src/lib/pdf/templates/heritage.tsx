@@ -251,6 +251,7 @@ function Stats({ m }: { m: ReportModel }) {
             <Stat label="Mean score" value={`${m.mean}%`}>{up(m.meanChange, `vs ${m.previousLabel}`)}</Stat>
             <Stat label={m.isKCSE ? 'Mean grade' : 'Overall level'} value={m.grade} valueStyle={symbolFont(m.grade)}><Text style={s.statSub}>{m.gradeCaption}</Text></Stat>
             {m.isKCSE && m.points != null && <Stat label="Total points" value={`${m.points}`}>{up(m.pointsChange, 'points')}</Stat>}
+            {m.ranksByTotal && <Stat label="Total marks" value={`${m.totalMarks}`}><Text style={s.statSub}>of {m.totalMarksOutOf} · decides position</Text></Stat>}
             {m.overallPosition && <Stat label="Overall position" value={`${m.overallPosition.rank}/${m.overallPosition.of}`}><Text style={s.statSub}>{m.overallPosition.label}</Text></Stat>}
             {m.position && <Stat label="Class position" value={`${m.position.rank}/${m.position.of}`}>{up(m.positionChange, 'places')}</Stat>}
             {m.classMean != null && (
@@ -348,7 +349,9 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                             ? <Field label="Pathway" value={m.learner.pathway} />
                             : m.isKCSE && m.points != null
                                 ? <Field label="Total points" value={`${m.points}`} />
-                                : <Field label={m.subjectNounPlural} value={`${m.subjects.length}`} />}
+                                : m.ranksByTotal
+                                    ? <Field label="Total marks" value={`${m.totalMarks}`} small={`of ${m.totalMarksOutOf}`} />
+                                    : <Field label={m.subjectNounPlural} value={`${m.subjects.length}`} />}
                     </View>
                 </View>
                 <ScoreRing size={86} stroke={3.8} pct={m.mean} color={C.gold} track="#EFE6D2">

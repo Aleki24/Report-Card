@@ -236,7 +236,8 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <Figure first big label="Mean score" value={`${m.mean}%`} sub={m.meanChange != null ? `${signed(m.meanChange)} since ${m.previousLabel}` : undefined} />
                 <Figure label={m.isKCSE ? 'Mean grade' : 'Level'} value={m.grade} sub={m.gradeCaption} />
                 {m.isKCSE && m.points != null && <Figure label="Points" value={`${m.points}`} sub={m.pointsChange != null ? `${signed(m.pointsChange)} since ${m.previousLabel}` : 'Best-seven total'} />}
-                {m.position && <Figure label="Position" value={`${m.position.rank}`} sub={`of ${m.position.of} learners${m.overallPosition ? ` · overall ${m.overallPosition.rank}/${m.overallPosition.of}` : ''}`} />}
+                {m.ranksByTotal && <Figure label="Total marks" value={`${m.totalMarks}`} sub={`of ${m.totalMarksOutOf}`} />}
+                {m.position && <Figure label="Position" value={`${m.position.rank}`} sub={`of ${m.position.of}${m.ranksByTotal ? ', by total marks' : ' learners'}${m.overallPosition ? ` · overall ${m.overallPosition.rank}/${m.overallPosition.of}` : ''}`} />}
                 {m.classMean != null && <Figure label="Class mean" value={`${m.classMean}`} sub={m.vsClassMean != null ? `${signed(m.vsClassMean)} difference` : undefined} />}
             </View>
 

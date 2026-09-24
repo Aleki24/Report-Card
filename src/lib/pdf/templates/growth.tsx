@@ -348,7 +348,7 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                             <Text style={s.hero}>{m.mean}%</Text>
                             {m.meanChange != null && <View style={{ marginLeft: 6 }}><Change value={m.meanChange} big /></View>}
                         </View>
-                        {m.meanChange != null && <Text style={s.heroSub}>from {m.mean - m.meanChange}% in {m.previousLabel}</Text>}
+                        {m.meanChange != null && <Text style={s.heroSub}>vs {m.previousLabel}, same {m.subjectNounPlural}</Text>}
                     </View>
                     {m.position && (
                         <View style={s.storyCell}>
@@ -359,6 +359,13 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                                 : m.positionChange != null
                                 ? <Trend value={m.positionChange} size={6.4} colors={TREND} fontFamily={font} suffix="places" />
                                 : <Text style={s.miniSub}>in the class</Text>}
+                        </View>
+                    )}
+                    {m.ranksByTotal && (
+                        <View style={s.storyCell}>
+                            <Text style={s.small}>Total marks</Text>
+                            <Text style={s.mini}>{m.totalMarks}<Text style={s.miniUnit}>/{m.totalMarksOutOf}</Text></Text>
+                            <Text style={s.miniSub}>decides position</Text>
                         </View>
                     )}
                     {m.isKCSE && m.points != null && (

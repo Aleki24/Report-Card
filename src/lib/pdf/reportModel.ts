@@ -68,7 +68,18 @@ export interface ReportModel {
     rowScale: number;
 
     mean: number;
+    /**
+     * Movement in the mean since the previous round, like for like: only the
+     * subjects sat both times, so a missed paper cannot fake a fall.
+     */
     meanChange: number | null;
+    /** Every subject's mark added up, and what that total is out of. */
+    totalMarks: number;
+    totalMarksOutOf: number;
+    /** What positions were ordered on, in words: "total marks" or "total points". */
+    rankedByLabel: string;
+    /** True when positions follow total marks (CBC). */
+    ranksByTotal: boolean;
     /** Overall grade (8-4-4) or overall competency level (CBC). */
     grade: string;
     /** What the grade means, e.g. "Meeting Expectations" or "KCSE 12-point scale". */
@@ -200,6 +211,13 @@ function subjectRow(sm: SubjectMark, paperCount: number, showPositions: boolean)
     };
 }
 
+/** Mean change over the subjects that have a mark in both rounds, or null when none do. */
+function likeForLikeChange(subjects: SubjectRow[]): number | null {
+    const pairs = subjects.filter(s => s.mark != null && s.previous != null);
+    if (pairs.length === 0) return null;
+    return Math.round(pairs.reduce((sum, s) => sum + ((s.mark ?? 0) - (s.previous ?? 0)), 0) / pairs.length);
+}
+
 export function buildReportModel(data: ReportCardData, qrCode?: string): ReportModel {
     const isKCSE = data.gradingSystemType === 'KCSE';
 
@@ -275,7 +293,12 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         rowScale: Math.min(2, 1 + 0.22 * Math.max(0, ROOMY_BELOW - subjects.length)),
 
         mean,
-        meanChange: data.previousOverallPercentage != null ? Math.round(data.overallPercentage - data.previousOverallPercentage) : null,
+        meanChange: likeForLikeChange(subjects)
+            ?? (data.previousOverallPercentage != null ? Math.round(data.overallPercentage - data.previousOverallPercentage) : null),
+        totalMarks: data.totalMarks ?? marked.reduce((sum, s) => sum + (s.mark ?? 0), 0),
+        totalMarksOutOf: marked.length * 100,
+        rankedByLabel: data.rankedBy === 'points' ? 'total points' : data.rankedBy === 'totalMarks' ? 'total marks' : 'mean mark',
+        ranksByTotal: data.rankedBy === 'totalMarks',
         grade,
         gradeCaption,
         points: isKCSE ? data.totalPoints : undefined,

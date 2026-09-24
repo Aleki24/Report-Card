@@ -371,7 +371,7 @@ export async function GET(
             };
         });
 
-        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
+        const studentPerf = mappedMarks.length > 0 ? aggregateStudentPerformance(mappedMarks, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap, overallGradingScales, overallGradingKind) : { percentage: 0, rawAverage: 0, used844Selection: false, totalPoints: 0, totalMarks: 0, grade: '-', overallGrade: '-', selectedSubjectIds: [] };
 
         
         const selectedSubjectIds = new Set(studentPerf.selectedSubjectIds || []);
@@ -725,6 +725,8 @@ export async function GET(
             // class reports could show different overall grades.
             overallGrade: overallGradeSymbol,
             totalPoints: studentPerf.totalPoints,
+            totalMarks: Math.round(studentPerf.totalMarks),
+            rankedBy: rankingBasis,
             overallPointsGrade: studentPerf.overallGrade,
             classRank,
             totalStudents,

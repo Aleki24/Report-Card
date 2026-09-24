@@ -147,7 +147,8 @@ const X = 18;
 
 /* Fixed heights — the pagination plan is exact because of them. */
 const H = {
-    masthead: 52,
+    masthead: 66,
+    mastheadRule: 3.6,
     kpis: 38,
     firstGap: 8,
     slim: 28,
@@ -167,14 +168,18 @@ const s = StyleSheet.create({
     page: { fontFamily: font, color: C.ink, backgroundColor: '#FFFFFF', paddingHorizontal: X, paddingBottom: H.footer },
     footer: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 
-    masthead: { height: H.masthead, flexDirection: 'row', alignItems: 'center', borderBottom: `1.5pt solid ${C.navy}` },
-    school: { fontFamily: FONTS.playfair, fontWeight: 700, fontSize: 15.5, color: C.navy },
-    address: { fontSize: 6.8, color: C.muted, marginTop: 1.5 },
-    doc: { marginLeft: 'auto', alignItems: 'flex-end' },
-    tag: { backgroundColor: C.gold, borderRadius: 2, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 3 },
-    tagText: { fontWeight: 700, fontSize: 6, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1 },
-    docTitle: { fontWeight: 800, fontSize: 9.8, color: C.navy },
-    docSub: { fontSize: 7, color: C.muted, marginTop: 1 },
+    masthead: { height: H.masthead, flexDirection: 'row', alignItems: 'center', paddingTop: 6, paddingBottom: 4 },
+    letterhead: { flex: 1, marginLeft: 11, marginRight: 14 },
+    school: { fontFamily: FONTS.playfair, fontWeight: 700, fontSize: 17, color: C.navy, letterSpacing: 0.2 },
+    schoolRule: { width: 34, height: 1.2, backgroundColor: C.gold, marginTop: 3, marginBottom: 3 },
+    address: { fontSize: 6.8, color: C.muted, letterSpacing: 0.2 },
+    docCard: { width: 330, border: `0.75pt solid ${C.navy}`, borderRadius: 3, overflow: 'hidden' },
+    docStrip: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.navy, paddingHorizontal: 8, paddingVertical: 3.5 },
+    docStripText: { fontWeight: 700, fontSize: 6.4, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1.4 },
+    docGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+    docFact: { width: '33.333%', paddingHorizontal: 7, paddingVertical: 3, borderRight: `0.5pt solid #E2E8F0`, borderBottom: `0.5pt solid #E2E8F0` },
+    docLabel: { fontWeight: 700, fontSize: 4.9, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.8 },
+    docValue: { fontWeight: 700, fontSize: 7.2, color: C.navy, marginTop: 0.5, maxLines: 1, textOverflow: 'ellipsis' },
 
     kpis: { height: H.kpis, flexDirection: 'row', marginTop: H.firstGap, border: `0.75pt solid #E2E8F0`, borderRadius: 6 },
     kpi: { flex: 1, paddingHorizontal: 9, justifyContent: 'center', borderLeft: `0.75pt solid #E2E8F0` },
@@ -306,21 +311,54 @@ function rankingFigure(d: MarkSheetData, st: Learner): string {
 
 /* ── Header pieces ───────────────────────────────────────── */
 
+/**
+ * The letterhead: the school on the left as it would head its own paper, and
+ * on the right a document panel that says exactly what this sheet is — class,
+ * exam, what it is ranked on and what it is compared with — so a sheet lifted
+ * off a staffroom table still explains itself.
+ */
 function Masthead({ d }: { d: MarkSheetData }) {
+    const exam = `${d.examTitle}${d.examRound ? ` ${d.examRound}` : ''}`;
+    const facts: [string, string][] = [
+        ['Class', d.className],
+        ['Exam', exam],
+        ['Year', d.academicYear],
+        ['Ranked by', d.rankedBy === 'points' ? 'Total points' : d.rankedBy === 'totalMarks' ? 'Total marks' : 'Mean marks'],
+        ['Compared with', d.previousExamLabel || 'No earlier exam'],
+        ['Scale', d.gradingSystemType === 'KCSE' ? 'KCSE 12-point' : 'CBC competency levels'],
+    ];
     return (
         <View style={s.masthead}>
-            <Crest logo={d.schoolLogoUrl} initial={(d.schoolName || 'S').trim().charAt(0).toUpperCase()} size={34} background={C.navy} color={C.cream} fontFamily={FONTS.playfair} ring={{ color: C.gold, gap: 1.2, width: 0.8 }} />
-            <View style={{ marginLeft: 10 }}>
+            <Crest logo={d.schoolLogoUrl} initial={(d.schoolName || 'S').trim().charAt(0).toUpperCase()} size={40} background={C.navy} color={C.cream} fontFamily={FONTS.playfair} ring={{ color: C.gold, gap: 1.5, width: 0.9 }} />
+            <View style={s.letterhead}>
                 <Text style={s.school}>{d.schoolName}</Text>
+                <View style={s.schoolRule} />
                 {d.schoolAddress && <Text style={s.address}>{d.schoolAddress}</Text>}
             </View>
-            <View style={s.doc}>
-                <View style={s.tag}><Text style={s.tagText}>Class mark sheet</Text></View>
-                <Text style={s.docTitle}>{d.className} · {roundLabel(d)}</Text>
-                <Text style={s.docSub}>
-                    Ranked by {d.rankedBy === 'points' ? 'total points' : d.rankedBy === 'totalMarks' ? 'total marks' : 'mean marks'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
-                </Text>
+            <View style={s.docCard}>
+                <View style={s.docStrip}>
+                    <Text style={s.docStripText}>Class mark sheet</Text>
+                    <Text style={[s.docStripText, { color: C.goldText, letterSpacing: 0.6 }]}>{d.className} · {exam}</Text>
+                </View>
+                <View style={s.docGrid}>
+                    {facts.map(([label, value], i) => (
+                        <View key={label} style={[s.docFact, i % 3 === 2 ? { borderRightWidth: 0 } : {}, i >= 3 ? { borderBottomWidth: 0 } : {}]}>
+                            <Text style={s.docLabel}>{label}</Text>
+                            <Text style={s.docValue}>{value}</Text>
+                        </View>
+                    ))}
+                </View>
             </View>
+        </View>
+    );
+}
+
+/** The double keyline under the letterhead: navy, then a hairline of gold. */
+function MastheadRule() {
+    return (
+        <View>
+            <View style={{ height: 1.6, backgroundColor: C.navy }} />
+            <View style={{ height: 0.6, backgroundColor: C.gold, marginTop: 1.4 }} />
         </View>
     );
 }
@@ -729,7 +767,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
 
     const dims: PageDimensions = {
         usable: PAGE_H - H.footer - 6,
-        firstChrome: H.masthead + H.firstGap + H.kpis + 6 + H.legend,
+        firstChrome: H.masthead + H.mastheadRule + H.firstGap + H.kpis + 6 + H.legend,
         otherChrome: H.slim + 6,
         tableHead: H.groupHead + H.colHead,
         row: H.row,
@@ -778,7 +816,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 let index = chunk.length > 0 ? ranked.indexOf(chunk[0]) : 0;
                 return (
                     <Page key={p} size="A4" orientation="landscape" style={s.page}>
-                        {first ? (<><Masthead d={d} /><Kpis d={d} classMean={classMean} ranked={ranked} /></>) : <SlimHeader d={d} page={p + 1} pages={totalPages} />}
+                        {first ? (<><Masthead d={d} /><MastheadRule /><Kpis d={d} classMean={classMean} ranked={ranked} /></>) : <SlimHeader d={d} page={p + 1} pages={totalPages} />}
                         <View style={s.table}>
                             <TableHead d={d} w={w} isKCSE={isKCSE} showDev={showDev} />
                             {chunk.map(st => (
