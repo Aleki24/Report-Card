@@ -10,8 +10,14 @@
  *
  * When the caller names a round the routes filter by it directly and this is
  * not used. When they don't, this resolves the round the report should show —
- * the one containing the most recently created exam — and drops everything
+ * the most recent one that is substantially entered — and drops everything
  * else, so subject rows, the mean and the ranking all describe the same sitting.
+ *
+ * "Substantially entered" matters because a round's exams are set up ahead of
+ * time with future dates: one subject's marks keyed into the End Term by
+ * mistake (or the first subject of a round still being entered) made that
+ * round the most recent, and the default download printed a one-subject sheet
+ * while the Midterm with every subject sat behind it.
  */
 
 /**
@@ -19,9 +25,11 @@
  * object in others, so the exam is read defensively rather than typed.
  */
 interface ExamStamp {
+    id?: string | null;
     exam_type?: string | null;
     exam_date?: string | null;
     created_at?: string | null;
+    subjects?: { id?: string | null } | { id?: string | null }[] | null;
 }
 
 function examOf(mark: unknown): ExamStamp | null {
@@ -68,22 +76,46 @@ export interface ExamRoundSelection<T> {
 }
 
 /**
- * Narrow a term's marks to the single most recent round.
+ * A round counts as substantially entered when it covers at least this share
+ * of the subjects in the fullest round of the term.
+ */
+const MIN_SUBJECT_SHARE = 0.5;
+
+/** The subject a mark is for — the subject id, else the exam (one per subject). */
+function subjectKey(exam: ExamStamp | null): string | null {
+    const subject = Array.isArray(exam?.subjects) ? exam?.subjects[0] : exam?.subjects;
+    return subject?.id || exam?.id || null;
+}
+
+/**
+ * Narrow a term's marks to the most recent round that is substantially entered.
  * Marks whose exam has no `exam_type` are left alone (nothing to group on).
  */
 export function selectExamRound<T>(marks: T[]): ExamRoundSelection<T> {
-    const typed = marks.filter(m => examOf(m)?.exam_type);
-    if (typed.length === 0) return { round: null, marks };
+    const rounds = new Map<string, { latest: number; subjects: Set<string> }>();
+    for (const m of marks) {
+        const exam = examOf(m);
+        const type = exam?.exam_type;
+        if (!type) continue;
+        const round = rounds.get(type) ?? { latest: -Infinity, subjects: new Set<string>() };
+        round.latest = Math.max(round.latest, sittingTime(exam));
+        const subject = subjectKey(exam);
+        if (subject) round.subjects.add(subject);
+        rounds.set(type, round);
+    }
+    if (rounds.size === 0) return { round: null, marks };
+
+    const fullest = Math.max(...[...rounds.values()].map(r => r.subjects.size));
+    const needed = Math.max(1, Math.ceil(fullest * MIN_SUBJECT_SHARE));
 
     let round: string | null = null;
     let latest = -Infinity;
-    for (const m of typed) {
-        const exam = examOf(m);
-        const when = sittingTime(exam);
-        const type = exam?.exam_type ?? null;
+    for (const [type, stats] of rounds) {
+        // Without subject information every round counts, as before.
+        if (fullest > 0 && stats.subjects.size < needed) continue;
         // A genuine tie still needs an answer that does not depend on row order.
-        if (when > latest || (when === latest && type !== null && laterInTerm(type, round))) {
-            latest = when;
+        if (stats.latest > latest || (stats.latest === latest && laterInTerm(type, round))) {
+            latest = stats.latest;
             round = type;
         }
     }

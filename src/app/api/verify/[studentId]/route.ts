@@ -57,8 +57,11 @@ function flatten(row: unknown, fallbackStudentId: string): FlatMark | null {
     };
 }
 
-/** Shape selectExamRound() reads: `exams.exam_type`, and `exam_date` before `created_at`. */
-const asRoundInput = (m: FlatMark) => ({ ...m, exams: { exam_type: m.examType, exam_date: m.examDate, created_at: m.createdAt } });
+/** Shape selectExamRound() reads: `exams.exam_type`, `exam_date` before `created_at`, and the subject. */
+const asRoundInput = (m: FlatMark) => ({
+    ...m,
+    exams: { id: m.examId, exam_type: m.examType, exam_date: m.examDate, created_at: m.createdAt, subjects: { id: m.subject.id } },
+});
 
 function toAnalyticsMark(m: FlatMark): ExamMarkWithDetails {
     return {
