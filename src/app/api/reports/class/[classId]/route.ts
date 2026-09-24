@@ -429,7 +429,7 @@ export async function GET(
                 remarks: m.remarks,
             }));
             const perf = aggregateStudentPerformance(mapped, gradingScales, gradingSystemType, subjectNamesMap, subjectCategoriesMap);
-            return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints };
+            return { studentId: student.id, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
         });
 
         // 8-4-4 ranks by total points; every CBC learner by their marks,

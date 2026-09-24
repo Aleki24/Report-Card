@@ -480,16 +480,16 @@ export async function GET(request: NextRequest) {
               if (subjectId && subj?.category) rankSubjectCategories[subjectId] = subj.category;
             }
 
-            // 8-4-4 ranks by total points (best-7 selection); CBC by marks.
+            // 8-4-4 ranks by total points (best-7 selection); CBC by total marks.
             const gradingSystemType = isKCSE ? 'KCSE' : 'CBC';
             // PostgREST returns a to-one embed as an object, or an array on older relations.
             const level = (streamData?.grades as { academic_levels?: { code?: string } | { code?: string }[] } | null)?.academic_levels;
             const levelCode = (Array.isArray(level) ? level[0] : level)?.code;
-            const byMarks = rankingBasisFor(gradingSystemType, levelCode) === 'percentage';
+            const byTotalMarks = rankingBasisFor(gradingSystemType, levelCode) === 'totalMarks';
             const sorted = Object.entries(marksByClassmate)
               .map(([sid, marks]) => {
                 const perf = aggregateStudentPerformance(marks, [], gradingSystemType, rankSubjectNames, rankSubjectCategories);
-                return { sid, metric: byMarks ? perf.percentage : perf.totalPoints };
+                return { sid, metric: byTotalMarks ? perf.totalMarks : perf.totalPoints };
               })
               .sort((a, b) => b.metric - a.metric);
 

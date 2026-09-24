@@ -470,7 +470,7 @@ export async function GET(
                     const aggregates = Object.entries(marksByClassmate)
                         .map(([sid, marks]) => {
                             const perf = aggregateStudentPerformance(marks, gradingScales, gradingSystemType, rankSubjectNames, rankSubjectCategories);
-                            return { studentId: sid, percentage: perf.percentage, totalPoints: perf.totalPoints };
+                            return { studentId: sid, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
                         });
 
                     const ranks = calculateClassRanks(aggregates, rankingBasis);

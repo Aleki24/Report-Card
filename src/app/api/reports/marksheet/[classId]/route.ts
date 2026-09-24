@@ -337,7 +337,7 @@ export async function GET(
                 ? subjectPercentages.reduce((a, b) => a + b, 0) / subjectPercentages.length
                 : 0;
             
-            return { studentId: sid, percentage: avgPercentage, totalPoints: perf.totalPoints };
+            return { studentId: sid, percentage: avgPercentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
         });
 
         const ranks = calculateClassRanks(aggregates, rankingBasis);

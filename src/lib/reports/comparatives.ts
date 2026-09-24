@@ -271,7 +271,7 @@ export async function fetchPreviousRound(
             const perf = aggregateStudentPerformance(
                 studentMarks, gradingScales, gradingSystemType, subjectNames, subjectCategories
             );
-            return { studentId, percentage: perf.percentage, totalPoints: perf.totalPoints };
+            return { studentId, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
         });
 
         const ranks = calculateClassRanks(aggregates, rankingBasis);

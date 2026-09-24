@@ -271,6 +271,12 @@ export interface AggregateResult {
     used844Selection: boolean;
     gpa: number;
     totalPoints: number;
+    /**
+     * Every subject's mark (out of 100) added up, across all subjects sat —
+     * never the best-seven selection. What CBC learners are ranked on, and
+     * the "Total" a mark sheet prints.
+     */
+    totalMarks: number;
     grade: string;
     overallGrade: string;
     markCount: number;
@@ -295,7 +301,7 @@ export function aggregateStudentPerformance(
     overallKind: OverallGradingKind = 'PERCENTAGE'
 ): AggregateResult {
     if (!marks || marks.length === 0) {
-        return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
+        return { totalScore: 0, totalPossible: 0, percentage: 0, rawAverage: 0, used844Selection: false, gpa: 0, totalPoints: 0, totalMarks: 0, grade: 'N/A', overallGrade: '-', markCount: 0 };
     }
 
     let marksToProcess = marks;
@@ -396,6 +402,7 @@ export function aggregateStudentPerformance(
         used844Selection,
         gpa,
         totalPoints,
+        totalMarks: totalMarksAcrossSubjects(marks),
         grade,
         overallGrade,
         markCount: marksToProcess.length,
@@ -403,14 +410,35 @@ export function aggregateStudentPerformance(
     };
 }
 
+/**
+ * One mark per subject (out of 100), summed. A subject assessed more than
+ * once in the list contributes its average, so it is never counted twice.
+ */
+function totalMarksAcrossSubjects(marks: ExamMarkWithDetails[]): number {
+    const bySubject = new Map<string, number[]>();
+    marks.forEach((m, i) => {
+        const key = m.subject_id || `mark-${i}`;
+        const list = bySubject.get(key) ?? [];
+        list.push(calculatePercentage(m.raw_score, m.max_score));
+        bySubject.set(key, list);
+    });
+    let total = 0;
+    for (const list of bySubject.values()) total += list.reduce((a, b) => a + b, 0) / list.length;
+    return total;
+}
+
 /* ── Class Ranking ──────────────────────────────────────── */
 
 /** What learners are ordered on when they are given a position. */
-export type RankingBasis = 'percentage' | 'points';
+export type RankingBasis = 'totalMarks' | 'percentage' | 'points';
 
 /**
- * CBC learners are ranked by their marks (mean percentage); only 8-4-4
- * learners are ranked by total points.
+ * CBC learners are ranked by their total marks; only 8-4-4 learners are
+ * ranked by total points.
+ *
+ * Total, not average: ranking on the mean let a learner who sat fewer
+ * subjects outrank one who scored more marks overall (a mean of 78 from six
+ * subjects beating 500 marks from eight).
  *
  * Grading style and ranking basis are separate questions. Grades 7, 8, 11
  * and 12 sit under the CBC level but are graded KCSE-style (see
@@ -422,38 +450,41 @@ export function rankingBasisFor(
     gradingSystemType: 'KCSE' | 'CBC',
     academicLevelCode?: string | null,
 ): RankingBasis {
-    if (academicLevelCode) return academicLevelCode.trim().toUpperCase() === 'CBC' ? 'percentage' : 'points';
-    return gradingSystemType === 'CBC' ? 'percentage' : 'points';
+    if (academicLevelCode) return academicLevelCode.trim().toUpperCase() === 'CBC' ? 'totalMarks' : 'points';
+    return gradingSystemType === 'CBC' ? 'totalMarks' : 'points';
 }
 
+export interface RankableAggregate {
+    studentId: string;
+    percentage: number;
+    totalPoints?: number;
+    totalMarks?: number;
+}
+
+/** The figure a learner is ranked on, falling back to the mean when it is missing. */
+function rankingValue(a: RankableAggregate, basis: RankingBasis): number {
+    if (basis === 'points') return a.totalPoints ?? a.percentage;
+    if (basis === 'totalMarks') return a.totalMarks ?? a.percentage;
+    return a.percentage;
+}
+
+/** Competition ranking (1, 2, 2, 4) on the chosen basis. */
 export function calculateClassRanks(
-    studentAggregates: { studentId: string, percentage: number, totalPoints?: number }[],
+    studentAggregates: RankableAggregate[],
     rankingBy: RankingBasis = 'percentage'
 ) {
-    if (!studentAggregates || studentAggregates.length === 0) {
-        return new Map<string, number>();
-    }
-    
-    const sorted = [...studentAggregates].sort((a, b) => {
-        if (rankingBy === 'points' && a.totalPoints !== undefined && b.totalPoints !== undefined) {
-            return b.totalPoints - a.totalPoints;
-        }
-        return b.percentage - a.percentage;
-    });
-
     const ranks = new Map<string, number>();
+    if (!studentAggregates || studentAggregates.length === 0) return ranks;
+
+    const sorted = [...studentAggregates]
+        .map(a => ({ id: a.studentId, value: rankingValue(a, rankingBy) }))
+        .sort((a, b) => b.value - a.value);
+
     let currentRank = 1;
-
-    for (let i = 0; i < sorted.length; i++) {
-        const aVal = rankingBy === 'points' ? (sorted[i] as any).totalPoints : sorted[i].percentage;
-        const bVal = rankingBy === 'points' ? (sorted[i-1] as any)?.totalPoints : sorted[i-1]?.percentage;
-        
-        if (i > 0 && aVal < bVal) {
-            currentRank = i + 1;
-        }
-        ranks.set(sorted[i].studentId, currentRank);
-    }
-
+    sorted.forEach((entry, i) => {
+        if (i > 0 && entry.value < sorted[i - 1].value) currentRank = i + 1;
+        ranks.set(entry.id, currentRank);
+    });
     return ranks;
 }
 

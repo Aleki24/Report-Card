@@ -269,7 +269,7 @@ function Masthead({ d }: { d: MarkSheetData }) {
                 <View style={s.tag}><Text style={s.tagText}>Class mark sheet</Text></View>
                 <Text style={s.docTitle}>{d.className} · {roundLabel(d)}</Text>
                 <Text style={s.docSub}>
-                    Ranked by {d.rankedBy === 'points' ? 'total points' : 'mean marks'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
+                    Ranked by {d.rankedBy === 'points' ? 'total points' : d.rankedBy === 'totalMarks' ? 'total marks' : 'mean marks'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
                 </Text>
             </View>
         </View>
