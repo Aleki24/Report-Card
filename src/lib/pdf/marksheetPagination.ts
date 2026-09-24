@@ -9,8 +9,9 @@
  *      A class one learner too big for page one prints as two evenly filled
  *      pages, not a full page and a nearly empty one.
  *
- * Rows then grow (up to a cap) to take up the room the balancing left, with
- * one height for every page so the sheet reads as a single table.
+ * Rows then grow (up to a cap) to take up the room the balancing left. Each
+ * page sizes its own rows: holding every page to the tightest page's height
+ * left a band of white under the table on page one.
  *
  * Every height here is a fixed layout dimension from the mark sheet itself,
  * which is what makes the plan exact rather than an estimate: names are
@@ -37,8 +38,8 @@ export interface PageDimensions {
 export interface PagePlan {
     /** Learner rows on each table page, in order. */
     rows: number[];
-    /** Row height used on every page. */
-    rowHeight: number;
+    /** Row height for each table page, in order. */
+    rowHeights: number[];
     /** True when the summary could not share a page with the table. */
     summaryOnOwnPage: boolean;
 }
@@ -104,14 +105,13 @@ export function planPages(total: number, d: PageDimensions): PagePlan {
 
     const rows = balance(total, capacities);
 
-    // One row height for the whole sheet: the largest every page can take.
-    const room = rows.map((r, i) => {
+    const rowHeights = rows.map((r, i) => {
         const first = i === 0;
         const last = i === rows.length - 1 && !summaryOnOwnPage;
         const space = tableSpace(first ? d.firstChrome : d.otherChrome, last);
-        return r > 0 ? space / r : Infinity;
+        const fits = r > 0 ? space / r : d.row;
+        return Math.max(d.row, Math.min(d.row * d.maxRowGrowth, fits));
     });
-    const rowHeight = Math.min(d.row * d.maxRowGrowth, ...room);
 
-    return { rows, rowHeight: Math.max(d.row, rowHeight), summaryOnOwnPage };
+    return { rows, rowHeights, summaryOnOwnPage };
 }

@@ -14,7 +14,7 @@ import {
 } from '@/lib/analytics';
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
-import { generateMarkSheetPDF, type MarkSheetData } from '@/lib/marksheetPdfGenerator';
+import { generateMarkSheetPDF, type MarkSheetData, type SubjectStats } from '@/lib/marksheetPdfGenerator';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import { resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
@@ -344,10 +344,7 @@ export async function GET(
 
         // 7. Aggregate data for the specific report format
         // Calculate subject-wise statistics (mean, rank)
-        const subjectStats: Record<string, {
-            mean: number; highest: number; lowest: number; studentCount: number;
-            previousMean?: number; teacher?: string;
-        }> = {};
+        const subjectStats: Record<string, SubjectStats> = {};
         
         // Initialize subject stats
         subjectsArray.forEach(sub => {
@@ -389,6 +386,33 @@ export async function GET(
             }
         }
 
+        /*
+          Like-for-like pairs: a learner's mark in a subject now, beside their
+          mark in the same subject last round. Every "change" on the sheet is
+          measured on these alone. Comparing this round's whole class with
+          last round's whole class let absentees swing a subject by thirty
+          marks when nobody's marks had moved that far.
+        */
+        const pairsBySubject: Record<string, { now: number; before: number }[]> = {};
+        const pairsByStudent: Record<string, { now: number; before: number }[]> = {};
+        if (previousRound) {
+            for (const [sid, marks] of Object.entries(marksByStudent)) {
+                for (const m of marks) {
+                    const subjectId = m.exams?.subjects?.id as string | undefined;
+                    const code = subjectId ? subjectCodeById.get(subjectId) : undefined;
+                    const before = subjectId ? previousRound.subjectPercentage.get(`${sid}|${subjectId}`) : undefined;
+                    if (!code || before == null || m.percentage == null) continue;
+                    const pair = { now: Number(m.percentage), before };
+                    (pairsBySubject[code] ||= []).push(pair);
+                    (pairsByStudent[sid] ||= []).push(pair);
+                }
+            }
+        }
+        const meanChange = (pairs?: { now: number; before: number }[]) =>
+            pairs && pairs.length > 0
+                ? Math.round(pairs.reduce((sum, p) => sum + (p.now - p.before), 0) / pairs.length)
+                : undefined;
+
         // Calculate stats for each subject
         for (const sub of subjectsArray) {
             const scores = subjectScores[sub.code];
@@ -403,6 +427,8 @@ export async function GET(
                     previousMean: previousScores.length > 0
                         ? Math.round(previousScores.reduce((a, b) => a + b, 0) / previousScores.length)
                         : undefined,
+                    change: meanChange(pairsBySubject[sub.code]),
+                    comparedCount: pairsBySubject[sub.code]?.length ?? 0,
                     teacher: subjectTeacherNames.get(
                         [...subjectCodeById.entries()].find(([, code]) => code === sub.code)?.[0] || ''
                     ),
@@ -481,6 +507,9 @@ export async function GET(
                 previousPercentage: previous?.percentage,
                 previousTotalPoints: previous?.totalPoints,
                 previousClassRank: previous?.rank || undefined,
+                change: meanChange(pairsByStudent[student.id]),
+                totalMarks: Math.round(studentPerf.totalMarks),
+                subjectsSat: subjectPercentages.length,
                 // Per-subject mean points (KCSE) — the class mean grade must be
                 // derived from these, not from total points.
                 meanPoints: studentPerf.markCount > 0 ? (studentPerf.totalPoints || 0) / studentPerf.markCount : 0,
@@ -564,6 +593,7 @@ export async function GET(
             previousExamLabel: previousRound?.label,
             classMeanPercentage: Math.round(classMeanPercentage * 10) / 10,
             previousClassMeanPercentage,
+            classMeanChange: meanChange(Object.values(pairsByStudent).flat()),
             schoolName,
             schoolLogoUrl,
             schoolAddress,

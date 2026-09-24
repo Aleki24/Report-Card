@@ -240,7 +240,10 @@ export async function fetchPreviousRound(
 
         if (!marks || marks.length === 0) return null;
 
-        const subjectPercentage = new Map<string, number>();
+        // A subject sat more than once in the round (a re-sit, two exam rows)
+        // counts once, at its average — the last row read used to overwrite
+        // the others, so which mark was compared came down to row order.
+        const sums = new Map<string, { total: number; count: number }>();
         const byStudent = new Map<string, ExamMarkWithDetails[]>();
 
         for (const mark of marks as unknown as PreviousMarkRow[]) {
@@ -249,7 +252,9 @@ export async function fetchPreviousRound(
             const rawScore = Number(mark.raw_score);
             if (!Number.isFinite(rawScore)) continue;
             const pct = meta.maxScore > 0 ? (rawScore / meta.maxScore) * 100 : 0;
-            subjectPercentage.set(`${mark.student_id}|${meta.subjectId}`, Math.round(pct));
+            const key = `${mark.student_id}|${meta.subjectId}`;
+            const sum = sums.get(key) ?? { total: 0, count: 0 };
+            sums.set(key, { total: sum.total + pct, count: sum.count + 1 });
 
             const list = byStudent.get(mark.student_id) || [];
             list.push({
@@ -264,6 +269,10 @@ export async function fetchPreviousRound(
             });
             byStudent.set(mark.student_id, list);
         }
+
+        const subjectPercentage = new Map<string, number>(
+            [...sums].map(([key, { total, count }]) => [key, Math.round(total / count)])
+        );
 
         // Same aggregation the current round uses, so "last time" and "this
         // time" are measured the same way and the deviation means something.
@@ -285,8 +294,18 @@ export async function fetchPreviousRound(
             });
         }
 
+        // Name the term when it differs: "Midterm" alone, printed on a Term 3
+        // Midterm sheet, never said which midterm it was being compared with.
+        const round = roundLabel(previous.exam_type, previous.name || 'Previous exam');
+        let label = round;
+        if (previous.term_id && previous.term_id !== current.termId) {
+            const { data: term } = await supabase.from('terms').select('name').eq('id', previous.term_id).maybeSingle();
+            const termName = (term as { name?: string | null } | null)?.name?.trim();
+            if (termName) label = `${termName} ${round}`;
+        }
+
         return {
-            label: roundLabel(previous.exam_type, previous.name || 'Previous exam'),
+            label,
             subjectPercentage,
             overall,
         };
