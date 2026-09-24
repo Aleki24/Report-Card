@@ -10,10 +10,11 @@ import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
+import { markEntryHref } from '@/lib/marking-progress';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption {
-    id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string;
+    id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string; term_id?: string;
     status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED'; published_by?: string | null; approved_by?: string | null; created_by_teacher_id?: string | null;
 }
 interface AcademicYear { id: string; name: string; }
@@ -126,6 +127,7 @@ export function ExamResultsTab() {
                     max_score: e.max_score,
                     subject_name: e.subject_name || 'N/A',
                     subject_id: e.subject_id,
+                    term_id: e.term_id,
                     status: e.status || 'DRAFT',
                     published_by: e.published_by,
                     approved_by: e.approved_by,
@@ -436,6 +438,7 @@ export function ExamResultsTab() {
                                     scheme={markScheme}
                                     onRefresh={fetchMarks}
                                     onMarkPatched={(patched) => setMarks(prev => prev.map(m => m.id === patched.id ? patched : m))}
+                                    markEntryLink={markEntryHref(selectedExam?.term_id, selectedExamId)}
                                 />
                             )}
                             {activeTab === 'results' && !selectedExamId && (

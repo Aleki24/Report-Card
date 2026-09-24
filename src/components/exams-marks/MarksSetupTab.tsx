@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { ArrowRight, Camera, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -9,50 +11,147 @@ import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
 import { isMultiPaper } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
-import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, type ExamTypeDefinition } from '@/lib/exam-types';
-import { findActiveTermId, getCurrentTermName } from '@/lib/term-calendar';
+import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel } from '@/lib/exam-types';
+import { findActiveTermId } from '@/lib/term-calendar';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
+import { cn } from '@/lib/utils';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
-
 interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
 interface AcademicLevel { id: string; code: string; name: string; }
 interface GradeItem { id: string; name_display: string; academic_level_id: string; }
-interface SubjectItem { id: string; name: string; code: string; academic_level_id: string; }
 interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
-  grade_id: string; grade_name: string; term_id: string; grade_stream_id?: string | null;
+  grade_id: string; grade_name: string; term_id: string;
+  grade_stream_id?: string | null; grade_stream_name?: string | null;
 }
+/** A subject shown in the picker; `hasExam` is false for a teacher's subject with no exam slot yet. */
+interface SubjectChoice { subject_id: string; subject_name: string; subject_code: string; subject_category: string; hasExam: boolean; }
+
+type EntryMode = 'manual' | 'bulk' | 'scan';
+
+/** The last exam opened here, so a teacher can pick up where they left off. */
+interface LastExam { termId: string; examId: string; label: string; }
+const LAST_EXAM_KEY = 'skulbase:mark-entry:last:v1';
+
+function readLastExam(): LastExam | null {
+  try {
+    const raw = window.localStorage.getItem(LAST_EXAM_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Partial<LastExam>) : null;
+    return parsed?.termId && parsed.examId && parsed.label ? { termId: parsed.termId, examId: parsed.examId, label: parsed.label } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastExam(value: LastExam): void {
+  try { window.localStorage.setItem(LAST_EXAM_KEY, JSON.stringify(value)); } catch { /* private mode: nothing to remember */ }
+}
+
+async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
+  const res = await fetch(`/api/school/exams?term_id=${encodeURIComponent(termId)}`, { cache: 'no-store' });
+  const json = (await res.json()) as { data?: ExamSlot[] };
+  return json.data ?? [];
+}
+
+const CATEGORY_ORDER: Record<string, number> = { LANGUAGE: 1, MATHEMATICS: 2, SCIENCE: 3, HUMANITY: 4, TECHNICAL: 5, CREATIVE: 6 };
+const CATEGORY_LABELS: Record<string, string> = {
+  LANGUAGE: 'Languages',
+  MATHEMATICS: 'Mathematics',
+  SCIENCE: 'Sciences',
+  HUMANITY: 'Humanities',
+  TECHNICAL: 'Technical & Applied',
+  CREATIVE: 'Creative Arts & Sports',
+  OTHER: 'Other subjects',
+};
+
+const MODES: { id: EntryMode; label: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'manual', label: 'Type marks', hint: 'Type or correct marks learner by learner', icon: <Keyboard size={15} aria-hidden /> },
+  { id: 'bulk', label: 'Upload file', hint: 'Import a spreadsheet of marks', icon: <FileSpreadsheet size={15} aria-hidden /> },
+  { id: 'scan', label: 'Scan sheet', hint: 'Photograph a paper marksheet and review what was read', icon: <Camera size={15} aria-hidden /> },
+];
+
+/* ── Small building blocks ─────────────────────────────── */
+
+function ChoiceChip({ active, onClick, children, title, disabled }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      aria-pressed={active}
+      className={cn(
+        'inline-flex min-h-10 items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all disabled:opacity-50',
+        active
+          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+          : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StepCard({ step, title, hint, done, children, aside }: { step: number; title: string; hint?: string; done?: boolean; children: React.ReactNode; aside?: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span
+          className={cn(
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+            done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+          )}
+          aria-hidden
+        >
+          {step}
+        </span>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+        {aside && <div className="ml-auto">{aside}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/* ── Tab ───────────────────────────────────────────────── */
 
 export function MarksSetupTab() {
   const { profile } = useAuth();
+  const isAdmin = profile?.role === 'ADMIN';
 
-  // State
+  // ?exam=<id>&term=<id> opens one exam's mark sheet straight away — used by
+  // the teacher dashboard and the Results tab's "Correct marks" link.
+  const searchParams = useSearchParams();
+  const linkedExamId = searchParams.get('exam') ?? '';
+  const linkedTermId = searchParams.get('term') ?? '';
+
   const [terms, setTerms] = useState<Term[]>([]);
   const [selectedTermId, setSelectedTermId] = useState('');
   const [exams, setExams] = useState<ExamSlot[]>([]);
   const [selectedExamType, setSelectedExamType] = useState('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [filterGradeId, setFilterGradeId] = useState('');
+  const [selectedLevelId, setSelectedLevelId] = useState('');
+  const [selectedExamId, setSelectedExamId] = useState('');
+  const [subjectQuery, setSubjectQuery] = useState('');
+  // Once an exam is chosen the pickers fold into one summary line so the
+  // mark sheet gets the screen; "Change" opens them again.
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [lastExam, setLastExam] = useState<LastExam | null>(null);
 
-  // Academic structure for level/grade filtering
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [allGrades, setAllGrades] = useState<GradeItem[]>([]);
-  const [allSubjects, setAllSubjects] = useState<SubjectItem[]>([]);
-  const [selectedLevelId, setSelectedLevelId] = useState('');
-
   const [mySubjects, setMySubjects] = useState<MySubjectItem[]>([]);
-  const [loadingMySubjects, setLoadingMySubjects] = useState(true);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createSubjectId, setCreateSubjectId] = useState<string | undefined>(undefined);
-  const [selectedExamId, setSelectedExamId] = useState('');
-  const [mode, setMode] = useState<'manual' | 'bulk' | 'scan'>('manual');
+  const [mode, setMode] = useState<EntryMode>('manual');
   const [showPaperModal, setShowPaperModal] = useState(false);
-  const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount entry grid after papers config changes
+  const [schemeVersion, setSchemeVersion] = useState(0); // bump to remount the sheet after the paper set-up changes
   const [examScheme, setExamScheme] = useState<ExamSubjectComponentScheme | null>(null);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null); // subject group currently open
 
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
@@ -62,18 +161,17 @@ export function MarksSetupTab() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  // Tap-to-open menu (not CSS :hover, which never fires on touch screens) —
-  // close on outside tap/click or Escape.
+  // An exam to open once its term's exams have loaded.
+  const pendingExamRef = useRef<{ termId: string; examId: string } | null>(null);
+  const handledLinkRef = useRef('');
+
+  // Tap-to-open menu (not CSS :hover, which never fires on touch screens).
   useEffect(() => {
     if (!showMoreMenu) return;
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setShowMoreMenu(false);
-      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) setShowMoreMenu(false);
     };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowMoreMenu(false);
-    };
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowMoreMenu(false); };
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('touchstart', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -84,220 +182,237 @@ export function MarksSetupTab() {
     };
   }, [showMoreMenu]);
 
-  // Grade → academic level map (must be before derived state)
+  // Read after mount: localStorage is not available during server render.
+  useEffect(() => {
+     
+    setLastExam(readLastExam());
+  }, []);
+
   const gradeLevelMap = new Map(allGrades.map(g => [g.id, g.academic_level_id]));
 
-  // ── 0a. Fetch academic structure (levels + grades) ──
+  // ── Academic structure (levels + grades) ──
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/api/admin/academic-structure', { cache: 'no-store' });
-        const data = await res.json();
-        if (data.academic_levels) setAcademicLevels(data.academic_levels);
-        if (data.grades) setAllGrades(data.grades);
-        if (data.subjects) setAllSubjects(data.subjects);
+        const data = (await res.json()) as { academic_levels?: AcademicLevel[]; grades?: GradeItem[] };
+        setAcademicLevels(data.academic_levels ?? []);
+        setAllGrades(data.grades ?? []);
       } catch (err) { console.error('Failed to fetch academic structure:', err); }
     })();
   }, []);
 
-  // ── 0b. Fetch teacher's assigned subjects (for non-admin) ──
+  // ── A teacher's assigned subjects ──
   useEffect(() => {
-    if (profile?.role === 'ADMIN') { setLoadingMySubjects(false); return; }
+    if (!profile?.role || profile.role === 'ADMIN') return;
     (async () => {
       try {
         const res = await fetch('/api/school/data?type=my_subjects', { cache: 'no-store' });
-        const json = await res.json();
-        setMySubjects(json.data || []);
+        const json = (await res.json()) as { data?: MySubjectItem[] };
+        setMySubjects(json.data ?? []);
       } catch (err) { console.error('Failed to fetch my subjects:', err); }
-      setLoadingMySubjects(false);
     })();
   }, [profile?.role]);
 
-  // ── 1. Fetch terms & auto-select active ──
+  // ── Terms: open the linked term, else the active one ──
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/api/school/data?type=terms', { cache: 'no-store' });
-        const json = await res.json();
-        const termList: Term[] = json.data || [];
+        const json = (await res.json()) as { data?: Term[] };
+        const termList = json.data ?? [];
         setTerms(termList);
-        // Auto-select active term based on Kenyan calendar (Jan-Apr=T1, May-Jul=T2, Aug-Nov=T3)
-        const activeId = findActiveTermId(termList);
-        if (activeId) setSelectedTermId(activeId);
-        else if (termList.length > 0) setSelectedTermId(termList[0].id);
+        const linkedTermExists = !!linkedTermId && termList.some(t => t.id === linkedTermId);
+        const initial = linkedTermExists ? linkedTermId : findActiveTermId(termList) ?? termList[0]?.id ?? '';
+        if (linkedExamId && initial) {
+          pendingExamRef.current = { termId: initial, examId: linkedExamId };
+          handledLinkRef.current = `${linkedTermId}:${linkedExamId}`;
+        }
+        setSelectedTermId(initial);
       } catch (err) { console.error('Failed to fetch terms:', err); }
       setLoadingTerms(false);
     })();
+    // Runs once: later link changes are handled by the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 2. Fetch exams for selected term ──
-  const refreshExams = useCallback(async (termId: string) => {
-    if (!termId) { setExams([]); return; }
-    setLoadingExams(true);
-    try {
-      const res = await fetch(`/api/school/exams?term_id=${termId}`, { cache: 'no-store' });
-      const json = await res.json();
-      setExams(json.data || []);
-    } catch (err) { console.error('Failed to fetch exams:', err); }
-    setLoadingExams(false);
-  }, []);
-
-  useEffect(() => {
+  const resetSelection = useCallback(() => {
     setSelectedExamType('');
     setSelectedSubjectId('');
     setSelectedExamId('');
     setSelectedLevelId('');
     setFilterGradeId('');
-    refreshExams(selectedTermId);
-  }, [selectedTermId, refreshExams]);
+    setPickerOpen(true);
+  }, []);
 
-  // ── Derived: available exam types from pre-defined list ──
+  const applyExam = useCallback((exam: ExamSlot) => {
+    setSelectedExamType(exam.exam_type);
+    setSelectedLevelId('');
+    setFilterGradeId(exam.grade_id);
+    setSelectedSubjectId(exam.subject_id);
+    setSelectedExamId(exam.id);
+    setPickerOpen(false);
+  }, []);
+
+  // ── Exams for the selected term; open a pending exam once they arrive ──
+  useEffect(() => {
+    if (!selectedTermId) return;
+    let cancelled = false;
+     
+    setLoadingExams(true);
+    (async () => {
+      let list: ExamSlot[] = [];
+      try { list = await fetchTermExams(selectedTermId); } catch (err) { console.error('Failed to fetch exams:', err); }
+      if (cancelled) return;
+      setExams(list);
+      const pending = pendingExamRef.current;
+      const target = pending?.termId === selectedTermId ? list.find(e => e.id === pending.examId) : undefined;
+      if (pending?.termId === selectedTermId) pendingExamRef.current = null;
+      if (target) applyExam(target); else resetSelection();
+      setLoadingExams(false);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedTermId, applyExam, resetSelection]);
+
+  const reloadExams = async () => {
+    if (!selectedTermId) return;
+    try { setExams(await fetchTermExams(selectedTermId)); } catch (err) { console.error('Failed to fetch exams:', err); }
+  };
+
+  const openExam = useCallback((termId: string, examId: string) => {
+    if (termId === selectedTermId) {
+      const exam = exams.find(e => e.id === examId);
+      if (exam) applyExam(exam);
+      return;
+    }
+    pendingExamRef.current = { termId, examId };
+    setSelectedTermId(termId);
+  }, [selectedTermId, exams, applyExam]);
+
+  // A new deep link while this tab is already open.
+  useEffect(() => {
+    if (!linkedExamId || loadingTerms) return;
+    const key = `${linkedTermId}:${linkedExamId}`;
+    if (handledLinkRef.current === key) return;
+    handledLinkRef.current = key;
+    openExam(linkedTermId || selectedTermId, linkedExamId);
+  }, [linkedExamId, linkedTermId, loadingTerms, openExam, selectedTermId]);
+
+  // ── Derived choices ──
   const existingTypes = new Set(exams.map(e => e.exam_type));
-  const availableExamTypes = ALL_EXAM_TYPES.filter(
-    et => existingTypes.has(et.code)
-  );
-
-  // Subjects for selected exam type, filtered by level and grade
+  const availableExamTypes = ALL_EXAM_TYPES.filter(et => existingTypes.has(et.code));
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
 
-  // Available levels (show all levels to allow free navigation)
-  const availableLevelsForType = academicLevels;
-
-  // Available grades (show all grades for the selected level)
-  const availableGradesForType = allGrades
+  // Teachers only see the classes they have exams in; an admin sees every
+  // class, since they can create an exam for one that has none yet.
+  const gradesWithExams = new Set(examsByType.map(e => e.grade_id));
+  const availableGrades = allGrades
     .filter(g => !selectedLevelId || g.academic_level_id === selectedLevelId)
-    .sort((a, b) => a.name_display.localeCompare(b.name_display));
+    .filter(g => isAdmin || gradesWithExams.has(g.id))
+    .sort((a, b) => a.name_display.localeCompare(b.name_display, undefined, { numeric: true }));
+  // With only one class to choose from, it is chosen.
+  const effectiveGradeId = filterGradeId || (availableGrades.length === 1 ? availableGrades[0].id : '');
 
-  // Build subject list from exams filtered by level + grade
   const filteredExamsByType = examsByType
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
-    .filter(e => !filterGradeId || e.grade_id === filterGradeId);
-  // The class being filtered on, used to keep subjects from other bands of the
-  // same curriculum out of the picker — CBC shares one academic level across
-  // Pre-Primary to Grade 12, so the level alone would let an Upper Primary
-  // learning area show up under Grade 11.
-  const filterGrade = filterGradeId ? allGrades.find(g => g.id === filterGradeId) : null;
+    .filter(e => !effectiveGradeId || e.grade_id === effectiveGradeId);
+  // Keeps subjects from other bands of the same curriculum out of the picker —
+  // CBC shares one academic level from Pre-Primary to Grade 12.
+  const filterGrade = effectiveGradeId ? allGrades.find(g => g.id === effectiveGradeId) ?? null : null;
 
-  const subjectMap = new Map<string, ExamSlot>();
-  filteredExamsByType
-    .filter(e => isSubjectOfferedAtGrade({ name: e.subject_name, code: e.subject_code }, filterGrade))
-    .forEach(e => { if (!subjectMap.has(e.subject_id)) subjectMap.set(e.subject_id, e); });
-
-  // Intelligently filter teacher's assigned subjects by the selected level/grade
-  const resolvedFilterLevelId = filterGradeId
-    ? gradeLevelMap.get(filterGradeId) || ''
-    : selectedLevelId;
-  const myFilteredSubjects = mySubjects.filter(ms =>
-    (!resolvedFilterLevelId || ms.academic_level_id === resolvedFilterLevelId)
-    && isSubjectOfferedAtGrade(ms, filterGrade)
-  );
-  for (const ms of myFilteredSubjects) {
-    if (!subjectMap.has(ms.id)) {
-      subjectMap.set(ms.id, {
-        id: '',
-        name: '',
-        exam_type: '',
-        max_score: 0,
-        subject_id: ms.id,
-        subject_name: ms.name,
-        subject_code: ms.code,
-        subject_category: ms.category || '',
-        grade_id: '',
-        grade_name: '',
-        term_id: '',
-      });
+  const subjectMap = new Map<string, SubjectChoice>();
+  for (const e of filteredExamsByType) {
+    if (!subjectMap.has(e.subject_id) && isSubjectOfferedAtGrade({ name: e.subject_name, code: e.subject_code }, filterGrade)) {
+      subjectMap.set(e.subject_id, { subject_id: e.subject_id, subject_name: e.subject_name, subject_code: e.subject_code, subject_category: e.subject_category, hasExam: true });
     }
   }
-
+  const resolvedFilterLevelId = effectiveGradeId ? gradeLevelMap.get(effectiveGradeId) ?? '' : selectedLevelId;
+  for (const ms of mySubjects) {
+    if (subjectMap.has(ms.id)) continue;
+    if (resolvedFilterLevelId && ms.academic_level_id !== resolvedFilterLevelId) continue;
+    if (!isSubjectOfferedAtGrade(ms, filterGrade)) continue;
+    subjectMap.set(ms.id, { subject_id: ms.id, subject_name: ms.name, subject_code: ms.code, subject_category: ms.category ?? '', hasExam: false });
+  }
   const subjects = [...subjectMap.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name));
+  const subjectNeedle = subjectQuery.trim().toLowerCase();
+  const shownSubjects = subjectNeedle
+    ? subjects.filter(s => s.subject_name.toLowerCase().includes(subjectNeedle) || s.subject_code.toLowerCase().includes(subjectNeedle))
+    : subjects;
 
-  // Group the (already class-filtered) subjects by category for display
-  const CATEGORY_ORDER: Record<string, number> = {
-    LANGUAGE: 1, MATHEMATICS: 2, SCIENCE: 3, HUMANITY: 4, TECHNICAL: 5, CREATIVE: 6,
-  };
-  const CATEGORY_LABELS: Record<string, string> = {
-    LANGUAGE: '🗣️ Languages',
-    MATHEMATICS: '🔢 Mathematics',
-    SCIENCE: '🔬 Sciences',
-    HUMANITY: '🌍 Humanities',
-    TECHNICAL: '🛠️ Technical & Applied',
-    CREATIVE: '🎨 Creative Arts & Sports',
-    OTHER: '📦 Other Subjects',
-  };
-  const subjectGroups: [string, ExamSlot[]][] = (() => {
-    const map = new Map<string, ExamSlot[]>();
-    for (const s of subjects) {
+  const subjectGroups: [string, SubjectChoice[]][] = (() => {
+    const map = new Map<string, SubjectChoice[]>();
+    for (const s of shownSubjects) {
       const cat = (s.subject_category || 'OTHER').toUpperCase();
       const key = CATEGORY_ORDER[cat] ? cat : 'OTHER';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(s);
+      map.set(key, [...(map.get(key) ?? []), s]);
     }
-    return [...map.entries()].sort(
-      (a, b) => (CATEGORY_ORDER[a[0]] || 99) - (CATEGORY_ORDER[b[0]] || 99)
-    );
+    return [...map.entries()].sort((a, b) => (CATEGORY_ORDER[a[0]] ?? 99) - (CATEGORY_ORDER[b[0]] ?? 99));
   })();
-
-  // With a single group there's nothing to choose — open it directly
-  const effectiveExpandedCategory = subjectGroups.length === 1 ? subjectGroups[0][0] : expandedCategory;
-
-  // The chosen subject (collapses the picker once set)
-  const selectedSubjectSlot = subjects.find(s => s.subject_id === selectedSubjectId);
-
-
 
   const examsForSelectedSubject = exams
     .filter(e => e.exam_type === selectedExamType && e.subject_id === selectedSubjectId)
-    .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
-    .filter(e => !filterGradeId || e.grade_id === filterGradeId)
-    .sort((a, b) => a.grade_name.localeCompare(b.grade_name));
+    .filter(e => !effectiveGradeId || e.grade_id === effectiveGradeId)
+    .sort((a, b) => (a.grade_stream_name ?? a.grade_name).localeCompare(b.grade_stream_name ?? b.grade_name));
 
-
-
-  // Close any open subject group when the exam type or class changes
+  // Only one exam type in the term → select it.
   useEffect(() => {
-    setExpandedCategory(null);
-  }, [selectedExamType, filterGradeId]);
-
-  // ── Fewer clicks: auto-select when there's only one choice ──
-  // Only one exam type in the term → select it
-  useEffect(() => {
-    if (!loadingExams && !selectedExamType) {
-      const types = [...new Set(exams.map(e => e.exam_type))];
-      if (types.length === 1) setSelectedExamType(types[0]);
-    }
+    if (loadingExams || selectedExamType) return;
+    const types = [...new Set(exams.map(e => e.exam_type))];
+     
+    if (types.length === 1) setSelectedExamType(types[0]);
   }, [loadingExams, exams, selectedExamType]);
 
-  // Only one class/exam slot for the chosen subject → use it
+  // An explicit pick only counts while it still belongs to the current
+  // subject/class; otherwise fall back to the sole exam slot, if there is one.
   const soleExamId = examsForSelectedSubject.length === 1 ? examsForSelectedSubject[0].id : '';
-
-  // Derive the effective exam rather than clearing selectedExamId through a
-  // chain of reset effects: an explicit pick only counts while it still belongs
-  // to the current subject/level/grade, otherwise fall back to the sole slot.
-  // This removes the one-render window where a stale exam's mark-entry UI
-  // flashed after changing subject/level before a passive effect cleared it.
-  const effectiveSelectedExamId = examsForSelectedSubject.some(e => e.id === selectedExamId)
-    ? selectedExamId
-    : soleExamId;
+  const effectiveSelectedExamId = examsForSelectedSubject.some(e => e.id === selectedExamId) ? selectedExamId : soleExamId;
   const selectedExam = exams.find(e => e.id === effectiveSelectedExamId);
+  const showSheet = !!selectedExam && !pickerOpen;
 
-  // ── Papers configuration status for the selected exam ──
+  // ── Paper set-up for the selected exam ──
   useEffect(() => {
-    if (!effectiveSelectedExamId) { setExamScheme(null); return; }
+    if (!effectiveSelectedExamId) return;
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/school/exams/${effectiveSelectedExamId}/components`, { cache: 'no-store' });
-        const json = await res.json();
-        setExamScheme(json.data || null);
+        const json = (await res.json()) as { data?: ExamSubjectComponentScheme | null };
+        if (!cancelled) setExamScheme(json.data ?? null);
       } catch {
-        setExamScheme(null);
+        if (!cancelled) setExamScheme(null);
       }
     })();
+    return () => { cancelled = true; };
   }, [effectiveSelectedExamId, schemeVersion]);
 
-  const examIsMultiPaper = isMultiPaper(examScheme);
+  const examIsMultiPaper = !!effectiveSelectedExamId && isMultiPaper(examScheme);
   const examPaperSummary = examIsMultiPaper
-    ? (examScheme?.components || []).map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')
+    ? (examScheme?.components ?? []).map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')
     : '';
+
+  const selectedTermName = terms.find(t => t.id === selectedTermId)?.name ?? '';
+  const activeTermId = findActiveTermId(terms);
+  const selectedClassName = selectedExam ? selectedExam.grade_stream_name || selectedExam.grade_name : '';
+
+  // Remember the open exam so the next visit can resume it in one tap.
+  useEffect(() => {
+    if (!selectedExam || pickerOpen) return;
+    const value: LastExam = {
+      termId: selectedExam.term_id,
+      examId: selectedExam.id,
+      label: `${selectedExam.subject_name} · ${selectedExam.grade_stream_name || selectedExam.grade_name} · ${getExamTypeLabel(selectedExam.exam_type)}`,
+    };
+    writeLastExam(value);
+     
+    setLastExam(value);
+  }, [selectedExam, pickerOpen]);
+
+  const chooseSubject = (subjectId: string) => {
+    setSelectedSubjectId(subjectId);
+    setSelectedExamId('');
+    const slots = exams.filter(e => e.exam_type === selectedExamType && e.subject_id === subjectId && (!effectiveGradeId || e.grade_id === effectiveGradeId));
+    if (slots.length === 1) setPickerOpen(false);
+  };
 
   // ── Seed exam slots (admin only) ──
   const handleSeedExams = async (examTypes?: string[]) => {
@@ -309,152 +424,224 @@ export function MarksSetupTab() {
       const res = await fetch('/api/school/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'seed',
-          termId: selectedTermId,
-          academicYearId: term?.academic_year_id,
-          examTypes,
-        }),
+        body: JSON.stringify({ action: 'seed', termId: selectedTermId, academicYearId: term?.academic_year_id, examTypes }),
       });
-      const json = await res.json();
+      const json = (await res.json()) as { created?: number; skipped?: number; error?: string };
       if (res.ok) {
-        setSeedMsg({ type: 'success', text: `✅ Created ${json.created} exam slots (${json.skipped} already existed)` });
-        await refreshExams(selectedTermId);
+        setSeedMsg({ type: 'success', text: `Created ${json.created ?? 0} exam slots (${json.skipped ?? 0} already existed).` });
+        await reloadExams();
       } else {
-        setSeedMsg({ type: 'error', text: `❌ ${json.error}` });
+        setSeedMsg({ type: 'error', text: json.error ?? 'Failed to set up exams' });
       }
-    } catch { setSeedMsg({ type: 'error', text: '❌ Failed to seed exams' }); }
+    } catch { setSeedMsg({ type: 'error', text: 'Failed to set up exams' }); }
     setSeeding(false);
   };
 
-  // Determine active term by Kenyan calendar (Jan-Apr=T1, May-Jul=T2, Aug-Nov=T3)
-  const activeTermId = findActiveTermId(terms);
-  const activeTermObj = terms.find(t => t.id === activeTermId);
-  const selectedTermName = terms.find(t => t.id === selectedTermId)?.name || '';
+  const lastExamAvailable = !!lastExam && terms.some(t => t.id === lastExam.termId) && lastExam.examId !== selectedExam?.id;
 
-  return (
-    <div className="w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start" style={{ gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-        <div className="flex-1">
-          {/* Header removed as it is now a tab */}
-        </div>
-        {activeTermObj && (
-          <div className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--viz-good)' }} />
-            Active: {getCurrentTermName()} ({activeTermObj.name})
+  /* ── Folded view: the chosen exam and its mark sheet ── */
+  if (showSheet && selectedExam) {
+    return (
+      <div className="w-full">
+        <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Entering marks for</p>
+            <h2 className="mt-1 truncate font-display text-xl font-bold tracking-tight sm:text-2xl">
+              {selectedExam.subject_name} <span className="text-muted-foreground">·</span> {selectedClassName}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {selectedTermName} · {getExamTypeLabel(selectedExam.exam_type)} · {examIsMultiPaper ? <span className="font-medium text-primary">Papers {examPaperSummary}</span> : <>Out of {selectedExam.max_score}</>}
+            </p>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPaperModal(true)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors',
+                examIsMultiPaper ? 'border-primary/40 bg-primary/10 text-primary' : 'border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
+              )}
+              title="Some subjects are examined in several papers (e.g. Maths Paper 1 & 2, Sciences with a practical). Set that up here — the papers combine into one final subject score."
+            >
+              <Layers size={14} aria-hidden />
+              {examIsMultiPaper ? `Papers: ${(examScheme?.components ?? []).map(c => c.component_code).join(' + ')}` : 'Split into papers'}
+            </button>
+            <button type="button" onClick={() => setPickerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/40">
+              <RefreshCw size={14} aria-hidden /> Change exam, class or subject
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-muted/50 p-1 sm:inline-grid sm:w-auto" role="tablist" aria-label="How to enter marks">
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={mode === m.id}
+              onClick={() => setMode(m.id)}
+              title={m.hint}
+              className={cn(
+                'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
+                mode === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {m.icon}<span className="truncate">{m.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {mode === 'manual' && (
+          <ManualEntryGrid
+            key={`${effectiveSelectedExamId}-${schemeVersion}`}
+            examId={effectiveSelectedExamId}
+            maxScore={selectedExam.max_score}
+            gradeId={selectedExam.grade_id}
+            gradeStreamId={selectedExam.grade_stream_id ?? null}
+            subjectId={selectedExam.subject_id}
+          />
+        )}
+        {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} />}
+        {mode === 'scan' && (
+          <>
+            {examIsMultiPaper && (
+              <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+                This subject uses several papers. Scanning records <strong>final scores only</strong> — use <em>Type marks</em> for per-paper scores.
+              </div>
+            )}
+            <ScanSheet
+              key={`scan-${effectiveSelectedExamId}`}
+              examId={effectiveSelectedExamId}
+              maxScore={selectedExam.max_score}
+              gradeId={selectedExam.grade_id}
+              gradeStreamId={selectedExam.grade_stream_id ?? null}
+              subjectId={selectedExam.subject_id}
+            />
+          </>
+        )}
+
+        {showPaperModal && (
+          <PaperSchemeModal
+            examId={effectiveSelectedExamId}
+            subjectName={selectedExam.subject_name}
+            onClose={() => setShowPaperModal(false)}
+            onSaved={() => setSchemeVersion(v => v + 1)}
+          />
         )}
       </div>
+    );
+  }
 
-      {/* ═══ STEP 1: Select Term ═══ */}
-      <div className="card mb-4 p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm font-semibold" style={{ minWidth: 70 }}>① Term</label>
-          {loadingTerms ? (
-            <span className="text-xs text-muted-foreground">Loading terms...</span>
-          ) : terms.length === 0 ? (
-            <span className="text-xs text-orange-400">No terms found. Ask admin to set up terms.</span>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {terms.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTermId(t.id)}
-                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${selectedTermId === t.id
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
-                >
-                  {t.name}
-                  {t.id === activeTermId && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold text-inherit opacity-90">ACTIVE</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+  /* ── Pickers ── */
+  return (
+    <div className="flex w-full flex-col gap-4">
+      {lastExamAvailable && lastExam && (
+        <button
+          type="button"
+          onClick={() => openExam(lastExam.termId, lastExam.examId)}
+          className="group flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.06] p-4 text-left transition-colors hover:border-primary/50"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary"><History size={18} aria-hidden /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-medium text-muted-foreground">Pick up where you left off</span>
+            <span className="block truncate text-sm font-semibold text-foreground">{lastExam.label}</span>
+          </span>
+          <ArrowRight size={16} className="shrink-0 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </button>
+      )}
 
-      {/* ═══ STEP 2: Select Exam Type ═══ */}
-      {selectedTermId && (
-        <div className="card mb-4 p-5">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>② Exam</label>
-            {loadingExams && <span className="text-xs text-muted-foreground">Loading...</span>}
+      {/* ① Term */}
+      <StepCard step={1} title="Term" done={!!selectedTermId}>
+        {loadingTerms ? (
+          <p className="text-xs text-muted-foreground">Loading terms…</p>
+        ) : terms.length === 0 ? (
+          <p className="text-sm text-amber-700 dark:text-amber-400">No terms found. Ask your admin to set up the academic calendar.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {terms.map(t => (
+              <ChoiceChip key={t.id} active={selectedTermId === t.id} onClick={() => setSelectedTermId(t.id)}>
+                {t.name}
+                {t.id === activeTermId && (
+                  <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', selectedTermId === t.id ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>
+                )}
+              </ChoiceChip>
+            ))}
           </div>
+        )}
+      </StepCard>
 
+      {/* ② Exam */}
+      {selectedTermId && (
+        <StepCard step={2} title="Exam" hint={loadingExams ? 'Loading…' : undefined} done={!!selectedExamType}>
           {!loadingExams && availableExamTypes.length === 0 ? (
-            // No exams yet — one clear primary action for admin
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-4">
-              <p className="text-sm mb-3 text-muted-foreground">
-                No exams set up yet for <strong>{selectedTermName}</strong>.
-                {profile?.role !== 'ADMIN' && ' Ask your admin to set up exams for this term.'}
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-4">
+              <p className="mb-3 text-sm text-muted-foreground">
+                No exams set up yet for <strong className="text-foreground">{selectedTermName}</strong>.
+                {!isAdmin && ' Ask your admin to set up exams for this term.'}
               </p>
-              {profile?.role === 'ADMIN' && (
+              {isAdmin && (
                 <div className="flex flex-wrap items-center gap-3">
-                  <button onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary px-4 py-2">
-                    {seeding ? 'Setting up...' : '🔧 Set Up This Term’s Exams'}
+                  <button type="button" onClick={() => handleSeedExams(STANDARD_TERM_EXAMS)} disabled={seeding} className="btn-primary px-4 py-2">
+                    {seeding ? 'Setting up…' : 'Set up this term’s exams'}
                   </button>
-                  <button onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="text-xs text-primary hover:underline">
+                  <button type="button" onClick={() => handleSeedExams(ALL_EXAM_TYPES.map(e => e.code))} disabled={seeding} className="text-xs text-primary hover:underline">
                     Need every exam type instead?
                   </button>
                 </div>
               )}
             </div>
           ) : !loadingExams ? (
-            // Show available exam types as clickable buttons
             <div className="flex flex-wrap items-center gap-2">
-              {availableExamTypes.map(et => {
-                const count = exams.filter(e => e.exam_type === et.code).length;
-                const isActive = selectedExamType === et.code;
-                return (
-                  <button
-                    key={et.code}
-                    onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); }}
-                    className={`cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${isActive
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border/70 bg-card/70 text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
-                    title={et.description}
-                  >
-                    {et.icon} {et.shortName}
-                    <span className="ml-1.5 text-[10px] opacity-70">({count})</span>
-                  </button>
-                );
-              })}
+              {availableExamTypes.map(et => (
+                <ChoiceChip
+                  key={et.code}
+                  active={selectedExamType === et.code}
+                  onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); setSelectedExamId(''); }}
+                  title={et.description}
+                >
+                  <span aria-hidden>{et.icon}</span> {et.shortName}
+                </ChoiceChip>
+              ))}
 
-              {/* Admin: one compact menu for the less-common exam-setup actions */}
-              {profile?.role === 'ADMIN' && (
+              {isAdmin && (
                 <div className="relative" ref={moreMenuRef}>
                   <button
+                    type="button"
                     onClick={() => setShowMoreMenu(v => !v)}
                     aria-expanded={showMoreMenu}
-                    className={`cursor-pointer rounded-xl border border-dashed px-3 py-2.5 text-xs transition-colors ${showMoreMenu ? 'border-primary/50 text-foreground' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'}`}
-                    title="More exam setup options"
+                    className={cn(
+                      'inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-xs font-medium transition-colors',
+                      showMoreMenu ? 'border-primary/50 text-foreground' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                    )}
                   >
-                    ⚙️ More
+                    <Settings2 size={14} aria-hidden /> More <ChevronDown size={12} aria-hidden />
                   </button>
                   {showMoreMenu && (
-                    <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] max-w-[90vw] max-h-[60vh] overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg">
+                    <div className="absolute left-0 top-full z-50 mt-1 max-h-[60vh] w-64 max-w-[90vw] overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg">
                       {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
                         <button
                           key={et.code}
-                          onClick={() => { handleSeedExams([et.code]); setShowMoreMenu(false); }}
+                          type="button"
+                          onClick={() => { void handleSeedExams([et.code]); setShowMoreMenu(false); }}
                           disabled={seeding}
-                          className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                          className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
                           + {et.icon} {et.name}
                           <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
                         </button>
                       ))}
                       <button
-                        onClick={() => { handleSeedExams(Array.from(existingTypes)); setShowMoreMenu(false); }}
+                        type="button"
+                        onClick={() => { void handleSeedExams(Array.from(existingTypes)); setShowMoreMenu(false); }}
                         disabled={seeding}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                       >
-                        {seeding ? 'Working...' : '🔄 Add exams for any new subjects'}
+                        {seeding ? 'Working…' : 'Add exams for any new subjects'}
                       </button>
                       <button
+                        type="button"
                         onClick={() => { setShowCreateModal(true); setShowMoreMenu(false); }}
-                        className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                       >
                         + Create one exam manually
                       </button>
@@ -466,284 +653,150 @@ export function MarksSetupTab() {
           ) : null}
 
           {seedMsg && (
-            <div className={`mt-3 text-xs px-3 py-2 rounded ${seedMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+            <p className={cn('mt-3 rounded-lg px-3 py-2 text-xs', seedMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/10 text-red-700 dark:text-red-400')}>
               {seedMsg.text}
-            </div>
+            </p>
           )}
-        </div>
+        </StepCard>
       )}
 
-      {/* ═══ STEP 3: Class & Subject (one step — pick a class, its subjects load right below) ═══ */}
+      {/* ③ Class */}
       {selectedExamType && (
-        <div className="card mb-4 p-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>③ Class</label>
+        <StepCard step={3} title="Class" done={!!effectiveGradeId} hint={!isAdmin ? 'Only classes you have exams for are listed' : undefined}>
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            {academicLevels.length > 1 && (
+              <select
+                className="input-field h-10 text-sm sm:w-48"
+                value={selectedLevelId}
+                onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
+                aria-label="Curriculum level"
+              >
+                <option value="">All levels</option>
+                {academicLevels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            )}
             <select
-              className="input-field text-sm"
-              style={{ padding: '8px 12px', maxWidth: 180 }}
-              value={selectedLevelId}
-              onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
-              title="Filter classes by level"
-            >
-              <option value="">— All Levels —</option>
-              {availableLevelsForType.map(l => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-            <select
-              className="input-field text-sm"
-              style={{ padding: '8px 12px', maxWidth: 200 }}
-              value={filterGradeId}
+              className="input-field h-10 text-sm sm:w-56"
+              value={effectiveGradeId}
               onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
+              aria-label="Class"
             >
-              <option value="">— Select Class —</option>
-              {availableGradesForType.map(g => (
-                <option key={g.id} value={g.id}>{g.name_display}</option>
-              ))}
+              <option value="">Choose a class…</option>
+              {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name_display}</option>)}
             </select>
-            {!filterGradeId && (
-              <span className="text-xs text-muted-foreground">
-                👈 Pick a class to load its subjects
-              </span>
+            {availableGrades.length === 0 && (
+              <span className="text-xs text-muted-foreground">No classes have a {getExamTypeLabel(selectedExamType)} exam this term.</span>
             )}
           </div>
+        </StepCard>
+      )}
 
-          {filterGradeId && selectedSubjectSlot && (
-            /* A subject is chosen: collapse the picker to a single chip + change */
-            <div className="mt-4 border-t border-border/60 pt-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs font-medium text-muted-foreground">④ Subject</span>
-                <span className="rounded-lg border border-primary/50 bg-primary/10 px-3 py-1.5 text-sm font-semibold">
-                  {selectedSubjectSlot.subject_name}
-                  <span className="ml-2 font-mono text-[10px] font-normal text-muted-foreground">{selectedSubjectSlot.subject_code}</span>
-                </span>
-                <button
-                  onClick={() => { setSelectedSubjectId(''); setSelectedExamId(''); }}
-                  className="rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground transition-all hover:bg-muted"
-                >
-                  ↺ Change subject
-                </button>
-              </div>
+      {/* ④ Subject */}
+      {selectedExamType && effectiveGradeId && (
+        <StepCard
+          step={4}
+          title="Subject"
+          done={!!selectedSubjectId}
+          hint={`${subjects.length} subject${subjects.length !== 1 ? 's' : ''}`}
+          aside={subjects.length > 8 ? (
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <input
+                type="search"
+                value={subjectQuery}
+                onChange={e => setSubjectQuery(e.target.value)}
+                placeholder="Find a subject"
+                aria-label="Find a subject"
+                className="h-9 w-44 rounded-lg border border-border bg-background pl-8 pr-2 text-sm outline-none focus:border-primary sm:w-56"
+              />
             </div>
-          )}
-          {filterGradeId && !selectedSubjectSlot && (
-            <div className="mt-4 border-t border-border/60 pt-4">
-              <div className="flex flex-wrap items-center gap-3 mb-3">
-                <span className="text-xs font-medium text-muted-foreground">
-                  {subjects.length} subject{subjects.length !== 1 ? 's' : ''} in this class — tap a group, then pick the subject
-                </span>
-              </div>
-              {subjects.length === 0 ? (
-                <p className="text-xs text-orange-400">
-                  No subjects found for the selected level/grade. Try widening your filter.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {subjectGroups.map(([category, groupSubjects]) => {
-                    const isOpen = effectiveExpandedCategory === category;
-                    return (
-                    <div key={category}>
-                      <button
-                        onClick={() => setExpandedCategory(isOpen ? null : category)}
-                        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 transition-all ${isOpen
-                          ? 'border-primary/50 bg-primary/10'
-                          : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
-                      >
-                        <span className={`text-sm font-semibold ${isOpen ? 'text-primary' : ''}`}>
-                          {CATEGORY_LABELS[category] || category}
-                        </span>
-                        <span className="rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                          {groupSubjects.length}
-                        </span>
-                        <span className="ml-auto text-xs text-muted-foreground">{isOpen ? '▲' : '▼'}</span>
-                      </button>
-                      {isOpen && (
-                      <div className="grid gap-2 mt-2 mb-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                        {groupSubjects.map(s => {
-                          const isActive = selectedSubjectId === s.subject_id;
-                          const hasExams = filteredExamsByType.some(e => e.subject_id === s.subject_id);
-                          return (
-                            <div
-                              key={s.subject_id}
-                              className={`rounded-xl border p-3 transition-all ${isActive
-                                ? 'border-primary/60 bg-primary/10'
-                                : 'border-border/70 bg-card/70 hover:border-primary/30'}`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="font-semibold text-sm">{s.subject_name}</span>
-                                <span className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
-                              </div>
-                              {hasExams ? (
-                                <button
-                                  onClick={() => setSelectedSubjectId(s.subject_id)}
-                                  className="btn-primary text-[10px] px-2 py-1"
-                                >
-                                  Select & Enter Marks
-                                </button>
-                              ) : profile?.role === 'ADMIN' ? (
-                                <button
-                                  onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }}
-                                  className="btn-secondary text-[10px] px-2 py-1"
-                                >
-                                  + Create Exam
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-orange-400/80 italic">No exams yet</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      )}
-                    </div>
-                    );
-                  })}
+          ) : undefined}
+        >
+          {subjects.length === 0 ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400">No subjects found for this class.</p>
+          ) : shownSubjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {subjectGroups.map(([category, groupSubjects]) => (
+                <div key={category}>
+                  {subjectGroups.length > 1 && (
+                    <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{CATEGORY_LABELS[category] ?? category}</h4>
+                  )}
+                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {groupSubjects.map(s => {
+                      const active = selectedSubjectId === s.subject_id;
+                      if (!s.hasExam) {
+                        return (
+                          <div key={s.subject_id} className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border/70 px-3 py-2.5">
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-muted-foreground">{s.subject_name}</span>
+                              <span className="block text-[11px] text-muted-foreground/80">No exam set up yet</span>
+                            </span>
+                            {isAdmin && (
+                              <button type="button" onClick={() => { setCreateSubjectId(s.subject_id); setShowCreateModal(true); }} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+                                + Create
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          key={s.subject_id}
+                          type="button"
+                          onClick={() => chooseSubject(s.subject_id)}
+                          aria-pressed={active}
+                          className={cn(
+                            'group flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-all',
+                            active ? 'border-primary bg-primary/10' : 'border-border/70 bg-card hover:border-primary/40 hover:bg-primary/[0.03]',
+                          )}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-foreground">{s.subject_name}</span>
+                            <span className="block font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
+                          </span>
+                          <ArrowRight size={15} className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ═══ Extra: choose the exam slot (only when the subject has several for this class) ═══ */}
-      {selectedSubjectId && examsForSelectedSubject.length === 0 && (
-        <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs text-orange-400">No exam slots found for this subject in the selected class.</p>
-        </div>
-      )}
-      {selectedSubjectId && examsForSelectedSubject.length > 1 && (
-        <div className="card mb-4 p-5 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-3 mb-3">
-            <label className="text-sm font-semibold" style={{ minWidth: 70 }}>Slot</label>
-            <span className="text-xs text-muted-foreground">
-              This subject has {examsForSelectedSubject.length} exam slots — choose one
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {examsForSelectedSubject.map(exam => {
-              const isActive = effectiveSelectedExamId === exam.id;
-              return (
-                <button
-                  key={exam.id}
-                  onClick={() => setSelectedExamId(exam.id)}
-                  className={`cursor-pointer rounded-xl border px-4 py-2 text-sm font-medium transition-all ${isActive
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border/70 bg-card/70 text-foreground hover:border-primary/40'}`}
-                >
-                  {exam.name || exam.grade_name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ═══ MARK ENTRY ═══ */}
-      {effectiveSelectedExamId && selectedExam && (
-        <div>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3">
-            <div className="text-sm">
-              <strong>{selectedTermName}</strong> · <strong>{getExamTypeLabel(selectedExamType)}</strong> · <strong>{selectedExam.subject_name}</strong> · {selectedExam.grade_name} · {examIsMultiPaper ? <span className="text-primary">Papers: {examPaperSummary}</span> : <>Max: {selectedExam.max_score}</>}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowPaperModal(true)}
-                className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${examIsMultiPaper
-                  ? 'border border-primary/40 bg-primary/10 text-primary'
-                  : 'border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
-                title="Some subjects are examined in several papers (e.g. Maths Paper 1 & Paper 2, Sciences with a practical). Set that up here — the papers automatically combine into one final subject score."
-              >
-                {examIsMultiPaper
-                  ? `📑 Papers: ${(examScheme?.components || []).map(c => c.component_code).join(' + ')} ✓`
-                  : '✂️ Split into Papers (P1, P2…)'}
-              </button>
-              {(['manual', 'bulk', 'scan'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${mode === m
-                    ? 'bg-primary text-primary-foreground'
-                    : 'border border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'}`}
-                  title={m === 'scan' ? 'Photograph a paper marksheet and let the app read the marks for review' : undefined}
-                >
-                  {m === 'manual' ? '✏️ Manual Entry' : m === 'bulk' ? '📤 Bulk Upload' : '📷 Scan Sheet'}
-                </button>
               ))}
             </div>
-          </div>
-          {mode === 'manual' && (
-            <ManualEntryGrid
-              key={`${effectiveSelectedExamId}-${schemeVersion}`}
-              examId={effectiveSelectedExamId}
-              maxScore={selectedExam.max_score}
-              gradeId={selectedExam.grade_id}
-              gradeStreamId={selectedExam.grade_stream_id || null}
-              subjectId={selectedExam.subject_id}
-            />
           )}
-          {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} />}
-          {mode === 'scan' && (
-            <>
-              {examIsMultiPaper && (
-                <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600">
-                  📑 This subject uses multiple papers. Scanning records <strong>final scores only</strong> — use Manual Entry for per-paper (P1/P2/P3) scores.
-                </div>
-              )}
-              <ScanSheet
-                key={`scan-${effectiveSelectedExamId}`}
-                examId={effectiveSelectedExamId}
-                maxScore={selectedExam.max_score}
-                gradeId={selectedExam.grade_id}
-                gradeStreamId={selectedExam.grade_stream_id || null}
-                subjectId={selectedExam.subject_id}
-              />
-            </>
-          )}
-        </div>
+        </StepCard>
       )}
 
-      {/* Empty states */}
-      {!selectedTermId && !loadingTerms && (
-        <div className="card text-center py-16 text-muted-foreground">
-          <p className="text-4xl mb-3">📝</p>
-          <p className="text-sm">Select a term above to start entering marks</p>
-        </div>
+      {/* ⑤ Only when the subject has several exam slots in this class (e.g. one per stream) */}
+      {selectedSubjectId && examsForSelectedSubject.length > 1 && (
+        <StepCard step={5} title="Which one?" hint={`This subject has ${examsForSelectedSubject.length} exams in this class`} done={!!selectedExamId}>
+          <div className="flex flex-wrap gap-2">
+            {examsForSelectedSubject.map(exam => (
+              <ChoiceChip key={exam.id} active={effectiveSelectedExamId === exam.id} onClick={() => { setSelectedExamId(exam.id); setPickerOpen(false); }}>
+                {exam.grade_stream_name || exam.name || exam.grade_name}
+              </ChoiceChip>
+            ))}
+          </div>
+        </StepCard>
       )}
-      {selectedTermId && !selectedExamType && !loadingExams && availableExamTypes.length > 0 && (
-        <div className="card text-center py-12 text-muted-foreground">
-          <p className="text-2xl mb-2">📋</p>
-          <p className="text-sm">Select an exam type to continue</p>
-        </div>
+      {selectedSubjectId && examsForSelectedSubject.length === 0 && (
+        <p className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-4 text-sm text-amber-700 dark:text-amber-400">No exam found for this subject in the selected class.</p>
       )}
-      {selectedExamType && !filterGradeId && (
-        <div className="card text-center py-12 text-muted-foreground">
-          <p className="text-2xl mb-2">🏫</p>
-          <p className="text-sm">Select a <strong>class</strong> above to load its subjects</p>
-        </div>
-      )}
-      {selectedExamType && filterGradeId && !selectedSubjectId && subjects.length > 0 && (
-        <div className="card text-center py-12 text-muted-foreground">
-          <p className="text-2xl mb-2">📚</p>
-          <p className="text-sm">{effectiveExpandedCategory ? 'Select a subject to enter marks' : 'Tap a subject group above to see its subjects'}</p>
-        </div>
-      )}
-      
-      {showPaperModal && effectiveSelectedExamId && (
-        <PaperSchemeModal
-          examId={effectiveSelectedExamId}
-          subjectName={selectedExam?.subject_name}
-          onClose={() => setShowPaperModal(false)}
-          onSaved={() => setSchemeVersion(v => v + 1)}
-        />
+
+      {selectedExam && pickerOpen && (
+        <button type="button" onClick={() => setPickerOpen(false)} className="btn-primary inline-flex items-center justify-center gap-2 self-start px-5 py-2.5">
+          Open mark sheet <ArrowRight size={16} aria-hidden />
+        </button>
       )}
 
       {showCreateModal && (
         <CreateExamModal
           onClose={() => { setShowCreateModal(false); setCreateSubjectId(undefined); }}
-          onCreated={(newExamId) => {
+          onCreated={() => {
             setShowCreateModal(false);
             setCreateSubjectId(undefined);
-            refreshExams(selectedTermId);
+            void reloadExams();
           }}
           preselectedSubjectId={createSubjectId}
         />

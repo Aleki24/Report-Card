@@ -4,10 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Avatar } from '@/components/Avatar';
-import StatCard from '@/components/dashboard/StatCard';
-import { Badge } from '@/components/ui';
 import {
-  Users, GraduationCap, Building2, FileText, CalendarCheck, Calendar,
+  Users, GraduationCap, FileText,
   ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
   BookOpen, Search, CheckCircle2, Plus, MessageSquare,
 } from 'lucide-react';
@@ -44,8 +42,6 @@ interface DashboardData {
 
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import ListPanel from '@/components/dashboard/ListPanel';
-import EmptyState from '@/components/dashboard/EmptyState';
 import KpiTile from '@/components/dashboard/KpiTile';
 import KpiCarousel from '@/components/dashboard/KpiCarousel';
 import GradeResultsCard from '@/components/dashboard/GradeResultsCard';
@@ -57,116 +53,7 @@ import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
 import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
 import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
-import { InfoGuide } from '@/components/ui/InfoGuide';
-
-function UpcomingExamsCard({ exams }: { exams: DashboardData['upcomingExams'] }) {
-  const [now] = useState(() => Date.now());
-
-  if (exams.length === 0) {
-    return (
-      <ListPanel title="Upcoming Exams" actionLabel="Schedule" actionHref="/dashboard/exams-marks" className="h-full">
-        <EmptyState title="No upcoming exams" description="Scheduled exams will appear here with clear date blocks." />
-      </ListPanel>
-    );
-  }
-
-  const displayExams = exams.slice(0, 5);
-
-  return (
-    <ListPanel title="Upcoming Exams" actionLabel="View all" actionHref="/dashboard/exams-marks" className="h-full">
-      <div className="flex flex-col gap-3">
-        {displayExams.map(exam => {
-          const date = new Date(exam.exam_date);
-          const month = date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
-          const day = date.toLocaleDateString('en-GB', { day: '2-digit' });
-          const isSoon = (date.getTime() - now) < 3 * 24 * 60 * 60 * 1000;
-          return (
-            <div
-              key={exam.id}
-              className={`flex items-center gap-3 rounded-xl border p-[5px] transition-colors hover:bg-muted/55 ${isSoon ? 'border-amber-500/25 bg-amber-500/10' : 'border-border/55 bg-muted/35'}`}
-            >
-              <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border bg-card/80 ${isSoon ? 'border-amber-500/30 text-amber-600' : 'border-border/60 text-muted-foreground'}`}>
-                <span className="text-[10px] font-bold leading-none tracking-[0.12em]">{month}</span>
-                <span className="text-base font-bold leading-none tracking-tight">{day}</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold tracking-tight text-foreground">{exam.name}</div>
-                <div className="truncate text-xs leading-relaxed text-muted-foreground">
-                  {exam.subject_name} &middot; {exam.grade_name}
-                </div>
-              </div>
-              {isSoon && <Badge variant="warning">SOON</Badge>}
-            </div>
-          );
-        })}
-      </div>
-    </ListPanel>
-  );
-}
-
-function RecentActivitiesCard({ activities, viewAllHref }: { activities: DashboardData['recentActivities']; viewAllHref?: string }) {
-  if (activities.length === 0) {
-    return (
-      <ListPanel title="Recent Activity" className="h-full">
-        <EmptyState title="No recent activity" description="Activity such as marks, students, and report cards will be listed here." />
-      </ListPanel>
-    );
-  }
-
-  const displayActivities = activities.slice(0, 5);
-
-  return (
-    <ListPanel title="Recent Activity" actionLabel={viewAllHref ? 'View all' : undefined} actionHref={viewAllHref} className="h-full">
-      <div className="flex flex-col gap-3">
-        {displayActivities.map((act, i) => {
-          const date = new Date(act.timestamp);
-          const timeAgo = getTimeAgo(date);
-          return (
-            <div
-              key={i}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/55 bg-muted/35 p-[5px] transition-colors hover:bg-muted/55"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium tracking-tight text-foreground">{act.message}</div>
-                <div className="text-xs leading-relaxed text-muted-foreground">School activity update</div>
-              </div>
-              <div className="shrink-0 text-xs font-medium text-muted-foreground">{timeAgo}</div>
-            </div>
-          );
-        })}
-      </div>
-    </ListPanel>
-  );
-}
-
-function getTimeAgo(date: Date): string {
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 60) return 'Just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hrs = Math.floor(min / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-function QuickAction({ label, desc, href, icon }: { label: string; desc: string; href: string; icon: React.ReactNode }) {
-  return (
-    <a href={href} className="group block h-full no-underline">
-      <div className="flex h-full items-center gap-3 rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm transition-all duration-200 hover:-translate-y-px hover:border-primary/50 hover:shadow-md">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="text-sm font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">{label}</div>
-          <div className="text-xs leading-relaxed text-muted-foreground">{desc}</div>
-        </div>
-        <ArrowRight size={16} className="shrink-0 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:text-primary" />
-      </div>
-    </a>
-  );
-}
+import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
 
 // ── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard({ userName }: { userName: string }) {
@@ -639,157 +526,6 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 }
 
-// ── Class Teacher Dashboard ──────────────────────────────────
-function ClassTeacherDashboard() {
-  const { user } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [kpis, setKpis] = useState<{ label: string; value: string; sub: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const [dashboardRes, statsRes] = await Promise.all([
-          fetch('/api/school/dashboard'),
-          fetch('/api/school/stats?role=class_teacher'),
-        ]);
-        if (dashboardRes.ok) {
-          const json = await dashboardRes.json();
-          setData(json);
-        }
-        if (statsRes.ok) {
-          const json = await statsRes.json();
-          setKpis([
-            { label: 'My Stream', value: json.streamName || '—', sub: 'Assigned homeroom' },
-            { label: 'Stream Students', value: (json.studentCount || 0).toString(), sub: json.studentCount ? 'Enrolled' : 'No students yet' },
-            { label: 'Stream Average', value: json.streamAvg !== '—' ? `${json.streamAvg}%` : '—', sub: json.streamAvg !== '—' ? 'Class average' : 'Enter marks to see' },
-            { label: 'Reports Pending', value: (json.reportsPending || 0).toString(), sub: json.reportsPending > 0 ? 'Need generation' : 'All done!' },
-          ]);
-        }
-      } catch {
-        setKpis([
-          { label: 'My Stream', value: '—', sub: 'Not assigned' },
-          { label: 'Stream Students', value: '—', sub: 'N/A' },
-          { label: 'Stream Average', value: '—', sub: 'N/A' },
-          { label: 'Reports Pending', value: '—', sub: 'N/A' },
-        ]);
-      }
-      setLoading(false);
-    })();
-  }, [user]);
-
-  if (loading) return <LoadingSkeleton />;
-
-  return (
-    <>
-      <InfoGuide title="Class Teacher Guide — how to run your class">
-        <ol className="list-decimal space-y-1.5 pl-5">
-          <li><strong>Enter marks:</strong> open <strong>Exams &amp; Marks</strong>, pick the class, subject and exam, then type scores straight down the list — drafts autosave and sync when the network returns.</li>
-          <li><strong>Track attendance:</strong> use <strong>Attendance</strong> to mark your stream daily; absentees&apos; guardians can be notified by SMS.</li>
-          <li><strong>Manage your roster:</strong> add or update students in your stream from <strong>People</strong>.</li>
-          <li><strong>Generate report cards:</strong> at term end, open <strong>Report Cards</strong> → <em>Generate Reports</em> to compile every subject into one branded card, then export or send to parents.</li>
-          <li><strong>Communicate:</strong> post <strong>Announcements</strong> (optionally by SMS) and set <strong>Assignments</strong> for your class.</li>
-        </ol>
-      </InfoGuide>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {kpis.map((k, i) => (
-          <StatCard key={i} label={k.label} value={k.value} sub={k.sub} icon={i === 0 ? Building2 : i === 1 ? GraduationCap : i === 2 ? BarChart3 : FileText} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
-          <RecentActivitiesCard activities={data?.recentActivities ?? []} viewAllHref="/dashboard/reports" />
-        </div>
-        <div className="flex flex-col gap-4">
-          <h3 className="text-[15px] font-semibold mb-1 font-body">Quick Actions</h3>
-          <QuickAction label="Generate Reports" desc="Report cards for your class" href="/dashboard/reports" icon={<FileText size={18} />} />
-          <QuickAction label="Class Results" desc="Broadsheet and rankings" href="/dashboard/exams-marks?tab=results" icon={<BarChart3 size={18} />} />
-          <QuickAction label="Track Attendance" desc="Daily class attendance" href="/dashboard/attendance" icon={<CalendarCheck size={18} />} />
-          <QuickAction label="My Students" desc="View class roster" href="/dashboard/people" icon={<GraduationCap size={18} />} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Subject Teacher Dashboard ────────────────────────────────
-function SubjectTeacherDashboard() {
-  const { user } = useAuth();
-  const [kpis, setKpis] = useState<{ label: string; value: string; sub: string }[]>([]);
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const [dashboardRes, statsRes] = await Promise.all([
-          fetch('/api/school/dashboard'),
-          fetch('/api/school/stats?role=subject_teacher'),
-        ]);
-        if (dashboardRes.ok) {
-          const json = await dashboardRes.json();
-          setData(json);
-        }
-        if (statsRes.ok) {
-          const json = await statsRes.json();
-          setKpis([
-            { label: 'My Exams', value: (json.examCount || 0).toString(), sub: (json.examCount || 0) > 0 ? 'Created' : 'No exams yet' },
-            { label: 'Subject Average', value: json.avg || '—', sub: json.markCount > 0 ? `From ${json.markCount} marks` : 'Enter marks to see' },
-            { label: 'Students Assessed', value: (json.markCount || 0).toString(), sub: json.markCount > 0 ? 'Total mark entries' : 'No data yet' },
-          ]);
-        }
-      } catch {
-        setKpis([
-          { label: 'My Exams', value: '—', sub: 'No exams yet' },
-          { label: 'Subject Average', value: '—', sub: 'Enter marks to see' },
-          { label: 'Students Assessed', value: '0', sub: 'No data yet' },
-        ]);
-      }
-      setLoading(false);
-    })();
-  }, [user]);
-
-  if (loading) return <LoadingSkeleton />;
-
-  return (
-    <>
-      <InfoGuide title="Subject Teacher Guide — how to assess your subjects">
-        <ol className="list-decimal space-y-1.5 pl-5">
-          <li><strong>Find your exam:</strong> in <strong>Exams &amp; Marks</strong> → <em>Mark Entry &amp; Setup</em>, pick the term, exam and a subject you teach. Exams are set up by your admin — ask them if one is missing. For multi-paper subjects, set the paper structure (P1/P2/P3) once.</li>
-          <li><strong>Enter marks:</strong> load the whole class and type scores down the column — <em>Enter</em> jumps to the next student. Entries autosave locally and sync automatically when you&apos;re back online.</li>
-          <li><strong>Review results:</strong> open <em>Results &amp; Reports</em> to see the broadsheet, subject averages and rankings.</li>
-          <li><strong>Communicate:</strong> set <strong>Assignments</strong> and post <strong>Announcements</strong> for the classes you teach.</li>
-        </ol>
-      </InfoGuide>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {kpis.map((k, i) => (
-          <StatCard key={i} label={k.label} value={k.value} sub={k.sub} icon={i === 0 ? Calendar : i === 1 ? BarChart3 : GraduationCap} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <UpcomingExamsCard exams={data?.upcomingExams ?? []} />
-          <RecentActivitiesCard activities={data?.recentActivities ?? []} />
-        </div>
-        <div className="flex flex-col gap-4">
-          <h3 className="text-[15px] font-semibold mb-1 font-body">Quick Actions</h3>
-          <QuickAction label="Enter Marks" desc="Record exam scores" href="/dashboard/exams-marks" icon={<ClipboardList size={18} />} />
-          <QuickAction label="Exam Results" desc="Broadsheet and subject averages" href="/dashboard/exams-marks?tab=results" icon={<BarChart3 size={18} />} />
-          <QuickAction label="Publish Results" desc="Send marks for approval" href="/dashboard/exams-marks?tab=publish" icon={<Calendar size={18} />} />
-          <QuickAction label="Assignments" desc="Set work for your classes" href="/dashboard/assignments" icon={<FileText size={18} />} />
-        </div>
-      </div>
-    </>
-  );
-}
-
 export default function DashboardPage() {
   const { profile, role, loading } = useAuth();
   const router = useRouter();
@@ -825,17 +561,24 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">
       {isAdmin && <AdminDashboard userName={userName} />}
-      {role === 'CLASS_TEACHER' && <ClassTeacherDashboard />}
-      {role === 'SUBJECT_TEACHER' && <SubjectTeacherDashboard />}
+      {role === 'CLASS_TEACHER' && <TeacherDashboard variant="class" />}
+      {role === 'SUBJECT_TEACHER' && <TeacherDashboard variant="subject" />}
       {role === 'STAFF' && (
-        <div className="max-w-xl mx-auto mt-8 card p-8 text-center">
-          <h2 className="text-xl font-bold font-display mb-2">Welcome{userName ? `, ${userName}` : ''} 👋</h2>
-          <p className="text-sm text-muted-foreground mb-1">
-            {profile?.job_title ? `You're signed in as ${profile.job_title}.` : "You're signed in as staff."}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Use <strong>Announcements</strong> in the menu to stay up to date. Your administrator can grant you more access when needed.
-          </p>
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-1 pt-2 sm:px-2">
+          <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 px-5 py-7 text-white shadow-sm sm:px-8">
+            <div className="pointer-events-none absolute -right-10 -top-14 h-44 w-44 rounded-full bg-white/10" aria-hidden />
+            <p className="relative text-xs font-medium text-white/75 sm:text-sm">{profile?.job_title || 'Staff'}</p>
+            <h1 className="relative mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">Welcome{userName ? `, ${userName}` : ''}</h1>
+            <p className="relative mt-1.5 max-w-lg text-sm text-white/85">Keep up with school news here. Your administrator can give you more access when you need it.</p>
+          </section>
+          <Link href="/dashboard/announcements" className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-5 no-underline shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bell size={20} aria-hidden /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground group-hover:text-primary">Announcements</span>
+              <span className="block text-xs text-muted-foreground">Read the latest notices from the school</span>
+            </span>
+            <ArrowRight size={16} className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+          </Link>
         </div>
       )}
     </div>
