@@ -3,7 +3,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
-interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
+type Embedded<T> = T | T[] | null | undefined;
+interface GradeStreamOption {
+    id: string;
+    full_name: string;
+    grade_id: string;
+    grades?: Embedded<{ academic_levels?: Embedded<{ code?: string | null }> }>;
+}
+
+const first = <T,>(value: Embedded<T>): T | undefined => (Array.isArray(value) ? value[0] : value ?? undefined);
+
+/** CBC classes are ranked by marks only; points ranking is an 8-4-4 idea. */
+const isCbcStream = (stream?: GradeStreamOption): boolean =>
+    first(first(stream?.grades)?.academic_levels)?.code?.trim().toUpperCase() === 'CBC';
 interface TermOption { id: string; name: string; academic_year_id?: string }
 interface ExamRow {
     id: string; name: string; exam_type: string; subject_id: string; subject_name: string;
@@ -24,7 +36,7 @@ interface PublishReadiness {
     hasIssues: boolean;
 }
 
-type RankBy = 'mean_marks' | 'total_points' | 'mean_points';
+type RankBy = 'total_marks' | 'mean_marks' | 'total_points' | 'mean_points';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
     CAT: 'CAT', TOPICAL: 'Topical', MIDTERM: 'Midterm', ENDTERM: 'End Term',
@@ -72,6 +84,10 @@ export function PublishResultsView() {
     // Ranking preview
     const [rankBy, setRankBy] = useState<RankBy>('mean_marks');
     const [minSubjects, setMinSubjects] = useState(7);
+    const cbcClass = isCbcStream(streams.find(s => s.id === streamId));
+    // A CBC class has one ranking criterion — total marks — so the choice is
+    // never offered. Total, not mean: a mean favours whoever sat fewer subjects.
+    const effectiveRankBy: RankBy = cbcClass ? 'total_marks' : rankBy;
     const [marks, setMarks] = useState<any[]>([]);
     const [pointsBySymbol, setPointsBySymbol] = useState<Record<string, number>>({});
     const [loadingPreview, setLoadingPreview] = useState(false);
@@ -252,21 +268,22 @@ export function PublishResultsView() {
             rec.pts.push(m.grade_symbol && pointsBySymbol[m.grade_symbol] != null ? pointsBySymbol[m.grade_symbol] : 0);
         }
         const rows = Array.from(byStudent.entries()).map(([sid, r]) => {
-            const meanMarks = r.pcts.length ? r.pcts.reduce((a, b) => a + b, 0) / r.pcts.length : 0;
+            const totalMarks = r.pcts.reduce((a, b) => a + b, 0);
+            const meanMarks = r.pcts.length ? totalMarks / r.pcts.length : 0;
             const bestPts = [...r.pts].sort((a, b) => b - a).slice(0, Math.max(1, minSubjects));
             const totalPoints = bestPts.reduce((a, b) => a + b, 0);
             const meanPoints = bestPts.length ? totalPoints / bestPts.length : 0;
-            return { sid, name: r.name, adm: r.adm, subjects: r.pcts.length, meanMarks, totalPoints, meanPoints };
+            return { sid, name: r.name, adm: r.adm, subjects: r.pcts.length, totalMarks, meanMarks, totalPoints, meanPoints };
         });
-        const key = rankBy === 'mean_marks' ? 'meanMarks' : rankBy === 'total_points' ? 'totalPoints' : 'meanPoints';
-        rows.sort((a, b) => (b as any)[key] - (a as any)[key]);
+        const key = ({ total_marks: 'totalMarks', mean_marks: 'meanMarks', total_points: 'totalPoints', mean_points: 'meanPoints' } as const)[effectiveRankBy];
+        rows.sort((a, b) => b[key] - a[key]);
         let rank = 0, prev: number | null = null;
         return rows.map((r, i) => {
-            const v = (r as any)[key];
+            const v = r[key];
             if (prev === null || v !== prev) { rank = i + 1; prev = v; }
             return { ...r, rank };
         });
-    }, [marks, pointsBySymbol, rankBy, minSubjects]);
+    }, [marks, pointsBySymbol, effectiveRankBy, minSubjects]);
 
     const draftCount = exams.filter(e => e.status === 'DRAFT').length;
 
@@ -366,10 +383,14 @@ export function PublishResultsView() {
                     <div className="card overflow-hidden">
                         <div className="flex flex-wrap items-end justify-between gap-3 p-5 border-b border-border">
                             <h3 className="font-bold text-base font-[family-name:var(--font-display)]">Class ranking preview</h3>
+                            {cbcClass ? (
+                                <p className="text-xs text-muted-foreground">CBC class: ranked by total marks</p>
+                            ) : (
                             <div className="flex flex-wrap items-end gap-3">
                                 <div>
                                     <label className="block text-[11px] text-muted-foreground mb-2">Ranking criteria</label>
                                     <select className="input-field text-sm" value={rankBy} onChange={e => setRankBy(e.target.value as RankBy)}>
+                                        <option value="total_marks">Rank by Total marks</option>
                                         <option value="mean_marks">Rank by Mean marks</option>
                                         <option value="total_points">Rank by Total points</option>
                                         <option value="mean_points">Rank by Mean points</option>
@@ -380,6 +401,7 @@ export function PublishResultsView() {
                                     <input type="number" min={1} max={20} className="input-field text-sm w-20 text-center" value={minSubjects} onChange={e => setMinSubjects(Math.max(1, parseInt(e.target.value) || 1))} />
                                 </div>
                             </div>
+                            )}
                         </div>
                         {loadingPreview ? (
                             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
@@ -394,9 +416,10 @@ export function PublishResultsView() {
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Student</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground">Adm No</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Subjects</th>
+                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Total</th>
                                             <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Mean %</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Total pts</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Mean pts</th>
+                                            {!cbcClass && <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Total pts</th>}
+                                            {!cbcClass && <th className="px-4 py-3 text-xs font-semibold text-muted-foreground text-center">Mean pts</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[var(--color-border)]">
@@ -406,16 +429,19 @@ export function PublishResultsView() {
                                                 <td className="px-4 py-3 text-sm">{r.name}</td>
                                                 <td className="px-4 py-3 text-xs text-muted-foreground">{r.adm}</td>
                                                 <td className="px-4 py-3 text-center text-sm">{r.subjects}</td>
-                                                <td className="px-4 py-3 text-center text-sm font-semibold">{r.meanMarks.toFixed(1)}%</td>
-                                                <td className="px-4 py-3 text-center text-sm">{r.totalPoints}</td>
-                                                <td className="px-4 py-3 text-center text-sm">{r.meanPoints.toFixed(2)}</td>
+                                                <td className="px-4 py-3 text-center text-sm font-semibold">{Math.round(r.totalMarks)}</td>
+                                                <td className="px-4 py-3 text-center text-sm">{r.meanMarks.toFixed(1)}%</td>
+                                                {!cbcClass && <td className="px-4 py-3 text-center text-sm">{r.totalPoints}</td>}
+                                                {!cbcClass && <td className="px-4 py-3 text-center text-sm">{r.meanPoints.toFixed(2)}</td>}
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
                         )}
-                        <p className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">Preview only — the official report-card ranking uses the full 8-4-4 subject clustering. &quot;Best subjects&quot; sums each student&apos;s top-N grade points.</p>
+                        <p className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">{cbcClass
+                            ? 'Preview only — CBC learners are ranked by their total marks, the same as on report cards and the mark sheet.'
+                            : <>Preview only — the official report-card ranking uses the full 8-4-4 subject clustering. &quot;Best subjects&quot; sums each student&apos;s top-N grade points.</>}</p>
                     </div>
                 </>
             )}

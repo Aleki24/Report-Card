@@ -18,6 +18,7 @@ import {
     aggregateStudentPerformance,
     calculateClassRanks,
     type ExamMarkWithDetails,
+    type RankingBasis,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -180,6 +181,7 @@ export async function fetchPreviousRound(
         current,
         gradingScales,
         gradingSystemType,
+        rankingBasis,
     }: {
         studentIds: string[];
         gradeId?: string | null;
@@ -189,23 +191,15 @@ export async function fetchPreviousRound(
         current: { termId?: string | null; examType?: string | null };
         gradingScales: GradingScale[];
         gradingSystemType: 'KCSE' | 'CBC';
+        /** Marks for CBC learners, points for 8-4-4 — see rankingBasisFor. */
+        rankingBasis: RankingBasis;
     }
 ): Promise<PreviousRoundStats | null> {
     if (!gradeId || !before || studentIds.length === 0) return null;
 
     try {
-        const { data: previous } = await supabase
-            .from('exams')
-            .select('id, name, exam_type, term_id, created_at')
-            .eq('grade_id', gradeId)
-            .lt('created_at', before)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
+        const previous = await findPreviousRound(supabase, { gradeId, before, current });
         if (!previous) return null;
-        // Same sitting as the one being printed — nothing to compare.
-        if (previous.term_id === current.termId && previous.exam_type === current.examType) return null;
 
         const { data: roundExams } = await supabase
             .from('exams')
@@ -236,7 +230,10 @@ export async function fetchPreviousRound(
 
         if (!marks || marks.length === 0) return null;
 
-        const subjectPercentage = new Map<string, number>();
+        // A subject sat more than once in the round (a re-sit, two exam rows)
+        // counts once, at its average — the last row read used to overwrite
+        // the others, so which mark was compared came down to row order.
+        const sums = new Map<string, { total: number; count: number }>();
         const byStudent = new Map<string, ExamMarkWithDetails[]>();
 
         for (const mark of marks as unknown as PreviousMarkRow[]) {
@@ -245,7 +242,9 @@ export async function fetchPreviousRound(
             const rawScore = Number(mark.raw_score);
             if (!Number.isFinite(rawScore)) continue;
             const pct = meta.maxScore > 0 ? (rawScore / meta.maxScore) * 100 : 0;
-            subjectPercentage.set(`${mark.student_id}|${meta.subjectId}`, Math.round(pct));
+            const key = `${mark.student_id}|${meta.subjectId}`;
+            const sum = sums.get(key) ?? { total: 0, count: 0 };
+            sums.set(key, { total: sum.total + pct, count: sum.count + 1 });
 
             const list = byStudent.get(mark.student_id) || [];
             list.push({
@@ -261,18 +260,20 @@ export async function fetchPreviousRound(
             byStudent.set(mark.student_id, list);
         }
 
+        const subjectPercentage = new Map<string, number>(
+            [...sums].map(([key, { total, count }]) => [key, Math.round(total / count)])
+        );
+
         // Same aggregation the current round uses, so "last time" and "this
         // time" are measured the same way and the deviation means something.
         const aggregates = [...byStudent.entries()].map(([studentId, studentMarks]) => {
             const perf = aggregateStudentPerformance(
                 studentMarks, gradingScales, gradingSystemType, subjectNames, subjectCategories
             );
-            return { studentId, percentage: perf.percentage, totalPoints: perf.totalPoints };
+            return { studentId, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
         });
 
-        const ranks = calculateClassRanks(
-            aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage'
-        );
+        const ranks = calculateClassRanks(aggregates, rankingBasis);
 
         const overall = new Map<string, { percentage: number; totalPoints: number; rank: number }>();
         for (const aggregate of aggregates) {
@@ -283,8 +284,18 @@ export async function fetchPreviousRound(
             });
         }
 
+        // Name the term when it differs: "Midterm" alone, printed on a Term 3
+        // Midterm sheet, never said which midterm it was being compared with.
+        const round = roundLabel(previous.exam_type, previous.name || 'Previous exam');
+        let label = round;
+        if (previous.term_id && previous.term_id !== current.termId) {
+            const { data: term } = await supabase.from('terms').select('name').eq('id', previous.term_id).maybeSingle();
+            const termName = (term as { name?: string | null } | null)?.name?.trim();
+            if (termName) label = `${termName} ${round}`;
+        }
+
         return {
-            label: roundLabel(previous.exam_type, previous.name || 'Previous exam'),
+            label,
             subjectPercentage,
             overall,
         };
@@ -292,6 +303,72 @@ export async function fetchPreviousRound(
         // Comparative data is a bonus on the card, never a reason to fail it.
         return null;
     }
+}
+
+interface RoundRef { term_id: string; exam_type: string | null; name: string | null }
+
+/**
+ * Which round a sheet compares with.
+ *
+ * The same kind of exam in the most recent earlier term, by the school
+ * calendar: a Term 3 Midterm is compared with the Term 2 Midterm, and a
+ * Term 1 Midterm with last year's Term 3 Midterm. Like with like — an opener
+ * and an end-term exam are different papers, so comparing across them
+ * measured the paper as much as the learner.
+ *
+ * Only when that round does not exist (a school's first Midterm, or a card
+ * printed for a whole term) does it fall back to the round created
+ * immediately before this one.
+ */
+export async function findPreviousRound(
+    supabase: Supabase,
+    { gradeId, before, current }: {
+        gradeId: string;
+        before: string;
+        current: { termId?: string | null; examType?: string | null };
+    }
+): Promise<RoundRef | null> {
+    if (current.termId && current.examType) {
+        const { data: currentTerm } = await supabase
+            .from('terms')
+            .select('start_date')
+            .eq('id', current.termId)
+            .maybeSingle();
+        const currentStart = (currentTerm as { start_date?: string | null } | null)?.start_date;
+
+        if (currentStart) {
+            const { data: sameRound } = await supabase
+                .from('exams')
+                .select('term_id, exam_type, name, terms!inner(start_date)')
+                .eq('grade_id', gradeId)
+                .eq('exam_type', current.examType)
+                .neq('term_id', current.termId);
+
+            type Row = RoundRef & { terms: { start_date: string | null } | { start_date: string | null }[] | null };
+            const startOf = (row: Row) => (Array.isArray(row.terms) ? row.terms[0] : row.terms)?.start_date ?? '';
+            const earlier = ((sameRound || []) as unknown as Row[])
+                .filter(row => startOf(row) && startOf(row) < currentStart)
+                .sort((a, b) => startOf(b).localeCompare(startOf(a)));
+            if (earlier.length > 0) {
+                const { term_id, exam_type, name } = earlier[0];
+                return { term_id, exam_type, name };
+            }
+        }
+    }
+
+    const { data: previous } = await supabase
+        .from('exams')
+        .select('name, exam_type, term_id')
+        .eq('grade_id', gradeId)
+        .lt('created_at', before)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    const row = previous as RoundRef | null;
+    if (!row) return null;
+    // Same sitting as the one being printed — nothing to compare.
+    if (row.term_id === current.termId && row.exam_type === current.examType) return null;
+    return row;
 }
 
 /** Earliest exam creation time in a set of marks — the cut-off for "previous". */

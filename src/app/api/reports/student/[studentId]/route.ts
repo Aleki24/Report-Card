@@ -190,6 +190,7 @@ export async function GET(
             gradingScales,
             overallGradingScales,
             overallGradingKind,
+            rankingBasis,
         } = await resolveGradingContext(supabase, student, targetSchoolId);
 
 
@@ -469,10 +470,10 @@ export async function GET(
                     const aggregates = Object.entries(marksByClassmate)
                         .map(([sid, marks]) => {
                             const perf = aggregateStudentPerformance(marks, gradingScales, gradingSystemType, rankSubjectNames, rankSubjectCategories);
-                            return { studentId: sid, percentage: perf.percentage, totalPoints: perf.totalPoints };
+                            return { studentId: sid, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks };
                         });
 
-                    const ranks = calculateClassRanks(aggregates, gradingSystemType === 'KCSE' ? 'points' : 'percentage');
+                    const ranks = calculateClassRanks(aggregates, rankingBasis);
                     classRank = ranks.get(studentId) || 0;
                     totalStudents = aggregates.length;
 
@@ -515,6 +516,7 @@ export async function GET(
                 releasedOnly,
                 gradingScales,
                 gradingSystemType,
+                rankingBasis,
                 seniorRankGroup: rankingSettings.seniorRankGroup,
             })
             : null;
@@ -569,6 +571,7 @@ export async function GET(
                 current: { termId, examType: roundSelection.round },
                 gradingScales,
                 gradingSystemType,
+                rankingBasis,
             }),
             fetchSubjectTeachers(supabase, { gradeId, gradeStreamId, yearId }),
         ]);

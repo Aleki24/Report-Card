@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCaller } from '@/lib/auth-server';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { aggregateStudentPerformance, isKCSEGradeLevel, type ExamMarkWithDetails } from '@/lib/analytics';
+import { aggregateStudentPerformance, isKCSEGradeLevel, rankingBasisFor, type ExamMarkWithDetails } from '@/lib/analytics';
 import { PASS_MARK } from '@/lib/pass-mark';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
@@ -437,10 +437,11 @@ export async function GET(request: NextRequest) {
       let positionSub = 'N/A';
       const gradeStreamId = studentRecord.current_grade_stream_id;
       if (gradeStreamId && currentYear) {
-        // Grade code decides KCSE (8-4-4, points-ranked) vs CBC (percentage).
+        // Grade code decides the grading style; the academic level decides
+        // the ranking — CBC learners by marks, 8-4-4 by total points.
         const { data: streamData } = await supabase
           .from('grade_streams')
-          .select('full_name, grades ( code )')
+          .select('full_name, grades ( code, academic_levels ( code ) )')
           .eq('id', gradeStreamId)
           .maybeSingle();
         const gradeCode = (streamData?.grades as any)?.code || '';
@@ -479,12 +480,16 @@ export async function GET(request: NextRequest) {
               if (subjectId && subj?.category) rankSubjectCategories[subjectId] = subj.category;
             }
 
-            // KCSE ranks by total points (best-7 selection); CBC by percentage.
+            // 8-4-4 ranks by total points (best-7 selection); CBC by total marks.
             const gradingSystemType = isKCSE ? 'KCSE' : 'CBC';
+            // PostgREST returns a to-one embed as an object, or an array on older relations.
+            const level = (streamData?.grades as { academic_levels?: { code?: string } | { code?: string }[] } | null)?.academic_levels;
+            const levelCode = (Array.isArray(level) ? level[0] : level)?.code;
+            const byTotalMarks = rankingBasisFor(gradingSystemType, levelCode) === 'totalMarks';
             const sorted = Object.entries(marksByClassmate)
               .map(([sid, marks]) => {
                 const perf = aggregateStudentPerformance(marks, [], gradingSystemType, rankSubjectNames, rankSubjectCategories);
-                return { sid, metric: isKCSE ? perf.totalPoints : perf.percentage };
+                return { sid, metric: byTotalMarks ? perf.totalMarks : perf.totalPoints };
               })
               .sort((a, b) => b.metric - a.metric);
 

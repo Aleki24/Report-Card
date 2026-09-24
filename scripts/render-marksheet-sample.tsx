@@ -67,12 +67,96 @@ return {
     subjectStats,
     subjectRankings: SUBJECTS.map(([code]) => ({ code, mean: subjectStats[code].mean, rank: 0 }))
         .sort((a, b) => b.mean - a.mean).map((r, i) => ({ ...r, rank: i + 1 })),
+    rankedBy: curriculum === 'KCSE' ? 'points' : 'totalMarks',
     gradeBands: curriculum === 'KCSE'
         ? [[80, 100, 'A'], [75, 79, 'A-'], [70, 74, 'B+'], [65, 69, 'B'], [60, 64, 'B-'], [55, 59, 'C+'], [50, 54, 'C'], [45, 49, 'C-'], [40, 44, 'D+'], [35, 39, 'D'], [30, 34, 'D-'], [0, 29, 'E']]
             .map(([min_percentage, max_percentage, symbol]) => ({ symbol: String(symbol), min_percentage: Number(min_percentage), max_percentage: Number(max_percentage) }))
         : [[75, 100, 'EE'], [50, 74, 'ME'], [25, 49, 'AE'], [0, 24, 'BE']]
             .map(([min_percentage, max_percentage, symbol]) => ({ symbol: String(symbol), min_percentage: Number(min_percentage), max_percentage: Number(max_percentage) })),
 };
+}
+
+/**
+ * A CBC Grade 9 class shaped like a real one that exposed weak analysis:
+ * EE1–BE2 sub-levels, learners who missed a learning area, most learners
+ * dropping since the last round, and two areas with 30-mark swings. Changes
+ * are measured like for like, as the route does.
+ */
+function buildGrade9(): MarkSheetData {
+    const AREAS: [string, string][] = [
+        ['AGRI_JS', 'Agriculture'], ['CAS_JS', 'Creative Arts and Sports'], ['ENG_JS', 'English'], ['KISW_JS', 'Kiswahili'],
+        ['MATH_JS', 'Mathematics'], ['PTS_JS', 'Pre-Technical Studies'], ['RE_JS', 'Religious Education'],
+        ['SCI_JS', 'Integrated Science'], ['SS_JS', 'Social Studies'],
+    ];
+    const bands: [number, number, string][] = [[90, 100, 'EE1'], [75, 89, 'EE2'], [58, 74, 'ME1'], [41, 57, 'ME2'], [31, 40, 'AE1'], [21, 30, 'AE2'], [11, 20, 'BE1'], [0, 10, 'BE2']];
+    const level = (p: number) => bands.find(([min, max]) => p >= min && p <= max + 0.999)![2];
+    // Per-area difficulty now, and how much easier the last round was.
+    const areaShift: Record<string, [number, number]> = {
+        AGRI_JS: [14, 4], CAS_JS: [0, 9], ENG_JS: [4, 2], KISW_JS: [-4, 0], MATH_JS: [-22, 3],
+        PTS_JS: [6, -5], RE_JS: [-11, 32], SCI_JS: [-12, 5], SS_JS: [-29, 36],
+    };
+    const learners = Array.from({ length: 26 }, (_, i) => {
+        const ability = 40 + rand() * 45;
+        const marks: Record<string, number | null> = {};
+        const before: Record<string, number> = {};
+        for (const [code] of AREAS) {
+            const [now, easier] = areaShift[code];
+            const missing = (i === 2 && code === 'MATH_JS') || (i === 15 && (code === 'KISW_JS' || code === 'PTS_JS'));
+            const mark = Math.round(Math.min(95, Math.max(4, ability + now + (rand() - 0.5) * 24)));
+            marks[code] = missing ? null : mark;
+            before[code] = Math.round(Math.min(98, Math.max(5, mark + easier + (rand() - 0.3) * 10)));
+        }
+        const sat = Object.values(marks).filter((v): v is number => v != null);
+        const pairs = AREAS.filter(([c]) => marks[c] != null).map(([c]) => ({ now: marks[c] as number, before: before[c] }));
+        const beforeAll = Object.values(before);
+        return {
+            studentName: `${FIRST[(i * 7) % FIRST.length]} ${LAST[(i * 5) % LAST.length]}`,
+            admissionNumber: `ADM-2026-${String(10000 + i * 3733).slice(0, 5)}`,
+            marks, overallPercentage: sat.reduce((a, b) => a + b, 0) / sat.length,
+            overallGrade: '', totalPoints: 0, classRank: 0,
+            totalMarks: sat.reduce((a, b) => a + b, 0), subjectsSat: sat.length,
+            previousPercentage: beforeAll.reduce((a, b) => a + b, 0) / beforeAll.length,
+            previousTotal: beforeAll.reduce((a, b) => a + b, 0),
+            previousClassRank: 0 as number | undefined,
+            change: Math.round(pairs.reduce((a, p) => a + (p.now - p.before), 0) / pairs.length),
+            before,
+        };
+    });
+    // CBC ranks on total marks — now and last round.
+    [...learners].sort((a, b) => b.totalMarks - a.totalMarks).forEach((l, i, all) => { l.classRank = i > 0 && all[i - 1].totalMarks === l.totalMarks ? all[i - 1].classRank : i + 1; });
+    [...learners].sort((a, b) => b.previousTotal - a.previousTotal).forEach((l, i) => { l.previousClassRank = i + 1; });
+    for (const l of learners) l.overallGrade = level(l.overallPercentage);
+    learners.sort((a, b) => a.classRank - b.classRank);
+
+    const subjectStats: Record<string, SubjectStats> = {};
+    AREAS.forEach(([code]) => {
+        const sat = learners.filter(l => l.marks[code] != null);
+        const v = sat.map(l => l.marks[code] as number);
+        const mean = Math.round(v.reduce((a, b) => a + b, 0) / v.length);
+        const previousMean = Math.round(learners.reduce((a, l) => a + l.before[code], 0) / learners.length);
+        const change = Math.round(sat.reduce((a, l) => a + ((l.marks[code] as number) - l.before[code]), 0) / sat.length);
+        subjectStats[code] = { mean, highest: Math.max(...v), lowest: Math.min(...v), studentCount: v.length, previousMean, change, comparedCount: sat.length, teacher: 'B. Cheruiyot' };
+    });
+    const gradeDistribution: Record<string, number> = {};
+    for (const l of learners) gradeDistribution[l.overallGrade] = (gradeDistribution[l.overallGrade] ?? 0) + 1;
+    const classMean = learners.reduce((a, l) => a + l.overallPercentage, 0) / learners.length;
+    const allPairs = learners.flatMap(l => AREAS.filter(([c]) => l.marks[c] != null).map(([c]) => (l.marks[c] as number) - l.before[c]));
+    return {
+        schoolName: 'Sathya Sai School - Kisaju', schoolAddress: 'P. O. Box 333 Kajiado Kenya',
+        examTitle: 'Term 3', examRound: 'Midterm', academicYear: '2026', className: 'Grade 9', gradingSystemType: 'CBC',
+        subjects: AREAS.map(([code, name]) => ({ code, name })),
+        students: learners.map(({ before: _before, previousTotal: _previousTotal, ...l }) => l),
+        gradeDistribution, meanGrade: level(classMean), meanPoints: 0,
+        classMeanPercentage: classMean,
+        previousClassMeanPercentage: learners.reduce((a, l) => a + l.previousPercentage, 0) / learners.length,
+        classMeanChange: Math.round(allPairs.reduce((a, b) => a + b, 0) / allPairs.length),
+        previousExamLabel: 'Term 2 Midterm',
+        subjectStats,
+        subjectRankings: AREAS.map(([code]) => ({ code, mean: subjectStats[code].mean, rank: 0 }))
+            .sort((a, b) => b.mean - a.mean).map((r, i) => ({ ...r, rank: i + 1 })),
+        rankedBy: 'totalMarks',
+        gradeBands: bands.map(([min_percentage, max_percentage, symbol]) => ({ symbol, min_percentage, max_percentage })),
+    };
 }
 
 async function main() {
@@ -83,5 +167,7 @@ async function main() {
         writeFileSync(join(out, `marksheet-${curriculum.toLowerCase()}-${size}.pdf`), await generateMarkSheetPDF(buildClass(size, curriculum)));
         console.log('rendered marksheet', curriculum, size);
     }
+    writeFileSync(join(out, 'marksheet-cbc-grade9.pdf'), await generateMarkSheetPDF(buildGrade9()));
+    console.log('rendered marksheet CBC grade 9');
 }
 main().catch(e => { console.error(e); process.exit(1); });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
-import { gradeSymbolFromScales, gradeSymbolRank } from '@/lib/analytics';
+import { gradeSymbolFromScales, gradeSymbolRank, type RankingBasis } from '@/lib/analytics';
 import type { GradeBand } from '@/types';
 import { FONTS } from './pdf/pdfTheme';
 import { Crest, BrandFooter } from './pdf/primitives';
@@ -16,6 +16,13 @@ export interface SubjectStats {
     studentCount: number;
     /** The class's mean in this subject at the previous round. */
     previousMean?: number;
+    /**
+     * Mean change in this subject, over only the learners who sat it in both
+     * rounds — so absentees in either round cannot swing it.
+     */
+    change?: number;
+    /** How many learners that change is measured on. */
+    comparedCount?: number;
     /** Who teaches it, when the school records subject assignments. */
     teacher?: string;
 }
@@ -50,6 +57,12 @@ export interface MarkSheetData {
         previousPercentage?: number;
         previousTotalPoints?: number;
         previousClassRank?: number;
+        /** Mean change over the subjects sat in both rounds (like for like). */
+        change?: number;
+        /** Sum of every subject's mark — what CBC positions follow. */
+        totalMarks?: number;
+        /** How many subjects the learner has a mark in. */
+        subjectsSat?: number;
     }[];
     gradeDistribution: Record<string, number>;
     meanGrade: string;
@@ -57,12 +70,16 @@ export interface MarkSheetData {
     /** Class mean percentage this round, and at the round being compared against. */
     classMeanPercentage?: number;
     previousClassMeanPercentage?: number;
-    /** Name of that previous round, e.g. "Mid Term". */
+    /** Name of that previous round, e.g. "Term 2 Midterm". */
     previousExamLabel?: string;
+    /** Class mean change over learners and subjects present in both rounds. */
+    classMeanChange?: number;
     subjectStats: Record<string, SubjectStats>;
     subjectRankings: SubjectRanking[];
     /** The school's grading bands, so every mark can print its grade beside it. */
     gradeBands?: GradeBand[];
+    /** What the class positions were ordered on: marks for CBC, points for 8-4-4. */
+    rankedBy: RankingBasis;
 }
 
 type Learner = MarkSheetData['students'][number];
@@ -102,7 +119,15 @@ const KCSE_TONES: Record<string, string> = {
     'A': '#14532D', 'A-': '#15803D', 'B+': '#1E4E8C', 'B': '#2563EB', 'B-': '#60A5FA', 'C+': '#B8893A',
     'C': '#D4A24C', 'C-': '#E8C27A', 'D+': '#EA580C', 'D': '#DC2626', 'D-': '#991B1B', 'E': '#7F1D1D',
 };
-const CBC_TONES: Record<string, string> = { EE: '#15803D', ME: '#2563EB', AE: '#D4A24C', BE: '#DC2626' };
+/* Each CBC sub-level gets its own shade — ME1 and ME2 used to share one blue,
+   so the distribution bar could not tell them apart. A bare level (EE) takes
+   its first sub-level's shade. */
+const CBC_TONES: Record<string, string> = {
+    EE1: '#14532D', EE2: '#16A34A', EE: '#15803D',
+    ME1: '#1E40AF', ME2: '#60A5FA', ME: '#2563EB',
+    AE1: '#B45309', AE2: '#F0B45A', AE: '#D4A24C',
+    BE1: '#DC2626', BE2: '#7F1D1D', BE: '#DC2626',
+};
 
 /**
  * Sort key for a grade. The shared ranking knows CBC sub-levels (EE1…BE2) and
@@ -112,7 +137,7 @@ const gradeOrder = (g: string) => gradeSymbolRank(/^(EE|ME|AE|BE)$/i.test(g.trim
 
 function gradeTone(g: string): string {
     const symbol = g.trim().toUpperCase();
-    return KCSE_TONES[symbol] ?? CBC_TONES[symbol.slice(0, 2)] ?? '#64748B';
+    return KCSE_TONES[symbol] ?? CBC_TONES[symbol] ?? CBC_TONES[symbol.slice(0, 2)] ?? '#64748B';
 }
 
 const font = FONTS.inter;
@@ -196,17 +221,20 @@ const s = StyleSheet.create({
     h3: { fontWeight: 800, fontSize: 5.9, textTransform: 'uppercase', letterSpacing: 1, color: C.navy },
     h3Note: { fontSize: 5.6, color: C.faint },
     rank: { height: H.panelRow, flexDirection: 'row', alignItems: 'center' },
-    rankName: { width: 78, fontSize: 6.4, maxLines: 1 },
+    rankName: { width: 104, fontSize: 6.4, maxLines: 1, textOverflow: 'ellipsis' },
     rankTrack: { flex: 1, height: 5.2, borderRadius: 3, backgroundColor: C.track, position: 'relative', marginHorizontal: 4.5 },
     rankFill: { height: 5.2, borderRadius: 3, backgroundColor: C.bar },
     rankTick: { position: 'absolute', top: -1.5, width: 1.5, height: 8.2, backgroundColor: C.gold },
     rankMean: { width: 14, fontWeight: 700, fontSize: 6.4, textAlign: 'right' },
-    rankDelta: { width: 18, fontWeight: 700, fontSize: 6, textAlign: 'right' },
+    rankDelta: { width: 20, fontWeight: 700, fontSize: 6, textAlign: 'right' },
+    flag: { width: 8, fontWeight: 800, fontSize: 6, color: '#B45309', textAlign: 'right' },
+    split: { flexDirection: 'row', height: 9, borderRadius: 2, overflow: 'hidden', marginTop: 5, marginBottom: 3 },
+    note: { fontSize: 5.8, color: C.muted, marginTop: 5, lineHeight: 1.35 },
     dist: { flexDirection: 'row', height: 16.5, borderRadius: 3, overflow: 'hidden', marginBottom: 5 },
     distSeg: { alignItems: 'center', justifyContent: 'center' },
     distText: { fontWeight: 700, fontSize: 6.4, color: '#FFFFFF' },
     legendGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-    gradeKey: { width: '16.66%', flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+    gradeKey: { width: '25%', flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
     gradeKeyText: { fontSize: 6.4, color: C.muted },
     passValue: { fontWeight: 800, fontSize: 18, color: C.navy },
     li: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 12, borderBottom: `0.75pt dashed #E2E8F0` },
@@ -222,13 +250,13 @@ const s = StyleSheet.create({
 
 interface Columns {
     pos: number; name: number; adm: number; subject: number;
-    total: number; mean: number; pts: number; grade: number; dev: number;
+    total: number; mean: number; pts: number; grade: number; dev: number; move: number;
 }
 
 const CONTENT_W = PAGE_W - 2 * X;
 
-function columnWidths(subjectCount: number, isKCSE: boolean, showDev: boolean): Columns {
-    const fixed = { pos: 25, adm: 62, total: 34, mean: 30, pts: isKCSE ? 27 : 0, grade: 28, dev: showDev ? 27 : 0 };
+function columnWidths(subjectCount: number, isKCSE: boolean, showDev: boolean, showMove: boolean): Columns {
+    const fixed = { pos: 25, adm: 62, total: 34, mean: 30, pts: isKCSE ? 27 : 0, grade: 28, dev: showDev ? 27 : 0, move: showMove ? 25 : 0 };
     // The name keeps a generous column; subjects share whatever is left, and
     // the name gives some back only when a very wide timetable needs it.
     let name = 120;
@@ -253,6 +281,29 @@ function learnerTotal(d: MarkSheetData, st: Learner) {
     return { total: Math.round(marks.reduce((a, b) => a + b, 0)), sat: marks.length };
 }
 
+/* Changes since the previous round. The route measures them like for like
+   (only what was sat both times); the fallbacks keep older data working. */
+const learnerChange = (st: Learner): number | null =>
+    st.change ?? (st.previousPercentage != null ? Math.round(st.overallPercentage - st.previousPercentage) : null);
+const subjectChange = (st?: SubjectStats): number | null =>
+    st?.change ?? (st?.previousMean != null ? Math.round(st.mean - st.previousMean) : null);
+const classChange = (d: MarkSheetData, classMean: number): number | null =>
+    d.classMeanChange ?? (d.previousClassMeanPercentage != null ? Math.round(classMean - d.previousClassMeanPercentage) : null);
+/** Places gained since the previous round (a smaller rank is a better one). */
+const placesMoved = (st: Learner): number | null =>
+    st.previousClassRank && st.classRank ? st.previousClassRank - st.classRank : null;
+/** A subject mean moving this far in one round is worth a second look. */
+const LARGE_SWING = 20;
+
+const changeColor = (v: number) => (v > 0 ? C.up : v < 0 ? C.down : C.muted);
+
+/** The figure the class was ranked on, as printed beside a name. */
+function rankingFigure(d: MarkSheetData, st: Learner): string {
+    if (d.rankedBy === 'points') return `${st.totalPoints}`;
+    if (d.rankedBy === 'totalMarks') return `${st.totalMarks ?? learnerTotal(d, st).total}`;
+    return `${Math.round(st.overallPercentage)}%`;
+}
+
 /* ── Header pieces ───────────────────────────────────────── */
 
 function Masthead({ d }: { d: MarkSheetData }) {
@@ -267,7 +318,7 @@ function Masthead({ d }: { d: MarkSheetData }) {
                 <View style={s.tag}><Text style={s.tagText}>Class mark sheet</Text></View>
                 <Text style={s.docTitle}>{d.className} · {roundLabel(d)}</Text>
                 <Text style={s.docSub}>
-                    Ranked by {d.gradingSystemType === 'KCSE' ? 'total points' : 'mean score'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
+                    Ranked by {d.rankedBy === 'points' ? 'total points' : d.rankedBy === 'totalMarks' ? 'total marks' : 'mean marks'} · {d.gradingSystemType === 'KCSE' ? 'KCSE 12-point scale' : 'CBC competency levels'}
                 </Text>
             </View>
         </View>
@@ -276,7 +327,7 @@ function Masthead({ d }: { d: MarkSheetData }) {
 
 function Kpis({ d, classMean, ranked }: { d: MarkSheetData; classMean: number; ranked: Learner[] }) {
     const isKCSE = d.gradingSystemType === 'KCSE';
-    const delta = d.previousClassMeanPercentage != null ? Math.round(classMean - d.previousClassMeanPercentage) : null;
+    const delta = classChange(d, classMean);
     const entered = d.students.filter(st => d.subjects.every(sub => st.marks[sub.code] != null)).length;
     const top = ranked[0];
     const best = [...d.subjectRankings].sort((a, b) => a.rank - b.rank)[0];
@@ -291,7 +342,7 @@ function Kpis({ d, classMean, ranked }: { d: MarkSheetData; classMean: number; r
         { label: 'Learners', value: `${d.students.length}`, unit: entered < d.students.length ? `  ${entered} with every mark` : '  all marks entered' },
     ];
     // Names can be long, so they keep one line and their figure rides in the label.
-    if (top) items.push({ label: `Top learner · ${Math.round(top.overallPercentage)}%`, value: firstWords(top.studentName) });
+    if (top) items.push({ label: `Top learner · ${rankingFigure(d, top)}`, value: firstWords(top.studentName) });
     if (best && bestName) items.push({ label: `Best ${isKCSE ? 'subject' : 'area'} · ${best.mean}%`, value: bestName });
     return (
         <View style={s.kpis}>
@@ -319,7 +370,7 @@ function SlimHeader({ d, page, pages }: { d: MarkSheetData; page: number; pages:
 /* ── Table ───────────────────────────────────────────────── */
 
 function TableHead({ d, w, isKCSE, showDev }: { d: MarkSheetData; w: Columns; isKCSE: boolean; showDev: boolean }) {
-    const summaryW = w.total + w.mean + w.pts + w.grade + w.dev;
+    const summaryW = w.total + w.mean + w.pts + w.grade + w.dev + w.move;
     const sep: Style = { borderLeft: `1.5pt solid ${C.navy}` };
     return (
         <>
@@ -344,7 +395,8 @@ function TableHead({ d, w, isKCSE, showDev }: { d: MarkSheetData; w: Columns; is
                 <View style={[s.head, { width: w.mean }]}><Text style={s.headText}>Mean</Text><Text style={s.headSub}>%</Text></View>
                 {isKCSE && <View style={[s.head, { width: w.pts }]}><Text style={s.headText}>Pts</Text></View>}
                 <View style={[s.head, { width: w.grade }]}><Text style={s.headText}>{isKCSE ? 'Grade' : 'Level'}</Text></View>
-                {showDev && <View style={[s.head, { width: w.dev, borderRightWidth: 0 }]}><Text style={s.headText}>Change</Text><Text style={s.headSub}>vs {d.previousExamLabel || 'last'}</Text></View>}
+                {showDev && <View style={[s.head, { width: w.dev }, w.move ? {} : { borderRightWidth: 0 }]}><Text style={s.headText}>Change</Text><Text style={s.headSub}>mean</Text></View>}
+                {w.move > 0 && <View style={[s.head, { width: w.move, borderRightWidth: 0 }]}><Text style={s.headText}>Move</Text><Text style={s.headSub}>places</Text></View>}
             </View>
         </>
     );
@@ -357,8 +409,9 @@ function LearnerRow({ d, st, index, w, height, isKCSE, showDev }: {
     const sep: Style = { borderLeft: `1.5pt solid ${C.navy}` };
     const sum: Style = { backgroundColor: C.summary, borderRight: `0.75pt solid #E2E8F0` };
     const medal = st.classRank >= 1 && st.classRank <= 3 ? MEDAL[st.classRank - 1] : undefined;
-    const { total } = learnerTotal(d, st);
-    const dev = st.previousPercentage != null ? Math.round(st.overallPercentage - st.previousPercentage) : null;
+    const { total, sat } = learnerTotal(d, st);
+    const dev = learnerChange(st);
+    const move = placesMoved(st);
     return (
         <View style={[s.row, { height }, zebra]} wrap={false}>
             <View style={[s.cell, { width: w.pos }]}>
@@ -383,14 +436,22 @@ function LearnerRow({ d, st, index, w, height, isKCSE, showDev }: {
                     </View>
                 );
             })}
-            <View style={[s.cell, { width: w.total }, sum, sep]}><Text style={s.sumText}>{total}</Text></View>
+            <View style={[s.cell, { width: w.total }, sum, sep]}>
+                <Text style={s.sumText}>{total}{sat < d.subjects.length ? <Text style={{ color: C.gold }}>*</Text> : null}</Text>
+            </View>
             <View style={[s.cell, { width: w.mean }, sum]}><Text style={s.sumText}>{Math.round(st.overallPercentage)}</Text></View>
             {isKCSE && <View style={[s.cell, { width: w.pts }, sum]}><Text style={s.sumText}>{st.totalPoints}</Text></View>}
             <View style={[s.cell, { width: w.grade }]}><Text style={[s.sumText, { fontWeight: 800, color: C.navy }]}>{st.overallGrade || '-'}</Text></View>
             {showDev && (
-                <View style={[s.cell, { width: w.dev, borderRightWidth: 0 }]}>
+                <View style={[s.cell, { width: w.dev }, w.move ? {} : { borderRightWidth: 0 }]}>
                     {dev == null ? <Text style={s.none}>–</Text>
-                        : <Text style={[s.sumText, { color: dev > 0 ? C.up : dev < 0 ? C.down : C.muted }]}>{signed(dev)}</Text>}
+                        : <Text style={[s.sumText, { color: changeColor(dev) }]}>{signed(dev)}</Text>}
+                </View>
+            )}
+            {w.move > 0 && (
+                <View style={[s.cell, { width: w.move, borderRightWidth: 0 }]}>
+                    {move == null ? <Text style={s.none}>–</Text>
+                        : <Text style={[s.sumText, { color: changeColor(move) }]}>{move === 0 ? '=' : signed(move)}</Text>}
                 </View>
             )}
         </View>
@@ -399,14 +460,14 @@ function LearnerRow({ d, st, index, w, height, isKCSE, showDev }: {
 
 /** Per-subject statistics under the last learner row. */
 function StatRows({ d, w, isKCSE, showDev, classMean }: { d: MarkSheetData; w: Columns; isKCSE: boolean; showDev: boolean; classMean: number }) {
-    const summaryW = w.total + w.mean + w.pts + w.grade + w.dev;
+    const summaryW = w.total + w.mean + w.pts + w.grade + w.dev + w.move;
     const labelW = w.pos + w.name + w.adm;
     const sep: Style = { borderLeft: `1.5pt solid ${C.navy}` };
     const stat = (code: string) => d.subjectStats[code];
     const hasPrevious = d.subjects.some(sub => stat(sub.code)?.previousMean != null);
     const hasTeacher = d.subjects.some(sub => stat(sub.code)?.teacher);
     const rankOf = (code: string) => d.subjectRankings.find(r => r.code === code)?.rank;
-    const classDelta = d.previousClassMeanPercentage != null ? Math.round(classMean - d.previousClassMeanPercentage) : null;
+    const classDelta = classChange(d, classMean);
 
     const line = (label: string, render: (code: string) => React.ReactNode, style: Style = {}) => (
         <View style={[s.stat, style]}>
@@ -436,12 +497,16 @@ function StatRows({ d, w, isKCSE, showDev, classMean }: { d: MarkSheetData; w: C
                 {isKCSE && <View style={[s.cell, { width: w.pts, borderRightWidth: 0 }]}><Text style={[s.statText, { color: '#FFFFFF', fontWeight: 800 }]}>{Math.round(d.meanPoints)}</Text></View>}
                 <View style={[s.cell, { width: w.grade, borderRightWidth: 0 }]}><Text style={[s.statText, { color: '#FFFFFF', fontWeight: 800 }]}>{d.meanGrade || '-'}</Text></View>
                 {showDev && <View style={[s.cell, { width: w.dev, borderRightWidth: 0 }]}><Text style={[s.statText, { color: '#86EFAC', fontWeight: 800 }]}>{classDelta != null ? signed(classDelta) : ''}</Text></View>}
+                {w.move > 0 && <View style={{ width: w.move }} />}
             </View>
             {hasPrevious && line(`vs ${d.previousExamLabel || 'last exam'}`, code => {
-                const st = stat(code);
-                if (st?.previousMean == null) return <Text style={s.none}>–</Text>;
-                const change = Math.round(st.mean - st.previousMean);
-                return <Text style={[s.statText, { fontWeight: 700, color: change > 0 ? C.up : change < 0 ? C.down : C.muted }]}>{signed(change)}</Text>;
+                const change = subjectChange(stat(code));
+                if (change == null) return <Text style={s.none}>–</Text>;
+                return (
+                    <Text style={[s.statText, { fontWeight: 700, color: changeColor(change) }]}>
+                        {signed(change)}{Math.abs(change) >= LARGE_SWING ? <Text style={{ color: '#B45309' }}> !</Text> : null}
+                    </Text>
+                );
             })}
             {line('Highest · lowest', code => {
                 const st = stat(code);
@@ -464,7 +529,10 @@ function Legend({ d }: { d: MarkSheetData }) {
             <View style={s.legendItem}><View style={[s.swatch, { backgroundColor: C.hiBg }]} /><Text style={s.legendText}>80 and above</Text></View>
             <View style={s.legendItem}><View style={[s.swatch, { backgroundColor: C.loBg }]} /><Text style={s.legendText}>Below 40</Text></View>
             <View style={s.legendItem}><View style={[s.medal, { width: 9, height: 9, backgroundColor: MEDAL[0], marginRight: 3 }]} /><Text style={s.legendText}>Top three</Text></View>
-            <Text style={s.legendText}>– no mark recorded{d.students.some(st => st.previousPercentage != null) ? `   ·   Change = movement in mean since ${d.previousExamLabel || 'the last exam'}` : ''}</Text>
+            <Text style={s.legendText}>
+                – no mark recorded   ·   <Text style={{ color: C.gold }}>*</Text> fewer {d.gradingSystemType === 'KCSE' ? 'subjects' : 'learning areas'} sat
+                {d.students.some(st => st.previousPercentage != null) ? `   ·   Change and Move compare with ${d.previousExamLabel || 'the last exam'}, on what was sat both times` : ''}
+            </Text>
         </View>
     );
 }
@@ -474,13 +542,13 @@ function Legend({ d }: { d: MarkSheetData }) {
 function SubjectRanking({ d }: { d: MarkSheetData }) {
     const ranked = [...d.subjectRankings].sort((a, b) => a.rank - b.rank);
     return (
-        <View style={[s.panel, { flex: 1.25, marginRight: 9 }]}>
+        <View style={[s.panel, { flex: 1.3, marginRight: 9 }]}>
             <View style={s.panelTitle}><Text style={s.h3}>{d.gradingSystemType === 'KCSE' ? 'Subject ranking' : 'Learning area ranking'}</Text><Text style={s.h3Note}>class mean · gold tick = {d.previousExamLabel || 'last exam'}</Text></View>
             {ranked.map(r => {
                 const st = d.subjectStats[r.code];
                 const name = d.subjects.find(sub => sub.code === r.code)?.name ?? r.code;
                 const mean = st?.mean ?? r.mean;
-                const change = st?.previousMean != null ? Math.round(mean - st.previousMean) : null;
+                const change = subjectChange(st);
                 return (
                     <View key={r.code} style={s.rank}>
                         <Text style={s.rankName}>{r.rank}. {name}</Text>
@@ -489,7 +557,8 @@ function SubjectRanking({ d }: { d: MarkSheetData }) {
                             {st?.previousMean != null && <View style={[s.rankTick, { left: `${Math.min(99, st.previousMean)}%` }]} />}
                         </View>
                         <Text style={s.rankMean}>{Math.round(mean)}</Text>
-                        <Text style={[s.rankDelta, { color: change == null ? C.faint : change > 0 ? C.up : change < 0 ? C.down : C.muted }]}>{change == null ? '' : signed(change)}</Text>
+                        <Text style={[s.rankDelta, { color: change == null ? C.faint : changeColor(change) }]}>{change == null ? '' : signed(change)}</Text>
+                        <Text style={s.flag}>{change != null && Math.abs(change) >= LARGE_SWING ? '!' : ''}</Text>
                     </View>
                 );
             })}
@@ -504,7 +573,7 @@ function GradePanel({ d }: { d: MarkSheetData }) {
     const total = order.reduce((sum, g) => sum + d.gradeDistribution[g], 0);
     const passing = order.filter(g => passes(g, isKCSE)).reduce((sum, g) => sum + d.gradeDistribution[g], 0);
     return (
-        <View style={[s.panel, { flex: 1, marginRight: 9 }]}>
+        <View style={[s.panel, { flex: 0.95, marginRight: 9 }]}>
             <View style={s.panelTitle}><Text style={s.h3}>Grade distribution</Text><Text style={s.h3Note}>{total} learners</Text></View>
             {total > 0 && (
                 <View style={s.dist}>
@@ -532,34 +601,93 @@ function GradePanel({ d }: { d: MarkSheetData }) {
     );
 }
 
-function PeoplePanel({ d, ranked }: { d: MarkSheetData; ranked: Learner[] }) {
-    const improved = d.students
-        .filter(st => st.previousPercentage != null)
-        .map(st => ({ st, change: Math.round(st.overallPercentage - (st.previousPercentage as number)) }))
-        .filter(x => x.change > 0)
-        .sort((a, b) => b.change - a.change)
-        .slice(0, 5);
+function TopFive({ d, ranked }: { d: MarkSheetData; ranked: Learner[] }) {
+    const unit = d.rankedBy === 'points' ? 'points' : d.rankedBy === 'totalMarks' ? 'total marks' : 'mean';
     return (
-        <View style={[s.panel, { flex: 1, flexDirection: 'row' }]}>
-            <View style={{ flex: 1, marginRight: improved.length > 0 ? 9 : 0 }}>
-                <Text style={[s.h3, { marginBottom: 5 }]}>Top 5</Text>
-                {ranked.slice(0, 5).map(st => (
-                    <View key={`${st.admissionNumber}-${st.studentName}`} style={s.li}>
-                        <Text style={s.liText}><Text style={s.liNo}>{st.classRank}  </Text>{firstWords(st.studentName)}</Text>
-                        <Text style={[s.liText, { fontWeight: 700 }]}>{Math.round(st.overallPercentage)}</Text>
+        <View style={[s.panel, { flex: 0.72, marginRight: 9 }]}>
+            <View style={s.panelTitle}><Text style={s.h3}>Top 5</Text><Text style={s.h3Note}>by {unit}</Text></View>
+            {ranked.slice(0, 5).map(st => (
+                <View key={`${st.admissionNumber}-${st.studentName}`} style={s.li}>
+                    <Text style={s.liText}><Text style={s.liNo}>{st.classRank}  </Text>{firstWords(st.studentName)}</Text>
+                    <Text style={[s.liText, { fontWeight: 700 }]}>{rankingFigure(d, st)}</Text>
+                </View>
+            ))}
+        </View>
+    );
+}
+
+/**
+ * What changed since the previous round, measured only on what was sat both
+ * times. It always prints both directions: when nobody improved, the old
+ * "Most improved" list simply vanished and the sheet said nothing at all.
+ */
+function ProgressPanel({ d, classMean }: { d: MarkSheetData; classMean: number }) {
+    const label = d.previousExamLabel || 'the last exam';
+    const moved = d.students
+        .map(st => ({ st, change: learnerChange(st) }))
+        .filter((x): x is { st: Learner; change: number } => x.change != null);
+    if (moved.length === 0) {
+        return (
+            <View style={[s.panel, { flex: 1.25 }]}>
+                <View style={s.panelTitle}><Text style={s.h3}>Progress</Text></View>
+                <Text style={s.note}>No earlier exam to compare with yet — progress shows from the next round on.</Text>
+            </View>
+        );
+    }
+    const up = moved.filter(x => x.change > 0);
+    const down = moved.filter(x => x.change < 0);
+    const same = moved.length - up.length - down.length;
+    const gains = [...up].sort((a, b) => b.change - a.change).slice(0, 3);
+    const drops = [...down].sort((a, b) => a.change - b.change).slice(0, 3);
+    const delta = classChange(d, classMean);
+    const swings = d.subjects
+        .filter(sub => { const c = subjectChange(d.subjectStats[sub.code]); return c != null && Math.abs(c) >= LARGE_SWING; })
+        .map(sub => abbreviateSubject(sub.name, sub.code));
+    const seg = (n: number, color: string) => n > 0 && (
+        <View style={{ flex: n, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+            {n / moved.length >= 0.08 && <Text style={{ fontWeight: 700, fontSize: 5.8, color: '#FFFFFF' }}>{n}</Text>}
+        </View>
+    );
+    const list = (title: string, rows: { st: Learner; change: number }[], empty: string) => (
+        <View style={{ flex: 1 }}>
+            <Text style={[s.h3Note, { fontWeight: 700, color: C.body, marginBottom: 2 }]}>{title}</Text>
+            {rows.length === 0
+                ? <Text style={[s.liText, { color: C.faint }]}>{empty}</Text>
+                : rows.map(({ st, change }) => (
+                    <View key={`${st.admissionNumber}-${st.studentName}`} style={[s.li, { height: 11 }]}>
+                        <Text style={[s.liText, { flex: 1 }]}>{firstWords(st.studentName)}</Text>
+                        <Text style={[s.liText, { fontWeight: 700, color: changeColor(change) }]}>{signed(change)}</Text>
                     </View>
                 ))}
+        </View>
+    );
+    return (
+        <View style={[s.panel, { flex: 1.25 }]}>
+            <View style={s.panelTitle}><Text style={s.h3}>Progress since {label}</Text><Text style={s.h3Note}>{moved.length} learners compared</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={[s.gradeKeyText, { color: C.body }]}>Class mean </Text>
+                {d.previousClassMeanPercentage != null && <Text style={[s.gradeKeyText, { color: C.body }]}>{Math.round(d.previousClassMeanPercentage)}% → </Text>}
+                <Text style={[s.gradeKeyText, { fontWeight: 800, color: C.navy }]}>{Math.round(classMean)}%</Text>
+                {delta != null && <Text style={[s.gradeKeyText, { fontWeight: 800, color: changeColor(delta), marginLeft: 4 }]}>{signed(delta)} like for like</Text>}
             </View>
-            {improved.length > 0 && (
-                <View style={{ flex: 1 }}>
-                    <Text style={[s.h3, { marginBottom: 5 }]}>Most improved</Text>
-                    {improved.map(({ st, change }) => (
-                        <View key={`${st.admissionNumber}-${st.studentName}`} style={s.li}>
-                            <Text style={s.liText}>{firstWords(st.studentName)}</Text>
-                            <Text style={[s.liText, { fontWeight: 700, color: C.up }]}>{signed(change)}</Text>
-                        </View>
-                    ))}
-                </View>
+            <View style={s.split}>
+                {seg(up.length, C.up)}
+                {seg(same, '#CBD5E1')}
+                {seg(down.length, C.down)}
+            </View>
+            <Text style={[s.gradeKeyText, { marginBottom: 5 }]}>
+                <Text style={{ fontWeight: 700, color: C.up }}>{up.length} improved</Text>   ·   {same} unchanged   ·   <Text style={{ fontWeight: 700, color: C.down }}>{down.length} dropped</Text>
+            </Text>
+            <View style={{ flexDirection: 'row' }}>
+                {list('Biggest gains', gains, 'No learner improved')}
+                <View style={{ width: 9 }} />
+                {list('Biggest drops', drops, 'No learner dropped')}
+            </View>
+            {swings.length > 0 && (
+                <Text style={s.note}>
+                    <Text style={{ fontWeight: 800, color: '#B45309' }}>! </Text>
+                    {swings.join(', ')} moved {LARGE_SWING}+ marks in one round — confirm both papers were set and marked on the same basis.
+                </Text>
             )}
         </View>
     );
@@ -581,7 +709,8 @@ function Signatures() {
 function summaryHeight(d: MarkSheetData): number {
     const rankingPanel = H.panelHead + d.subjectRankings.length * H.panelRow;
     const gradePanel = 110;
-    const panels = Math.max(rankingPanel, gradePanel, 80);
+    const progressPanel = 130;
+    const panels = Math.max(rankingPanel, gradePanel, progressPanel);
     return statRowCount(d) * H.statRow + H.summaryGap + panels + H.signature;
 }
 
@@ -591,7 +720,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
     const d = data;
     const isKCSE = d.gradingSystemType === 'KCSE';
     const showDev = d.students.some(st => st.previousPercentage != null);
-    const w = columnWidths(d.subjects.length, isKCSE, showDev);
+    const showMove = d.students.some(st => placesMoved(st) != null);
+    const w = columnWidths(d.subjects.length, isKCSE, showDev, showMove);
     const ranked = [...d.students].sort((a, b) => (a.classRank || 9999) - (b.classRank || 9999));
     const classMean = d.classMeanPercentage
         ?? (ranked.reduce((sum, st) => sum + st.overallPercentage, 0) / Math.max(1, ranked.length));
@@ -604,7 +734,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
         tableHead: H.groupHead + H.colHead,
         row: H.row,
         summary: summaryHeight(d),
-        maxRowGrowth: 1.3,
+        // Rows may open up a little further so a balanced page is also a full one.
+        maxRowGrowth: 1.75,
     };
     const plan = planPages(ranked.length, dims);
     const totalPages = plan.rows.length + (plan.summaryOnOwnPage ? 1 : 0);
@@ -621,7 +752,8 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
             <View style={[s.panels, { flexGrow: 1 }]} wrap={false}>
                 <SubjectRanking d={d} />
                 <GradePanel d={d} />
-                <PeoplePanel d={d} ranked={ranked} />
+                <TopFive d={d} ranked={ranked} />
+                <ProgressPanel d={d} classMean={classMean} />
             </View>
             <Signatures />
         </View>
@@ -650,7 +782,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                         <View style={s.table}>
                             <TableHead d={d} w={w} isKCSE={isKCSE} showDev={showDev} />
                             {chunk.map(st => (
-                                <LearnerRow key={`${st.admissionNumber}-${st.studentName}`} d={d} st={st} index={index++} w={w} height={plan.rowHeight} isKCSE={isKCSE} showDev={showDev} />
+                                <LearnerRow key={`${st.admissionNumber}-${st.studentName}`} d={d} st={st} index={index++} w={w} height={plan.rowHeights[p]} isKCSE={isKCSE} showDev={showDev} />
                             ))}
                             {last && <StatRows d={d} w={w} isKCSE={isKCSE} showDev={showDev} classMean={classMean} />}
                         </View>

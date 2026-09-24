@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { aggregateStudentPerformance, calculateClassRanks, type ExamMarkWithDetails } from '@/lib/analytics';
+import { aggregateStudentPerformance, calculateClassRanks, type ExamMarkWithDetails, type RankableAggregate, type RankingBasis } from '@/lib/analytics';
 import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import type { SeniorRankGroup } from '@/lib/ranking';
@@ -45,6 +45,8 @@ type Options = {
     releasedOnly?: boolean;
     gradingScales: GradingScale[];
     gradingSystemType: 'KCSE' | 'CBC';
+    /** Marks for CBC learners, points for 8-4-4 — see rankingBasisFor. */
+    rankingBasis: RankingBasis;
     /** The school's Senior School grouping; applies to CBC Grades 10-12 only. */
     seniorRankGroup: SeniorRankGroup;
 };
@@ -127,21 +129,20 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
         marksByPeer.set(m.student_id, list);
     }
 
-    const groups = new Map<string, { label: string; entries: { studentId: string; percentage: number; totalPoints?: number }[] }>();
+    const groups = new Map<string, { label: string; entries: RankableAggregate[] }>();
     for (const peer of peers) {
         const peerMarks = marksByPeer.get(peer.id);
         if (!peerMarks?.length) continue;
         const perf = aggregateStudentPerformance(peerMarks, opts.gradingScales, opts.gradingSystemType, subjectNames, subjectCategories);
         const { key, label } = groupOf(peer);
         const bucket = groups.get(key) ?? { label, entries: [] };
-        bucket.entries.push({ studentId: peer.id, percentage: perf.percentage, totalPoints: perf.totalPoints });
+        bucket.entries.push({ studentId: peer.id, percentage: perf.percentage, totalPoints: perf.totalPoints, totalMarks: perf.totalMarks });
         groups.set(key, bucket);
     }
 
     const byStudent = new Map<string, GradePosition>();
-    const rankingBy = opts.gradingSystemType === 'KCSE' ? 'points' : 'percentage';
     for (const { label, entries } of groups.values()) {
-        const ranks = calculateClassRanks(entries, rankingBy);
+        const ranks = calculateClassRanks(entries, opts.rankingBasis);
         for (const { studentId } of entries) {
             const rank = ranks.get(studentId);
             if (rank) byStudent.set(studentId, { rank, size: entries.length, label });
