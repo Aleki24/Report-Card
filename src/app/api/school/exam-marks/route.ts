@@ -5,6 +5,7 @@ import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher, m
 import { fetchActiveMultiPaperScheme } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
+import { internalError } from '@/lib/api-errors';
 
 /**
  * Resolve a { [componentId]: score } payload against the exam's
@@ -151,9 +152,7 @@ export async function GET(request: NextRequest) {
       .eq('exam_id', examId)
       .eq('students.users.school_id', schoolId);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    if (error) return internalError('exam-marks list', error);
 
     type MarkPlacement = { students: { current_grade_stream_id: string | null; grade_streams: { grade_id: string } | { grade_id: string }[] | null } | null };
     const placementOf = (m: MarkPlacement) => {
@@ -202,8 +201,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: mapped, scheme });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError('exam-marks GET', err);
   }
 }
 
@@ -241,7 +239,13 @@ export async function POST(request: NextRequest) {
     if (!exam || exam.school_id !== schoolId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    if (marks.length === 0) return NextResponse.json({ error: 'No marks to save' }, { status: 400 });
+    if (marks.length > 2000) return NextResponse.json({ error: 'Too many marks in one request' }, { status: 400 });
     const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
+    // One upsert cannot touch the same (student, exam) row twice.
+    if (submittedIds.length !== marks.length) {
+      return NextResponse.json({ error: 'Each learner can appear only once per save.' }, { status: 400 });
+    }
 
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
       const perms = await getTeacherPermissions(userId);
@@ -331,18 +335,18 @@ export async function POST(request: NextRequest) {
       .upsert(processedMarks, { onConflict: 'student_id,exam_id' })
       .select();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) return internalError('exam-marks save', error);
 
     if (componentRows.length > 0) {
       const { error: compError } = await supabase
         .from('exam_mark_components')
         .upsert(componentRows, { onConflict: 'component_id,student_id' });
-      if (compError) return NextResponse.json({ error: compError.message }, { status: 400 });
+      if (compError) return internalError('exam-marks paper scores save', compError);
     }
 
     return NextResponse.json({ success: true, data });
   } catch (err: unknown) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 });
+    return internalError('exam-marks', err);
   }
 }
 
@@ -463,10 +467,10 @@ export async function PATCH(request: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) return internalError('exam-marks update', error);
     return NextResponse.json({ success: true, data });
   } catch (err: unknown) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 });
+    return internalError('exam-marks', err);
   }
 }
 
@@ -517,11 +521,15 @@ export async function DELETE(request: NextRequest) {
       if (!isExamVisibleToTeacher(exam, perms, userId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
+      // Same stream rule as saving: seeing a grade-wide exam does not let a
+      // teacher remove marks in a stream they don't teach.
+      const denial = await streamDenial(perms, exam, userId, [markCheck.student_id as string]);
+      if (denial) return denial;
     }
-    
+
     const { error } = await supabase.from('exam_marks').delete().eq('id', id);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) return internalError('exam-marks delete', error);
 
     // Also remove the student's per-paper scores for this exam (if any)
     await supabase
@@ -532,6 +540,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 });
+    return internalError('exam-marks', err);
   }
 }

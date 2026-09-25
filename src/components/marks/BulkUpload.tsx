@@ -146,9 +146,13 @@ export function BulkUpload({ examId, subjectId }: Props) {
                 }
             });
 
-            // 4. Build rows with auto-calculated percentage and grade
-            const rows: any[] = [];
+            // 4. Build rows with auto-calculated percentage and grade. Keyed by
+            // learner: a learner listed twice keeps their last row, since one
+            // save cannot write the same learner's mark twice.
+            const rowsByStudent = new Map<string, { student_id: string; raw_score: number; exam_id: string; percentage: number; grade_symbol: string | null }>();
             const missingStudents: string[] = [];
+            const invalidScores: string[] = [];
+            let blankScores = 0;
 
             parsedData.forEach(row => {
                 const admNo = row[mapping.admissionNumber];
@@ -158,14 +162,22 @@ export function BulkUpload({ examId, subjectId }: Props) {
                     return;
                 }
 
-                const score = parseFloat(row[mapping.score]);
+                // A blank cell means "no mark yet", not zero: skip it rather
+                // than send NaN and have the whole upload rejected.
+                const rawText = String(row[mapping.score] ?? '').trim();
+                if (rawText === '') { blankScores++; return; }
+                const score = Number(rawText);
+                if (!Number.isFinite(score) || score < 0 || (examMaxScore > 0 && score > examMaxScore)) {
+                    invalidScores.push(`${admNo} (${rawText})`);
+                    return;
+                }
                 const percentage = examMaxScore > 0 ? (score / examMaxScore) * 100 : 0;
                 // Use the CSV's grade column if provided, otherwise auto-resolve
                 // from this subject's grading scale so the published mark carries
                 // a grade (and points) just like manual entry.
                 const gradeVal = (mapping.grade ? row[mapping.grade] : '') || resolveGrade(percentage);
 
-                rows.push({
+                rowsByStudent.set(student_id, {
                     student_id,
                     raw_score: score,
                     exam_id: examId,
@@ -174,6 +186,16 @@ export function BulkUpload({ examId, subjectId }: Props) {
                 });
             });
 
+            if (invalidScores.length > 0) {
+                setSubmitMessage({
+                    type: 'error',
+                    text: `Fix these scores first (each must be a number from 0 to ${examMaxScore}): ${invalidScores.slice(0, 5).join(', ')}${invalidScores.length > 5 ? ` and ${invalidScores.length - 5} more` : ''}.`,
+                });
+                setSubmitting(false);
+                return;
+            }
+
+            const rows = [...rowsByStudent.values()];
             if (rows.length === 0) {
                 setSubmitMessage({ type: 'error', text: `No valid students found. Missing: ${missingStudents.slice(0, 3).join(', ')}...` });
                 setSubmitting(false);
@@ -188,12 +210,14 @@ export function BulkUpload({ examId, subjectId }: Props) {
             const data = await res.json();
 
             if (!res.ok) {
-                setSubmitMessage({ type: 'error', text: `Database error: ${data.error}` });
+                setSubmitMessage({ type: 'error', text: data.error || 'The marks could not be saved. Please try again.' });
             } else {
-                let text = `✅ Successfully saved ${rows.length} marks!`;
-                if (missingStudents.length > 0) {
-                    text += ` (Skipped ${missingStudents.length} unrecognised admission numbers)`;
-                }
+                let text = `Saved ${rows.length} mark${rows.length === 1 ? '' : 's'}.`;
+                const skipped = [
+                    missingStudents.length > 0 && `${missingStudents.length} unrecognised admission number${missingStudents.length === 1 ? '' : 's'}`,
+                    blankScores > 0 && `${blankScores} blank score${blankScores === 1 ? '' : 's'}`,
+                ].filter(Boolean);
+                if (skipped.length > 0) text += ` Skipped ${skipped.join(' and ')}.`;
                 setSubmitMessage({ type: 'success', text });
                 setTimeout(() => {
                     setStep('upload');
