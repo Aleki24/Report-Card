@@ -5,6 +5,7 @@ import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { embedOne } from '@/lib/postgrest';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
@@ -295,20 +296,25 @@ export async function GET(request: NextRequest) {
         const { data, error } = await supabase
           .from('users')
           .select(`
-            id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, job_title,
-            students!left ( admission_number )
+            id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, job_title, avatar_url,
+            students!left ( admission_number, avatar_url, grade_streams ( full_name ) )
           `)
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-        // Flatten nested students.admission_number
-        const mapped = (data ?? []).map((u: any) => ({
-          ...u,
-          admission_number: u.students?.admission_number ?? null,
-          students: undefined
-        }));
+        // Flatten the one-to-one students row: a learner's photo lives on
+        // students.avatar_url, everyone else's on users.avatar_url.
+        const mapped = (data ?? []).map(({ students, ...u }) => {
+          const student = embedOne(students);
+          return {
+            ...u,
+            avatar_url: student?.avatar_url ?? u.avatar_url ?? null,
+            admission_number: student?.admission_number ?? null,
+            class_name: embedOne(student?.grade_streams)?.full_name ?? null,
+          };
+        });
         return NextResponse.json({ data: mapped });
       }
 

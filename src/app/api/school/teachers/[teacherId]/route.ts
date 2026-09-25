@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import type { StaffProfileResponse } from '@/types/user-profile';
 
 export async function GET(
   _request: NextRequest,
@@ -98,7 +99,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
+    return NextResponse.json<StaffProfileResponse>({
       profile: {
         id: user.id,
         first_name: user.first_name,
@@ -109,6 +110,7 @@ export async function GET(
         job_title: user.job_title ?? null,
         is_active: user.is_active,
         created_at: user.created_at,
+        avatar_url: user.avatar_url ?? null,
       },
       classAssignments: classAssignments.map((ca: any) => ({
         id: ca.id,

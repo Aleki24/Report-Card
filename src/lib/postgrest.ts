@@ -17,3 +17,12 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export function isUuid(value: string): boolean {
     return UUID_PATTERN.test(value);
 }
+
+/**
+ * A many-to-one embed (`grade_streams (...)` on a student) comes back as one
+ * object at runtime, but supabase-js without generated types infers an array.
+ * Normalise either shape to the single row, or null when there is none.
+ */
+export function embedOne<T>(value: T | T[] | null | undefined): T | null {
+    return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}

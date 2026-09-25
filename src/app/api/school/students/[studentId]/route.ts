@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import type { StudentProfileResponse } from '@/types/user-profile';
+import { embedOne } from '@/lib/postgrest';
 import { getTeacherPermissions, isStudentVisibleToTeacher } from '@/lib/teacher-utils';
 
 export async function GET(
@@ -173,7 +175,7 @@ export async function GET(
         : null,
     }));
 
-    return NextResponse.json({
+    return NextResponse.json<StudentProfileResponse>({
       profile: {
         id: student.id,
         first_name: studentUser?.first_name,
@@ -189,8 +191,8 @@ export async function GET(
         guardian_name: student.guardian_name,
         guardian_phone: student.guardian_phone,
         guardian_email: student.guardian_email,
-        grade_stream: student.grade_streams,
-        academic_level: student.academic_levels,
+        grade_stream: embedOne(student.grade_streams),
+        academic_level: embedOne(student.academic_levels),
         pathway: (student as any).pathway,
         track: (student as any).track,
         subject_combination: (student as any).subject_combinations,

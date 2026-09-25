@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
+import { fullName, roleGroupOf, type RoleFilter, type StatusFilter, type UserSort } from '@/components/users/userMeta';
 
 export interface UserRow {
   id: string;
@@ -15,7 +16,13 @@ export interface UserRow {
   created_at: string;
   admission_number?: string | null;
   job_title?: string | null;
+  /** The learner's photo for students, the account photo for everyone else. */
+  avatar_url?: string | null;
+  /** Students only: the class (grade stream) they are currently in. */
+  class_name?: string | null;
 }
+
+export type RoleCounts = Record<RoleFilter, number>;
 
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
 export interface ClassTeacherAssignment { user_id: string; current_grade_stream_id: string; }
@@ -45,10 +52,15 @@ export function useUsersPage() {
   const [invitedNotified, setInvitedNotified] = useState<{ sms: boolean; email: boolean } | null>(null);
 
   // Filter, search, pagination state
-  const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [sortBy, setSortBy] = useState<UserSort>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const usersPerPage = 5;
+  const usersPerPage = 12;
+
+  // Profile dialog
+  const [viewingUser, setViewingUser] = useState<UserRow | null>(null);
 
   // Password reset
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
@@ -225,11 +237,23 @@ export function useUsersPage() {
     finally { setSubmitting(false); }
   };
 
-  useEffect(() => { setCurrentPage(1); }, [users.length, roleFilter, searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [users.length, roleFilter, statusFilter, sortBy, searchQuery]);
+
+  const { roleCounts, inactiveCount } = useMemo(() => {
+    const counts: RoleCounts = { ALL: users.length, ADMIN: 0, TEACHER: 0, STAFF: 0, STUDENT: 0 };
+    let inactive = 0;
+    for (const u of users) {
+      const group = roleGroupOf(u.role);
+      if (group) counts[group] += 1;
+      if (!u.is_active) inactive += 1;
+    }
+    return { roleCounts: counts, inactiveCount: inactive };
+  }, [users]);
 
   const { paginatedUsers, totalPages, filteredUsers } = useMemo(() => {
     let filtered = users;
-    if (roleFilter !== 'ALL') filtered = filtered.filter(u => u.role === roleFilter);
+    if (roleFilter !== 'ALL') filtered = filtered.filter(u => roleGroupOf(u.role) === roleFilter);
+    if (statusFilter !== 'ALL') filtered = filtered.filter(u => u.is_active === (statusFilter === 'ACTIVE'));
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(u =>
@@ -237,19 +261,25 @@ export function useUsersPage() {
         (u.email && u.email.toLowerCase().includes(query)) ||
         (u.username && u.username.toLowerCase().includes(query)) ||
         (u.phone && u.phone.includes(query)) ||
-        u.admission_number?.toLowerCase().includes(query)
+        u.admission_number?.toLowerCase().includes(query) ||
+        u.class_name?.toLowerCase().includes(query)
       );
     }
+    // The API already returns newest first; only re-sort for name order.
+    if (sortBy === 'name') filtered = [...filtered].sort((a, b) => fullName(a).localeCompare(fullName(b)));
     const total = Math.ceil(filtered.length / usersPerPage);
     const paginated = filtered.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
     return { paginatedUsers: paginated, totalPages: total, filteredUsers: filtered };
-  }, [users, currentPage, usersPerPage, roleFilter, searchQuery]);
+  }, [users, currentPage, usersPerPage, roleFilter, statusFilter, sortBy, searchQuery]);
 
   return {
     // Data
-    users, loading, paginatedUsers, totalPages, filteredUsers,
-    // Filter / search / pagination
-    roleFilter, setRoleFilter, searchQuery, setSearchQuery, currentPage, setCurrentPage, usersPerPage,
+    users, loading, paginatedUsers, totalPages, filteredUsers, roleCounts, inactiveCount,
+    // Filter / search / sort / pagination
+    roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy,
+    searchQuery, setSearchQuery, currentPage, setCurrentPage, usersPerPage,
+    // Profile dialog
+    viewingUser, setViewingUser,
     // Invite modal
     showModal, setShowModal, resetForm, handleInviteUser,
     formFirstName, setFormFirstName, formLastName, setFormLastName, formPhone, setFormPhone,
