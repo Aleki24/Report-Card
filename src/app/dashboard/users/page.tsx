@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { Printer, UserPlus } from 'lucide-react';
 import { useUsersPage, type UserRow } from '@/hooks/useUsersPage';
 import { UsersStats } from '@/components/users/UsersStats';
 import { UsersDirectory } from '@/components/users/UsersDirectory';
@@ -10,10 +10,12 @@ import type { DirectoryView } from '@/components/users/userMeta';
 import { InviteUserModal } from '@/components/users/InviteUserModal';
 import { EditUserModal } from '@/components/users/EditUserModal';
 import { InviteResultModal, ResetPasswordResultModal } from '@/components/users/UserResultModals';
+import { InviteCodesPrintModal } from '@/components/users/InviteCodesPrintModal';
 
 export default function UsersPage() {
   const h = useUsersPage();
   const [view, setView] = useState<DirectoryView>('grid');
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const openAddUser = () => { h.resetForm(); h.setShowModal(true); };
   // Actions started from the profile dialog close it first, so two dialogs never stack.
@@ -42,6 +44,19 @@ export default function UsersPage() {
         roleFilter={h.roleFilter} statusFilter={h.statusFilter}
         onSelectRole={h.setRoleFilter} onSelectStatus={h.setStatusFilter}
       />
+
+      {/* Only where it is useful: people who have not activated yet need their codes handed out. */}
+      {h.statusFilter === 'INACTIVE' && h.inactiveCount > 0 && (
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm">
+            <span className="font-semibold">{h.inactiveCount} account{h.inactiveCount === 1 ? '' : 's'} not active.</span>{' '}
+            <span className="text-muted-foreground">People who haven&apos;t activated yet need their activation code to sign in.</span>
+          </p>
+          <button type="button" className="btn-secondary w-full shrink-0 sm:w-auto" onClick={() => setShowPrintModal(true)}>
+            <Printer className="size-4" aria-hidden="true" />Print activation codes
+          </button>
+        </div>
+      )}
 
       <UsersDirectory
         loading={h.loading} totalUsers={h.users.length} paginatedUsers={h.paginatedUsers}
@@ -109,6 +124,8 @@ export default function UsersPage() {
       {h.showInviteResult && (
         <InviteResultModal invitedName={h.invitedName} invitedUsername={h.invitedUsername} invitedCode={h.invitedCode} notified={h.invitedNotified} onClose={() => h.setShowInviteResult(false)} />
       )}
+
+      {showPrintModal && <InviteCodesPrintModal onClose={() => setShowPrintModal(false)} />}
 
       {h.showResetResult && (
         <ResetPasswordResultModal inviteCode={h.resetResultInviteCode} notified={h.resetResultNotified} onClose={() => h.setShowResetResult(false)} />
