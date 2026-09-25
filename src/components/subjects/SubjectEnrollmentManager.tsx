@@ -1,181 +1,170 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, X, Users } from 'lucide-react';
-
-interface RosterStudent {
-    id: string;
-    admission_number: string;
-    status: string;
-    current_grade_stream_id: string | null;
-    subject_combination_id: string | null;
-    users: { first_name: string; last_name: string } | null;
-    grade_streams: { id: string; full_name: string } | null;
-    enrolled: boolean;
-}
+import { toast } from 'sonner';
+import { CheckSquare, Layers, Square } from 'lucide-react';
+import { Modal } from '@/components/ui';
+import { SearchBox } from '@/components/ui/SearchBox';
+import { apiErrorMessage } from '@/lib/api-error-message';
+import type { SubjectRosterEntry } from '@/lib/subject-roster-types';
+import { cn } from '@/lib/utils';
 
 interface Props {
     subject: { id: string; name: string; code: string };
     onClose: () => void;
-    onSaved?: () => void;
 }
 
+type Load = { state: 'loading' } | { state: 'ready' } | { state: 'error'; message: string };
+
+const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) => a.size === b.size && [...a].every(id => b.has(id));
+
 /**
- * "Who takes this subject" manager — used for 8-4-4 electives (e.g.
- * only the CRE takers, not the whole class) and for inspecting CBC
- * elective enrollment. Once at least one learner in a class is
- * enrolled, mark entry for this subject lists only enrolled learners.
+ * Who takes a subject: for 8-4-4 electives (only the CRE takers, not the
+ * whole class) and for checking CBC electives. Once anyone in a class is
+ * enrolled, mark entry for this subject lists only enrolled learners there.
  */
-export default function SubjectEnrollmentManager({ subject, onClose, onSaved }: Props) {
-    const [roster, setRoster] = useState<RosterStudent[]>([]);
-    const [initialEnrolled, setInitialEnrolled] = useState<Set<string>>(new Set());
-    const [selected, setSelected] = useState<Set<string>>(new Set());
+export default function SubjectEnrollmentManager({ subject, onClose }: Props) {
+    const [roster, setRoster] = useState<SubjectRosterEntry[]>([]);
+    const [saved, setSaved] = useState<ReadonlySet<string>>(new Set());
+    const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
     const [streamFilter, setStreamFilter] = useState('');
     const [search, setSearch] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [load, setLoad] = useState<Load>({ state: 'loading' });
     const [saving, setSaving] = useState(false);
-    const [msg, setMsg] = useState('');
 
     useEffect(() => {
-        (async () => {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/admin/student-subjects?subject_id=${subject.id}`, { cache: 'no-store' });
-                const json = await res.json();
-                if (!res.ok) throw new Error(json.error || 'Failed to load roster');
-                const students: RosterStudent[] = json.data || [];
-                setRoster(students);
-                const enrolled = new Set<string>(students.filter(s => s.enrolled).map(s => s.id));
-                setInitialEnrolled(enrolled);
-                setSelected(new Set(enrolled));
-            } catch (err) {
-                setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-            } finally {
-                setLoading(false);
-            }
-        })();
+        const controller = new AbortController();
+        fetch(`/api/admin/student-subjects?subject_id=${encodeURIComponent(subject.id)}`, { cache: 'no-store', signal: controller.signal })
+            .then(async res => {
+                const json: unknown = await res.json().catch(() => null);
+                if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not load learners.'));
+                const rows = ((json as { data?: SubjectRosterEntry[] } | null)?.data) ?? [];
+                const enrolled = new Set(rows.filter(s => s.enrolled).map(s => s.id));
+                setRoster(rows);
+                setSaved(enrolled);
+                setSelected(enrolled);
+                setLoad({ state: 'ready' });
+            })
+            .catch((err: unknown) => {
+                if (!controller.signal.aborted) setLoad({ state: 'error', message: err instanceof Error ? err.message : 'Could not load learners.' });
+            });
+        return () => controller.abort();
     }, [subject.id]);
 
     const streams = useMemo(() => {
         const map = new Map<string, string>();
-        roster.forEach(s => { if (s.grade_streams) map.set(s.grade_streams.id, s.grade_streams.full_name); });
+        roster.forEach(s => { if (s.stream_id) map.set(s.stream_id, s.stream_name ?? ''); });
         return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
     }, [roster]);
 
-    const filtered = roster.filter(s => {
-        const q = search.toLowerCase();
-        const matchSearch = !q || `${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''} ${s.admission_number}`.toLowerCase().includes(q);
-        const matchStream = !streamFilter || s.current_grade_stream_id === streamFilter;
-        return matchSearch && matchStream;
-    });
+    const shown = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return roster.filter(s =>
+            (!streamFilter || s.stream_id === streamFilter)
+            && (!q || `${s.name} ${s.admission_number ?? ''}`.toLowerCase().includes(q)));
+    }, [roster, streamFilter, search]);
+
+    const allShownOn = shown.length > 0 && shown.every(s => selected.has(s.id));
+    const dirty = !sameSet(selected, saved);
 
     const toggle = (id: string) => setSelected(prev => {
         const next = new Set(prev);
-        if (next.has(id)) next.delete(id); else next.add(id);
+        if (!next.delete(id)) next.add(id);
         return next;
     });
 
-    const dirty = useMemo(() => {
-        if (selected.size !== initialEnrolled.size) return true;
-        for (const id of selected) if (!initialEnrolled.has(id)) return true;
-        return false;
-    }, [selected, initialEnrolled]);
+    const toggleShown = () => setSelected(prev => {
+        const next = new Set(prev);
+        for (const s of shown) {
+            if (allShownOn) next.delete(s.id);
+            else next.add(s.id);
+        }
+        return next;
+    });
 
     const save = async () => {
-        const add = [...selected].filter(id => !initialEnrolled.has(id));
-        const remove = [...initialEnrolled].filter(id => !selected.has(id));
-        if (add.length === 0 && remove.length === 0) return;
+        const add = [...selected].filter(id => !saved.has(id));
+        const remove = [...saved].filter(id => !selected.has(id));
         setSaving(true);
-        setMsg('');
         try {
             const res = await fetch('/api/admin/student-subjects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subject_id: subject.id, add, remove }),
             });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Failed to save');
-            setInitialEnrolled(new Set(selected));
-            setMsg(`Saved — ${selected.size} learner(s) now take ${subject.name}.`);
-            onSaved?.();
+            const json: unknown = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save.'));
+            setSaved(new Set(selected));
+            toast.success(`${selected.size} learner${selected.size === 1 ? '' : 's'} now take ${subject.name}`);
+            onClose();
         } catch (err) {
-            setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            toast.error(err instanceof Error ? err.message : 'Could not save.');
         } finally {
             setSaving(false);
         }
     };
 
+    const combos = shown.filter(s => s.in_combination).length;
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-            <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col p-5" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-start justify-between mb-1">
-                    <h2 className="text-sm font-bold font-display flex items-center gap-2">
-                        <Users size={16} className="text-primary" /> Learners taking {subject.name} ({subject.code})
-                    </h2>
-                    <button onClick={onClose} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
-                </div>
-                <p className="text-xs text-muted-foreground mb-4">
-                    Tick the learners who take this subject. Once anyone in a class is enrolled, mark entry (manual, CSV, photo scan, quick entry) for this subject lists only enrolled learners in that class. Leave a class fully unticked to keep showing everyone there.
-                </p>
+        <Modal
+            isOpen
+            onClose={() => { if (!saving) onClose(); }}
+            title={`Learners taking ${subject.name}`}
+            size="lg"
+            footer={<>
+                <span className="mr-auto self-center text-xs text-muted-foreground">{selected.size} enrolled</span>
+                <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+                <button type="button" className="btn-primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save'}</button>
+            </>}
+        >
+            <p className="mb-4 text-sm text-muted-foreground">
+                Tick who takes {subject.name} ({subject.code}). Once anyone in a class is ticked, mark entry for it lists only the ticked learners there; a class with nobody ticked keeps showing everyone.
+            </p>
 
-                {msg && (
-                    <div className={`mb-3 p-2.5 rounded-md text-xs ${!msg.startsWith('Failed') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                        {msg}
-                    </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                    <select className="input-field" style={{ width: "auto", minWidth: "150px" }} value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
-                        <option value="">All Classes</option>
-                        {streams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                    </select>
-                    <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
-                        <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={14} /></span>
-                        <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search learners..." value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
-                    <button
-                        className="btn-secondary px-3 py-1.5 shrink-0"
-                        onClick={() => {
-                            const allSelected = filtered.every(s => selected.has(s.id));
-                            setSelected(prev => {
-                                const next = new Set(prev);
-                                filtered.forEach(s => { if (allSelected) next.delete(s.id); else next.add(s.id); });
-                                return next;
-                            });
-                        }}
-                        disabled={filtered.length === 0}
-                    >
-                        {filtered.length > 0 && filtered.every(s => selected.has(s.id)) ? 'Untick all' : `Tick all (${filtered.length})`}
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md min-h-[200px]">
-                    {loading ? (
-                        <p className="text-xs text-muted-foreground text-center py-8">Loading learners...</p>
-                    ) : filtered.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-8">No learners on this subject&apos;s curriculum level match.</p>
-                    ) : filtered.map(s => (
-                        <label key={s.id} className="flex items-center gap-3 px-3 py-2 border-b border-border/50 last:border-b-0 cursor-pointer hover:bg-muted/40">
-                            <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
-                            <span className="text-xs font-medium flex-1">
-                                {s.users?.first_name} {s.users?.last_name} <span className="font-mono text-muted-foreground">({s.admission_number})</span>
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">{s.grade_streams?.full_name || '—'}</span>
-                            {s.subject_combination_id && (
-                                <span className="text-[11px] text-amber-400" title="This learner's enrollment is managed by their subject combination — manual changes are overwritten when the combination re-syncs.">combo</span>
-                            )}
-                        </label>
-                    ))}
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{selected.size} enrolled</span>
-                    <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={onClose} disabled={saving}>Close</button>
-                        <button className="btn-primary" onClick={save} disabled={saving || !dirty}>{saving ? 'Saving...' : 'Save Enrollment'}</button>
-                    </div>
-                </div>
+            <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                <select className="input-field" aria-label="Class" value={streamFilter} onChange={e => setStreamFilter(e.target.value)} disabled={streams.length === 0}>
+                    <option value="">All classes</option>
+                    {streams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+                <SearchBox value={search} onChange={setSearch} placeholder="Search learners" />
             </div>
-        </div>
+
+            <div className="overflow-hidden rounded-xl border border-border">
+                <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/40 px-3 py-2 text-xs">
+                    <button type="button" onClick={toggleShown} disabled={shown.length === 0} className="inline-flex items-center gap-2 font-medium disabled:opacity-50">
+                        {allShownOn ? <CheckSquare className="size-4 text-primary" aria-hidden /> : <Square className="size-4 text-muted-foreground" aria-hidden />}
+                        {allShownOn ? 'Untick these' : `Tick all ${shown.length}`}
+                    </button>
+                    {combos > 0 && (
+                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300" title="These learners' subjects come from their combination; re-syncing it can undo changes here.">
+                            <Layers className="size-3.5" aria-hidden />{combos} on a combination
+                        </span>
+                    )}
+                </div>
+                <ul className="max-h-[45vh] min-h-[10rem] overflow-y-auto" aria-busy={load.state === 'loading'}>
+                    {load.state === 'loading' ? (
+                        Array.from({ length: 5 }, (_, i) => <li key={i} className="skeleton-bone m-2 h-9 rounded-lg" />)
+                    ) : load.state === 'error' ? (
+                        <li className="px-4 py-10 text-center text-sm text-destructive">{load.message}</li>
+                    ) : shown.length === 0 ? (
+                        <li className="px-4 py-10 text-center text-xs text-muted-foreground">
+                            {roster.length === 0 ? `No enrolled learners are in a grade that takes ${subject.name}.` : 'No learners match.'}
+                        </li>
+                    ) : shown.map(s => (
+                        <li key={s.id}>
+                            <label className={cn('flex cursor-pointer items-center gap-3 border-b border-border/50 px-3 py-2.5 hover:bg-muted/40', selected.has(s.id) !== saved.has(s.id) && 'bg-primary/[0.05]')}>
+                                <input type="checkbox" className="size-4 accent-primary" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium">{s.name}</span>
+                                    <span className="block truncate text-[11px] text-muted-foreground">{s.stream_name ?? 'No class'} · {s.admission_number?.trim() || '—'}</span>
+                                </span>
+                                {s.in_combination && <Layers className="size-3.5 shrink-0 text-amber-500" aria-label="On a subject combination" />}
+                            </label>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </Modal>
     );
 }
