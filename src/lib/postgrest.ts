@@ -26,3 +26,30 @@ export function isUuid(value: string): boolean {
 export function embedOne<T>(value: T | T[] | null | undefined): T | null {
     return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
+
+const PAGE_SIZE = 1000;
+/** Hard ceiling for {@link fetchAllRows}: a backstop, not a limit we expect to reach. */
+export const MAX_PAGED_ROWS = 50000;
+
+/**
+ * Every row a query matches. PostgREST answers with at most 1,000 rows unless
+ * told otherwise, and says nothing when it cuts a result short — Analytics
+ * once averaged an arbitrary 1,000 of a school's 1,819 marks that way. Pages
+ * until a short page arrives; reaching the ceiling is reported as
+ * `truncated`, never hidden.
+ *
+ * `build` must return a fresh query each call, with a stable order.
+ */
+export async function fetchAllRows<T>(
+    build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
+): Promise<{ rows: T[]; error: unknown; truncated: boolean }> {
+    const rows: T[] = [];
+    for (let from = 0; from < MAX_PAGED_ROWS; from += PAGE_SIZE) {
+        const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+        if (error) return { rows, error, truncated: false };
+        const page = data ?? [];
+        rows.push(...page);
+        if (page.length < PAGE_SIZE) return { rows, error: null, truncated: false };
+    }
+    return { rows, error: null, truncated: true };
+}

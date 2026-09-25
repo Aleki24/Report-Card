@@ -5,7 +5,8 @@ import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { embedOne } from '@/lib/postgrest';
+import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { guardianKey, type ParentContact } from '@/lib/guardians';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
@@ -74,28 +75,28 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case 'students': {
-        let query = supabase
-          .from('students')
-          .select(`
-            id, admission_number, status, academic_level_id, current_grade_stream_id,
-            guardian_phone, guardian_name, guardian_email, gender, date_of_birth, date_enrolled, avatar_url,
-            pathway, track, subject_combination_id,
-            users!inner (first_name, last_name, email, school_id),
-            grade_streams (id, full_name, grade_id),
-            subject_combinations (id, code, name, pathway, track)
-          `)
-          .eq('users.school_id', schoolId);
-
         const gradeStreamId = searchParams.get('grade_stream_id');
-        if (gradeStreamId) {
-          query = query.eq('current_grade_stream_id', gradeStreamId);
-        }
+        // Paged: a school past 1,000 learners was silently cut short.
+        const { rows: data, error } = await fetchAllRows(() => {
+          let query = supabase
+            .from('students')
+            .select(`
+              id, admission_number, status, academic_level_id, current_grade_stream_id,
+              guardian_phone, guardian_name, guardian_email, gender, date_of_birth, date_enrolled, avatar_url,
+              pathway, track, subject_combination_id,
+              users!inner (first_name, last_name, email, phone, school_id),
+              grade_streams (id, full_name, grade_id),
+              subject_combinations (id, code, name, pathway, track)
+            `)
+            .eq('users.school_id', schoolId);
+          if (gradeStreamId) query = query.eq('current_grade_stream_id', gradeStreamId);
+          // Admission numbers are optional, so id keeps the page order stable.
+          return query.order('admission_number').order('id');
+        });
 
-        const { data, error } = await query.order('admission_number');
+        if (error) return NextResponse.json({ error: 'Could not load students.' }, { status: 400 });
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-        let filteredStudents = data ?? [];
+        let filteredStudents = data;
         const subjectId = searchParams.get('subject_id');
         if (auth.role !== 'ADMIN') {
           const perms = await getTeacherPermissions(auth.userId);
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'parents': {
-        const { data: studentsData, error: studentsError } = await supabase
+        const { rows: studentsData, error: studentsError } = await fetchAllRows(() => supabase
           .from('students')
           .select(`
             id, admission_number, guardian_name, guardian_phone, guardian_email,
@@ -130,25 +131,37 @@ export async function GET(request: NextRequest) {
             grade_streams (id, full_name)
           `)
           .eq('users.school_id', schoolId)
-          .not('guardian_name', 'is', null)
-          .order('guardian_name');
+          // A guardian with a phone but no name is still someone to reach.
+          .or('guardian_name.not.is.null,guardian_phone.not.is.null,guardian_email.not.is.null')
+          .order('id'));
 
-        if (studentsError) return NextResponse.json({ error: studentsError.message }, { status: 400 });
+        if (studentsError) return NextResponse.json({ error: 'Could not load parents.' }, { status: 400 });
 
-        const parentMap = new Map<string, { id: string; name: string; phone: string; email: string; students: any[] }>();
-        for (const s of studentsData ?? []) {
-          const key = s.guardian_phone || s.guardian_email || s.guardian_name || 'unknown';
-          if (!parentMap.has(key)) {
-            parentMap.set(key, { id: `parent_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, name: s.guardian_name || 'Unknown', phone: s.guardian_phone || '', email: s.guardian_email || '', students: [] });
+        const parentMap = new Map<string, ParentContact>();
+        for (const s of studentsData) {
+          const key = guardianKey(s.guardian_phone, s.guardian_email, s.guardian_name);
+          if (!key) continue;
+          const learner = embedOne(s.users);
+          let parent = parentMap.get(key);
+          if (!parent) {
+            parent = { id: `parent_${key.replace(/[^a-zA-Z0-9]/g, '_')}`, name: s.guardian_name?.trim() || '', phone: s.guardian_phone?.trim() || '', email: s.guardian_email?.trim() || '', students: [] };
+            parentMap.set(key, parent);
           }
-          parentMap.get(key)!.students.push({
+          // Siblings' records may each hold only part of the contact.
+          parent.name ||= s.guardian_name?.trim() || '';
+          parent.phone ||= s.guardian_phone?.trim() || '';
+          parent.email ||= s.guardian_email?.trim() || '';
+          parent.students.push({
             id: s.id, admission_number: s.admission_number,
-            first_name: (s.users as any)?.first_name || '', last_name: (s.users as any)?.last_name || '',
-            status: s.status, grade_stream: s.grade_streams,
+            first_name: learner?.first_name || '', last_name: learner?.last_name || '',
+            status: s.status, grade_stream: embedOne(s.grade_streams),
           });
         }
 
-        const parents = Array.from(parentMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        const parents = Array.from(parentMap.values(), p => ({
+          ...p,
+          name: p.name || `Guardian of ${p.students[0]?.first_name || 'a student'}`,
+        })).sort((a, b) => a.name.localeCompare(b.name));
         return NextResponse.json({ data: parents });
       }
 

@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { z } from 'zod';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { internalError } from '@/lib/api-errors';
+
+const requiredName = (label: string) => z.string().trim().min(1, `${label} can't be empty.`).max(100);
+
+const updateTeacherSchema = z.object({
+    teacher_id: z.string().min(1, 'teacher_id is required'),
+    first_name: requiredName('First name').optional(),
+    last_name: requiredName('Last name').optional(),
+    phone: z.string().trim().max(20).optional(),
+    avatar_url: z.string().url().or(z.literal('')).optional(),
+});
 
 export async function PATCH(request: NextRequest) {
     try {
@@ -9,18 +21,11 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { 
-            teacher_id, 
-            first_name, 
-            last_name, 
-            phone,
-            avatar_url,
-        } = body;
-
-        if (!teacher_id) {
-            return NextResponse.json({ error: 'teacher_id is required' }, { status: 400 });
+        const parsed = updateTeacherSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request.' }, { status: 400 });
         }
+        const { teacher_id, first_name, last_name, phone, avatar_url } = parsed.data;
 
         const supabaseAdmin = createSupabaseAdmin();
 
@@ -52,10 +57,10 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Build update object for users table
-        const userUpdates: Record<string, any> = {};
-        if (first_name !== undefined) userUpdates.first_name = first_name?.trim() || null;
-        if (last_name !== undefined) userUpdates.last_name = last_name?.trim() || null;
-        if (phone !== undefined) userUpdates.phone = phone?.trim() || null;
+        const userUpdates: { first_name?: string; last_name?: string; phone?: string | null; avatar_url?: string | null } = {};
+        if (first_name !== undefined) userUpdates.first_name = first_name;
+        if (last_name !== undefined) userUpdates.last_name = last_name;
+        if (phone !== undefined) userUpdates.phone = phone || null;
         if (avatar_url !== undefined) userUpdates.avatar_url = avatar_url || null;
 
         if (Object.keys(userUpdates).length > 0) {
@@ -64,14 +69,11 @@ export async function PATCH(request: NextRequest) {
                 .update(userUpdates)
                 .eq('id', teacher_id);
 
-            if (userError) {
-                return NextResponse.json({ error: `Update failed: ${userError.message}` }, { status: 400 });
-            }
+            if (userError) return internalError('update-teacher', userError);
         }
 
         return NextResponse.json({ success: true, message: 'Teacher updated successfully.' });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('update-teacher', err);
     }
 }

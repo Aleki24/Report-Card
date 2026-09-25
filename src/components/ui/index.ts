@@ -21,3 +21,4 @@ export { StepHeading } from './StepHeading';
 export { TONES, STEP_TONES } from './tones';
 export type { Tone, Hue } from './tones';
 export { RankBadge } from './RankBadge';
+export { StatFilterTile } from './StatFilterTile';
