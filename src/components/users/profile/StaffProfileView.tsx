@@ -115,7 +115,7 @@ export function StaffProfileView({ user, data, tab }: StaffProfileViewProps) {
 
       <ProfileSection title="Contact & account" icon={UserRound}>
         <InfoGrid>
-          <InfoItem icon={AtSign} label="Username" value={user.username} copyValue={user.username} />
+          {user.username && <InfoItem icon={AtSign} label="Username" value={user.username} copyValue={user.username} />}
           <InfoItem icon={Mail} label="Email" value={profile.email} href={profile.email ? `mailto:${profile.email}` : undefined} copyValue={profile.email} />
           <InfoItem icon={Phone} label="Phone" value={phone} href={phone ? `tel:${phone}` : undefined} copyValue={phone} />
           <InfoItem icon={isTeacher ? GraduationCap : ShieldCheck} label="Role" value={ROLE_META[profile.role].label} />

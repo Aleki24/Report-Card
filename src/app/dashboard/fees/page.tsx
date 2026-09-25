@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, List, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, ChevronDown, CircleDollarSign, History, Download, Ban, Receipt } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { requestJson, jsonBody } from '@/lib/api-error-message';
-import PageHeader from '@/components/dashboard/PageHeader';
-import StatCard from '@/components/dashboard/StatCard';
 import { Modal } from '@/components/ui/Modal';
-import { DataTable } from '@/components/ui';
+import { DataTable, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
+import { humanize } from '@/lib/text';
+import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { computeFeeStatus, isOverdue, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
 
@@ -39,7 +39,29 @@ interface StudentOption {
 interface TermOption {
     id: string;
     name: string;
+    academic_year_id: string | null;
 }
+
+/** Rows of /api/school/data?type=students, as far as this page reads them. */
+interface StudentApiRow {
+    id: string;
+    admission_number: string | null;
+    current_grade_stream_id: string | null;
+    status: string;
+    users: { first_name: string | null; last_name: string | null } | null;
+}
+
+const toStudentOption = (s: StudentApiRow): StudentOption => ({
+    id: s.id,
+    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
+    admission: s.admission_number ?? '',
+    gradeStreamId: s.current_grade_stream_id || null,
+    status: s.status,
+});
+
+type FeesMode = 'list' | 'payments' | 'batch';
+
+const methodLabel = (m: string) => (m === 'MPESA' ? 'M-Pesa' : humanize(m));
 
 interface StreamOption {
     id: string;
@@ -85,15 +107,19 @@ function formatCurrency(n: number): string {
     return `KSh ${n.toLocaleString()}`;
 }
 
-const statusBadge = (status: string) => {
-    const classes: Record<string, string> = {
-        PENDING: 'badge-warning',
-        PARTIAL: 'badge-info',
-        PAID: 'badge-success',
-        OVERPAID: 'badge-info',
-    };
-    return <span className={`badge whitespace-nowrap ${classes[status] || 'badge-info'}`}>{status}</span>;
+const STATUS_BADGE: Record<string, string> = {
+    PENDING: 'badge-warning',
+    PARTIAL: 'badge-info',
+    PAID: 'badge-success',
+    OVERPAID: 'badge-info',
+    COMPLETED: 'badge-success',
+    FAILED: 'badge-danger',
+    CANCELLED: 'badge-danger',
 };
+
+const statusBadge = (status: string) => (
+    <span className={`badge whitespace-nowrap ${STATUS_BADGE[status] || 'badge-warning'}`}>{humanize(status)}</span>
+);
 
 /** Balance figures: red when owing, green when settled (theme-aware viz tokens). */
 const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
@@ -112,9 +138,8 @@ export default function FeesPage() {
     const [editingFee, setEditingFee] = useState<FeeRecord | null>(null);
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [terms, setTerms] = useState<TermOption[]>([]);
+    const [years, setYears] = useState<TermSelectYear[]>([]);
     const [saving, setSaving] = useState(false);
-    const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-    const actionsRef = useRef<HTMLDivElement>(null);
 
     // Form state
     const [formStudent, setFormStudent] = useState('');
@@ -124,7 +149,7 @@ export default function FeesPage() {
     const [formNotes, setFormNotes] = useState('');
 
     // Batch entry state
-    const [mode, setMode] = useState<'list' | 'batch' | 'payments'>('list');
+    const [mode, setMode] = useState<FeesMode>('list');
     const [gradeStreams, setGradeStreams] = useState<StreamOption[]>([]);
     const [batchStream, setBatchStream] = useState('');
     const [batchTerm, setBatchTerm] = useState('');
@@ -153,22 +178,18 @@ export default function FeesPage() {
     const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
     const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
     const [plSearch, setPlSearch] = useState('');
+    // What the log is actually filtered by: the search box, 300ms after typing stops.
+    const [plSearchQuery, setPlSearchQuery] = useState('');
     const [plMethod, setPlMethod] = useState('');
     const [plStatus, setPlStatus] = useState('');
     const [plSource, setPlSource] = useState('');
     const [plDateFrom, setPlDateFrom] = useState('');
     const [plDateTo, setPlDateTo] = useState('');
 
-    // Close dropdown on outside click
     useEffect(() => {
-        const handleClick = (e: MouseEvent) => {
-            if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
-                setShowActionsDropdown(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
+        const timer = window.setTimeout(() => setPlSearchQuery(plSearch.trim()), 300);
+        return () => window.clearTimeout(timer);
+    }, [plSearch]);
 
     const fetchFees = useCallback(async () => {
         try {
@@ -189,26 +210,21 @@ export default function FeesPage() {
 
     useEffect(() => {
         (async () => {
-            const [sRes, tRes, gsRes] = await Promise.all([
+            const [sRes, tRes, gsRes, yRes] = await Promise.all([
                 fetch('/api/school/data?type=students'),
                 fetch('/api/school/data?type=terms'),
                 fetch('/api/school/data?type=grade_streams'),
+                fetch('/api/school/data?type=academic_years'),
             ]);
-            const sData = await sRes.json();
-            const tData = await tRes.json();
-            const gsData = await gsRes.json();
+            const sData: { data?: StudentApiRow[] } = await sRes.json();
+            const tData: { data?: (TermOption & { start_date: string; end_date: string })[] } = await tRes.json();
+            const gsData: { data?: StreamOption[] } = await gsRes.json();
+            const yData: { data?: TermSelectYear[] } = await yRes.json();
 
-            if (sData.data) {
-                setStudents(sData.data.map((s: any) => ({
-                    id: s.id,
-                    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-                    admission: s.admission_number,
-                    gradeStreamId: s.current_grade_stream_id || null,
-                    status: s.status,
-                })));
-            }
+            if (sData.data) setStudents(sData.data.map(toStudentOption));
+            if (yData.data) setYears(yData.data);
             if (tData.data) {
-                setTerms(tData.data.map((t: any) => ({ id: t.id, name: t.name })));
+                setTerms(tData.data.map(t => ({ id: t.id, name: t.name, academic_year_id: t.academic_year_id })));
                 // Auto-select the active term (Kenyan calendar), falling back to the first
                 if (!selectedTerm && tData.data.length > 0) {
                     setSelectedTerm(findActiveTermId(tData.data) || tData.data[0].id);
@@ -278,13 +294,9 @@ export default function FeesPage() {
         setFormDueDate('');
         setFormNotes('');
         setShowAddModal(true);
-        setShowActionsDropdown(false);
     };
 
-    const openBatch = () => {
-        setMode('batch');
-        setShowActionsDropdown(false);
-    };
+    const openBatch = () => setMode('batch');
 
     const openEdit = (fee: FeeRecord) => {
         setEditingFee(fee);
@@ -374,6 +386,7 @@ export default function FeesPage() {
                 setPaySaving(false);
                 return;
             }
+            toast.success(`Payment of ${formatCurrency(amountValue)} recorded for ${payingFee.studentName ?? 'the student'}`);
             setPayingFee(null);
             await fetchFees();
         } catch (err) {
@@ -423,7 +436,7 @@ export default function FeesPage() {
             if (plSource) params.set('source', plSource);
             if (plDateFrom) params.set('date_from', plDateFrom);
             if (plDateTo) params.set('date_to', plDateTo);
-            if (plSearch) params.set('search', plSearch);
+            if (plSearchQuery) params.set('search', plSearchQuery);
             const res = await fetch(`/api/school/fees/payments?${params}`);
             const json = await res.json();
             setPaymentsLog(json.data || []);
@@ -432,16 +445,12 @@ export default function FeesPage() {
             setPaymentsLog([]);
         }
         setPaymentsLogLoading(false);
-    }, [selectedTerm, plMethod, plStatus, plSource, plDateFrom, plDateTo, plSearch]);
+    }, [selectedTerm, plMethod, plStatus, plSource, plDateFrom, plDateTo, plSearchQuery]);
 
     useEffect(() => {
         if (mode === 'payments') fetchPaymentsLog();
     }, [mode, fetchPaymentsLog]);
 
-    const openPaymentsLog = () => {
-        setMode('payments');
-        setShowActionsDropdown(false);
-    };
 
     const voidLogPayment = async (payment: PaymentLogRow) => {
         if (!payment.studentFeeId) {
@@ -476,13 +485,9 @@ export default function FeesPage() {
         try {
             const res = await fetch(`/api/school/data?type=students&grade_stream_id=${batchStream}`);
             const json = await res.json();
-            const mapped: StudentOption[] = (json.data || [])
-                .filter((s: any) => !s.status || s.status === 'ACTIVE')
-                .map((s: any) => ({
-                    id: s.id,
-                    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-                    admission: s.admission_number || '',
-                }));
+            const mapped: StudentOption[] = ((json.data || []) as StudentApiRow[])
+                .filter(s => !s.status || s.status === 'ACTIVE')
+                .map(toStudentOption);
             setBatchStudents(mapped);
 
             const feeRes = await fetch(`/api/school/fees?term_id=${batchTerm || ''}`);
@@ -593,11 +598,6 @@ export default function FeesPage() {
         setBatchTerm('');
     };
 
-    const switchToList = () => {
-        setMode('list');
-        clearBatch();
-    };
-
     const totalRecords = fees.length;
 
     const exportExcel = () => {
@@ -608,97 +608,96 @@ export default function FeesPage() {
         window.location.href = `/api/school/fees/export?${params}`;
     };
 
+    const tabs: { id: FeesMode; label: string; icon: React.ReactNode; show: boolean }[] = [
+        { id: 'list', label: 'Fee records', icon: <FileText className="size-4" aria-hidden="true" />, show: true },
+        // The school-wide log exposes every receipt; it is admin-only on the server.
+        { id: 'payments', label: 'Payments', icon: <Receipt className="size-4" aria-hidden="true" />, show: isAdmin },
+        { id: 'batch', label: 'Batch entry', icon: <Layers className="size-4" aria-hidden="true" />, show: true },
+    ];
+
+    const changeMode = (next: FeesMode) => {
+        if (next === mode) return;
+        if (mode === 'batch') clearBatch();
+        setMode(next);
+    };
+
     return (
-        <div>
-            <PageHeader
-                title="Fees Management"
-                description="Track student fee balances and payment collection"
-                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Fees' }]}
-                action={
-                    <div className="flex gap-2 items-center flex-wrap">
-                        <select
-                            className="input-field"
-                            style={{ width: 'auto', minWidth: 140, height: 36 }}
+        <div className="mx-auto w-full max-w-7xl pb-10">
+            <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">Finance</p>
+                    <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Fees</h1>
+                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">Bill students each term, record payments and track what is still owed.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end">
+                    <label className="col-span-2 flex flex-col gap-1.5 sm:w-56">
+                        <span className="text-xs font-medium text-muted-foreground">Term</span>
+                        <TermSelect
+                            terms={terms}
+                            years={years}
                             value={selectedTerm}
-                            onChange={e => { setSelectedTerm(e.target.value); setLoading(true); }}
+                            onChange={v => { setSelectedTerm(v); setLoading(true); }}
+                            emptyLabel="All terms"
+                        />
+                    </label>
+                    {mode !== 'batch' && (
+                        <button
+                            className="btn-secondary h-11"
+                            onClick={mode === 'payments' ? exportPaymentsLog : exportExcel}
+                            title={mode === 'payments' ? 'Export the payments log to Excel' : 'Export the current view to Excel'}
                         >
-                            <option value="">All Terms</option>
-                            {terms.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                        </select>
+                            <Download className="size-4" aria-hidden="true" />Export
+                        </button>
+                    )}
+                    <button className={cn('btn-primary h-11', mode === 'batch' && 'col-span-2')} onClick={openAdd}>
+                        <Plus className="size-4" aria-hidden="true" />Add record
+                    </button>
+                </div>
+            </header>
 
-                        {mode === 'list' && (
-                            <button className="btn-secondary" onClick={exportExcel} title="Export the current view to Excel">
-                                <Download size={14} /> Export
-                            </button>
+            <div role="tablist" aria-label="Fees views" className="-mx-1 mb-5 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/40 p-1 sm:w-fit">
+                {tabs.filter(t => t.show).map(t => (
+                    <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={mode === t.id}
+                        onClick={() => changeMode(t.id)}
+                        className={cn(
+                            'flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none sm:gap-2 sm:px-4',
+                            mode === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                         )}
-                        {mode === 'payments' && (
-                            <button className="btn-secondary" onClick={exportPaymentsLog} title="Export the payments log to Excel">
-                                <Download size={14} /> Export
-                            </button>
-                        )}
-
-                        {mode === 'list' && isAdmin && (
-                            <button className="btn-secondary" onClick={openPaymentsLog}>
-                                <Receipt size={14} /> Payments Log
-                            </button>
-                        )}
-
-                        {mode === 'list' ? (
-                            <div className="relative" ref={actionsRef}>
-                                <button
-                                    className="btn-primary"
-                                    onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-                                >
-                                    <Plus size={14} /> Add Record <ChevronDown size={12} />
-                                </button>
-                                {showActionsDropdown && (
-                                    <div className="absolute right-0 top-full mt-1 w-52 bg-card border border-border rounded-xl shadow-lg z-50 py-1 animate-fade-in">
-                                        <button
-                                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
-                                            onClick={openAdd}
-                                        >
-                                            <FileText size={15} className="text-primary" />
-                                            Add Fee Record
-                                        </button>
-                                        <button
-                                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors text-left"
-                                            onClick={openBatch}
-                                        >
-                                            <Upload size={15} className="text-primary" />
-                                            Batch Entry
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <button className="btn-secondary" onClick={switchToList}>
-                                <List size={14} /> List View
-                            </button>
-                        )}
-                    </div>
-                }
-            />
+                    >
+                        {t.icon}{t.label}
+                    </button>
+                ))}
+            </div>
 
             {/* ── KPI Cards ── */}
-            <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <StatCard label="Expected" value={formatCurrency(kpi.expected)} sub={`${totalRecords} record(s)`} icon={Wallet} iconClassName="bg-primary/15 text-primary" />
-                <StatCard label="Collected" value={formatCurrency(kpi.collected)} sub={`${kpi.collectionRate}% collection rate`} icon={ArrowUpRight} iconClassName="bg-primary/15 text-primary" />
-                <StatCard label="Outstanding" value={formatCurrency(kpi.outstanding)} sub="Total unpaid balance" icon={Clock} iconClassName="bg-amber-500/15 text-amber-600" />
-                <StatCard label="Overdue" value={formatCurrency(kpi.overdueAmount)} sub={`${kpi.overdueCount} overdue record(s)`} icon={AlertTriangle} iconClassName="bg-destructive/15 text-destructive" />
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatTile icon={Wallet} label="Expected" value={formatCurrency(kpi.expected)} hint={`${totalRecords} record(s)`} />
+                <StatTile icon={ArrowUpRight} label="Collected" value={formatCurrency(kpi.collected)} hint={`${kpi.collectionRate}% collection rate`} tone="good" />
+                <StatTile icon={Clock} label="Outstanding" value={formatCurrency(kpi.outstanding)} hint="unpaid balance" tone={kpi.outstanding > 0 ? 'warn' : 'default'} />
+                <StatTile icon={AlertTriangle} label="Overdue" value={formatCurrency(kpi.overdueAmount)} hint={`${kpi.overdueCount} overdue record(s)`} tone={kpi.overdueCount > 0 ? 'bad' : 'default'} />
             </div>
 
             {/* ── Collection meter ── */}
-            <div className="mb-5 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
-                <div className="mb-2 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">Term collection progress</span>
+            <div className="mb-5 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-1 text-xs">
+                    <span className="font-semibold text-foreground">Collection progress</span>
                     <span className="text-muted-foreground">
                         {kpi.collectionRate}% collected · {kpi.collectionRate >= 80 ? 'Healthy' : kpi.collectionRate >= 50 ? 'Moderate' : 'Needs attention'}
                     </span>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-primary/15">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, kpi.collectionRate)}%` }} />
+                <div
+                    role="meter"
+                    aria-label="Share of expected fees collected"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.min(100, kpi.collectionRate)}
+                    className="h-2.5 w-full overflow-hidden rounded-full bg-primary/15"
+                >
+                    <div className={cn('h-full rounded-full transition-[width] duration-500', kpi.collectionRate >= 80 ? 'bg-emerald-500' : kpi.collectionRate >= 50 ? 'bg-primary' : 'bg-amber-500')} style={{ width: `${Math.min(100, kpi.collectionRate)}%` }} />
                 </div>
             </div>
 
@@ -707,11 +706,12 @@ export default function FeesPage() {
             {/* ════════════════════════════════════════════ */}
             {mode === 'batch' && (
                 <div>
-                    <div className="card mb-4 p-5">
-                        <h3 className="font-bold text-sm mb-3">Batch Fee Entry</h3>
-                        <div className="flex flex-wrap gap-4 items-end">
-                            <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs text-muted-foreground mb-2 font-medium">Class/Stream</label>
+                    <div className="mb-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+                        <h2 className="font-semibold">Batch fee entry</h2>
+                        <p className="mt-0.5 mb-4 text-xs text-muted-foreground">Pick a class and term, then enter each student&apos;s fee and anything already paid.</p>
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                            <div>
+                                <label className="mb-2 block text-xs font-medium text-muted-foreground">Class</label>
                                 <select className="input-field w-full" value={batchStream} onChange={e => setBatchStream(e.target.value)}>
                                     <option value="">Select class...</option>
                                     {gradeStreams.map(s => (
@@ -719,26 +719,21 @@ export default function FeesPage() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs text-muted-foreground mb-2 font-medium">Term</label>
-                                <select className="input-field w-full" value={batchTerm} onChange={e => setBatchTerm(e.target.value)}>
-                                    <option value="">Select term...</option>
-                                    {terms.map(t => (
-                                        <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
-                                </select>
+                            <div>
+                                <label className="mb-2 block text-xs font-medium text-muted-foreground">Term</label>
+                                <TermSelect terms={terms} years={years} value={batchTerm} onChange={setBatchTerm} emptyLabel="Select term…" />
                             </div>
-                            <div className="flex gap-2">
+                            <div className="grid grid-cols-2 gap-2">
                                 <button className="btn-primary" onClick={saveBatch} disabled={batchSaving || !batchStream || !batchTerm || batchStudents.length === 0}>
-                                    <Save size={14} /> {batchSaving ? 'Saving...' : 'Save All'}
+                                    <Save className="size-4" aria-hidden="true" />{batchSaving ? 'Saving…' : 'Save all'}
                                 </button>
                                 <button className="btn-secondary" onClick={clearBatch}>
-                                    <RotateCcw size={14} /> Clear
+                                    <RotateCcw className="size-4" aria-hidden="true" />Clear
                                 </button>
                             </div>
                         </div>
                         {batchMsg && (
-                            <div className={`mt-3 p-3 rounded-md text-sm ${batchMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                            <div role={batchMsg.type === 'error' ? 'alert' : 'status'} className={cn('mt-3 rounded-xl border p-3 text-sm', batchMsg.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'border-destructive/30 bg-destructive/5 text-destructive')}>
                                 {batchMsg.text}
                             </div>
                         )}
@@ -747,21 +742,21 @@ export default function FeesPage() {
                     {batchStream && batchTerm && (
                         <>
                             {batchStudents.length === 0 ? (
-                                <div className="card py-12 text-center text-muted-foreground text-sm">
-                                    Select a class and term, then students will load here.
+                                <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                                    No active students in this class.
                                 </div>
                             ) : (
-                                <div style={{ overflowX: 'auto' }}>
+                                <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
                                     <div className="w-full overflow-x-auto">
                                       <table className="data-table">
                                           <thead>
                                               <tr>
-                                                  <th style={{ minWidth: 180 }}>Student</th>
+                                                  <th className="min-w-44">Student</th>
                                                   <th>Admission</th>
-                                                  <th style={{ minWidth: 120 }}>Total Fee (KShs)</th>
-                                                  <th style={{ minWidth: 120 }}>Paid (KShs)</th>
-                                                  <th style={{ minWidth: 100 }}>Balance</th>
-                                                  <th style={{ minWidth: 140 }}>Due Date</th>
+                                                  <th className="min-w-28">Total fee (KSh)</th>
+                                                  <th className="min-w-28">Paid (KSh)</th>
+                                                  <th className="min-w-24">Balance</th>
+                                                  <th className="min-w-36">Due date</th>
                                                   <th>Notes</th>
                                                   <th>Status</th>
                                               </tr>
@@ -783,8 +778,7 @@ export default function FeesPage() {
                                                                   type="number"
                                                                   min="0"
                                                                   step="0.01"
-                                                                  className="input-field w-full"
-                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  className="input-field input-field-sm w-full min-w-24"
                                                                   placeholder="0"
                                                                   value={entry?.total || ''}
                                                                   onChange={e => updateBatchEntry(s.id, 'total', e.target.value)}
@@ -795,21 +789,19 @@ export default function FeesPage() {
                                                                   type="number"
                                                                   min="0"
                                                                   step="0.01"
-                                                                  className="input-field w-full"
-                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  className="input-field input-field-sm w-full min-w-24"
                                                                   placeholder="0"
                                                                   value={entry?.paid || ''}
                                                                   onChange={e => updateBatchEntry(s.id, 'paid', e.target.value)}
                                                               />
                                                           </td>
-                                                          <td data-label="Balance" style={{ fontFamily: 'monospace', color: balanceColor(balance), fontWeight: 600 }}>
+                                                          <td data-label="Balance" className="font-mono font-semibold tabular-nums" style={{ color: balanceColor(balance) }}>
                                                               {hasTotal ? balance.toLocaleString() : '—'}
                                                           </td>
                                                           <td data-label="Due Date">
                                                               <input
                                                                   type="date"
-                                                                  className="input-field"
-                                                                  style={{ minWidth: 130, height: 32, fontSize: 12 }}
+                                                                  className="input-field input-field-sm min-w-32"
                                                                   value={entry?.dueDate || ''}
                                                                   onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)}
                                                               />
@@ -817,8 +809,7 @@ export default function FeesPage() {
                                                           <td data-label="Notes">
                                                               <input
                                                                   type="text"
-                                                                  className="input-field"
-                                                                  style={{ minWidth: 100, height: 32, fontSize: 12 }}
+                                                                  className="input-field input-field-sm w-full min-w-24"
                                                                   placeholder="Notes"
                                                                   value={entry?.notes || ''}
                                                                   onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)}
@@ -843,41 +834,45 @@ export default function FeesPage() {
             {/* ════════════════════════════════════════════ */}
             {mode === 'payments' && (
                 <div>
-                    <div className="card p-4 mb-4">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="relative flex-1 min-w-[200px] max-w-xs">
-                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                <input
-                                    type="text"
-                                    placeholder="Search student, admission, or receipt..."
-                                    value={plSearch}
-                                    onChange={e => setPlSearch(e.target.value)}
-                                    className="input-field input-icon-left w-full"
-                                />
-                            </div>
-                            <select className="input-field min-w-[130px]" value={plMethod} onChange={e => setPlMethod(e.target.value)}>
-                                <option value="">All Methods</option>
-                                {FEE_PAYMENT_METHODS.map(m => (
-                                    <option key={m} value={m}>{m === 'MPESA' ? 'M-Pesa' : m.charAt(0) + m.slice(1).toLowerCase()}</option>
-                                ))}
+                    <section aria-label="Payment filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
+                        <div className="relative">
+                            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                            <input
+                                type="text"
+                                placeholder="Search student, admission no. or receipt"
+                                aria-label="Search payments"
+                                value={plSearch}
+                                onChange={e => setPlSearch(e.target.value)}
+                                className="input-field input-icon-left w-full"
+                            />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
+                            <select className="input-field" aria-label="Payment method" value={plMethod} onChange={e => setPlMethod(e.target.value)}>
+                                <option value="">All methods</option>
+                                {FEE_PAYMENT_METHODS.map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
                             </select>
-                            <select className="input-field min-w-[130px]" value={plSource} onChange={e => setPlSource(e.target.value)}>
-                                <option value="">Auto & Manual</option>
+                            <select className="input-field" aria-label="Payment source" value={plSource} onChange={e => setPlSource(e.target.value)}>
+                                <option value="">Auto &amp; manual</option>
                                 <option value="AUTO">Auto only</option>
                                 <option value="MANUAL">Manual only</option>
                             </select>
-                            <select className="input-field min-w-[130px]" value={plStatus} onChange={e => setPlStatus(e.target.value)}>
-                                <option value="">All Statuses</option>
+                            <select className="input-field col-span-2 md:col-span-1" aria-label="Payment status" value={plStatus} onChange={e => setPlStatus(e.target.value)}>
+                                <option value="">All statuses</option>
                                 <option value="COMPLETED">Completed</option>
                                 <option value="PENDING">Pending</option>
                                 <option value="FAILED">Failed</option>
                                 <option value="CANCELLED">Cancelled</option>
                             </select>
-                            <input type="date" className="input-field" value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} title="From date" />
-                            <input type="date" className="input-field" value={plDateTo} onChange={e => setPlDateTo(e.target.value)} title="To date" />
-                            <button className="btn-secondary" onClick={fetchPaymentsLog}>Apply</button>
+                            <label className="relative">
+                                <span className="pointer-events-none absolute -top-2 left-3 bg-card px-1 text-[10px] font-medium text-muted-foreground">From</span>
+                                <input type="date" className="input-field w-full" value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} aria-label="Paid from" />
+                            </label>
+                            <label className="relative">
+                                <span className="pointer-events-none absolute -top-2 left-3 bg-card px-1 text-[10px] font-medium text-muted-foreground">To</span>
+                                <input type="date" className="input-field w-full" value={plDateTo} min={plDateFrom || undefined} onChange={e => setPlDateTo(e.target.value)} aria-label="Paid to" />
+                            </label>
                         </div>
-                    </div>
+                    </section>
 
                     <DataTable<PaymentLogRow>
                         columns={[
@@ -898,7 +893,7 @@ export default function FeesPage() {
                             { key: 'amount', header: 'Amount', numeric: true, render: p => <span className="font-semibold">{formatCurrency(p.amount)}</span> },
                             {
                                 key: 'method', header: 'Method',
-                                render: p => <span>{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</span>,
+                                render: p => <span>{methodLabel(p.method)}</span>,
                             },
                             {
                                 key: 'transactionCode', header: 'Transaction Code', hideOnMobile: true,
@@ -914,11 +909,7 @@ export default function FeesPage() {
                             },
                             {
                                 key: 'status', header: 'Status',
-                                render: p => (
-                                    <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : p.status === 'FAILED' ? 'badge-danger' : 'badge-warning'}`}>
-                                        {p.status}
-                                    </span>
-                                ),
+                                render: p => statusBadge(p.status),
                             },
                             {
                                 key: 'recordedBy', header: 'Recorded By', hideOnMobile: true,
@@ -949,7 +940,7 @@ export default function FeesPage() {
                                 )}
                             </span>
                         )}
-                        emptyState={<p className="text-sm">No payments found for the current filters.</p>}
+                        emptyState={<p className="py-6 text-sm">No payments match these filters.</p>}
                     />
                 </div>
             )}
@@ -959,56 +950,42 @@ export default function FeesPage() {
             {/* ════════════════════════════════════════════ */}
             {mode === 'list' && (
                 <>
-                    {/* ── Smart Filters ── */}
-                    <div className="card p-4 mb-4">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="relative flex-1 min-w-[200px] max-w-xs">
-                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                <input
-                                    type="text"
-                                    placeholder="Search student or admission..."
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                    className="input-field input-icon-left w-full"
-                                />
-                            </div>
-                            <div className="min-w-[140px]">
-                                <select
-                                    className="input-field w-full"
-                                    value={statusFilter}
-                                    onChange={e => setStatusFilter(e.target.value)}
-                                >
-                                    <option value="">All Statuses</option>
-                                    <option value="PENDING">Pending</option>
-                                    <option value="PARTIAL">Partial</option>
-                                    <option value="PAID">Paid</option>
-                                    <option value="OVERPAID">Overpaid</option>
-                                </select>
-                            </div>
-                            <div className="min-w-[180px]">
-                                <select
-                                    className="input-field w-full"
-                                    value={streamFilter}
-                                    onChange={e => setStreamFilter(e.target.value)}
-                                >
-                                    <option value="">All Classes</option>
-                                    {gradeStreams.map(s => (
-                                        <option key={s.id} value={s.id}>{s.full_name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                                {filtered.length} of {fees.length} record(s)
-                            </span>
+                    <section aria-label="Fee filters" className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 md:grid-cols-[minmax(0,1fr)_11rem_13rem]">
+                        <div className="relative col-span-2 md:col-span-1">
+                            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                            <input
+                                type="text"
+                                placeholder="Search student or admission no."
+                                aria-label="Search fee records"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="input-field input-icon-left w-full"
+                            />
                         </div>
-                    </div>
+                        <select className="input-field" aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                            <option value="">All statuses</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="PARTIAL">Partial</option>
+                            <option value="PAID">Paid</option>
+                            <option value="OVERPAID">Overpaid</option>
+                        </select>
+                        <select className="input-field" aria-label="Filter by class" value={streamFilter} onChange={e => setStreamFilter(e.target.value)}>
+                            <option value="">All classes</option>
+                            {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                        </select>
+                        <p className="col-span-2 text-xs text-muted-foreground md:col-span-3" aria-live="polite">
+                            {filtered.length === fees.length ? `${fees.length} record(s)` : `${filtered.length} of ${fees.length} record(s)`}
+                        </p>
+                    </section>
 
                     {/* ── Empty State / Table ── */}
                     {loading ? (
-                        <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+                        <div className="space-y-2" aria-hidden="true">
+                            {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/60" />)}
+                        </div>
                     ) : fees.length === 0 ? (
                         /* ── Guided Onboarding Empty State ── */
-                        <div className="card py-12 px-6 text-center">
+                        <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
                             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
                                 <Wallet size={32} className="text-primary" />
                             </div>
@@ -1018,25 +995,25 @@ export default function FeesPage() {
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
                                 <button
-                                    className="card p-5 text-left hover:border-primary/60 transition-all cursor-pointer"
+                                    className="rounded-2xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
                                     onClick={openAdd}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center mb-3">
                                         <FileText size={20} />
                                     </div>
-                                    <h4 className="font-bold text-sm mb-1">Add Fee Record</h4>
+                                    <h4 className="font-bold text-sm mb-1">Add a fee record</h4>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
                                         Create a fee record for an individual student with amount, due date, and notes.
                                     </p>
                                 </button>
                                 <button
-                                    className="card p-5 text-left hover:border-primary/60 transition-all cursor-pointer"
+                                    className="rounded-2xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
                                     onClick={openBatch}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center mb-3">
                                         <Upload size={20} />
                                     </div>
-                                    <h4 className="font-bold text-sm mb-1">Batch Entry</h4>
+                                    <h4 className="font-bold text-sm mb-1">Batch entry</h4>
                                     <p className="text-xs text-muted-foreground leading-relaxed">
                                         Select a class and term, then bulk-enter fees for multiple students at once.
                                     </p>
@@ -1049,9 +1026,9 @@ export default function FeesPage() {
                                 {
                                     key: 'student', header: 'Student',
                                     render: fee => (
-                                        <div>
-                                            <div className="font-semibold text-sm">{fee.studentName || '—'}</div>
-                                            <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}</div>
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-semibold">{fee.studentName || '—'}</div>
+                                            <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}{fee.termName ? ` · ${fee.termName}` : ''}</div>
                                         </div>
                                     ),
                                 },
@@ -1087,18 +1064,28 @@ export default function FeesPage() {
                             rowKey={fee => fee.id}
                             rowActions={fee => (
                                 <span className="whitespace-nowrap">
-                                    <button className="btn-icon text-primary hover:text-primary" onClick={() => openPay(fee)} title="Record Payment"><CircleDollarSign size={14} /></button>
-                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment History"><History size={14} /></button>
-                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit"><Edit3 size={14} /></button>
-                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete"><Trash2 size={14} /></button>}
+                                    <button className="btn-icon text-primary hover:text-primary" onClick={() => openPay(fee)} title="Record payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign size={14} /></button>
+                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment history" aria-label={`Payment history for ${fee.studentName ?? 'student'}`}><History size={14} /></button>
+                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>
+                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
                                 </span>
                             )}
                             emptyState={<p className="text-sm">No matching records found for the current filters.</p>}
                         />
                     )}
 
-                    <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={editingFee ? 'Edit Fee Record' : 'Add Fee Record'}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <Modal
+                        isOpen={showAddModal}
+                        onClose={() => setShowAddModal(false)}
+                        title={editingFee ? 'Edit fee record' : 'Add fee record'}
+                        footer={<>
+                            <button className="btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleSave} disabled={saving || !formTotal}>
+                                {saving ? 'Saving…' : editingFee ? 'Save changes' : 'Create record'}
+                            </button>
+                        </>}
+                    >
+                        <div className="flex flex-col gap-4">
                             {!editingFee && (
                                 <>
                                     <div>
@@ -1121,16 +1108,7 @@ export default function FeesPage() {
                                     </div>
                                     <div>
                                         <label className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
-                                        <select
-                                            value={formTerm}
-                                            onChange={e => { setFormTerm(e.target.value); setFormStudent(''); }}
-                                            className="input-field w-full"
-                                        >
-                                            <option value="">Select term...</option>
-                                            {terms.map(t => (
-                                                <option key={t.id} value={t.id}>{t.name}</option>
-                                            ))}
-                                        </select>
+                                        <TermSelect terms={terms} years={years} value={formTerm} onChange={v => { setFormTerm(v); setFormStudent(''); }} emptyLabel="Select term…" />
                                     </div>
                                 </>
                             )}
@@ -1151,19 +1129,23 @@ export default function FeesPage() {
                                 <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
                                 <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={3} placeholder="Optional notes..." className="input-field w-full resize-y" />
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-                                <button className="btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-                                <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                                    {saving ? 'Saving...' : editingFee ? 'Update' : 'Create'}
-                                </button>
-                            </div>
                         </div>
                     </Modal>
 
                     {/* ── Record Payment ── */}
-                    <Modal isOpen={!!payingFee} onClose={() => setPayingFee(null)} title="Record Payment">
+                    <Modal
+                        isOpen={!!payingFee}
+                        onClose={() => setPayingFee(null)}
+                        title="Record payment"
+                        footer={<>
+                            <button className="btn-secondary" onClick={() => setPayingFee(null)}>Cancel</button>
+                            <button className="btn-primary" onClick={submitPayment} disabled={paySaving}>
+                                {paySaving ? 'Saving…' : 'Record payment'}
+                            </button>
+                        </>}
+                    >
                         {payingFee && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div className="flex flex-col gap-4">
                                 <div className="rounded-xl bg-muted/40 p-3 text-sm">
                                     <div className="font-semibold">{payingFee.studentName}</div>
                                     <div className="text-xs text-muted-foreground">
@@ -1172,13 +1154,13 @@ export default function FeesPage() {
                                 </div>
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
-                                    <input type="number" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
+                                    <input type="number" inputMode="decimal" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
                                 </div>
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Payment Method</label>
                                     <select value={payMethod} onChange={e => setPayMethod(e.target.value as FeePaymentMethod)} className="input-field w-full">
                                         {FEE_PAYMENT_METHODS.map(m => (
-                                            <option key={m} value={m}>{m === 'MPESA' ? 'M-Pesa' : m.charAt(0) + m.slice(1).toLowerCase()}</option>
+                                            <option key={m} value={m}>{methodLabel(m)}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -1195,25 +1177,19 @@ export default function FeesPage() {
                                 </div>
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
-                                    <input type="text" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
+                                    <input type="tel" inputMode="tel" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
                                 </div>
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
                                     <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} rows={2} className="input-field w-full resize-y" />
                                 </div>
-                                {payError && <p className="text-sm text-destructive">{payError}</p>}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-                                    <button className="btn-secondary" onClick={() => setPayingFee(null)}>Cancel</button>
-                                    <button className="btn-primary" onClick={submitPayment} disabled={paySaving}>
-                                        {paySaving ? 'Saving...' : 'Record Payment'}
-                                    </button>
-                                </div>
+                                {payError && <p role="alert" className="text-sm text-destructive">{payError}</p>}
                             </div>
                         )}
                     </Modal>
 
                     {/* ── Payment History ── */}
-                    <Modal isOpen={!!historyFee} onClose={() => setHistoryFee(null)} title="Payment History" size="lg">
+                    <Modal isOpen={!!historyFee} onClose={() => setHistoryFee(null)} title="Payment history" size="lg">
                         {historyFee && (
                             <div>
                                 <div className="mb-4 rounded-xl bg-muted/40 p-3 text-sm">
@@ -1227,7 +1203,7 @@ export default function FeesPage() {
                                 ) : historyPayments.length === 0 ? (
                                     <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded yet.</p>
                                 ) : (
-                                    <div style={{ overflowX: 'auto' }}>
+                                    <div className="overflow-hidden rounded-xl border border-border/70">
                                         <div className="w-full overflow-x-auto">
                                           <table className="data-table">
                                               <thead>
@@ -1246,13 +1222,11 @@ export default function FeesPage() {
                                                       <tr key={p.id}>
                                                           <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
                                                           <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
-                                                          <td data-label="Method">{p.method === 'MPESA' ? 'M-Pesa' : p.method.charAt(0) + p.method.slice(1).toLowerCase()}</td>
+                                                          <td data-label="Method">{methodLabel(p.method)}</td>
                                                           <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
                                                           <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                           <td data-label="Status">
-                                                              <span className={`badge whitespace-nowrap ${p.status === 'CANCELLED' ? 'badge-danger' : p.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
-                                                                  {p.status}
-                                                              </span>
+                                                              {statusBadge(p.status)}
                                                           </td>
                                                           <td data-label="" className="whitespace-nowrap text-right">
                                                               {p.status !== 'CANCELLED' && (

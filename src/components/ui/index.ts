@@ -12,3 +12,7 @@ export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 export { default as DataTable } from './DataTable';
 export type { DataTableColumn } from './DataTable';
 export { default as FilterBar, FilterField } from './FilterBar';
+export { StatTile } from './StatTile';
+export type { StatTone } from './StatTile';
+export { TermSelect } from './TermSelect';
+export type { TermSelectTerm, TermSelectYear } from './TermSelect';

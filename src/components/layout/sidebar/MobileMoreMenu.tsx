@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
-import { type NavItem, roleBadgeColors } from './navItems';
+import { type NavItem, roleBadgeColors, routeMatches } from './navItems';
 import type { UserRole } from '@/types';
 
 interface MobileMoreMenuProps {
@@ -59,7 +59,7 @@ export function MobileMoreMenu({
                         </div>
 
                         {overflowItems.map((item) => {
-                            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                            const isActive = routeMatches(pathname, item.href);
                             return (
                                 <Link
                                     key={item.href}

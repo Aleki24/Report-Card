@@ -67,7 +67,7 @@ export function StatusBadge({ active, label, className }: { active: boolean; lab
       )}
     >
       <span className={cn('size-1.5 rounded-full', active ? 'bg-emerald-500' : 'bg-amber-500')} aria-hidden="true" />
-      {label ?? (active ? 'Active' : 'Inactive')}
+      {label ?? (active ? 'Active' : 'Not active')}
     </span>
   );
 }

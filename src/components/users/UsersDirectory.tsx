@@ -11,7 +11,7 @@ import type { RoleCounts, UserRow } from '@/hooks/useUsersPage';
 import { RoleBadge, StatusBadge, UserAvatar } from './UserBadges';
 import {
   ROLE_FILTERS, describeUser, formatDate, fullName,
-  type DirectoryView, type RoleFilter, type StatusFilter, type UserSort,
+  type ClassFilter, type DirectoryView, type GradeGroup, type RoleFilter, type StatusFilter, type UserSort,
 } from './userMeta';
 
 interface UsersDirectoryProps {
@@ -30,6 +30,10 @@ interface UsersDirectoryProps {
   setStatusFilter: (val: StatusFilter) => void;
   sortBy: UserSort;
   setSortBy: (val: UserSort) => void;
+  classFilter: ClassFilter;
+  setClassFilter: (val: ClassFilter) => void;
+  /** Grades and their streams; the class filter is hidden when there are none. */
+  gradeGroups: GradeGroup[];
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   view: DirectoryView;
@@ -92,7 +96,7 @@ function UserCard({ user, resetting, onView, onEdit, onResetPassword }: ItemProp
           <UserAvatar firstName={user.first_name} lastName={user.last_name} role={user.role} imageUrl={user.avatar_url} size="md" />
           <span
             className={cn('absolute right-0 bottom-0 size-3.5 rounded-full border-2 border-card', user.is_active ? 'bg-emerald-500' : 'bg-amber-500')}
-            title={user.is_active ? 'Active' : 'Inactive'}
+            title={user.is_active ? 'Active' : 'Not active (not yet activated, or switched off)'}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -207,12 +211,13 @@ const VIEW_OPTIONS: readonly { value: DirectoryView; label: string; icon: Lucide
 export function UsersDirectory(props: UsersDirectoryProps) {
   const {
     loading, totalUsers, paginatedUsers, filteredCount, roleCounts, totalPages, currentPage, setCurrentPage, usersPerPage,
-    roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy, searchQuery, setSearchQuery,
+    roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy, classFilter, setClassFilter, gradeGroups, searchQuery, setSearchQuery,
     view, setView, resettingPasswordId, onView, onEdit, onResetPassword, onAddUser,
   } = props;
 
-  const hasFilters = roleFilter !== 'ALL' || statusFilter !== 'ALL' || searchQuery.trim() !== '';
-  const clearFilters = () => { setRoleFilter('ALL'); setStatusFilter('ALL'); setSearchQuery(''); };
+  const hasFilters = roleFilter !== 'ALL' || statusFilter !== 'ALL' || classFilter !== '' || searchQuery.trim() !== '';
+  const clearFilters = () => { setRoleFilter('ALL'); setStatusFilter('ALL'); setClassFilter(''); setSearchQuery(''); };
+  const showClassFilter = gradeGroups.length > 0;
   const itemProps = (u: UserRow): ItemProps => ({ user: u, resetting: resettingPasswordId === u.id, onView, onEdit, onResetPassword });
 
   const renderBody = () => {
@@ -270,7 +275,7 @@ export function UsersDirectory(props: UsersDirectoryProps) {
     <section aria-label="User directory" className="rounded-3xl border border-border/70 bg-card/60 p-3 shadow-sm sm:p-5">
       {/* Toolbar: search + layout toggle on the first row and the two selects on the
           second on phones; one row from lg, with the toggle moved to the end. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]">
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_auto] gap-2', showClassFilter ? 'lg:grid-cols-[minmax(0,1fr)_13rem_9.5rem_9.5rem_auto]' : 'lg:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]')}>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <input
@@ -303,10 +308,27 @@ export function UsersDirectory(props: UsersDirectoryProps) {
           ))}
         </div>
         <div className="col-span-2 grid grid-cols-2 gap-2 lg:contents">
+          {showClassFilter && (
+            // Native select: optgroups give each grade a "whole grade" option above its streams.
+            <select
+              className="input-field col-span-2 lg:col-span-1"
+              aria-label="Filter students by class"
+              value={classFilter}
+              onChange={e => setClassFilter(e.target.value as ClassFilter)}
+            >
+              <option value="">All classes</option>
+              {gradeGroups.map(g => (
+                <optgroup key={g.grade} label={g.grade}>
+                  <option value={`grade:${g.grade}`}>All of {g.grade}</option>
+                  {g.classes.filter(c => c !== g.grade).map(c => <option key={c} value={`class:${c}`}>{c}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          )}
           <select className="input-field" aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
             <option value="ALL">Any status</option>
             <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
+            <option value="INACTIVE">Not active</option>
           </select>
           <select className="input-field" aria-label="Sort users" value={sortBy} onChange={e => setSortBy(e.target.value as UserSort)}>
             <option value="newest">Newest first</option>

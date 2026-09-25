@@ -185,7 +185,7 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
         >
           <InfoGrid>
             <InfoItem icon={Hash} label="Admission no." value={profile.admission_number} copyValue={profile.admission_number} />
-            <InfoItem icon={AtSign} label="Username" value={user.username} copyValue={user.username} />
+            {user.username && <InfoItem icon={AtSign} label="Username" value={user.username} copyValue={user.username} />}
             <InfoItem icon={UserRound} label="Gender" value={profile.gender ? humanize(profile.gender) : null} />
             <InfoItem icon={Cake} label="Date of birth" value={profile.date_of_birth ? `${formatDate(profile.date_of_birth)}${age !== null ? ` · ${age} yrs` : ''}` : null} />
             <InfoItem icon={CalendarDays} label="Enrolled" value={profile.date_enrolled ? formatDate(profile.date_enrolled) : null} />

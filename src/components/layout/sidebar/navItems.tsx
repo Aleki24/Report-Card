@@ -80,7 +80,12 @@ const unlistedRoutes: Pick<NavItem, 'href' | 'roles'>[] = [
     { href: '/dashboard/admin-tools', roles: adminRoles },
 ];
 
-const routeMatches = (pathname: string, href: string) =>
+/**
+ * Whether a menu link covers `pathname`: its own page, or a page nested under
+ * it (never a sibling that merely shares the prefix). Home links match only
+ * themselves. Shared by access checks and every menu's active state.
+ */
+export const routeMatches = (pathname: string, href: string) =>
     pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(`${href}/`));
 
 /**

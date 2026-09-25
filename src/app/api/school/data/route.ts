@@ -297,7 +297,7 @@ export async function GET(request: NextRequest) {
           .from('users')
           .select(`
             id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, job_title, avatar_url,
-            students!left ( admission_number, avatar_url, grade_streams ( full_name ) )
+            students!left ( admission_number, avatar_url, grade_streams ( full_name, grades ( name_display, numeric_order ) ) )
           `)
           .eq('school_id', schoolId)
           .order('created_at', { ascending: false });
@@ -308,11 +308,15 @@ export async function GET(request: NextRequest) {
         // students.avatar_url, everyone else's on users.avatar_url.
         const mapped = (data ?? []).map(({ students, ...u }) => {
           const student = embedOne(students);
+          const stream = embedOne(student?.grade_streams);
+          const grade = embedOne(stream?.grades);
           return {
             ...u,
             avatar_url: student?.avatar_url ?? u.avatar_url ?? null,
             admission_number: student?.admission_number ?? null,
-            class_name: embedOne(student?.grade_streams)?.full_name ?? null,
+            class_name: stream?.full_name ?? null,
+            grade_name: grade?.name_display ?? null,
+            grade_order: grade?.numeric_order ?? null,
           };
         });
         return NextResponse.json({ data: mapped });

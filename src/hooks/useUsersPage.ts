@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
-import { fullName, roleGroupOf, type RoleFilter, type StatusFilter, type UserSort } from '@/components/users/userMeta';
+import { fullName, roleGroupOf, type ClassFilter, type GradeGroup, type RoleFilter, type StatusFilter, type UserSort } from '@/components/users/userMeta';
 
 export interface UserRow {
   id: string;
@@ -20,6 +20,9 @@ export interface UserRow {
   avatar_url?: string | null;
   /** Students only: the class (grade stream) they are currently in. */
   class_name?: string | null;
+  /** Students only: that class's grade, and its place in the school's order. */
+  grade_name?: string | null;
+  grade_order?: number | null;
 }
 
 export type RoleCounts = Record<RoleFilter, number>;
@@ -55,6 +58,7 @@ export function useUsersPage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [sortBy, setSortBy] = useState<UserSort>('newest');
+  const [classFilter, setClassFilter] = useState<ClassFilter>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 12;
@@ -242,7 +246,20 @@ export function useUsersPage() {
     finally { setSubmitting(false); }
   };
 
-  useEffect(() => { setCurrentPage(1); }, [users.length, roleFilter, statusFilter, sortBy, searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [users.length, roleFilter, statusFilter, sortBy, searchQuery, classFilter]);
+
+  const gradeGroups = useMemo<GradeGroup[]>(() => {
+    const byGrade = new Map<string, { order: number; classes: Set<string> }>();
+    for (const u of users) {
+      if (!u.grade_name || !u.class_name) continue;
+      const entry = byGrade.get(u.grade_name) ?? { order: u.grade_order ?? Number.MAX_SAFE_INTEGER, classes: new Set<string>() };
+      entry.classes.add(u.class_name);
+      byGrade.set(u.grade_name, entry);
+    }
+    return [...byGrade.entries()]
+      .sort(([a, x], [b, y]) => x.order - y.order || a.localeCompare(b, undefined, { numeric: true }))
+      .map(([grade, { classes }]) => ({ grade, classes: [...classes].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) }));
+  }, [users]);
 
   const { roleCounts, inactiveCount } = useMemo(() => {
     const counts: RoleCounts = { ALL: users.length, ADMIN: 0, TEACHER: 0, STAFF: 0, STUDENT: 0 };
@@ -259,6 +276,10 @@ export function useUsersPage() {
     let filtered = users;
     if (roleFilter !== 'ALL') filtered = filtered.filter(u => roleGroupOf(u.role) === roleFilter);
     if (statusFilter !== 'ALL') filtered = filtered.filter(u => u.is_active === (statusFilter === 'ACTIVE'));
+    if (classFilter) {
+      const [kind, name] = [classFilter.slice(0, classFilter.indexOf(':')), classFilter.slice(classFilter.indexOf(':') + 1)];
+      filtered = filtered.filter(u => (kind === 'grade' ? u.grade_name : u.class_name) === name);
+    }
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(u =>
@@ -275,13 +296,13 @@ export function useUsersPage() {
     const total = Math.ceil(filtered.length / usersPerPage);
     const paginated = filtered.slice((currentPage - 1) * usersPerPage, currentPage * usersPerPage);
     return { paginatedUsers: paginated, totalPages: total, filteredUsers: filtered };
-  }, [users, currentPage, usersPerPage, roleFilter, statusFilter, sortBy, searchQuery]);
+  }, [users, currentPage, usersPerPage, roleFilter, statusFilter, sortBy, searchQuery, classFilter]);
 
   return {
     // Data
     users, loading, paginatedUsers, totalPages, filteredUsers, roleCounts, inactiveCount,
     // Filter / search / sort / pagination
-    roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy,
+    roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy, classFilter, setClassFilter, gradeGroups,
     searchQuery, setSearchQuery, currentPage, setCurrentPage, usersPerPage,
     // Profile dialog
     viewingUser, setViewingUser, refreshUsers,

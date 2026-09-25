@@ -34,7 +34,7 @@ export function UsersStats({ loading, roleCounts, inactiveCount, roleFilter, sta
     { key: 'all', label: 'Total users', value: roleCounts.ALL, hint: `${roleCounts.ADMIN + roleCounts.STAFF} admins & staff`, icon: Users, tint: 'bg-primary/10 text-primary', selected: roleFilter === 'ALL' && statusFilter === 'ALL', onClick: selectRole('ALL') },
     { key: 'students', label: 'Students', value: roleCounts.STUDENT, hint: 'Enrolled learners', icon: UserRound, tint: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', selected: roleFilter === 'STUDENT' && statusFilter === 'ALL', onClick: selectRole('STUDENT') },
     { key: 'teachers', label: 'Teachers', value: roleCounts.TEACHER, hint: 'Class & subject teachers', icon: GraduationCap, tint: 'bg-blue-500/10 text-blue-600 dark:text-blue-400', selected: roleFilter === 'TEACHER' && statusFilter === 'ALL', onClick: selectRole('TEACHER') },
-    { key: 'inactive', label: 'Inactive', value: inactiveCount, hint: 'Accounts switched off', icon: UserX, tint: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', selected: statusFilter === 'INACTIVE', onClick: () => { onSelectRole('ALL'); onSelectStatus('INACTIVE'); } },
+    { key: 'inactive', label: 'Not active', value: inactiveCount, hint: 'Not yet activated, or switched off', icon: UserX, tint: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', selected: statusFilter === 'INACTIVE', onClick: () => { onSelectRole('ALL'); onSelectStatus('INACTIVE'); } },
   ];
 
   return (

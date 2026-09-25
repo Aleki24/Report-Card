@@ -12,6 +12,11 @@ export type RoleFilter = 'ALL' | RoleGroup;
 export type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 export type UserSort = 'newest' | 'name';
 export type DirectoryView = 'grid' | 'list';
+/** No class filter, a whole grade ("grade:Grade 10"), or one stream ("class:Grade 10 East"). */
+export type ClassFilter = '' | `grade:${string}` | `class:${string}`;
+
+/** Grades in school order, each with its streams, for the class filter. */
+export interface GradeGroup { grade: string; classes: string[] }
 
 export function roleGroupOf(role: UserRole): RoleGroup | null {
   if (isRoleIn(role, TEACHER_ROLES)) return 'TEACHER';
@@ -76,9 +81,4 @@ export function ageFrom(dateOfBirth: string | null | undefined): number | null {
   return now.getFullYear() - dob.getFullYear() - (hadBirthday ? 0 : 1);
 }
 
-/** Title-case an enum-ish value: "TRANSFERRED" → "Transferred", "stem_pure" → "Stem pure". */
-export function humanize(value: string | null | undefined): string {
-  if (!value) return '—';
-  const text = value.replace(/_/g, ' ').toLowerCase();
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
+export { humanize } from '@/lib/text';
