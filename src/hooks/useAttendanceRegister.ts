@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { localIsoDate } from '@/lib/dates';
+import { MANAGED_STREAMS_URL } from '@/lib/managed-streams';
 import type { AttendanceRosterEntry, AttendanceStatus, AttendanceStream, NotifyResult } from '@/lib/attendance';
 
 const LAST_STREAM_KEY = 'attendance:last-stream';
@@ -46,7 +47,7 @@ export function useAttendanceRegister() {
   const loadStreams = useCallback(async () => {
     setStreamsState({ state: 'loading' });
     try {
-      const res = await fetch('/api/school/attendance/streams');
+      const res = await fetch(MANAGED_STREAMS_URL);
       const json: unknown = await res.json().catch(() => null);
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not load your classes.'));
       const streams = ((json as { data?: AttendanceStream[] } | null)?.data) ?? [];

@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Card, CardContent, Select, Input } from '@/components/ui';
-import { Filter, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
+import { StepHeading } from '@/components/ui/StepHeading';
 import { REPORT_TEMPLATES, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
 const EXAM_TYPE_LABELS: Record<string, string> = {
@@ -39,12 +40,9 @@ export function ReportSettings({
     <Card className="mb-6">
       <CardContent className="p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-primary" />
-            <h3 className="text-[15px] font-semibold font-display">① Report Scope</h3>
-          </div>
+          <StepHeading step={1} title="Report scope" done={isReady} />
           {isReady ? (
-            <span className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" /> Ready — pick an action below
             </span>
           ) : (
@@ -67,9 +65,9 @@ export function ReportSettings({
             </Select>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Grade Stream <span className="text-red-500">*</span></label>
+            <label className="block text-xs text-muted-foreground mb-2 font-medium">Class <span className="text-red-500">*</span></label>
             <Select className="w-full h-9 text-sm" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)}>
-              <option value="">-- Choose Stream --</option>
+              <option value="">{gradeStreams.length === 0 ? 'No classes assigned to you' : '-- Choose Class --'}</option>
               {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
             </Select>
           </div>

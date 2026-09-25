@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { Button, Card, CardContent } from '@/components/ui';
-import { MessageSquareText, ChevronDown, ChevronUp, Search, Save, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Save, Loader2 } from 'lucide-react';
+import { StepHeading } from '@/components/ui/StepHeading';
 
 interface StudentComment {
   student_id: string;
@@ -40,15 +41,12 @@ export function StudentCommentsSection({
     <Card className="mb-6">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4 mb-1">
-          <div className="flex items-center gap-2">
-            <MessageSquareText className="w-4 h-4 text-primary" />
-            <h3 className="text-[15px] font-semibold font-display">Student Comments</h3>
-          </div>
+          <StepHeading step={3} title="Student comments" />
           <Button variant="secondary" size="sm" onClick={() => setShowComments(!showComments)}>
             {showComments ? <><ChevronUp className="w-3.5 h-3.5" /> Hide</> : <><ChevronDown className="w-3.5 h-3.5" /> Show</>}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mb-4">Add class teacher and principal comments for each student. These appear on PDF report cards.</p>
+        <p className="text-xs text-muted-foreground mb-4 sm:pl-[2.625rem]">Add class teacher and principal comments for each student. These appear on PDF report cards.</p>
 
         {showComments && (
           <>

@@ -30,10 +30,7 @@ export interface AttendanceRosterEntry {
 }
 
 /** A class whose register the caller may keep. */
-export interface AttendanceStream {
-  id: string;
-  full_name: string;
-}
+export type { ManagedStream as AttendanceStream } from './managed-streams';
 
 /** What a "notify guardians" request did, per absent student. */
 export interface NotifyResult {
