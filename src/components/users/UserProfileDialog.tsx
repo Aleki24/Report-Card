@@ -6,9 +6,11 @@ import { cn } from '@/lib/utils';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import type { UserRow } from '@/hooks/useUsersPage';
-import { RoleBadge, StatusBadge, UserAvatar } from './UserBadges';
+import { RoleBadge, StatusBadge } from './UserBadges';
 import { ROLE_META, describeUser, fullName } from './userMeta';
 import { ProfileSkeleton } from './profile/ProfileParts';
+import { ProfilePhoto } from './profile/ProfilePhoto';
+import { updateStaffPhoto, updateStudentDetails } from './profile/profileApi';
 import { STUDENT_TABS, StudentProfileView, type StudentTab } from './profile/StudentProfileView';
 import { StaffProfileView, staffTabsFor, type StaffTab } from './profile/StaffProfileView';
 
@@ -21,6 +23,8 @@ interface UserProfileDialogProps {
   onEdit: (user: UserRow) => void;
   onResetPassword: (user: UserRow) => void;
   resetting: boolean;
+  /** Called after the dialog saved a change (details or photo), so the directory can refresh. */
+  onUpdated: () => void;
 }
 
 interface ProfileTabsProps {
@@ -72,9 +76,18 @@ function ProfileTabs({ tabs, active, onChange, idPrefix }: ProfileTabsProps) {
   );
 }
 
-function ProfileBody({ user, onEdit, onResetPassword, resetting, titleId }: Omit<UserProfileDialogProps, 'user' | 'onClose'> & { user: UserRow; titleId: string }) {
-  const state = useUserProfile(user);
+function ProfileBody({ user, onEdit, onResetPassword, resetting, onUpdated, titleId }: Omit<UserProfileDialogProps, 'user' | 'onClose'> & { user: UserRow; titleId: string }) {
+  const { state, reload } = useUserProfile(user);
   const [tab, setTab] = useState<ProfileTab>('overview');
+  const [editing, setEditing] = useState(false);
+
+  const afterSave = () => { reload(); onUpdated(); };
+  const onDetailsSaved = () => { setEditing(false); afterSave(); };
+  // A learner's photo is on their student record, everyone else's on their account.
+  const savePhoto = async (url: string) => {
+    await (user.role === 'STUDENT' ? updateStudentDetails(user.id, { avatar_url: url }) : updateStaffPhoto(user.id, url));
+    afterSave();
+  };
   const idPrefix = useId();
   const tabs = user.role === 'STUDENT' ? STUDENT_TABS : staffTabsFor(user);
   const name = fullName(user);
@@ -94,7 +107,7 @@ function ProfileBody({ user, onEdit, onResetPassword, resetting, titleId }: Omit
         );
       case 'ready':
         return state.detail.kind === 'student'
-          ? <StudentProfileView user={user} data={state.detail.data} tab={tab as StudentTab} />
+          ? <StudentProfileView user={user} data={state.detail.data} tab={tab as StudentTab} editing={editing} onEditingChange={setEditing} onSaved={onDetailsSaved} />
           : <StaffProfileView user={user} data={state.detail.data} tab={tab as StaffTab} />;
     }
   };
@@ -111,14 +124,7 @@ function ProfileBody({ user, onEdit, onResetPassword, resetting, titleId }: Omit
         <div className="relative px-4 pb-4 sm:px-6">
           <div className="-mt-12 flex flex-col items-center gap-4 sm:-mt-14 md:flex-row md:items-start md:justify-between">
             <div className="flex min-w-0 flex-col items-center gap-3 text-center md:flex-row md:items-start md:gap-5 md:text-left">
-              <UserAvatar
-                firstName={user.first_name}
-                lastName={user.last_name}
-                role={user.role}
-                imageUrl={detailAvatar ?? user.avatar_url}
-                size="lg"
-                className="shadow-lg ring-4 ring-card"
-              />
+              <ProfilePhoto user={user} imageUrl={detailAvatar ?? user.avatar_url} onUploaded={savePhoto} />
               <div className="min-w-0 md:pt-16">
                 <h2 id={titleId} className="font-display text-xl font-bold tracking-tight break-words sm:text-2xl">{name}</h2>
                 <p className="mt-0.5 truncate text-sm text-muted-foreground">{describeUser(user)}</p>
@@ -130,7 +136,7 @@ function ProfileBody({ user, onEdit, onResetPassword, resetting, titleId }: Omit
             </div>
             <div className="flex w-full shrink-0 gap-2 sm:w-auto md:pt-17">
               <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onEdit(user)}>
-                <Pencil className="size-3.5" aria-hidden="true" />Edit
+                <Pencil className="size-3.5" aria-hidden="true" />Edit account
               </button>
               <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onResetPassword(user)} disabled={resetting}>
                 <KeyRound className="size-3.5" aria-hidden="true" />{resetting ? 'Resetting…' : 'Reset password'}

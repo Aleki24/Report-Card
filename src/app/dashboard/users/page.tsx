@@ -81,6 +81,7 @@ export default function UsersPage() {
         onEdit={editFromProfile}
         onResetPassword={resetFromProfile}
         resetting={h.viewingUser !== null && h.resettingPasswordId === h.viewingUser.id}
+        onUpdated={h.refreshUsers}
       />
 
       {h.showModal && (

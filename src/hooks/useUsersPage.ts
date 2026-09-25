@@ -60,7 +60,10 @@ export function useUsersPage() {
   const usersPerPage = 12;
 
   // Profile dialog
-  const [viewingUser, setViewingUser] = useState<UserRow | null>(null);
+  // Stored by id and read from the list, so a refresh after an edit shows the saved values.
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+  const viewingUser = useMemo(() => users.find(u => u.id === viewingUserId) ?? null, [users, viewingUserId]);
+  const setViewingUser = useCallback((user: UserRow | null) => setViewingUserId(user?.id ?? null), []);
 
   // Password reset
   const [resettingPasswordId, setResettingPasswordId] = useState<string | null>(null);
@@ -107,8 +110,9 @@ export function useUsersPage() {
   const [formClassTeacherStreamId, setFormClassTeacherStreamId] = useState('');
   const [formSubjectTeacherSubjects, setFormSubjectTeacherSubjects] = useState<{subject_id: string, grade_id: string}[]>([{ subject_id: '', grade_id: '' }]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  /** `silent` refreshes in place without swapping the directory for its skeleton. */
+  const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/school/data?type=users', { cache: 'no-store' });
       const json = await res.json();
@@ -118,6 +122,7 @@ export function useUsersPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  const refreshUsers = useCallback(() => fetchData({ silent: true }), [fetchData]);
 
   const fetchDropdowns = useCallback(async () => {
     try {
@@ -279,7 +284,7 @@ export function useUsersPage() {
     roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy,
     searchQuery, setSearchQuery, currentPage, setCurrentPage, usersPerPage,
     // Profile dialog
-    viewingUser, setViewingUser,
+    viewingUser, setViewingUser, refreshUsers,
     // Invite modal
     showModal, setShowModal, resetForm, handleInviteUser,
     formFirstName, setFormFirstName, formLastName, setFormLastName, formPhone, setFormPhone,

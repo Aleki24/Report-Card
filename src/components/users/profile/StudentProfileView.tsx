@@ -3,13 +3,14 @@
 import React from 'react';
 import {
   AtSign, Award, BookMarked, BookOpen, Cake, CalendarDays, ClipboardCheck, FileText, Hash, Layers, Mail, Phone,
-  School, TrendingUp, UserRound, Users,
+  Pencil, School, TrendingUp, UserRound, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UserRow } from '@/hooks/useUsersPage';
 import type { StudentProfileResponse, TermPerformance } from '@/types/user-profile';
 import { ageFrom, formatDate, humanize } from '../userMeta';
 import { EmptyNote, InfoGrid, InfoItem, ProfileSection, ScoreBar, StatTile, scoreTone } from './ProfileParts';
+import { StudentDetailsForm } from './StudentDetailsForm';
 
 export type StudentTab = 'overview' | 'academics' | 'records';
 
@@ -31,9 +32,14 @@ interface StudentProfileViewProps {
   user: UserRow;
   data: StudentProfileResponse;
   tab: StudentTab;
+  /** Whether the overview shows the edit form in place of the details. */
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+  /** Called after the details were saved. */
+  onSaved: () => void;
 }
 
-export function StudentProfileView({ user, data, tab }: StudentProfileViewProps) {
+export function StudentProfileView({ user, data, tab, editing, onEditingChange, onSaved }: StudentProfileViewProps) {
   const { profile, academicHistory, reportHistory, attendanceHistory } = data;
   const latestTerm = latestTermWithMarks(academicHistory);
   const latestAttendance = attendanceHistory[0] ?? null;
@@ -145,21 +151,38 @@ export function StudentProfileView({ user, data, tab }: StudentProfileViewProps)
     );
   }
 
+  const stats = (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <StatTile icon={TrendingUp} label="Latest average" value={latestTerm ? `${latestTerm.average}%` : '—'} hint={latestTerm?.term_name ?? 'No marks yet'} />
+      <StatTile icon={Award} label="Position" value={latestReport?.position ?? '—'} hint={latestReport ? `${latestReport.term} report` : 'No reports yet'} />
+      <StatTile icon={ClipboardCheck} label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? latestAttendance.term : 'Not recorded'} />
+      <StatTile icon={BookOpen} label="Subjects" value={profile.enrolled_subjects.length || latestTerm?.subjects.length || '—'} hint={profile.enrolled_subjects.length ? 'Enrolled' : 'With marks this term'} />
+    </div>
+  );
+
+  if (editing) {
+    return <StudentDetailsForm profile={profile} onCancel={() => onEditingChange(false)} onSaved={onSaved} />;
+  }
+
   const age = ageFrom(profile.date_of_birth);
   const guardianPhone = profile.guardian_phone;
   const guardianEmail = profile.guardian_email;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile icon={TrendingUp} label="Latest average" value={latestTerm ? `${latestTerm.average}%` : '—'} hint={latestTerm?.term_name ?? 'No marks yet'} />
-        <StatTile icon={Award} label="Position" value={latestReport?.position ?? '—'} hint={latestReport ? `${latestReport.term} report` : 'No reports yet'} />
-        <StatTile icon={ClipboardCheck} label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? latestAttendance.term : 'Not recorded'} />
-        <StatTile icon={BookOpen} label="Subjects" value={profile.enrolled_subjects.length || latestTerm?.subjects.length || '—'} hint={profile.enrolled_subjects.length ? 'Enrolled' : 'With marks this term'} />
-      </div>
+      {stats}
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <ProfileSection title="Personal details" icon={UserRound} className="lg:col-span-3">
+        <ProfileSection
+          title="Personal details"
+          icon={UserRound}
+          className="lg:col-span-3"
+          action={
+            <button type="button" onClick={() => onEditingChange(true)} className="btn-secondary h-8 rounded-lg px-3 text-xs">
+              <Pencil className="size-3.5" aria-hidden="true" />Edit details
+            </button>
+          }
+        >
           <InfoGrid>
             <InfoItem icon={Hash} label="Admission no." value={profile.admission_number} copyValue={profile.admission_number} />
             <InfoItem icon={AtSign} label="Username" value={user.username} copyValue={user.username} />

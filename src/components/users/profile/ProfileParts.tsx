@@ -4,15 +4,27 @@ import React, { useEffect, useState } from 'react';
 import { Check, Copy, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function ProfileSection({ title, icon: Icon, children, className }: { title: string; icon: LucideIcon; children: React.ReactNode; className?: string }) {
+interface ProfileSectionProps {
+  title: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
+  /** Rendered at the right of the heading, e.g. an edit button. */
+  action?: React.ReactNode;
+  className?: string;
+}
+
+export function ProfileSection({ title, icon: Icon, children, action, className }: ProfileSectionProps) {
   return (
     <section className={cn('rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5', className)}>
-      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
-        {title}
-      </h3>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+          {title}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
