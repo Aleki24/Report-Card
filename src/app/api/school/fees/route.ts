@@ -3,6 +3,7 @@ import { internalError } from '@/lib/api-errors';
 import { canManageStudent, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
+import { embedOne } from '@/lib/postgrest';
 
 export async function GET(request: NextRequest) {
     try {
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
             .select(`
                 id, total_fee, paid_amount, due_date, status, notes, created_at, updated_at,
                 terms ( id, name ),
-                students!inner ( id, admission_number, current_grade_stream_id, users ( first_name, last_name ) )
+                students!inner ( id, admission_number, current_grade_stream_id, users ( first_name, last_name ), grade_streams ( full_name ) )
             `)
             .eq('school_id', schoolId);
 
@@ -62,6 +63,11 @@ export async function GET(request: NextRequest) {
             termName: f.terms?.name,
             studentName: f.students?.users ? `${f.students.users.first_name} ${f.students.users.last_name}` : null,
             admissionNumber: f.students?.admission_number,
+            // Match records to students by id, never by admission number:
+            // admission numbers are optional, so many students have none.
+            studentId: f.students?.id ?? null,
+            gradeStreamId: f.students?.current_grade_stream_id ?? null,
+            className: embedOne(f.students?.grade_streams)?.full_name ?? null,
             createdAt: f.created_at,
             updatedAt: f.updated_at,
         }));
