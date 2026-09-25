@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { FileText } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { TermComparisonModal } from '@/components/reports/TermComparisonModal';
 import { StudentCommentsSection } from '@/components/reports/StudentCommentsSection';
@@ -381,9 +382,12 @@ export default function ReportsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
-      <PageHeader 
-          title="Academic Reports" 
-          description="Generate and download professional PDF report cards, bulk class sheets, and compare term performance with advanced analytics."
+      <PageHeader
+        title="Report cards"
+        eyebrow="Academics"
+        icon={FileText}
+        hue="violet"
+        description="Download report cards and mark sheets, text results to parents and compare terms."
       />
 
       {/* Report Settings */}

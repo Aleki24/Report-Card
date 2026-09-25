@@ -153,10 +153,10 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
 
   const stats = (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <StatTile icon={TrendingUp} label="Latest average" value={latestTerm ? `${latestTerm.average}%` : '—'} hint={latestTerm?.term_name ?? 'No marks yet'} />
-      <StatTile icon={Award} label="Position" value={latestReport?.position ?? '—'} hint={latestReport ? `${latestReport.term} report` : 'No reports yet'} />
-      <StatTile icon={ClipboardCheck} label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? latestAttendance.term : 'Not recorded'} />
-      <StatTile icon={BookOpen} label="Subjects" value={profile.enrolled_subjects.length || latestTerm?.subjects.length || '—'} hint={profile.enrolled_subjects.length ? 'Enrolled' : 'With marks this term'} />
+      <StatTile icon={TrendingUp} hue="violet" label="Latest average" value={latestTerm ? `${latestTerm.average}%` : '—'} hint={latestTerm?.term_name ?? 'No marks yet'} />
+      <StatTile icon={Award} hue="amber" label="Position" value={latestReport?.position ?? '—'} hint={latestReport ? `${latestReport.term} report` : 'No reports yet'} />
+      <StatTile icon={ClipboardCheck} hue="teal" label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? latestAttendance.term : 'Not recorded'} />
+      <StatTile icon={BookOpen} hue="emerald" label="Subjects" value={profile.enrolled_subjects.length || latestTerm?.subjects.length || '—'} hint={profile.enrolled_subjects.length ? 'Enrolled' : 'With marks this term'} />
     </div>
   );
 

@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, CircleDashed, Clock, Download, FileCheck2, MessageSquare,
@@ -130,10 +131,13 @@ export default function AttendancePage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl pb-36 min-[768px]:pb-4">
-      <header className="mb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Attendance</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Take the daily register, add reasons for absence and let guardians know.</p>
-      </header>
+      <PageHeader
+        title="Attendance"
+        eyebrow="Academics"
+        icon={CalendarCheck}
+        hue="teal"
+        description="Take the daily register, add reasons for absence and let guardians know."
+      />
 
       {/* ── Class and day ─────────────────────────────── */}
       <section aria-label="Class and day" className="mb-4 grid gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
@@ -209,10 +213,10 @@ export default function AttendancePage() {
 
           {/* ── Summary ─────────────────────────────────── */}
           <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <StatTile icon={UserCheck} label="Present" value={counts.present} />
-            <StatTile icon={UserX} label="Absent" value={counts.absent} tone={counts.absent > 0 ? 'bad' : 'default'} />
-            <StatTile icon={Clock} label="Late" value={counts.late} tone={counts.late > 0 ? 'warn' : 'default'} />
-            <StatTile icon={FileCheck2} label="Excused" value={counts.excused} />
+            <StatTile icon={UserCheck} hue="emerald" label="Present" value={counts.present} />
+            <StatTile icon={UserX} hue="rose" label="Absent" value={counts.absent} tone={counts.absent > 0 ? 'bad' : 'default'} />
+            <StatTile icon={Clock} hue="amber" label="Late" value={counts.late} tone={counts.late > 0 ? 'warn' : 'default'} />
+            <StatTile icon={FileCheck2} hue="sky" label="Excused" value={counts.excused} />
             <StatTile
               icon={TrendingUp}
               label="Attendance"

@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckCircle2 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -339,7 +340,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
     if (students.length === 0) {
         return (
             <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-                <div style={{ fontSize: 32, marginBottom: 'var(--space-3)' }}>✅</div>
+                <span className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" aria-hidden><CheckCircle2 className="size-7" /></span>
                 <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
                     All students in this class already have marks for this exam.
                 </p>
@@ -353,7 +354,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
                 {students.length} student{students.length !== 1 ? 's' : ''} missing marks — enter scores below and submit.
                 {multiPaper && (
                     <span style={{ display: 'block', marginTop: 4, color: 'var(--color-accent)' }}>
-                        📑 Multi-paper subject: enter each paper separately ({schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}). * = some papers still missing (counted as 0).
+                        Multi-paper subject: enter each paper separately ({schemeComponents.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}). * = some papers still missing (counted as 0).
                     </span>
                 )}
             </p>

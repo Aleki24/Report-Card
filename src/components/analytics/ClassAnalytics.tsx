@@ -210,10 +210,10 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
             )}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <StatTile icon={BarChart3} label="Class average" value={`${data.summary.mean_percentage}%`} hint={`${data.summary.mark_count.toLocaleString()} marks`} />
+                <StatTile icon={BarChart3} hue="sky" label="Class average" value={`${data.summary.mean_percentage}%`} hint={`${data.summary.mark_count.toLocaleString()} marks`} />
                 <StatTile icon={CheckCircle2} label="Pass rate" value={`${data.summary.pass_rate}%`} hint="at or above 50%" tone={passStatTone(data.summary.pass_rate)} />
-                <StatTile icon={Users} label="Learners" value={data.summary.student_count} hint="with marks" />
-                <StatTile icon={BookOpen} label="Subjects" value={data.summary.subject_count} hint="assessed" />
+                <StatTile icon={Users} hue="orange" label="Learners" value={data.summary.student_count} hint="with marks" />
+                <StatTile icon={BookOpen} hue="emerald" label="Subjects" value={data.summary.subject_count} hint="assessed" />
             </div>
 
             <div className="grid items-start gap-4 lg:grid-cols-2">

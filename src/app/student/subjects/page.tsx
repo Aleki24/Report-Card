@@ -49,7 +49,7 @@ export default function StudentSubjectsPage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="My Subjects" description="Select a subject to view detailed performance, assignments, and notes." />
+            <PageHeader title="My subjects" eyebrow="Academics" icon={BookOpen} hue="emerald" description="Open a subject for its performance, assignments and notes." />
 
             <div className="mb-6 flex max-w-[400px] items-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5">
                 <Search size={18} className="text-muted-foreground" />

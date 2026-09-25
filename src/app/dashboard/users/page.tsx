@@ -1,7 +1,8 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useState } from 'react';
-import { Printer, UserPlus } from 'lucide-react';
+import { Printer, UserPlus, UserCog } from 'lucide-react';
 import { useUsersPage, type UserRow } from '@/hooks/useUsersPage';
 import { UsersStats } from '@/components/users/UsersStats';
 import { UsersDirectory } from '@/components/users/UsersDirectory';
@@ -24,20 +25,18 @@ export default function UsersPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-10">
-      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">People</p>
-          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">User Management</h1>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Everyone with an account at your school. Open anyone to see their full profile.
-          </p>
-        </div>
-        <div className="flex w-full shrink-0 md:w-auto">
+      <PageHeader
+        title="Users"
+        eyebrow="Administration"
+        icon={UserCog}
+        hue="rose"
+        description="Everyone with an account at your school. Open anyone to see their full profile."
+        action={
           <button type="button" className="btn-primary w-full md:w-auto" onClick={openAddUser}>
             <UserPlus className="size-4" aria-hidden="true" />Add user
           </button>
-        </div>
-      </header>
+        }
+      />
 
       <UsersStats
         loading={h.loading} roleCounts={h.roleCounts} inactiveCount={h.inactiveCount}

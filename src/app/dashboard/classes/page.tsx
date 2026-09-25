@@ -1,11 +1,12 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import PageHeader from '@/components/dashboard/PageHeader';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, School, Layers, BookOpen } from 'lucide-react';
 import { classNames } from '@/lib/classes';
 
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
@@ -114,9 +115,11 @@ export default function ClassesPage() {
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
       <PageHeader
-        title="Manage Classes"
+        title="Classes"
+        eyebrow="School"
+        icon={School}
+        hue="amber"
         description="Select a grade to add or remove its class streams."
-        breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Classes' }]}
       />
 
       {loading ? (
@@ -131,11 +134,11 @@ export default function ClassesPage() {
             )}
             
             <div className="card">
-              <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">🏷️ Manage Classes</h3>
+              <CardHeading icon={Layers} hue="amber" title="Class streams" description="Pick a grade, then add or remove its streams (e.g. East, West)." />
               <div className="mb-4">
                 <label className="block text-xs text-muted-foreground mb-2">Select Grade</label>
                 {grades.length === 0 ? (
-                  <p className="text-xs text-orange-400">No grades found. Run seed SQL first.</p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400">No grades are set up yet. Choose your curriculum in Settings → Academic Structure first.</p>
                 ) : (
                   <select className="input-field w-full md:w-64" value={selectedCalGradeId} onChange={e => setSelectedCalGradeId(e.target.value)}>
                     <option value="">-- Select Grade --</option>
@@ -171,9 +174,7 @@ export default function ClassesPage() {
 
             {selectedCalGradeId && (
               <div className="card">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">
-                  🏫 Added Classes for {grades.find(g => g.id === selectedCalGradeId)?.name_display}
-                </h3>
+                <CardHeading icon={School} hue="amber" title={`Streams in ${grades.find(g => g.id === selectedCalGradeId)?.name_display ?? 'this grade'}`} />
                 {calStreams.length > 0 ? (
                   <div className="overflow-x-auto border border-border rounded-lg">
                     <table className="data-table w-full text-left sm:whitespace-nowrap">
@@ -213,10 +214,7 @@ export default function ClassesPage() {
               className="card group flex flex-col gap-3 transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between"
             >
               <div>
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)]">📚 Subjects</h3>
-                <p className="text-sm text-muted-foreground">
-                  Pick the subjects your school offers, set up senior school combinations and assign subject teachers.
-                </p>
+                <CardHeading icon={BookOpen} hue="emerald" className="mb-0" title="Subjects" description="Pick the subjects your school offers, set up senior school combinations and assign subject teachers." />
               </div>
               <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
                 Manage subjects

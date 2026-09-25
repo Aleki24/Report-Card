@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Camera, Check, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -15,6 +15,7 @@ import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel } from '@/lib/exa
 import { findActiveTermId } from '@/lib/term-calendar';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
+import { ExamSetupMenu } from './ExamSetupMenu';
 import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
@@ -92,9 +93,9 @@ function ChoiceChip({ active, onClick, children, title, disabled }: { active: bo
 function StepCard({ step, title, hint, done, children, aside }: { step: number; title: string; hint?: string; done?: boolean; children: React.ReactNode; aside?: React.ReactNode }) {
   const tone = STEP_TONES[(step - 1) % STEP_TONES.length];
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+    <section className="relative h-full rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
       {/* A thin strip in the step's colour ties the card to its number. */}
-      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', tone.dot, !done && 'opacity-40')} />
+      <span aria-hidden className={cn('absolute inset-y-0 -left-px w-1 rounded-l-2xl', tone.dot, !done && 'opacity-40')} />
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span
           className={cn('flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-colors', done ? tone.solid : tone.tile)}
@@ -156,29 +157,11 @@ export function MarksSetupTab() {
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // An exam to open once its term's exams have loaded.
   const pendingExamRef = useRef<{ termId: string; examId: string } | null>(null);
   const handledLinkRef = useRef('');
 
-  // Tap-to-open menu (not CSS :hover, which never fires on touch screens).
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) setShowMoreMenu(false);
-    };
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowMoreMenu(false); };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showMoreMenu]);
 
   // Read after mount: localStorage is not available during server render.
   useEffect(() => {
@@ -461,7 +444,8 @@ export function MarksSetupTab() {
   if (showSheet && selectedExam) {
     return (
       <div className="w-full">
-        <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5 md:flex-row md:items-center md:justify-between">
+        <div className="mb-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-start gap-3 sm:gap-4">
             {(() => {
               const theme = SUBJECT_CATEGORY_THEME[subjectCategory(selectedExam.subject_category)];
@@ -496,6 +480,25 @@ export function MarksSetupTab() {
             </button>
           </div>
         </div>
+          <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-card/70 p-1 sm:inline-grid sm:w-auto" role="tablist" aria-label="How to enter marks">
+            {MODES.map(m => (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={mode === m.id}
+                onClick={() => setMode(m.id)}
+                title={m.hint}
+                className={cn(
+                  'inline-flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-row sm:gap-1.5 sm:px-4 sm:text-sm',
+                  mode === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-md transition-colors', mode === m.id ? MODE_TONES[m.id].tile : '')}>{m.icon}</span><span className="max-w-full truncate">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         {selectedExam.status === 'APPROVED' && (
           <div role="status" className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
@@ -508,24 +511,6 @@ export function MarksSetupTab() {
           </div>
         )}
 
-        <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-muted/50 p-1 sm:inline-grid sm:w-auto" role="tablist" aria-label="How to enter marks">
-          {MODES.map(m => (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              aria-selected={mode === m.id}
-              onClick={() => setMode(m.id)}
-              title={m.hint}
-              className={cn(
-                'inline-flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-row sm:gap-1.5 sm:px-4 sm:text-sm',
-                mode === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-md transition-colors', mode === m.id ? MODE_TONES[m.id].tile : '')}>{m.icon}</span><span className="max-w-full truncate">{m.label}</span>
-            </button>
-          ))}
-        </div>
 
         {mode === 'manual' && (
           <ManualEntryGrid
@@ -586,6 +571,8 @@ export function MarksSetupTab() {
         </button>
       )}
 
+      {/* ①–③ side by side from lg: each holds only a few controls. */}
+      <div className="grid gap-3 lg:grid-cols-3">
       {/* ① Term */}
       <StepCard step={1} title="Term" done={!!selectedTermId}>
         {loadingTerms ? (
@@ -618,8 +605,8 @@ export function MarksSetupTab() {
       </StepCard>
 
       {/* ② Exam */}
-      {selectedTermId && (
-        <StepCard step={2} title="Exam" hint={loadingExams ? 'Loading…' : undefined} done={!!selectedExamType}>
+        <StepCard step={2} title="Exam" hint={selectedTermId && loadingExams ? 'Loading…' : undefined} done={!!selectedExamType}>
+          {!selectedTermId ? <p className="text-sm text-muted-foreground">Choose a term first.</p> : <>
           {!loadingExams && examsError ? (
             <LoadError message={examsError} onRetry={() => setExamsReloadToken(t => t + 1)} />
           ) : !loadingExams && availableExamTypes.length === 0 ? (
@@ -653,50 +640,13 @@ export function MarksSetupTab() {
               ))}
 
               {isAdmin && (
-                <div className="relative" ref={moreMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowMoreMenu(v => !v)}
-                    aria-expanded={showMoreMenu}
-                    className={cn(
-                      'inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-dashed px-3 py-2 text-xs font-medium transition-colors',
-                      showMoreMenu ? 'border-primary/50 text-foreground' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
-                    )}
-                  >
-                    <Settings2 size={14} aria-hidden /> More <ChevronDown size={12} aria-hidden />
-                  </button>
-                  {showMoreMenu && (
-                    <div className="absolute left-0 top-full z-50 mt-1 max-h-[60vh] w-64 max-w-[90vw] overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-lg">
-                      {ALL_EXAM_TYPES.filter(et => !existingTypes.has(et.code)).map(et => (
-                        <button
-                          key={et.code}
-                          type="button"
-                          onClick={() => { void handleSeedExams([et.code]); setShowMoreMenu(false); }}
-                          disabled={seeding}
-                          className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        >
-                          + {et.icon} {et.name}
-                          <span className="mt-0.5 block text-[10px] opacity-70">{et.description}</span>
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => { void handleSeedExams(Array.from(existingTypes)); setShowMoreMenu(false); }}
-                        disabled={seeding}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                      >
-                        {seeding ? 'Working…' : 'Add exams for any new subjects'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowCreateModal(true); setShowMoreMenu(false); }}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                      >
-                        + Create one exam manually
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <ExamSetupMenu
+                  existingTypes={existingTypes}
+                  seeding={seeding}
+                  onAddRound={code => void handleSeedExams([code])}
+                  onAddMissingSubjects={() => void handleSeedExams(Array.from(existingTypes))}
+                  onCreateManually={() => setShowCreateModal(true)}
+                />
               )}
             </div>
           ) : null}
@@ -706,16 +656,16 @@ export function MarksSetupTab() {
               {seedMsg.text}
             </p>
           )}
+          </>}
         </StepCard>
-      )}
 
       {/* ③ Class */}
-      {selectedExamType && (
-        <StepCard step={3} title="Class" done={!!effectiveGradeId} hint={!isAdmin ? 'Only classes you have exams for are listed' : undefined}>
-          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <StepCard step={3} title="Class" done={!!effectiveGradeId} hint={selectedExamType && !isAdmin ? 'Classes you have exams for' : undefined}>
+          {!selectedExamType ? <p className="text-sm text-muted-foreground">Choose an exam first.</p> : (
+          <div className="grid gap-2">
             {academicLevels.length > 1 && (
               <select
-                className="input-field h-10 text-sm sm:w-48"
+                className="input-field h-10 w-full text-sm"
                 value={selectedLevelId}
                 onChange={e => { setSelectedLevelId(e.target.value); setFilterGradeId(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
                 aria-label="Curriculum level"
@@ -725,7 +675,7 @@ export function MarksSetupTab() {
               </select>
             )}
             <select
-              className="input-field h-10 text-sm sm:w-56"
+              className="input-field h-10 w-full text-sm"
               value={effectiveGradeId}
               onChange={e => { setFilterGradeId(e.target.value); setSelectedSubjectId(''); setSelectedExamId(''); }}
               aria-label="Class"
@@ -737,8 +687,9 @@ export function MarksSetupTab() {
               <span className="text-xs text-muted-foreground">No classes have a {getExamTypeLabel(selectedExamType)} exam this term.</span>
             )}
           </div>
+          )}
         </StepCard>
-      )}
+      </div>
 
       {/* ④ Subject */}
       {selectedExamType && effectiveGradeId && (
@@ -766,7 +717,7 @@ export function MarksSetupTab() {
           ) : shownSubjects.length === 0 ? (
             <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
           ) : (
-            <div className="flex flex-col gap-4">
+            <div className={cn('grid gap-x-4 gap-y-5', subjectGroups.length > 1 && 'md:grid-cols-2 xl:grid-cols-3')}>
               {subjectGroups.map(([category, groupSubjects]) => {
                 const theme = SUBJECT_CATEGORY_THEME[category];
                 const CategoryIcon = theme.icon;
@@ -779,7 +730,7 @@ export function MarksSetupTab() {
                       <span className="font-normal normal-case tracking-normal opacity-70">{groupSubjects.length}</span>
                     </h4>
                   )}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className={cn('grid grid-cols-1 gap-2', subjectGroups.length === 1 && 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4')}>
                     {groupSubjects.map(s => {
                       const active = selectedSubjectId === s.subject_id;
                       if (!s.hasExam) {

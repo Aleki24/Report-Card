@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -703,12 +704,13 @@ export default function FeesPage() {
 
     return (
         <div className="mx-auto w-full max-w-7xl pb-10">
-            <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                    <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">Finance</p>
-                    <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Fees</h1>
-                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">Bill students each term, record payments and track what is still owed.</p>
-                </div>
+            <PageHeader
+                title="Fees"
+                eyebrow="Finance"
+                icon={Wallet}
+                hue="emerald"
+                description="Bill students each term, record payments and track what is still owed."
+                action={
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end">
                     <label className="col-span-2 flex flex-col gap-1.5 sm:w-56">
                         <span className="text-xs font-medium text-muted-foreground">Term</span>
@@ -733,7 +735,8 @@ export default function FeesPage() {
                         <Plus className="size-4" aria-hidden="true" />Add record
                     </button>
                 </div>
-            </header>
+                }
+            />
 
             <div role="tablist" aria-label="Fees views" className="-mx-1 mb-5 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/40 p-1 sm:w-fit">
                 {tabs.filter(t => t.show).map(t => (
@@ -765,7 +768,7 @@ export default function FeesPage() {
 
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile icon={Wallet} label="Expected" value={formatCurrency(kpi.expected)} hint={`${totalRecords} record(s)`} />
+                <StatTile icon={Wallet} hue="blue" label="Expected" value={formatCurrency(kpi.expected)} hint={`${totalRecords} record(s)`} />
                 <StatTile icon={ArrowUpRight} label="Collected" value={formatCurrency(kpi.collected)} hint={`${kpi.collectionRate}% collection rate`} tone="good" />
                 <StatTile icon={Clock} label="Outstanding" value={formatCurrency(kpi.outstanding)} hint="unpaid balance" tone={kpi.outstanding > 0 ? 'warn' : 'default'} />
                 <StatTile icon={AlertTriangle} label="Overdue" value={formatCurrency(kpi.overdueAmount)} hint={`${kpi.overdueCount} overdue record(s)`} tone={kpi.overdueCount > 0 ? 'bad' : 'default'} />

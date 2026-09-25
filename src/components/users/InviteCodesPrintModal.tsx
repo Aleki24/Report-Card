@@ -1,5 +1,7 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
+import { Printer, Loader2, FolderArchive, Download } from 'lucide-react';
 import React, { useState } from 'react';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { downloadBlob, filenameFromResponse } from '@/lib/download';
@@ -52,7 +54,7 @@ export function InviteCodesPrintModal({ onClose }: { onClose: () => void }) {
 
     return (
         <ModalOverlay onClose={onClose}>
-            <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">🖨️ Print Invite Codes</h2>
+            <CardHeading as="h2" icon={Printer} hue="blue" className="mb-2" title="Print invite codes" />
             <p className="text-xs text-muted-foreground mb-6">
                 Generate a printable PDF of invitation codes grouped by category, so you can share each person&apos;s
                 code with them in person at your school.
@@ -96,11 +98,11 @@ export function InviteCodesPrintModal({ onClose }: { onClose: () => void }) {
                 <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
                 {category === 'all' && (
                     <button type="button" className="btn-secondary disabled:opacity-50" onClick={() => download('zip')} disabled={busy}>
-                        {downloading === 'zip' ? '⏳ Building…' : '📦 Separate PDFs (ZIP)'}
+                        {downloading === 'zip' ? <><Loader2 className="size-4 animate-spin" aria-hidden />Building…</> : <><FolderArchive className="size-4" aria-hidden />Separate PDFs (ZIP)</>}
                     </button>
                 )}
                 <button type="button" className="btn-primary disabled:opacity-50" onClick={() => download('pdf')} disabled={busy}>
-                    {downloading === 'pdf' ? '⏳ Building…' : '📄 Download PDF'}
+                    {downloading === 'pdf' ? <><Loader2 className="size-4 animate-spin" aria-hidden />Building…</> : <><Download className="size-4" aria-hidden />Download PDF</>}
                 </button>
             </div>
         </ModalOverlay>

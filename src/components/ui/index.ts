@@ -16,3 +16,8 @@ export { StatTile } from './StatTile';
 export type { StatTone } from './StatTile';
 export { TermSelect } from './TermSelect';
 export type { TermSelectTerm, TermSelectYear } from './TermSelect';
+export { CardHeading } from './CardHeading';
+export { StepHeading } from './StepHeading';
+export { TONES, STEP_TONES } from './tones';
+export type { Tone, Hue } from './tones';
+export { RankBadge } from './RankBadge';

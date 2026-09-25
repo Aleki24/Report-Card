@@ -261,7 +261,7 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
     const chooserRow = chooser?.kind === 'row' ? chooser.row : null;
 
     return (
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden min-[769px]:p-0">
             <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3 text-xs sm:px-5">
                 <Badge tone="positive" icon={CheckCircle2}>{counts.official ?? 0} official match</Badge>
                 <Badge tone="caution" icon={CircleAlert}>{counts.custom ?? 0} not on Ministry list</Badge>
@@ -416,7 +416,7 @@ function ElectiveTable({ data, onApply, onError }: TableProps<ElectivePlacementR
     }
 
     return (
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden min-[769px]:p-0">
             <p className="border-b border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
                 Compulsory subjects list the whole class automatically. Tick the electives each student takes — pre-filled from the marks
                 already recorded (<span className="font-semibold text-primary">•</span> marks a subject the student has marks in).

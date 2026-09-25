@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 
 type ExamStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
@@ -191,8 +192,8 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
 
                         {readiness.partiallyMarked.length > 0 && (
                             <div className="mb-3">
-                                <p className="text-xs font-semibold text-amber-500 mb-1">
-                                    ⚠️ Missing some papers — a missing paper counts as 0, so their subject mark is
+                                <p className="mb-1 flex gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                    <AlertTriangle className="size-3.5 shrink-0" aria-hidden />Missing some papers — a missing paper counts as 0, so their subject mark is
                                     still out of all papers. Enter the marks first if these papers were sat:
                                 </p>
                                 <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto pl-1">
@@ -222,7 +223,7 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
                         )}
 
                         {!readiness.hasIssues && (
-                            <p className="text-xs text-emerald-400 mb-3">✅ Every student in this class is fully marked.</p>
+                            <p className="mb-3 flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="size-3.5" aria-hidden />Every student in this class is fully marked.</p>
                         )}
 
                         {error && <div className="mb-3 text-xs text-red-400">{error}</div>}

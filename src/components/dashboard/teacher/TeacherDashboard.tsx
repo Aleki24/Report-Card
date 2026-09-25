@@ -1,5 +1,8 @@
 "use client";
 
+import { cn } from '@/lib/utils';
+import { hueForHref } from '@/components/ui/pageHues';
+import { TONES } from '@/components/ui/tones';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -168,6 +171,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
             title="Marks to enter"
             value={markingLoading ? '…' : progress.left.toLocaleString()}
             icon={<ClipboardList size={17} />}
+            hue="amber"
             href={progress.next ? markEntryHref(progress.next.termId, progress.next.examId) : '/dashboard/exams-marks'}
             tone={!markingLoading && progress.left > 0 ? 'amber' : undefined}
           />
@@ -175,18 +179,19 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
             title="Exams fully marked"
             value={markingLoading ? '…' : `${progress.complete}/${items.length}`}
             icon={<CheckCircle2 size={17} />}
+            hue="emerald"
             href="/dashboard/exams-marks"
             tone={!markingLoading && items.length > 0 && progress.complete === items.length ? 'green' : undefined}
           />
           {variant === 'class' ? (
             <>
-              <KpiTile title={classStats?.streamName && classStats.streamName !== '—' ? `Learners in ${classStats.streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" />
-              <KpiTile title="Class average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" />
+              <KpiTile title={classStats?.streamName && classStats.streamName !== '—' ? `Learners in ${classStats.streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
+              <KpiTile title="Class average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
             </>
           ) : (
             <>
-              <KpiTile title="Subject average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" />
-              <KpiTile title="Upcoming exams" value={upcoming.length} icon={<BookOpen size={17} />} href="/dashboard/exams-marks" />
+              <KpiTile title="Subject average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
+              <KpiTile title="Upcoming exams" value={upcoming.length} icon={<BookOpen size={17} />} href="/dashboard/exams-marks" hue="sky" />
             </>
           )}
         </div>
@@ -204,7 +209,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
               {QUICK_LINKS[variant].map(link => (
                 <li key={link.href + link.label}>
                   <Link href={link.href} className="group flex items-center gap-3 rounded-xl px-2 py-2 no-underline transition-colors hover:bg-muted/60">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{link.icon}</span>
+                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', TONES[hueForHref(link.href)].tile)}>{link.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary">{link.label}</span>
                       <span className="block truncate text-xs text-muted-foreground">{link.desc}</span>

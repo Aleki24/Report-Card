@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Check, Copy, MessageCircle } from 'lucide-react';
+import { Check, Copy, MessageCircle, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { activationUrl } from '@/lib/activation-link';
@@ -116,8 +116,8 @@ export function ResetPasswordResultModal({ inviteCode, notified, onClose }: Rese
   return (
     <ModalOverlay onClose={onClose} maxWidth="max-w-sm">
       <div className="text-center">
-        <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-primary/15">
-          <span className="text-3xl">🔑</span>
+        <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-400">
+          <KeyRound className="size-7" aria-hidden />
         </div>
         <h2 className="text-lg font-bold font-sans mb-2">Account Reset</h2>
         <p className="text-sm text-muted-foreground mb-4">A new invite code was generated for this user:</p>

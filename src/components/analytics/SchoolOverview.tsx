@@ -146,9 +146,9 @@ export default function SchoolOverview({ yearId, termId, onSelectClass, onShowWh
     return (
         <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <StatTile icon={School} label="Classes" value={summary.classes_with_marks} hint={`of ${summary.classes_total} with marks`} />
-                <StatTile icon={Users} label="Learners" value={summary.learners.toLocaleString()} hint="enrolled" />
-                <StatTile icon={BarChart3} label="Marks" value={summary.mark_count.toLocaleString()} hint={period} />
+                <StatTile icon={School} hue="amber" label="Classes" value={summary.classes_with_marks} hint={`of ${summary.classes_total} with marks`} />
+                <StatTile icon={Users} hue="orange" label="Learners" value={summary.learners.toLocaleString()} hint="enrolled" />
+                <StatTile icon={BarChart3} hue="sky" label="Marks" value={summary.mark_count.toLocaleString()} hint={period} />
                 <StatTile
                     icon={ClipboardList}
                     label="Awaiting marks"

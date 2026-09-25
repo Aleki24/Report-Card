@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { Settings } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { Card, CardContent, Button } from '@/components/ui';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
@@ -31,7 +32,7 @@ const SETTINGS_TABS = [
   { key: 'profile', label: 'School Profile' },
   { key: 'academic', label: 'Academic Structure' },
   { key: 'grading', label: 'Grading Systems' },
-  { key: 'calendar', label: '📅 Academic Calendar' },
+  { key: 'calendar', label: 'Academic Calendar' },
   { key: 'payments', label: 'Payments' },
 ] as const;
 
@@ -264,9 +265,12 @@ export default function SettingsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
-      <PageHeader 
-        title="School Settings" 
-        description="System configuration and academic setup" 
+      <PageHeader
+        title="School settings"
+        eyebrow="Administration"
+        icon={Settings}
+        hue="slate"
+        description="Your school's profile, academic calendar, grading and payments."
       />
 
       <div className="flex border-b border-border mb-8 overflow-x-auto">
@@ -298,7 +302,7 @@ export default function SettingsPage() {
                     <form onSubmit={handleSaveSchool}>
                       <SchoolForm school={school} setSchool={setSchool} />
                       <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
-                        {saving ? '⏳ Creating...' : '🚀 Create School'}
+                        {saving ? 'Creating…' : 'Create school'}
                       </Button>
                     </form>
                   </CardContent>

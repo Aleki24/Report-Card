@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TONES, type Hue } from '@/components/ui/tones';
 
 /**
  * `amber` is the deliberate middle ground between the neutral surface and
@@ -20,6 +21,8 @@ interface KpiTileProps {
   alert?: boolean;
   /** Render as a bold color card instead of the neutral surface, for a scannable overview grid. */
   tone?: Tone;
+  /** Colour of the icon chip on a neutral tile (ignored with `tone`). */
+  hue?: Hue;
 }
 
 const TONE_BG: Record<Tone, string> = {
@@ -30,7 +33,7 @@ const TONE_BG: Record<Tone, string> = {
   red: 'bg-red-600',
 };
 
-export default function KpiTile({ title, value, icon, href, alert = false, tone }: KpiTileProps) {
+export default function KpiTile({ title, value, icon, href, alert = false, tone, hue }: KpiTileProps) {
   return (
     <Link href={href} className="group block no-underline">
       <div
@@ -43,7 +46,7 @@ export default function KpiTile({ title, value, icon, href, alert = false, tone 
           <div
             className={cn(
               'flex h-8 w-8 items-center justify-center rounded-lg sm:h-9 sm:w-9',
-              tone ? 'bg-white/20 text-white' : alert ? 'bg-destructive/15 text-destructive' : 'bg-primary/12 text-primary'
+              tone ? 'bg-white/20 text-white' : alert ? 'bg-destructive/15 text-destructive' : hue ? TONES[hue].tile : 'bg-primary/12 text-primary'
             )}
           >
             {icon}

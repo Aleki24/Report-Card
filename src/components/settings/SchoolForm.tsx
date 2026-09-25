@@ -1,8 +1,9 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy, Trophy } from 'lucide-react';
+import { Check, Copy, Trophy, KeyRound, School } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SENIOR_RANK_GROUPS, SENIOR_RANK_GROUP_OPTIONS, type SeniorRankGroup } from '@/lib/ranking';
 
@@ -90,7 +91,7 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
           {school.logo_url ? (
             <img src={school.logo_url} alt="School Logo" className="w-24 h-24 rounded-lg object-contain bg-muted border border-border" />
           ) : (
-            <div className="w-24 h-24 rounded-lg bg-muted flex items-center justify-center border border-border text-3xl">🏫</div>
+            <div className="flex size-24 items-center justify-center rounded-2xl border border-border bg-amber-500/10 text-amber-600 dark:text-amber-400" aria-hidden><School className="size-10" /></div>
           )}
         </div>
         <div className="flex-1">
@@ -135,10 +136,7 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
 
       {/* Invite Codes */}
       <div className="mt-8 pt-6 border-t border-border">
-        <h3 className="text-sm font-bold mb-1 flex items-center gap-2">🔗 Invite Codes</h3>
-        <p className="text-xs text-muted-foreground mb-4">
-          Share these codes with teachers and students so they can join your school during signup.
-        </p>
+        <CardHeading icon={KeyRound} hue="amber" title="Invite codes" description="Share these codes with teachers and students so they can join your school during signup." />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
           <InviteCodeCard label="Teacher Invite Code" code={school.teacher_invite_code} tone="good" />
           <InviteCodeCard label="Student Invite Code" code={school.student_invite_code} tone="info" />

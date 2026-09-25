@@ -1,5 +1,7 @@
 "use client";
 
+import { RankBadge } from '@/components/ui/RankBadge';
+import { LayoutGrid } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 interface Props {
@@ -145,8 +147,9 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
     return (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: 'var(--space-4)' }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>
-                    📋 All Subjects — Aggregated Results
+                <h3 className="flex items-center gap-2.5 text-base font-semibold">
+                    <span className="flex size-8 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 dark:text-blue-400" aria-hidden><LayoutGrid className="size-4" /></span>
+                    All subjects — class results
                 </h3>
                 <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
                     Showing best score per subject for each student. {rows.length} students · {subjectCodes.length} subjects
@@ -176,8 +179,8 @@ export function AllSubjectsView({ gradeStreamId }: Props) {
                                       background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
                                   }}
                               >
-                                  <td style={{ ...tdStyle, fontWeight: 700, color: row.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
-                                      {row.rank <= 3 ? ['🥇', '🥈', '🥉'][row.rank - 1] : `#${row.rank}`}
+                                  <td style={tdStyle}>
+                                      <RankBadge rank={row.rank} />
                                   </td>
                                   <td style={{ ...tdStyle, fontWeight: 500 }}>{row.studentName}</td>
                                   <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber || '—'}</td>

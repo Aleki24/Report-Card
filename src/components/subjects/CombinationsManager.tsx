@@ -317,7 +317,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                 </div>
             )}
 
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden min-[769px]:p-0">
                 <div className="overflow-x-auto">
                     {combinations.length === 0 ? (
                         <div className="text-center py-16 text-muted-foreground">

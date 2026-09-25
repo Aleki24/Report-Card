@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Trophy, Download, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, Download, FileText, ChevronDown, ChevronUp, GraduationCap } from 'lucide-react';
 import { REPORT_TEMPLATES, DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
@@ -57,7 +57,7 @@ export default function StudentCombinedResultsPage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="My Results" description="View your granular exam marks and official report cards." />
+            <PageHeader title="My results" eyebrow="Academics" icon={GraduationCap} hue="violet" description="Your exam marks and official report cards." />
 
             <div className="mb-6 flex overflow-x-auto border-b border-border">
                 <button

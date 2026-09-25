@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, Trash2 } from 'lucide-react';
 import React, { useState } from 'react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
@@ -216,7 +217,7 @@ export function GradingSystemsTab({
             </div>
 
             {/* ── Grading Systems list (Name | Actions) ── */}
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden min-[769px]:p-0">
                 <div className="flex items-center justify-between p-5 border-b border-border">
                     <h3 className="font-bold text-lg font-[family-name:var(--font-display)]">Grading Systems</h3>
                     <button type="button" className="btn-primary" onClick={() => { setShowCreate(v => !v); if (showCreate) resetForm(); }}>
@@ -257,9 +258,9 @@ export function GradingSystemsTab({
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex justify-end gap-2">
-                                                    <button type="button" className="btn-secondary" onClick={() => openView(gs)}>👁 View</button>
+                                                    <button type="button" className="btn-secondary" onClick={() => openView(gs)}><Eye className="size-4" aria-hidden />View</button>
                                                     {own && (
-                                                        <button type="button" className="text-xs font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50" onClick={() => onDelete('grading_system', gs.id)} disabled={saving}>🗑 Delete</button>
+                                                        <button type="button" className="text-xs font-medium px-2.5 py-1 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50" onClick={() => onDelete('grading_system', gs.id)} disabled={saving}><Trash2 className="mr-1 inline size-3.5" aria-hidden />Delete</button>
                                                     )}
                                                 </div>
                                             </td>
