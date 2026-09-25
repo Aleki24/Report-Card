@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { Award, BarChart3, BookOpen, CheckCircle2, Medal, Users } from 'lucide-react';
 import { shortCurriculumLabel } from '@/lib/curriculum-labels';
+import { cn } from '@/lib/utils';
+import { StatTile, type StatTone } from '@/components/ui/StatTile';
 import type { ClassSubjectRow, MeritRow, SeriesRow } from '@/app/api/school/analytics/class/route';
 
 /**
@@ -54,20 +57,27 @@ function barFor(passRate: number): string {
     return 'bg-destructive';
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-    return (
-        <div className="rounded-xl border border-border bg-card p-3 xs:p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="mt-1 text-xl font-bold text-foreground xs:text-2xl">{value}</p>
-            {sub && <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sub}</p>}
-        </div>
-    );
+const passStatTone = (passRate: number): StatTone => (passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad');
+
+/** Gold, silver and bronze for the top three places. */
+const PODIUM: Record<number, string> = {
+    1: 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
+    2: 'bg-slate-400/20 text-slate-700 dark:text-slate-300',
+    3: 'bg-orange-400/20 text-orange-700 dark:text-orange-300',
+};
+
+interface ClassAnalyticsProps {
+    streamId: string;
+    /** The term to analyse, chosen by the page. Null lets the server pick the current one. */
+    termId: string | null;
+    /** "Term 2 · 2025", for headings. */
+    periodLabel: string;
 }
 
-export default function ClassAnalytics({ streamId }: { streamId: string }) {
+export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassAnalyticsProps) {
+    // The page keys this component by class and term, so the exam filter
+    // starts over whenever either changes.
     const [examType, setExamType] = useState<string | null>(null);
-    // null means "whichever term the school is in"; the server resolves it.
-    const [termId, setTermId] = useState<string | null>(null);
 
     /*
       Responses keyed by the request that produced them, rather than a `data`
@@ -125,17 +135,30 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
     const MERIT_PREVIEW = 15;
 
     if (loading) {
-        return <div className="h-64 animate-pulse rounded-xl border border-border bg-muted/40" />;
+        return (
+            <div className="space-y-4" aria-hidden="true">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {Array.from({ length: 4 }, (_, i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted/60" />)}
+                </div>
+                <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="h-80 animate-pulse rounded-2xl bg-muted/60" />
+                    <div className="h-80 animate-pulse rounded-2xl bg-muted/60" />
+                </div>
+            </div>
+        );
     }
 
     if (!data || data.summary.mark_count === 0) {
         return (
-            <div className="rounded-xl border border-border bg-card p-8 text-center">
-                <p className="text-sm font-medium text-foreground">No marks for this class yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                    {data?.scope.term_name
-                        ? `Nothing recorded for ${data.scope.term_name}.`
-                        : 'Once marks are entered they will be analysed here.'}
+            <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
+                <span className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <BarChart3 className="size-6" aria-hidden="true" />
+                </span>
+                <p className="font-semibold">{data ? `No marks for ${periodLabel || 'this term'}` : "Couldn't load this class"}</p>
+                <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    {data
+                        ? 'Pick an earlier term or year in the filters above to see past results.'
+                        : 'Something went wrong. Try another term or reload the page.'}
                 </p>
             </div>
         );
@@ -146,38 +169,12 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
 
     return (
         <div className="space-y-5">
-            {/* Who and when. Stated, never implied. */}
-            <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-bold text-foreground">{data.class.full_name}</h2>
-                {curriculum && (
-                    <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {curriculum}
-                    </span>
-                )}
-
-                {/*
-                  A term picker, not just a label. Defaulting to the current
-                  term is right; offering only the current term is not — for a
-                  while after a term rolls over, the previous one still holds
-                  all the marks, and the reader has no way back to it.
-                */}
-                {data.terms.length > 1 ? (
-                    <select
-                        className="rounded-md border border-border bg-card px-2 py-0.5 text-xs text-foreground"
-                        value={data.scope.term_id ?? ''}
-                        onChange={e => { setTermId(e.target.value || null); setExamType(null); }}
-                        aria-label="Term"
-                    >
-                        {data.terms.map(t => (
-                            <option key={t.id} value={t.id}>
-                                {t.name}{t.is_current ? ' (current)' : ''}
-                            </option>
-                        ))}
-                    </select>
-                ) : data.scope.term_name && (
-                    <span className="text-xs text-muted-foreground">{data.scope.term_name}</span>
-                )}
-            </div>
+            {curriculum && (
+                <p className="-mt-1 text-xs text-muted-foreground">
+                    <span className="rounded-md bg-muted px-2 py-0.5 font-semibold">{curriculum}</span>
+                    <span className="ml-2">{periodLabel}</span>
+                </p>
+            )}
 
             {/* Exam series. A series is a term plus an exam type, so "Term 2
                 Endterm" is one thing rather than nine exams sharing a name. */}
@@ -186,10 +183,11 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Exam
                     </span>
-                    <div className="flex flex-wrap gap-1 rounded-lg bg-muted/60 p-1">
+                    <div role="group" aria-label="Exam" className="-mx-1 flex max-w-full gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1">
                         <button
                             onClick={() => setExamType(null)}
-                            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                            aria-pressed={examType === null}
+                            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                                 examType === null ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                             }`}
                         >
@@ -199,7 +197,8 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                             <button
                                 key={`${s.term_id}-${s.exam_type}`}
                                 onClick={() => setExamType(s.exam_type)}
-                                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                aria-pressed={examType === s.exam_type}
+                                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                                     examType === s.exam_type ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                                 }`}
                             >
@@ -211,20 +210,16 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
             )}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Stat
-                    label="Class average"
-                    value={`${data.summary.mean_percentage}%`}
-                    sub={`${data.summary.mark_count} marks`}
-                />
-                <Stat label="Pass rate" value={`${data.summary.pass_rate}%`} sub="at or above 50%" />
-                {/* Learners, counted as learners. */}
-                <Stat label="Learners" value={String(data.summary.student_count)} sub="with marks" />
-                <Stat label="Subjects" value={String(data.summary.subject_count)} sub="assessed" />
+                <StatTile icon={BarChart3} label="Class average" value={`${data.summary.mean_percentage}%`} hint={`${data.summary.mark_count.toLocaleString()} marks`} />
+                <StatTile icon={CheckCircle2} label="Pass rate" value={`${data.summary.pass_rate}%`} hint="at or above 50%" tone={passStatTone(data.summary.pass_rate)} />
+                <StatTile icon={Users} label="Learners" value={data.summary.student_count} hint="with marks" />
+                <StatTile icon={BookOpen} label="Subjects" value={data.summary.subject_count} hint="assessed" />
             </div>
 
+            <div className="grid items-start gap-4 lg:grid-cols-2">
             {/* ── Subject ranking, best first ──────────────────────────────── */}
-            <section className="rounded-xl border border-border bg-card p-4">
-                <h3 className="text-sm font-semibold text-foreground">Subject ranking</h3>
+            <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+                <h3 className="flex items-center gap-2 font-semibold"><Award className="size-4 text-primary" aria-hidden="true" />Subject ranking</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                     Ranked from highest to lowest mean score. Colour shows the pass rate; grades come from this school&apos;s own scale.
                 </p>
@@ -244,7 +239,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                                         {s.mean_percentage}%{s.grade_symbol ? ` · ${s.grade_symbol}` : ''}
                                     </span>
                                 </div>
-                                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
                                     <div
                                         className={`h-full rounded-full ${barFor(s.pass_rate)}`}
                                         style={{ width: `${Math.min(Math.max(s.mean_percentage, 2), 100)}%` }}
@@ -261,9 +256,9 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
             </section>
 
             {/* ── Merit list ──────────────────────────────────────────────── */}
-            <section className="rounded-xl border border-border bg-card">
-                <div className="border-b border-border p-4">
-                    <h3 className="text-sm font-semibold text-foreground">Merit list</h3>
+            <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+                <div className="border-b border-border/70 p-4 sm:p-5">
+                    <h3 className="flex items-center gap-2 font-semibold"><Medal className="size-4 text-primary" aria-hidden="true" />Merit list</h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                         {data.class.full_name}
                         {data.scope.term_name ? `, ${data.scope.term_name}` : ''}
@@ -275,8 +270,8 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                 {/* Stacks on narrow screens rather than scrolling sideways. */}
                 <ul className="divide-y divide-border">
                     {(showAllMerit ? data.merit : data.merit.slice(0, MERIT_PREVIEW)).map(m => (
-                        <li key={m.student_id} className="flex items-center gap-3 p-3 xs:px-4">
-                            <span className="w-7 shrink-0 text-xs font-semibold text-muted-foreground">
+                        <li key={m.student_id} className="flex items-center gap-3 px-4 py-2.5 sm:px-5">
+                            <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold', m.rank ? PODIUM[m.rank] ?? 'bg-muted text-muted-foreground' : 'text-muted-foreground')}>
                                 {m.rank ?? '—'}
                             </span>
                             <div className="min-w-0 flex-1">
@@ -290,7 +285,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                                     incomplete
                                 </span>
                             )}
-                            <span className="shrink-0 text-sm font-semibold text-foreground">
+                            <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-foreground">
                                 {m.mean_percentage}%
                             </span>
                         </li>
@@ -308,6 +303,7 @@ export default function ClassAnalytics({ streamId }: { streamId: string }) {
                     </button>
                 )}
             </section>
+            </div>
         </div>
     );
 }

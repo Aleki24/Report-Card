@@ -20,9 +20,13 @@ interface UserProfileDialogProps {
   /** The user to show; null keeps the dialog closed. */
   user: UserRow | null;
   onClose: () => void;
-  onEdit: (user: UserRow) => void;
-  onResetPassword: (user: UserRow) => void;
-  resetting: boolean;
+  /** Opens the page's own edit form; the button is hidden when omitted. */
+  onEdit?: (user: UserRow) => void;
+  /** Label for the edit button. */
+  editLabel?: string;
+  /** Issues a new password; the button is hidden when omitted. */
+  onResetPassword?: (user: UserRow) => void;
+  resetting?: boolean;
   /** Called after the dialog saved a change (details or photo), so the directory can refresh. */
   onUpdated: () => void;
 }
@@ -76,7 +80,7 @@ function ProfileTabs({ tabs, active, onChange, idPrefix }: ProfileTabsProps) {
   );
 }
 
-function ProfileBody({ user, onEdit, onResetPassword, resetting, onUpdated, titleId }: Omit<UserProfileDialogProps, 'user' | 'onClose'> & { user: UserRow; titleId: string }) {
+function ProfileBody({ user, onEdit, editLabel = 'Edit account', onResetPassword, resetting = false, onUpdated, titleId }: Omit<UserProfileDialogProps, 'user' | 'onClose'> & { user: UserRow; titleId: string }) {
   const { state, reload } = useUserProfile(user);
   const [tab, setTab] = useState<ProfileTab>('overview');
   const [editing, setEditing] = useState(false);
@@ -130,18 +134,24 @@ function ProfileBody({ user, onEdit, onResetPassword, resetting, onUpdated, titl
                 <p className="mt-0.5 truncate text-sm text-muted-foreground">{describeUser(user)}</p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
                   <RoleBadge role={user.role} />
-                  <StatusBadge active={user.is_active} label={user.is_active ? 'Active account' : 'Inactive account'} />
+                  <StatusBadge active={user.is_active} label={user.is_active ? 'Active account' : 'Account not active'} />
                 </div>
               </div>
             </div>
-            <div className="flex w-full shrink-0 gap-2 sm:w-auto md:pt-17">
-              <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onEdit(user)}>
-                <Pencil className="size-3.5" aria-hidden="true" />Edit account
-              </button>
-              <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onResetPassword(user)} disabled={resetting}>
-                <KeyRound className="size-3.5" aria-hidden="true" />{resetting ? 'Resetting…' : 'Reset password'}
-              </button>
-            </div>
+            {(onEdit || onResetPassword) && (
+              <div className="flex w-full shrink-0 gap-2 sm:w-auto md:pt-17">
+                {onEdit && (
+                  <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onEdit(user)}>
+                    <Pencil className="size-3.5" aria-hidden="true" />{editLabel}
+                  </button>
+                )}
+                {onResetPassword && (
+                  <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => onResetPassword(user)} disabled={resetting}>
+                    <KeyRound className="size-3.5" aria-hidden="true" />{resetting ? 'Resetting…' : 'Reset password'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

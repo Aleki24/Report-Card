@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { PASS_MARK } from '@/lib/pass-mark';
 import { getActiveUserProfile } from '@/lib/auth-server';
+import { isUuid } from '@/lib/postgrest';
 
 /**
  * The school, compared class by class.
@@ -30,7 +31,18 @@ export interface OverviewClass {
     unmarked: number;
 }
 
-export async function GET() {
+export interface OverviewScope {
+    academic_year_id: string | null;
+    academic_year: string | null;
+    /** Null means the whole academic year. */
+    term_id: string | null;
+    term_name: string | null;
+}
+
+/** PostgREST's "no such function" — the term rollups' migration has not been applied yet. */
+const FUNCTION_MISSING = 'PGRST202';
+
+export async function GET(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,28 +56,52 @@ export async function GET() {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        const { data: currentYear } = await supabase
-            .from('academic_years')
-            .select('id, name')
-            .eq('school_id', schoolId)
-            .order('start_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        const { searchParams } = new URL(request.url);
+        const yearParam = searchParams.get('academic_year_id');
+        const termParam = searchParams.get('term_id');
+        if ((yearParam && !isUuid(yearParam)) || (termParam && !isUuid(termParam))) {
+            return NextResponse.json({ error: 'Invalid period' }, { status: 400 });
+        }
+
+        // A chosen term decides its own year. Every id must be this school's,
+        // or an admin could read another school's figures by guessing one.
+        let term: { id: string; name: string; academic_year_id: string } | null = null;
+        if (termParam) {
+            const { data } = await supabase
+                .from('terms')
+                .select('id, name, academic_year_id')
+                .eq('id', termParam)
+                .eq('school_id', schoolId)
+                .maybeSingle();
+            if (!data) return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+            term = data;
+        }
+
+        let yearQuery = supabase.from('academic_years').select('id, name').eq('school_id', schoolId);
+        const yearId = term?.academic_year_id ?? yearParam;
+        yearQuery = yearId ? yearQuery.eq('id', yearId) : yearQuery.order('start_date', { ascending: false }).limit(1);
+        const { data: year } = await yearQuery.maybeSingle();
+        if (yearId && !year) return NextResponse.json({ error: 'Academic year not found' }, { status: 404 });
 
         // Both rollups already exist and are already used by the dashboard;
         // Analytics simply never called them and hand-rolled the same thing in
         // the browser from a truncated array of marks.
-        const [perfRes, unmarkedRes] = await Promise.all([
-            supabase.rpc('school_class_performance', {
-                p_school_id: schoolId,
-                p_academic_year_id: currentYear?.id ?? null,
-                p_pass_mark: PASS_MARK,
-            }),
-            supabase.rpc('school_unmarked_exams', {
-                p_school_id: schoolId,
-                p_academic_year_id: currentYear?.id ?? null,
-            }),
-        ]);
+        const [perfRes, unmarkedRes] = await Promise.all(term
+            ? [
+                supabase.rpc('school_class_performance_for_term', { p_school_id: schoolId, p_term_id: term.id, p_pass_mark: PASS_MARK }),
+                supabase.rpc('school_unmarked_exams_for_term', { p_school_id: schoolId, p_term_id: term.id }),
+            ]
+            : [
+                supabase.rpc('school_class_performance', { p_school_id: schoolId, p_academic_year_id: year?.id ?? null, p_pass_mark: PASS_MARK }),
+                supabase.rpc('school_unmarked_exams', { p_school_id: schoolId, p_academic_year_id: year?.id ?? null }),
+            ]);
+
+        if (term && perfRes.error?.code === FUNCTION_MISSING) {
+            return NextResponse.json({
+                error: 'Term figures need a database update (migration 20260925100000_class_rollups_by_term). Whole-year figures still work.',
+                code: 'TERM_FILTER_UNAVAILABLE',
+            }, { status: 501 });
+        }
 
         if (perfRes.error) {
             console.error('Analytics overview error:', perfRes.error);
@@ -104,8 +140,16 @@ export async function GET() {
         const withMarks = classes.filter(c => c.mark_count > 0);
         const totalMarks = withMarks.reduce((sum, c) => sum + c.mark_count, 0);
 
+        const scope: OverviewScope = {
+            academic_year_id: year?.id ?? null,
+            academic_year: year?.name ?? null,
+            term_id: term?.id ?? null,
+            term_name: term?.name ?? null,
+        };
+
         return NextResponse.json({
-            academic_year: currentYear?.name ?? null,
+            scope,
+            academic_year: year?.name ?? null,
             classes,
             summary: {
                 classes_with_marks: withMarks.length,

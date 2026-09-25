@@ -1,17 +1,93 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { parseTabularFile, normalizeRowKeys, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { useAuth } from '@/components/AuthProvider';
-import { ContentSkeleton, InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import { DataTable, type DataTableColumn, FormGrid, FormField, InputField, SelectField } from '@/components/ui';
-import { Users, GraduationCap, Heart, Search, Edit3, Trash2, X, Upload, FileText, Users as UsersIcon, Calendar, ClipboardList, BookOpen, UserPlus, Mail, Phone, MapPin, UserCircle, ShieldCheck, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import Pagination from '@/components/dashboard/Pagination';
+import { DataTable, type DataTableColumn, FormGrid, FormField, InputField, SelectField, Modal, StatTile } from '@/components/ui';
+import { Users, GraduationCap, Heart, Search, Edit3, Trash2, Upload, ClipboardList, UserPlus, Mail, Phone, UserCheck, UserX, School, Briefcase, MessageSquare, X } from 'lucide-react';
+import type { UserRole } from '@/types';
+import type { UserRow } from '@/hooks/useUsersPage';
+import { UserProfileDialog } from '@/components/users/UserProfileDialog';
+import { RoleBadge, StatusBadge, UserAvatar } from '@/components/users/UserBadges';
+import { humanize } from '@/components/users/userMeta';
+import { cn } from '@/lib/utils';
+import { isRoleIn } from '@/lib/roles';
+
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong');
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { CLASS_REQUIRED_MESSAGE } from '@/lib/classes';
 
 type RoleTab = 'students' | 'teachers' | 'parents';
+
+/** Search box used by every section's toolbar. */
+function SearchBox({ value, onChange, placeholder, className }: { value: string; onChange: (value: string) => void; placeholder: string; className?: string }) {
+  return (
+    <div className={cn('relative min-w-0', className)}>
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <input
+        type="text"
+        className="input-field input-icon-left input-icon-right"
+        placeholder={placeholder}
+        aria-label={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+      {value && (
+        <button type="button" onClick={() => onChange('')} aria-label="Clear search" className="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function studentAsUser(s: StudentRow): UserRow {
+  return {
+    id: s.id,
+    first_name: s.users?.first_name ?? '',
+    last_name: s.users?.last_name ?? '',
+    email: s.users?.email ?? null,
+    username: '',
+    phone: s.users?.phone ?? null,
+    role: 'STUDENT',
+    is_active: s.status === 'ACTIVE',
+    created_at: '',
+    admission_number: s.admission_number,
+    avatar_url: s.avatar_url,
+    class_name: s.grade_stream?.full_name ?? null,
+  };
+}
+
+function staffAsUser(t: TeacherRow): UserRow {
+  return {
+    id: t.id,
+    first_name: t.profile.first_name,
+    last_name: t.profile.last_name,
+    email: t.profile.email,
+    username: '',
+    phone: t.profile.phone || null,
+    role: t.profile.role as UserRole,
+    is_active: t.profile.is_active,
+    created_at: '',
+    job_title: t.profile.job_title ?? null,
+    avatar_url: t.profile.avatar_url,
+  };
+}
+
+function EmptyState({ icon: Icon, title, body }: { icon: React.ComponentType<{ className?: string }>; title: string; body?: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-12 text-center">
+      <span className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon className="size-6" /></span>
+      <p className="font-semibold">{title}</p>
+      {body && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p>}
+    </div>
+  );
+}
 
 export default function PeoplePage() {
   return (
@@ -34,30 +110,41 @@ function PeoplePageInner() {
     { id: 'students' as const, label: 'Students', icon: <Users size={16} />, roles: ['ADMIN', 'CLASS_TEACHER'] as const },
     { id: 'teachers' as const, label: 'Staff', icon: <GraduationCap size={16} />, roles: ['ADMIN'] as const },
     { id: 'parents' as const, label: 'Parents', icon: <Heart size={16} />, roles: ['ADMIN'] as const },
-  ].filter(t => t.roles.includes(role as any));
-
-  useEffect(() => {
-    if (tabs.length > 0 && !tabs.find(t => t.id === tab)) setTab(tabs[0].id);
-  }, [role]);
+  ].filter(t => isRoleIn(role, t.roles));
+  // A tab this role cannot see (e.g. ?tab=parents for a class teacher) falls back to the first allowed one.
+  const activeTab: RoleTab | undefined = tabs.some(t => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="mb-6">
-        <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">People</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage students, teachers, staff, and parent contacts</p>
-      </div>
+    <div className="mx-auto w-full max-w-7xl pb-10">
+      <header className="mb-5">
+        <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">School</p>
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">People</h1>
+        <p className="mt-1 max-w-xl text-sm text-muted-foreground">Students, staff and parent contacts. Open anyone for their full profile.</p>
+      </header>
 
-      <div className="flex gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${tab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 && (
+        <div role="tablist" aria-label="People" className="-mx-1 mb-6 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/40 p-1 sm:w-fit">
+          {tabs.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none sm:gap-2 sm:px-4',
+                activeTab === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {tab === 'students' && <StudentsSection initialSearch={initialSearch} />}
-      {tab === 'teachers' && <TeachersSection />}
-      {tab === 'parents' && <ParentsSection />}
+      {activeTab === 'students' && <StudentsSection initialSearch={initialSearch} />}
+      {activeTab === 'teachers' && <TeachersSection />}
+      {activeTab === 'parents' && <ParentsSection />}
     </div>
   );
 }
@@ -69,13 +156,28 @@ interface CombinationOption { id: string; code: string; name: string; pathway: s
 /** Admission numbers are optional, so every display falls back to a dash. */
 const admNoLabel = (value: string | null | undefined) => value?.trim() || '—';
 
+/** One student row read from an import file, as sent to /api/admin/bulk-import-students. */
+interface ImportRow {
+  first_name: string;
+  last_name: string;
+  admission_number: string;
+  gender: string;
+  date_of_birth: string;
+  guardian_phone: string;
+  guardian_name: string;
+  guardian_email: string;
+  class: string;
+  stream: string;
+  academic_level_id: string;
+}
+
 const GENDER_OPTIONS = [
   { id: 'MALE', label: 'Male' },
   { id: 'FEMALE', label: 'Female' },
 ];
 
 const emptyStudentForm = { first_name: '', last_name: '', admission_number: '', gender: '', date_of_birth: '', guardian_name: '', guardian_phone: '', grade_stream_id: '', academic_level_id: '', pathway: '', track: '', subject_combination_id: '' };
-interface StudentDetail { profile: { first_name: string; last_name: string; admission_number: string | null; date_of_birth: string; gender: string; guardian_name: string; guardian_phone: string; avatar_url: string | null; status: string; grade_stream: { full_name: string } | null; pathway?: string | null; track?: string | null; subject_combination?: { code: string; name: string } | null; enrolled_subjects?: { id: string; name: string; code: string; role: 'CORE' | 'ELECTIVE' }[]; }; academicHistory: any[]; reportHistory: any[]; attendanceHistory: any[]; }
+
 
 function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const { profile, role } = useAuth();
@@ -93,18 +195,13 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
   const [formData, setFormData] = useState({ ...emptyStudentForm });
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [viewStudent, setViewStudent] = useState<StudentDetail | null>(null);
-  const [viewLoading, setViewLoading] = useState(false);
-  const [viewTab, setViewTab] = useState<'profile' | 'academic' | 'reports' | 'attendance'>('profile');
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [academicLevels, setAcademicLevels] = useState<{ id: string; name: string; code?: string }[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
   const [page, setPage] = useState(1);
   const perPage = 20;
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importData, setImportData] = useState<any[]>([]);
-  const [skippedData, setSkippedData] = useState<{ row: any; reason: string }[]>([]);
+  const [importData, setImportData] = useState<ImportRow[]>([]);
+  const [skippedData, setSkippedData] = useState<{ row: ImportRow; reason: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [importClassId, setImportClassId] = useState('');
   const [createdCredentials, setCreatedCredentials] = useState<{first_name: string; last_name: string; username: string; invite_code: string}[] | null>(null);
@@ -165,18 +262,18 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       && /^[\d\s\-+()]+$/.test(nameTrimmed)
       && nameTrimmed.replace(/\D/g, '').length >= 7;
     if (nameLooksLikePhone) {
-      showToast('❌ Guardian Name looks like a phone number — put the number in the Guardian Phone field instead.');
+      toast.error('Guardian Name looks like a phone number — put the number in the Guardian Phone field instead.');
       return;
     }
     if (!formData.grade_stream_id) {
-      showToast(`❌ ${CLASS_REQUIRED_MESSAGE}`);
+      toast.error(`${CLASS_REQUIRED_MESSAGE}`);
       return;
     }
     // Validate the phone itself so an unusable number is caught at entry, not at SMS time.
     if (formData.guardian_phone?.trim()) {
       const digits = formData.guardian_phone.replace(/\D/g, '');
       if (digits.length < 9 || digits.length > 12) {
-        showToast('❌ Guardian Phone doesn\'t look right. Use a format like 0712345678.');
+        toast.error('Guardian Phone doesn\'t look right. Use a format like 0712345678.');
         return;
       }
     }
@@ -188,7 +285,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
-      showToast(editing ? '✅ Student updated' : '✅ Student added');
+      toast.success(editing ? 'Student updated' : 'Student added');
       setShowModal(false); setEditing(null); await fetchStudents();
       
       // If adding a new student, show their invite code!
@@ -200,7 +297,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           invite_code: json.invite_code
         }]);
       }
-    } catch (err: any) { showToast(`❌ ${err.message}`); }
+    } catch (err: unknown) { toast.error(errorMessage(err)); }
     finally { setSaving(false); }
   };
 
@@ -209,8 +306,8 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     try {
       const res = await fetch(`/api/admin/delete-student?student_id=${id}`, { method: 'DELETE' });
       if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
-      showToast('✅ Deleted'); await fetchStudents();
-    } catch (err: any) { showToast(`❌ ${err.message}`); }
+      toast.success('Deleted'); await fetchStudents();
+    } catch (err: unknown) { toast.error(errorMessage(err)); }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,7 +318,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       // Accepts Excel as well as CSV — schools keep their rosters in .xlsx and
       // the "Save As CSV" step was being skipped or done wrong.
       const { rows } = await parseTabularFile(file);
-      const parsed = rows.map(raw => {
+      const parsed = rows.map((raw): ImportRow => {
         const row = normalizeRowKeys(raw);
         let first = row.firstname || row.first || '';
         let last = row.lastname || row.last || row.surname || '';
@@ -243,17 +340,17 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
           stream: row.stream || row.section || '',
           academic_level_id: academicLevels.length === 1 ? academicLevels[0].id : '',
         };
-      }).filter((r: any) => r.first_name || r.last_name);
+      }).filter(r => r.first_name || r.last_name);
 
       if (parsed.length === 0) {
-        showToast('❌ No student rows found. Check the file has a heading row with a name column.');
+        toast.error('No student rows found. Check the file has a heading row with a name column.');
         return;
       }
       setImportData(parsed);
       setSkippedData([]); // Reset skipped data on new file upload
     } catch (err) {
       console.error('Import parse failed:', err);
-      showToast('❌ Could not read that file. Use a CSV or Excel (.xlsx) file.');
+      toast.error('Could not read that file. Use a CSV or Excel (.xlsx) file.');
     }
   };
 
@@ -267,17 +364,17 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         body: JSON.stringify({ students: importData, default_grade_stream_id: importClassId || undefined })
       });
       const r = await res.json();
-      if (!res.ok) showToast(`❌ ${r.error || 'Failed to import students'}`);
+      if (!res.ok) toast.error(`${r.error || 'Failed to import students'}`);
       else {
         if (r.skipped_rows?.length > 0) {
-          showToast(`⚠️ Imported ${r.imported}, skipped ${r.skipped_rows.length}`);
+          toast.warning(`Imported ${r.imported}, skipped ${r.skipped_rows.length}`);
           setSkippedData(r.skipped_rows);
-          setImportData(r.skipped_rows.map((s: any) => s.row));
+          setImportData((r.skipped_rows as { row: ImportRow }[]).map(s => s.row));
           if (r.created_credentials && r.created_credentials.length > 0) {
             setCreatedCredentials(r.created_credentials);
           }
         } else {
-          showToast(`✅ ${r.message || 'Students imported successfully'}`);
+          toast.success(`${r.message || 'Students imported successfully'}`);
           setShowImportModal(false);
           setImportData([]);
           setSkippedData([]);
@@ -289,30 +386,16 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
         await fetchStudents();
       }
     } catch {
-      showToast('❌ Error importing students.');
+      toast.error('Error importing students.');
     }
     setImporting(false);
   };
 
-  const handlePhoto = async (f: File, onUrl: (url: string) => void) => {
-    setUploadingPhoto(true);
-    try {
-      const fd = new FormData(); fd.append('file', f);
-      const res = await fetch('/api/admin/upload-photo', { method: 'POST', body: fd });
-      const j = await res.json();
-      if (j.url) onUrl(j.url);
-    } finally { setUploadingPhoto(false); }
-  };
-
-  const viewStudentDetails = async (id: string) => {
-    setViewLoading(true); setViewStudent(null); setViewTab('profile');
-    try {
-      const res = await fetch(`/api/school/students/${id}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error();
-      setViewStudent(await res.json());
-    } catch { showToast('Failed to load details'); }
-    finally { setViewLoading(false); }
-  };
+  // The profile dialog is shared with the Users page and speaks UserRow.
+  const viewingUser = useMemo(() => {
+    const s = data.find(row => row.id === viewingId);
+    return s ? studentAsUser(s) : null;
+  }, [data, viewingId]);
 
   // Pathways/combinations only apply to CBC Senior School (Grades 10-12)
   const cbcLevelIds = new Set(academicLevels.filter(l => l.code === 'CBC').map(l => l.id));
@@ -341,7 +424,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
   const handleBulkAssign = async () => {
     if (bulkSelected.size === 0) return;
-    if (!bulkClear && !bulkCombination) { showToast('❌ Pick a subject combination or choose "Clear assignment".'); return; }
+    if (!bulkClear && !bulkCombination) { toast.error('Pick a subject combination or choose "Clear assignment".'); return; }
     setBulkSaving(true);
     try {
       const res = await fetch('/api/admin/student-pathways', {
@@ -356,75 +439,75 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
-      showToast(`✅ ${json.updated} student(s) ${bulkClear ? 'cleared' : 'assigned'}${json.warnings?.length ? ` (${json.warnings.length} sync warning(s))` : ''}`);
+      toast.success(`${json.updated} student(s) ${bulkClear ? 'cleared' : 'assigned'}${json.warnings?.length ? ` (${json.warnings.length} sync warning(s))` : ''}`);
       setShowBulkAssign(false);
       setBulkSelected(new Set());
       setBulkCombination('');
       setBulkClear(false);
       await fetchStudents();
-    } catch (err: any) { showToast(`❌ ${err.message}`); }
+    } catch (err: unknown) { toast.error(errorMessage(err)); }
     finally { setBulkSaving(false); }
   };
 
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-
-  if (error) return <div className="text-center py-16 text-muted-foreground"><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">{error}</p></div>;
+  if (error) return <EmptyState icon={Users} title="Couldn't load students" body={error} />;
 
   return (
     <div>
-      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <div className="stat-card"><div className="stat-label">Total Students</div><div className="stat-value">{stats.total}</div></div>
-        <div className="stat-card"><div className="stat-label">Active</div><div className="stat-value">{stats.active}</div></div>
-        <div className="stat-card"><div className="stat-label">Inactive</div><div className="stat-value">{stats.inactive}</div></div>
-        <div className="stat-card"><div className="stat-label">Streams</div><div className="stat-value">{stats.streams}</div></div>
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile icon={Users} label="Students" value={stats.total} hint="on the roll" />
+        <StatTile icon={UserCheck} label="Active" value={stats.active} hint="currently enrolled" tone="good" />
+        <StatTile icon={UserX} label="Left" value={stats.inactive} hint="transferred, graduated or off" tone={stats.inactive ? 'warn' : 'default'} />
+        <StatTile icon={School} label="Classes" value={stats.streams} hint="streams" />
       </div>
 
-      <div className="flex flex-col md:flex-row md:flex-wrap gap-3 mb-4">
-        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
-          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
-          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search students..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+      <section aria-label="Student filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <SearchBox className="flex-1" value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Search name, admission no. or guardian phone" />
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary flex-1 sm:flex-none" onClick={() => setShowImportModal(true)}>
+              <Upload className="size-4" aria-hidden="true" />Import
+            </button>
+            {isAdmin && combinations.length > 0 && (
+              <button className="btn-secondary flex-1 sm:flex-none" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
+                <ClipboardList className="size-4" aria-hidden="true" />Pathways
+              </button>
+            )}
+            <button className="btn-primary flex-1 sm:flex-none" onClick={() => { setEditing(null); setFormData({ ...emptyStudentForm }); setShowModal(true); }}>
+              <UserPlus className="size-4" aria-hidden="true" />Add student
+            </button>
+          </div>
         </div>
-        <select className="input-field" style={{ width: "auto", minWidth: "140px" }} value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
-          <option value="">All Streams</option>
-          {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
-        </select>
-        <select className="input-field" style={{ width: "auto", minWidth: "120px" }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-          <option value="ALL">All Status</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Not active</option>
-          <option value="TRANSFERRED">Transferred</option>
-          <option value="GRADUATED">Graduated</option>
-          <option value="DEACTIVATED">Deactivated</option>
-        </select>
-        {combinations.length > 0 && (
-          <>
-            <select className="input-field" style={{ width: "auto", minWidth: "140px" }} value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
-              <option value="">All Pathways</option>
-              <option value="STEM">STEM</option>
-              <option value="SOCIAL_SCIENCES">Social Sciences</option>
-              <option value="ARTS_SPORTS">Arts &amp; Sports Science</option>
-              <option value="UNASSIGNED">Unassigned</option>
-            </select>
-            <select className="input-field" style={{ width: "auto", minWidth: "160px" }} value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
-              <option value="">All Combinations</option>
-              {combinations.filter(c => !pathwayFilter || pathwayFilter === 'UNASSIGNED' || c.pathway === pathwayFilter).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
-            </select>
-          </>
-        )}
-        <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => setShowImportModal(true)}>
-          <Upload size={14} /> Import File
-        </button>
-        {isAdmin && combinations.length > 0 && (
-          <button className="btn-secondary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setBulkSelected(new Set()); setBulkStreamFilter(seniorStreamIds.has(gradeStreamFilter) ? gradeStreamFilter : ''); setBulkSearch(''); setBulkCombination(''); setBulkClear(false); setShowBulkAssign(true); }}>
-            <ClipboardList size={14} /> Assign Pathways
-          </button>
-        )}
-        <button className="btn-primary px-4 py-2 shrink-0 flex items-center gap-2" onClick={() => { setEditing(null); setFormData({ ...emptyStudentForm }); setShowModal(true); }}>
-          <UserPlus size={14} /> Add Student
-        </button>
-      </div>
+        <div className={cn('mt-3 grid grid-cols-2 gap-2', combinations.length > 0 ? 'md:grid-cols-4' : 'md:grid-cols-2')}>
+          <select className="input-field" aria-label="Filter by class" value={gradeStreamFilter} onChange={e => { setGradeStreamFilter(e.target.value); setPage(1); }}>
+            <option value="">All classes</option>
+            {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+          </select>
+          <select className="input-field" aria-label="Filter by status" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
+            <option value="ALL">Any status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Not active</option>
+            <option value="TRANSFERRED">Transferred</option>
+            <option value="GRADUATED">Graduated</option>
+            <option value="DEACTIVATED">Deactivated</option>
+          </select>
+          {combinations.length > 0 && (
+            <>
+              <select className="input-field" aria-label="Filter by pathway" value={pathwayFilter} onChange={e => { setPathwayFilter(e.target.value); setCombinationFilter(''); setPage(1); }}>
+                <option value="">All pathways</option>
+                <option value="STEM">STEM</option>
+                <option value="SOCIAL_SCIENCES">Social Sciences</option>
+                <option value="ARTS_SPORTS">Arts &amp; Sports Science</option>
+                <option value="UNASSIGNED">Unassigned</option>
+              </select>
+              <select className="input-field" aria-label="Filter by subject combination" value={combinationFilter} onChange={e => { setCombinationFilter(e.target.value); setPage(1); }}>
+                <option value="">All combinations</option>
+                {combinations.filter(c => !pathwayFilter || pathwayFilter === 'UNASSIGNED' || c.pathway === pathwayFilter).map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+              </select>
+            </>
+          )}
+        </div>
+      </section>
 
       {loading ? <ContentSkeleton message="Loading students..." /> : (
         <>
@@ -433,13 +516,11 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               {
                 key: 'student', header: 'Student',
                 render: s => (
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {s.avatar_url ? <img src={s.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${s.users?.first_name ?? ''} ${s.users?.last_name ?? ''}`)}
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm">{s.users?.first_name ?? ''} {s.users?.last_name ?? ''}</div>
-                      <div className="text-xs text-muted-foreground">{s.users?.email || '—'}</div>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <UserAvatar firstName={s.users?.first_name ?? null} lastName={s.users?.last_name ?? null} role="STUDENT" imageUrl={s.avatar_url} />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{s.users?.first_name ?? ''} {s.users?.last_name ?? ''}</div>
+                      <div className="truncate text-xs text-muted-foreground">{s.grade_stream?.full_name || 'No class'}</div>
                     </div>
                   </div>
                 ),
@@ -468,38 +549,38 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               },
               {
                 key: 'status', header: 'Status',
-                render: s => <span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span>,
+                render: s => <StatusBadge active={s.status === 'ACTIVE'} label={humanize(s.status)} />,
               },
             ]}
             rows={paginated}
             rowKey={s => s.id}
-            onRowClick={s => viewStudentDetails(s.id)}
+            onRowClick={s => setViewingId(s.id)}
             rowActions={s => (
               <span className="whitespace-nowrap">
-                <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" onClick={() => openEdit(s)}><Edit3 size={14} /></button>
-                <button className="btn-icon text-destructive/80 hover:text-destructive" title="Delete" onClick={() => handleDelete(s.id)}><Trash2 size={14} /></button>
+                <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" aria-label={`Edit ${s.users?.first_name ?? 'student'}`} onClick={() => openEdit(s)}><Edit3 size={14} /></button>
+                <button className="btn-icon text-destructive/80 hover:text-destructive" title="Delete" aria-label={`Delete ${s.users?.first_name ?? 'student'}`} onClick={() => handleDelete(s.id)}><Trash2 size={14} /></button>
               </span>
             )}
-            emptyState={<><Users size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No students found.</p></>}
+            emptyState={<EmptyState icon={Users} title="No students found" body="Try another class, status or search, or add a student." />}
           />
-          {totalPages > 1 && (
-            <div className="mt-3 flex items-center justify-between px-1">
-              <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
-              <div className="flex gap-2">
-                <button className="btn-secondary px-3 py-1" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</button>
-                <button className="btn-secondary px-3 py-1" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</button>
-              </div>
-            </div>
-          )}
+          <div className="mt-2 overflow-hidden rounded-2xl">
+            <Pagination currentPage={page} totalPages={totalPages} totalItems={filtered.length} pageSize={perPage} onPageChange={setPage} />
+          </div>
         </>
       )}
 
       {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowModal(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold font-display mb-5">{editing ? 'Edit Student' : 'Add Student'}</h2>
-            <FormGrid className="mb-5">
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={editing ? 'Edit student' : 'Add student'}
+        size="lg"
+        footer={<>
+          <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+          <button className="btn-primary" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving…' : editing ? 'Save changes' : 'Add student'}</button>
+        </>}
+      >
+            <FormGrid>
               <FormField label="First Name" span="half" required><InputField value={formData.first_name || ''} onChange={e => setFormData(p => ({ ...p, first_name: e.target.value }))} /></FormField>
               <FormField label="Last Name" span="half" required><InputField value={formData.last_name || ''} onChange={e => setFormData(p => ({ ...p, last_name: e.target.value }))} /></FormField>
               <FormField label="Admission No." span="half" hint="Leave empty if the school has not assigned one yet."><InputField placeholder="Optional" value={formData.admission_number || ''} onChange={e => setFormData(p => ({ ...p, admission_number: e.target.value }))} /></FormField>
@@ -551,19 +632,21 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                 </>
               )}
             </FormGrid>
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleSave} disabled={saving || !formData.first_name || !formData.last_name}>{saving ? 'Saving...' : editing ? 'Update' : 'Add Student'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Bulk Pathway Assignment Modal */}
-      {showBulkAssign && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowBulkAssign(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-sm font-bold font-display mb-1">Assign Pathways &amp; Subject Combinations</h2>
+      <Modal
+        isOpen={showBulkAssign}
+        onClose={() => setShowBulkAssign(false)}
+        title="Assign pathways & subject combinations"
+        size="lg"
+        footer={<>
+          <button className="btn-secondary" onClick={() => setShowBulkAssign(false)} disabled={bulkSaving}>Cancel</button>
+          <button className="btn-primary" onClick={handleBulkAssign} disabled={bulkSaving || bulkSelected.size === 0 || (!bulkClear && !bulkCombination)}>
+            {bulkSaving ? 'Assigning…' : bulkClear ? `Clear ${bulkSelected.size} student(s)` : `Assign ${bulkSelected.size} student(s)`}
+          </button>
+        </>}
+      >
             <p className="text-xs text-muted-foreground mb-4">Reassign existing CBC Senior School students (Grades 10–12) to a pathway/track/combination without re-entering their data. Their subject enrollments (3 electives + compulsory cores) sync automatically.</p>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -590,7 +673,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md min-h-[180px]">
+            <div className="mb-4 max-h-72 min-h-[180px] overflow-y-auto rounded-xl border border-border">
               {bulkFiltered.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-8">
                   {seniorStreamIds.size === 0
@@ -613,7 +696,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end mb-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1 w-full">
                 <label className="block text-xs text-muted-foreground mb-2">Assign to combination</label>
                 <select className="input-field w-full" value={bulkCombination} disabled={bulkClear} onChange={e => setBulkCombination(e.target.value)}>
@@ -627,22 +710,19 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
                 <input type="checkbox" checked={bulkClear} onChange={e => setBulkClear(e.target.checked)} /> Clear assignment
               </label>
             </div>
-
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary" onClick={() => setShowBulkAssign(false)} disabled={bulkSaving}>Cancel</button>
-              <button className="btn-primary" onClick={handleBulkAssign} disabled={bulkSaving || bulkSelected.size === 0 || (!bulkClear && !bulkCombination)}>
-                {bulkSaving ? 'Assigning...' : bulkClear ? `Clear ${bulkSelected.size} student(s)` : `Assign ${bulkSelected.size} student(s)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowImportModal(false)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-sm font-bold font-display mb-4">Bulk Import Students</h2>
+      <Modal
+        isOpen={showImportModal}
+        onClose={() => { if (!importing) { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); } }}
+        title="Import students"
+        size="lg"
+        footer={<>
+          <button className="btn-secondary" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</button>
+          <button className="btn-primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing…' : skippedData.length > 0 ? `Retry import (${importData.length})` : `Import ${importData.length} students`}</button>
+        </>}
+      >
             <p className="text-xs text-muted-foreground mb-4">Select a class, upload a <strong>CSV or Excel (.xlsx)</strong> file, and import. Columns: <strong>first_name, last_name, admission_number, gender</strong></p>
 
             {/* Class selection */}
@@ -656,7 +736,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
             <div className="flex items-center gap-3 mb-4">
               <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border bg-surface cursor-pointer text-xs font-medium hover:bg-muted transition-colors">
-                <Upload size={14} /> Select CSV File
+                <Upload size={14} /> Choose CSV or Excel file
                 <input type="file" accept={IMPORT_FILE_ACCEPT} className="hidden" onChange={handleFileChange} />
               </label>
               <span className="text-xs text-muted-foreground">{importData.length > 0 ? `${importData.length} students found` : 'No file selected'}</span>
@@ -669,7 +749,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             )}
 
             {importData.length > 0 && (
-              <div className="flex-1 overflow-y-auto mb-4 border border-border rounded-md">
+              <div className="mb-4 max-h-80 overflow-y-auto rounded-xl border border-border">
                 <div className="w-full overflow-x-auto">
                   <table className="data-table w-full">
                     <thead><tr><th className="px-4 py-2 text-xs">First Name</th><th className="px-4 py-2 text-xs">Last Name</th><th className="px-4 py-2 text-xs">Admission No.</th><th className="px-4 py-2 text-xs">Gender</th></tr></thead>
@@ -712,69 +792,16 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             {!importClassId && importData.length > 0 && (
               <p className="text-xs text-amber-500 mb-3">⚠️ Please select a class above before importing.</p>
             )}
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary" onClick={() => { setShowImportModal(false); setImportData([]); setSkippedData([]); setImportClassId(''); }} disabled={importing}>Cancel</button>
-              <button className="btn-primary" onClick={handleImportSubmit} disabled={importing || importData.length === 0 || !importClassId}>{importing ? 'Importing...' : skippedData.length > 0 ? `Retry Import (${importData.length})` : `Import ${importData.length} Students`}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* View Detail Panel */}
-      {viewStudent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setViewStudent(null)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-sm font-bold text-accent">{getInitials(`${viewStudent.profile.first_name} ${viewStudent.profile.last_name}`)}</div>
-                <div><h2 className="text-sm font-bold">{viewStudent.profile.first_name} {viewStudent.profile.last_name}</h2><p className="text-xs text-muted-foreground">{admNoLabel(viewStudent.profile.admission_number)} · {viewStudent.profile.grade_stream?.full_name || '—'}</p></div>
-              </div>
-              <button onClick={() => setViewStudent(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
-            </div>
-            <div className="flex border-b border-border shrink-0 overflow-x-auto">
-              {(['profile', 'academic', 'reports', 'attendance'] as const).map(t => (
-                <button key={t} onClick={() => setViewTab(t)} className={`px-4 py-3 text-xs font-semibold whitespace-nowrap bg-none border-none cursor-pointer ${viewTab === t ? 'text-accent border-b-2 border-accent' : 'text-muted-foreground'}`}>{t === 'profile' ? 'Profile' : t === 'academic' ? 'Academic' : t === 'reports' ? 'Reports' : 'Attendance'}</button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              {viewLoading ? <InlineLoadingSkeleton rows={4} /> : viewTab === 'profile' ? (
-                <div className="space-y-3 text-sm">
-                  <div className="grid grid-cols-2 gap-3"><div><span className="text-xs text-muted-foreground">Gender</span><p>{viewStudent.profile.gender || '—'}</p></div><div><span className="text-xs text-muted-foreground">DOB</span><p>{viewStudent.profile.date_of_birth ? new Date(viewStudent.profile.date_of_birth).toLocaleDateString() : '—'}</p></div></div>
-                  <div><span className="text-xs text-muted-foreground">Guardian</span><p>{viewStudent.profile.guardian_name || '—'} {viewStudent.profile.guardian_phone ? `(${viewStudent.profile.guardian_phone})` : ''}</p></div>
-                  <div><span className="text-xs text-muted-foreground">Status</span><p><span className={`badge ${viewStudent.profile.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{viewStudent.profile.status}</span></p></div>
-                  {viewStudent.profile.pathway && (
-                    <div>
-                      <span className="text-xs text-muted-foreground">Pathway</span>
-                      <p>{pathwayLabel(viewStudent.profile.pathway)}{viewStudent.profile.track ? ` — ${viewStudent.profile.track}` : ''}{viewStudent.profile.subject_combination ? ` (${viewStudent.profile.subject_combination.code} — ${viewStudent.profile.subject_combination.name})` : ''}</p>
-                    </div>
-                  )}
-                  {(viewStudent.profile.enrolled_subjects?.length ?? 0) > 0 && (
-                    <div>
-                      <span className="text-xs text-muted-foreground">Subjects ({viewStudent.profile.enrolled_subjects!.length})</span>
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {viewStudent.profile.enrolled_subjects!.map(sub => (
-                          <span key={sub.id} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${sub.role === 'CORE' ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary'}`}>
-                            {sub.name}{sub.role === 'ELECTIVE' ? ' •' : ''}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : viewTab === 'academic' ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-3"><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-accent">{viewStudent.academicHistory.length > 0 ? `${viewStudent.academicHistory[viewStudent.academicHistory.length - 1].average.toFixed(1)}%` : '—'}</div><div className="text-xs text-muted-foreground">Average</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-blue-400">—</div><div className="text-xs text-muted-foreground">Best Grade</div></div><div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-lg font-bold text-amber-400">—</div><div className="text-xs text-muted-foreground">Position</div></div></div>
-                  {viewStudent.academicHistory.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No academic history yet.</p>}
-                </div>
-              ) : viewTab === 'reports' ? (
-                <div>{viewStudent.reportHistory.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No report history yet.</p> : <p className="text-xs text-muted-foreground">{viewStudent.reportHistory.length} report(s) generated.</p>}</div>
-              ) : (
-                <div><div className="p-3 rounded-lg bg-surface-raised text-center mb-3"><div className="text-lg font-bold text-emerald-400">{viewStudent.attendanceHistory.length > 0 ? `${Math.round(viewStudent.attendanceHistory.reduce((s: number, a: any) => s + (a.percentage ?? 0), 0) / viewStudent.attendanceHistory.length)}%` : '—'}</div><div className="text-xs text-muted-foreground">Attendance Rate</div></div>{viewStudent.attendanceHistory.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">No attendance history yet.</p>}</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <UserProfileDialog
+        user={viewingUser}
+        onClose={() => setViewingId(null)}
+        onEdit={u => { const s = data.find(row => row.id === u.id); setViewingId(null); if (s) openEdit(s); }}
+        editLabel="Edit student"
+        onUpdated={() => fetchStudents()}
+      />
+
       {/* Created Invite Codes Modal */}
       {createdCredentials && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
@@ -819,8 +846,6 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
 
 /* ───── Teachers Section ───── */
 interface TeacherRow { id: string; employee_id: string; profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; job_title?: string | null; }; subjects: string; classes: string; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; }
-interface TeacherDetail { profile: { first_name: string; last_name: string; email: string | null; phone: string; avatar_url: string | null; is_active: boolean; role: string; job_title?: string | null; }; stats: { subjectCount: number; classCount: number; examCount: number; markCount: number; }; subjectAssignments: any[]; classAssignments: any[]; recentExams: any[]; }
-type TeacherTab = 'overview' | 'subjects' | 'classes' | 'exams';
 
 function TeachersSection() {
   const [data, setData] = useState<TeacherRow[]>([]);
@@ -831,25 +856,30 @@ function TeachersSection() {
   const [editingTeacher, setEditingTeacher] = useState<TeacherRow | null>(null);
   const [editData, setEditData] = useState({ first_name: '', last_name: '', phone: '', avatar_url: '' });
   const [savingEdit, setSavingEdit] = useState(false);
-  const [viewTeacher, setViewTeacher] = useState<TeacherDetail | null>(null);
-  const [viewLoading, setViewLoading] = useState(false);
-  const [viewTab, setViewTab] = useState<TeacherTab>('overview');
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const showToast = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4000); };
 
-  useEffect(() => {
-    const fetchTeachers = async () => {
-      try {
-        const res = await fetch('/api/school/data?type=teachers');
-        if (!res.ok) return;
-        const json = await res.json();
-        setData(json.data || []);
-      } catch (err) { console.error('Failed to fetch teachers:', err); }
-      finally { setLoading(false); }
-    };
-    fetchTeachers();
+  const fetchTeachers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/school/data?type=teachers', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      setData(json.data || []);
+    } catch (err) { console.error('Failed to fetch teachers:', err); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { fetchTeachers(); }, [fetchTeachers]);
+
+  const viewingUser = useMemo(() => {
+    const t = data.find(row => row.id === viewingId);
+    return t ? staffAsUser(t) : null;
+  }, [data, viewingId]);
+
+  const openEditTeacher = (t: TeacherRow) => {
+    setEditingTeacher(t);
+    setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' });
+  };
 
   const filtered = data.filter(t => {
     const q = search.toLowerCase();
@@ -859,16 +889,12 @@ function TeachersSection() {
     return matchSearch && matchRole && matchStatus;
   });
 
-  const roleBadge = (role: string, isActive: boolean, jobTitle?: string | null) => {
-    if (!isActive) return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/15 text-red-400">Inactive</span>;
-    const colors: Record<string, string> = { CLASS_TEACHER: 'bg-blue-500/15 text-blue-400', SUBJECT_TEACHER: 'bg-purple-500/15 text-purple-400', ADMIN: 'bg-red-500/15 text-red-400', STAFF: 'bg-sky-500/15 text-sky-400' };
-    const labels: Record<string, string> = { CLASS_TEACHER: 'Class Teacher', SUBJECT_TEACHER: 'Subject Teacher', ADMIN: 'Admin', STAFF: 'Staff' };
-    // Non-teaching staff carry a descriptive title (Bursar, Secretary, …) — show it in place of the generic "Staff".
-    const label = role === 'STAFF' ? (jobTitle || 'Staff') : (labels[role] || role);
-    return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${colors[role] || 'bg-gray-500/15 text-gray-400'}`}>{label}</span>;
+  const stats = {
+    total: data.length,
+    teachers: data.filter(t => t.profile.role === 'CLASS_TEACHER' || t.profile.role === 'SUBJECT_TEACHER').length,
+    office: data.filter(t => t.profile.role === 'ADMIN' || t.profile.role === 'STAFF').length,
+    notActive: data.filter(t => !t.profile.is_active).length,
   };
-
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
   const handleSaveTeacher = async () => {
     if (!editingTeacher) return;
@@ -877,12 +903,10 @@ function TeachersSection() {
       const res = await fetch('/api/admin/update-teacher', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editData, teacher_id: editingTeacher.id }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
-      showToast('✅ Teacher updated');
+      toast.success('Teacher updated');
       setEditingTeacher(null);
-      const fetchRes = await fetch('/api/school/data?type=teachers');
-      const fetchJson = await fetchRes.json();
-      setData(fetchJson.data || []);
-    } catch (err: any) { showToast(`❌ ${err.message}`); }
+      await fetchTeachers();
+    } catch (err: unknown) { toast.error(errorMessage(err)); }
     finally { setSavingEdit(false); }
   };
 
@@ -896,134 +920,96 @@ function TeachersSection() {
     } finally { setUploadingPhoto(false); }
   };
 
-  const viewTeacherDetails = async (t: TeacherRow) => {
-    setViewLoading(true); setViewTeacher(null); setViewTab('overview');
-    try {
-      const res = await fetch(`/api/school/teachers/${t.id}`);
-      if (!res.ok) throw new Error();
-      setViewTeacher(await res.json());
-    } catch { showToast('Failed to load details'); }
-    finally { setViewLoading(false); }
-  };
-
   if (loading) return <ContentSkeleton message="Loading teachers..." />;
 
   return (
     <div>
-      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
-      <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
-          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
-          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <select className="input-field" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-          <option value="ALL">All Roles</option>
-          <option value="CLASS_TEACHER">Class Teacher</option>
-          <option value="SUBJECT_TEACHER">Subject Teacher</option>
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile icon={Users} label="Staff" value={stats.total} hint="with accounts" />
+        <StatTile icon={GraduationCap} label="Teachers" value={stats.teachers} hint="class & subject" />
+        <StatTile icon={Briefcase} label="Admin & office" value={stats.office} hint="admins and other staff" />
+        <StatTile icon={UserX} label="Not active" value={stats.notActive} hint="not yet activated, or off" tone={stats.notActive ? 'warn' : 'default'} />
+      </div>
+
+      <section aria-label="Staff filters" className="mb-4 grid grid-cols-2 gap-2 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 md:grid-cols-[minmax(0,1fr)_12rem_10rem]">
+        <SearchBox className="col-span-2 md:col-span-1" value={search} onChange={setSearch} placeholder="Search name or email" />
+        <select className="input-field" aria-label="Filter by role" value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+          <option value="ALL">All roles</option>
+          <option value="CLASS_TEACHER">Class teacher</option>
+          <option value="SUBJECT_TEACHER">Subject teacher</option>
           <option value="ADMIN">Admin</option>
-          <option value="STAFF">Other Staff</option>
+          <option value="STAFF">Other staff</option>
         </select>
-        <select className="input-field" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="ALL">All Status</option>
+        {/* Staff accounts are only on or off; the student enrolment statuses never applied here. */}
+        <select className="input-field" aria-label="Filter by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="ALL">Any status</option>
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Not active</option>
-          <option value="TRANSFERRED">Transferred</option>
-          <option value="GRADUATED">Graduated</option>
-          <option value="DEACTIVATED">Deactivated</option>
         </select>
-      </div>
+      </section>
 
       <DataTable<TeacherRow>
         columns={[
           {
             key: 'teacher', header: 'Teacher',
             render: t => (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {t.profile.avatar_url ? <img src={t.profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" /> : getInitials(`${t.profile.first_name} ${t.profile.last_name}`)}
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar firstName={t.profile.first_name} lastName={t.profile.last_name} role={t.profile.role as UserRole} imageUrl={t.profile.avatar_url} />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{t.profile.first_name} {t.profile.last_name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{t.profile.role === 'STAFF' ? (t.profile.job_title || 'Staff member') : (t.profile.email || '—')}</div>
                 </div>
-                <span className="font-medium text-sm">{t.profile.first_name} {t.profile.last_name}</span>
               </div>
             ),
           },
-          { key: 'email', header: 'Email', render: t => <span className="text-muted-foreground">{t.profile.email || '—'}</span> },
-          { key: 'employee_id', header: 'Employee ID', render: t => <span className="font-mono">{t.employee_id || '—'}</span>, hideOnMobile: true },
-          { key: 'role', header: 'Role', render: t => roleBadge(t.profile.role, t.profile.is_active, t.profile.job_title) },
-          { key: 'subjects', header: 'Subjects', render: t => t.subjects || '—' },
+          { key: 'role', header: 'Role', render: t => <RoleBadge role={t.profile.role as UserRole} /> },
+          { key: 'subjects', header: 'Subjects', render: t => <span className="text-sm text-muted-foreground">{t.subjects || '—'}</span>, hideOnMobile: true },
+          { key: 'status', header: 'Status', render: t => <StatusBadge active={t.profile.is_active} /> },
         ]}
         rows={filtered}
         rowKey={t => t.id}
-        onRowClick={t => viewTeacherDetails(t)}
+        onRowClick={t => setViewingId(t.id)}
         rowActions={t => (
-          <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" onClick={() => { setEditingTeacher(t); setEditData({ first_name: t.profile.first_name, last_name: t.profile.last_name, phone: t.profile.phone, avatar_url: t.profile.avatar_url || '' }); }}><Edit3 size={14} /></button>
+          <button className="btn-icon text-muted-foreground hover:text-foreground" title="Edit" aria-label={`Edit ${t.profile.first_name}`} onClick={() => openEditTeacher(t)}><Edit3 size={14} /></button>
         )}
-        emptyState={<><GraduationCap size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No staff found.</p></>}
+        emptyState={<EmptyState icon={GraduationCap} title="No staff found" body="Try another role, status or search." />}
       />
 
-      {editingTeacher && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setEditingTeacher(null)}>
-          <div className="card w-full max-w-md" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <h2 className="text-sm font-bold font-display mb-4">Edit Teacher</h2>
-            <div className="flex flex-col gap-3 mb-4">
-              <div className="flex gap-3">
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">First Name</label><input className="input-field w-full" value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></div>
-                <div className="flex-1"><label className="block text-xs text-muted-foreground mb-2">Last Name</label><input className="input-field w-full" value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></div>
-              </div>
-              <div><label className="block text-xs text-muted-foreground mb-2">Phone</label><input className="input-field w-full" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-2">Photo</label>
-                <div className="flex items-center gap-2">
-                  {editData.avatar_url ? (
-                    <div className="relative w-12 h-12 shrink-0"><img src={editData.avatar_url} className="w-12 h-12 rounded-full object-cover" /><button type="button" onClick={() => setEditData(p => ({ ...p, avatar_url: '' }))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white border-none text-xs flex items-center justify-center cursor-pointer">×</button></div>
-                  ) : null}
-                  <label className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-border bg-surface cursor-pointer text-xs text-muted-foreground"><Upload size={12} />{uploadingPhoto ? 'Uploading...' : 'Choose File'}<input type="file" accept="image/jpeg,image/png,image/gif,image/webp" style={{ display: 'none' }} disabled={uploadingPhoto} onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoFileSelect(f, url => setEditData(p => ({ ...p, avatar_url: url }))); e.target.value = ''; }} /></label>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button className="btn-secondary" onClick={() => setEditingTeacher(null)} disabled={savingEdit}>Cancel</button>
-              <button className="btn-primary disabled:opacity-50" onClick={handleSaveTeacher} disabled={savingEdit}>{savingEdit ? 'Saving...' : 'Save Changes'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {viewTeacher && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setViewTeacher(null)}>
-          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col" style={{ animation: 'fadeIn .2s ease' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between p-5 border-b border-border shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-accent-glow flex items-center justify-center text-xs font-bold text-accent">{getInitials(`${viewTeacher.profile.first_name} ${viewTeacher.profile.last_name}`)}</div>
-                <div><h2 className="text-sm font-bold">{viewTeacher.profile.first_name} {viewTeacher.profile.last_name}</h2><p className="text-xs text-muted-foreground">{viewTeacher.profile.email} · {viewTeacher.profile.phone}</p></div>
-              </div>
-              <button onClick={() => setViewTeacher(null)} className="w-7 h-7 rounded-md border border-border bg-surface flex items-center justify-center cursor-pointer text-muted-foreground"><X size={14} /></button>
-            </div>
-            <div className="flex border-b border-border shrink-0 overflow-x-auto">
-              {(['overview', 'subjects', 'classes', 'exams'] as TeacherTab[]).map(tab => (
-                <button key={tab} onClick={() => setViewTab(tab)} className={`px-4 py-3 text-xs font-semibold whitespace-nowrap bg-none border-none cursor-pointer ${viewTab === tab ? 'text-accent border-b-2 border-accent' : 'text-muted-foreground'}`}>{tab === 'overview' ? 'Overview' : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-y-auto p-5">
-              {viewLoading ? <InlineLoadingSkeleton rows={4} /> : viewTab === 'overview' ? (
-                <div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-accent">{viewTeacher.stats.subjectCount}</div><div className="text-xs text-muted-foreground">Subjects</div></div>
-                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-blue-400">{viewTeacher.stats.classCount}</div><div className="text-xs text-muted-foreground">Classes</div></div>
-                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-amber-400">{viewTeacher.stats.examCount}</div><div className="text-xs text-muted-foreground">Exams</div></div>
-                    <div className="p-3 rounded-lg bg-surface-raised text-center"><div className="text-sm font-bold text-purple-400">{viewTeacher.stats.markCount}</div><div className="text-xs text-muted-foreground">Marks Entered</div></div>
-                  </div>
-                </div>
-              ) : viewTab === 'subjects' ? (
-                <div>{viewTeacher.subjectAssignments.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No subject assignments yet.</p> : <div className="space-y-2">{viewTeacher.subjectAssignments.map((sa: any, i: number) => <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><div><div className="text-sm font-semibold">{sa.subject}</div><div className="text-xs text-muted-foreground">{sa.category} · {sa.subject_code}</div></div><div className="text-right text-xs text-muted-foreground"><div>{sa.grade}</div><div className="text-xs">{sa.stream || 'All streams'}</div></div></div>)}</div>}</div>
-              ) : viewTab === 'classes' ? (
-                <div>{viewTeacher.classAssignments.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No homeroom class assigned.</p> : <div className="space-y-2">{viewTeacher.classAssignments.map((ca: any) => <div key={ca.id} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><span className="text-sm font-semibold">{ca.stream}</span><span className="text-xs text-muted-foreground">{ca.year}</span></div>)}</div>}</div>
-              ) : (
-                <div>{viewTeacher.recentExams.length === 0 ? <p className="text-xs text-muted-foreground text-center py-6">No exams created yet.</p> : <div className="space-y-2">{viewTeacher.recentExams.map((ex: any) => <div key={ex.id} className="flex justify-between items-center p-3 rounded-lg bg-surface-raised"><div><div className="text-sm font-semibold">{ex.name}</div><div className="text-xs text-muted-foreground">{ex.subject} · {ex.grade}</div></div><div className="text-xs text-muted-foreground">{ex.date ? new Date(ex.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</div></div>)}</div>}</div>
+      <Modal
+        isOpen={editingTeacher !== null}
+        onClose={() => setEditingTeacher(null)}
+        title="Edit staff member"
+        footer={<>
+          <button className="btn-secondary" onClick={() => setEditingTeacher(null)} disabled={savingEdit}>Cancel</button>
+          <button className="btn-primary" onClick={handleSaveTeacher} disabled={savingEdit || uploadingPhoto}>{savingEdit ? 'Saving…' : 'Save changes'}</button>
+        </>}
+      >
+        <FormGrid>
+          <FormField label="First name" span="half"><InputField value={editData.first_name} onChange={e => setEditData(p => ({ ...p, first_name: e.target.value }))} /></FormField>
+          <FormField label="Last name" span="half"><InputField value={editData.last_name} onChange={e => setEditData(p => ({ ...p, last_name: e.target.value }))} /></FormField>
+          <FormField label="Phone" span="full"><InputField type="tel" value={editData.phone} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))} /></FormField>
+          <FormField label="Photo" span="full">
+            <div className="flex items-center gap-3">
+              <UserAvatar firstName={editData.first_name} lastName={editData.last_name} role={(editingTeacher?.profile.role ?? 'STAFF') as UserRole} imageUrl={editData.avatar_url || null} size="md" />
+              <label className="btn-secondary h-9 cursor-pointer text-xs">
+                <Upload className="size-3.5" aria-hidden="true" />{uploadingPhoto ? 'Uploading…' : editData.avatar_url ? 'Change photo' : 'Upload photo'}
+                <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="sr-only" disabled={uploadingPhoto} onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoFileSelect(f, url => setEditData(p => ({ ...p, avatar_url: url }))); e.target.value = ''; }} />
+              </label>
+              {editData.avatar_url && (
+                <button type="button" className="text-xs font-medium text-destructive hover:underline" onClick={() => setEditData(p => ({ ...p, avatar_url: '' }))}>Remove</button>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </FormField>
+        </FormGrid>
+      </Modal>
+
+      <UserProfileDialog
+        user={viewingUser}
+        onClose={() => setViewingId(null)}
+        onEdit={u => { const t = data.find(row => row.id === u.id); setViewingId(null); if (t) openEditTeacher(t); }}
+        editLabel="Edit details"
+        onUpdated={fetchTeachers}
+      />
     </div>
   );
 }
@@ -1058,47 +1044,66 @@ function ParentsSection() {
 
   const stats = { total: data.length, linkedStudents: data.reduce((a, p) => a + p.students.length, 0), phoneContacts: data.filter(p => p.phone).length, emailContacts: data.filter(p => p.email).length };
 
-  if (error) return <div className="text-center py-16 text-muted-foreground"><Heart size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">{error}</p></div>;
+  if (error) return <EmptyState icon={Heart} title="Couldn't load parents" body={error} />;
 
   return (
     <div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <div className="stat-card"><div className="stat-label">Total Parents</div><div className="stat-value">{stats.total}</div></div>
-        <div className="stat-card"><div className="stat-label">Linked Students</div><div className="stat-value">{stats.linkedStudents}</div></div>
-        <div className="stat-card"><div className="stat-label">Phone Contacts</div><div className="stat-value">{stats.phoneContacts}</div></div>
-        <div className="stat-card"><div className="stat-label">Email Contacts</div><div className="stat-value">{stats.emailContacts}</div></div>
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile icon={Heart} label="Parents" value={stats.total} hint="guardian contacts" />
+        <StatTile icon={Users} label="Children" value={stats.linkedStudents} hint="linked to a parent" />
+        <StatTile icon={Phone} label="With phone" value={stats.phoneContacts} hint="reachable by SMS" tone={stats.phoneContacts < stats.total ? 'warn' : 'good'} />
+        <StatTile icon={Mail} label="With email" value={stats.emailContacts} hint="reachable by email" />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3 mb-4">
-        <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1 min-w-[200px] max-w-[400px]">
-          <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0"><Search size={16} /></span>
-          <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search parents..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      </div>
+      <section aria-label="Parent filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
+        <SearchBox value={search} onChange={setSearch} placeholder="Search parent, phone, email or child" />
+      </section>
 
       {loading ? <ContentSkeleton message="Loading parents..." /> : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground"><Heart size={48} className="mx-auto mb-4 opacity-30" /><p className="text-sm">No parents found.</p></div>
+        <EmptyState icon={Heart} title="No parents found" body={search ? 'Nobody matches that search.' : 'Guardian details added to students appear here.'} />
       ) : (
-        <div className="space-y-3">
-          {filtered.map(p => (
-            <div key={p.id} className="card p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div><h3 className="font-semibold text-sm">{p.name}</h3><p className="text-xs text-muted-foreground">{p.phone} {p.email ? `· ${p.email}` : ''}</p></div>
-              </div>
-              {p.students.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground">Linked Children</p>
-                  {p.students.map(s => (
-                    <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-surface-raised">
-                      <div><span className="text-sm font-medium">{s.first_name} {s.last_name}</span><span className="text-xs text-muted-foreground ml-2">({admNoLabel(s.admission_number)})</span></div>
-                      <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">{s.grade_stream?.full_name || '—'}</span><span className={`badge ${s.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span></div>
-                    </div>
-                  ))}
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map(p => {
+            const [first = '', ...rest] = p.name.split(/\s+/);
+            return (
+              <li key={p.id} className="flex flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+                <div className="flex items-start gap-3">
+                  <UserAvatar firstName={first} lastName={rest.join(' ')} role="PENDING" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold">{p.name}</h3>
+                    <p className="truncate text-xs text-muted-foreground">{p.phone || 'No phone'}{p.email ? ` · ${p.email}` : ''}</p>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+
+                {p.students.length > 0 && (
+                  <ul className="mt-4 space-y-1.5 border-t border-border/60 pt-3">
+                    {p.students.map(s => (
+                      <li key={s.id} className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{s.first_name} {s.last_name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">{s.grade_stream?.full_name || 'No class'} · {admNoLabel(s.admission_number)}</p>
+                        </div>
+                        <StatusBadge active={s.status === 'ACTIVE'} label={humanize(s.status)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {(p.phone || p.email) && (
+                  <div className="mt-4 flex gap-2">
+                    {p.phone && (
+                      <>
+                        <a href={`tel:${p.phone}`} className="btn-secondary h-9 flex-1 text-xs"><Phone className="size-3.5" aria-hidden="true" />Call</a>
+                        <a href={`sms:${p.phone}`} className="btn-secondary h-9 flex-1 text-xs"><MessageSquare className="size-3.5" aria-hidden="true" />SMS</a>
+                      </>
+                    )}
+                    {p.email && <a href={`mailto:${p.email}`} className="btn-secondary h-9 flex-1 text-xs"><Mail className="size-3.5" aria-hidden="true" />Email</a>}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

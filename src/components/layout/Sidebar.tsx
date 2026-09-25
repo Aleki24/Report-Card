@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Sun, Moon, PanelLeftClose, PanelLeft, MoreHorizontal } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthProvider";
-import { getNavGroups, getPinnedItems, getMobileNav, EXACT_MATCH_HREFS, type NavItem } from "./sidebar/navItems";
+import { getNavGroups, getPinnedItems, getMobileNav, routeMatches, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
 import { Wordmark } from "@/components/Wordmark";
@@ -18,16 +18,14 @@ interface SidebarProps {
     setCollapsed?: (val: boolean) => void;
 }
 
-function isActivePath(pathname: string, href: string) {
-    return pathname === href || (!EXACT_MATCH_HREFS.has(href) && pathname.startsWith(href));
-}
-
 function NavLink({ item, collapsed, pathname, badge }: { item: NavItem; collapsed: boolean; pathname: string; badge?: number }) {
-    const isActive = isActivePath(pathname, item.href);
+    const isActive = routeMatches(pathname, item.href);
     return (
         <Link
             href={item.href}
             title={collapsed ? item.label : undefined}
+            aria-label={collapsed ? item.label : undefined}
+            aria-current={isActive ? "page" : undefined}
             className={cn(
                 "relative flex items-center gap-3 rounded-lg text-sm no-underline transition-colors",
                 collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
@@ -58,6 +56,7 @@ function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
         <button
             onClick={toggleTheme}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             suppressHydrationWarning
             className={cn(
                 "mx-3 mb-3 flex cursor-pointer items-center gap-3 rounded-lg border border-sidebar-border bg-white/5 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
@@ -150,6 +149,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         <button
                             onClick={() => setCollapsed?.(true)}
                             title="Collapse sidebar"
+                            aria-label="Collapse sidebar"
                             className="shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                         >
                             <PanelLeftClose size={16} />
@@ -160,6 +160,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     <button
                         onClick={() => setCollapsed?.(false)}
                         title="Expand sidebar"
+                        aria-label="Expand sidebar"
                         className="mx-auto mb-2 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     >
                         <PanelLeft size={16} />
@@ -241,11 +242,12 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 }}
             >
                 {mobileNav.primary.map((item) => {
-                    const isActive = isActivePath(pathname, item.href);
+                    const isActive = routeMatches(pathname, item.href);
                     return (
                         <Link
                             key={item.href}
                             href={item.href}
+                            aria-current={isActive ? "page" : undefined}
                             onClick={() => setShowMoreMenu(false)}
                             className={cn(
                                 "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center no-underline transition-colors",
@@ -274,6 +276,8 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                     bar (empty overflow), it must stay reachable. */}
                 <button
                     onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    aria-expanded={showMoreMenu}
+                    aria-haspopup="dialog"
                     className={cn(
                         "relative flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center border-none bg-transparent transition-colors",
                         showMoreMenu ? "text-primary" : "text-muted-foreground"
