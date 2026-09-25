@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             data: {
+                // The ledger row, so the payer can open its receipt once it completes.
+                id: payment.id,
                 status: payment.status,
                 amount: Number(payment.amount),
                 mpesaReceiptNumber: payment.mpesa_receipt_number,
