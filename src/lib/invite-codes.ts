@@ -107,8 +107,7 @@ export async function notifyInviteCode(params: {
   // A placeholder address never reaches anyone — don't report it as delivered.
   if (email && !isPlaceholderEmail(email)) {
     try {
-      // Resend reports a rejected send in `error` rather than throwing.
-      const { error } = await sendEmail({
+      await sendEmail({
         to: email,
         subject: `Your Skulbase invite code for ${schoolName}`,
         html: `
@@ -124,8 +123,7 @@ export async function notifyInviteCode(params: {
           </div>
         `,
       });
-      result.email = !error;
-      if (error) console.error('[invite] Email send failed:', error);
+      result.email = true;
     } catch (err) {
       console.error('[invite] Email send threw:', err);
     }

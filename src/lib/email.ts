@@ -22,15 +22,33 @@ export interface SendEmailParams {
   replyTo?: string;
 }
 
+/**
+ * The sender. It must be on a domain verified in Resend; the old default,
+ * noreply@skulbase.app, was on a domain the product doesn't use, so Resend
+ * refused every email. EMAIL_FROM overrides it without a code change.
+ */
+export const EMAIL_FROM = process.env.EMAIL_FROM?.trim() || 'Skulbase <noreply@skulbase.com>';
+
+/**
+ * Sends one email. Throws when Resend refuses it: Resend reports a rejected
+ * send (unverified domain, bad address, bad key) in `error` rather than by
+ * throwing, which let every failure pass silently as a success.
+ */
 export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailParams) {
   const resend = getResend();
-  return resend.emails.send({
-    from: from || 'Skulbase <noreply@skulbase.app>',
-    to: Array.isArray(to) ? to : [to],
+  const recipients = (Array.isArray(to) ? to : to.split(',')).map(r => r.trim()).filter(Boolean);
+  const result = await resend.emails.send({
+    from: from || EMAIL_FROM,
+    to: recipients,
     subject,
     html,
     replyTo,
   });
+  if (result.error) {
+    console.error('[email] Resend refused the email', { subject, to: recipients, error: result.error });
+    throw new Error(`Email not sent: ${result.error.message}`);
+  }
+  return result;
 }
 
 export async function sendInviteEmail(email: string, inviteCode: string, schoolName: string) {
@@ -79,7 +97,7 @@ export interface SchoolApprovalRequest {
  * reject links. The links carry a single-use token so the owner can act
  * straight from their inbox without a separate console login.
  */
-export async function sendSchoolApprovalRequestEmail(ownerEmail: string, req: SchoolApprovalRequest) {
+export async function sendSchoolApprovalRequestEmail(ownerEmails: string | string[], req: SchoolApprovalRequest) {
   const base = process.env.NEXT_PUBLIC_APP_URL || '';
   const decide = (action: 'approve' | 'reject') =>
     `${base}/api/platform/schools/${req.schoolId}/decision?action=${action}&token=${encodeURIComponent(req.approvalToken)}`;
@@ -88,7 +106,7 @@ export async function sendSchoolApprovalRequestEmail(ownerEmail: string, req: Sc
     value ? `<tr><td style="padding:4px 12px 4px 0;color:#666;">${esc(label)}</td><td style="padding:4px 0;"><strong>${esc(value)}</strong></td></tr>` : '';
 
   return sendEmail({
-    to: ownerEmail,
+    to: ownerEmails,
     subject: `Approval needed: "${req.schoolName}" wants to join Skulbase`,
     replyTo: req.requesterEmail || undefined,
     html: `

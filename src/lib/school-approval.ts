@@ -60,7 +60,7 @@ export async function notifyOwnerOfSchoolRequest(req: SchoolApprovalRequest): Pr
     // Sent in parallel so a slow SMS gateway doesn't hold up the email.
     await Promise.allSettled([
         ...(emails.length > 0
-            ? [sendSchoolApprovalRequestEmail(emails.join(','), req).catch(err => {
+            ? [sendSchoolApprovalRequestEmail(emails, req).catch(err => {
                 console.error('[school-approval] owner email failed:', err);
                 throw err;
               })]
@@ -71,9 +71,9 @@ export async function notifyOwnerOfSchoolRequest(req: SchoolApprovalRequest): Pr
                 `Skulbase: "${req.schoolName}" has requested a new school account`
                 + `${req.requesterName ? ` (${req.requesterName})` : ''}.`
                 + ' It stays locked until you approve. Check your email to approve or reject.'
-            ).catch(err => {
-                console.error('[school-approval] owner SMS failed:', err);
-                throw err;
+            ).then(res => {
+                // sendSMS reports failure in its result rather than throwing.
+                if (!res.success) console.error('[school-approval] owner SMS failed:', res.to, res.error);
             })
         ),
     ]);
