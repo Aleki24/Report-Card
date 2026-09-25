@@ -3,6 +3,7 @@
 import React, { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { isRoleIn } from '@/lib/roles';
 import { PenTool, Trophy, Send } from 'lucide-react';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { MarksSetupTab } from '@/components/exams-marks/MarksSetupTab';
@@ -41,14 +42,15 @@ function ExamsMarksPageInner() {
     // Leave a deep link's exam selection behind when the tab is switched by hand.
     params.delete('stream');
     params.delete('exam');
+    params.delete('term');
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const tabs = [
-    { id: 'setup' as const, label: 'Mark Entry & Setup', icon: <PenTool size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
+    { id: 'setup' as const, label: 'Enter & Correct Marks', icon: <PenTool size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
     { id: 'results' as const, label: 'Results & Reports', icon: <Trophy size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
-    { id: 'publish' as const, label: 'Publish Results', icon: <Send size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
-  ].filter(t => t.roles.includes(role as any));
+    { id: 'publish' as const, label: 'Release Results', icon: <Send size={16} />, roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'] as const },
+  ].filter(t => isRoleIn(role, t.roles));
 
   // Derive the active tab in render so a role that can't see the current tab
   // falls back to the first available one — no effect / setState needed.
@@ -58,12 +60,12 @@ function ExamsMarksPageInner() {
     <div className="w-full max-w-7xl mx-auto pb-10">
       <div className="mb-6">
         <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">Exams & Marks</h1>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Manage exam schedules, enter marks, and view results</p>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Enter or correct marks, review results, and release them to learners</p>
       </div>
 
-      <div className="flex flex-wrap gap-1 mb-6 p-1 bg-muted/50 border border-border rounded-lg w-fit">
+      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-border bg-muted/50 p-1 [scrollbar-width:none] sm:w-fit">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => selectTab(t.id)} className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t.id} onClick={() => selectTab(t.id)} className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium rounded-lg transition-colors sm:px-4 ${activeTab === t.id ? 'bg-[var(--color-surface)] text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.icon} {t.label}
           </button>
         ))}

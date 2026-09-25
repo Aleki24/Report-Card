@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { PenLine } from 'lucide-react';
 import { EditMarkModal, type EditMarkData } from './EditMarkModal';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { isMultiPaper } from '@/lib/multi-paper';
@@ -31,6 +33,8 @@ interface Props {
     onRefresh: () => void;
     /** Patch a single row in place after an edit, avoiding a full grid refetch. */
     onMarkPatched?: (patched: MarkRow) => void;
+    /** Opens this exam's mark sheet, where several marks can be corrected at once. */
+    markEntryLink?: string;
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -62,7 +66,7 @@ const OVERALL_POINTS_GRADES = [
 
 type SortKey = 'student_name' | 'percentage' | 'grade_symbol';
 
-export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh, onMarkPatched }: Props) {
+export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh, onMarkPatched, markEntryLink }: Props) {
     const multiPaper = isMultiPaper(scheme);
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
     // Default view: highest-performing student first (descending total marks).
@@ -337,6 +341,18 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             {exportError && (
                 <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{exportError}</div>
             )}
+
+            {/* How to fix a wrong mark — said where mistakes are spotted */}
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-muted-foreground">
+                    <strong className="text-foreground">Spotted a wrong mark?</strong> Tap ✏️ on the learner&apos;s row to fix it{markEntryLink ? ', or open the mark sheet to correct several at once.' : '.'}
+                </p>
+                {markEntryLink && (
+                    <Link href={markEntryLink} className="btn-secondary inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-1.5 text-xs">
+                        <PenLine size={13} aria-hidden /> Correct marks
+                    </Link>
+                )}
+            </div>
 
             {/* Table */}
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
