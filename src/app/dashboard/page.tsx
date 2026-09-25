@@ -1,5 +1,8 @@
 "use client";
 
+import { cn } from '@/lib/utils';
+import { hueForHref } from '@/components/ui/pageHues';
+import { TONES } from '@/components/ui/tones';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
@@ -255,8 +258,8 @@ function AdminDashboard({ userName }: { userName: string }) {
 
 function QuickActionBtn({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
   return (
-    <Link href={href} className="group flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/90 px-3 py-2.5 no-underline shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md sm:px-4 sm:py-3">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary sm:h-8 sm:w-8">{icon}</div>
+    <Link href={href} className={cn("group flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/90 px-3 py-2.5 no-underline shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:px-4 sm:py-3", TONES[hueForHref(href)].hover)}>
+      <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8', TONES[hueForHref(href)].tile)}>{icon}</div>
       <span className="text-xs font-semibold leading-tight tracking-tight text-foreground transition-colors group-hover:text-primary sm:text-sm">{label}</span>
       <ArrowRight size={14} className="ml-auto shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
     </Link>
@@ -470,22 +473,17 @@ function SideRail({ data }: { data: DashboardData | null }) {
       <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
         <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">This Week</h3>
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col items-center rounded-xl bg-muted/40 p-2.5">
-            <span className="text-lg font-bold text-foreground">{data?.upcomingExams.length ?? 0}</span>
-            <span className="text-[11px] text-muted-foreground">Exams</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-muted/40 p-2.5">
-            <span className="text-lg font-bold text-foreground">{data?.overdueFeesCount ?? 0}</span>
-            <span className="text-[11px] text-muted-foreground">Overdue Fees</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-muted/40 p-2.5">
-            <span className="text-lg font-bold text-foreground">{data?.recentEnrollmentsLast7 ?? 0}</span>
-            <span className="text-[11px] text-muted-foreground">Enrollments</span>
-          </div>
-          <div className="flex flex-col items-center rounded-xl bg-muted/40 p-2.5">
-            <span className="text-lg font-bold text-foreground">{data?.announcementsLast7Days ?? 0}</span>
-            <span className="text-[11px] text-muted-foreground">Announcements</span>
-          </div>
+          {([
+            { label: 'Exams', value: data?.upcomingExams.length ?? 0, hue: 'blue' },
+            { label: 'Overdue fees', value: data?.overdueFeesCount ?? 0, hue: 'rose' },
+            { label: 'Enrolments', value: data?.recentEnrollmentsLast7 ?? 0, hue: 'orange' },
+            { label: 'Announcements', value: data?.announcementsLast7Days ?? 0, hue: 'violet' },
+          ] as const).map(stat => (
+            <div key={stat.label} className={cn('flex flex-col items-center rounded-xl p-2.5', TONES[stat.hue].tile)}>
+              <span className="text-lg font-bold tabular-nums">{stat.value}</span>
+              <span className="text-[11px] font-medium text-foreground/70">{stat.label}</span>
+            </div>
+          ))}
         </div>
       </div>
 

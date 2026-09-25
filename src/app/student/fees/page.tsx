@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Check, Clock3, Copy, Info, Landmark, Receipt, RotateCcw, Smartphone, Wallet } from 'lucide-react';
 import EmptyState from '@/components/dashboard/EmptyState';
@@ -289,11 +290,13 @@ export default function StudentFeesPage() {
 
     return (
         <div className="mx-auto w-full max-w-[1100px] pb-10">
-            <header className="mb-5">
-                <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">Finance</p>
-                <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Fees</h1>
-                <p className="mt-1 max-w-xl text-sm text-muted-foreground">Your fee balance and payment history, term by term. Tap a term for its receipts.</p>
-            </header>
+            <PageHeader
+              title="Fees"
+              eyebrow="Finance"
+              icon={Wallet}
+              hue="emerald"
+              description="Your fee balance and payment history, term by term. Tap a term for its receipts."
+            />
 
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <StatTile
@@ -304,7 +307,7 @@ export default function StudentFeesPage() {
                     tone={owed === 0 ? 'good' : overdueCount > 0 ? 'bad' : 'warn'}
                     className="col-span-2 lg:col-span-1"
                 />
-                <StatTile icon={Wallet} label="Total billed" value={formatCurrency(totalBilled)} hint={`${termCount} term${termCount === 1 ? '' : 's'} on record`} />
+                <StatTile icon={Wallet} hue="blue" label="Total billed" value={formatCurrency(totalBilled)} hint={`${termCount} term${termCount === 1 ? '' : 's'} on record`} />
                 <StatTile icon={Clock3} label="Total paid" value={formatCurrency(totalPaid)} hint="settled so far" tone="good" />
             </div>
 

@@ -8,6 +8,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { markEntryHref } from '@/lib/marking-progress';
 import { cn } from '@/lib/utils';
+import { RankBadge } from '@/components/ui/RankBadge';
 import { SUBJECT_CATEGORY_THEME, subjectCategory } from './examTheme';
 
 type Embedded<T> = T | T[] | null | undefined;
@@ -474,15 +475,7 @@ export function PublishResultsView() {
                                     <tbody className="divide-y divide-border/60">
                                         {ranking.map(r => (
                                             <tr key={r.sid} className="transition-colors hover:bg-muted/40">
-                                                <td className="px-4 py-2.5 text-center">
-                                                    <span className={cn(
-                                                        'inline-flex size-7 items-center justify-center rounded-full text-xs font-bold tabular-nums',
-                                                        r.rank === 1 ? 'bg-gradient-to-br from-amber-400 to-yellow-300 text-amber-950 shadow-sm'
-                                                            : r.rank === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-200 text-slate-800 shadow-sm'
-                                                                : r.rank === 3 ? 'bg-gradient-to-br from-orange-400 to-amber-300 text-orange-950 shadow-sm'
-                                                                    : 'text-primary',
-                                                    )}>{r.rank}</span>
-                                                </td>
+                                                <td className="px-4 py-2.5 text-center"><RankBadge rank={r.rank} /></td>
                                                 <td className="px-4 py-2.5">
                                                     <div className="text-sm font-medium">{r.name}</div>
                                                     <div className="text-[11px] text-muted-foreground">{r.adm}</div>

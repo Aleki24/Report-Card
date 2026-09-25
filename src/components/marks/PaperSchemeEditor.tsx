@@ -1,5 +1,6 @@
 "use client";
 
+import { Sparkles } from 'lucide-react';
 import React from 'react';
 import type { AggregationMethod } from '@/types';
 import { AGGREGATION_METHODS, getSubjectPresetForPapers } from '@/lib/multi-paper';
@@ -107,7 +108,7 @@ export function PaperSchemeEditor({ value, onChange, subjectName, disabled }: Pr
                             onClick={applyPreset}
                             disabled={disabled}
                         >
-                            ✨ Apply preset: <strong>{preset.label}</strong> (editable after applying)
+                            <Sparkles className="mr-1 inline size-3.5" aria-hidden />Apply preset: <strong>{preset.label}</strong> (editable after applying)
                         </button>
                     )}
 

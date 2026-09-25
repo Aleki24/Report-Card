@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Edit3, Trash2, Eye, FileText, ClockAlert, Paperclip, X } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Eye, FileText, ClockAlert, Paperclip, X, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { requestJson, jsonBody } from '@/lib/api-error-message';
 import PageHeader from '@/components/dashboard/PageHeader';
@@ -232,8 +232,10 @@ export default function AssignmentsPage() {
         <div>
             <PageHeader
                 title="Assignments"
-                description="Create and manage homework and assignments"
-                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Assignments' }]}
+                eyebrow="Communication"
+                icon={Briefcase}
+                hue="violet"
+                description="Create and manage homework and assignments."
                 action={
                     <div className="flex gap-2">
                         <button className="btn-secondary" onClick={openSubmissions}>

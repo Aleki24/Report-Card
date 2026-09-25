@@ -1,7 +1,8 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useEffect, useId, useState } from 'react';
-import { ArrowLeft, CalendarRange } from 'lucide-react';
+import { ArrowLeft, CalendarRange, LineChart } from 'lucide-react';
 import ClassAnalytics from '@/components/analytics/ClassAnalytics';
 import SchoolOverview from '@/components/analytics/SchoolOverview';
 import { SelectField, type SelectOption } from '@/components/ui/FormField';
@@ -86,25 +87,21 @@ export default function AnalyticsPage() {
 
     return (
         <div className="mx-auto w-full max-w-7xl pb-10">
-            <header className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div className="min-w-0">
-                    <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">Insights</p>
-                    <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                        {selectedClass ? selectedClass.full_name : 'Analytics'}
-                    </h1>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                        {selectedClass
-                            ? 'Subject ranking, merit list and exam series for this class.'
-                            : 'How each class is doing, weakest first. Open a class for its subjects and merit list.'}
-                    </p>
-                </div>
-                {periodLabel && (
-                    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
+            <PageHeader
+                title={selectedClass ? selectedClass.full_name : 'Analytics'}
+                eyebrow="Insights"
+                icon={LineChart}
+                hue="sky"
+                description={selectedClass
+                    ? 'Subject ranking, merit list and exam series for this class.'
+                    : 'How each class is doing, weakest first. Open a class for its subjects and merit list.'}
+                action={periodLabel ? (
+                    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
                         <CalendarRange className="size-3.5" aria-hidden="true" />
                         {periodLabel}
                     </span>
-                )}
-            </header>
+                ) : undefined}
+            />
 
             {/* Filters: always visible, whatever the results below say. */}
             <section aria-label="Filters" className="mb-5 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">

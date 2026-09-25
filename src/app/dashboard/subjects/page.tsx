@@ -183,9 +183,11 @@ export default function SubjectsPage() {
     return (
         <div>
             <PageHeader
-                title="Subject Management"
+                title="Subjects"
+                eyebrow="School"
+                icon={BookOpen}
+                hue="emerald"
                 description="Choose the subjects your school offers, set up senior school combinations and assign subject teachers."
-                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Academic Structure', href: '/dashboard/settings' }, { label: 'Subjects' }]}
             />
 
             {/* Tabs */}
@@ -306,7 +308,7 @@ export default function SubjectsPage() {
             )}
 
             {/* Subject Table */}
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden min-[769px]:p-0">
                 {/* Sticky filter bar */}
                 <div className="sticky top-0 z-10 bg-card border-b border-border px-5 py-3.5">
                     <div className="flex flex-wrap items-center gap-3">

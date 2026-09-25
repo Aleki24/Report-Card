@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash2 } from 'lucide-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { ExamSubjectComponentScheme } from '@/types';
@@ -420,7 +421,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                     {multiPaper ? (
                         <div>
                             <label className="block text-xs text-muted-foreground mb-2">
-                                📑 Paper Scores *
+                                Paper scores *
                             </label>
                             <div className="flex flex-col gap-2">
                                 {schemeComponents.map((c, idx) => (
@@ -548,7 +549,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                                 className="text-sm text-destructive hover:underline cursor-pointer"
                                 onClick={() => setConfirmDelete(true)}
                             >
-                                🗑 Delete
+                                <Trash2 className="mr-1 inline size-4" aria-hidden />Delete
                             </button>
                         ) : (
                             <div className="flex items-center gap-2">

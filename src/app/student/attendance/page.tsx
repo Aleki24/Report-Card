@@ -84,7 +84,7 @@ export default function StudentAttendancePage() {
 
     return (
         <div className="mx-auto w-full max-w-[900px] pb-10">
-            <PageHeader title="Attendance" description="Your daily attendance, as recorded by your class teacher." />
+            <PageHeader title="Attendance" eyebrow="My school" icon={CalendarCheck} hue="teal" description="Your daily attendance, as recorded by your class teacher." />
 
             <FilterBar>
                 <FilterField label="Month">

@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { isRoleIn } from '@/lib/roles';
 import { ClipboardList, PenTool, Trophy, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PageHeader from '@/components/dashboard/PageHeader';
 import { TAB_TONES } from '@/components/exams-marks/examTheme';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { MarksSetupTab } from '@/components/exams-marks/MarksSetupTab';
@@ -60,15 +61,13 @@ function ExamsMarksPageInner() {
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="mb-6 flex items-center gap-3 sm:gap-4">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-500 text-white shadow-md shadow-blue-500/25 sm:size-12" aria-hidden>
-          <ClipboardList className="size-5 sm:size-6" />
-        </span>
-        <div className="min-w-0">
-          <h1 className="font-display text-[1.25rem] font-bold tracking-tight xs:text-[1.5rem] sm:text-[1.75rem]">Exams & Marks</h1>
-          <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">Enter or correct marks, review results, and release them to learners</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Exams & Marks"
+        eyebrow="Academics"
+        icon={ClipboardList}
+        hue="blue"
+        description="Enter or correct marks, review results, and release them to learners."
+      />
 
       <div role="tablist" aria-label="Exams & Marks" className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/50 p-1 [scrollbar-width:none] sm:w-fit">
         {tabs.map(t => {

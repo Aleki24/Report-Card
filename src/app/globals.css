@@ -1484,3 +1484,14 @@ body {
     @apply font-sans;
   }
 }
+@layer components {
+  /* Desktop cards get the same breathing room as on phones and tablets
+     (padding is set per breakpoint above). Without this, every .card that
+     did not add its own padding put its content flush against the border
+     from 769px up. Cards that need to be flush (tables) set p-0. */
+  @media (min-width: 769px) {
+    .card {
+      padding: var(--space-6);
+    }
+  }
+}

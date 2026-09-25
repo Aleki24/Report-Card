@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { PenLine } from 'lucide-react';
+import { PenLine, Loader2, FileSpreadsheet, FileDown, Pencil } from 'lucide-react';
 import { EditMarkModal, type EditMarkData } from './EditMarkModal';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { isMultiPaper } from '@/lib/multi-paper';
@@ -317,7 +317,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             {/* Toolbar */}
             <div className="flex justify-between items-center flex-wrap gap-2" style={{ marginBottom: 'var(--space-4)' }}>
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-                    {marks.length} student{marks.length !== 1 ? 's' : ''} · Click ✏️ to edit a result
+                    {marks.length} student{marks.length !== 1 ? 's' : ''} · Tap the pencil to edit a result
                 </p>
                 <div className="flex items-center gap-2">
                     <button
@@ -326,7 +326,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                         onClick={() => exportResults('csv')}
                         disabled={exporting !== null}
                     >
-                        {exporting === 'csv' ? '⏳ Exporting…' : '📥 Export CSV'}
+                        {exporting === 'csv' ? <><Loader2 className="size-4 animate-spin" aria-hidden />Exporting…</> : <><FileSpreadsheet className="size-4" aria-hidden />Export CSV</>}
                     </button>
                     <button
                         className="btn-secondary disabled:opacity-50"
@@ -334,7 +334,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                         onClick={() => exportResults('pdf')}
                         disabled={exporting !== null}
                     >
-                        {exporting === 'pdf' ? '⏳ Exporting…' : '📄 Export PDF'}
+                        {exporting === 'pdf' ? <><Loader2 className="size-4 animate-spin" aria-hidden />Exporting…</> : <><FileDown className="size-4" aria-hidden />Export PDF</>}
                     </button>
                 </div>
             </div>
@@ -345,7 +345,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
             {/* How to fix a wrong mark — said where mistakes are spotted */}
             <div className="mb-4 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted-foreground">
-                    <strong className="text-foreground">Spotted a wrong mark?</strong> Tap ✏️ on the learner&apos;s row to fix it{markEntryLink ? ', or open the mark sheet to correct several at once.' : '.'}
+                    <strong className="text-foreground">Spotted a wrong mark?</strong> Tap the pencil on the learner&apos;s row to fix it{markEntryLink ? ', or open the mark sheet to correct several at once.' : '.'}
                 </p>
                 {markEntryLink && (
                     <Link href={markEntryLink} className="btn-secondary inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-1.5 text-xs">
@@ -454,7 +454,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                                               }}
                                               title={`Edit ${mark.student_name}'s result`}
                                           >
-                                              ✏️
+                                              <Pencil className="size-4" aria-hidden />
                                           </button>
                                       </td>
                                   </tr>

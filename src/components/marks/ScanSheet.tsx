@@ -1,5 +1,7 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
+import { Camera, ScanLine, AlertTriangle } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 interface StudentOption {
@@ -342,9 +344,9 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
 
     /* ── Render ── */
     return (
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden min-[769px]:p-0">
             <div className="mb-6">
-                <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">📷 Scan Marksheet</h3>
+                <CardHeading icon={Camera} hue="violet" className="mb-1" title="Scan a marksheet" />
                 <p className="text-muted-foreground text-sm">
                     Take a photo of a paper marksheet — names and marks are read automatically for you to review before saving.
                     · Max score: {maxScore} · {students.length} student{students.length !== 1 ? 's' : ''} in this class
@@ -362,7 +364,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
             {/* Capture */}
             {phase === 'capture' && (
                 <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-10 text-center">
-                    <div className="text-4xl" aria-hidden>📄</div>
+                    <span className="flex size-14 items-center justify-center rounded-2xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><ScanLine className="size-7" /></span>
                     <div className="max-w-md text-sm text-muted-foreground">
                         Photograph the whole sheet from directly above, in good light, with names and marks visible.
                         Multi-page sheets: scan one page at a time.
@@ -376,7 +378,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                         onChange={e => handleFile(e.target.files?.[0])}
                     />
                     <button className="btn-primary" onClick={() => fileInputRef.current?.click()}>
-                        📷 Take / Upload Photo
+                        <Camera className="size-4" aria-hidden />Take or upload a photo
                     </button>
                 </div>
             )}
@@ -401,8 +403,8 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                             </a>
                         )}
                         {scanNotes && (
-                            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600">
-                                ⚠️ {scanNotes}
+                            <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+                                <AlertTriangle className="size-4 shrink-0" aria-hidden />{scanNotes}
                             </div>
                         )}
                         <div className="mt-3 text-xs text-muted-foreground">

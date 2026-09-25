@@ -1,5 +1,6 @@
 "use client";
 
+import { Layers } from 'lucide-react';
 import React, { useState, useCallback, useEffect } from 'react';
 import { parseTabularFile, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { isMultiPaper } from '@/lib/multi-paper';
@@ -238,8 +239,9 @@ export function BulkUpload({ examId, subjectId }: Props) {
     return (
         <div className="w-full">
             {multiPaperExam && (
-                <div className="mb-4 p-3 rounded-md text-sm" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: 'rgb(251,191,36)' }}>
-                    📑 This subject is configured with multiple papers. Bulk upload accepts <strong>final scores only</strong> (no per-paper breakdown). Use <strong>Manual Entry</strong> to record P1/P2/P3 scores per paper.
+                <div className="mb-4 flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+                    <Layers className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span>This subject is configured with multiple papers. Bulk upload accepts <strong>final scores only</strong> (no per-paper breakdown). Use <strong>Type marks</strong> to record P1/P2/P3 scores per paper.</span>
                 </div>
             )}
             {/* Step 1: Upload */}
@@ -320,7 +322,7 @@ export function BulkUpload({ examId, subjectId }: Props) {
 
             {/* Step 3: Preview */}
             {step === 'preview' && (
-                <div className="card overflow-hidden">
+                <div className="card overflow-hidden min-[769px]:p-0">
                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
                         <div>
                             <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-1">Preview ({parsedData.length} records)</h3>

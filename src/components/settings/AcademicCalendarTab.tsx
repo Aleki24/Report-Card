@@ -1,5 +1,7 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
+import { CalendarRange, CalendarDays } from 'lucide-react';
 import React from 'react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 
@@ -58,7 +60,7 @@ export function AcademicCalendarTab({
 
             {/* Academic Years */}
             <div className="card">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📅 Academic Years</h3>
+                <CardHeading icon={CalendarRange} hue="blue" title="Academic years" />
                 {academicYears.length > 0 ? (
                     <div className="overflow-x-auto border border-border rounded-lg mb-4">
                         <table className="data-table w-full text-left sm:whitespace-nowrap">
@@ -110,7 +112,7 @@ export function AcademicCalendarTab({
 
             {/* Terms */}
             <div className="card">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-4">📋 Terms</h3>
+                <CardHeading icon={CalendarDays} hue="violet" title="Terms" description="Term dates drive the current term, report cards and reopening dates." />
                 <div className="mb-4">
                     <label className="block text-xs text-muted-foreground mb-2">Select Academic Year</label>
                     {academicYears.length === 0 ? (

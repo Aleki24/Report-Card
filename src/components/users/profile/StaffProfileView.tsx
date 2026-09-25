@@ -106,10 +106,10 @@ export function StaffProfileView({ user, data, tab }: StaffProfileViewProps) {
     <div className="space-y-4">
       {isTeacher && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatTile icon={School} label="Classes" value={stats.classCount} hint="As class teacher" />
-          <StatTile icon={BookOpen} label="Subjects" value={stats.subjectCount} hint="Assignments" />
-          <StatTile icon={FileText} label="Exams" value={stats.examCount} hint="Recently created" />
-          <StatTile icon={ClipboardCheck} label="Marks" value={stats.markCount.toLocaleString()} hint="Entered" />
+          <StatTile icon={School} hue="amber" label="Classes" value={stats.classCount} hint="As class teacher" />
+          <StatTile icon={BookOpen} hue="emerald" label="Subjects" value={stats.subjectCount} hint="Assignments" />
+          <StatTile icon={FileText} hue="blue" label="Exams" value={stats.examCount} hint="Recently created" />
+          <StatTile icon={ClipboardCheck} hue="violet" label="Marks" value={stats.markCount.toLocaleString()} hint="Entered" />
         </div>
       )}
 

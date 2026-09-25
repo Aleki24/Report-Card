@@ -1,5 +1,6 @@
 "use client";
 
+import { RankBadge } from '@/components/ui/RankBadge';
 import React from 'react';
 import { gradeSymbolRank } from '@/lib/analytics';
 import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
@@ -110,8 +111,8 @@ export function ExamAnalysisPanel({ marks }: Props) {
                                           background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
                                       }}
                                   >
-                                      <td style={{ ...tdStyle, fontWeight: 700, color: s.rank <= 3 ? '#F59E0B' : 'var(--color-text)' }}>
-                                          {s.rank <= 3 ? ['🥇', '🥈', '🥉'][s.rank - 1] : `#${s.rank}`}
+                                      <td style={tdStyle}>
+                                          <RankBadge rank={s.rank} />
                                       </td>
                                       <td style={tdStyle}>{s.name}</td>
                                       <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{s.admNo}</td>

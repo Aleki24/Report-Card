@@ -144,8 +144,10 @@ export default function AnnouncementsPage() {
         <div>
             <PageHeader
                 title="Announcements"
-                description={canPost ? 'Create and manage school-wide announcements' : 'Stay up to date with school-wide announcements'}
-                breadcrumbs={[{ label: 'Home', href: '/dashboard' }, { label: 'Announcements' }]}
+                eyebrow="Communication"
+                icon={Bell}
+                hue="rose"
+                description={canPost ? 'Create and manage school-wide announcements.' : 'Stay up to date with school-wide announcements.'}
                 action={canPost ? (
                     <button className="btn-primary" onClick={openAdd}>
                         <Plus size={14} /> New Announcement

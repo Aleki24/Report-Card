@@ -1,5 +1,6 @@
 "use client";
 
+import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { parseTabularFile, normalizeRowKeys, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
@@ -8,7 +9,7 @@ import { toast } from 'sonner';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import Pagination from '@/components/dashboard/Pagination';
 import { DataTable, type DataTableColumn, FormGrid, FormField, InputField, SelectField, Modal, StatTile } from '@/components/ui';
-import { Users, GraduationCap, Heart, Search, Edit3, Trash2, Upload, ClipboardList, UserPlus, Mail, Phone, UserCheck, UserX, School, Briefcase, MessageSquare, X } from 'lucide-react';
+import { Users, GraduationCap, Heart, Search, Edit3, Trash2, Upload, ClipboardList, UserPlus, Mail, Phone, UserCheck, UserX, School, Briefcase, MessageSquare, X, AlertTriangle } from 'lucide-react';
 import type { UserRole } from '@/types';
 import type { UserRow } from '@/hooks/useUsersPage';
 import { UserProfileDialog } from '@/components/users/UserProfileDialog';
@@ -116,11 +117,13 @@ function PeoplePageInner() {
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-10">
-      <header className="mb-5">
-        <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">School</p>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">People</h1>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">Students, staff and parent contacts. Open anyone for their full profile.</p>
-      </header>
+      <PageHeader
+        title="People"
+        eyebrow="School"
+        icon={Users}
+        hue="orange"
+        description="Students, staff and parent contacts. Open anyone for their full profile."
+      />
 
       {tabs.length > 1 && (
         <div role="tablist" aria-label="People" className="-mx-1 mb-6 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/40 p-1 sm:w-fit">
@@ -455,7 +458,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
     <div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile icon={Users} label="Students" value={stats.total} hint="on the roll" />
+        <StatTile icon={Users} hue="orange" label="Students" value={stats.total} hint="on the roll" />
         <StatTile icon={UserCheck} label="Active" value={stats.active} hint="currently enrolled" tone="good" />
         <StatTile icon={UserX} label="Left" value={stats.inactive} hint="transferred, graduated or off" tone={stats.inactive ? 'warn' : 'default'} />
         <StatTile icon={School} label="Classes" value={stats.streams} hint="streams" />
@@ -744,7 +747,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
             
             {skippedData.length > 0 && (
               <div className="p-3 mb-4 rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-500 text-xs">
-                <strong>⚠️ {skippedData.length} students skipped.</strong> Please correct the errors below and try importing again.
+                <strong><AlertTriangle className="mr-1 inline size-3.5" aria-hidden />{skippedData.length} students skipped.</strong> Please correct the errors below and try importing again.
               </div>
             )}
 
@@ -790,7 +793,7 @@ function StudentsSection({ initialSearch = '' }: { initialSearch?: string }) {
               </div>
             )}
             {!importClassId && importData.length > 0 && (
-              <p className="text-xs text-amber-500 mb-3">⚠️ Please select a class above before importing.</p>
+              <p className="mb-3 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><AlertTriangle className="size-3.5" aria-hidden />Select a class above before importing.</p>
             )}
       </Modal>
 

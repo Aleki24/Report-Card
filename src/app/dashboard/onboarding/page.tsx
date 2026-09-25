@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School, Library } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School, Library, Hourglass, Ban } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Wordmark } from '@/components/Wordmark';
 import { toast } from 'sonner';
@@ -268,7 +268,7 @@ export default function OnboardingWizard() {
       <div className="min-h-screen bg-muted/30 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
           <div className={`mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl ${awaitingApproval ? 'bg-amber-500/10' : 'bg-red-500/10'}`}>
-            <span className="text-2xl" aria-hidden>{awaitingApproval ? '⏳' : '🚫'}</span>
+            {awaitingApproval ? <Hourglass className="size-7 text-amber-600 dark:text-amber-400" aria-hidden /> : <Ban className="size-7 text-red-600 dark:text-red-400" aria-hidden />}
           </div>
           <h1 className="font-display text-2xl font-bold text-foreground">
             {awaitingApproval ? 'Waiting for approval' : 'Request not approved'}

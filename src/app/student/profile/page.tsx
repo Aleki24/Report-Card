@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { User, Phone, Mail, Calendar, Shield, Users, Save, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, Calendar, Shield, Users, Save, Loader2, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { Avatar } from '@/components/Avatar';
@@ -63,7 +63,7 @@ export default function StudentProfilePage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="Profile" description="View your academic information and update your personal details." />
+            <PageHeader title="My profile" eyebrow="Account" icon={UserCircle} hue="blue" description="Your academic information and personal details." />
 
             <div className="grid grid-cols-1 items-start gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))]">
                 {/* 1. Account Information */}

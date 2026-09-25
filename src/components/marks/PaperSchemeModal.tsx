@@ -1,5 +1,7 @@
 "use client";
 
+import { CardHeading } from '@/components/ui/CardHeading';
+import { Layers } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import {
     PaperSchemeEditor,
@@ -111,7 +113,7 @@ export function PaperSchemeModal({ examId, subjectName, onClose, onSaved }: Prop
             >
                 <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">📑 Papers Configuration</h2>
+                        <CardHeading as="h2" icon={Layers} hue="violet" className="mb-0" title="Papers configuration" />
                         {subjectName && (
                             <p className="text-sm text-muted-foreground mt-1">{subjectName}</p>
                         )}
