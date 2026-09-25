@@ -1,5 +1,5 @@
-# Not part of the web app build; keep them out of every deployment upload.
-mobile
+# Not part of any Vercel build; keep them out of every deployment upload.
+# (mobile/ must stay: the report-card-mobile project builds from it.)
 docs
 supabase
 supabase_*.sql
