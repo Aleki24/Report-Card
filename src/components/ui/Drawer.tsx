@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef, useId } from 'react';
+import React, { useId } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface DrawerProps {
     isOpen: boolean;
@@ -17,71 +18,21 @@ const sizeClasses = {
     lg: 'max-w-xl',
 };
 
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 /**
  * Slide-over panel for create/edit forms. Unlike Modal, the page behind it
  * (the list being edited) stays visible and scrollable — useful when
  * writing something long enough that glancing back at existing entries helps.
  */
 export function Drawer({ isOpen, onClose, title, children, footer, size = 'md' }: DrawerProps) {
-    const panelRef = useRef<HTMLDivElement>(null);
-    const mouseDownOnBackdrop = useRef(false);
+    const { panelRef, backdropProps } = useDialogBehavior(isOpen, onClose);
     const titleId = useId();
-
-    // onClose is typically a fresh arrow function on every parent render
-    // (e.g. onClose={() => setOpen(false)}). Reading it through a ref keeps
-    // handleKeyDown — and therefore the effect below — stable across
-    // keystrokes in a controlled input, instead of re-running init-focus
-    // logic (and yanking focus back to the first field) on every keypress.
-    const onCloseRef = useRef(onClose);
-    onCloseRef.current = onClose;
-
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            onCloseRef.current();
-            return;
-        }
-        if (e.key === 'Tab' && panelRef.current) {
-            const focusable = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
-            if (focusable.length === 0) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            const active = document.activeElement;
-            if (e.shiftKey && (active === first || active === panelRef.current)) {
-                e.preventDefault();
-                last.focus();
-            } else if (!e.shiftKey && active === last) {
-                e.preventDefault();
-                first.focus();
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        const previouslyFocused = document.activeElement as HTMLElement | null;
-        document.addEventListener('keydown', handleKeyDown);
-        document.body.style.overflow = 'hidden';
-        const focusable = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
-        (focusable && focusable.length > 1 ? focusable[1] : panelRef.current)?.focus();
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-            document.body.style.overflow = '';
-            previouslyFocused?.focus?.();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
 
     if (!isOpen) return null;
 
     return (
         <div
             className="fixed inset-0 z-[100] bg-black/20 animate-backdrop-in"
-            onMouseDown={e => { mouseDownOnBackdrop.current = e.target === e.currentTarget; }}
-            onClick={e => {
-                if (e.target === e.currentTarget && mouseDownOnBackdrop.current) onClose();
-            }}
+            {...backdropProps}
         >
             <div
                 ref={panelRef}

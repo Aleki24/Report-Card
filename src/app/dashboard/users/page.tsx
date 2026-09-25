@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useUsersPage } from '@/hooks/useUsersPage';
+import { Printer, UserPlus } from 'lucide-react';
+import { useUsersPage, type UserRow } from '@/hooks/useUsersPage';
 import { useAuth } from '@/components/AuthProvider';
 import { InfoGuide } from '@/components/ui/InfoGuide';
-import { UsersTable } from '@/components/users/UsersTable';
+import { UsersStats } from '@/components/users/UsersStats';
+import { UsersDirectory } from '@/components/users/UsersDirectory';
+import { UserProfileDialog } from '@/components/users/UserProfileDialog';
+import type { DirectoryView } from '@/components/users/userMeta';
 import { InviteUserModal } from '@/components/users/InviteUserModal';
 import { EditUserModal } from '@/components/users/EditUserModal';
 import { InviteResultModal, ResetPasswordResultModal } from '@/components/users/UserResultModals';
@@ -14,39 +18,70 @@ export default function UsersPage() {
   const h = useUsersPage();
   const { role } = useAuth();
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [view, setView] = useState<DirectoryView>('grid');
+
+  const openAddUser = () => { h.resetForm(); h.setShowModal(true); };
+  // Actions started from the profile dialog close it first, so two dialogs never stack.
+  const editFromProfile = (user: UserRow) => { h.setViewingUser(null); h.handleEditClick(user); };
+  const resetFromProfile = (user: UserRow) => { h.setViewingUser(null); h.resetUserPassword(user); };
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-10">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
+    <div className="mx-auto w-full max-w-7xl pb-10">
+      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-[1.25rem] xs:text-[1.5rem] sm:text-[1.75rem] font-bold tracking-tight font-display mb-1">User Management</h1>
-          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>Add teachers and students by phone number</p>
+          <p className="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">People</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">User Management</h1>
+          <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+            Everyone with an account at your school. Open anyone to see their full profile.
+          </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex w-full shrink-0 flex-col gap-2 xs:flex-row md:w-auto">
           {role === 'ADMIN' && (
-            <button className="btn-secondary" onClick={() => setShowPrintModal(true)} title="Download a printable PDF of invitation codes grouped by category">🖨️ Print Invite Codes</button>
+            <button type="button" className="btn-secondary w-full xs:w-auto" onClick={() => setShowPrintModal(true)} title="Download a printable PDF of invitation codes grouped by category">
+              <Printer className="size-4" aria-hidden="true" />Print invite codes
+            </button>
           )}
-          <button className="btn-primary" onClick={() => { h.resetForm(); h.setShowModal(true); }}>+ Add User</button>
+          <button type="button" className="btn-primary w-full xs:w-auto" onClick={openAddUser}>
+            <UserPlus className="size-4" aria-hidden="true" />Add user
+          </button>
         </div>
-      </div>
+      </header>
 
-      <InfoGuide title="How your users log in:">
-        <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2 text-[var(--color-text)]">
+      <UsersStats
+        loading={h.loading} roleCounts={h.roleCounts} inactiveCount={h.inactiveCount}
+        roleFilter={h.roleFilter} statusFilter={h.statusFilter}
+        onSelectRole={h.setRoleFilter} onSelectStatus={h.setStatusFilter}
+      />
+
+      <InfoGuide title="How your users log in">
+        <ul className="mt-2 list-disc space-y-2 pl-5 text-foreground/90">
           <li><strong>Admins &amp; Principals:</strong> Must log in using their <strong>Email Address</strong>.</li>
-          <li><strong>Teachers &amp; Students:</strong> Must log in using their unique auto-generated <strong>Username</strong> (listed in the table below).</li>
-          <li><strong>Passwords:</strong> Each new user is assigned a one-time password shown to you at creation. If a user forgets theirs, use the 🔑 reset button in the table below to issue a new one.</li>
-          <li><strong>Creating Users:</strong> Click <strong>+ Add User</strong>. After providing their details, the system will instantly generate a username and password for them. Simply share those details so they can log in!</li>
+          <li><strong>Teachers &amp; Students:</strong> Must log in using their unique auto-generated <strong>Username</strong> (shown on each person&apos;s card and profile).</li>
+          <li><strong>Passwords:</strong> Each new user is assigned a one-time password shown to you at creation. If a user forgets theirs, use the key button on their card or the <strong>Reset password</strong> button in their profile to issue a new one.</li>
+          <li><strong>Creating Users:</strong> Click <strong>Add user</strong>. After providing their details, the system will instantly generate a username and password for them. Simply share those details so they can log in!</li>
         </ul>
       </InfoGuide>
 
-      <UsersTable
-        loading={h.loading} users={h.users} paginatedUsers={h.paginatedUsers}
-        filteredUsers={h.filteredUsers} totalPages={h.totalPages}
+      <UsersDirectory
+        loading={h.loading} totalUsers={h.users.length} paginatedUsers={h.paginatedUsers}
+        filteredCount={h.filteredUsers.length} roleCounts={h.roleCounts} totalPages={h.totalPages}
         currentPage={h.currentPage} setCurrentPage={h.setCurrentPage} usersPerPage={h.usersPerPage}
         roleFilter={h.roleFilter} setRoleFilter={h.setRoleFilter}
+        statusFilter={h.statusFilter} setStatusFilter={h.setStatusFilter}
+        sortBy={h.sortBy} setSortBy={h.setSortBy}
         searchQuery={h.searchQuery} setSearchQuery={h.setSearchQuery}
+        view={view} setView={setView}
         resettingPasswordId={h.resettingPasswordId}
-        onEdit={h.handleEditClick} onResetPassword={h.resetUserPassword}
+        onView={h.setViewingUser} onEdit={h.handleEditClick} onResetPassword={h.resetUserPassword} onAddUser={openAddUser}
+      />
+
+      <UserProfileDialog
+        user={h.viewingUser}
+        onClose={() => h.setViewingUser(null)}
+        onEdit={editFromProfile}
+        onResetPassword={resetFromProfile}
+        resetting={h.viewingUser !== null && h.resettingPasswordId === h.viewingUser.id}
+        onUpdated={h.refreshUsers}
       />
 
       {h.showModal && (
