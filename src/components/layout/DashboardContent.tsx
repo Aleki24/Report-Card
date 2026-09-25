@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { canAccessPath } from '@/components/layout/sidebar/navItems';
 import { homePathForRole } from '@/lib/roles';
+import { PreviewBanner } from '@/components/preview/PreviewMode';
 
 const COLLAPSE_KEY = 'sidebar-collapsed';
 
@@ -46,8 +47,9 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     }, [loading, needsSchoolSetup, isForbiddenPath, pathname, role, router]);
 
     // Don't render sidebar and header if on onboarding page
+    // (Its controls stay usable in preview: joining with an invite code is allowed.)
     if (pathname === '/dashboard/onboarding') {
-        return <main>{children}</main>;
+        return <main data-preview-allow>{children}</main>;
     }
 
     return (
@@ -58,6 +60,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
                 '--sidebar-width': `${sidebarWidth}px`,
                 display: 'flex', flexDirection: 'column',
             } as React.CSSProperties}>
+                <div className="mx-auto w-full max-w-7xl empty:hidden"><PreviewBanner /></div>
                 {isForbiddenPath ? <ContentSkeleton /> : children}
             </main>
         </div>

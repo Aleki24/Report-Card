@@ -29,9 +29,11 @@ const CURRICULUM_OPTIONS: Record<Curriculum, { label: string; description: strin
 
 export default function OnboardingWizard() {
   const router = useRouter();
-  const { user, role, schoolOnboardingCompleted, loading: authLoading } = useAuth();
+  const { user, role, schoolOnboardingCompleted, loading: authLoading, preview } = useAuth();
+  // "I have an invite code" from the preview banner: straight to joining.
+  const [joining] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('join') === '1');
 
-  const [selectedRole, setSelectedRole] = useState<OnboardingRole>(null);
+  const [selectedRole, setSelectedRole] = useState<OnboardingRole>(() => (joining ? 'TEACHER' : null));
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -61,14 +63,19 @@ export default function OnboardingWizard() {
   // accounts, or admins whose school setup is unfinished. Anyone who already
   // activated with an invite code has a real role — send them straight to
   // their dashboard instead of asking for an invite code a second time.
-  const alreadyOnboarded = !authLoading && !!role && role !== 'PENDING' &&
+  const alreadyOnboarded = !authLoading && !!role && role !== 'PENDING' && !preview &&
     !(role === 'ADMIN' && schoolOnboardingCompleted === false);
+  // A school awaiting approval explores the app on demo data rather than
+  // sitting on a waiting screen, unless they came here to join with a code.
+  const sendToPreview = !authLoading && preview && !joining;
 
   useEffect(() => {
     if (alreadyOnboarded) {
       router.replace(nextPath || (role === 'STUDENT' ? '/student/dashboard' : '/dashboard'));
+    } else if (sendToPreview) {
+      router.replace('/dashboard');
     }
-  }, [alreadyOnboarded, role, router, nextPath]);
+  }, [alreadyOnboarded, sendToPreview, role, router, nextPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,12 +83,13 @@ export default function OnboardingWizard() {
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (cancelled) return;
-        if (d?.hasSchool) setApproval({ status: d.status, schoolName: d.schoolName, note: d.note });
+        // Someone joining with a code skips the waiting screen for their own request.
+        if (d?.hasSchool && !(joining && d.status === 'PENDING_APPROVAL')) setApproval({ status: d.status, schoolName: d.schoolName, note: d.note });
       })
       .catch(() => { /* fall through to the normal wizard */ })
       .finally(() => { if (!cancelled) setApprovalChecked(true); });
     return () => { cancelled = true; };
-  }, []);
+  }, [joining]);
 
   const awaitingApproval = approval?.status === 'PENDING_APPROVAL';
   const wasRejected = approval?.status === 'REJECTED';
@@ -207,15 +215,9 @@ export default function OnboardingWizard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save onboarding data');
 
-      // A brand-new school is held for the platform owner, and the account is
-      // still PENDING, so the dashboard would have nothing to show. Switch to
-      // the waiting screen instead of navigating.
-      if (data.awaitingApproval) {
-        setApproval({ status: 'PENDING_APPROVAL', schoolName: schoolName.trim(), note: null });
-        setLoading(false);
-        return;
-      }
-
+      // A brand-new school is held for the platform owner. The account stays
+      // PENDING, and the dashboard opens in preview on demo data until then.
+      if (data.awaitingApproval) toast.success('Request sent. Explore Skulbase while it is reviewed.');
       window.location.href = '/dashboard';
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong');
@@ -295,6 +297,11 @@ export default function OnboardingWizard() {
             code — you won&apos;t need this request.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {awaitingApproval && (
+              <a href="/dashboard" className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground no-underline">
+                Explore while you wait
+              </a>
+            )}
             <button
               onClick={() => { setApproval(null); setSelectedRole('TEACHER'); }}
               className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold"

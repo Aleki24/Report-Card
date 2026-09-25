@@ -1495,3 +1495,10 @@ body {
     }
   }
 }
+
+/* Preview (school awaiting approval): controls that would change data. */
+[data-preview-locked] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: saturate(0.4);
+}
