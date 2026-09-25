@@ -168,7 +168,7 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
 
             {confirming && readiness && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => !busy && setConfirming(false)}>
-                    <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 sm:p-6" onClick={e => e.stopPropagation()}>
                         <h2 className="text-base font-bold font-display mb-1">Publish these results?</h2>
                         <p className="text-xs text-muted-foreground mb-4">
                             Once published, an admin reviews and approves before report cards can be downloaded.

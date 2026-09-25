@@ -105,7 +105,7 @@ export function PaperSchemeModal({ examId, subjectName, onClose, onSaved }: Prop
             onClick={onClose}
         >
             <div
-                className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
+                className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
                 onClick={e => e.stopPropagation()}
             >

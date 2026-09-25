@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useId, useMemo } from 'react';
+import { Plus, X } from 'lucide-react';
 import { filterSubjectsForGrade } from '@/lib/curriculum-bands';
 import { type GradeStreamOption, type SubjectOption, type GradeOption } from '@/hooks/useUsersPage';
 
@@ -33,6 +34,7 @@ function subjectsForGrade(subjects: SubjectOption[], grade: GradeOption | undefi
 }
 
 export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, setEntries }: SubjectTeacherFieldsProps) {
+  const idBase = useId();
   const gradeById = useMemo(() => new Map(grades.map(g => [g.id, g])), [grades]);
 
   // Only grades the school actually runs a class for.
@@ -55,40 +57,42 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
   };
 
   return (
-    <div className="border-t border-border pt-4 mt-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Subject Teacher Assignment
-      </p>
+    <fieldset className="mt-5 border-t border-border pt-5">
+      <legend className="sr-only">Subject teacher assignments</legend>
+      <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Subjects taught</p>
+      <p className="mb-4 text-xs text-muted-foreground">The grades and subjects this teacher enters marks for.</p>
 
       {entries.map((st, i) => {
         const grade = st.grade_id ? gradeById.get(st.grade_id) : undefined;
         const options = subjectsForGrade(subjects, grade);
 
         return (
-          <div key={i} className="mb-3 flex flex-col gap-2 xs:flex-row xs:items-start">
+          <div key={i} className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-2 gap-y-3 rounded-xl border border-border/70 bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             {/* Class first: it decides which subjects are on offer. */}
-            <div className="min-w-0 flex-1">
-              <label className="mb-2 block text-[10px] text-muted-foreground">Grade Level</label>
+            <div className="col-span-2 min-w-0 sm:col-span-1">
+              <label htmlFor={`${idBase}-grade-${i}`} className="mb-1.5 block text-xs font-medium text-muted-foreground">Grade</label>
               <select
-                className="input-field input-field-sm w-full"
+                id={`${idBase}-grade-${i}`}
+                className="input-field w-full"
                 value={st.grade_id}
                 onChange={e => chooseGrade(i, e.target.value)}
               >
-                <option value="">— Grade —</option>
+                <option value="">Select grade</option>
                 {gradeOptions.map(g => (
                   <option key={g.id} value={g.id}>{g.name_display}</option>
                 ))}
               </select>
             </div>
 
-            <div className="min-w-0 flex-1">
-              <label className="mb-2 block text-[10px] text-muted-foreground">Subject</label>
+            <div className="min-w-0">
+              <label htmlFor={`${idBase}-subject-${i}`} className="mb-1.5 block text-xs font-medium text-muted-foreground">Subject</label>
               <select
-                className="input-field input-field-sm w-full"
+                id={`${idBase}-subject-${i}`}
+                className="input-field w-full"
                 value={st.subject_id}
                 onChange={e => update(i, { subject_id: e.target.value })}
               >
-                <option value="">— Subject —</option>
+                <option value="">Select subject</option>
                 {options.map(sub => (
                   <option key={sub.id} value={sub.id}>
                     {sub.name}{sub.code ? ` (${sub.code})` : ''}
@@ -96,7 +100,7 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
                 ))}
               </select>
               {grade && options.length === 0 && (
-                <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">
                   No subjects are set up for {grade.name_display} yet.
                 </p>
               )}
@@ -106,9 +110,10 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
               type="button"
               onClick={() => setEntries(entries.filter((_, idx) => idx !== i))}
               aria-label="Remove this subject assignment"
-              className="self-end rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-destructive xs:mt-6 xs:self-auto"
+              title="Remove"
+              className="inline-flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              &times;
+              <X className="size-4" aria-hidden="true" />
             </button>
           </div>
         );
@@ -117,10 +122,10 @@ export function SubjectTeacherFields({ subjects, grades, gradeStreams, entries, 
       <button
         type="button"
         onClick={() => setEntries([...entries, { subject_id: '', grade_id: '' }])}
-        className="mt-1 text-xs font-medium text-primary hover:underline"
+        className="btn-secondary mt-1 h-10 w-full border-dashed text-sm sm:w-auto"
       >
-        + Add Subject
+        <Plus className="size-4" aria-hidden="true" />Add subject
       </button>
-    </div>
+    </fieldset>
   );
 }
