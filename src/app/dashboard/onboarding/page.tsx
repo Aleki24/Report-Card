@@ -10,6 +10,7 @@ import ClassesStep, { gradesMissingStreams, type ClassPlan, type StandardGrade }
 import SubjectsStep from '@/components/onboarding/SubjectsStep';
 import { parseStreamNames } from '@/lib/classes';
 import { CURRICULA, ONBOARDING_TERMS, type Curriculum, type OnboardingInput } from '@/lib/schemas';
+import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
 
 type OnboardingRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | null;
 
@@ -137,7 +138,7 @@ export default function OnboardingWizard() {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('code');
     const roleParam = params.get('role')?.toUpperCase();
-    if (codeParam) setInviteCode(codeParam.toUpperCase());
+    if (codeParam) setInviteCode(extractInviteCode(codeParam));
     if (roleParam === 'ADMIN' || roleParam === 'TEACHER' || roleParam === 'STUDENT') {
       setSelectedRole(roleParam);
     }
@@ -223,8 +224,8 @@ export default function OnboardingWizard() {
   };
 
   const handleJoinSubmit = async () => {
-    if (!inviteCode) {
-      toast.error('Invite code is required');
+    if (inviteCode.length !== INVITE_CODE_LENGTH) {
+      toast.error('Enter the 6-character invite code from your school');
       return;
     }
 
@@ -592,7 +593,7 @@ export default function OnboardingWizard() {
                <div>
                   <h2 className="text-xl font-bold mb-1">Invite Code</h2>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Please enter the invite code provided by your school administrator.
+                    Enter the invite code from your school administrator, or paste the activation link they sent you.
                   </p>
                 </div>
                 
@@ -602,9 +603,10 @@ export default function OnboardingWizard() {
                     <input 
                       type="text" 
                       value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value)}
+                      onChange={(e) => setInviteCode(extractInviteCode(e.target.value))}
                       className="input-field input-field-mono uppercase"
-                      placeholder="e.g. T-A1B2C3"
+                      placeholder="e.g. A7X3K9"
+                      autoComplete="off"
                       required
                     />
                   </div>

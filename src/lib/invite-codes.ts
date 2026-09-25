@@ -1,6 +1,10 @@
 import crypto from 'crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { sendSMS } from './africastalking';
 import { sendEmail } from './email';
+import { escapeHtml } from './html';
+import { activationUrl } from './activation-link';
+import { isPlaceholderEmail } from './placeholder-email';
 
 /**
  * Generates a unique 6-character alphanumeric invite code.
@@ -29,7 +33,7 @@ export function generateInviteCode(): string {
  * Returns the generated code string.
  */
 export async function createInviteCode(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient,
   userId: string,
   schoolId: string,
   role: string,
@@ -86,11 +90,12 @@ export async function notifyInviteCode(params: {
 }): Promise<InviteNotifyResult> {
   const { phone, email, firstName, schoolName, code } = params;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const link = activationUrl(code, appUrl);
   const result: InviteNotifyResult = { sms: false, email: false };
 
   if (phone) {
     try {
-      const message = `Hi ${firstName}, your Skulbase invite code for ${schoolName} is ${code}. Activate your account at ${appUrl}/activate`;
+      const message = `Hi ${firstName}, your Skulbase invite code for ${schoolName} is ${code}. Open ${link} to set up your account.`;
       const smsRes = await sendSMS(phone, message);
       result.sms = smsRes.success;
       if (!smsRes.success) console.error('[invite] SMS send failed:', smsRes.error);
@@ -99,22 +104,28 @@ export async function notifyInviteCode(params: {
     }
   }
 
-  if (email) {
+  // A placeholder address never reaches anyone — don't report it as delivered.
+  if (email && !isPlaceholderEmail(email)) {
     try {
-      await sendEmail({
+      // Resend reports a rejected send in `error` rather than throwing.
+      const { error } = await sendEmail({
         to: email,
         subject: `Your Skulbase invite code for ${schoolName}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #1a1a2e;">You're invited to ${schoolName}</h1>
-            <p>Hi ${firstName},</p>
-            <p>Your invite code is:</p>
-            <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px;">${code}</p>
-            <p>Activate your account at <a href="${appUrl}/activate">${appUrl}/activate</a>.</p>
+            <h1 style="color: #1a1a2e;">You're invited to ${escapeHtml(schoolName)}</h1>
+            <p>Hi ${escapeHtml(firstName)},</p>
+            <p>Tap the button to set up your account — your invite code is already filled in.</p>
+            <p style="margin: 24px 0;">
+              <a href="${escapeHtml(link)}" style="background: #1a1a2e; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">Set up my account</a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Or enter this invite code at ${escapeHtml(appUrl)}/activate:</p>
+            <p style="font-size: 24px; font-weight: bold; letter-spacing: 2px;">${escapeHtml(code)}</p>
           </div>
         `,
       });
-      result.email = true;
+      result.email = !error;
+      if (error) console.error('[invite] Email send failed:', error);
     } catch (err) {
       console.error('[invite] Email send threw:', err);
     }

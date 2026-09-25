@@ -1,388 +1,398 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSignUp } from '@clerk/nextjs/legacy';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
+import { ArrowRight, CheckCircle2, KeyRound, Loader2 } from 'lucide-react';
+import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
+import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
+import { ROLE_LABELS } from '@/lib/roles';
+import { cn } from '@/lib/utils';
+import type { UserRole } from '@/types';
+import { PasswordInput } from '@/components/auth/PasswordInput';
+import {
+    AUTH_INPUT, AUTH_LABEL, AUTH_LINK, AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON,
+    AuthDivider, AuthShell, GoogleIcon,
+} from '@/components/auth/AuthShell';
 
+const MIN_PASSWORD_LENGTH = 8;
+const MIN_USERNAME_LENGTH = 3;
+const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
+
+/** What /api/auth/activate says about a valid code (verify_only). */
+interface InviteDetails {
+    name: string;
+    role: UserRole | null;
+    username: string;
+    /** The code resets an existing account's password rather than creating one. */
+    reset: boolean;
+}
+
+interface VerifyResponse {
+    error?: string;
+    name?: string;
+    role?: string;
+    username?: string;
+    reset?: boolean;
+}
+
+interface ActivateResponse {
+    error?: string;
+    ticket?: string | null;
+}
+
+type Stage = 'code' | 'details' | 'done';
+
+function errorMessage(err: unknown, fallback: string): string {
+    return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function isUserRole(role: string | undefined): role is UserRole {
+    return !!role && role in ROLE_LABELS;
+}
+
+/** Why the chosen username can't be used yet, or null. */
+function usernameProblem(username: string): string | null {
+    if (username.length < MIN_USERNAME_LENGTH) return `Username must be at least ${MIN_USERNAME_LENGTH} characters.`;
+    if (!USERNAME_PATTERN.test(username)) return 'Username can only contain letters, numbers, dots, dashes and underscores.';
+    return null;
+}
+
+/**
+ * Redeems an invite (or admin password-reset) code in one screen after the
+ * code: confirm who you are, choose a username and password — or Google —
+ * and land signed in. Links like /activate?code=A7X3K9 skip typing the code.
+ */
 export default function ActivatePage() {
     const router = useRouter();
-    const { isLoaded, signUp, setActive } = useSignUp();
+    const { isLoaded, signUp } = useSignUp();
+    const { signInWithTicket } = useSignInCodeVerification();
+
+    const [stage, setStage] = useState<Stage>('code');
     const [code, setCode] = useState('');
-    const [email, setEmail] = useState('');
+    const [invite, setInvite] = useState<InviteDetails | null>(null);
     const [username, setUsername] = useState('');
-    const [suggestedUsername, setSuggestedUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [googleLoading, setGoogleLoading] = useState(false);
     const [verifying, setVerifying] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
-    const [verified, setVerified] = useState(false);
-    const [userName, setUserName] = useState('');
-    const [userRole, setUserRole] = useState('');
-    const [showPasswordForm, setShowPasswordForm] = useState(false);
-    // True when the code belongs to an already-activated account (admin
-    // "Reset password" codes) — then we only set a new password, and the
-    // Google option doesn't apply.
-    const [isReset, setIsReset] = useState(false);
+    const [doneMessage, setDoneMessage] = useState('');
+    const [signedIn, setSignedIn] = useState(false);
 
-    // Step 1: Verify the invite code
-    const handleVerifyCode = async () => {
+    async function verifyCode(value: string) {
+        if (value.length !== INVITE_CODE_LENGTH || verifying) return;
         setError(null);
-        if (!code.trim() || code.trim().length < 6) {
-            setError('Please enter a valid 6-character invite code.');
-            return;
-        }
-
         setVerifying(true);
         try {
             const res = await fetch('/api/auth/activate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code.trim(), verify_only: true }),
+                body: JSON.stringify({ code: value, verify_only: true }),
             });
-            const data = await res.json();
+            const data: VerifyResponse = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'That invite code wasn’t recognised.');
 
-            if (!res.ok) {
-                throw new Error(data.error || 'Invalid invite code.');
-            }
-
-            setSuggestedUsername(data.username || '');
+            setInvite({
+                name: data.name?.trim() || '',
+                role: isUserRole(data.role) ? data.role : null,
+                username: data.username || '',
+                reset: !!data.reset,
+            });
             setUsername(data.username || '');
-            setUserName(data.name || '');
-            setUserRole(data.role || '');
-            setIsReset(!!data.reset);
-            // Reset codes skip the method chooser — password is the only option
-            if (data.reset) setShowPasswordForm(true);
-            setVerified(true);
-        } catch (err: any) {
-            setError(err.message || 'Failed to verify code.');
+            setStage('details');
+        } catch (err) {
+            setError(errorMessage(err, 'Could not check that code. Please try again.'));
         } finally {
             setVerifying(false);
         }
-    };
+    }
 
-    // Activate with Google
-    const handleGoogleActivation = async () => {
+    // An activation link fills the code in and checks it on arrival.
+    const linkChecked = useRef(false);
+    useEffect(() => {
+        if (linkChecked.current) return;
+        linkChecked.current = true;
+        const fromLink = extractInviteCode(new URLSearchParams(window.location.search).get('code') ?? '');
+        if (fromLink.length !== INVITE_CODE_LENGTH) return;
+        setCode(fromLink);
+        void verifyCode(fromLink);
+        // Runs once on arrival; verifyCode is recreated every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function handleCodeChange(raw: string) {
+        const next = extractInviteCode(raw);
+        setCode(next);
+        setError(null);
+        // Typing or pasting the last character checks it — no extra tap needed.
+        if (next.length === INVITE_CODE_LENGTH && next !== code) void verifyCode(next);
+    }
+
+    function startOver() {
+        setStage('code');
+        setInvite(null);
+        setCode('');
+        setPassword('');
+        setEmail('');
+        setError(null);
+    }
+
+    async function handleGoogle() {
         if (!isLoaded || !signUp) return;
         setError(null);
         setGoogleLoading(true);
-
         try {
-            // Store the invite code in sessionStorage so we can use it after Google redirect
-            sessionStorage.setItem('activate_invite_code', code.trim());
-            sessionStorage.setItem('activate_username', username.trim() || suggestedUsername);
-
+            // Read back by /activate/callback once Google redirects home.
+            sessionStorage.setItem('activate_invite_code', code);
+            sessionStorage.setItem('activate_username', username || invite?.username || '');
             await signUp.authenticateWithRedirect({
                 strategy: 'oauth_google',
                 redirectUrl: '/activate/callback',
                 redirectUrlComplete: '/activate/callback',
             });
-        } catch (err: any) {
+        } catch (err) {
             console.error('Google activation error:', err);
-            setError(err?.errors?.[0]?.longMessage || 'Failed to start Google sign-in.');
+            setError((isClerkAPIResponseError(err) && err.errors[0]?.longMessage) || 'Could not start Google sign-in.');
             setGoogleLoading(false);
         }
-    };
+    }
 
-    // Activate with password
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
+        const problem = usernameProblem(username)
+            ?? (password.length < MIN_PASSWORD_LENGTH ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` : null);
+        if (problem) {
+            setError(problem);
+            return;
+        }
+
         setError(null);
-
-        if (!username.trim()) {
-            setError('Username is required.');
-            return;
-        }
-
-        if (username.trim().length < 3) {
-            setError('Username must be at least 3 characters.');
-            return;
-        }
-
-        if (/[^a-zA-Z0-9._-]/.test(username.trim())) {
-            setError('Username can only contain letters, numbers, dots, dashes, and underscores.');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            setError('Passwords do not match.');
-            return;
-        }
-
-        if (password.length < 8) {
-            setError('Password must be at least 8 characters.');
-            return;
-        }
-
-        setLoading(true);
-
+        setSubmitting(true);
         try {
-            const response = await fetch('/api/auth/activate', {
+            const res = await fetch('/api/auth/activate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code: code.trim(),
-                    email: email.trim() || undefined,
-                    username: username.trim(),
-                    password
-                }),
+                body: JSON.stringify({ code, username, password, email: email.trim() || undefined }),
             });
+            const data: ActivateResponse = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Activation failed. Please try again.');
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Activation failed');
-            }
-
-            setSuccess(isReset
-                ? 'Password updated successfully! Redirecting to login...'
-                : 'Account activated successfully! Redirecting to login...');
-
-            setTimeout(() => {
-                router.push('/login');
-            }, 2000);
-
-        } catch (err: any) {
-            setError(err.message || 'An error occurred during activation.');
+            // The server issues a one-time ticket, so there's no second login
+            // and no code sent to an inbox the user may not have.
+            const ok = !!data.ticket && await signInWithTicket(data.ticket).catch(() => false);
+            setSignedIn(ok);
+            setDoneMessage(invite?.reset ? 'Your password has been updated.' : 'Your account is ready.');
+            setStage('done');
+            if (ok) router.replace('/dashboard');
+        } catch (err) {
+            setError(errorMessage(err, 'Activation failed. Please try again.'));
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
-    };
+    }
+
+    const firstName = invite?.name.split(' ')[0] || '';
+    const heading = stage === 'code'
+        ? 'Activate your account'
+        : stage === 'done'
+            ? 'You’re all set'
+            : invite?.reset
+                ? 'Reset your password'
+                : firstName ? `Welcome, ${firstName}!` : 'Welcome!';
+    const subheading = stage === 'code'
+        ? 'Enter the invite code from your school to get started.'
+        : stage === 'done'
+            ? doneMessage
+            : invite?.reset
+                ? 'Choose a new password for your account.'
+                : 'Choose how you’ll sign in. It takes less than a minute.';
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
-            {/* Background Decorations */}
-            <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-3xl" />
-            <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-3xl" />
-
-            <div 
-                className="w-full max-w-md p-8 bg-card border border-border/50 rounded-2xl shadow-xl z-10 animate-in fade-in slide-in-from-bottom-4 duration-500"
-            >
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl text-primary">🔐</span>
-                    </div>
-                    <h1 className="text-3xl font-bold tracking-tight mb-2">{verified && isReset ? 'Reset Password' : 'Activate Account'}</h1>
-                    <p className="text-muted-foreground text-sm">
-                        {!verified
-                            ? 'Enter your invite code to get started.'
-                            : isReset
-                                ? `Welcome back, ${userName}! Set a new password for your account.`
-                                : `Welcome, ${userName}! Choose how to set up your account.`}
-                    </p>
+        <AuthShell
+            title={heading}
+            subtitle={subheading}
+            footer={stage !== 'done' && (
+                <>
+                    <span>Already activated? <Link href="/login" className={AUTH_LINK}>Sign in</Link></span>
+                    {!invite?.reset && (
+                        <span>Setting up a new school? <Link href="/signup" className={AUTH_LINK}>Create an account</Link></span>
+                    )}
+                </>
+            )}
+        >
+            {error && (
+                <div role="alert" className="mb-5 rounded-xl border border-red-500/20 bg-red-500/[0.08] px-4 py-3 text-sm leading-relaxed text-red-600 dark:bg-red-500/10 dark:text-red-300">
+                    {error}
                 </div>
+            )}
 
-                {error && (
-                    <div className="p-3 mb-6 text-sm text-red-500 bg-red-500/10 border border-red-500/20 rounded-md">
-                        {error}
+            {stage === 'code' && (
+                <form
+                    onSubmit={(e) => { e.preventDefault(); void verifyCode(code); }}
+                    className="flex flex-col gap-5"
+                >
+                    <div className="flex flex-col gap-2">
+                        <label htmlFor="invite-code" className={AUTH_LABEL}>Invite code</label>
+                        <input
+                            id="invite-code"
+                            value={code}
+                            onChange={(e) => handleCodeChange(e.target.value)}
+                            placeholder="A7X3K9"
+                            autoComplete="one-time-code"
+                            autoCapitalize="characters"
+                            spellCheck={false}
+                            autoFocus
+                            disabled={verifying}
+                            aria-invalid={error !== null}
+                            aria-describedby="invite-code-help"
+                            className={cn(AUTH_INPUT, 'h-14 text-center font-mono text-2xl uppercase tracking-[0.4em] sm:text-2xl placeholder:tracking-[0.4em]')}
+                        />
+                        <p id="invite-code-help" className="text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                            6 letters and numbers from your school. You can also paste the link you were sent.
+                        </p>
                     </div>
-                )}
 
-                {success && (
-                    <div className="p-3 mb-6 text-sm text-green-500 bg-green-500/10 border border-green-500/20 rounded-md text-center font-medium">
-                        {success}
+                    <button type="submit" disabled={verifying || code.length !== INVITE_CODE_LENGTH} className={AUTH_PRIMARY_BUTTON}>
+                        {verifying
+                            ? <><Loader2 className="size-5 animate-spin" aria-hidden />Checking your code…</>
+                            : <>Continue<ArrowRight className="size-4" aria-hidden /></>}
+                    </button>
+
+                    <p className="text-center text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        No code yet? Ask your school administrator. They can send it to you as a link.
+                    </p>
+                </form>
+            )}
+
+            {stage === 'details' && invite && (
+                <div className="flex flex-col gap-5">
+                    <div className="flex items-center gap-3 rounded-xl border border-indigo-500/15 bg-indigo-500/5 p-3 dark:border-indigo-400/20 dark:bg-indigo-400/10">
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-violet-500 text-sm font-bold text-white" aria-hidden>
+                            {invite.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || <KeyRound className="size-5" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{invite.name || 'Your account'}</p>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                {invite.role && <span className="whitespace-nowrap">{ROLE_LABELS[invite.role]}</span>}
+                                <span className="whitespace-nowrap rounded-md bg-white/70 px-1.5 py-0.5 font-mono tracking-wider text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                                    <span className="sr-only">Invite code </span>{code}
+                                </span>
+                            </p>
+                        </div>
+                        <button type="button" onClick={startOver} className={cn(AUTH_LINK, 'shrink-0 text-xs')}>
+                            Not you?
+                        </button>
                     </div>
-                )}
 
-                {/* Step 1: Enter invite code */}
-                {!verified && !success && (
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-foreground">Invite Code <span className="text-red-500">*</span></label>
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
+                        <div className="flex flex-col gap-2">
+                            <label htmlFor="username" className={AUTH_LABEL}>Username</label>
                             <input
-                                type="text"
-                                value={code}
-                                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                className="input-field input-field-mono w-full font-mono uppercase tracking-widest text-center text-lg"
-                                placeholder="A7X3K9"
-                                maxLength={6}
-                                required
-                                disabled={verifying}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1 text-center">The 6-character code given by your admin</p>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={handleVerifyCode}
-                            disabled={verifying || code.trim().length < 6}
-                            className="btn-primary w-full py-3 text-sm font-semibold tracking-wide"
-                        >
-                            {verifying ? 'Verifying...' : 'Verify Code'}
-                        </button>
-                    </div>
-                )}
-
-                {/* Step 2: Choose activation method */}
-                {verified && !success && !showPasswordForm && (
-                    <div className="space-y-4">
-                        <div className="p-3 mb-2 text-sm bg-primary/5 border border-primary/10 rounded-md text-center">
-                            <span className="text-muted-foreground">Invite code:</span>{' '}
-                            <span className="font-mono font-bold tracking-widest uppercase text-primary">{code}</span>
-                            <span className="text-muted-foreground ml-2">·</span>
-                            <span className="text-muted-foreground ml-2 capitalize text-xs">{userRole.toLowerCase().replace('_', ' ')}</span>
-                        </div>
-
-                        {/* Google activation */}
-                        <button
-                            type="button"
-                            onClick={handleGoogleActivation}
-                            disabled={!isLoaded || googleLoading}
-                            className="flex h-[46px] w-full cursor-pointer items-center justify-center gap-3 rounded-xl border text-[14px] font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 bg-card hover:bg-muted/50 border-border"
-                        >
-                            {googleLoading ? (
-                                <div className="h-5 w-5 border-2 border-muted-foreground/30 border-t-primary rounded-full animate-spin" />
-                            ) : (
-                                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                </svg>
-                            )}
-                            Continue with Google
-                        </button>
-
-                        {/* Divider */}
-                        <div className="flex items-center gap-3">
-                            <div className="h-px flex-1 bg-border" />
-                            <span className="text-xs text-muted-foreground">or</span>
-                            <div className="h-px flex-1 bg-border" />
-                        </div>
-
-                        {/* Password option */}
-                        <button
-                            type="button"
-                            onClick={() => setShowPasswordForm(true)}
-                            className="btn-primary w-full py-3 text-sm font-semibold tracking-wide"
-                        >
-                            Set Up with Username & Password
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => { setVerified(false); setCode(''); setError(null); }}
-                            className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            ← Use a different code
-                        </button>
-                    </div>
-                )}
-
-                {/* Step 2b: Password form */}
-                {verified && !success && showPasswordForm && (
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="p-3 mb-2 text-sm bg-primary/5 border border-primary/10 rounded-md text-center">
-                            <span className="text-muted-foreground">Invite code:</span>{' '}
-                            <span className="font-mono font-bold tracking-widest uppercase text-primary">{code}</span>
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-foreground">Username <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
+                                id="username"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s/g, ''))}
-                                className="input-field w-full"
                                 placeholder="Choose a username"
-                                required
-                                disabled={loading}
-                                minLength={3}
+                                autoComplete="username"
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                disabled={submitting}
+                                className={AUTH_INPUT}
                             />
-                            {suggestedUsername && username !== suggestedUsername && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Suggested: <button type="button" className="text-primary font-mono hover:underline" onClick={() => setUsername(suggestedUsername)}>{suggestedUsername}</button>
-                                </p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">This is what you&apos;ll use to log in</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                You’ll use this to sign in.
+                                {invite.username && username !== invite.username && (
+                                    <> Suggested: <button type="button" className={cn(AUTH_LINK, 'font-mono')} onClick={() => setUsername(invite.username)}>{invite.username}</button></>
+                                )}
+                            </p>
                         </div>
 
-                        {!isReset && (
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-foreground">Email Address (Optional)</label>
+                        <div className="flex flex-col gap-2">
+                            <label htmlFor="new-password" className={AUTH_LABEL}>{invite.reset ? 'New password' : 'Password'}</label>
+                            <PasswordInput
+                                id="new-password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                                autoComplete="new-password"
+                                disabled={submitting}
+                                aria-describedby="password-help"
+                            />
+                            <p
+                                id="password-help"
+                                className={cn(
+                                    'flex items-center gap-1.5 text-xs transition-colors',
+                                    password.length >= MIN_PASSWORD_LENGTH ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400',
+                                )}
+                            >
+                                {password.length >= MIN_PASSWORD_LENGTH && <CheckCircle2 className="size-3.5" aria-hidden />}
+                                At least {MIN_PASSWORD_LENGTH} characters
+                            </p>
+                        </div>
+
+                        {!invite.reset && (
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="email" className={AUTH_LABEL}>
+                                    Email <span className="font-normal text-slate-400 dark:text-slate-500">(optional)</span>
+                                </label>
                                 <input
+                                    id="email"
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="input-field w-full"
-                                    placeholder="your.email@example.com"
-                                    disabled={loading}
+                                    placeholder="you@example.com"
+                                    autoComplete="email"
+                                    disabled={submitting}
+                                    className={AUTH_INPUT}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">Add an email to help recover your account later</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">Lets you reset your password yourself if you forget it.</p>
                             </div>
                         )}
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-foreground">New Password <span className="text-red-500">*</span></label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="input-field w-full"
-                                placeholder="Min. 8 characters"
-                                required
-                                disabled={loading}
-                                minLength={8}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-foreground">Confirm Password <span className="text-red-500">*</span></label>
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="input-field w-full"
-                                placeholder="Repeat your password"
-                                required
-                                disabled={loading}
-                                minLength={8}
-                            />
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="btn-primary w-full py-3 mt-2 text-sm font-semibold tracking-wide"
-                        >
-                            {loading
-                                ? (isReset ? 'Updating...' : 'Activating...')
-                                : (isReset ? 'Reset Password' : 'Activate Account')}
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => {
-                                // Reset codes have no method chooser to go back to
-                                if (isReset) {
-                                    setVerified(false);
-                                    setShowPasswordForm(false);
-                                    setCode('');
-                                    setError(null);
-                                } else {
-                                    setShowPasswordForm(false);
-                                }
-                            }}
-                            className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            disabled={loading}
-                        >
-                            {isReset ? '← Use a different code' : '← Back to options'}
+                        <button type="submit" disabled={submitting || googleLoading} className={AUTH_PRIMARY_BUTTON}>
+                            {submitting
+                                ? <><Loader2 className="size-5 animate-spin" aria-hidden />{invite.reset ? 'Updating…' : 'Activating…'}</>
+                                : invite.reset ? 'Update password & sign in' : 'Activate & sign in'}
                         </button>
                     </form>
-                )}
 
-                <div className="mt-6 text-center">
-                    <button 
-                        onClick={() => router.push('/login')}
-                        className="text-sm text-primary hover:text-primary/80 transition-colors"
-                        disabled={loading}
-                    >
-                        Already have an account? Log in
-                    </button>
+                    {!invite.reset && (
+                        <>
+                            <AuthDivider label="or" />
+                            <button type="button" onClick={handleGoogle} disabled={!isLoaded || googleLoading || submitting} className={AUTH_SECONDARY_BUTTON}>
+                                {googleLoading ? <Loader2 className="size-5 animate-spin" aria-label="Redirecting to Google" /> : <GoogleIcon />}
+                                Continue with Google
+                            </button>
+                        </>
+                    )}
                 </div>
-            </div>
-        </div>
+            )}
+
+            {stage === 'done' && (
+                <div className="flex flex-col items-center gap-4 py-2 text-center" role="status">
+                    <span className="flex size-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
+                        <CheckCircle2 className="size-7" aria-hidden />
+                    </span>
+                    {signedIn ? (
+                        <p className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                            <Loader2 className="size-4 animate-spin" aria-hidden />
+                            Signing you in…
+                        </p>
+                    ) : (
+                        <>
+                            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                Sign in with your username <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">{username}</span> and the password you just chose.
+                            </p>
+                            <Link href="/login" className={cn(AUTH_PRIMARY_BUTTON, 'no-underline')}>
+                                Go to sign in<ArrowRight className="size-4" aria-hidden />
+                            </Link>
+                        </>
+                    )}
+                </div>
+            )}
+        </AuthShell>
     );
 }

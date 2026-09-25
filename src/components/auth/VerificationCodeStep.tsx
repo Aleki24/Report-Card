@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { ArrowLeft, Loader2, MailCheck, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { describeCodeError, type PendingCodeVerification } from '@/hooks/useSignInCodeVerification';
+import { AUTH_INPUT, AUTH_LABEL, AUTH_PRIMARY_BUTTON } from '@/components/auth/AuthShell';
+import { cn } from '@/lib/utils';
 
 interface VerificationCodeStepProps {
   pending: PendingCodeVerification;
@@ -88,7 +90,7 @@ export function VerificationCodeStep({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="verification-code" className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+        <label htmlFor="verification-code" className={AUTH_LABEL}>
           Verification code
         </label>
         <input
@@ -105,7 +107,7 @@ export function VerificationCodeStep({
           required
           aria-invalid={error !== null}
           aria-describedby={error ? 'verification-code-error' : undefined}
-          className="input-field input-field-mono text-center"
+          className={cn(AUTH_INPUT, 'text-center font-mono text-lg tracking-[0.5em] sm:text-lg')}
         />
         {error && (
           <p id="verification-code-error" role="alert" className="text-xs font-medium text-destructive">
@@ -117,7 +119,7 @@ export function VerificationCodeStep({
       <button
         type="submit"
         disabled={verifying || code.length !== CODE_LENGTH}
-        className="flex h-[46px] items-center justify-center gap-2 rounded-xl bg-linear-to-br from-indigo-500 to-violet-500 text-[15px] font-semibold text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        className={AUTH_PRIMARY_BUTTON}
       >
         {verifying ? <Loader2 className="size-5 animate-spin" aria-label="Verifying" /> : 'Verify and continue'}
       </button>

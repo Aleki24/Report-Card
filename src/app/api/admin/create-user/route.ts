@@ -5,6 +5,7 @@ import { canManageStream, getCaller } from '@/lib/auth-server';
 import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
+import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { inviteUserSchema } from '@/lib/schemas';
 
 export async function POST(request: NextRequest) {
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
 
         // 2. CREATE USER IN DB (no Clerk account — deferred to activation)
         const newUserId = crypto.randomUUID();
-        const fakeEmail = `${username}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`;
+        const fakeEmail = placeholderEmailFor(username, school.name);
 
         const { data: newUser, error: insertError } = await supabaseAdmin
             .from('users')

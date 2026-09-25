@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isClerkAPIResponseError, useSignIn } from '@clerk/clerk-expo';
+import { publicPost } from '@/lib/api';
 
 type SignInResource = NonNullable<ReturnType<typeof useSignIn>['signIn']>;
 type SignInSecondFactor = NonNullable<SignInResource['supportedSecondFactors']>[number];
@@ -25,6 +26,34 @@ export type SignInOutcome = 'complete' | 'verify' | 'unsupported';
  * so the set is typed as plain strings.
  */
 const CODE_REQUIRED_STATUSES: ReadonlySet<string> = new Set(['needs_second_factor', 'needs_client_trust']);
+
+/** The password the user just typed, for accounts that can't receive a code. */
+export interface PasswordCredentials {
+    identifier: string;
+    password: string;
+}
+
+/**
+ * Teachers and students invited without an email get a `.local` placeholder
+ * address, which never receives mail. Mirrors src/lib/placeholder-email.ts.
+ */
+function isPlaceholderEmail(email: string): boolean {
+    return email.trim().toLowerCase().endsWith('.local');
+}
+
+/**
+ * Asks the server for a sign-in ticket for an account with no inbox or phone,
+ * after it re-checks the password. Null when it refuses (the account can
+ * receive a code after all), so the caller sends the code instead.
+ */
+async function fetchPasswordTicket(credentials: PasswordCredentials): Promise<string | null> {
+    try {
+        const { ticket } = await publicPost<{ ticket?: string }>('/api/auth/password-ticket', credentials);
+        return ticket ?? null;
+    } catch {
+        return null;
+    }
+}
 
 /** Seconds a user waits before another code can be requested. */
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -92,28 +121,42 @@ export function useSignInCodeVerification() {
         setCooldown(RESEND_COOLDOWN_SECONDS);
     }, []);
 
-    const continueSignIn = useCallback(async (result: SignInResource): Promise<SignInOutcome> => {
-        if (result.status === 'complete') {
-            await setActive?.({ session: result.createdSessionId });
-            return 'complete';
-        }
-        if (result.status && CODE_REQUIRED_STATUSES.has(result.status)) {
+    /** Activates the session once Clerk reports the sign-in finished. */
+    const activateIfComplete = useCallback(async (result: SignInResource): Promise<boolean> => {
+        if (result.status !== 'complete') return false;
+        await setActive?.({ session: result.createdSessionId });
+        return true;
+    }, [setActive]);
+
+    const continueSignIn = useCallback(async (
+        result: SignInResource,
+        credentials?: PasswordCredentials,
+    ): Promise<SignInOutcome> => {
+        if (await activateIfComplete(result)) return 'complete';
+        // Widened to string: this SDK's SignInStatus predates needs_client_trust.
+        const status: string | null = result.status;
+        if (status && CODE_REQUIRED_STATUSES.has(status)) {
             const target = pickCodeFactor(result.supportedSecondFactors);
+            const unreachable = !target || (target.strategy === 'email_code' && isPlaceholderEmail(target.safeIdentifier));
+            // Only the new-device check is skipped this way; real MFA always needs its code.
+            if (status === 'needs_client_trust' && unreachable && credentials) {
+                const ticket = await fetchPasswordTicket(credentials);
+                if (ticket && await activateIfComplete(await result.create({ strategy: 'ticket', ticket }))) {
+                    return 'complete';
+                }
+            }
             if (!target) return 'unsupported';
             await sendCode(result, target);
             return 'verify';
         }
         return 'unsupported';
-    }, [setActive, sendCode]);
+    }, [activateIfComplete, sendCode]);
 
     /** Submits the code; resolves true once the session is active. Throws Clerk errors. */
     const verifyCode = useCallback(async (code: string): Promise<boolean> => {
         if (!signIn || !pending) return false;
-        const result = await signIn.attemptSecondFactor({ strategy: pending.strategy, code: code.trim() });
-        if (result.status !== 'complete') return false;
-        await setActive?.({ session: result.createdSessionId });
-        return true;
-    }, [signIn, pending, setActive]);
+        return activateIfComplete(await signIn.attemptSecondFactor({ strategy: pending.strategy, code: code.trim() }));
+    }, [signIn, pending, activateIfComplete]);
 
     const resendCode = useCallback(async () => {
         if (!signIn || !factor || cooldown > 0) return;

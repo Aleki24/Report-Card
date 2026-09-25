@@ -1,7 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { placeholderEmailFor } from '@/lib/placeholder-email';
+import { createSignInTicket } from '@/lib/sign-in-ticket';
+
+type ClerkClient = ReturnType<typeof createClerkClient>;
+
+/**
+ * A ticket that signs the user straight in, so activating isn't followed by a
+ * second login — which, on a device Clerk hasn't seen, would email a code to
+ * an inbox that usually doesn't exist. Best effort: without one, the page
+ * falls back to sending them to /login.
+ */
+async function ticketFor(clerk: ClerkClient, userId: string): Promise<string | null> {
+    try {
+        return await createSignInTicket(clerk, userId);
+    } catch (err) {
+        console.error('[activate] Failed to create sign-in ticket:', err);
+        return null;
+    }
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -134,10 +154,11 @@ export async function POST(request: NextRequest) {
 
             return NextResponse.json({
                 success: true,
-                message: 'Password updated successfully! You can now log in.',
+                message: 'Password updated successfully!',
                 username: finalUsername,
                 role: user.role,
-                reset: true
+                reset: true,
+                ticket: await ticketFor(clerkClient, user.id),
             });
         }
 
@@ -150,8 +171,7 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         // Use provided email or generate placeholder
-        const userEmail = email?.trim() ||
-            `${finalUsername}@${(school?.name || 'school').toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`;
+        const userEmail = email?.trim() || placeholderEmailFor(finalUsername, school?.name);
 
         // 4. Create the Clerk account with the user's chosen password and username
         let clerkUserId: string;
@@ -168,9 +188,10 @@ export async function POST(request: NextRequest) {
                 }
             });
             clerkUserId = clerkUser.id;
-        } catch (clerkErr: any) {
+        } catch (clerkErr) {
             console.error('Clerk activation error:', clerkErr);
-            const msg = clerkErr.errors?.[0]?.message || 'Failed to create account. Try a different password or username.';
+            const msg = (isClerkAPIResponseError(clerkErr) && clerkErr.errors[0]?.message)
+                || 'Failed to create account. Try a different password or username.';
             return NextResponse.json({ error: msg }, { status: 400 });
         }
 
@@ -270,9 +291,10 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: 'Account activated successfully! You can now log in.',
+            message: 'Account activated successfully!',
             username: finalUsername,
-            role: user.role
+            role: user.role,
+            ticket: await ticketFor(clerkClient, clerkUserId),
         });
 
     } catch (err: unknown) {

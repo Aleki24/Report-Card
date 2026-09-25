@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSignIn } from '@clerk/nextjs/legacy';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import type { SignInResource, SignInSecondFactor } from '@clerk/nextjs/types';
+import { isPlaceholderEmail } from '@/lib/placeholder-email';
 
 /** Second-factor strategies where Clerk delivers a one-time code we can collect. */
 export type CodeStrategy = 'email_code' | 'phone_code';
@@ -24,6 +25,12 @@ export interface PendingCodeVerification {
  */
 export type SignInOutcome = 'complete' | 'verify' | 'unsupported';
 
+/** The password the user just typed, for accounts that can't receive a code. */
+export interface PasswordCredentials {
+  identifier: string;
+  password: string;
+}
+
 /** Seconds a user waits before another code can be requested. */
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -40,6 +47,21 @@ function pickCodeFactor(factors: SignInSecondFactor[] | null): CodeFactor | null
     codeFactors.find((f) => f.strategy === 'phone_code') ??
     null
   );
+}
+
+/**
+ * Asks the server for a sign-in ticket for an account with no inbox or phone,
+ * after it re-checks the password. Null when the account can receive a code
+ * after all (or the server refuses), so the caller falls back to sending one.
+ */
+async function fetchPasswordTicket(credentials: PasswordCredentials): Promise<string | null> {
+  const res = await fetch('/api/auth/password-ticket', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  });
+  const data: { ticket?: string } = await res.json().catch(() => ({}));
+  return res.ok && data.ticket ? data.ticket : null;
 }
 
 function prepareCode(signIn: SignInResource, factor: CodeFactor): Promise<SignInResource> {
@@ -73,6 +95,11 @@ export function describeCodeError(err: unknown): string {
  * device it hasn't seen (`needs_client_trust`) — which is every first sign-in
  * straight after /signup, since that account is created server-side. Both
  * are satisfied through the second-factor API, so they share this flow.
+ *
+ * Client Trust's code goes to the account's email, which for teachers and
+ * students invited without one is a `.local` placeholder that never receives
+ * mail. Given the credentials just typed, `continueSignIn` swaps that dead end
+ * for a server-issued sign-in ticket instead.
  */
 export function useSignInCodeVerification() {
   const { signIn, setActive } = useSignIn();
@@ -93,28 +120,46 @@ export function useSignInCodeVerification() {
     setCooldown(RESEND_COOLDOWN_SECONDS);
   }, []);
 
-  const continueSignIn = useCallback(async (result: SignInResource): Promise<SignInOutcome> => {
-    if (result.status === 'complete') {
-      await setActive?.({ session: result.createdSessionId });
-      return 'complete';
-    }
+  /** Activates the session once Clerk reports the sign-in finished. */
+  const activateIfComplete = useCallback(async (result: SignInResource): Promise<boolean> => {
+    if (result.status !== 'complete') return false;
+    await setActive?.({ session: result.createdSessionId });
+    return true;
+  }, [setActive]);
+
+  const continueSignIn = useCallback(async (
+    result: SignInResource,
+    credentials?: PasswordCredentials,
+  ): Promise<SignInOutcome> => {
+    if (await activateIfComplete(result)) return 'complete';
     if (result.status === 'needs_second_factor' || result.status === 'needs_client_trust') {
       const target = pickCodeFactor(result.supportedSecondFactors);
+      const unreachable = !target || (target.strategy === 'email_code' && isPlaceholderEmail(target.safeIdentifier));
+      // Only the new-device check is skipped this way — real MFA always needs its code.
+      if (result.status === 'needs_client_trust' && unreachable && credentials) {
+        const ticket = await fetchPasswordTicket(credentials);
+        if (ticket && await activateIfComplete(await result.create({ strategy: 'ticket', ticket }))) {
+          return 'complete';
+        }
+      }
       if (!target) return 'unsupported';
       await sendCode(result, target);
       return 'verify';
     }
     return 'unsupported';
-  }, [setActive, sendCode]);
+  }, [activateIfComplete, sendCode]);
+
+  /** Starts a session from a server-issued ticket (invite activation, sign-up). */
+  const signInWithTicket = useCallback(async (ticket: string): Promise<boolean> => {
+    if (!signIn) return false;
+    return activateIfComplete(await signIn.create({ strategy: 'ticket', ticket }));
+  }, [signIn, activateIfComplete]);
 
   /** Submits the code; resolves true once the session is active. Throws Clerk errors. */
   const verifyCode = useCallback(async (code: string): Promise<boolean> => {
     if (!signIn || !pending) return false;
-    const result = await signIn.attemptSecondFactor({ strategy: pending.strategy, code: code.trim() });
-    if (result.status !== 'complete') return false;
-    await setActive?.({ session: result.createdSessionId });
-    return true;
-  }, [signIn, pending, setActive]);
+    return activateIfComplete(await signIn.attemptSecondFactor({ strategy: pending.strategy, code: code.trim() }));
+  }, [signIn, pending, activateIfComplete]);
 
   const resendCode = useCallback(async () => {
     if (!signIn || !factor || cooldown > 0) return;
@@ -127,5 +172,5 @@ export function useSignInCodeVerification() {
     setCooldown(0);
   }, []);
 
-  return { pending, cooldown, continueSignIn, verifyCode, resendCode, reset };
+  return { pending, cooldown, continueSignIn, signInWithTicket, verifyCode, resendCode, reset };
 }

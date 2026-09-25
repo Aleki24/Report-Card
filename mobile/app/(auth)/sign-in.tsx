@@ -15,11 +15,28 @@ import { useSignIn, useSSO } from '@clerk/clerk-expo';
 import { isClerkAPIResponseError } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
 import { colors, radius, spacing } from '@/lib/theme';
+import { publicPost } from '@/lib/api';
 import { describeCodeError, useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
 
 const CODE_LENGTH = 6;
 
 WebBrowser.maybeCompleteAuthSession();
+
+/**
+ * Teachers and students sign in with the username their school gave them.
+ * Username may not be an enabled Clerk identifier, so resolve it to the
+ * account's email first — the same step the web login takes. Falls back to
+ * the raw value if the lookup fails, letting Clerk report "not found".
+ */
+async function resolveIdentifier(value: string): Promise<string> {
+    if (value.includes('@')) return value;
+    try {
+        const { email } = await publicPost<{ email?: string | null }>('/api/auth/resolve-identifier', { identifier: value });
+        return email || value;
+    } catch {
+        return value;
+    }
+}
 
 export default function SignInScreen() {
     const { isLoaded, signIn } = useSignIn();
@@ -39,8 +56,9 @@ export default function SignInScreen() {
         setError(null);
         setLoading(true);
         try {
-            const result = await signIn.create({ identifier: email.trim(), password });
-            const outcome = await verification.continueSignIn(result);
+            const identifier = await resolveIdentifier(email.trim());
+            const result = await signIn.create({ identifier, password });
+            const outcome = await verification.continueSignIn(result, { identifier, password });
             if (outcome === 'verify') {
                 setCode('');
             } else if (outcome === 'unsupported') {
@@ -176,15 +194,16 @@ export default function SignInScreen() {
                     ) : (
                         <>
                             <View style={styles.field}>
-                                <Text style={styles.label}>Email</Text>
+                                <Text style={styles.label}>Email or username</Text>
                                 <TextInput
                                     value={email}
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
                                     autoCorrect={false}
                                     keyboardType="email-address"
-                                    textContentType="emailAddress"
-                                    placeholder="you@example.com"
+                                    textContentType="username"
+                                    autoComplete="username"
+                                    placeholder="you@example.com or your username"
                                     placeholderTextColor={colors.muted}
                                     style={styles.input}
                                 />
