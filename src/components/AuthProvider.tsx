@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useEf
 import { useUser, useAuth as useClerkAuth, useSession } from '@clerk/nextjs';
 import type { UserRole } from '@/types';
 import { resolveActiveRole } from '@/lib/roles';
+import { installPreviewFetch } from '@/lib/preview/preview-fetch';
+import { DEMO_SCHOOL_NAME } from '@/lib/preview/demo-school';
 
 interface UserProfile {
     id: string;
@@ -36,6 +38,14 @@ interface AuthContextType {
     switchRole: (role: UserRole) => Promise<void>;
     devRoleOverride: UserRole | null;
     setDevRoleOverride: (role: UserRole | null) => void;
+    /**
+     * The account's school is waiting for approval, and it is exploring the
+     * app on demo data meanwhile: reads show the demo school, and nothing can
+     * be changed. The account itself stays PENDING on the server.
+     */
+    preview: boolean;
+    /** In preview, the name of the school awaiting approval. */
+    pendingSchoolName: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,6 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [baseRole, setBaseRole] = useState<UserRole | null>(null);
     const [devRoleOverride, setDevRoleOverride] = useState<UserRole | null>(null);
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
+    const [preview, setPreview] = useState(false);
+    const [pendingSchoolName, setPendingSchoolName] = useState<string | null>(null);
 
     const { userId } = clerkAuth;
 
@@ -127,6 +139,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then(data => {
                 if (data.error) return;
                 const u = data.profile || data.user;
+                // A requester whose school awaits approval explores on demo
+                // data. The fetch patch goes in before any page renders, so
+                // no page ever asks the real API for data it would refuse.
+                const inPreview = u?.role === 'PENDING' && data.schoolApprovalStatus === 'PENDING_APPROVAL';
+                if (inPreview) {
+                    installPreviewFetch();
+                    setPreview(true);
+                    setPendingSchoolName(data.schoolName ?? null);
+                    setProfile({
+                        id: u.id || userId,
+                        first_name: u.first_name || clerkFirstName,
+                        last_name: u.last_name || clerkLastName,
+                        email: u.email || clerkEmail,
+                        role: 'ADMIN',
+                        is_active: true,
+                        school_id: u.school_id || null,
+                        job_title: null,
+                        imageUrl: clerkImageUrl,
+                    });
+                    setBaseRole('ADMIN');
+                    setSchoolName(DEMO_SCHOOL_NAME);
+                    setSchoolOnboardingCompleted(true);
+                    return;
+                }
                 if (u) {
                     // The DB role is the base role; effective role may differ if active_role is set
                     const dbBaseRole: UserRole = u.role || clerkBaseRole;
@@ -187,7 +223,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         devRoleOverride,
         setDevRoleOverride,
-    }), [userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
+        preview,
+        pendingSchoolName,
+    }), [preview, pendingSchoolName, userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
 
     return (
         <AuthContext.Provider value={value}>

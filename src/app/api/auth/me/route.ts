@@ -90,14 +90,16 @@ export async function GET() {
     // Fetch school name and onboarding status
     let schoolName: string | null = null;
     let schoolOnboardingCompleted: boolean = false;
+    let schoolApprovalStatus: string | null = null;
     if (dbUser.school_id) {
       const { data: school } = await supabase
         .from('schools')
-        .select('name, onboarding_completed')
+        .select('name, onboarding_completed, approval_status')
         .eq('id', dbUser.school_id)
         .maybeSingle();
       schoolName = school?.name || null;
       schoolOnboardingCompleted = school?.onboarding_completed || false;
+      schoolApprovalStatus = school?.approval_status ?? null;
     }
 
     // active_role (Clerk metadata, set by role switching) only ever upgrades a
@@ -114,6 +116,8 @@ export async function GET() {
       user: dbUser, // backwards compatibility
       schoolName,
       schoolOnboardingCompleted,
+      // PENDING_APPROVAL lets the app show a waiting requester the demo preview.
+      schoolApprovalStatus,
       email: user?.emailAddresses[0]?.emailAddress || dbUser.email,
       activeRole,
     });
