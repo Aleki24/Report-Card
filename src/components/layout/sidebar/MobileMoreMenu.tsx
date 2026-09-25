@@ -2,153 +2,110 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { BookOpen } from 'lucide-react';
+import { X } from 'lucide-react';
+import type { UserRole } from '@/components/AuthProvider';
+import { Avatar } from '@/components/Avatar';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ROLE_LABELS } from '@/lib/roles';
+import { cn } from '@/lib/utils';
 import { type NavItem, roleBadgeColors, routeMatches } from './navItems';
-import type { UserRole } from '@/types';
+import { RoleDot, RoleSwitcher, SignOutButton, ThemeSwitch, canSwitchRole } from './AccountControls';
 
 interface MobileMoreMenuProps {
     showMoreMenu: boolean;
     setShowMoreMenu: (val: boolean) => void;
     overflowItems: NavItem[];
     pathname: string;
-    theme: string;
-    toggleTheme: () => void;
     onSignOut: () => void;
+    profile: { first_name: string; last_name: string; email?: string | null; role: UserRole; imageUrl?: string | null } | null;
     role: UserRole | null;
     baseRole: UserRole | null;
     availableRoles: UserRole[];
     switchRole: (role: UserRole) => Promise<void>;
 }
 
+/**
+ * The phone's "More" sheet: every page that doesn't fit the bottom bar, plus
+ * the account (theme, role switch, sign out), which has no other home on a
+ * phone. Slides up from the bottom, above the bottom bar's thumb reach.
+ */
 export function MobileMoreMenu({
-    showMoreMenu, setShowMoreMenu, overflowItems, pathname,
-    theme, toggleTheme, onSignOut, role, baseRole, availableRoles, switchRole,
+    showMoreMenu, setShowMoreMenu, overflowItems, pathname, onSignOut,
+    profile, role, baseRole, availableRoles, switchRole,
 }: MobileMoreMenuProps) {
+    const close = () => setShowMoreMenu(false);
+    const { panelRef, backdropProps } = useDialogBehavior(showMoreMenu, close);
     if (!showMoreMenu) return null;
 
-    const showRoleSwitcher = availableRoles.length > 1 && 
-        (baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER');
+    const fullName = profile ? `${profile.first_name} ${profile.last_name}`.trim() : '';
 
     return (
-        <div
-            className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowMoreMenu(false)}
-        >
+        <div className="animate-backdrop-in fixed inset-0 z-[70] flex items-end bg-black/50 backdrop-blur-[2px] min-[768px]:hidden" {...backdropProps}>
             <div
-                className="absolute shadow-2xl overflow-hidden"
-                style={{
-                    bottom: 'calc(80px + env(safe-area-inset-bottom))',
-                    right: '16px', width: '220px',
-                    background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-                    borderRadius: '16px', padding: '8px'
-                }}
-                onClick={e => e.stopPropagation()}
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="More"
+                tabIndex={-1}
+                className="animate-sheet-up flex max-h-[88dvh] w-full flex-col rounded-t-3xl border-t border-border bg-card text-card-foreground shadow-2xl outline-none"
             >
-                {/* The pages list only appears when there are overflow pages —
-                    roles whose pages all fit the bottom bar (e.g. subject
-                    teacher) still open this sheet for the actions below. */}
-                {overflowItems.length > 0 && (
-                    <>
-                        <div style={{
-                            padding: '12px 16px', borderBottom: '1px solid var(--color-border)',
-                            marginBottom: '8px', fontWeight: 600, color: 'var(--color-text)',
-                            fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px'
-                        }}>
-                            <BookOpen size={20} />
-                            All Pages
-                        </div>
+                <div className="flex justify-center pt-2.5 pb-1" aria-hidden><span className="h-1.5 w-10 rounded-full bg-muted-foreground/30" /></div>
 
-                        {overflowItems.map((item) => {
-                            const isActive = routeMatches(pathname, item.href);
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => setShowMoreMenu(false)}
-                                    style={{
-                                        display: 'flex', alignItems: 'center', gap: '12px',
-                                        padding: '12px 16px', borderRadius: '8px',
-                                        color: isActive ? 'var(--color-accent)' : 'var(--color-text)',
-                                        background: isActive ? 'var(--color-accent-transparent)' : 'transparent',
-                                        textDecoration: 'none', fontWeight: isActive ? 600 : 500, fontSize: '14px',
-                                    }}
-                                >
-                                    <div style={{ opacity: isActive ? 1 : 0.7, color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)' }}>
-                                        {item.icon}
-                                    </div>
-                                    {item.label}
-                                </Link>
-                            );
-                        })}
-                    </>
-                )}
-
-                {showRoleSwitcher && (
-                    <div style={{ padding: '8px 0' }}>
-                        <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0 8px 0' }} />
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0 16px', marginBottom: '8px' }}>
-                            Switch Role
-                        </div>
-                        {availableRoles.map(r => (
-                            <button
-                                key={r}
-                                onClick={async () => { await switchRole(r); setShowMoreMenu(false); }}
-                                style={{
-                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    width: '100%', padding: '10px 16px',
-                                    background: role === r ? 'var(--color-surface-hover)' : 'transparent',
-                                    border: 'none', color: role === r ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                                    fontSize: 14, fontWeight: role === r ? 600 : 400, cursor: 'pointer',
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: roleBadgeColors[r] }} />
-                                    {r.replace('_', ' ')}
-                                </div>
-                                {role === r && (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                )}
-                            </button>
-                        ))}
+                <div className="flex items-center gap-3 px-5 pt-1 pb-3">
+                    {profile && (
+                        <Avatar imageUrl={profile.imageUrl} firstName={profile.first_name} lastName={profile.last_name} size={44} fontSize={16} background={roleBadgeColors[profile.role]} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-semibold">{fullName || 'Menu'}</p>
+                        {role && (
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><RoleDot role={role} />{ROLE_LABELS[role]}</p>
+                        )}
                     </div>
-                )}
-
-                <div style={{ padding: '8px 0' }}>
-                    <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0 8px 0' }} />
-
-                    {/* Theme Toggle */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); toggleTheme(); setShowMoreMenu(false); }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '12px',
-                            padding: '12px 16px', width: '100%', borderRadius: '8px',
-                            color: 'var(--color-text)', background: 'transparent', border: 'none',
-                            textAlign: 'left', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
-                        }}
-                    >
-                        <span style={{ opacity: 0.7, fontSize: '18px' }}>
-                            {theme === 'dark' ? '☀️' : '🌙'}
-                        </span>
-                        {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                    <button type="button" onClick={close} aria-label="Close menu" className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <X className="size-5" aria-hidden />
                     </button>
+                </div>
 
-                    {/* Sign Out */}
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onSignOut(); }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '12px',
-                            padding: '12px 16px', width: '100%', borderRadius: '8px',
-                            color: '#EF4444', background: 'transparent', border: 'none',
-                            textAlign: 'left', fontSize: '14px', fontWeight: 500, cursor: 'pointer', marginTop: '4px'
-                        }}
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}>
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-                        </svg>
-                        Sign Out
-                    </button>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                    {overflowItems.length > 0 && (
+                        <nav aria-label="All pages" className="mb-4">
+                            <p className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Pages</p>
+                            <ul className="grid grid-cols-3 gap-2">
+                                {overflowItems.map(item => {
+                                    const active = routeMatches(pathname, item.href);
+                                    return (
+                                        <li key={item.href}>
+                                            <Link
+                                                href={item.href}
+                                                onClick={close}
+                                                aria-current={active ? 'page' : undefined}
+                                                className={cn(
+                                                    'flex h-full min-h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border px-1.5 py-3 text-center text-xs font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                                    active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border/70 bg-background text-foreground hover:border-primary/30',
+                                                )}
+                                            >
+                                                <span className={cn('flex size-9 items-center justify-center rounded-xl', active ? 'bg-primary/15' : 'bg-muted text-muted-foreground')}>{item.icon}</span>
+                                                <span className="line-clamp-2 leading-tight">{item.label}</span>
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </nav>
+                    )}
+
+                    {canSwitchRole(availableRoles, baseRole) && (
+                        <div className="mb-4 rounded-2xl border border-border/70 p-2">
+                            <RoleSwitcher role={role} availableRoles={availableRoles} switchRole={switchRole} onSwitched={close} />
+                        </div>
+                    )}
+
+                    <div className="mb-3">
+                        <p className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Appearance</p>
+                        <ThemeSwitch />
+                    </div>
+
+                    <SignOutButton onSignOut={onSignOut} className="h-11 justify-center rounded-xl border border-destructive/25" />
                 </div>
             </div>
         </div>
