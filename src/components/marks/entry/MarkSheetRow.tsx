@@ -5,6 +5,7 @@ import { Check, Pencil, Plus, Trash2, Undo2 } from 'lucide-react';
 import type { ExamSubjectComponent } from '@/types';
 import type { EntryValues, RowStatus } from '@/lib/mark-entry';
 import { cn } from '@/lib/utils';
+import { InitialsAvatar } from '@/components/ui/InitialsAvatar';
 
 export interface GradeOption {
     symbol: string;
@@ -129,11 +130,14 @@ export function MarkSheetRow({
 
             {/* Learner — on phones the status and actions ride along on this line */}
             <div role="cell" className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{learner.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                        {learner.admissionNumber || 'No adm. no.'}
-                        {learner.streamName && <> · {learner.streamName}</>}
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <InitialsAvatar name={learner.name} seed={learner.id} />
+                    <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">{learner.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                            {learner.admissionNumber || 'No adm. no.'}
+                            {learner.streamName && <> · {learner.streamName}</>}
+                        </div>
                     </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1 lg:hidden">

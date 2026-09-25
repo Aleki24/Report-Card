@@ -75,11 +75,13 @@ interface Props {
 
 const UNSAVED: ReadonlySet<RowStatus> = new Set<RowStatus>(['changed', 'new', 'removing']);
 
-const FILTERS: { id: Filter; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'todo', label: 'Not entered' },
-    { id: 'entered', label: 'Entered' },
-    { id: 'unsaved', label: 'Unsaved' },
+/* Each filter has its own hue, echoed by its count so the sheet's state
+   reads at a glance: amber still to do, emerald done, blue waiting to save. */
+const FILTERS: { id: Filter; label: string; active: string; count: string }[] = [
+    { id: 'all', label: 'All', active: 'bg-foreground text-background', count: 'bg-muted text-muted-foreground' },
+    { id: 'todo', label: 'Not entered', active: 'bg-amber-500 text-white', count: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
+    { id: 'entered', label: 'Entered', active: 'bg-emerald-500 text-white', count: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
+    { id: 'unsaved', label: 'Unsaved', active: 'bg-blue-500 text-white', count: 'bg-blue-500/15 text-blue-700 dark:text-blue-400' },
 ];
 
 function toSavedMark(m: ApiSavedMark): SavedMark {
@@ -587,7 +589,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     // card instead of being cut off by the page (which hides horizontal overflow).
     const columns: [string, number][] = [
         ['2rem', 2],
-        ['minmax(10rem, 1.6fr)', 10],
+        ['minmax(12rem, 1.6fr)', 12],
         ...(components.length > 0
             ? [...components.map((): [string, number] => ['5rem', 5]), ['4.5rem', 4.5] as [string, number]]
             : [['6rem', 6] as [string, number]]),
@@ -626,7 +628,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                         <h3 className="font-display text-lg font-bold tracking-tight">Mark sheet</h3>
                         <span className="text-sm text-muted-foreground">
-                            <strong className="text-foreground tabular-nums">{counts.entered}</strong> of <span className="tabular-nums">{counts.total}</span> entered
+                            <strong className={cn('tabular-nums', progress === 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground')}>{counts.entered}</strong> of <span className="tabular-nums">{counts.total}</span> entered
+                            {counts.total > 0 && <span className={cn('ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums', progress === 100 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400')}>{progress}%</span>}
                             {' · '}
                             {components.length > 0
                                 ? <>Papers {components.map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')}</>
@@ -634,7 +637,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                         </span>
                     </div>
                     <div className="mt-2.5 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Marks entered">
-                        <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${progress}%` }} />
+                        <div className={cn('h-full rounded-full bg-gradient-to-r transition-[width] duration-500', progress === 100 ? 'from-emerald-500 to-teal-400' : 'from-blue-500 to-violet-500')} style={{ width: `${progress}%` }} />
                     </div>
                 </div>
                 <div className="flex flex-col items-start gap-1 md:items-end">
@@ -719,11 +722,11 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                                 onClick={() => setFilter(f.id)}
                                 className={cn(
                                     'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
-                                    active ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                                    active ? f.active : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                                 )}
                             >
                                 {f.label}
-                                <span className={cn('rounded-full px-1.5 text-[10px] tabular-nums', active ? 'bg-background/20' : 'bg-muted', f.id === 'unsaved' && count > 0 && !active && 'bg-amber-500/20 text-amber-700 dark:text-amber-400')}>
+                                <span className={cn('rounded-full px-1.5 text-[10px] tabular-nums', active ? 'bg-white/25 text-inherit' : f.count)}>
                                     {count}
                                 </span>
                             </button>
