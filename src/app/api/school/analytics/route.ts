@@ -4,6 +4,7 @@ import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { auth } from '@clerk/nextjs/server';
 import type { GradeBand } from '@/types';
 import { getActiveUserProfile } from '@/lib/auth-server';
+import { fetchAllRows, MAX_PAGED_ROWS } from '@/lib/postgrest';
 
 /**
  * A subject as the dashboard needs to reason about it: which curriculum it
@@ -41,39 +42,6 @@ export interface AnalyticsScope {
     academic_year_name: string | null;
     mark_count: number;
     truncated: boolean;
-}
-
-/**
- * PostgREST answers with at most 1000 rows unless told otherwise, and it does
- * so without a word.
- *
- * This route had no range at all, so on a school with 1,819 marks it returned
- * 1,000 of them and the Analytics page computed every figure it displayed —
- * the overall average, the best and weakest subject, the merit list, the trend
- * — from an arbitrary 55% of the data. Worse, *which* 1,000 came back depended
- * on row order, so the numbers moved between page loads with nothing having
- * changed. The curriculum chips read "CBC 701" and "8-4-4 299"; 701 + 299 is
- * exactly 1000, which is how this was found.
- *
- * Paging until a short page arrives is what makes the result complete. The
- * hard ceiling is a backstop, not a limit we expect to reach, and reaching it
- * is reported rather than hidden.
- */
-const PAGE_SIZE = 1000;
-const MAX_ROWS = 50000;
-
-async function fetchAllRows<T>(
-    build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
-): Promise<{ rows: T[]; error: unknown; truncated: boolean }> {
-    const rows: T[] = [];
-    for (let from = 0; from < MAX_ROWS; from += PAGE_SIZE) {
-        const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
-        if (error) return { rows, error, truncated: false };
-        const page = data || [];
-        rows.push(...page);
-        if (page.length < PAGE_SIZE) return { rows, error: null, truncated: false };
-    }
-    return { rows, error: null, truncated: true };
 }
 
 export async function GET(request: NextRequest) {
@@ -246,7 +214,7 @@ export async function GET(request: NextRequest) {
     }
     if (truncated) {
       // Never silently. The caller is told so it can say so.
-      console.warn(`Analytics: hit the ${MAX_ROWS}-row ceiling for school ${schoolId}`);
+      console.warn(`Analytics: hit the ${MAX_PAGED_ROWS}-row ceiling for school ${schoolId}`);
     }
 
     // Supabase returns to-one relations as either an object or a single-element

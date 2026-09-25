@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { canManageStream, getCaller } from '@/lib/auth-server';
+import { normalizeGender } from '@/lib/gender';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
                 guardian_phone: guardian_phone?.trim() || null,
                 guardian_name: guardian_name?.trim() || null,
                 guardian_email: guardian_email?.trim() || null,
-                gender: gender || null,
+                gender: normalizeGender(gender),
                 date_of_birth: date_of_birth || null,
             });
 

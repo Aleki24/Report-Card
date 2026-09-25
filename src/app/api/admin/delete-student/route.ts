@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStudent, getCaller } from '@/lib/auth-server';
+import { internalError } from '@/lib/api-errors';
 
 export async function DELETE(request: NextRequest) {
     try {
@@ -45,23 +46,15 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'You can only delete students in your own class.' }, { status: 403 });
         }
 
-        // Cascade delete all related records before removing the student
-        // 1. Delete exam marks for this student
-        await supabaseAdmin.from('exam_marks').delete().eq('student_id', student_id);
-        // 2. Delete daily attendance records
-        await supabaseAdmin.from('daily_attendance').delete().eq('student_id', student_id);
-        // 3. Delete fee records
-        await supabaseAdmin.from('student_fees').delete().eq('student_id', student_id);
-        // 4. Delete active_users record if exists
-        await supabaseAdmin.from('active_users').delete().eq('user_id', student_id);
-        // 5. Delete from students table
-        await supabaseAdmin.from('students').delete().eq('id', student_id);
-        // 6. Finally delete the user record
-        await supabaseAdmin.from('users').delete().eq('id', student_id);
+        // Every student record (marks, attendance, fees, report cards,
+        // subjects…) cascades from the user row, so one delete removes it all
+        // or nothing. The old step-by-step deletes ignored their errors and
+        // reported success even when the student was still there.
+        const { error: deleteError } = await supabaseAdmin.from('users').delete().eq('id', student_id);
+        if (deleteError) return internalError('delete-student', deleteError);
 
         return NextResponse.json({ success: true, message: 'Student deleted successfully.' });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An unknown error occurred';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('delete-student', err);
     }
 }
