@@ -1,769 +1,377 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Search, Save, CheckCircle, X, Undo2, Download, MessageSquare } from 'lucide-react';
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
-import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import { Card, Input, Select, Button } from '@/components/ui';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  CalendarCheck, CheckCheck, ChevronLeft, ChevronRight, CircleDashed, Clock, Download, FileCheck2, MessageSquare,
+  RotateCcw, Save, Search, TrendingUp, UserCheck, UserX, X,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { ConfirmDialog, StatTile } from '@/components/ui';
+import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { RegisterRow } from '@/components/attendance/RegisterRow';
+import { STATUS_STYLES } from '@/components/attendance/statusStyles';
+import { useAttendanceRegister } from '@/hooks/useAttendanceRegister';
 import { downloadBlob } from '@/lib/download';
+import { addDays, formatIsoDate, localIsoDate } from '@/lib/dates';
+import { cn } from '@/lib/utils';
+import {
+  ATTENDANCE_LABELS, ATTENDANCE_STATUSES, attendanceRate, countAttendance, type AttendanceStatus,
+} from '@/lib/attendance';
 
-type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+type StatusFilter = 'all' | 'unmarked' | AttendanceStatus;
 
-interface StudentAttendance {
-  id: string;
-  name: string;
-  admission_number: string;
-  status: AttendanceStatus | null;
-  notes: string | null;
-}
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-interface GradeStreamOption {
-  id: string;
-  full_name: string;
-}
-
-const STATUS_ORDER: AttendanceStatus[] = ['present', 'absent', 'late', 'excused'];
-
-/* Status colors come from the CVD-validated --viz-* theme tokens (same
-   semantic mapping as the dashboard's attendance chart). */
-const STATUS_META: Record<AttendanceStatus, { label: string; color: string; bg: string }> = {
-  present: { label: 'P', color: 'var(--viz-good)', bg: 'color-mix(in srgb, var(--viz-good) 14%, transparent)' },
-  absent:  { label: 'A', color: 'var(--viz-bad)', bg: 'color-mix(in srgb, var(--viz-bad) 14%, transparent)' },
-  late:    { label: 'L', color: 'var(--viz-warn)', bg: 'color-mix(in srgb, var(--viz-warn) 14%, transparent)' },
-  excused: { label: 'E', color: 'var(--viz-info)', bg: 'color-mix(in srgb, var(--viz-info) 14%, transparent)' },
-};
-
-const PDF_STYLES = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica' },
-  title: { fontSize: 16, fontWeight: 'bold', marginBottom: 4, color: '#1E293B' },
-  subtitle: { fontSize: 10, color: '#64748B', marginBottom: 24 },
-  table: { width: '100%', borderCollapse: 'collapse' as const },
-  th: { borderBottom: '2 solid #E2E8F0', padding: '6 8', fontWeight: 'bold', fontSize: 9, color: '#94A3B8', textAlign: 'left' as const },
-  td: { borderBottom: '1 solid #F1F5F9', padding: '6 8', fontSize: 9, color: '#334155' },
-  statusPresent: { color: '#059669', fontWeight: 'bold' },
-  statusAbsent: { color: '#DC2626', fontWeight: 'bold' },
-  statusLate: { color: '#D97706', fontWeight: 'bold' },
-  statusExcused: { color: '#2563EB', fontWeight: 'bold' },
-  statusNull: { color: '#CBD5E1' },
-  summaryRow: { flexDirection: 'row', gap: 16, marginTop: 24, paddingTop: 16, borderTop: '1 solid #E2E8F0' },
-  summaryItem: { fontSize: 9, color: '#64748B' },
-  summaryValue: { fontSize: 11, fontWeight: 'bold', color: '#0F172A' },
-});
-
-function AttendancePdfDocument({
-  students, date, className, presentCount, absentCount, lateCount, excusedCount,
-}: {
-  students: StudentAttendance[];
-  date: string;
-  className: string;
-  presentCount: number;
-  absentCount: number;
-  lateCount: number;
-  excusedCount: number;
-}) {
-  const fmtDate = new Date(date).toLocaleDateString('en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-  const statusStyle = (status: AttendanceStatus | null) => {
-    switch (status) {
-      case 'present': return PDF_STYLES.statusPresent;
-      case 'absent': return PDF_STYLES.statusAbsent;
-      case 'late': return PDF_STYLES.statusLate;
-      case 'excused': return PDF_STYLES.statusExcused;
-      default: return PDF_STYLES.statusNull;
-    }
-  };
-
-  return (
-    <Document>
-      <Page size="A4" style={PDF_STYLES.page}>
-        <Text style={PDF_STYLES.title}>Attendance Sheet</Text>
-        <Text style={PDF_STYLES.subtitle}>{className} &mdash; {fmtDate}</Text>
-
-        <View style={{ flexDirection: 'row', borderBottom: '2 solid #E2E8F0', paddingBottom: 4, marginBottom: 4 }}>
-          <Text style={[PDF_STYLES.th, { width: '8%' }]}>#</Text>
-          <Text style={[PDF_STYLES.th, { width: '38%' }]}>Student</Text>
-          <Text style={[PDF_STYLES.th, { width: '26%' }]}>Adm No</Text>
-          <Text style={[PDF_STYLES.th, { width: '28%', textAlign: 'center' }]}>Status</Text>
-        </View>
-
-        {students.map((s, i) => (
-          <View key={s.id} style={{ flexDirection: 'row', paddingVertical: 3, borderBottom: '1 solid #F1F5F9' }}>
-            <Text style={[PDF_STYLES.td, { width: '8%' }]}>{i + 1}</Text>
-            <Text style={[PDF_STYLES.td, { width: '38%', fontWeight: 600 }]}>{s.name}</Text>
-            <Text style={[PDF_STYLES.td, { width: '26%' }]}>{s.admission_number}</Text>
-            <Text style={[PDF_STYLES.td, { width: '28%', textAlign: 'center', ...statusStyle(s.status) }]}>
-              {s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : '\u2014'}
-            </Text>
-          </View>
-        ))}
-
-        <View style={PDF_STYLES.summaryRow}>
-          <View><Text style={PDF_STYLES.summaryItem}>Present</Text><Text style={PDF_STYLES.summaryValue}>{presentCount}</Text></View>
-          <View><Text style={PDF_STYLES.summaryItem}>Absent</Text><Text style={PDF_STYLES.summaryValue}>{absentCount}</Text></View>
-          <View><Text style={PDF_STYLES.summaryItem}>Late</Text><Text style={PDF_STYLES.summaryValue}>{lateCount}</Text></View>
-          <View><Text style={PDF_STYLES.summaryItem}>Excused</Text><Text style={PDF_STYLES.summaryValue}>{excusedCount}</Text></View>
-          <View><Text style={PDF_STYLES.summaryItem}>Total</Text><Text style={PDF_STYLES.summaryValue}>{students.length}</Text></View>
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-function SegmentedControl({
-  value,
-  onChange,
-}: {
-  value: AttendanceStatus | null;
-  onChange: (v: AttendanceStatus) => void;
-}) {
-  return (
-    <div style={{
-      display: 'inline-flex',
-      borderRadius: 8,
-      overflow: 'hidden',
-      border: '1px solid var(--border)',
-      background: 'var(--background)',
-    }}>
-      {STATUS_ORDER.map((s) => {
-        const active = value === s;
-        const meta = STATUS_META[s];
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onChange(s)}
-            title={s.charAt(0).toUpperCase() + s.slice(1)}
-            style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 700,
-              border: 'none',
-              borderRight: s !== 'excused' ? '1px solid var(--border)' : 'none',
-              cursor: 'pointer',
-              background: active ? meta.bg : 'transparent',
-              color: active ? meta.color : 'var(--muted-foreground)',
-              transition: 'all 0.1s',
-              minWidth: 30,
-              textAlign: 'center',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {meta.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: AttendanceStatus | null }) {
-  if (!status) {
-    return (
-      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)' }}>
-        —
-      </span>
-    );
-  }
-  const meta = STATUS_META[status];
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 10px',
-      borderRadius: 6,
-      fontSize: 11,
-      fontWeight: 700,
-      background: meta.bg,
-      color: meta.color,
-    }}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
-}
-
-function SummaryChip({
-  label,
-  count,
-  color,
-  icon,
-}: {
-  label: string;
-  count: number;
-  color: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '5px 10px',
-      borderRadius: 8,
-      background: `color-mix(in srgb, ${color} 9%, transparent)`,
-      fontSize: 12,
-      fontWeight: 600,
-      color,
-      whiteSpace: 'nowrap',
-    }}>
-      {icon}
-      <span>{count}</span>
-      <span style={{ fontWeight: 500, opacity: 0.8 }}>{label}</span>
-    </div>
-  );
-}
+/** A change of class or day waiting on "discard unsaved marks?". */
+type PendingSwitch = { streamId: string; date: string } | null;
 
 export default function AttendancePage() {
-  const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
-  const [selectedStreamId, setSelectedStreamId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [students, setStudents] = useState<StudentAttendance[]>([]);
-  const [originalStudents, setOriginalStudents] = useState<StudentAttendance[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingStreams, setLoadingStreams] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const register = useAttendanceRegister();
+  const {
+    streamsState, streams, streamId, date, entries, loading, loadError, dirtyIds, isDirty, saving,
+  } = register;
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch>(null);
+  const [confirmNotify, setConfirmNotify] = useState(false);
   const [notifying, setNotifying] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const tableRef = useRef<HTMLDivElement>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  const today = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const today = localIsoDate();
+  const isToday = date === today;
+  const streamName = streams.find(s => s.id === streamId)?.full_name ?? '';
+  const dateLabel = formatIsoDate(date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const currentStreamName = gradeStreams.find(s => s.id === selectedStreamId)?.full_name || '';
+  const counts = useMemo(() => countAttendance(entries.map(e => e.status)), [entries]);
+  const rate = attendanceRate(counts);
 
-  useEffect(() => {
-    const fetchStreams = async () => {
-      try {
-        const res = await fetch('/api/school/data?type=grade_streams');
-        if (res.ok) {
-          const json = await res.json();
-          setGradeStreams(json.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch streams:', err);
-      } finally {
-        setLoadingStreams(false);
-      }
-    };
-    fetchStreams();
-  }, []);
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return entries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => {
+        if (statusFilter === 'unmarked' ? entry.status !== null : statusFilter !== 'all' && entry.status !== statusFilter) return false;
+        return !q || entry.name.toLowerCase().includes(q) || entry.admission_number.toLowerCase().includes(q);
+      });
+  }, [entries, search, statusFilter]);
 
-  const fetchAttendance = useCallback(async () => {
-    if (!selectedStreamId) { setStudents([]); setOriginalStudents([]); return; }
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ stream_id: selectedStreamId, date: selectedDate });
-      const res = await fetch(`/api/school/attendance?${params.toString()}`);
-      if (res.ok) {
-        const json = await res.json();
-        const data: StudentAttendance[] = json.data || [];
-        setStudents(data);
-        setOriginalStudents(data.map(s => ({ ...s })));
-      } else {
-        setStudents([]);
-        setOriginalStudents([]);
-      }
-    } catch (err) {
-      console.error('Failed to fetch attendance:', err);
-      setStudents([]);
-      setOriginalStudents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedStreamId, selectedDate]);
+  /** Switching class or day drops unsaved marks, so ask first when there are any. */
+  const requestSwitch = useCallback((next: { streamId?: string; date?: string }) => {
+    const target = { streamId: next.streamId ?? streamId, date: next.date ?? date };
+    if (target.streamId === streamId && target.date === date) return;
+    if (isDirty) { setPendingSwitch(target); return; }
+    register.setStreamId(target.streamId);
+    register.setDate(target.date);
+    setStatusFilter('all');
+  }, [streamId, date, isDirty, register]);
 
-  useEffect(() => { fetchAttendance(); }, [fetchAttendance]);
-
-  const updateStatus = (id: string, status: AttendanceStatus) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+  const confirmSwitch = () => {
+    if (!pendingSwitch) return;
+    register.revertAll();
+    register.setStreamId(pendingSwitch.streamId);
+    register.setDate(pendingSwitch.date);
+    setStatusFilter('all');
+    setPendingSwitch(null);
   };
-
-  const revertStudent = (id: string) => {
-    setStudents(prev => prev.map(s => {
-      const orig = originalStudents.find(o => o.id === s.id);
-      return s.id === id && orig ? { ...s, status: orig.status } : s;
-    }));
-  };
-
-  const revertAll = () => {
-    setStudents(prev => prev.map(s => {
-      const orig = originalStudents.find(o => o.id === s.id);
-      return orig ? { ...s, status: orig.status } : s;
-    }));
-    toast.success('All changes reverted');
-  };
-
-  const markAllPresent = () => {
-    setStudents(prev => prev.map(s => ({ ...s, status: 'present' as AttendanceStatus })));
-  };
-
-  const pendingChanges = useMemo(() => {
-    return students.filter(s => {
-      const orig = originalStudents.find(o => o.id === s.id);
-      return orig && orig.status !== s.status;
-    });
-  }, [students, originalStudents]);
-
-  const hasPendingChanges = pendingChanges.length > 0;
 
   const handleSave = async () => {
-    if (!selectedStreamId || students.length === 0) return;
-    setSaving(true);
     try {
-      const res = await fetch('/api/school/attendance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: selectedDate,
-          stream_id: selectedStreamId,
-          records: students.map(s => ({
-            student_id: s.id,
-            status: s.status || 'present',
-            notes: s.notes,
-          })),
-        }),
+      const count = await register.save();
+      if (count === 0) return;
+      const left = counts.unmarked;
+      toast.success(`Saved attendance for ${plural(count, 'student')}.`, {
+        description: left > 0 ? `${plural(left, 'student')} still unmarked.` : undefined,
       });
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        toast.error(`Failed: ${json.error || 'Unknown error'}`);
-      } else {
-        toast.success(`Attendance saved for ${json.count} students.`);
-        setOriginalStudents(students.map(s => ({ ...s })));
-      }
     } catch (err) {
-      toast.error(`Failed: ${err instanceof Error ? err.message : 'Network error'}`);
-    } finally {
-      setSaving(false);
+      toast.error(err instanceof Error ? err.message : 'Could not save attendance.');
     }
   };
 
-  const handleNotifyGuardians = async () => {
-    if (!selectedStreamId) return;
+  const handleNotify = async () => {
     setNotifying(true);
     try {
-      const res = await fetch('/api/school/attendance/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, stream_id: selectedStreamId }),
-      });
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        toast.error(`Failed: ${json.error || 'Unknown error'}`);
-        return;
-      }
-      const { sent = 0, failed = 0, skipped = 0, alreadyNotified = 0 } = json;
-      if (sent === 0 && failed === 0 && skipped === 0 && alreadyNotified === 0) {
-        toast('No absent students to notify for this date.');
-        return;
-      }
-      const parts: string[] = [];
-      if (sent > 0) parts.push(`${sent} sent`);
-      if (alreadyNotified > 0) parts.push(`${alreadyNotified} already notified`);
-      if (skipped > 0) parts.push(`${skipped} skipped (no phone)`);
-      if (failed > 0) parts.push(`${failed} failed`);
-      const summary = `Guardian SMS: ${parts.join(', ')}`;
-      if (failed > 0) toast.error(summary); else toast.success(summary);
+      const { sent, failed, skipped, alreadyNotified } = await register.notifyGuardians();
+      const parts = [
+        sent > 0 && `${sent} sent`,
+        alreadyNotified > 0 && `${alreadyNotified} already notified`,
+        skipped > 0 && `${skipped} without a guardian phone`,
+        failed > 0 && `${failed} failed`,
+      ].filter((p): p is string => !!p);
+      if (parts.length === 0) toast('No absent students to notify for this day.');
+      else if (failed > 0) toast.error(`Guardian SMS: ${parts.join(', ')}.`, { description: 'Check the numbers on the students’ profiles and try again.' });
+      else toast.success(`Guardian SMS: ${parts.join(', ')}.`);
+      setConfirmNotify(false);
     } catch (err) {
-      toast.error(`Failed: ${err instanceof Error ? err.message : 'Network error'}`);
+      toast.error(err instanceof Error ? err.message : 'Could not notify guardians.');
     } finally {
       setNotifying(false);
     }
   };
 
   const handleDownloadPdf = async () => {
-    if (students.length === 0) return;
     setGeneratingPdf(true);
     try {
-      const blob = await pdf(
-        <AttendancePdfDocument
-          students={students}
-          date={selectedDate}
-          className={currentStreamName}
-          presentCount={presentCount}
-          absentCount={absentCount}
-          lateCount={lateCount}
-          excusedCount={excusedCount}
-        />
-      ).toBlob();
-      downloadBlob(blob, `Attendance_${currentStreamName.replace(/\s+/g, '_')}_${selectedDate}.pdf`);
-      toast.success('PDF downloaded');
+      const { renderAttendancePdf } = await import('@/components/attendance/AttendancePdf');
+      const blob = await renderAttendancePdf({ students: entries, date, className: streamName });
+      downloadBlob(blob, `Attendance_${streamName.replace(/\s+/g, '_')}_${date}.pdf`);
     } catch (err) {
-      toast.error(`PDF failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Could not create the PDF: ${err instanceof Error ? err.message : 'unknown error'}`);
     } finally {
       setGeneratingPdf(false);
     }
   };
 
-  const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return students;
-    const q = searchQuery.toLowerCase();
-    return students.filter(
-      s => s.name.toLowerCase().includes(q) || s.admission_number.toLowerCase().includes(q)
-    );
-  }, [students, searchQuery]);
-
-  const markedStudents = students.filter(s => s.status);
-  const presentCount = students.filter(s => s.status === 'present').length;
-  const absentCount = students.filter(s => s.status === 'absent').length;
-  const lateCount = students.filter(s => s.status === 'late').length;
-  const excusedCount = students.filter(s => s.status === 'excused').length;
-  const unmarkedCount = students.filter(s => !s.status).length;
-  const attendanceRate = markedStudents.length > 0
-    ? Math.round((presentCount / markedStudents.length) * 100)
-    : 0;
+  const filterOptions: { value: StatusFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: counts.total },
+    { value: 'unmarked', label: 'Unmarked', count: counts.unmarked },
+    ...ATTENDANCE_STATUSES.map(s => ({ value: s, label: ATTENDANCE_LABELS[s], count: counts[s] })),
+  ];
 
   return (
-    <div className="pb-24 md:pb-20" style={{ maxWidth: 1120, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--foreground)', margin: '0 0 2px', letterSpacing: '-0.03em' }}>
-          Attendance
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: 0 }}>{today}</p>
-      </div>
+    <div className="mx-auto w-full max-w-5xl pb-36 min-[768px]:pb-4">
+      <header className="mb-5">
+        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Attendance</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">Take the daily register, add reasons for absence and let guardians know.</p>
+      </header>
 
-      {/* ── Toolbar ─────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
-        <div className="flex-1 min-w-0">
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Class / Stream
-          </label>
-          <Select
-            className="w-full text-sm"
-            style={{ height: 36, borderRadius: 8 }}
-            value={selectedStreamId}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedStreamId(e.target.value)}
-            disabled={loadingStreams}
-          >
-            <option value="">Select class</option>
-            {gradeStreams.map(s => (
-              <option key={s.id} value={s.id}>{s.full_name}</option>
-            ))}
-          </Select>
+      {/* ── Class and day ─────────────────────────────── */}
+      <section aria-label="Class and day" className="mb-4 grid gap-3 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <div className="min-w-0">
+          <label htmlFor="attendance-class" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Class</label>
+          {streamsState.state === 'error' ? (
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              <span className="min-w-0 truncate">{streamsState.message}</span>
+              <button type="button" onClick={() => void register.loadStreams()} className="btn-secondary h-8 shrink-0 px-3 text-xs">Retry</button>
+            </div>
+          ) : (
+            <select
+              id="attendance-class"
+              className="input-field w-full"
+              value={streamId}
+              disabled={streamsState.state === 'loading' || streams.length === 0}
+              onChange={e => requestSwitch({ streamId: e.target.value })}
+            >
+              <option value="">
+                {streamsState.state === 'loading' ? 'Loading classes…' : streams.length === 0 ? 'No classes assigned to you' : 'Select a class'}
+              </option>
+              {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          )}
         </div>
-        <div style={{ minWidth: 180 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Date
-          </label>
-          <Input
-            type="date"
-            className="w-full text-sm"
-            style={{ height: 36, borderRadius: 8 }}
-            value={selectedDate}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedDate(e.target.value)}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Search
-          </label>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)', pointerEvents: 'none' }} />
-            <Input
-              className="w-full text-sm"
-              style={{ height: 36, borderRadius: 8, paddingLeft: 30 }}
-              placeholder="Search student or adm no..."
-              value={searchQuery}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+
+        <div className="min-w-0">
+          <label htmlFor="attendance-date" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Day</label>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => requestSwitch({ date: addDays(date, -1) })} aria-label="Previous day" className="btn-secondary size-11 shrink-0 px-0">
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <input
+              id="attendance-date"
+              type="date"
+              className="input-field min-w-0 flex-1 md:w-44 md:flex-none"
+              value={date}
+              max={today}
+              onChange={e => { if (e.target.value) requestSwitch({ date: e.target.value > today ? today : e.target.value }); }}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)',
-                  padding: 2, display: 'flex',
-                }}
-              >
-                <X size={14} />
-              </button>
-            )}
+            <button type="button" onClick={() => requestSwitch({ date: addDays(date, 1) })} disabled={date >= today} aria-label="Next day" className="btn-secondary size-11 shrink-0 px-0 disabled:pointer-events-none disabled:opacity-40">
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={() => requestSwitch({ date: today })} disabled={isToday} className="btn-secondary h-11 shrink-0 px-3 disabled:pointer-events-none disabled:opacity-40">
+              Today
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={!selectedStreamId || students.length === 0}
-            onClick={markAllPresent}
-            style={{ height: 36, borderRadius: 8, whiteSpace: 'nowrap' }}
-          >
-            <CheckCircle size={14} />
-            Mark All Present
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!selectedStreamId || students.length === 0 || generatingPdf}
-            onClick={handleDownloadPdf}
-            style={{ height: 36, borderRadius: 8, whiteSpace: 'nowrap' }}
-          >
-            <Download size={14} />
-            PDF
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!selectedStreamId || absentCount === 0 || hasPendingChanges || notifying}
-            onClick={handleNotifyGuardians}
-            title={hasPendingChanges ? 'Save changes before notifying guardians' : 'Text guardians of absent students'}
-            style={{ height: 36, borderRadius: 8, whiteSpace: 'nowrap' }}
-          >
-            <MessageSquare size={14} />
-            {notifying ? 'Notifying...' : 'Notify Guardians'}
-          </Button>
-        </div>
-      </div>
+      </section>
 
-      {!selectedStreamId ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--muted-foreground)' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 16px', opacity: 0.3 }}>
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground)' }}>Select a class to begin</p>
-            <p style={{ fontSize: 13, margin: 0 }}>Choose a class and date to view and mark attendance.</p>
-          </div>
-        </Card>
+      {!streamId ? (
+        <EmptyState
+          icon={CalendarCheck}
+          title={streamsState.state === 'ready' && streams.length === 0 ? 'No class to take attendance for' : 'Select a class to begin'}
+          body={streamsState.state === 'ready' && streams.length === 0
+            ? 'Registers are kept by admins and by each class’s own class teacher. Ask an admin to make you class teacher of your class.'
+            : 'Choose a class and a day to view or take the register.'}
+        />
       ) : loading ? (
-        <Card><div style={{ padding: 20 }}><InlineLoadingSkeleton rows={6} /></div></Card>
-      ) : students.length === 0 ? (
-        <Card>
-          <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--muted-foreground)' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 16px', opacity: 0.3 }}>
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-            </svg>
-            <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 4px', color: 'var(--foreground)' }}>No students found</p>
-            <p style={{ fontSize: 13, margin: 0 }}>This class has no active students assigned.</p>
-          </div>
-        </Card>
+        <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm"><InlineLoadingSkeleton rows={6} /></div>
+      ) : loadError ? (
+        <EmptyState icon={X} title="Couldn’t load the register" body={loadError} action={<button type="button" onClick={register.reload} className="btn-primary"><RotateCcw className="size-4" aria-hidden="true" />Try again</button>} />
+      ) : entries.length === 0 ? (
+        <EmptyState icon={UserX} title="No students in this class" body="Only active students placed in this class appear on its register." />
       ) : (
         <>
-          {/* ── Summary Strip ─────────────────────────── */}
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            marginBottom: 16,
-            padding: '10px 16px',
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            borderRadius: 10,
-            alignItems: 'center',
-          }}>
-            <SummaryChip label="Present" count={presentCount} color="var(--viz-good)" icon={<CheckCircle size={13} />} />
-            <SummaryChip label="Absent" count={absentCount} color="var(--viz-bad)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>} />
-            <SummaryChip label="Late" count={lateCount} color="var(--viz-warn)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>} />
-            <SummaryChip label="Excused" count={excusedCount} color="var(--viz-info)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} />
-            <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
-            {unmarkedCount > 0 && (
-              <SummaryChip label="Unmarked" count={unmarkedCount} color="var(--muted-foreground)" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>} />
-            )}
-            <SummaryChip
-              label="Rate"
-              count={attendanceRate}
-              color={attendanceRate >= 80 ? 'var(--viz-good)' : attendanceRate >= 60 ? 'var(--viz-warn)' : 'var(--viz-bad)'}
-              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h2 className="text-base font-bold text-foreground">
+              {streamName} <span className="font-medium text-muted-foreground">· {dateLabel}</span>
+            </h2>
+            {!isToday && <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">Past day</span>}
+          </div>
+
+          {/* ── Summary ─────────────────────────────────── */}
+          <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatTile icon={UserCheck} label="Present" value={counts.present} />
+            <StatTile icon={UserX} label="Absent" value={counts.absent} tone={counts.absent > 0 ? 'bad' : 'default'} />
+            <StatTile icon={Clock} label="Late" value={counts.late} tone={counts.late > 0 ? 'warn' : 'default'} />
+            <StatTile icon={FileCheck2} label="Excused" value={counts.excused} />
+            <StatTile
+              icon={TrendingUp}
+              label="Attendance"
+              value={rate === null ? '—' : `${rate}%`}
+              tone={rate === null ? 'default' : rate >= 80 ? 'good' : rate >= 60 ? 'warn' : 'bad'}
+              hint={counts.unmarked > 0 ? `${counts.unmarked} unmarked` : 'Everyone marked'}
+              className="col-span-2 sm:col-span-1"
             />
-            <div style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted-foreground)' }}>
-              {students.length} student{students.length !== 1 ? 's' : ''}
-            </span>
-            {/* Stacked status bar — same pattern as the dashboard attendance chart;
-                order keeps green and red non-adjacent for CVD readability */}
-            {students.length > 0 && (
-              <div className="flex h-2 w-full gap-[2px] overflow-hidden rounded-full" style={{ flexBasis: '100%' }} role="img"
-                aria-label={`${presentCount} present, ${lateCount} late, ${excusedCount} excused, ${absentCount} absent, ${unmarkedCount} unmarked`}>
-                {presentCount > 0 && <div style={{ width: `${(presentCount / students.length) * 100}%`, background: 'var(--viz-good)' }} />}
-                {lateCount > 0 && <div style={{ width: `${(lateCount / students.length) * 100}%`, background: 'var(--viz-warn)' }} />}
-                {excusedCount > 0 && <div style={{ width: `${(excusedCount / students.length) * 100}%`, background: 'var(--viz-info)' }} />}
-                {absentCount > 0 && <div style={{ width: `${(absentCount / students.length) * 100}%`, background: 'var(--viz-bad)' }} />}
-                {unmarkedCount > 0 && <div style={{ width: `${(unmarkedCount / students.length) * 100}%`, background: 'var(--muted)' }} />}
-              </div>
+          </div>
+
+          {/* Present, late, excused, absent, unmarked: keeps green and red apart for CVD readability. */}
+          <div
+            className="mb-4 flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-muted"
+            role="img"
+            aria-label={`${counts.present} present, ${counts.late} late, ${counts.excused} excused, ${counts.absent} absent, ${counts.unmarked} unmarked`}
+          >
+            {(['present', 'late', 'excused', 'absent'] as const).map(s => counts[s] > 0 && (
+              <div key={s} className={STATUS_STYLES[s].bar} style={{ width: `${(counts[s] / counts.total) * 100}%` }} />
+            ))}
+          </div>
+
+          {/* ── Tools ───────────────────────────────────── */}
+          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or admission no."
+                aria-label="Search students"
+                className="input-field input-icon-left w-full"
+              />
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:flex-wrap">
+              <button type="button" onClick={register.markUnmarkedPresent} disabled={counts.unmarked === 0} className="btn-secondary col-span-2 disabled:pointer-events-none disabled:opacity-50 sm:col-span-1">
+                <CheckCheck className="size-4" aria-hidden="true" />
+                {counts.unmarked > 0 ? `Mark ${counts.unmarked} unmarked present` : 'All marked'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmNotify(true)}
+                disabled={counts.absent === 0 || isDirty}
+                title={isDirty ? 'Save your changes before notifying guardians' : counts.absent === 0 ? 'No one is marked absent' : 'Text the guardians of absent students'}
+                className="btn-secondary disabled:pointer-events-none disabled:opacity-50"
+              >
+                <MessageSquare className="size-4" aria-hidden="true" />Notify guardians
+              </button>
+              <button type="button" onClick={handleDownloadPdf} disabled={generatingPdf} className="btn-secondary disabled:pointer-events-none disabled:opacity-50">
+                <Download className="size-4" aria-hidden="true" />{generatingPdf ? 'Preparing…' : 'PDF'}
+              </button>
+            </div>
+          </div>
+
+          <div role="group" aria-label="Show students" className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            {filterOptions.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={statusFilter === opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+                className={cn(
+                  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  statusFilter === opt.value ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {opt.value === 'unmarked' && <CircleDashed className="size-3.5" aria-hidden="true" />}
+                {opt.label}
+                <span className="tabular-nums opacity-80">{opt.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Register ────────────────────────────────── */}
+          <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+            {visible.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                {search.trim() ? <>No students match &ldquo;{search.trim()}&rdquo;.</> : 'No students in this group.'}
+              </p>
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {visible.map(({ entry, index }) => (
+                  <RegisterRow
+                    key={entry.id}
+                    entry={entry}
+                    index={index}
+                    dirty={dirtyIds.has(entry.id)}
+                    onStatus={register.setStatus}
+                    onNote={register.setNote}
+                    onRevert={register.revert}
+                  />
+                ))}
+              </ul>
             )}
           </div>
 
-          {/* ── Table ─────────────────────────────────── */}
-          <div style={{
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            overflow: 'hidden',
-          }}>
-            <div ref={tableRef} style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
-              <div className="w-full overflow-x-auto">
-                <table className="sm:min-w-[600px]" style={{
-                  width: '100%',
-                  borderCollapse: 'collapse',
-                  fontSize: 13,
-                }}>
-                  <thead>
-                    <tr style={{
-                      position: 'sticky',
-                      top: 0,
-                      zIndex: 10,
-                      background: 'var(--card)',
-                      borderBottom: '2px solid var(--border)',
-                    }}>
-                      <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 40 }}>
-                        #
-                      </th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Student
-                      </th>
-                      <th className="hidden sm:table-cell" style={{ textAlign: 'left', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Adm No
-                      </th>
-                      <th className="hidden md:table-cell" style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', width: 100 }}>
-                        Status
-                      </th>
-                      <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', minWidth: 160 }}>
-                        Mark
-                      </th>
-                      <th style={{ width: 36, padding: '12px 4px' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStudents.map((s, idx) => {
-                      const isPending = pendingChanges.some(p => p.id === s.id);
-                      return (
-                        <tr
-                          key={s.id}
-                          style={{
-                            borderBottom: '1px solid var(--border)',
-                            background: isPending ? 'color-mix(in oklch, var(--color-warning) 4%, transparent)' : 'transparent',
-                            transition: 'background 0.15s',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isPending) e.currentTarget.style.background = 'color-mix(in oklch, var(--foreground) 2%, transparent)';
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isPending) e.currentTarget.style.background = 'transparent';
-                          }}
-                        >
-                          <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontSize: 12 }}>
-                            {idx + 1}
-                          </td>
-                          <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--foreground)' }}>
-                            <div>{s.name}</div>
-                            <div className="sm:hidden" style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: 'var(--muted-foreground)' }}>{s.admission_number}</div>
-                          </td>
-                          <td className="hidden sm:table-cell" style={{ padding: '10px 16px', color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: 12 }}>
-                            {s.admission_number}
-                          </td>
-                          <td className="hidden md:table-cell" style={{ textAlign: 'center', padding: '10px 16px' }}>
-                            <StatusBadge status={s.status} />
-                          </td>
-                          <td style={{ textAlign: 'center', padding: '10px 16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              <SegmentedControl
-                                value={s.status}
-                                onChange={(status) => updateStatus(s.id, status)}
-                              />
-                            </div>
-                          </td>
-                          <td style={{ padding: '10px 4px', textAlign: 'center' }}>
-                            {isPending && (
-                              <button
-                                type="button"
-                                onClick={() => revertStudent(s.id)}
-                                title="Revert"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: 'var(--color-warning)',
-                                  padding: 4,
-                                  display: 'flex',
-                                  borderRadius: 4,
-                                }}
-                              >
-                                <Undo2 size={14} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          {/* ── Save bar ────────────────────────────────── */}
+          {/* Phones: fixed above the bottom navigation (the page itself does not
+              scroll there). Desktop: sticks to the bottom of the scrolling main. */}
+          <div className="fixed inset-x-3 bottom-[calc(72px+env(safe-area-inset-bottom))] z-40 min-[768px]:sticky min-[768px]:inset-x-auto min-[768px]:bottom-3 min-[768px]:mt-4">
+            <div className={cn(
+              'flex items-center justify-between gap-3 rounded-2xl border bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur sm:px-4',
+              isDirty ? 'border-amber-500/40' : 'border-border/70',
+            )}>
+              <p className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm" aria-live="polite">
+                {isDirty
+                  ? (
+                    <span className="font-semibold text-amber-700 dark:text-amber-400">
+                      {dirtyIds.size} unsaved<span className="hidden sm:inline"> change{dirtyIds.size === 1 ? '' : 's'}</span>
+                    </span>
+                  )
+                  : counts.unmarked > 0 ? `${plural(counts.unmarked, 'student')} not marked yet` : 'All changes saved'}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                {isDirty && (
+                  <button type="button" onClick={register.revertAll} disabled={saving} className="btn-secondary h-9 px-3 text-xs sm:text-sm">
+                    <RotateCcw className="size-4" aria-hidden="true" /><span className="hidden xs:inline">Undo all</span>
+                  </button>
+                )}
+                <button type="button" onClick={handleSave} disabled={!isDirty || saving} className="btn-primary h-9 px-4 disabled:pointer-events-none disabled:opacity-50">
+                  <Save className="size-4" aria-hidden="true" />{saving ? 'Saving…' : isDirty ? 'Save' : 'Saved'}
+                </button>
               </div>
-              {filteredStudents.length === 0 && searchQuery && (
-                <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--muted-foreground)', fontSize: 13 }}>
-                  No students match &ldquo;{searchQuery}&rdquo;
-                </div>
-              )}
             </div>
           </div>
         </>
       )}
 
-      {/* ── Fixed Save Bar ─────────────────────────────
-          Sits above the mobile bottom nav (which is also fixed to the
-          viewport bottom) so the two don't stack on top of each other
-          and swallow the space needed to reach nav items below. */}
-      {selectedStreamId && students.length > 0 && (
-        <div
-          className="bottom-[calc(64px+env(safe-area-inset-bottom))] md:bottom-0"
-          style={{
-            position: 'fixed',
-            left: 0,
-            right: 0,
-            zIndex: 40,
-            background: 'var(--card)',
-            borderTop: '1px solid var(--border)',
-            padding: '10px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            boxShadow: hasPendingChanges ? '0 -4px 20px rgba(0,0,0,0.08)' : 'none',
-            transition: 'box-shadow 0.2s',
-          }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>
-              {students.length} student{students.length !== 1 ? 's' : ''}
-            </span>
-            {hasPendingChanges && (
-              <span style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: 'var(--color-warning)',
-                background: 'color-mix(in oklch, var(--color-warning) 10%, transparent)',
-                padding: '3px 10px',
-                borderRadius: 6,
-              }}>
-                {pendingChanges.length} unsaved change{pendingChanges.length !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {hasPendingChanges && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={revertAll}
-                style={{ height: 36, borderRadius: 8 }}
-              >
-                <Undo2 size={14} />
-                Revert All
-              </Button>
-            )}
-            <Button
-              variant={hasPendingChanges ? 'primary' : 'outline'}
-              size="sm"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ height: 36, borderRadius: 8, paddingLeft: 16, paddingRight: 16 }}
-            >
-              <Save size={14} />
-              {saving ? 'Saving...' : hasPendingChanges ? 'Save Changes' : 'Saved'}
-            </Button>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={pendingSwitch !== null}
+        onClose={() => setPendingSwitch(null)}
+        onConfirm={confirmSwitch}
+        title="Discard unsaved marks?"
+        message={`You have ${plural(dirtyIds.size, 'unsaved change')} on this register. Switching class or day will discard them.`}
+        confirmText="Discard changes"
+        cancelText="Keep editing"
+        variant="warning"
+      />
+
+      <ConfirmDialog
+        isOpen={confirmNotify}
+        onClose={() => { if (!notifying) setConfirmNotify(false); }}
+        onConfirm={handleNotify}
+        title="Text guardians?"
+        message={`Send an SMS to the guardians of ${plural(counts.absent, 'student')} marked absent in ${streamName} on ${dateLabel}. Guardians already texted for this day are not texted again.`}
+        confirmText="Send SMS"
+        loading={notifying}
+      />
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, title, body, action }: { icon: React.ComponentType<{ className?: string }>; title: string; body: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
+      <Icon className="mb-3 size-10 text-muted-foreground/40" />
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="mt-1 max-w-md text-sm text-muted-foreground">{body}</p>
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

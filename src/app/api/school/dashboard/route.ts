@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { PASS_MARK } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
+import { schoolToday } from '@/lib/dates';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -79,7 +80,9 @@ export async function GET(_request: NextRequest) {
       });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // The school's calendar day: UTC is still yesterday in Kenya until 3am, which
+    // showed an empty "today" register and missed fees that fell due overnight.
+    const today = schoolToday();
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, termsRes, schoolRes] = await Promise.all([
