@@ -15,7 +15,7 @@ import {
 import type { ExamMarkWithDetails } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
 import { generateMarkSheetPDF, type MarkSheetData, type SubjectStats } from '@/lib/marksheetPdfGenerator';
-import { selectExamRound } from '@/lib/reports/exam-round';
+import { selectExamRound, titleWithRound } from '@/lib/reports/exam-round';
 import { resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
     earliestExamCreatedAt,
@@ -258,6 +258,7 @@ export async function GET(
         const roundSelection = examType
             ? { round: examType, marks: fetchedMarks || [] }
             : selectExamRound(fetchedMarks || []);
+        termTitle = titleWithRound(termTitle, roundSelection.round, customTitle);
 
         // One mark per learner per subject, deterministically the most recent.
         const orderedMarks = [...roundSelection.marks].sort((a: any, b: any) =>

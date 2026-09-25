@@ -22,7 +22,7 @@ import { fetchPaperScores } from '@/lib/pdf/paperScores';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeGradePositions } from '@/lib/reports/grade-positions';
 import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
-import { selectExamRound } from '@/lib/reports/exam-round';
+import { selectExamRound, titleWithRound } from '@/lib/reports/exam-round';
 import { buildVerifyUrl, resolveOverallGradingSystem } from '@/lib/reports/grading-context';
 import {
     earliestExamCreatedAt,
@@ -289,25 +289,25 @@ export async function GET(
         // term), falling back to the next term's start — never this term's own
         // start_date, which is when the term began rather than when learners
         // come back. Mirrors resolveReopeningDate in the single-student route.
-        let openingDate: string | undefined;
-        {
+        // Resolved once the round is known (below): a default report on the
+        // Midterm needs the mid-term reopening date, which the requested
+        // examType alone (empty on the default) cannot tell.
+        const resolveOpeningDate = async (round: string | null): Promise<string | undefined> => {
             const t: any = termRes.data;
-            if (t) {
-                const isMidTerm = (examType || '').toUpperCase().includes('MID');
-                openingDate = (isMidTerm ? (t.midterm_reopening_date || t.reopening_date) : t.reopening_date) || undefined;
-                if (!openingDate && t.end_date && t.academic_year_id) {
-                    const { data: nextTerm } = await supabase
-                        .from('terms')
-                        .select('start_date')
-                        .eq('academic_year_id', t.academic_year_id)
-                        .gt('start_date', t.end_date)
-                        .order('start_date', { ascending: true })
-                        .limit(1)
-                        .maybeSingle();
-                    openingDate = nextTerm?.start_date || undefined;
-                }
-            }
-        }
+            if (!t) return undefined;
+            const isMidTerm = (round || '').toUpperCase().includes('MID');
+            const chosen = (isMidTerm ? (t.midterm_reopening_date || t.reopening_date) : t.reopening_date) || undefined;
+            if (chosen || !t.end_date || !t.academic_year_id) return chosen;
+            const { data: nextTerm } = await supabase
+                .from('terms')
+                .select('start_date')
+                .eq('academic_year_id', t.academic_year_id)
+                .gt('start_date', t.end_date)
+                .order('start_date', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            return nextTerm?.start_date || undefined;
+        };
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
@@ -355,6 +355,8 @@ export async function GET(
             ? { round: examType, marks: fetchedMarks || [] }
             : selectExamRound(fetchedMarks || []);
         const allMarks = roundSelection.marks;
+        const openingDate = await resolveOpeningDate(roundSelection.round);
+        termTitle = titleWithRound(termTitle, roundSelection.round, customTitle);
 
         if (marksErr) {
             console.error('Error fetching class marks:', marksErr);

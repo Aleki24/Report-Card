@@ -3,6 +3,8 @@ import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
+import { getExamType } from '@/lib/exam-types';
+import { selectExamRound } from '@/lib/reports/exam-round';
 import {
     getGradeFromScales,
     gradeSymbolFromScales,
@@ -18,6 +20,8 @@ interface SendSMSBody {
     termId: string;
     academicYearId: string;
     gradeStreamId: string;
+    /** The round the texts report (Midterm, End Term, …); most recent when omitted. */
+    examType?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -44,6 +48,7 @@ export async function POST(request: Request) {
 
         const body: SendSMSBody = await request.json();
         const { studentIds, termId, academicYearId, gradeStreamId } = body;
+        const requestedRound = typeof body.examType === 'string' && body.examType.trim() ? body.examType.trim() : null;
 
         if (!studentIds?.length || !termId || !academicYearId || !gradeStreamId) {
             return NextResponse.json(
@@ -143,31 +148,41 @@ export async function POST(request: Request) {
         const streamName = streamData?.full_name || '';
         const schoolName = schoolData?.name || 'School';
 
-        // 4. Fetch exam marks for these students in this term
-        const { data: marks } = await supabase
-            .from('exam_marks')
-            .select(`
-                student_id,
-                raw_score,
-                grade_symbol,
-                exams!inner(term_id, subjects (name))
-            `)
-            .in('student_id', scopedStudentIds)
-            .eq('exams.term_id', termId);
-
-        // 5. Fetch term reports for averages/ranks
-        const { data: termReports } = await supabase
-            .from('term_reports')
-            .select('student_id, average_score, overall_grade, rank')
-            .in('student_id', scopedStudentIds)
-            .eq('term_id', termId)
-            .eq('grade_stream_id', gradeStreamId);
-
-        // Count total students in class for rank context
-        const { count: totalInClass } = await supabase
+        // 4. The class's marks for ONE round of this term. This used to read
+        // every mark in the term, so a parent could get Midterm and End Term
+        // lines for the same subject side by side, with the average and rank
+        // taken from a different aggregate again. Everything below now comes
+        // from the same sitting as the report cards: the round chosen on the
+        // page, else the most recent one entered (same rule as the reports).
+        const { data: classStudents } = await supabase
             .from('students')
-            .select('id', { count: 'exact', head: true })
+            .select('id')
             .eq('current_grade_stream_id', gradeStreamId);
+        const classStudentIds = (classStudents ?? []).map(s => s.id as string);
+
+        let marksQuery = supabase
+            .from('exam_marks')
+            .select('student_id, percentage, grade_symbol, exams!inner(id, exam_type, exam_date, created_at, term_id, subjects (id, name))')
+            .in('student_id', classStudentIds.length > 0 ? classStudentIds : scopedStudentIds)
+            .eq('exams.term_id', termId);
+        if (requestedRound) marksQuery = marksQuery.eq('exams.exam_type', requestedRound);
+        const { data: termMarks } = await marksQuery;
+        const { round, marks } = requestedRound
+            ? { round: requestedRound, marks: termMarks ?? [] }
+            : selectExamRound(termMarks ?? []);
+        const roundLabel = round ? (getExamType(round)?.shortName ?? round) : '';
+
+        // Mean percentage per learner over the round's subjects, and the class
+        // position that mean gives (equal means share a position).
+        const pctsByStudent = new Map<string, number[]>();
+        for (const m of marks as { student_id: string; percentage: number | string | null }[]) {
+            if (m.percentage == null) continue;
+            pctsByStudent.set(m.student_id, [...(pctsByStudent.get(m.student_id) ?? []), Number(m.percentage)]);
+        }
+        const meanByStudent = new Map([...pctsByStudent].map(([id, p]) => [id, p.reduce((a, b) => a + b, 0) / p.length]));
+        const ordered = [...meanByStudent.values()].sort((a, b) => b - a);
+        const positionOf = (mean: number) => ordered.indexOf(mean) + 1;
+        const totalInClass = meanByStudent.size;
 
         // 6. Build SMS messages per student
         const recipients: { phone: string; message: string }[] = [];
@@ -182,35 +197,28 @@ export async function POST(request: Request) {
                 continue;
             }
 
-            // Get term report for this student
-            const report = termReports?.find((r: any) => r.student_id === student.id);
-
             // Get subject scores
             const studentMarks = (marks || []).filter((m: any) => m.student_id === student.id);
             const subjectLines = studentMarks
                 .map((m: any) => {
                     const subjectName = m.exams?.subjects?.name || '?';
-                    const score = m.raw_score != null ? m.raw_score : '-';
-                    const grade = m.grade_symbol || (m.raw_score != null && gradingScales.length > 0 ? getGradeFromScales(Number(m.raw_score), gradingScales) : '-');
-                    return `${subjectName}: ${score}% (${grade})`;
+                    // A percentage, not the raw score: "45%" for 45 out of 60 was wrong.
+                    const pct = m.percentage != null ? Math.round(Number(m.percentage)) : null;
+                    const grade = m.grade_symbol || (pct != null && gradingScales.length > 0 ? getGradeFromScales(pct, gradingScales) : '-');
+                    return `${subjectName}: ${pct ?? '-'}% (${grade})`;
                 })
                 .slice(0, 8); // Max 8 subjects to keep SMS short
 
-            const avg = report?.average_score ? Number(report.average_score).toFixed(1) : '-';
-            // No invented grade in a message to a parent: unlike the subject
-            // lines above, this had no `gradingScales.length` guard, so a school
-            // with no configured scale had a built-in A+/A/B/C/D/F ladder texted
-            // out as if it were its own.
-            const grade = report?.overall_grade
-                || (report?.average_score
-                    ? gradeSymbolFromScales(Number(report.average_score), gradingScales) ?? '-'
-                    : '-');
-            const rank = report?.rank || '-';
-            const rankStr = totalInClass ? `${rank}/${totalInClass}` : `${rank}`;
+            const mean = meanByStudent.get(student.id);
+            const avg = mean != null ? mean.toFixed(1) : '-';
+            // No invented grade in a message to a parent: without a configured
+            // scale the grade stays "-" rather than a built-in A–F ladder.
+            const grade = mean != null ? gradeSymbolFromScales(mean, gradingScales) ?? '-' : '-';
+            const rankStr = mean != null ? `${positionOf(mean)}/${totalInClass}` : '-';
 
             let message = `${schoolName} Student Results`;
             message += `\n${studentName} - ${streamName}`;
-            message += `\n${termName} ${yearName}`;
+            message += `\n${[termName, roundLabel, yearName].filter(Boolean).join(' ')}`;
             if (subjectLines.length > 0) {
                 message += `\n${subjectLines.join('\n')}`;
             }

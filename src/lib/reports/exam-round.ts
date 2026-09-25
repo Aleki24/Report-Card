@@ -20,6 +20,8 @@
  * while the Midterm with every subject sat behind it.
  */
 
+import { getExamType } from '@/lib/exam-types';
+
 /**
  * supabase-js types an embedded relation as an array in some selects and an
  * object in others, so the exam is read defensively rather than typed.
@@ -122,4 +124,36 @@ export function selectExamRound<T>(marks: T[]): ExamRoundSelection<T> {
 
     if (!round) return { round: null, marks };
     return { round, marks: marks.filter(m => examOf(m)?.exam_type === round) };
+}
+
+/**
+ * A report's title naming the sitting it shows — "Term 3 · Midterm" — so a
+ * card or mark sheet says which exam it is based on. The title used to be the
+ * term alone, and a report built on the default round gave no hint of which
+ * round had been picked. A custom title is left exactly as typed.
+ */
+export function titleWithRound(title: string, round: string | null, customTitle?: string | null): string {
+    if (customTitle || !round) return title;
+    const label = getExamType(round)?.shortName ?? round;
+    return `${title} · ${label}`;
+}
+
+/** One sitting a class can be reported on, as /api/reports/rounds lists it. */
+export interface ReportRound {
+    exam_type: string;
+    /** "Midterm", "Endterm", … */
+    label: string;
+    /** Subjects the class has an exam for in this round. */
+    subjects_total: number;
+    /** Of those, subjects with at least one mark entered. */
+    subjects_with_marks: number;
+    marks: number;
+    /** The round's sitting date (YYYY-MM-DD), when known. */
+    date: string | null;
+}
+
+export interface ReportRoundsResponse {
+    rounds: ReportRound[];
+    /** What "most recent" resolves to — the same rule the report routes apply. */
+    suggested: string | null;
 }

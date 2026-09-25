@@ -20,7 +20,7 @@ import type { GradingScale } from '@/types';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { computeGradePositions } from '@/lib/reports/grade-positions';
 import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
-import { selectExamRound } from '@/lib/reports/exam-round';
+import { selectExamRound, titleWithRound } from '@/lib/reports/exam-round';
 import {
     earliestExamCreatedAt,
     fetchPreviousRound,
@@ -337,13 +337,14 @@ export async function GET(
                 .select('start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date')
                 .eq('id', termId)
                 .maybeSingle();
-            openingDate = await resolveReopeningDate(supabase, termData, searchParams.get('examType'));
+            openingDate = await resolveReopeningDate(supabase, termData, roundSelection.round);
         }
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
             termTitle = customTitle;
         }
+        termTitle = titleWithRound(termTitle, roundSelection.round, customTitle);
 
         // 5. Map to analytics interface and calculate performance
         const subjectNamesMap: Record<string, string> = {};
