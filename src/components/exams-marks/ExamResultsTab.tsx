@@ -11,6 +11,10 @@ import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
 import { markEntryHref } from '@/lib/marking-progress';
+import { BarChart3, ClipboardList, Download, FileText, LayoutGrid, Package, PencilLine, Settings2, Trophy, type LucideIcon } from 'lucide-react';
+import { InitialsAvatar } from '@/components/ui/InitialsAvatar';
+import { cn } from '@/lib/utils';
+import { STEP_TONES } from './examTheme';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption {
@@ -374,13 +378,25 @@ export function ExamResultsTab() {
                 </div>
             </div>
 
+            {!selectedStreamId && (
+                <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
+                    <span className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-400" aria-hidden><Trophy className="size-6" /></span>
+                    <p className="text-sm font-semibold text-foreground">Choose a class to see its results</p>
+                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">Compare every subject, check one exam, see the analysis or download report cards.</p>
+                </div>
+            )}
+
             {/* Show content when stream is selected */}
             {selectedStreamId && (
                 <>
                     {/* Selected Exam Info (only if a specific exam is selected) */}
                     {selectedExamId && selectedExam && (
-                        <div className="mb-4 p-3 rounded-md text-sm bg-muted border border-border">
-                            <strong>Exam:</strong> {selectedExam.name} · <strong>Subject:</strong> {selectedExam.subject_name} · <strong>Max Score:</strong> {selectedExam.max_score}
+                        <div className="mb-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-3 sm:p-4">
+                            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><ClipboardList className="size-5" /></span>
+                            <div className="min-w-0 text-sm">
+                                <p className="truncate font-semibold text-foreground">{selectedExam.subject_name} · {selectedExam.name}</p>
+                                <p className="text-xs text-muted-foreground">Out of {selectedExam.max_score}</p>
+                            </div>
                         </div>
                     )}
 
@@ -393,34 +409,32 @@ export function ExamResultsTab() {
                     )}
 
                     {/* ── Tabs ── */}
-                    <div
-                        className="flex flex-wrap bg-card border border-border rounded-md overflow-hidden"
-                        style={{ marginBottom: 'var(--space-6)' }}
-                    >
-                        {([
-                            { key: 'allsubjects', label: '📊 All Subjects' },
-                            { key: 'results', label: '📋 Single Exam' },
-                            { key: 'analysis', label: '📈 Analysis' },
-                            { key: 'quickentry', label: '✏️ Quick Entry' },
-                            { key: 'reports', label: '📄 Reports' },
-                        ] as { key: Tab; label: string }[]).map(tab => (
-                            <button
-                                key={tab.key}
-                                onClick={() => setActiveTab(tab.key)}
-                                className={`flex-1 font-[family-name:var(--font-display)] font-semibold text-sm transition-all duration-150 ease-in-out ${activeTab === tab.key
-                                    ? 'bg-[var(--color-accent)] text-white'
-                                    : 'bg-transparent text-muted-foreground hover:bg-muted'
-                                    }`}
-                                style={{ padding: 'var(--space-3) var(--space-4)' }}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
+                    <div role="tablist" aria-label="Results views" className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/50 p-1 [scrollbar-width:none]">
+                        {RESULT_TABS.map((tab, i) => {
+                            const active = activeTab === tab.key;
+                            const Icon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={active}
+                                    onClick={() => setActiveTab(tab.key)}
+                                    className={cn(
+                                        'flex min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                        active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <span className={cn('flex size-7 items-center justify-center rounded-lg transition-colors', active && STEP_TONES[i % STEP_TONES.length].tile)} aria-hidden><Icon className="size-4" /></span>
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
                     {/* ── Tab Content ── */}
                     {loadingMarks ? (
-                        <div className="card">
+                        <div className="card p-5">
                             <InlineLoadingSkeleton rows={6} />
                         </div>
                     ) : (
@@ -464,7 +478,7 @@ export function ExamResultsTab() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                                     {/* Year/Term Filters */}
                                     <div className="card p-5">
-                                        <h3 className="text-sm font-semibold mb-4">Report Settings</h3>
+                                        <SectionTitle icon={Settings2} tone={0} title="Report settings" />
                                         <div className="flex flex-col md:flex-row" style={{ gap: 'var(--space-4)' }}>
                                             <div className="flex-1">
                                                 <label className="block text-xs text-muted-foreground mb-2">Academic Year</label>
@@ -506,7 +520,7 @@ export function ExamResultsTab() {
 
                                     {/* Individual Reports */}
                                     <div className="card p-5">
-                                        <h3 className="text-sm font-semibold mb-2">📥 Individual Student Reports (PDF)</h3>
+                                        <SectionTitle icon={Download} tone={1} title="Individual report cards (PDF)" />
                                         <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
                                             Click a student to download their PDF report card.
                                         </p>
@@ -517,16 +531,17 @@ export function ExamResultsTab() {
                                                 {classStudents.map(s => (
                                                     <button
                                                         key={s.id}
-                                                        className="btn-secondary text-left"
-                                                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-4)', fontSize: 13 }}
+                                                        type="button"
+                                                        className="group flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left text-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                                         onClick={() => handleDownloadReport(s.id)}
+                                                        aria-label={`Download ${s.name}'s report card`}
                                                     >
-                                                        <span style={{ fontSize: 18 }}>📄</span>
-                                                        <span>
-                                                            <strong>{s.name}</strong>
-                                                            <br />
-                                                            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{s.admission_number}</span>
+                                                        <InitialsAvatar name={s.name} seed={s.id} />
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate font-semibold">{s.name}</span>
+                                                            <span className="block truncate text-[11px] text-muted-foreground">{s.admission_number}</span>
                                                         </span>
+                                                        <FileText className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
                                                     </button>
                                                 ))}
                                             </div>
@@ -535,7 +550,7 @@ export function ExamResultsTab() {
 
                                     {/* Bulk Reports */}
                                     <div className="card p-5">
-                                        <h3 className="text-sm font-semibold mb-2">📦 Bulk Report Generation</h3>
+                                        <SectionTitle icon={Package} tone={2} title="Generate the whole class" />
                                         <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
                                             Generate report cards for all students in the selected class and term.
                                         </p>
@@ -549,8 +564,8 @@ export function ExamResultsTab() {
                                         {reportMsg && (
                                             <div
                                                 className={`mt-3 p-3 rounded-md text-sm ${reportMsg.type === 'success'
-                                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                                                    : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                                                    : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
                                                     }`}
                                             >
                                                 {reportMsg.text}
@@ -564,5 +579,22 @@ export function ExamResultsTab() {
                 </>
             )}
         </div>
+    );
+}
+
+const RESULT_TABS: readonly { key: Tab; label: string; icon: LucideIcon }[] = [
+    { key: 'allsubjects', label: 'All subjects', icon: LayoutGrid },
+    { key: 'results', label: 'Single exam', icon: ClipboardList },
+    { key: 'analysis', label: 'Analysis', icon: BarChart3 },
+    { key: 'quickentry', label: 'Quick entry', icon: PencilLine },
+    { key: 'reports', label: 'Reports', icon: FileText },
+];
+
+function SectionTitle({ icon: Icon, tone, title }: { icon: LucideIcon; tone: number; title: string }) {
+    return (
+        <h3 className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
+            <span className={cn('flex size-8 items-center justify-center rounded-lg', STEP_TONES[tone % STEP_TONES.length].tile)} aria-hidden><Icon className="size-4" /></span>
+            {title}
+        </h3>
     );
 }

@@ -8,6 +8,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { markEntryHref } from '@/lib/marking-progress';
 import { cn } from '@/lib/utils';
+import { SUBJECT_CATEGORY_THEME, subjectCategory } from './examTheme';
 
 type Embedded<T> = T | T[] | null | undefined;
 interface GradeStreamOption {
@@ -25,8 +26,8 @@ const isCbcStream = (stream?: GradeStreamOption): boolean =>
 
 interface TermOption { id: string; name: string; academic_year_id?: string; start_date?: string; end_date?: string; is_current?: boolean }
 type ExamStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
-interface ApiExam { id: string; name: string; exam_type: string; subject_id: string; subject_name?: string; status?: ExamStatus }
-interface ExamRow { id: string; name: string; exam_type: string; subject_id: string; subject_name: string; status: ExamStatus }
+interface ApiExam { id: string; name: string; exam_type: string; subject_id: string; subject_name?: string; subject_category?: string | null; status?: ExamStatus }
+interface ExamRow { id: string; name: string; exam_type: string; subject_id: string; subject_name: string; subject_category: string | null; status: ExamStatus }
 
 interface StreamMark {
     exam_id: string;
@@ -138,7 +139,7 @@ export function PublishResultsView() {
             const json = (await res.json()) as { data?: ApiExam[] };
             setTermExams((json.data ?? []).map(e => ({
                 id: e.id, name: e.name, exam_type: e.exam_type, subject_id: e.subject_id,
-                subject_name: e.subject_name || 'N/A', status: e.status ?? 'DRAFT',
+                subject_name: e.subject_name || 'N/A', subject_category: e.subject_category ?? null, status: e.status ?? 'DRAFT',
             })));
         } catch (err) {
             console.error('Failed to load exams', err);
@@ -351,12 +352,17 @@ export function PublishResultsView() {
                     {/* Subjects */}
                     <section className="rounded-2xl border border-border/70 bg-card shadow-sm">
                         <header className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                            <div>
+                            <div className="min-w-0 flex-1">
                                 <h3 className="font-display text-base font-bold">Subjects</h3>
                                 {exams.length > 0 && (
-                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                        {releasedCount} of {exams.length} released to learners
-                                    </p>
+                                    <>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                            <strong className={cn('tabular-nums', releasedCount === exams.length ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground')}>{releasedCount}</strong> of {exams.length} released to learners
+                                        </p>
+                                        <div className="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={exams.length} aria-valuenow={releasedCount} aria-label="Subjects released">
+                                            <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-[width] duration-500" style={{ width: `${(releasedCount / exams.length) * 100}%` }} />
+                                        </div>
+                                    </>
                                 )}
                             </div>
                             <button type="button" className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50" onClick={() => void releaseAll()} disabled={bulkBusy || notReleased.length === 0}>
@@ -377,12 +383,21 @@ export function PublishResultsView() {
                                     const marked = markedByExam.get(ex.id) ?? 0;
                                     return (
                                         <li key={ex.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+                                            {(() => {
+                                                const theme = SUBJECT_CATEGORY_THEME[subjectCategory(ex.subject_category)];
+                                                const Icon = theme.icon;
+                                                return (
+                                                    <span aria-hidden className={cn('hidden size-10 shrink-0 items-center justify-center rounded-xl sm:flex', theme.tone.tile)}>
+                                                        <Icon className="size-[18px]" />
+                                                    </span>
+                                                );
+                                            })()}
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="text-sm font-semibold text-foreground">{ex.subject_name}</span>
                                                     <span className={cn(
                                                         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                                                        released ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground',
+                                                        released ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
                                                     )}>
                                                         {released ? <Eye size={11} aria-hidden /> : <EyeOff size={11} aria-hidden />}
                                                         {released ? 'Learners can see' : 'Hidden from learners'}
@@ -459,7 +474,15 @@ export function PublishResultsView() {
                                     <tbody className="divide-y divide-border/60">
                                         {ranking.map(r => (
                                             <tr key={r.sid} className="transition-colors hover:bg-muted/40">
-                                                <td className="px-4 py-2.5 text-center font-bold text-primary tabular-nums">{r.rank}</td>
+                                                <td className="px-4 py-2.5 text-center">
+                                                    <span className={cn(
+                                                        'inline-flex size-7 items-center justify-center rounded-full text-xs font-bold tabular-nums',
+                                                        r.rank === 1 ? 'bg-gradient-to-br from-amber-400 to-yellow-300 text-amber-950 shadow-sm'
+                                                            : r.rank === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-200 text-slate-800 shadow-sm'
+                                                                : r.rank === 3 ? 'bg-gradient-to-br from-orange-400 to-amber-300 text-orange-950 shadow-sm'
+                                                                    : 'text-primary',
+                                                    )}>{r.rank}</span>
+                                                </td>
                                                 <td className="px-4 py-2.5">
                                                     <div className="text-sm font-medium">{r.name}</div>
                                                     <div className="text-[11px] text-muted-foreground">{r.adm}</div>
