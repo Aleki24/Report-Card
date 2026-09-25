@@ -1,12 +1,21 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignUp } from '@clerk/nextjs/legacy';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
+import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
+import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
+
+
+function errorMessage(err: unknown, fallback: string): string {
+    return err instanceof Error && err.message ? err.message : fallback;
+}
 
 export default function ActivatePage() {
     const router = useRouter();
-    const { isLoaded, signUp, setActive } = useSignUp();
+    const { isLoaded, signUp } = useSignUp();
+    const { signInWithTicket } = useSignInCodeVerification();
     const [code, setCode] = useState('');
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
@@ -28,9 +37,9 @@ export default function ActivatePage() {
     const [isReset, setIsReset] = useState(false);
 
     // Step 1: Verify the invite code
-    const handleVerifyCode = async () => {
+    const handleVerifyCode = async (value: string = code) => {
         setError(null);
-        if (!code.trim() || code.trim().length < 6) {
+        if (value.length < INVITE_CODE_LENGTH) {
             setError('Please enter a valid 6-character invite code.');
             return;
         }
@@ -40,7 +49,7 @@ export default function ActivatePage() {
             const res = await fetch('/api/auth/activate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code.trim(), verify_only: true }),
+                body: JSON.stringify({ code: value, verify_only: true }),
             });
             const data = await res.json();
 
@@ -56,12 +65,26 @@ export default function ActivatePage() {
             // Reset codes skip the method chooser — password is the only option
             if (data.reset) setShowPasswordForm(true);
             setVerified(true);
-        } catch (err: any) {
-            setError(err.message || 'Failed to verify code.');
+        } catch (err) {
+            setError(errorMessage(err, 'Failed to verify code.'));
         } finally {
             setVerifying(false);
         }
     };
+
+    // Activation links (/activate?code=A7X3K9) — sent by SMS/email or shared by
+    // the admin — fill the code in and check it, so the user never types it.
+    const linkChecked = useRef(false);
+    useEffect(() => {
+        if (linkChecked.current) return;
+        linkChecked.current = true;
+        const fromLink = extractInviteCode(new URLSearchParams(window.location.search).get('code') ?? '');
+        if (fromLink.length !== INVITE_CODE_LENGTH) return;
+        setCode(fromLink);
+        void handleVerifyCode(fromLink);
+        // Runs once on arrival; handleVerifyCode is recreated every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Activate with Google
     const handleGoogleActivation = async () => {
@@ -79,9 +102,9 @@ export default function ActivatePage() {
                 redirectUrl: '/activate/callback',
                 redirectUrlComplete: '/activate/callback',
             });
-        } catch (err: any) {
+        } catch (err) {
             console.error('Google activation error:', err);
-            setError(err?.errors?.[0]?.longMessage || 'Failed to start Google sign-in.');
+            setError((isClerkAPIResponseError(err) && err.errors[0]?.longMessage) || 'Failed to start Google sign-in.');
             setGoogleLoading(false);
         }
     };
@@ -136,16 +159,23 @@ export default function ActivatePage() {
                 throw new Error(data.error || 'Activation failed');
             }
 
+            // Sign straight in with the ticket the server issued — no second
+            // login, and no verification code sent to an inbox they may not have.
+            const signedIn = typeof data.ticket === 'string'
+                && await signInWithTicket(data.ticket).catch(() => false);
+
+            if (signedIn) {
+                setSuccess(isReset ? 'Password updated! Signing you in…' : 'Account activated! Signing you in…');
+                router.replace('/dashboard');
+                return;
+            }
+
             setSuccess(isReset
-                ? 'Password updated successfully! Redirecting to login...'
-                : 'Account activated successfully! Redirecting to login...');
-
-            setTimeout(() => {
-                router.push('/login');
-            }, 2000);
-
-        } catch (err: any) {
-            setError(err.message || 'An error occurred during activation.');
+                ? `Password updated! Sign in with your username ${username.trim()}.`
+                : `Account activated! Sign in with your username ${username.trim()}.`);
+            setTimeout(() => router.push('/login'), 2500);
+        } catch (err) {
+            setError(errorMessage(err, 'An error occurred during activation.'));
         } finally {
             setLoading(false);
         }
@@ -194,20 +224,19 @@ export default function ActivatePage() {
                             <input
                                 type="text"
                                 value={code}
-                                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                                onChange={(e) => setCode(extractInviteCode(e.target.value))}
                                 className="input-field input-field-mono w-full font-mono uppercase tracking-widest text-center text-lg"
                                 placeholder="A7X3K9"
-                                maxLength={6}
                                 required
                                 disabled={verifying}
                             />
-                            <p className="text-xs text-muted-foreground mt-1 text-center">The 6-character code given by your admin</p>
+                            <p className="text-xs text-muted-foreground mt-1 text-center">The 6-character code from your school, or paste the link you were sent</p>
                         </div>
 
                         <button
                             type="button"
-                            onClick={handleVerifyCode}
-                            disabled={verifying || code.trim().length < 6}
+                            onClick={() => handleVerifyCode()}
+                            disabled={verifying || code.length < INVITE_CODE_LENGTH}
                             className="btn-primary w-full py-3 text-sm font-semibold tracking-wide"
                         >
                             {verifying ? 'Verifying...' : 'Verify Code'}

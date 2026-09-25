@@ -8,7 +8,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from '@/components/ThemeProvider';
 import { Wordmark } from '@/components/Wordmark';
-import { Eye, EyeOff, Loader2, UserPlus } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, KeyRound, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
 import { VerificationCodeStep } from '@/components/auth/VerificationCodeStep';
@@ -163,6 +163,19 @@ export default function SignupPage() {
             />
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {/* Teachers and students already have an account waiting for them;
+                  signing up here would only lead to a second code at onboarding. */}
+              <Link
+                href="/activate"
+                className="flex items-center gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-sm no-underline transition-colors hover:bg-indigo-500/10 dark:border-indigo-400/20 dark:bg-indigo-400/10 dark:hover:bg-indigo-400/15"
+              >
+                <KeyRound className="size-5 shrink-0 text-indigo-500 dark:text-indigo-300" aria-hidden />
+                <span className="flex-1 leading-snug text-slate-600 dark:text-slate-300">
+                  <span className="block font-semibold text-slate-900 dark:text-slate-100">Teacher or student?</span>
+                  Got an invite code or link from your school? Activate your account instead.
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-indigo-500 dark:text-indigo-300" aria-hidden />
+              </Link>
               {/* Name row */}
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-2">
@@ -342,7 +355,7 @@ export default function SignupPage() {
         <div className="mt-6 text-center text-xs leading-relaxed"
           style={{ color: isDark ? '#475569' : '#94a3b8' }}>
           <span style={{ opacity: 0.8 }}>
-            Your role will be assigned by your school administrator
+            Setting up a new school? Create your account here, then register the school
           </span>
         </div>
       </div>

@@ -104,7 +104,7 @@ export default function LoginPage() {
         password,
       });
 
-      const outcome = await verification.continueSignIn(result);
+      const outcome = await verification.continueSignIn(result, { identifier: loginIdentifier, password });
       if (outcome === 'complete') {
         router.push(postLoginDestination());
       } else if (outcome === 'unsupported') {

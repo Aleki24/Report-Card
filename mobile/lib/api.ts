@@ -51,6 +51,11 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     return json as T;
 }
 
+/** POST to a public (signed-out) endpoint, e.g. during sign-in. Throws ApiError. */
+export function publicPost<T>(path: string, body: unknown): Promise<T> {
+    return request<T>(path, null, { method: 'POST', body: JSON.stringify(body) });
+}
+
 export interface Api {
     get: <T>(path: string) => Promise<T>;
     post: <T>(path: string, body?: unknown) => Promise<T>;

@@ -1,7 +1,10 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
+import { Check, Copy, MessageCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
+import { activationUrl } from '@/lib/activation-link';
 
 interface NotifyStatus { sms: boolean; email: boolean }
 
@@ -19,6 +22,49 @@ function NotifyBanner({ notified }: { notified?: NotifyStatus | null }) {
     <p className="text-xs text-amber-600 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
       Could not send the code automatically — please share it manually.
     </p>
+  );
+}
+
+/**
+ * Hands the code over as a link that fills itself in on /activate, so the
+ * person never has to type it — copy it anywhere, or send it on WhatsApp.
+ */
+function ShareActivation({ code, name }: { code: string; name?: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = activationUrl(code, typeof window === 'undefined' ? '' : window.location.origin);
+  const message = `${name ? `Hi ${name}, s` : 'S'}et up your Skulbase account here: ${link} (invite code ${code})`;
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success('Activation link copied');
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Could not copy — select the link and copy it manually.');
+    }
+  }
+
+  return (
+    <div className="mb-4 flex flex-col gap-2 text-left">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Activation link</span>
+      <p className="break-all rounded-md border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground select-all">{link}</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button type="button" onClick={copyLink} className="btn-secondary inline-flex items-center justify-center gap-2">
+          {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+        <a
+          href={`https://wa.me/?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary inline-flex items-center justify-center gap-2 no-underline"
+        >
+          <MessageCircle className="size-4" aria-hidden />
+          Send on WhatsApp
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -50,8 +96,9 @@ export function InviteResultModal({ invitedName, invitedUsername, invitedCode, n
           </div>
         </div>
         <NotifyBanner notified={notified} />
+        <ShareActivation code={invitedCode} name={invitedName} />
         <p className="text-xs text-muted-foreground mb-6">
-          The user must activate their account by going to <strong>/activate</strong> and setting their own password.
+          Opening the link fills the code in; they then choose a password and are signed in straight away.
         </p>
         <button className="btn-primary w-full" onClick={onClose}>Done</button>
       </div>
@@ -78,7 +125,8 @@ export function ResetPasswordResultModal({ inviteCode, notified, onClose }: Rese
           <code className="text-xl font-mono font-bold tracking-widest uppercase text-primary">{inviteCode}</code>
         </div>
         <NotifyBanner notified={notified} />
-        <p className="text-xs text-muted-foreground mb-4">Share this code with the user. They must go to <strong>/activate</strong> to set a new password.</p>
+        <ShareActivation code={inviteCode} />
+        <p className="text-xs text-muted-foreground mb-4">Share the link or code with the user. Opening it lets them set a new password and signs them in.</p>
         <button onClick={onClose} className="btn-primary w-full">Done</button>
       </div>
     </ModalOverlay>
