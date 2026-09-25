@@ -1,8 +1,10 @@
 "use client";
 
 import React from 'react';
-import { Card, CardContent, Button } from '@/components/ui';
-import { FileText, Layers, BarChart3, Table2, MessageSquare } from 'lucide-react';
+import { BarChart3, FileText, Layers, Loader2, MessageSquare, Table2, type LucideIcon } from 'lucide-react';
+import { StepHeading } from '@/components/ui/StepHeading';
+import { TONES, type Tone } from '@/components/ui/tones';
+import { cn } from '@/lib/utils';
 
 interface ReportActionCardsProps {
   isConfigured: boolean;
@@ -15,85 +17,71 @@ interface ReportActionCardsProps {
   onSMS: () => void;
 }
 
+interface Action {
+  key: string;
+  icon: LucideIcon;
+  tone: Tone;
+  title: string;
+  description: string;
+  cta: string;
+  busy?: boolean;
+  primary?: boolean;
+  /** Works without a class, year and term chosen. */
+  alwaysAvailable?: boolean;
+  onClick: () => void;
+}
+
+/** Step two: what can be made from the chosen scope, one colour per action. */
 export function ReportActionCards({
   isConfigured, generating, generatingMarkSheet,
   onSelectStudent, onBulkGenerate, onTermComparison, onMarkSheet, onSMS,
 }: ReportActionCardsProps) {
-  const disabled = !isConfigured;
-  const disabledTitle = disabled ? "Please configure the Report Settings above first" : "";
-
-  const actions = [
-    {
-      icon: Layers,
-      title: 'Bulk Class Reports',
-      description: 'Generate and download all reports at once.',
-      button: (
-        <Button variant="primary" size="sm" className="w-full" onClick={onBulkGenerate} disabled={disabled || generating} title={disabledTitle}>
-          {generating ? 'Processing...' : 'Generate & Download'}
-        </Button>
-      ),
-    },
-    {
-      icon: FileText,
-      title: 'Individual Report',
-      description: 'Generate a single student report card.',
-      button: (
-        <Button variant="secondary" size="sm" className="w-full" onClick={onSelectStudent} disabled={disabled} title={disabledTitle}>
-          Select Student
-        </Button>
-      ),
-    },
-    {
-      icon: Table2,
-      title: 'Class Mark Sheet',
-      description: 'Ranked mark sheet with subject scores for the entire class.',
-      button: (
-        <Button variant="secondary" size="sm" className="w-full" onClick={onMarkSheet} disabled={disabled || generatingMarkSheet} title={disabledTitle}>
-          {generatingMarkSheet ? 'Processing...' : 'Generate Mark Sheet'}
-        </Button>
-      ),
-    },
-    {
-      icon: MessageSquare,
-      title: 'SMS Results to Parents',
-      description: 'Send student results to parents/guardians via SMS.',
-      button: (
-        <Button variant="secondary" size="sm" className="w-full" onClick={onSMS} disabled={disabled} title={disabledTitle}>
-          Send SMS
-        </Button>
-      ),
-    },
-    {
-      icon: BarChart3,
-      title: 'Term Comparison',
-      description: 'Compare performance across multiple terms.',
-      button: (
-        <Button variant="secondary" size="sm" className="w-full" onClick={onTermComparison}>
-          Compare Terms
-        </Button>
-      ),
-    },
+  const actions: Action[] = [
+    { key: 'bulk', icon: Layers, tone: TONES.blue, title: 'Whole class', description: 'Every report card for the class in one download.', cta: generating ? 'Preparing…' : 'Generate & download', busy: generating, primary: true, onClick: onBulkGenerate },
+    { key: 'one', icon: FileText, tone: TONES.violet, title: 'One learner', description: 'A single learner’s report card.', cta: 'Choose learner', onClick: onSelectStudent },
+    { key: 'sheet', icon: Table2, tone: TONES.emerald, title: 'Mark sheet', description: 'Ranked subject scores for the whole class.', cta: generatingMarkSheet ? 'Preparing…' : 'Download mark sheet', busy: generatingMarkSheet, onClick: onMarkSheet },
+    { key: 'sms', icon: MessageSquare, tone: TONES.amber, title: 'SMS to parents', description: 'Text each guardian their child’s results.', cta: 'Send SMS', onClick: onSMS },
+    { key: 'compare', icon: BarChart3, tone: TONES.rose, title: 'Compare terms', description: 'How the class moved across terms.', cta: 'Compare', alwaysAvailable: true, onClick: onTermComparison },
   ];
 
   return (
-    <div className="mb-6">
-      <h3 className="mb-3 text-[15px] font-semibold font-display">② Generate &amp; Share</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {actions.map((action, i) => (
-          <Card key={i} className={`${disabled && action.button.props.disabled !== undefined ? 'opacity-50' : ''}`}>
-            <CardContent className="p-4 flex flex-col gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/12">
-                <action.icon className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold mb-0.5">{action.title}</h4>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">{action.description}</p>
-              </div>
-              {action.button}
-            </CardContent>
-          </Card>
-        ))}
+    <section className="mb-6" aria-labelledby="report-actions-heading">
+      <div id="report-actions-heading" className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <StepHeading step={2} title="Generate & share" />
+        {!isConfigured && <span className="text-xs text-muted-foreground">Choose year, term and class above to unlock these.</span>}
       </div>
-    </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {actions.map(({ key, icon: Icon, tone, title, description, cta, busy, primary, alwaysAvailable, onClick }) => {
+          const locked = !isConfigured && !alwaysAvailable;
+          return (
+            <div
+              key={key}
+              className={cn(
+                'flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-all',
+                locked ? 'opacity-55' : cn('hover:-translate-y-0.5 hover:shadow-md', tone.hover),
+              )}
+            >
+              <span className={cn('flex size-10 items-center justify-center rounded-xl', tone.tile)} aria-hidden>
+                <Icon className="size-5" />
+              </span>
+              <div className="flex-1">
+                <h4 className="mb-0.5 text-sm font-semibold">{title}</h4>
+                <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+              </div>
+              <button
+                type="button"
+                onClick={onClick}
+                disabled={locked || busy}
+                title={locked ? 'Choose year, term and class above first' : undefined}
+                className={cn(primary ? 'btn-primary' : 'btn-secondary', 'h-9 w-full text-sm disabled:pointer-events-none disabled:opacity-60')}
+              >
+                {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                {cta}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

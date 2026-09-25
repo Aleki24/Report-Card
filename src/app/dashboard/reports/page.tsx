@@ -14,11 +14,13 @@ import { useAuth } from '@/components/AuthProvider';
 import type { ReportCardData } from '@/lib/pdfGenerator';
 import { DEFAULT_TEMPLATE, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { MANAGED_STREAMS_URL, type ManagedStream } from '@/lib/managed-streams';
+import type { ReportRound, ReportRoundsResponse } from '@/lib/reports/exam-round';
+import { toast } from 'sonner';
 
 interface SMSStudent { id: string; admission_number: string; guardian_phone: string | null; guardian_name: string | null; users: { first_name: string; last_name: string } | null; selected: boolean; }
 interface StudentOption { id: string; admission_number: string; users: { first_name: string; last_name: string } | null; }
 interface StudentComment { student_id: string; admission_number: string; student_name: string; comments_class_teacher: string; comments_principal: string; }
-interface GradeStreamOption { id: string; full_name: string; grade_id?: string; }
 interface AcademicYearOption { id: string; name: string; }
 interface TermOption { id: string; name: string; academic_year_id?: string; }
 
@@ -29,13 +31,14 @@ export default function ReportsPage() {
   const [selectedAcademicYear, setSelectedAcademicYear] = useState('');
   const [selectedTerm, setSelectedTerm] = useState('');
   const [selectedExamType, setSelectedExamType] = useState('');
-  const [availableExamTypes, setAvailableExamTypes] = useState<string[]>([]);
+  const [rounds, setRounds] = useState<ReportRound[] | null>([]);
+  const [suggestedRound, setSuggestedRound] = useState<string | null>(null);
   const [customReportTitle, setCustomReportTitle] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
   const [generating, setGenerating] = useState(false);
   const [generatingMarkSheet, setGeneratingMarkSheet] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
-  const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
+  const [gradeStreams, setGradeStreams] = useState<ManagedStream[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
   const [terms, setTerms] = useState<TermOption[]>([]);
   const [showStudentPicker, setShowStudentPicker] = useState(false);
@@ -43,7 +46,6 @@ export default function ReportsPage() {
   const [studentSearch, setStudentSearch] = useState('');
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [showTermComparison, setShowTermComparison] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [studentComments, setStudentComments] = useState<StudentComment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [savingCommentId, setSavingCommentId] = useState<string | null>(null);
@@ -59,18 +61,23 @@ export default function ReportsPage() {
   const [splitByCombination, setSplitByCombination] = useState(false);
   const [groupThreshold, setGroupThreshold] = useState(15);
 
-  const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm;
-  const showToastMsg = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 5000); };
+  // The exam is part of the scope: every document states the round it shows.
+  const isConfigured = selectedGradeStream && selectedAcademicYear && selectedTerm && selectedExamType;
+  const showToastMsg = (msg: string, tone: 'success' | 'error' | 'warning' | 'info' = 'info') => { toast[tone](msg); };
 
   // ── Data fetching ──
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const [gsRes, ayRes, tRes] = await Promise.all([fetch('/api/school/data?type=grade_streams'), fetch('/api/school/data?type=academic_years'), fetch('/api/school/data?type=terms')]);
+        const [gsRes, ayRes, tRes] = await Promise.all([fetch(MANAGED_STREAMS_URL), fetch('/api/school/data?type=academic_years'), fetch('/api/school/data?type=terms')]);
         const [gsJson, ayJson, tJson] = await Promise.all([gsRes.json(), ayRes.json(), tRes.json()]);
         const termList: TermOption[] = tJson.data || [];
         const yearList: AcademicYearOption[] = ayJson.data || [];
-        setGradeStreams(gsJson.data || []); setAcademicYears(yearList); setTerms(termList);
+        // Only the classes this user runs: a teacher's list used to include
+        // classes they only teach a subject in, which every report refuses.
+        const streamList: ManagedStream[] = gsJson.data || [];
+        setGradeStreams(streamList); setAcademicYears(yearList); setTerms(termList);
+        if (streamList.length === 1) setSelectedGradeStream(streamList[0].id);
         // Pre-select the current term (Kenyan calendar) and its year — fewer clicks
         const activeId = findActiveTermId(termList);
         if (activeId) {
@@ -114,31 +121,33 @@ export default function ReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termsForYear]);
 
-  // Which rounds of exams (CAT, Midterm, End Term, Mock...) exist for this
-  // class + term — a term can hold several per subject, so let the admin
-  // pick which one the report card should be based on.
+  // Which rounds (Opener, Midterm, End Term, …) this class sat this term, how
+  // much of each is entered, and which is the most recent. That one is chosen
+  // for the user, and the choice is always sent: leaving it to the report
+  // routes hid which exam a document showed.
   useEffect(() => {
-    setSelectedExamType('');
-    if (!selectedGradeStream || !selectedTerm) { setAvailableExamTypes([]); return; }
-    const stream = gradeStreams.find(s => s.id === selectedGradeStream);
+    if (!selectedGradeStream || !selectedTerm) { setRounds([]); setSuggestedRound(null); setSelectedExamType(''); return; }
+    const controller = new AbortController();
+    setRounds(null);
     (async () => {
       try {
-        const paramsObj: Record<string, string> = { stream_id: selectedGradeStream, term_id: selectedTerm };
-        // Many exams are grade-wide (no specific stream assigned) — the API
-        // only matches those when grade_id is passed alongside stream_id.
-        if (stream?.grade_id) paramsObj.grade_id = stream.grade_id;
-        const params = new URLSearchParams(paramsObj);
-        const res = await fetch(`/api/school/exams?${params.toString()}`);
-        if (!res.ok) { setAvailableExamTypes([]); return; }
-        const json = await res.json();
-        const types = Array.from(new Set((json.data || []).map((e: any) => e.exam_type).filter(Boolean))) as string[];
-        setAvailableExamTypes(types);
+        const params = new URLSearchParams({ grade_stream_id: selectedGradeStream, term_id: selectedTerm });
+        const res = await fetch(`/api/reports/rounds?${params.toString()}`, { signal: controller.signal });
+        const json: unknown = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not load this class’s exams.'));
+        const data = json as ReportRoundsResponse;
+        setRounds(data.rounds);
+        setSuggestedRound(data.suggested);
+        // No marks anywhere yet: wait for a choice rather than pick an empty round.
+        setSelectedExamType(prev => (data.rounds.some(r => r.exam_type === prev) ? prev : data.suggested ?? ''));
       } catch (err) {
-        console.error('Failed to fetch exam types:', err);
-        setAvailableExamTypes([]);
+        if (controller.signal.aborted) return;
+        setRounds([]); setSuggestedRound(null); setSelectedExamType('');
+        toast.error(err instanceof Error ? err.message : 'Could not load this class’s exams.');
       }
     })();
-  }, [selectedGradeStream, selectedTerm, gradeStreams]);
+    return () => controller.abort();
+  }, [selectedGradeStream, selectedTerm]);
 
   const fetchStudents = async () => {
     setLoadingStudents(true);
@@ -169,7 +178,7 @@ export default function ReportsPage() {
 
   // ── Bulk generation ──
   const handleGenerateAndDownload = async () => {
-    if (!isConfigured) { showToastMsg('Please select Academic Year, Term, and Grade Stream.'); return; }
+    if (!isConfigured) { showToastMsg('Choose the academic year, term, class and exam first.', 'warning'); return; }
     setGenerating(true); setProgress({ current: 0, total: 0, message: 'Step 1 of 3: Aggregating database grades...' });
     try {
       // Aggregate through the server route, which checks the caller is the
@@ -226,7 +235,7 @@ export default function ReportsPage() {
       window.location.assign(`/api/reports/class/${selectedGradeStream}?${params.toString()}`);
       showToastMsg(wantsSplit
         ? 'Preparing your reports as a zip — the download will start shortly.'
-        : 'Preparing your reports — the download will start shortly.');
+        : 'Preparing your reports — the download will start shortly.', 'success');
 
       /*
         Hold the overlay after navigating.
@@ -240,12 +249,12 @@ export default function ReportsPage() {
         where the file went.
       */
       await new Promise(resolve => setTimeout(resolve, 8000));
-    } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
+    } catch (err: unknown) { showToastMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.', 'error'); }
     finally { setGenerating(false); setProgress({ current: 0, total: 0, message: '' }); }
   };
 
   const handleGenerateMarkSheet = async () => {
-    if (!isConfigured) { showToastMsg('Please select Academic Year, Term, and Grade Stream.'); return; }
+    if (!isConfigured) { showToastMsg('Choose the academic year, term, class and exam first.', 'warning'); return; }
     setGeneratingMarkSheet(true); setProgress({ current: 0, total: 0, message: 'Fetching mark sheet data...' });
     try {
       const params = new URLSearchParams(); params.append('yearId', selectedAcademicYear); params.append('termId', selectedTerm);
@@ -275,8 +284,8 @@ export default function ReportsPage() {
       setProgress({ current: 0, total: 0, message: 'Preparing download...' });
       params.set('format', 'pdf');
       window.location.assign(`/api/reports/marksheet/${selectedGradeStream}?${params.toString()}`);
-      showToastMsg('✅ Mark sheet ready — check your downloads.');
-    } catch (err: any) { showToastMsg(`Failed: ${err.message || 'Unknown error'}`); }
+      showToastMsg('Mark sheet ready — check your downloads.', 'success');
+    } catch (err: unknown) { showToastMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.', 'error'); }
     finally { setGeneratingMarkSheet(false); setProgress({ current: 0, total: 0, message: '' }); }
   };
 
@@ -300,8 +309,8 @@ export default function ReportsPage() {
       const res = await fetch('/api/reports/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: sc.student_id, term_id: selectedTerm, academic_year_id: selectedAcademicYear, grade_stream_id: selectedGradeStream, comments_class_teacher: sc.comments_class_teacher, comments_principal: sc.comments_principal }) });
       if (!res.ok) { const errJson = await res.json(); throw new Error(errJson.error || 'Save failed'); }
-      showToastMsg(`✅ Comments saved for ${sc.student_name}`);
-    } catch (err: any) { showToastMsg(`❌ ${err.message || 'Failed to save comment'}`); }
+      showToastMsg(`Comments saved for ${sc.student_name}.`, 'success');
+    } catch (err: unknown) { showToastMsg(err instanceof Error ? err.message : 'Failed to save comment', 'error'); }
     setSavingCommentId(null);
   };
 
@@ -317,7 +326,10 @@ export default function ReportsPage() {
       } catch { return false; }
     }));
     const successCount = results.filter(Boolean).length;
-    showToastMsg(`✅ Saved comments for ${successCount} of ${studentComments.length} students`);
+    const failed = studentComments.length - successCount;
+    // Say plainly when some did not save, rather than a tick over a partial result.
+    if (failed === 0) showToastMsg(`Saved comments for all ${successCount} students.`, 'success');
+    else showToastMsg(`Saved ${successCount} of ${studentComments.length}. ${failed} did not save — try Save all again.`, successCount === 0 ? 'error' : 'warning');
     setSavingCommentId(null);
   };
 
@@ -346,26 +358,26 @@ export default function ReportsPage() {
 
   const handleSendSMS = async () => {
     const selected = smsStudents.filter(s => s.selected && s.guardian_phone);
-    if (!selected.length) { showToastMsg('No students with valid phone numbers selected.'); return; }
+    if (!selected.length) { showToastMsg('No students with valid phone numbers selected.', 'warning'); return; }
     setSendingSMS(true); setSmsResult(null);
     try {
-      const res = await fetch('/api/sms/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentIds: selected.map(s => s.id), termId: selectedTerm, academicYearId: selectedAcademicYear, gradeStreamId: selectedGradeStream }) });
+      const res = await fetch('/api/sms/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentIds: selected.map(s => s.id), termId: selectedTerm, academicYearId: selectedAcademicYear, gradeStreamId: selectedGradeStream, examType: selectedExamType || null }) });
       const json = await res.json();
       if (!res.ok || json.error) throw new Error(json.error || 'Failed to send SMS');
       const failureReasons = [...new Set(((json.results || []) as { success: boolean; error?: string }[]).filter(r => !r.success && r.error).map(r => r.error as string))];
       setSmsResult({ sent: json.sent || 0, failed: json.failed || 0, skipped: json.skipped?.length || 0, failureReasons });
       if ((json.sent || 0) === 0) {
-        showToastMsg(`❌ SMS failed to send${failureReasons.length ? `: ${failureReasons[0]}` : ''}`);
+        showToastMsg(`SMS failed to send${failureReasons.length ? `: ${failureReasons[0]}` : ''}`, 'error');
       } else if ((json.failed || 0) > 0) {
-        showToastMsg(`⚠️ SMS sent: ${json.sent} delivered, ${json.failed} failed`);
+        showToastMsg(`SMS sent: ${json.sent} delivered, ${json.failed} failed`, 'warning');
       } else {
-        showToastMsg(`✅ SMS sent: ${json.sent} delivered`);
+        showToastMsg(`SMS sent: ${json.sent} delivered`, 'success');
       }
-    } catch (err: any) { showToastMsg(`❌ ${err.message || 'SMS send failed'}`); }
+    } catch (err: unknown) { showToastMsg(err instanceof Error ? err.message : 'SMS send failed', 'error'); }
     setSendingSMS(false);
   };
 
-  const smsMessagePreview = `${schoolName || 'Your School'} Student Results\n[Student Name] - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || 'Class'}\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''}\nMath: 85% (A) | Eng: 72% (B+) | Sci: 80% (A-) | ...\nAvg: 78.5% | Grade: B+ | Rank: 5/40`;
+  const smsMessagePreview = `${schoolName || 'Your School'} Student Results\n[Student Name] - ${gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || 'Class'}\n${terms.find(t => t.id === selectedTerm)?.name || 'Term'} ${rounds?.find(r => r.exam_type === selectedExamType)?.label ?? ''} ${academicYears.find(y => y.id === selectedAcademicYear)?.name || ''}\nMath: 85% (A) | Eng: 72% (B+) | Sci: 80% (A-) | ...\nAvg: 78.5% | Grade: B+ | Rank: 5/40`;
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6">
@@ -375,7 +387,7 @@ export default function ReportsPage() {
       />
 
       {/* Report Settings */}
-      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} selectedExamType={selectedExamType} setSelectedExamType={setSelectedExamType} availableExamTypes={availableExamTypes} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
+      <ReportSettings selectedAcademicYear={selectedAcademicYear} setSelectedAcademicYear={setSelectedAcademicYear} selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} selectedExamType={selectedExamType} setSelectedExamType={setSelectedExamType} rounds={rounds} suggestedRound={suggestedRound} academicYears={academicYears} terms={termsForYear} gradeStreams={gradeStreams} />
 
       {hasCombinations && (
         <div className="card p-4 flex flex-wrap items-center gap-4">
@@ -410,7 +422,6 @@ export default function ReportsPage() {
 
       {showSMSModal && <SMSModal onClose={() => { setShowSMSModal(false); setSmsSearch(''); }} streamLabel={gradeStreams.find(g => g.id === selectedGradeStream)?.full_name || ''} smsStudents={smsStudents} filteredSMSStudents={filteredSMSStudents} loadingSMSStudents={loadingSMSStudents} smsSearch={smsSearch} setSmsSearch={setSmsSearch} smsSelectedCount={smsSelectedCount} smsMissingPhoneCount={smsMissingPhoneCount} sendingSMS={sendingSMS} smsResult={smsResult} onToggle={id => setSmsStudents(prev => prev.map(s => s.id === id ? { ...s, selected: !s.selected } : s))} onSelectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: !!s.guardian_phone })))} onDeselectAll={() => setSmsStudents(prev => prev.map(s => ({ ...s, selected: false })))} onSend={handleSendSMS} messagePreview={smsMessagePreview} />}
 
-      {toast && <div className="fixed bottom-6 right-6 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg bg-muted border border-border text-foreground animate-in fade-in slide-in-from-bottom-5 duration-300">{toast}</div>}
 
       <TermComparisonModal isOpen={showTermComparison} onClose={() => setShowTermComparison(false)} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
     </div>

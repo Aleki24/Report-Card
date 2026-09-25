@@ -502,7 +502,7 @@ export function ExamResultsTab() {
                                                     onChange={e => setSelectedReportExamType(e.target.value)}
                                                     disabled={availableExamTypes.length === 0}
                                                 >
-                                                    <option value="">{availableExamTypes.length === 0 ? 'No exams for this term yet' : 'Most recent per subject'}</option>
+                                                    <option value="">{availableExamTypes.length === 0 ? 'No exams for this term yet' : 'Most recent exam'}</option>
                                                     {availableExamTypes.map(t => <option key={t} value={t}>{EXAM_TYPE_LABELS[t] || t}</option>)}
                                                 </select>
                                             </div>
