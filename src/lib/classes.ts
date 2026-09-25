@@ -71,3 +71,26 @@ export async function isSchoolClass(supabase: Db, schoolId: string, streamId: st
  * (transferred, graduated, deactivated) may be without a class.
  */
 export const CLASS_REQUIRED_MESSAGE = 'Choose a class for this learner — without one they get no mark sheets or report cards.';
+
+/**
+ * Why a class name can't be used, or null. Two classes a mark sheet can't
+ * tell apart are refused: the same name within a grade, or the same full
+ * name anywhere in the school. `excludeId` is the class being renamed.
+ */
+export async function classNameClash(
+    supabase: Db,
+    { schoolId, gradeId, name, fullName, excludeId }: { schoolId: string; gradeId: string; name: string; fullName: string; excludeId?: string },
+): Promise<string | null> {
+    const { data, error } = await supabase
+        .from('grade_streams')
+        .select('id, grade_id, name, full_name')
+        .eq('school_id', schoolId);
+    if (error) throw error;
+    const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    for (const c of data ?? []) {
+        if (c.id === excludeId) continue;
+        if (c.grade_id === gradeId && same(c.name as string, name)) return `This grade already has a class named "${name.trim()}".`;
+        if (same(c.full_name as string, fullName)) return `Another class is already called "${fullName.trim()}".`;
+    }
+    return null;
+}

@@ -66,8 +66,14 @@ export const gradeSchema = z.object({
 
 export const streamSchema = z.object({
     grade_id: z.string().uuid('Invalid grade ID'),
-    name: z.string().min(1, 'Name is required').max(50),
-    full_name: z.string().max(100).optional(),
+    name: z.string().trim().min(1, 'Name is required').max(50),
+    full_name: z.string().trim().max(100).optional(),
+});
+
+/** Renaming a class: the grade stays, so only the names. */
+export const streamUpdateSchema = z.object({
+    name: z.string().trim().min(1, 'Name is required').max(50),
+    full_name: z.string().trim().min(1, 'Full name is required').max(100),
 });
 
 export const subjectSchema = z.object({

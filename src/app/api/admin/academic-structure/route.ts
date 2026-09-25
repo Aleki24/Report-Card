@@ -10,6 +10,9 @@ import { subjectsBulkSchema } from '@/lib/schemas';
 import { createSchoolCombination, CombinationError } from '@/lib/pathway/combinations';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { isOfferedGrade } from '@/lib/classes-overview';
+import { classNameClash } from '@/lib/classes';
+import { classDeleteBlocker, classUsage } from '@/lib/class-usage';
 import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
 import { ZodError, ZodIssue } from 'zod';
 import {
@@ -18,6 +21,7 @@ import {
     academicLevelSchema,
     gradeSchema,
     streamSchema,
+    streamUpdateSchema,
     gradingSystemSchema,
     gradingScaleSchema,
     subjectSchema,
@@ -170,20 +174,7 @@ export async function GET(request: NextRequest) {
              subjectsData = [];
         }
 
-        // Filter out unwanted grades (as per user request: Form 1-2, Standard X)
-        // Keep CBC Grade 1-12, and 844 Form 3-4
-        const filteredGrades = (gradesRes.data || []).filter(g => {
-            const name = g.name_display || '';
-            
-            if (name.startsWith('Standard ')) return false;
-            
-            if (name.startsWith('Form ')) {
-                // Keep only exactly Form 3 and Form 4
-                return ['Form 3', 'Form 4'].includes(name.trim());
-            }
-            
-            return true;
-        });
+        const filteredGrades = (gradesRes.data || []).filter(g => isOfferedGrade(g.name_display));
 
         return NextResponse.json({
             academic_years: yearsData,
@@ -450,20 +441,12 @@ export async function POST(request: NextRequest) {
             stream: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = streamSchema.parse(payload);
-                // One class per name per grade: a second "East" makes two
-                // rooms nobody can tell apart on a mark sheet.
-                const { data: sameName } = await supabaseAdmin
-                    .from('grade_streams')
-                    .select('id')
-                    .eq('school_id', schoolId)
-                    .eq('grade_id', data.grade_id)
-                    .ilike('name', data.name.trim());
-                if (sameName && sameName.length > 0) {
-                    return NextResponse.json({ error: `This grade already has a class named "${data.name.trim()}".` }, { status: 409 });
-                }
+                const fullName = data.full_name || data.name;
+                const clash = await classNameClash(supabaseAdmin, { schoolId, gradeId: data.grade_id, name: data.name, fullName });
+                if (clash) return NextResponse.json({ error: clash }, { status: 409 });
                 const { data: result, error } = await supabaseAdmin
                     .from('grade_streams')
-                    .insert({ grade_id: data.grade_id, name: data.name, full_name: data.full_name || data.name, school_id: schoolId })
+                    .insert({ grade_id: data.grade_id, name: data.name, full_name: fullName, school_id: schoolId })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'stream');
                 return NextResponse.json({ success: true, data: result });
@@ -769,8 +752,12 @@ export async function PATCH(request: NextRequest) {
             if (payload.midterm_reopening_date !== undefined) updateData.midterm_reopening_date = payload.midterm_reopening_date || null;
             if (payload.reopening_date !== undefined) updateData.reopening_date = payload.reopening_date || null;
         } else if (type === 'stream') {
-            if (payload.name !== undefined) updateData.name = payload.name;
-            if (payload.full_name !== undefined) updateData.full_name = payload.full_name;
+            const data = streamUpdateSchema.parse(payload);
+            const { data: current } = await supabaseAdmin.from('grade_streams').select('grade_id').eq('id', id).single();
+            const clash = await classNameClash(supabaseAdmin, { schoolId, gradeId: current?.grade_id ?? '', name: data.name, fullName: data.full_name, excludeId: id });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
+            updateData.name = data.name;
+            updateData.full_name = data.full_name;
         } else if (type === 'grading_system') {
             if (payload.name !== undefined) updateData.name = payload.name;
             if (payload.description !== undefined) updateData.description = payload.description;
@@ -913,6 +900,14 @@ export async function DELETE(request: NextRequest) {
 
             if (!existing || existing.school_id !== schoolId) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            if (type === 'stream') {
+                // Exams cascade from the class, and marks from the exams: a
+                // delete here once took a class's whole exam history with it.
+                const usage = (await classUsage(supabaseAdmin, [id])).get(id)!;
+                const blocker = classDeleteBlocker(usage);
+                if (blocker) return NextResponse.json({ error: blocker, usage }, { status: 409 });
             }
 
             if (type === 'subject_combination') {
