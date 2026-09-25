@@ -393,7 +393,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
             onClick={onClose}
         >
             <div
-                className="card w-full max-w-md"
+                className="card w-full max-w-md p-5 sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
                 onClick={e => e.stopPropagation()}
             >
