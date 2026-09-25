@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Layers, Plus, Pencil, Trash2, RotateCcw, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
+import { Layers, Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
+import { CardHeading, ConfirmDialog, DataTable, type DataTableColumn } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import {
     PATHWAYS,
     PATHWAY_ORDER,
@@ -47,7 +50,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({ ...emptyForm });
     const [saving, setSaving] = useState(false);
-    const [msg, setMsg] = useState('');
+    const [deleting, setDeleting] = useState<{ combo: CombinationRow; studentCount: number | null } | null>(null);
 
     // Electives can come from any pathway (2+1 blends are legal), but a
     // combination is a Senior School construct, so only Senior School subjects
@@ -83,7 +86,6 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
     /** Create each chosen official combination; one failure doesn't stop the rest. */
     const addOfficial = async (templates: MinistryCombinationTemplate[]) => {
         setSaving(true);
-        setMsg('');
         const failed: string[] = [];
         for (const t of templates) {
             const subjectIds = t.subjectCodes.map(c => offeredIdByCode.get(c));
@@ -107,9 +109,8 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
             }
         }
         const added = templates.length - failed.length;
-        setMsg(failed.length === 0
-            ? `Added ${added} combination${added === 1 ? '' : 's'}.`
-            : `Failed: could not add ${failed.join(', ')}${added > 0 ? ` (${added} others were added)` : ''}.`);
+        if (failed.length === 0) toast.success(`Added ${added} combination${added === 1 ? '' : 's'}.`);
+        else toast.error(`Could not add ${failed.join(', ')}${added > 0 ? ` (${added} others were added)` : ''}.`);
         setSaving(false);
         await onChanged();
     };
@@ -125,12 +126,10 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
             subject_ids: [ids[0] || '', ids[1] || '', ids[2] || ''],
         });
         setShowForm(true);
-        setMsg('');
     };
 
     const save = async () => {
         setSaving(true);
-        setMsg('');
         try {
             const payload = {
                 code: form.code.trim().toUpperCase(),
@@ -148,12 +147,12 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
             });
             const data = await res.json();
             if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
-            setMsg(editingId ? 'Combination updated — assigned students were re-synced.' : 'Combination created.');
+            toast.success(editingId ? 'Combination updated; assigned students were re-synced.' : 'Combination created.');
             resetForm();
             setShowForm(false);
             await onChanged();
         } catch (err) {
-            setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            toast.error(err instanceof Error ? err.message : 'Something went wrong.');
         } finally {
             setSaving(false);
         }
@@ -161,74 +160,113 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
 
     const toggleActive = async (combo: CombinationRow) => {
         setSaving(true);
-        setMsg('');
         try {
             const res = await fetch('/api/admin/academic-structure', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type: 'subject_combination', id: combo.id, is_active: !combo.is_active }),
             });
-            if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
+            if (!res.ok) throw new Error(apiErrorMessage(await res.json().catch(() => null), 'Something went wrong.'));
             await onChanged();
         } catch (err) {
-            setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            toast.error(err instanceof Error ? err.message : 'Something went wrong.');
         } finally {
             setSaving(false);
         }
     };
 
-    const remove = async (combo: CombinationRow) => {
-        if (!confirm(`Delete combination ${combo.code}?`)) return;
+    /**
+     * Deleting asks first; when learners are assigned the server answers 409
+     * with how many, and the dialog asks again before detaching them.
+     */
+    const remove = async () => {
+        if (!deleting) return;
+        const { combo, studentCount } = deleting;
         setSaving(true);
-        setMsg('');
         try {
-            let res = await fetch(`/api/admin/academic-structure?type=subject_combination&id=${combo.id}`, { method: 'DELETE' });
+            const force = studentCount !== null ? '&force=true' : '';
+            const res = await fetch(`/api/admin/academic-structure?type=subject_combination&id=${encodeURIComponent(combo.id)}${force}`, { method: 'DELETE' });
+            const json: unknown = await res.json().catch(() => null);
             if (res.status === 409) {
-                const d = await res.json();
-                const detach = confirm(`${d.student_count} student(s) are assigned to ${combo.code}. Detach them (they keep their marks and become Unassigned) and delete anyway?`);
-                if (!detach) { setSaving(false); return; }
-                res = await fetch(`/api/admin/academic-structure?type=subject_combination&id=${combo.id}&force=true`, { method: 'DELETE' });
+                setDeleting({ combo, studentCount: Number((json as { student_count?: number } | null)?.student_count) || 0 });
+                return;
             }
-            if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed'); }
-            setMsg('Combination deleted.');
+            if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not delete the combination.'));
+            toast.success(`${combo.code} deleted`);
+            setDeleting(null);
             await onChanged();
         } catch (err) {
-            setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            toast.error(err instanceof Error ? err.message : 'Could not delete the combination.');
         } finally {
             setSaving(false);
         }
     };
+
+    const statusClass = (active: boolean) => cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold', active ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300' : 'bg-muted text-muted-foreground');
+
+    const columns: DataTableColumn<CombinationRow>[] = [
+        {
+            key: 'combo', header: 'Combination',
+            render: c => (
+                <div className="min-w-0">
+                    <div className="font-mono text-sm font-semibold">{c.code}</div>
+                    <div className="truncate text-xs text-muted-foreground">{c.name}</div>
+                </div>
+            ),
+        },
+        { key: 'pathway', header: 'Pathway / track', hideOnMobile: true, render: c => <span className="text-sm text-muted-foreground">{pathwayLabel(c.pathway)}{c.track ? ` — ${c.track}` : ''}</span> },
+        {
+            key: 'electives', header: 'Electives', hideOnMobile: true,
+            render: c => (
+                <div className="flex flex-wrap gap-1">
+                    {(c.subjects ?? []).map(sub => <span key={sub.id} className="rounded-full bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-300">{sub.name}</span>)}
+                </div>
+            ),
+        },
+        {
+            key: 'learners', header: 'Learners', numeric: true,
+            render: c => {
+                const count = c.student_count ?? 0;
+                const below = count > 0 && count < minGroupSize;
+                return (
+                    <span className={cn('inline-flex items-center gap-1 font-semibold', below && 'text-amber-600 dark:text-amber-400')} title={below ? `Below the ${minGroupSize}-learner minimum for its own class group` : undefined}>
+                        {below && <AlertTriangle className="size-3.5" aria-hidden />}{count}
+                    </span>
+                );
+            },
+        },
+        {
+            key: 'status', header: 'Status',
+            render: c => isAdmin ? (
+                <button type="button" className={cn(statusClass(c.is_active), 'hover:ring-1 hover:ring-current')} onClick={e => { e.stopPropagation(); void toggleActive(c); }} disabled={saving} title={c.is_active ? 'Mark inactive' : 'Mark active'}>
+                    {c.is_active ? 'Active' : 'Inactive'}
+                </button>
+            ) : <span className={statusClass(c.is_active)}>{c.is_active ? 'Active' : 'Inactive'}</span>,
+        },
+    ];
 
     const canSave = form.code.trim() && form.name.trim() && form.subject_ids.every(Boolean)
         && new Set(form.subject_ids).size === 3;
 
     return (
         <div>
-            {msg && (
-                <div className={`mb-4 p-3 rounded-md text-sm ${!msg.startsWith('Failed') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                    {msg}
-                </div>
-            )}
-
             {isAdmin && (
-                <div className="card p-5 mb-6">
-                    <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-bold text-sm flex items-center gap-2">
-                            <Layers size={16} className="text-primary" /> {editingId ? 'Edit Subject Combination' : 'Subject Combinations'}
-                        </h3>
-                        <div className="flex gap-2">
-                            {showForm && (
-                                <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => { resetForm(); setShowForm(false); }} title="Cancel">
-                                    <RotateCcw size={14} />
-                                </button>
-                            )}
-                            {!showForm && (
-                                <button className="btn-secondary text-sm h-9 px-4" onClick={() => { resetForm(); setShowForm(true); }}>
-                                    <Plus size={14} /> Custom combination
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                <div className="mb-6 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+                    <CardHeading
+                        icon={Layers}
+                        hue="violet"
+                        className="mb-2"
+                        title={editingId ? 'Edit combination' : 'Subject combinations'}
+                        action={showForm ? (
+                            <button type="button" className="btn-secondary h-9 whitespace-nowrap px-3" onClick={() => { resetForm(); setShowForm(false); }}>
+                                <X className="size-4" aria-hidden />Cancel
+                            </button>
+                        ) : (
+                            <button type="button" className="btn-secondary h-9 whitespace-nowrap px-3" onClick={() => { resetForm(); setShowForm(true); }}>
+                                <Plus className="size-4" aria-hidden />Custom
+                            </button>
+                        )}
+                    />
                     <p className="text-xs text-muted-foreground mb-4">
                         A combination is a Ministry code for a track plus exactly 3 electives (e.g. AS2009 = Biology + Geography + Sports &amp; Recreation).
                         Learners take these 3 electives alongside English, Kiswahili, Community Service Learning and Mathematics — Essential Mathematics
@@ -317,93 +355,31 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                 </div>
             )}
 
-            <div className="card overflow-hidden min-[769px]:p-0">
-                <div className="overflow-x-auto">
-                    {combinations.length === 0 ? (
-                        <div className="text-center py-16 text-muted-foreground">
-                            <Layers size={40} className="mx-auto mb-3 opacity-30" />
-                            <p className="text-sm">No subject combinations yet.</p>
-                            <p className="text-xs mt-1 opacity-60">Add the official combinations your school runs from the list above.</p>
-                        </div>
-                    ) : (
-                        <table className="data-table w-full text-left">
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>Name</th>
-                                    <th>Pathway / Track</th>
-                                    <th>Electives</th>
-                                    <th>Learners</th>
-                                    <th>Status</th>
-                                    {isAdmin && <th className="text-right">Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {combinations.map(c => {
-                                    const count = c.student_count ?? 0;
-                                    const belowMinimum = count > 0 && count < minGroupSize;
-                                    return (
-                                        <tr key={c.id} className="hover:bg-muted/50 transition-colors">
-                                            <td><span className="font-mono text-sm font-semibold">{c.code}</span></td>
-                                            <td className="text-sm">{c.name}</td>
-                                            <td className="text-sm text-muted-foreground">
-                                                {pathwayLabel(c.pathway)}{c.track ? ` — ${c.track}` : ''}
-                                            </td>
-                                            <td>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {(c.subjects ?? []).map(s => (
-                                                        <span key={s.id} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted text-muted-foreground">
-                                                            {s.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`text-sm font-semibold ${belowMinimum ? 'text-amber-400' : ''}`}>
-                                                    {count}
-                                                    {belowMinimum && (
-                                                        <span className="inline-flex items-center gap-1 ml-1.5 text-[11px] font-medium" title={`Below the ${minGroupSize}-learner minimum for a standalone class group`}>
-                                                            <AlertTriangle size={12} /> &lt;{minGroupSize}
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {isAdmin ? (
-                                                    <button
-                                                        className={`text-[11px] px-2 py-0.5 rounded-full font-semibold transition-colors ${c.is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}
-                                                        onClick={() => toggleActive(c)}
-                                                        disabled={saving}
-                                                        title="Toggle active"
-                                                    >
-                                                        {c.is_active ? 'Active' : 'Inactive'}
-                                                    </button>
-                                                ) : (
-                                                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${c.is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
-                                                        {c.is_active ? 'Active' : 'Inactive'}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            {isAdmin && (
-                                                <td className="text-right">
-                                                    <div className="flex justify-end gap-2 items-center">
-                                                        <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => startEdit(c)} disabled={saving} title="Edit">
-                                                            <Pencil size={14} />
-                                                        </button>
-                                                        <button className="btn-icon text-red-400 hover:text-red-300" onClick={() => remove(c)} disabled={saving} title="Delete">
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
+            <DataTable<CombinationRow>
+                columns={columns}
+                rows={combinations}
+                rowKey={c => c.id}
+                rowActions={isAdmin ? c => (
+                    <span className="inline-flex gap-1 whitespace-nowrap">
+                        <button type="button" className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => startEdit(c)} disabled={saving} aria-label={`Edit ${c.code}`} title="Edit"><Pencil className="size-4" /></button>
+                        <button type="button" className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => setDeleting({ combo: c, studentCount: null })} disabled={saving} aria-label={`Delete ${c.code}`} title="Delete"><Trash2 className="size-4" /></button>
+                    </span>
+                ) : undefined}
+                emptyState="No subject combinations yet. Add the official ones your school runs from the list above."
+            />
+
+            <ConfirmDialog
+                isOpen={deleting !== null}
+                onClose={() => { if (!saving) setDeleting(null); }}
+                onConfirm={() => void remove()}
+                loading={saving}
+                variant={deleting?.studentCount ? 'warning' : 'danger'}
+                title={`Delete ${deleting?.combo.code ?? 'combination'}?`}
+                message={deleting?.studentCount
+                    ? `${deleting.studentCount} learner${deleting.studentCount === 1 ? ' is' : 's are'} assigned to it. They keep their marks but become Unassigned, and their elective subjects are cleared.`
+                    : 'It is removed from your school’s list.'}
+                confirmText={deleting?.studentCount ? 'Detach and delete' : 'Delete'}
+            />
         </div>
     );
 }

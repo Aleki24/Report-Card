@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, ChevronDown, CircleAlert, CircleDashed, Layers, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
@@ -50,20 +50,25 @@ export default function PlacementManager(props: Props) {
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
 
+    // Only the latest request may land: switching classes quickly used to
+    // let a slower earlier answer replace the class just picked.
+    const latest = useRef(0);
+
     const load = async (id: string) => {
+        const request = ++latest.current;
         setData(null);
         setMsg('');
-        if (!id) return;
+        if (!id) { setLoading(false); return; }
         setLoading(true);
         try {
-            const res = await fetch(`/api/admin/placement?grade_stream_id=${id}`, { cache: 'no-store' });
-            const json = await res.json();
+            const res = await fetch(`/api/admin/placement?grade_stream_id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+            const json: unknown = await res.json().catch(() => null);
             if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not load the class'));
-            setData(json as PlacementResponse);
+            if (request === latest.current) setData(json as PlacementResponse);
         } catch (err) {
-            setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            if (request === latest.current) setMsg(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
-            setLoading(false);
+            if (request === latest.current) setLoading(false);
         }
     };
 
@@ -82,7 +87,7 @@ export default function PlacementManager(props: Props) {
 
     return (
         <section className="flex flex-col gap-5" aria-labelledby="placement-heading">
-            <div className="card p-5">
+            <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
                 <h3 id="placement-heading" className="flex items-center gap-2 text-sm font-bold">
                     <Sparkles size={16} className="text-primary" aria-hidden /> Place learners from their marks
                 </h3>
