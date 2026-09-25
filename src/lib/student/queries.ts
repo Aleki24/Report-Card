@@ -297,7 +297,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
                 subject_id,
                 school_id,
                 subjects ( id, name, category ),
-                terms ( id, name ),
+                terms ( id, name, start_date ),
                 academic_years ( id, name )
             )
         `)
@@ -314,6 +314,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
         yearName: string;
         termId: string;
         yearId: string;
+        startDate: string | null;
         subjects: Record<string, { name: string; category?: string; totalPct: number; count: number }>;
     }> = {};
 
@@ -334,6 +335,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
                 yearName,
                 termId: ex.term_id,
                 yearId: ex.academic_year_id,
+                startDate: ex.terms?.start_date ?? null,
                 subjects: {},
             };
         }
@@ -350,7 +352,12 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
     // the student took that term (so per-subject trend views still show all
     // of a student's own history), while `overallAverage` reflects only the
     // KCSE-selected 7 subjects, matching the report card / marksheet.
-    const trends = Object.values(termMap).map(term => {
+    // Oldest term first, so charts read left to right and the last two
+    // entries are "last term" and "this term". Grouping preserved whatever
+    // order the marks arrived in, which is not chronological.
+    const orderedTerms = Object.values(termMap).sort((a, b) =>
+        (a.startDate ?? '').localeCompare(b.startDate ?? '') || a.yearName.localeCompare(b.yearName) || a.termName.localeCompare(b.termName));
+    const trends = orderedTerms.map(term => {
         const subjectEntries = Object.entries(term.subjects).map(([subjId, s]) => {
             const avgPct = s.totalPct / s.count;
             return {
@@ -382,6 +389,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
             yearName: term.yearName,
             termId: term.termId,
             yearId: term.yearId,
+            startDate: term.startDate,
             subjects,
             overallAverage,
         };
@@ -564,9 +572,13 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
             attendanceRate,
             hasReportCard: !!latestReport,
             examsTaken: results.length,
+            // How many attendance days are on record: 0 means the school does
+            // not take registers, so a 0% rate is not information.
+            attendanceRecords: attendance.length,
         },
         latestResults,
         latestReport,
+        trends,
         upcomingExams: (upcomingExams ?? []).map((e: any) => ({
             id: e.id,
             name: e.name,

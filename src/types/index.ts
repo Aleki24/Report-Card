@@ -387,6 +387,16 @@ export interface StudentAttendanceRecord {
     notes?: string;
 }
 
+export interface StudentTermTrend {
+    termId: string;
+    termName: string;
+    yearId: string;
+    yearName: string;
+    startDate: string | null;
+    overallAverage: number;
+    subjects: { name: string; average: number }[];
+}
+
 export interface StudentDashboardSummary {
     profile: StudentProfileData;
     stats: {
@@ -395,9 +405,13 @@ export interface StudentDashboardSummary {
         attendanceRate: number;
         hasReportCard: boolean;
         examsTaken: number;
+        /** Attendance days on record; 0 when the school does not take registers. */
+        attendanceRecords: number;
     };
     latestResults: StudentResultItem[];
     latestReport: StudentReportCardData | null;
+    /** Released results averaged per term, oldest first. */
+    trends: StudentTermTrend[];
     upcomingExams: {
         id: string;
         name: string;
