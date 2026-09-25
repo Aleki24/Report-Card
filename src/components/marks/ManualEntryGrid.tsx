@@ -582,14 +582,23 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     }, []);
 
     /* ── Layout ── */
-    const sheetCols = [
-        '2rem',
-        'minmax(11rem, 1.6fr)',
-        ...(components.length > 0 ? [...components.map(() => '5.25rem'), '5rem'] : ['6.5rem']),
-        '8rem',
-        'minmax(8rem, 1fr)',
-        '11rem',
-    ].join(' ');
+    // [track, narrowest width in rem]. The narrowest widths add up to the
+    // sheet's minimum width: below it the sheet scrolls sideways inside its
+    // card instead of being cut off by the page (which hides horizontal overflow).
+    const columns: [string, number][] = [
+        ['2rem', 2],
+        ['minmax(10rem, 1.6fr)', 10],
+        ...(components.length > 0
+            ? [...components.map((): [string, number] => ['5rem', 5]), ['4.5rem', 4.5] as [string, number]]
+            : [['6rem', 6] as [string, number]]),
+        ['7rem', 7],
+        ['minmax(7rem, 1fr)', 7],
+        ['9.5rem', 9.5],
+    ];
+    const sheetCols = columns.map(([track]) => track).join(' ');
+    const COLUMN_GAP_REM = 0.75;
+    const ROW_PADDING_REM = 2.5;
+    const sheetMinWidth = `${columns.reduce((sum, [, min]) => sum + min, 0) + COLUMN_GAP_REM * (columns.length - 1) + ROW_PADDING_REM}rem`;
     const progress = counts.total > 0 ? Math.round((counts.entered / counts.total) * 100) : 0;
 
     if (loading) {
@@ -772,8 +781,9 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     )}
                 </div>
             ) : (
-                <div role="table" aria-label="Marks" style={{ '--sheet-cols': sheetCols } as React.CSSProperties}>
-                    <div role="row" className="hidden gap-3 border-b border-border/60 bg-muted/40 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid md:[grid-template-columns:var(--sheet-cols)]">
+                <div className="overflow-x-auto">
+                <div role="table" aria-label="Marks" className="lg:min-w-[var(--sheet-min)]" style={{ '--sheet-cols': sheetCols, '--sheet-min': sheetMinWidth } as React.CSSProperties}>
+                    <div role="row" className="hidden gap-3 border-b border-border/60 bg-muted/40 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid lg:[grid-template-columns:var(--sheet-cols)]">
                         <span role="columnheader">#</span>
                         <span role="columnheader">Learner</span>
                         {components.length > 0 ? (
@@ -815,6 +825,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                             onScoreKeyDown={handleScoreKeyDown}
                         />
                     ))}
+                </div>
                 </div>
             )}
 

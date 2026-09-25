@@ -105,7 +105,7 @@ function RowActions({ status, name, onUndo, onRemove }: { status: RowStatus; nam
 
 /** Small caption shown above an input on phones, where there is no column header. */
 function MobileLabel({ children }: { children: React.ReactNode }) {
-    return <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:hidden">{children}</span>;
+    return <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground lg:hidden">{children}</span>;
 }
 
 export function MarkSheetRow({
@@ -120,12 +120,12 @@ export function MarkSheetRow({
         <div
             role="row"
             className={cn(
-                'grid grid-cols-1 gap-3 border-b border-border/60 px-4 py-3 transition-colors last:border-b-0 md:items-center md:gap-3 md:px-5 md:py-2 md:[grid-template-columns:var(--sheet-cols)]',
+                'grid grid-cols-1 gap-3 border-b border-border/60 px-4 py-3 transition-colors last:border-b-0 lg:items-center lg:gap-3 lg:px-5 lg:py-2 lg:[grid-template-columns:var(--sheet-cols)]',
                 ROW_TONE[status],
                 invalid && 'bg-red-500/[0.06]',
             )}
         >
-            <span role="cell" className="hidden text-xs tabular-nums text-muted-foreground md:block">{index + 1}</span>
+            <span role="cell" className="hidden text-xs tabular-nums text-muted-foreground lg:block">{index + 1}</span>
 
             {/* Learner — on phones the status and actions ride along on this line */}
             <div role="cell" className="flex min-w-0 items-start justify-between gap-3">
@@ -136,18 +136,18 @@ export function MarkSheetRow({
                         {learner.streamName && <> · {learner.streamName}</>}
                     </div>
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-1 md:hidden">
+                <div className="flex shrink-0 flex-col items-end gap-1 lg:hidden">
                     <StatusBadge status={status} />
                     <RowActions status={status} name={learner.name} onUndo={onUndo} onRemove={onRemove} />
                 </div>
             </div>
 
             {/* Score inputs + grade: wrap on phones, become grid cells on wider screens */}
-            <div className="flex flex-wrap gap-2 md:contents">
+            <div className="flex flex-wrap gap-2 lg:contents">
                 {multiPaper ? (
                     <>
                         {components.map(c => (
-                            <label key={c.id} role="cell" className="block w-[5.5rem] md:w-auto">
+                            <label key={c.id} role="cell" className="block w-[5.5rem] lg:w-auto">
                                 <MobileLabel>{c.component_code} /{Number(c.max_score)}</MobileLabel>
                                 <input
                                     type="text"
@@ -165,7 +165,7 @@ export function MarkSheetRow({
                                 />
                             </label>
                         ))}
-                        <div role="cell" className="w-[5.5rem] md:w-auto">
+                        <div role="cell" className="w-[5.5rem] lg:w-auto">
                             <MobileLabel>Final</MobileLabel>
                             <div className="flex h-10 items-center text-sm font-semibold tabular-nums text-primary" title={incompletePapers ? 'Some papers are still blank and count as 0' : undefined}>
                                 {finalPercentage === null ? <span className="text-muted-foreground">—</span> : <>{finalPercentage.toFixed(1)}%{incompletePapers && <span className="text-muted-foreground">*</span>}</>}
@@ -173,7 +173,7 @@ export function MarkSheetRow({
                         </div>
                     </>
                 ) : (
-                    <label role="cell" className="block w-28 md:w-auto">
+                    <label role="cell" className="block w-28 lg:w-auto">
                         <MobileLabel>Score /{maxScore}</MobileLabel>
                         <input
                             type="text"
@@ -192,7 +192,7 @@ export function MarkSheetRow({
                     </label>
                 )}
 
-                <label role="cell" className="block w-28 md:w-auto">
+                <label role="cell" className="block w-28 lg:w-auto">
                     <MobileLabel>Grade</MobileLabel>
                     <select
                         className={cn(inputBase, 'border-border pr-2 font-semibold', values.gradeOverridden && 'border-primary/50')}
@@ -228,13 +228,13 @@ export function MarkSheetRow({
                 />
             </label>
 
-            <div role="cell" className="hidden items-center justify-end gap-2 md:flex">
+            <div role="cell" className="hidden items-center justify-end gap-2 lg:flex">
                 <StatusBadge status={status} />
                 <RowActions status={status} name={learner.name} onUndo={onUndo} onRemove={onRemove} />
             </div>
 
             {error && (
-                <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400 md:col-span-full md:pl-[calc(2rem+0.75rem)]">
+                <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400 lg:col-span-full lg:pl-[calc(2rem+0.75rem)]">
                     {error}
                 </p>
             )}
