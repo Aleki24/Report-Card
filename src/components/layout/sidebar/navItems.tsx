@@ -76,9 +76,7 @@ const forRole = (item: NavItem, role: UserRole | null) =>
 export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href]);
 
 /** Pages outside the menu that still belong to particular roles. */
-const unlistedRoutes: Pick<NavItem, 'href' | 'roles'>[] = [
-    { href: '/dashboard/admin-tools', roles: adminRoles },
-];
+const unlistedRoutes: Pick<NavItem, 'href' | 'roles'>[] = [];
 
 /**
  * Whether a menu link covers `pathname`: its own page, or a page nested under
