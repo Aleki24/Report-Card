@@ -1,78 +1,94 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, Sun, Moon, PanelLeftClose, PanelLeft, MoreHorizontal } from "lucide-react";
-import { useTheme } from "@/components/ThemeProvider";
+import { ChevronLeft, ChevronRight, LayoutGrid, Search, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { getNavGroups, getPinnedItems, getMobileNav, routeMatches, type NavItem } from "./sidebar/navItems";
+import { Avatar } from "@/components/Avatar";
+import { Wordmark } from "@/components/Wordmark";
+import { ROLE_LABELS } from "@/lib/roles";
+import { cn } from "@/lib/utils";
+import { findNavItem, getMobileNav, getNavGroups, getPinnedItems, roleBadgeColors, routeMatches, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
-import { Wordmark } from "@/components/Wordmark";
-import { cn } from "@/lib/utils";
 
 interface SidebarProps {
     collapsed?: boolean;
     setCollapsed?: (val: boolean) => void;
 }
 
-function NavLink({ item, collapsed, pathname, badge }: { item: NavItem; collapsed: boolean; pathname: string; badge?: number }) {
-    const isActive = routeMatches(pathname, item.href);
+/** A label shown beside the collapsed rail, positioned from the hovered link. */
+interface RailTooltip { label: string; top: number }
+
+/** Whether a key press came from somewhere the user is typing. */
+function isTypingTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+}
+
+function SchoolMark({ logo, name, size }: { logo: string | null; name: string; size: number }) {
+    return logo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- school-uploaded URL, not a local asset
+        <img src={logo} alt={name || "School"} width={size} height={size} className="shrink-0 rounded-xl bg-white object-contain p-0.5" style={{ width: size, height: size }} />
+    ) : (
+        <Image src="/images/logo.png" alt="Skulbase" width={size} height={size} className="shrink-0 rounded-xl object-contain" />
+    );
+}
+
+interface NavLinkProps {
+    item: NavItem;
+    collapsed: boolean;
+    active: boolean;
+    badge?: number;
+    onHint?: (hint: RailTooltip | null) => void;
+}
+
+function NavLink({ item, collapsed, active, badge, onHint }: NavLinkProps) {
+    const showHint = (e: React.SyntheticEvent<HTMLAnchorElement>) => {
+        if (!collapsed) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        onHint?.({ label: item.label, top: rect.top + rect.height / 2 });
+    };
+    const hideHint = () => onHint?.(null);
+
     return (
         <Link
             href={item.href}
-            title={collapsed ? item.label : undefined}
             aria-label={collapsed ? item.label : undefined}
-            aria-current={isActive ? "page" : undefined}
+            aria-current={active ? "page" : undefined}
+            onMouseEnter={showHint}
+            onMouseLeave={hideHint}
+            onFocus={showHint}
+            onBlur={hideHint}
             className={cn(
-                "relative flex items-center gap-3 rounded-lg text-sm no-underline transition-colors",
-                collapsed ? "justify-center px-0 py-2" : "px-3 py-2",
-                isActive
-                    ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
-                    : "font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                "group relative flex h-10 items-center gap-3 rounded-xl text-sm no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                collapsed ? "mx-auto w-11 justify-center" : "px-3",
+                active
+                    ? "bg-white/[0.12] font-semibold text-sidebar-foreground"
+                    : "font-medium text-sidebar-foreground/65 hover:bg-white/[0.06] hover:text-sidebar-foreground",
             )}
         >
-            <span className="relative flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+            {/* Accent bar on the page you're on */}
+            {active && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-1 rounded-full bg-sidebar-ring" />}
+            <span className={cn("relative flex size-5 shrink-0 items-center justify-center", active ? "text-sidebar-ring" : "")}>
                 {item.icon}
-                {!!badge && collapsed && (
-                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
-                )}
+                {!!badge && collapsed && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar" />}
             </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
             {!collapsed && !!badge && (
-                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
-                    {badge > 9 ? '9+' : badge}
+                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
+                    {badge > 9 ? "9+" : badge}
                 </span>
             )}
         </Link>
     );
 }
 
-function ThemeToggleButton({ collapsed }: { collapsed: boolean }) {
-    const { theme, toggleTheme } = useTheme();
-    return (
-        <button
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            suppressHydrationWarning
-            className={cn(
-                "mx-3 mb-3 flex cursor-pointer items-center gap-3 rounded-lg border border-sidebar-border bg-white/5 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                collapsed ? "justify-center px-0 py-2" : "px-3 py-2"
-            )}
-        >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            {!collapsed && (theme === "dark" ? "Light Mode" : "Dark Mode")}
-        </button>
-    );
-}
-
 export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { theme, toggleTheme } = useTheme();
     const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading } = useAuth();
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -80,6 +96,8 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [notifCount, setNotifCount] = useState(0);
+    const [railHint, setRailHint] = useState<RailTooltip | null>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetch("/api/school/data?type=school_profile")
@@ -102,8 +120,8 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
 
     const groups = useMemo(() => {
         const base = getNavGroups(role);
-        if (!searchQuery.trim()) return base;
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return base;
         return base
             .map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(q)) }))
             .filter((g) => g.items.length > 0);
@@ -111,111 +129,143 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
 
     const pinned = useMemo(() => getPinnedItems(role), [role]);
     const mobileNav = useMemo(() => getMobileNav(role), [role]);
+    const currentPage = findNavItem(pathname);
 
     const handleSignOut = () => router.push("/logout");
     const homeHref = role === "STUDENT" ? "/student/dashboard" : "/dashboard";
+    const roleLabel = role ? ROLE_LABELS[role] : "";
+
+    const focusSearch = useCallback(() => {
+        if (collapsed) setCollapsed?.(false);
+        // Wait a frame for the input to exist after expanding.
+        requestAnimationFrame(() => searchRef.current?.focus());
+    }, [collapsed, setCollapsed]);
+
+    // "/" jumps to the menu search, as in most web apps.
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
+            if (!window.matchMedia("(min-width: 768px)").matches) return;
+            e.preventDefault();
+            focusSearch();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [focusSearch]);
+
+    // Enter in the search opens the first match.
+    const firstMatch = groups[0]?.items[0];
+    const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter" && firstMatch) {
+            router.push(firstMatch.href);
+            setSearchQuery("");
+            e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+            setSearchQuery("");
+            e.currentTarget.blur();
+        }
+    };
+
+    const moreActive = showMoreMenu || mobileNav.overflow.some((i) => routeMatches(pathname, i.href));
 
     return (
         <>
-            {/* Desktop Sidebar */}
+            {/* ── Desktop sidebar ──────────────────────────────── */}
             <aside
+                aria-label="Main"
                 className={cn(
-                    "fixed top-0 left-0 z-50 hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out md:flex",
-                    collapsed ? "w-20" : "w-[260px] shadow-[4px_0_24px_rgba(0,0,0,0.08)]"
+                    "fixed top-0 left-0 z-50 hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-in-out min-[768px]:flex",
+                    collapsed ? "w-20" : "w-[260px]",
                 )}
             >
-                {/* Logo + collapse toggle */}
-                <div className={cn("flex items-center gap-3 p-4", collapsed && "justify-center")}>
-                    <Link href={homeHref} className="flex min-w-0 flex-1 items-center gap-3 no-underline text-inherit">
-                        {schoolLogo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={schoolLogo} alt={schoolName || "School"} className={cn("shrink-0 object-contain", collapsed ? "h-10 w-10" : "h-12 w-12")} />
-                        ) : (
-                            <Image
-                                src="/images/logo.png"
-                                alt="Skulbase Logo"
-                                width={collapsed ? 40 : 48}
-                                height={collapsed ? 40 : 48}
-                                className="shrink-0 rounded-lg object-contain"
-                            />
-                        )}
+                {/* Brand */}
+                <div className={cn("flex items-center gap-3 border-b border-sidebar-border/70 py-4", collapsed ? "justify-center px-3" : "px-4")}>
+                    <Link href={homeHref} className="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring rounded-xl" aria-label={`${schoolName || "Skulbase"} home`}>
+                        <SchoolMark logo={schoolLogo} name={schoolName ?? ""} size={collapsed ? 40 : 42} />
                         {!collapsed && (
-                            <span className="min-w-0 break-words font-display text-[13px] font-bold leading-tight">
-                                {schoolName || <Wordmark />}
+                            <span className="min-w-0">
+                                <span className="line-clamp-2 font-display text-sm leading-tight font-bold">{schoolName || <Wordmark />}</span>
+                                {roleLabel && <span className="mt-0.5 block truncate text-[11px] text-sidebar-foreground/55">{roleLabel} workspace</span>}
                             </span>
                         )}
                     </Link>
-                    {!collapsed && (
-                        <button
-                            onClick={() => setCollapsed?.(true)}
-                            title="Collapse sidebar"
-                            aria-label="Collapse sidebar"
-                            className="shrink-0 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                        >
-                            <PanelLeftClose size={16} />
-                        </button>
-                    )}
                 </div>
-                {collapsed && (
-                    <button
-                        onClick={() => setCollapsed?.(false)}
-                        title="Expand sidebar"
-                        aria-label="Expand sidebar"
-                        className="mx-auto mb-2 cursor-pointer rounded-md p-1.5 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    >
-                        <PanelLeft size={16} />
-                    </button>
-                )}
+
+                {/* Edge toggle: always in the same place, collapsed or not */}
+                <button
+                    type="button"
+                    onClick={() => { setCollapsed?.(!collapsed); setRailHint(null); }}
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    className="absolute top-[30px] -right-3 z-10 flex size-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground/70 shadow-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                >
+                    {collapsed ? <ChevronRight className="size-3.5" aria-hidden /> : <ChevronLeft className="size-3.5" aria-hidden />}
+                </button>
 
                 {/* Menu search */}
-                {!collapsed && (
-                    <div className="px-4 pb-3">
-                        <div className="flex items-center gap-2 rounded-lg border border-sidebar-border bg-white/5 px-3 py-2 transition-colors focus-within:border-sidebar-foreground/40">
-                            <Search size={14} className="shrink-0 text-sidebar-foreground/60" />
+                <div className={cn("pt-4 pb-2", collapsed ? "px-3" : "px-4")}>
+                    {collapsed ? (
+                        <button
+                            type="button"
+                            onClick={focusSearch}
+                            aria-label="Search menu"
+                            title="Search menu (/)"
+                            className="mx-auto flex size-11 items-center justify-center rounded-xl text-sidebar-foreground/65 transition-colors hover:bg-white/[0.06] hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                        >
+                            <Search className="size-[18px]" aria-hidden />
+                        </button>
+                    ) : (
+                        <div className="flex h-10 items-center gap-2 rounded-xl border border-sidebar-border bg-white/[0.05] px-3 transition-colors focus-within:border-sidebar-ring/70 focus-within:bg-white/[0.08]">
+                            <Search className="size-4 shrink-0 text-sidebar-foreground/55" aria-hidden />
                             <input
+                                ref={searchRef}
                                 type="text"
-                                placeholder="Search menu…"
+                                placeholder="Search menu"
                                 aria-label="Search menu"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full border-none bg-transparent text-[13px] text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/50"
+                                onKeyDown={onSearchKeyDown}
+                                className="min-w-0 flex-1 border-none bg-transparent text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
                             />
+                            {searchQuery ? (
+                                <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search" className="rounded p-0.5 text-sidebar-foreground/55 hover:text-sidebar-foreground">
+                                    <X className="size-3.5" aria-hidden />
+                                </button>
+                            ) : (
+                                <kbd className="rounded-md border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/50" aria-hidden>/</kbd>
+                            )}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {/* Navigation */}
-                <nav className={cn("flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4", collapsed ? "px-3" : "px-4")}>
+                <nav aria-label="Pages" className={cn("flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto py-2 [scrollbar-width:thin]", collapsed ? "px-3" : "px-4")} onScroll={() => setRailHint(null)}>
                     {groups.map((group) => (
                         <div key={group.title ?? "top"}>
-                            {!collapsed && group.title && (
-                                <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/50">
-                                    {group.title}
-                                </div>
-                            )}
-                            {collapsed && group.title && <div className="mx-2 mb-2 border-t border-sidebar-border" />}
-                            <div className="flex flex-col gap-0.5">
+                            {group.title && (collapsed
+                                ? <div className="mx-2 mb-2 border-t border-sidebar-border/70" aria-hidden />
+                                : <p className="mb-1.5 px-3 text-[10px] font-semibold tracking-[0.14em] text-sidebar-foreground/45 uppercase">{group.title}</p>)}
+                            <div className="flex flex-col gap-1">
                                 {group.items.map((item) => (
-                                    <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} badge={badges[item.href]} />
+                                    <NavLink key={item.href} item={item} collapsed={collapsed} active={routeMatches(pathname, item.href)} badge={badges[item.href]} onHint={setRailHint} />
                                 ))}
                             </div>
                         </div>
                     ))}
                     {groups.length === 0 && !collapsed && (
-                        <div className="px-2 text-xs italic text-sidebar-foreground/60">No pages match “{searchQuery}”</div>
+                        <p className="px-3 text-xs text-sidebar-foreground/60">No pages match “{searchQuery}”.</p>
                     )}
                 </nav>
 
-                {/* Pinned bottom items (Settings, Users) */}
+                {/* Pinned (Users, Settings, My Profile) */}
                 {pinned.length > 0 && (
-                    <div className={cn("flex flex-col gap-0.5 border-t border-sidebar-border py-2", collapsed ? "px-3" : "px-4")}>
+                    <div className={cn("flex flex-col gap-1 border-t border-sidebar-border/70 py-3", collapsed ? "px-3" : "px-4")}>
                         {pinned.map((item) => (
-                            <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+                            <NavLink key={item.href} item={item} collapsed={collapsed} active={routeMatches(pathname, item.href)} onHint={setRailHint} />
                         ))}
                     </div>
                 )}
 
-                {/* User Profile */}
                 {!loading && profile && (
                     <DesktopUserMenu
                         profile={profile}
@@ -229,70 +279,59 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         onSignOut={handleSignOut}
                     />
                 )}
-
-                <ThemeToggleButton collapsed={collapsed} />
             </aside>
 
-            {/* Mobile Bottom Navigation */}
-            <nav
-                className="fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-border/70 bg-[var(--color-surface)] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] md:hidden"
-                style={{
-                    paddingBottom: "env(safe-area-inset-bottom)",
-                    height: "calc(64px + env(safe-area-inset-bottom))",
-                }}
-            >
-                {mobileNav.primary.map((item) => {
-                    const isActive = routeMatches(pathname, item.href);
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            aria-current={isActive ? "page" : undefined}
-                            onClick={() => setShowMoreMenu(false)}
-                            className={cn(
-                                "relative flex h-full min-w-0 flex-1 flex-col items-center justify-center no-underline transition-colors",
-                                isActive ? "text-primary" : "text-muted-foreground"
-                            )}
-                        >
-                            {isActive && (
-                                <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
-                            )}
-                            <span className={cn("relative transition-transform", isActive ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
-                                {item.icon}
-                                {!!badges[item.href] && (
-                                    <span className="absolute -right-1.5 -top-1.5 h-2 w-2 rounded-full bg-destructive" />
-                                )}
-                            </span>
-                            <span className={cn("mt-1 max-w-full truncate text-[10px]", isActive ? "font-semibold opacity-100" : "font-medium opacity-70")}>
-                                {item.label}
-                            </span>
-                        </Link>
-                    );
-                })}
-
-                {/* Always shown: the More sheet is the only place Sign Out, the
-                    theme toggle, and the role switcher live on mobile — even for
-                    roles like subject teacher whose few pages all fit the primary
-                    bar (empty overflow), it must stay reachable. */}
-                <button
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    aria-expanded={showMoreMenu}
-                    aria-haspopup="dialog"
-                    className={cn(
-                        "relative flex h-full min-w-0 flex-1 cursor-pointer flex-col items-center justify-center border-none bg-transparent transition-colors",
-                        showMoreMenu ? "text-primary" : "text-muted-foreground"
-                    )}
+            {/* Labels for the collapsed rail. Rendered outside the scrolling nav,
+                which would otherwise clip them. */}
+            {collapsed && railHint && (
+                <div
+                    role="tooltip"
+                    className="animate-pop-in pointer-events-none fixed left-[88px] z-[60] hidden -translate-y-1/2 rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-background shadow-lg min-[768px]:block"
+                    style={{ top: railHint.top }}
                 >
-                    {showMoreMenu && (
-                        <span className="absolute top-0 left-1/2 h-[3px] w-2/5 -translate-x-1/2 rounded-b-sm bg-primary" />
-                    )}
-                    <span className={cn("transition-transform", showMoreMenu ? "-translate-y-0.5 opacity-100" : "opacity-70")}>
-                        <MoreHorizontal size={18} />
-                    </span>
-                    <span className={cn("mt-1 text-[10px]", showMoreMenu ? "font-semibold opacity-100" : "font-medium opacity-70")}>
-                        More
-                    </span>
-                </button>
+                    {railHint.label}
+                </div>
+            )}
+
+            {/* ── Phone top bar ────────────────────────────────── */}
+            <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center gap-3 border-b border-border/70 bg-[var(--color-surface)]/90 px-4 backdrop-blur-md min-[768px]:hidden">
+                <Link href={homeHref} aria-label={`${schoolName || "Skulbase"} home`} className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <SchoolMark logo={schoolLogo} name={schoolName ?? ""} size={34} />
+                </Link>
+                <div className="min-w-0 flex-1 leading-tight">
+                    <p className="truncate text-[15px] font-bold text-foreground">{currentPage?.label ?? (schoolName || "Skulbase")}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">{currentPage ? (schoolName || "Skulbase") : roleLabel}</p>
+                </div>
+                {profile && (
+                    <button
+                        type="button"
+                        onClick={() => setShowMoreMenu(true)}
+                        aria-label="Account and more"
+                        className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <Avatar imageUrl={profile.imageUrl} firstName={profile.first_name} lastName={profile.last_name} size={34} fontSize={13} background={roleBadgeColors[profile.role]} />
+                    </button>
+                )}
+            </header>
+
+            {/* ── Phone bottom bar ─────────────────────────────── */}
+            <nav
+                aria-label="Main"
+                className="fixed inset-x-0 bottom-0 z-50 flex h-[calc(64px+env(safe-area-inset-bottom))] items-stretch border-t border-border/70 bg-[var(--color-surface)]/95 px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-md min-[768px]:hidden"
+            >
+                {mobileNav.primary.map((item) => (
+                    <BottomTab key={item.href} href={item.href} label={item.shortLabel ?? item.label} fullLabel={item.label} icon={item.icon} active={routeMatches(pathname, item.href)} badge={badges[item.href]} />
+                ))}
+                {/* Always shown: the More sheet is the only home on a phone for
+                    sign out, the theme and the role switch, even for roles whose
+                    pages all fit the bar. */}
+                <BottomTab
+                    label="More"
+                    icon={<LayoutGrid size={20} aria-hidden />}
+                    active={moreActive}
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    expanded={showMoreMenu}
+                />
             </nav>
 
             <MobileMoreMenu
@@ -300,14 +339,50 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 setShowMoreMenu={setShowMoreMenu}
                 overflowItems={mobileNav.overflow}
                 pathname={pathname}
-                theme={theme}
-                toggleTheme={toggleTheme}
                 onSignOut={handleSignOut}
+                profile={profile}
                 role={role}
                 baseRole={baseRole}
                 availableRoles={availableRoles}
                 switchRole={switchRole}
             />
         </>
+    );
+}
+
+interface BottomTabProps {
+    label: string;
+    /** Spoken name when the visible label is shortened. */
+    fullLabel?: string;
+    icon: React.ReactNode;
+    active: boolean;
+    href?: string;
+    badge?: number;
+    onClick?: () => void;
+    expanded?: boolean;
+}
+
+/** One bottom-bar destination: an icon in a pill that fills when active, and its label. */
+function BottomTab({ label, fullLabel, icon, active, href, badge, onClick, expanded }: BottomTabProps) {
+    const body = (
+        <>
+            <span className={cn(
+                "relative flex h-8 w-14 items-center justify-center rounded-full transition-colors duration-200",
+                active ? "bg-primary/15 text-primary" : "text-muted-foreground",
+            )}>
+                {icon}
+                {!!badge && <span className="absolute top-0.5 right-3 size-2 rounded-full bg-destructive ring-2 ring-[var(--color-surface)]" />}
+            </span>
+            <span className={cn("max-w-full truncate px-0.5 text-[11px] leading-none", active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
+                {label}
+            </span>
+        </>
+    );
+    const className = "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring rounded-xl";
+
+    return href ? (
+        <Link href={href} aria-current={active ? "page" : undefined} aria-label={fullLabel && fullLabel !== label ? fullLabel : undefined} className={className}>{body}</Link>
+    ) : (
+        <button type="button" onClick={onClick} aria-expanded={expanded} aria-haspopup="dialog" className={cn(className, "border-none bg-transparent")}>{body}</button>
     );
 }

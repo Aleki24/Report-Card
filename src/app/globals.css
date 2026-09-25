@@ -518,28 +518,6 @@ body {
 }
 
 @layer components {
-  /* ============================================= */
-  /* RESPONSIVE LAYOUT: Mobile Topbar & Main Area  */
-  /* ============================================= */
-
-  /* Mobile top bar — visible only below md (769px) */
-  .mobile-topbar-container {
-    display: flex;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    z-index: 40;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 var(--space-4);
-  }
-}
-
-@layer components {
   /* Dashboard main content */
   .dashboard-main {
     flex: 1;
@@ -555,10 +533,6 @@ body {
 @layer components {
   /* Desktop: hide topbar, shift main content for sidebar */
   @media (min-width: 768px) {
-    .mobile-topbar-container {
-      display: none;
-    }
-
     .dashboard-main {
       margin-left: var(--sidebar-width, 260px);
       padding: var(--space-6);
@@ -1082,6 +1056,16 @@ body {
   to { transform: translateX(0); }
 }
 
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @layer components {
   .animate-fade-in-up {
     animation: fadeInUp 0.8s ease-out both;
@@ -1103,6 +1087,16 @@ body {
 @layer components {
   .animate-backdrop-in {
     animation: fadeIn 0.15s ease-out both;
+  }
+}
+
+@layer components {
+  .animate-sheet-up {
+    animation: sheetUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-pop-in {
+    animation: popIn 0.14s ease-out both;
   }
 }
 
@@ -1250,7 +1244,7 @@ body {
   /* ============================================= */
   /* Layout (sidebar/topbar/bottom-nav) is now shared with the admin
      dashboard via DashboardContent + Sidebar — see .dashboard-main and
-     .mobile-topbar-container above. These are content-level classes used
+     the mobile top bar in Sidebar.tsx. These are content-level classes used
      inside student pages only. */
 
   .student-kpi-grid {

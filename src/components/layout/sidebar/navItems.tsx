@@ -8,6 +8,8 @@ import { type UserRole } from '@/components/AuthProvider';
 
 export interface NavItem {
     label: string;
+    /** Shorter name for the phone's bottom bar, where each tab is a fifth of the width. */
+    shortLabel?: string;
     href: string;
     icon: React.ReactNode;
     roles: UserRole[];
@@ -31,16 +33,16 @@ const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSPropertie
    lookup silently dropped items when the strings drifted). */
 const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: [...staffRoles, 'STAFF'], icon: icon(LayoutDashboard) };
 const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', roles: ['STUDENT'], icon: icon(LayoutDashboard) };
-const examsMarks: NavItem = { label: 'Exams & Marks', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(ClipboardList) };
-const reports: NavItem = { label: 'Report Cards', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(FileText) };
+const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(ClipboardList) };
+const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(FileText) };
 const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(CalendarCheck) };
 const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', roles: adminRoles, icon: icon(LineChart) };
 const people: NavItem = { label: 'People', href: '/dashboard/people', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(Users) };
 const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', roles: adminRoles, icon: icon(School) };
 const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: icon(BookOpen) };
 const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(DollarSign) };
-const announcements: NavItem = { label: 'Announcements', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'], icon: icon(Bell) };
-const assignments: NavItem = { label: 'Assignments', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(Briefcase) };
+const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'], icon: icon(Bell) };
+const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(Briefcase) };
 const users: NavItem = { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: icon(UserCircle) };
 const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', roles: adminRoles, icon: icon(Settings) };
 const myResults: NavItem = { label: 'My Results', href: '/student/results', roles: ['STUDENT'], icon: icon(GraduationCap) };
@@ -96,6 +98,13 @@ export function canAccessPath(pathname: string, role: UserRole | null): boolean 
         .filter(item => routeMatches(pathname, item.href))
         .sort((a, b) => b.href.length - a.href.length)[0];
     return !match || (!!role && match.roles.includes(role));
+}
+
+/** The menu entry for the page being viewed (its most specific match), for titles. */
+export function findNavItem(pathname: string): NavItem | null {
+    return navItems
+        .filter(item => routeMatches(pathname, item.href))
+        .sort((a, b) => b.href.length - a.href.length)[0] ?? null;
 }
 
 export function getNavGroups(role: UserRole | null): NavGroup[] {
