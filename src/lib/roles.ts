@@ -39,3 +39,13 @@ export function homePathForRole(role: UserRole | null): string {
     if (role === 'PENDING') return '/dashboard/onboarding';
     return '/dashboard';
 }
+
+/** How each role is named to people, e.g. on the activation screen. */
+export const ROLE_LABELS: Record<UserRole, string> = {
+    ADMIN: 'Admin',
+    CLASS_TEACHER: 'Class Teacher',
+    SUBJECT_TEACHER: 'Subject Teacher',
+    STAFF: 'Staff',
+    STUDENT: 'Student',
+    PENDING: 'Pending',
+};
