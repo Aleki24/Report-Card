@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Camera, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Camera, Check, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -15,6 +15,7 @@ import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel } from '@/lib/exa
 import { findActiveTermId } from '@/lib/term-calendar';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
+import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
 interface Term { id: string; name: string; academic_year_id: string; academic_year_name?: string | null; is_current: boolean; }
@@ -60,17 +61,6 @@ async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
   return json?.data ?? [];
 }
 
-const CATEGORY_ORDER: Record<string, number> = { LANGUAGE: 1, MATHEMATICS: 2, SCIENCE: 3, HUMANITY: 4, TECHNICAL: 5, CREATIVE: 6 };
-const CATEGORY_LABELS: Record<string, string> = {
-  LANGUAGE: 'Languages',
-  MATHEMATICS: 'Mathematics',
-  SCIENCE: 'Sciences',
-  HUMANITY: 'Humanities',
-  TECHNICAL: 'Technical & Applied',
-  CREATIVE: 'Creative Arts & Sports',
-  OTHER: 'Other subjects',
-};
-
 const MODES: { id: EntryMode; label: string; hint: string; icon: React.ReactNode }[] = [
   { id: 'manual', label: 'Type marks', hint: 'Type or correct marks learner by learner', icon: <Keyboard size={15} aria-hidden /> },
   { id: 'bulk', label: 'Upload file', hint: 'Import a spreadsheet of marks', icon: <FileSpreadsheet size={15} aria-hidden /> },
@@ -100,17 +90,17 @@ function ChoiceChip({ active, onClick, children, title, disabled }: { active: bo
 }
 
 function StepCard({ step, title, hint, done, children, aside }: { step: number; title: string; hint?: string; done?: boolean; children: React.ReactNode; aside?: React.ReactNode }) {
+  const tone = STEP_TONES[(step - 1) % STEP_TONES.length];
   return (
-    <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+    <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+      {/* A thin strip in the step's colour ties the card to its number. */}
+      <span aria-hidden className={cn('absolute inset-y-0 left-0 w-1', tone.dot, !done && 'opacity-40')} />
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span
-          className={cn(
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-            done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-          )}
+          className={cn('flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-colors', done ? tone.solid : tone.tile)}
           aria-hidden
         >
-          {step}
+          {done ? <Check className="size-4" strokeWidth={3} /> : step}
         </span>
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
@@ -365,14 +355,13 @@ export function MarksSetupTab() {
     ? subjects.filter(s => s.subject_name.toLowerCase().includes(subjectNeedle) || s.subject_code.toLowerCase().includes(subjectNeedle))
     : subjects;
 
-  const subjectGroups: [string, SubjectChoice[]][] = (() => {
-    const map = new Map<string, SubjectChoice[]>();
+  const subjectGroups: [SubjectCategory, SubjectChoice[]][] = (() => {
+    const map = new Map<SubjectCategory, SubjectChoice[]>();
     for (const s of shownSubjects) {
-      const cat = (s.subject_category || 'OTHER').toUpperCase();
-      const key = CATEGORY_ORDER[cat] ? cat : 'OTHER';
+      const key = subjectCategory(s.subject_category);
       map.set(key, [...(map.get(key) ?? []), s]);
     }
-    return [...map.entries()].sort((a, b) => (CATEGORY_ORDER[a[0]] ?? 99) - (CATEGORY_ORDER[b[0]] ?? 99));
+    return [...map.entries()].sort((a, b) => SUBJECT_CATEGORY_THEME[a[0]].order - SUBJECT_CATEGORY_THEME[b[0]].order);
   })();
 
   const examsForSelectedSubject = exams
@@ -473,6 +462,12 @@ export function MarksSetupTab() {
     return (
       <div className="w-full">
         <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            {(() => {
+              const theme = SUBJECT_CATEGORY_THEME[subjectCategory(selectedExam.subject_category)];
+              const Icon = theme.icon;
+              return <span className={cn('flex size-12 shrink-0 items-center justify-center rounded-2xl sm:size-14', theme.tone.tile)} aria-hidden><Icon className="size-6 sm:size-7" /></span>;
+            })()}
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Entering marks for</p>
             <h2 className="mt-1 truncate font-display text-xl font-bold tracking-tight sm:text-2xl">
@@ -481,6 +476,7 @@ export function MarksSetupTab() {
             <p className="mt-1 text-sm text-muted-foreground">
               {selectedTermName} · {getExamTypeLabel(selectedExam.exam_type)} · {examIsMultiPaper ? <span className="font-medium text-primary">Papers {examPaperSummary}</span> : <>Out of {selectedExam.max_score}</>}
             </p>
+          </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -522,11 +518,11 @@ export function MarksSetupTab() {
               onClick={() => setMode(m.id)}
               title={m.hint}
               className={cn(
-                'inline-flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm',
+                'inline-flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-row sm:gap-1.5 sm:px-4 sm:text-sm',
                 mode === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {m.icon}<span className="truncate">{m.label}</span>
+              <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-md transition-colors', mode === m.id ? MODE_TONES[m.id].tile : '')}>{m.icon}</span><span className="max-w-full truncate">{m.label}</span>
             </button>
           ))}
         </div>
@@ -771,18 +767,26 @@ export function MarksSetupTab() {
             <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
           ) : (
             <div className="flex flex-col gap-4">
-              {subjectGroups.map(([category, groupSubjects]) => (
+              {subjectGroups.map(([category, groupSubjects]) => {
+                const theme = SUBJECT_CATEGORY_THEME[category];
+                const CategoryIcon = theme.icon;
+                return (
                 <div key={category}>
                   {subjectGroups.length > 1 && (
-                    <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{CATEGORY_LABELS[category] ?? category}</h4>
+                    <h4 className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      <span aria-hidden className={cn('size-2 rounded-full', theme.tone.dot)} />
+                      {theme.label}
+                      <span className="font-normal normal-case tracking-normal opacity-70">{groupSubjects.length}</span>
+                    </h4>
                   )}
-                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {groupSubjects.map(s => {
                       const active = selectedSubjectId === s.subject_id;
                       if (!s.hasExam) {
                         return (
                           <div key={s.subject_id} className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border/70 px-3 py-2.5">
-                            <span className="min-w-0">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground/70" aria-hidden><CategoryIcon className="size-4" /></span>
+                            <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-medium text-muted-foreground">{s.subject_name}</span>
                               <span className="block text-[11px] text-muted-foreground/80">No exam set up yet</span>
                             </span>
@@ -801,11 +805,12 @@ export function MarksSetupTab() {
                           onClick={() => chooseSubject(s.subject_id)}
                           aria-pressed={active}
                           className={cn(
-                            'group flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-all',
-                            active ? 'border-primary bg-primary/10' : 'border-border/70 bg-card hover:border-primary/40 hover:bg-primary/[0.03]',
+                            'group flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            active ? theme.tone.selected : cn('border-border/70 bg-card', theme.tone.hover),
                           )}
                         >
-                          <span className="min-w-0">
+                          <span className={cn('flex size-9 shrink-0 items-center justify-center rounded-xl', theme.tone.tile)} aria-hidden><CategoryIcon className="size-4" /></span>
+                          <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-foreground">{s.subject_name}</span>
                             <span className="block font-mono text-[10px] text-muted-foreground">{s.subject_code}</span>
                           </span>
@@ -815,7 +820,8 @@ export function MarksSetupTab() {
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </StepCard>
