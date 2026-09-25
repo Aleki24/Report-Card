@@ -4,6 +4,11 @@
     "installCommand": "npm install",
     "buildCommand": "npx expo export --platform web",
     "outputDirectory": "dist",
+    "git": {
+        "deploymentEnabled": {
+            "claude/**": false
+        }
+    },
     "rewrites": [
         { "source": "/api/:path*", "destination": "https://skulbase.com/api/:path*" },
         { "source": "/((?!_expo/|assets/|favicon\\.ico).*)", "destination": "/index.html" }
