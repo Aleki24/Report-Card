@@ -24,6 +24,9 @@ interface FeeRecord {
     termName: string;
     studentName: string | null;
     admissionNumber: string | null;
+    studentId: string | null;
+    gradeStreamId: string | null;
+    className: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -60,6 +63,33 @@ const toStudentOption = (s: StudentApiRow): StudentOption => ({
 });
 
 type FeesMode = 'list' | 'payments' | 'batch';
+
+/** One row of the batch screen. Money already paid is read from the ledger, never typed. */
+interface BatchEntry {
+    total: string;
+    /** New money received now, recorded as a payment on save. */
+    payNow: string;
+    dueDate: string;
+    notes: string;
+    existing: FeeRecord | null;
+}
+
+const emptyBatchEntry = (existing: FeeRecord | null): BatchEntry => ({
+    total: existing ? String(existing.totalFee) : '',
+    payNow: '',
+    dueDate: existing?.dueDate || '',
+    notes: existing?.notes || '',
+    existing,
+});
+
+/** Whether the fee part of a row differs from what is saved. */
+const feeChanged = (e: BatchEntry) =>
+    e.total !== '' && (
+        !e.existing
+        || Number(e.total) !== e.existing.totalFee
+        || (e.dueDate || '') !== (e.existing.dueDate || '')
+        || (e.notes || '') !== (e.existing.notes || '')
+    );
 
 const methodLabel = (m: string) => (m === 'MPESA' ? 'M-Pesa' : humanize(m));
 
@@ -103,6 +133,14 @@ function timeAgo(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('en-GB');
 }
 
+/** Today as YYYY-MM-DD in the viewer's time zone (what a date input shows). */
+function todayIso(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const receiptUrl = (paymentId: string) => `/api/school/fees/payments/${paymentId}/receipt`;
+
 function formatCurrency(n: number): string {
     return `KSh ${n.toLocaleString()}`;
 }
@@ -143,6 +181,8 @@ export default function FeesPage() {
 
     // Form state
     const [formStudent, setFormStudent] = useState('');
+    // Narrows the student picker; hundreds of names in one list is unusable.
+    const [formClass, setFormClass] = useState('');
     const [formTerm, setFormTerm] = useState('');
     const [formTotal, setFormTotal] = useState('');
     const [formDueDate, setFormDueDate] = useState('');
@@ -154,7 +194,10 @@ export default function FeesPage() {
     const [batchStream, setBatchStream] = useState('');
     const [batchTerm, setBatchTerm] = useState('');
     const [batchStudents, setBatchStudents] = useState<StudentOption[]>([]);
-    const [batchEntries, setBatchEntries] = useState<Record<string, { total: string; paid: string; dueDate: string; notes: string; existing: FeeRecord | null }>>({});
+    const [batchEntries, setBatchEntries] = useState<Record<string, BatchEntry>>({});
+    const [batchMethod, setBatchMethod] = useState<FeePaymentMethod>('CASH');
+    const [bulkFee, setBulkFee] = useState('');
+    const [bulkDue, setBulkDue] = useState('');
     const [batchSaving, setBatchSaving] = useState(false);
     const [batchMsg, setBatchMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -166,6 +209,7 @@ export default function FeesPage() {
     const [payPhone, setPayPhone] = useState('');
     const [payMpesaRef, setPayMpesaRef] = useState('');
     const [payNotes, setPayNotes] = useState('');
+    const [payDate, setPayDate] = useState('');
     const [paySaving, setPaySaving] = useState(false);
     const [payError, setPayError] = useState('');
 
@@ -177,6 +221,8 @@ export default function FeesPage() {
     // Payments log (school-wide transactions view)
     const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
     const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
+    // Paybill money that could not be matched to a student; assigned in Settings > Payments.
+    const [unmatchedCount, setUnmatchedCount] = useState(0);
     const [plSearch, setPlSearch] = useState('');
     // What the log is actually filtered by: the search box, 300ms after typing stops.
     const [plSearchQuery, setPlSearchQuery] = useState('');
@@ -185,6 +231,16 @@ export default function FeesPage() {
     const [plSource, setPlSource] = useState('');
     const [plDateFrom, setPlDateFrom] = useState('');
     const [plDateTo, setPlDateTo] = useState('');
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        const controller = new AbortController();
+        fetch('/api/school/fees/unmatched', { cache: 'no-store', signal: controller.signal })
+            .then(r => (r.ok ? r.json() : null))
+            .then((j: { data?: unknown[] } | null) => setUnmatchedCount(j?.data?.length ?? 0))
+            .catch(() => {});
+        return () => controller.abort();
+    }, [isAdmin]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => setPlSearchQuery(plSearch.trim()), 300);
@@ -248,15 +304,9 @@ export default function FeesPage() {
         if (statusFilter) {
             result = result.filter(f => f.status === statusFilter);
         }
-        if (streamFilter) {
-            // Fee records carry admission numbers; resolve class through the roster
-            const admissionsInStream = new Set(
-                students.filter(s => s.gradeStreamId === streamFilter).map(s => s.admission)
-            );
-            result = result.filter(f => f.admissionNumber && admissionsInStream.has(f.admissionNumber));
-        }
+        if (streamFilter) result = result.filter(f => f.gradeStreamId === streamFilter);
         return result;
-    }, [fees, search, statusFilter, streamFilter, students]);
+    }, [fees, search, statusFilter, streamFilter]);
 
     const kpi = useMemo(() => {
         const expected = fees.reduce((s, f) => s + f.totalFee, 0);
@@ -276,19 +326,20 @@ export default function FeesPage() {
     // an existing balance via the upsert; only reliable when `fees` was
     // loaded for that same term (the common case, since formTerm defaults to
     // the page's selected term). Falls back to showing everyone otherwise.
-    const billedAdmissionsForFormTerm = useMemo(() => {
+    const billedStudentsForFormTerm = useMemo(() => {
         if (!formTerm || formTerm !== selectedTerm) return new Set<string>();
-        return new Set(fees.filter(f => f.admissionNumber).map(f => f.admissionNumber as string));
+        return new Set(fees.map(f => f.studentId).filter((id): id is string => !!id));
     }, [fees, formTerm, selectedTerm]);
 
     const availableStudentsForAdd = useMemo(
-        () => activeStudents.filter(s => !billedAdmissionsForFormTerm.has(s.admission)),
-        [activeStudents, billedAdmissionsForFormTerm]
+        () => activeStudents.filter(s => !billedStudentsForFormTerm.has(s.id) && (!formClass || s.gradeStreamId === formClass)),
+        [activeStudents, billedStudentsForFormTerm, formClass]
     );
 
     const openAdd = () => {
         setEditingFee(null);
         setFormStudent('');
+        setFormClass(streamFilter);
         setFormTerm(selectedTerm);
         setFormTotal('');
         setFormDueDate('');
@@ -355,6 +406,7 @@ export default function FeesPage() {
         setPayPhone('');
         setPayMpesaRef('');
         setPayNotes('');
+        setPayDate(todayIso());
         setPayError('');
     };
 
@@ -378,6 +430,8 @@ export default function FeesPage() {
                     phone_number: payPhone || null,
                     mpesa_receipt_number: payMethod === 'MPESA' ? (payMpesaRef || null) : null,
                     notes: payNotes || null,
+                    // Only send a backdate; today's payments keep the exact time.
+                    paid_at: payDate && payDate !== todayIso() ? payDate : undefined,
                 }),
             });
             if (!res.ok) {
@@ -386,7 +440,13 @@ export default function FeesPage() {
                 setPaySaving(false);
                 return;
             }
-            toast.success(`Payment of ${formatCurrency(amountValue)} recorded for ${payingFee.studentName ?? 'the student'}`);
+            const saved: { data?: { id?: string; receiptNumber?: string } } = await res.json();
+            const paymentId = saved.data?.id;
+            toast.success(`Payment of ${formatCurrency(amountValue)} recorded for ${payingFee.studentName ?? 'the student'}`, {
+                description: saved.data?.receiptNumber ? `Receipt ${saved.data.receiptNumber}` : undefined,
+                action: paymentId ? { label: 'Download receipt', onClick: () => window.open(receiptUrl(paymentId), '_blank', 'noopener') } : undefined,
+                duration: 10000,
+            });
             setPayingFee(null);
             await fetchFees();
         } catch (err) {
@@ -417,6 +477,7 @@ export default function FeesPage() {
         if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
         try {
             await requestJson(`/api/school/fees/${historyFee.id}/payments/${payment.id}`, { method: 'DELETE' });
+            toast.success(`Receipt ${payment.receiptNumber} voided`);
             await openHistory(historyFee);
             await fetchFees();
         } catch (err) {
@@ -460,7 +521,8 @@ export default function FeesPage() {
         if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
         try {
             await requestJson(`/api/school/fees/${payment.studentFeeId}/payments/${payment.id}`, { method: 'DELETE' });
-            await fetchPaymentsLog();
+            toast.success(`Receipt ${payment.receiptNumber} voided`);
+            await Promise.all([fetchPaymentsLog(), fetchFees()]);
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
         }
@@ -480,33 +542,22 @@ export default function FeesPage() {
     // ── Batch entry ──
 
     const loadBatchStudents = useCallback(async () => {
-        if (!batchStream) return;
-        setBatchMsg(null);
+        if (!batchStream || !batchTerm) return;
         try {
-            const res = await fetch(`/api/school/data?type=students&grade_stream_id=${batchStream}`);
-            const json = await res.json();
-            const mapped: StudentOption[] = ((json.data || []) as StudentApiRow[])
+            const [res, feeRes] = await Promise.all([
+                fetch(`/api/school/data?type=students&grade_stream_id=${batchStream}`, { cache: 'no-store' }),
+                fetch(`/api/school/fees?term_id=${batchTerm}`, { cache: 'no-store' }),
+            ]);
+            const json: { data?: StudentApiRow[] } = await res.json();
+            const feeJson: { data?: FeeRecord[] } = await feeRes.json();
+            const mapped = (json.data || [])
                 .filter(s => !s.status || s.status === 'ACTIVE')
-                .map(toStudentOption);
+                .map(toStudentOption)
+                .sort((a, b) => a.name.localeCompare(b.name));
+            // Matched by student id: admission numbers are optional.
+            const byStudent = new Map((feeJson.data || []).filter(f => f.studentId).map(f => [f.studentId as string, f]));
             setBatchStudents(mapped);
-
-            const feeRes = await fetch(`/api/school/fees?term_id=${batchTerm || ''}`);
-            const feeJson = await feeRes.json();
-            const existingFees: FeeRecord[] = feeJson.data || [];
-
-            const entries: Record<string, { total: string; paid: string; dueDate: string; notes: string; existing: FeeRecord | null }> = {};
-            for (const s of mapped) {
-                // Match existing records by admission number — names are ambiguous
-                const existing = existingFees.find(f => f.admissionNumber && f.admissionNumber === s.admission);
-                entries[s.id] = {
-                    total: existing ? String(existing.totalFee) : '',
-                    paid: existing ? String(existing.paidAmount) : '0',
-                    dueDate: existing ? (existing.dueDate || '') : '',
-                    notes: existing ? (existing.notes || '') : '',
-                    existing: existing || null,
-                };
-            }
-            setBatchEntries(entries);
+            setBatchEntries(Object.fromEntries(mapped.map(s => [s.id, emptyBatchEntry(byStudent.get(s.id) ?? null)])));
         } catch (err) {
             console.error('Failed to load batch students:', err);
             setBatchMsg({ type: 'error', text: 'Failed to load students.' });
@@ -515,82 +566,111 @@ export default function FeesPage() {
 
     useEffect(() => {
         if (mode === 'batch' && batchStream && batchTerm) {
+            setBatchMsg(null);
             loadBatchStudents();
         }
     }, [mode, batchStream, batchTerm, loadBatchStudents]);
 
-    const updateBatchEntry = (studentId: string, field: 'total' | 'paid' | 'dueDate' | 'notes', value: string) => {
+    const updateBatchEntry = (studentId: string, field: 'total' | 'payNow' | 'dueDate' | 'notes', value: string) => {
         setBatchEntries(prev => ({
             ...prev,
             [studentId]: { ...prev[studentId], [field]: value },
         }));
     };
 
+    const applyToAll = (field: 'total' | 'dueDate', value: string) => {
+        if (!value) return;
+        setBatchEntries(prev => Object.fromEntries(Object.entries(prev).map(([id, e]) => [id, { ...e, [field]: value }])));
+    };
+
+    const batchChanges = useMemo(() => {
+        const rows = Object.values(batchEntries);
+        const fees = rows.filter(feeChanged).length;
+        const payments = rows.filter(e => Number(e.payNow) > 0);
+        return { fees, payments: payments.length, paymentTotal: payments.reduce((sum, e) => sum + Number(e.payNow), 0) };
+    }, [batchEntries]);
+
     const saveBatch = async () => {
         setBatchSaving(true);
         setBatchMsg(null);
         const errors: string[] = [];
-        let saved = 0;
+        let savedFees = 0;
+        let savedPayments = 0;
+        const nameOf = (id: string) => batchStudents.find(s => s.id === id)?.name || 'A student';
 
-        const promises = Object.entries(batchEntries).map(async ([studentId, entry]) => {
-            // Skip untouched rows, but let an explicit 0 through (fee waivers).
-            if (entry.total === '' || entry.total == null) return;
-            const totalValue = parseFloat(entry.total);
-            if (isNaN(totalValue) || totalValue < 0) return;
-            try {
-                const res = await fetch('/api/school/fees', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        student_id: studentId,
-                        term_id: batchTerm,
-                        total_fee: totalValue,
-                        due_date: entry.dueDate || null,
-                        notes: entry.notes || null,
-                    }),
-                });
-                if (!res.ok) {
-                    const errData = await res.json();
-                    errors.push(`${batchStudents.find(s => s.id === studentId)?.name || studentId}: ${errData.error}`);
-                    return;
-                }
-                const { data: savedFee } = await res.json();
+        await Promise.all(Object.entries(batchEntries).map(async ([studentId, entry]) => {
+            const payNow = Number(entry.payNow) || 0;
+            const saveFee = feeChanged(entry);
+            if (!saveFee && payNow <= 0) return;
 
-                // paid_amount is ledger-derived — only log a payment for the
-                // NEW money entered here (vs. what was already recorded), so
-                // resaving a batch screen unchanged never double-counts.
-                const enteredPaid = parseFloat(entry.paid) || 0;
-                const alreadyPaid = entry.existing?.paidAmount ?? 0;
-                const delta = enteredPaid - alreadyPaid;
-                if (delta > 0 && savedFee?.id) {
-                    await fetch(`/api/school/fees/${savedFee.id}/payments`, {
+            const total = Number(entry.total);
+            if (entry.total !== '' && (isNaN(total) || total < 0)) {
+                errors.push(`${nameOf(studentId)}: the fee must be 0 or more`);
+                return;
+            }
+            if (payNow < 0) {
+                errors.push(`${nameOf(studentId)}: a payment can't be negative. Void a receipt from Payment history instead.`);
+                return;
+            }
+
+            let feeId = entry.existing?.id ?? null;
+            if (saveFee) {
+                try {
+                    const res = await fetch('/api/school/fees', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: delta, method: 'OTHER', notes: 'Batch entry' }),
+                        body: JSON.stringify({ student_id: studentId, term_id: batchTerm, total_fee: total, due_date: entry.dueDate || null, notes: entry.notes || null }),
                     });
+                    const body: { data?: { id: string }; error?: string } = await res.json();
+                    if (!res.ok || !body.data) {
+                        errors.push(`${nameOf(studentId)}: ${body.error || 'fee not saved'}`);
+                        return;
+                    }
+                    feeId = body.data.id;
+                    savedFees++;
+                } catch {
+                    errors.push(`${nameOf(studentId)}: fee not saved`);
+                    return;
                 }
-                saved++;
-            } catch {
-                errors.push(batchStudents.find(s => s.id === studentId)?.name || studentId);
             }
-        });
 
-        await Promise.all(promises);
+            if (payNow > 0) {
+                if (!feeId) {
+                    errors.push(`${nameOf(studentId)}: set a fee before recording a payment`);
+                    return;
+                }
+                try {
+                    const res = await fetch(`/api/school/fees/${feeId}/payments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: payNow, method: batchMethod, notes: 'Batch entry' }),
+                    });
+                    if (!res.ok) {
+                        const body: { error?: string } = await res.json().catch(() => ({}));
+                        errors.push(`${nameOf(studentId)}: payment not recorded (${body.error || res.status})`);
+                        return;
+                    }
+                    savedPayments++;
+                } catch {
+                    errors.push(`${nameOf(studentId)}: payment not recorded`);
+                }
+            }
+        }));
+
+        // Always reload: rows that did save now have a new "paid so far", and a
+        // stale screen is what let a second save record the same money twice.
+        await Promise.all([fetchFees(), loadBatchStudents()]);
         setBatchSaving(false);
 
-        // Refresh either way: on a partial save the rows that did go through are
-        // already changed on the server, and leaving them off the screen makes
-        // the failure look bigger than it is.
-        await fetchFees();
-
-        if (errors.length === 0) {
-            setBatchMsg({ type: 'success', text: `${saved} fee record(s) saved successfully.` });
-        } else {
-            setBatchMsg({ type: 'error', text: `Saved ${saved}, but ${errors.length} failed. ${errors.slice(0, 3).join('; ')}` });
-        }
+        const summary = `${savedFees} fee record(s) saved, ${savedPayments} payment(s) recorded.`;
+        setBatchMsg(errors.length === 0
+            ? { type: 'success', text: summary }
+            : { type: 'error', text: `${summary} ${errors.length} problem(s): ${errors.slice(0, 4).join('; ')}${errors.length > 4 ? '…' : ''}` });
     };
 
     const clearBatch = () => {
+        setBulkFee('');
+        setBulkDue('');
         setBatchEntries({});
         setBatchStudents([]);
         setBatchMsg(null);
@@ -673,6 +753,16 @@ export default function FeesPage() {
                 ))}
             </div>
 
+            {unmatchedCount > 0 && (
+                <div role="status" className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm">
+                        <span className="font-semibold">{unmatchedCount} M-Pesa payment{unmatchedCount === 1 ? '' : 's'} not matched to a student.</span>{' '}
+                        <span className="text-muted-foreground">The payer used an account number we couldn&apos;t recognise. Assign it so it counts towards the right balance.</span>
+                    </p>
+                    <a href="/dashboard/settings?tab=payments" className="btn-secondary w-full shrink-0 sm:w-auto">Assign payments</a>
+                </div>
+            )}
+
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatTile icon={Wallet} label="Expected" value={formatCurrency(kpi.expected)} hint={`${totalRecords} record(s)`} />
@@ -708,122 +798,137 @@ export default function FeesPage() {
                 <div>
                     <div className="mb-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
                         <h2 className="font-semibold">Batch fee entry</h2>
-                        <p className="mt-0.5 mb-4 text-xs text-muted-foreground">Pick a class and term, then enter each student&apos;s fee and anything already paid.</p>
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                        <p className="mt-0.5 mb-4 text-xs text-muted-foreground">
+                            Pick a class and term, set each student&apos;s fee, and enter any money received now. Payments already on record are shown, not re-entered.
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-2">
                             <div>
-                                <label className="mb-2 block text-xs font-medium text-muted-foreground">Class</label>
-                                <select className="input-field w-full" value={batchStream} onChange={e => setBatchStream(e.target.value)}>
-                                    <option value="">Select class...</option>
-                                    {gradeStreams.map(s => (
-                                        <option key={s.id} value={s.id}>{s.full_name}</option>
-                                    ))}
+                                <label htmlFor="batch-class" className="mb-2 block text-xs font-medium text-muted-foreground">Class</label>
+                                <select id="batch-class" className="input-field w-full" value={batchStream} onChange={e => setBatchStream(e.target.value)}>
+                                    <option value="">Select class…</option>
+                                    {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="mb-2 block text-xs font-medium text-muted-foreground">Term</label>
-                                <TermSelect terms={terms} years={years} value={batchTerm} onChange={setBatchTerm} emptyLabel="Select term…" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button className="btn-primary" onClick={saveBatch} disabled={batchSaving || !batchStream || !batchTerm || batchStudents.length === 0}>
-                                    <Save className="size-4" aria-hidden="true" />{batchSaving ? 'Saving…' : 'Save all'}
-                                </button>
-                                <button className="btn-secondary" onClick={clearBatch}>
-                                    <RotateCcw className="size-4" aria-hidden="true" />Clear
-                                </button>
+                                <label htmlFor="batch-term" className="mb-2 block text-xs font-medium text-muted-foreground">Term</label>
+                                <TermSelect id="batch-term" terms={terms} years={years} value={batchTerm} onChange={setBatchTerm} emptyLabel="Select term…" />
                             </div>
                         </div>
+
+                        {batchStream && batchTerm && batchStudents.length > 0 && (
+                            <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 md:grid-cols-3">
+                                <div>
+                                    <label htmlFor="bulk-fee" className="mb-2 block text-xs font-medium text-muted-foreground">Same fee for everyone (KSh)</label>
+                                    <div className="flex gap-2">
+                                        <input id="bulk-fee" type="number" inputMode="decimal" min="0" step="0.01" className="input-field min-w-0 flex-1" placeholder="e.g. 45000" value={bulkFee} onChange={e => setBulkFee(e.target.value)} />
+                                        <button type="button" className="btn-secondary h-11 shrink-0" onClick={() => applyToAll('total', bulkFee)} disabled={!bulkFee}>Apply</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label htmlFor="bulk-due" className="mb-2 block text-xs font-medium text-muted-foreground">Same due date for everyone</label>
+                                    <div className="flex gap-2">
+                                        <input id="bulk-due" type="date" className="input-field min-w-0 flex-1" value={bulkDue} onChange={e => setBulkDue(e.target.value)} />
+                                        <button type="button" className="btn-secondary h-11 shrink-0" onClick={() => applyToAll('dueDate', bulkDue)} disabled={!bulkDue}>Apply</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label htmlFor="batch-method" className="mb-2 block text-xs font-medium text-muted-foreground">Payments below were received by</label>
+                                    <select id="batch-method" className="input-field w-full" value={batchMethod} onChange={e => setBatchMethod(e.target.value as FeePaymentMethod)}>
+                                        {FEE_PAYMENT_METHODS.filter(m => m !== 'PESAPAL').map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
                         {batchMsg && (
-                            <div role={batchMsg.type === 'error' ? 'alert' : 'status'} className={cn('mt-3 rounded-xl border p-3 text-sm', batchMsg.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'border-destructive/30 bg-destructive/5 text-destructive')}>
+                            <div role={batchMsg.type === 'error' ? 'alert' : 'status'} className={cn('mt-4 rounded-xl border p-3 text-sm', batchMsg.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'border-destructive/30 bg-destructive/5 text-destructive')}>
                                 {batchMsg.text}
                             </div>
                         )}
                     </div>
 
-                    {batchStream && batchTerm && (
+                    {!batchStream || !batchTerm ? (
+                        <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                            Choose a class and a term to load its students.
+                        </div>
+                    ) : batchStudents.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                            No active students in this class.
+                        </div>
+                    ) : (
                         <>
-                            {batchStudents.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                                    No active students in this class.
+                            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
+                                <div className="w-full overflow-x-auto">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th className="min-w-44">Student</th>
+                                                <th className="min-w-32">Fee (KSh)</th>
+                                                <th className="min-w-28 text-right">Paid so far</th>
+                                                <th className="min-w-32">Payment now (KSh)</th>
+                                                <th className="min-w-28 text-right">Balance after</th>
+                                                <th className="min-w-36">Due date</th>
+                                                <th className="min-w-32">Notes</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {batchStudents.map(s => {
+                                                const entry = batchEntries[s.id];
+                                                if (!entry) return null;
+                                                const hasTotal = entry.total !== '';
+                                                const total = Number(entry.total) || 0;
+                                                const paidSoFar = entry.existing?.paidAmount ?? 0;
+                                                const paidAfter = paidSoFar + (Number(entry.payNow) || 0);
+                                                const balance = total - paidAfter;
+                                                const dirty = feeChanged(entry) || Number(entry.payNow) > 0;
+                                                return (
+                                                    <tr key={s.id} className={cn(dirty && 'bg-primary/[0.04]')}>
+                                                        <td data-label="Student">
+                                                            <div className="font-semibold">{s.name}</div>
+                                                            <div className="text-[11px] text-muted-foreground">{s.admission || 'No admission no.'}{entry.existing ? '' : ' · not billed yet'}</div>
+                                                        </td>
+                                                        <td data-label="Fee (KSh)">
+                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Fee for ${s.name}`} value={entry.total} onChange={e => updateBatchEntry(s.id, 'total', e.target.value)} />
+                                                        </td>
+                                                        <td data-label="Paid so far" className="text-right tabular-nums text-muted-foreground">{paidSoFar.toLocaleString()}</td>
+                                                        <td data-label="Payment now">
+                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Payment received now for ${s.name}`} value={entry.payNow} onChange={e => updateBatchEntry(s.id, 'payNow', e.target.value)} />
+                                                        </td>
+                                                        <td data-label="Balance after" className="text-right font-mono font-semibold tabular-nums" style={{ color: hasTotal ? balanceColor(balance) : undefined }}>
+                                                            {hasTotal ? balance.toLocaleString() : '—'}
+                                                        </td>
+                                                        <td data-label="Due date">
+                                                            <input type="date" className="input-field input-field-sm min-w-32" aria-label={`Due date for ${s.name}`} value={entry.dueDate} onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)} />
+                                                        </td>
+                                                        <td data-label="Notes">
+                                                            <input type="text" className="input-field input-field-sm w-full min-w-24" placeholder="Notes" aria-label={`Notes for ${s.name}`} value={entry.notes} onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)} />
+                                                        </td>
+                                                        <td data-label="Status">{hasTotal ? statusBadge(computeFeeStatus(total, paidAfter)) : '—'}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            ) : (
-                                <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
-                                    <div className="w-full overflow-x-auto">
-                                      <table className="data-table">
-                                          <thead>
-                                              <tr>
-                                                  <th className="min-w-44">Student</th>
-                                                  <th>Admission</th>
-                                                  <th className="min-w-28">Total fee (KSh)</th>
-                                                  <th className="min-w-28">Paid (KSh)</th>
-                                                  <th className="min-w-24">Balance</th>
-                                                  <th className="min-w-36">Due date</th>
-                                                  <th>Notes</th>
-                                                  <th>Status</th>
-                                              </tr>
-                                          </thead>
-                                          <tbody>
-                                              {batchStudents.map(s => {
-                                                  const entry = batchEntries[s.id];
-                                                  const hasTotal = !!entry?.total && entry.total !== '';
-                                                  const total = parseFloat(entry?.total || '0');
-                                                  const paid = parseFloat(entry?.paid || '0');
-                                                  const balance = total - paid;
-                                                  const status = computeFeeStatus(total, paid);
-                                                  return (
-                                                      <tr key={s.id}>
-                                                          <td data-label="Student" className="font-semibold">{s.name}</td>
-                                                          <td data-label="Admission" className="text-muted-foreground text-xs">{s.admission}</td>
-                                                          <td data-label="Total Fee">
-                                                              <input
-                                                                  type="number"
-                                                                  min="0"
-                                                                  step="0.01"
-                                                                  className="input-field input-field-sm w-full min-w-24"
-                                                                  placeholder="0"
-                                                                  value={entry?.total || ''}
-                                                                  onChange={e => updateBatchEntry(s.id, 'total', e.target.value)}
-                                                              />
-                                                          </td>
-                                                          <td data-label="Paid">
-                                                              <input
-                                                                  type="number"
-                                                                  min="0"
-                                                                  step="0.01"
-                                                                  className="input-field input-field-sm w-full min-w-24"
-                                                                  placeholder="0"
-                                                                  value={entry?.paid || ''}
-                                                                  onChange={e => updateBatchEntry(s.id, 'paid', e.target.value)}
-                                                              />
-                                                          </td>
-                                                          <td data-label="Balance" className="font-mono font-semibold tabular-nums" style={{ color: balanceColor(balance) }}>
-                                                              {hasTotal ? balance.toLocaleString() : '—'}
-                                                          </td>
-                                                          <td data-label="Due Date">
-                                                              <input
-                                                                  type="date"
-                                                                  className="input-field input-field-sm min-w-32"
-                                                                  value={entry?.dueDate || ''}
-                                                                  onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)}
-                                                              />
-                                                          </td>
-                                                          <td data-label="Notes">
-                                                              <input
-                                                                  type="text"
-                                                                  className="input-field input-field-sm w-full min-w-24"
-                                                                  placeholder="Notes"
-                                                                  value={entry?.notes || ''}
-                                                                  onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)}
-                                                              />
-                                                          </td>
-                                                          <td data-label="Status">{hasTotal ? statusBadge(status) : '—'}</td>
-                                                      </tr>
-                                                  );
-                                              })}
-                                          </tbody>
-                                      </table>
-                                    </div>
+                            </div>
+
+                            {/* Sticky save bar: the table can be long, the button must stay reachable. */}
+                            <div className="sticky bottom-20 z-10 mt-4 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between md:bottom-4">
+                                <p className="text-sm text-muted-foreground" aria-live="polite">
+                                    {batchChanges.fees === 0 && batchChanges.payments === 0
+                                        ? 'No changes yet.'
+                                        : `${batchChanges.fees} fee change(s) · ${batchChanges.payments} payment(s) totalling ${formatCurrency(batchChanges.paymentTotal)}`}
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button className="btn-secondary" onClick={loadBatchStudents} disabled={batchSaving}>
+                                        <RotateCcw className="size-4" aria-hidden="true" />Discard
+                                    </button>
+                                    <button className="btn-primary" onClick={saveBatch} disabled={batchSaving || (batchChanges.fees === 0 && batchChanges.payments === 0)}>
+                                        <Save className="size-4" aria-hidden="true" />{batchSaving ? 'Saving…' : 'Save all'}
+                                    </button>
                                 </div>
-                            )}
+                            </div>
                         </>
                     )}
                 </div>
@@ -925,7 +1030,7 @@ export default function FeesPage() {
                                 {p.status !== 'CANCELLED' && (
                                     <a
                                         className="btn-icon text-muted-foreground hover:text-foreground"
-                                        href={`/api/school/fees/payments/${p.id}/receipt`}
+                                        href={receiptUrl(p.id)}
                                         target="_blank"
                                         rel="noreferrer"
                                         title="Download Receipt"
@@ -1028,7 +1133,7 @@ export default function FeesPage() {
                                     render: fee => (
                                         <div className="min-w-0">
                                             <div className="truncate text-sm font-semibold">{fee.studentName || '—'}</div>
-                                            <div className="text-[11px] text-muted-foreground">{fee.admissionNumber || ''}{fee.termName ? ` · ${fee.termName}` : ''}</div>
+                                            <div className="text-[11px] text-muted-foreground">{[fee.className, fee.admissionNumber, fee.termName].filter(Boolean).join(' · ')}</div>
                                         </div>
                                     ),
                                 },
@@ -1062,9 +1167,10 @@ export default function FeesPage() {
                             ]}
                             rows={filtered}
                             rowKey={fee => fee.id}
+                            onRowClick={openHistory}
                             rowActions={fee => (
-                                <span className="whitespace-nowrap">
-                                    <button className="btn-icon text-primary hover:text-primary" onClick={() => openPay(fee)} title="Record payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign size={14} /></button>
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                                    <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment history" aria-label={`Payment history for ${fee.studentName ?? 'student'}`}><History size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>
                                     {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
@@ -1089,6 +1195,17 @@ export default function FeesPage() {
                             {!editingFee && (
                                 <>
                                     <div>
+                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
+                                        <TermSelect terms={terms} years={years} value={formTerm} onChange={v => { setFormTerm(v); setFormStudent(''); }} emptyLabel="Select term…" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="fee-class" className="mb-2 block text-xs font-semibold text-muted-foreground">Class</label>
+                                        <select id="fee-class" value={formClass} onChange={e => { setFormClass(e.target.value); setFormStudent(''); }} className="input-field w-full">
+                                            <option value="">All classes</option>
+                                            {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
                                         <label className="mb-2 block text-xs font-semibold text-muted-foreground">Student *</label>
                                         <select
                                             value={formStudent}
@@ -1097,18 +1214,14 @@ export default function FeesPage() {
                                         >
                                             <option value="">Select student...</option>
                                             {availableStudentsForAdd.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name} ({s.admission})</option>
+                                                <option key={s.id} value={s.id}>{s.name}{s.admission ? ` (${s.admission})` : ''}</option>
                                             ))}
                                         </select>
-                                        {billedAdmissionsForFormTerm.size > 0 && (
+                                        {billedStudentsForFormTerm.size > 0 && (
                                             <p className="mt-1 text-[11px] text-muted-foreground">
-                                                {billedAdmissionsForFormTerm.size} student(s) already have a record for this term and are hidden here — edit them from the list instead.
+                                                {billedStudentsForFormTerm.size} student(s) already have a record for this term and are hidden here — edit them from the list instead.
                                             </p>
                                         )}
-                                    </div>
-                                    <div>
-                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
-                                        <TermSelect terms={terms} years={years} value={formTerm} onChange={v => { setFormTerm(v); setFormStudent(''); }} emptyLabel="Select term…" />
                                     </div>
                                 </>
                             )}
@@ -1155,6 +1268,17 @@ export default function FeesPage() {
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
                                     <input type="number" inputMode="decimal" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
+                                    {payingFee.balance > 0 && (
+                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                            Balance {formatCurrency(payingFee.balance)}
+                                            {Number(payAmount) > payingFee.balance && ' · more than the balance; the extra is kept as credit (overpaid)'}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label htmlFor="pay-date" className="mb-2 block text-xs font-semibold text-muted-foreground">Date paid</label>
+                                    <input id="pay-date" type="date" value={payDate} max={todayIso()} onChange={e => setPayDate(e.target.value)} className="input-field w-full" />
+                                    <p className="mt-1 text-[11px] text-muted-foreground">Change it when recording an older deposit slip or M-Pesa message.</p>
                                 </div>
                                 <div>
                                     <label className="mb-2 block text-xs font-semibold text-muted-foreground">Payment Method</label>
@@ -1192,11 +1316,16 @@ export default function FeesPage() {
                     <Modal isOpen={!!historyFee} onClose={() => setHistoryFee(null)} title="Payment history" size="lg">
                         {historyFee && (
                             <div>
-                                <div className="mb-4 rounded-xl bg-muted/40 p-3 text-sm">
-                                    <div className="font-semibold">{historyFee.studentName}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {historyFee.admissionNumber} · {historyFee.termName} · {formatCurrency(historyFee.paidAmount)} of {formatCurrency(historyFee.totalFee)} paid
+                                <div className="mb-4 flex flex-col gap-3 rounded-xl bg-muted/40 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <div className="font-semibold">{historyFee.studentName}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {[historyFee.className, historyFee.admissionNumber, historyFee.termName].filter(Boolean).join(' · ')} · {formatCurrency(historyFee.paidAmount)} of {formatCurrency(historyFee.totalFee)} paid
+                                        </div>
                                     </div>
+                                    <button className="btn-primary h-9 shrink-0 text-xs" onClick={() => { const fee = historyFee; setHistoryFee(null); openPay(fee); }}>
+                                        <CircleDollarSign className="size-3.5" aria-hidden="true" />Record payment
+                                    </button>
                                 </div>
                                 {historyLoading ? (
                                     <p className="py-8 text-center text-sm text-muted-foreground">Loading…</p>
@@ -1233,7 +1362,7 @@ export default function FeesPage() {
                                                                   <>
                                                                       <a
                                                                           className="btn-icon text-muted-foreground hover:text-foreground"
-                                                                          href={`/api/school/fees/payments/${p.id}/receipt`}
+                                                                          href={receiptUrl(p.id)}
                                                                           target="_blank"
                                                                           rel="noreferrer"
                                                                           title="Download Receipt"
