@@ -9,6 +9,8 @@
  * This API has been stable and unchanged in shape since ~2018.
  */
 
+import { normalizeMpesaPhone } from './phone';
+
 export type MpesaEnvironment = 'sandbox' | 'production';
 
 export interface MpesaCredentials {
@@ -34,17 +36,8 @@ function generatePassword(shortcode: string, passkey: string, timestamp: string)
     return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
 }
 
-/**
- * Normalizes Kenyan phone numbers to the 2547XXXXXXXX / 2541XXXXXXXX form
- * Daraja requires, accepting the common local formats (07.., +2547.., 2547..).
- */
-export function normalizeMpesaPhone(phone: string): string | null {
-    const digits = phone.replace(/\D/g, '');
-    if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`;
-    if (/^254[17]\d{8}$/.test(digits)) return digits;
-    if (/^[17]\d{8}$/.test(digits)) return `254${digits}`;
-    return null;
-}
+/** Re-exported for existing importers; it lives in ./phone so the browser can use it too. */
+export { normalizeMpesaPhone };
 
 export async function getMpesaAccessToken(creds: Pick<MpesaCredentials, 'environment' | 'consumerKey' | 'consumerSecret'>): Promise<string> {
     const auth = Buffer.from(`${creds.consumerKey}:${creds.consumerSecret}`).toString('base64');

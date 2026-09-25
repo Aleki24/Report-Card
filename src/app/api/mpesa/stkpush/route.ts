@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { FEE_VIEWER_ROLES } from '@/lib/fees';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
 import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
+import { normalizeMpesaPhone } from '@/lib/phone';
 
 export const runtime = 'nodejs';
 
@@ -47,9 +48,15 @@ export async function POST(request: NextRequest) {
         }
 
         const balance = Number(fee.total_fee) - Number(fee.paid_amount);
-        const amountValue = amount != null ? Number(amount) : balance;
-        if (isNaN(amountValue) || amountValue <= 0) {
-            return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 });
+        // M-Pesa only moves whole shillings (Daraja rounds the amount), so round
+        // here too: the reserved ledger row then shows what is really charged.
+        const amountValue = Math.round(amount != null ? Number(amount) : balance);
+        if (isNaN(amountValue) || amountValue < 1) {
+            return NextResponse.json({ error: 'Enter an amount of at least KSh 1.' }, { status: 400 });
+        }
+        // Reject a mistyped number before reserving a ledger row for it.
+        if (!normalizeMpesaPhone(String(phone_number))) {
+            return NextResponse.json({ error: 'Enter a Safaricom number like 0712 345 678.' }, { status: 400 });
         }
 
         const { data: settings } = await supabase
