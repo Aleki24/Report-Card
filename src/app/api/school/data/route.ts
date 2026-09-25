@@ -284,12 +284,17 @@ export async function GET(request: NextRequest) {
       case 'terms': {
         const { data, error } = await supabase
           .from('terms')
-          .select('id, name, academic_year_id, start_date, end_date, is_current, midterm_reopening_date, reopening_date')
+          .select('id, name, academic_year_id, start_date, end_date, is_current, midterm_reopening_date, reopening_date, academic_years ( name )')
           .eq('school_id', schoolId)
           .order('start_date');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+        // "Term 1" repeats every year; the year name tells them apart.
+        const terms = (data ?? []).map(({ academic_years, ...term }) => ({
+          ...term,
+          academic_year_name: embedOne(academic_years as { name: string } | { name: string }[] | null)?.name ?? null,
+        }));
+        return NextResponse.json({ data: terms });
       }
 
       case 'users': {

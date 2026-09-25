@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, Camera, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Camera, ChevronDown, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -17,7 +17,7 @@ import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
-interface Term { id: string; name: string; academic_year_id: string; is_current: boolean; }
+interface Term { id: string; name: string; academic_year_id: string; academic_year_name?: string | null; is_current: boolean; }
 interface AcademicLevel { id: string; code: string; name: string; }
 interface GradeItem { id: string; name_display: string; academic_level_id: string; }
 interface ExamSlot {
@@ -25,6 +25,8 @@ interface ExamSlot {
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
   grade_id: string; grade_name: string; term_id: string;
   grade_stream_id?: string | null; grade_stream_name?: string | null;
+  /** APPROVED once results are released to learners and parents. */
+  status?: string;
 }
 /** A subject shown in the picker; `hasExam` is false for a teacher's subject with no exam slot yet. */
 interface SubjectChoice { subject_id: string; subject_name: string; subject_code: string; subject_category: string; hasExam: boolean; }
@@ -51,8 +53,11 @@ function writeLastExam(value: LastExam): void {
 
 async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
   const res = await fetch(`/api/school/exams?term_id=${encodeURIComponent(termId)}`, { cache: 'no-store' });
-  const json = (await res.json()) as { data?: ExamSlot[] };
-  return json.data ?? [];
+  const json = (await res.json().catch(() => null)) as { data?: ExamSlot[]; error?: string } | null;
+  // Throw rather than return []: an empty list reads as "no exams set up yet"
+  // and invites an admin to set the term up again.
+  if (!res.ok) throw new Error(json?.error || 'Could not load this term’s exams.');
+  return json?.data ?? [];
 }
 
 const CATEGORY_ORDER: Record<string, number> = { LANGUAGE: 1, MATHEMATICS: 2, SCIENCE: 3, HUMANITY: 4, TECHNICAL: 5, CREATIVE: 6 };
@@ -155,6 +160,9 @@ export function MarksSetupTab() {
 
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
+  const [termsError, setTermsError] = useState('');
+  const [examsError, setExamsError] = useState('');
+  const [examsReloadToken, setExamsReloadToken] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const [seedMsg, setSeedMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -190,6 +198,17 @@ export function MarksSetupTab() {
 
   const gradeLevelMap = new Map(allGrades.map(g => [g.id, g.academic_level_id]));
 
+  // Terms by academic year, newest year first: "Term 1" repeats every year.
+  const termGroups = (() => {
+    const groups = new Map<string, { yearId: string; yearName: string; terms: Term[] }>();
+    for (const t of terms) {
+      const group = groups.get(t.academic_year_id) ?? { yearId: t.academic_year_id, yearName: t.academic_year_name || 'Other', terms: [] };
+      group.terms.push(t);
+      groups.set(t.academic_year_id, group);
+    }
+    return [...groups.values()].reverse();
+  })();
+
   // ── Academic structure (levels + grades) ──
   useEffect(() => {
     (async () => {
@@ -215,12 +234,14 @@ export function MarksSetupTab() {
   }, [profile?.role]);
 
   // ── Terms: open the linked term, else the active one ──
-  useEffect(() => {
-    (async () => {
+  const loadTerms = useCallback(async () => {
+      setLoadingTerms(true);
+      setTermsError('');
       try {
         const res = await fetch('/api/school/data?type=terms', { cache: 'no-store' });
-        const json = (await res.json()) as { data?: Term[] };
-        const termList = json.data ?? [];
+        const json = (await res.json().catch(() => null)) as { data?: Term[]; error?: string } | null;
+        if (!res.ok) throw new Error(json?.error || 'Could not load terms.');
+        const termList = json?.data ?? [];
         setTerms(termList);
         const linkedTermExists = !!linkedTermId && termList.some(t => t.id === linkedTermId);
         const initial = linkedTermExists ? linkedTermId : findActiveTermId(termList) ?? termList[0]?.id ?? '';
@@ -228,13 +249,16 @@ export function MarksSetupTab() {
           pendingExamRef.current = { termId: initial, examId: linkedExamId };
           handledLinkRef.current = `${linkedTermId}:${linkedExamId}`;
         }
-        setSelectedTermId(initial);
-      } catch (err) { console.error('Failed to fetch terms:', err); }
+        setSelectedTermId(prev => prev || initial);
+      } catch (err) {
+        setTermsError(err instanceof Error ? err.message : 'Could not load terms.');
+      }
       setLoadingTerms(false);
-    })();
-    // Runs once: later link changes are handled by the effect below.
+    // Reads the deep link once: later link changes are handled by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => { void loadTerms(); }, [loadTerms]);
 
   const resetSelection = useCallback(() => {
     setSelectedExamType('');
@@ -262,8 +286,10 @@ export function MarksSetupTab() {
     setLoadingExams(true);
     (async () => {
       let list: ExamSlot[] = [];
-      try { list = await fetchTermExams(selectedTermId); } catch (err) { console.error('Failed to fetch exams:', err); }
+      let failure = '';
+      try { list = await fetchTermExams(selectedTermId); } catch (err) { failure = err instanceof Error ? err.message : 'Could not load this term’s exams.'; }
       if (cancelled) return;
+      setExamsError(failure);
       setExams(list);
       const pending = pendingExamRef.current;
       const target = pending?.termId === selectedTermId ? list.find(e => e.id === pending.examId) : undefined;
@@ -272,11 +298,11 @@ export function MarksSetupTab() {
       setLoadingExams(false);
     })();
     return () => { cancelled = true; };
-  }, [selectedTermId, applyExam, resetSelection]);
+  }, [selectedTermId, applyExam, resetSelection, examsReloadToken]);
 
   const reloadExams = async () => {
     if (!selectedTermId) return;
-    try { setExams(await fetchTermExams(selectedTermId)); } catch (err) { console.error('Failed to fetch exams:', err); }
+    try { setExams(await fetchTermExams(selectedTermId)); setExamsError(''); } catch (err) { setExamsError(err instanceof Error ? err.message : 'Could not load this term’s exams.'); }
   };
 
   const openExam = useCallback((termId: string, examId: string) => {
@@ -390,7 +416,10 @@ export function MarksSetupTab() {
     ? (examScheme?.components ?? []).map(c => `${c.component_code}/${Number(c.max_score)}`).join(' + ')
     : '';
 
-  const selectedTermName = terms.find(t => t.id === selectedTermId)?.name ?? '';
+  const selectedTerm = terms.find(t => t.id === selectedTermId);
+  const selectedTermName = selectedTerm
+    ? `${selectedTerm.name}${termGroups.length > 1 && selectedTerm.academic_year_name ? ` ${selectedTerm.academic_year_name}` : ''}`
+    : '';
   const activeTermId = findActiveTermId(terms);
   const selectedClassName = selectedExam ? selectedExam.grade_stream_name || selectedExam.grade_name : '';
 
@@ -471,6 +500,17 @@ export function MarksSetupTab() {
             </button>
           </div>
         </div>
+
+        {selectedExam.status === 'APPROVED' && (
+          <div role="status" className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>
+              <strong className="font-semibold">These results are already released.</strong>{' '}
+              Changes you save here show straight away on report cards and on the page parents open from the QR code.
+              To make several corrections quietly, withdraw the results on the <em>Release Results</em> tab first.
+            </p>
+          </div>
+        )}
 
         <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-muted/50 p-1 sm:inline-grid sm:w-auto" role="tablist" aria-label="How to enter marks">
           {MODES.map(m => (
@@ -554,17 +594,28 @@ export function MarksSetupTab() {
       <StepCard step={1} title="Term" done={!!selectedTermId}>
         {loadingTerms ? (
           <p className="text-xs text-muted-foreground">Loading terms…</p>
+        ) : termsError ? (
+          <LoadError message={termsError} onRetry={() => void loadTerms()} />
         ) : terms.length === 0 ? (
           <p className="text-sm text-amber-700 dark:text-amber-400">No terms found. Ask your admin to set up the academic calendar.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            {terms.map(t => (
-              <ChoiceChip key={t.id} active={selectedTermId === t.id} onClick={() => setSelectedTermId(t.id)}>
-                {t.name}
-                {t.id === activeTermId && (
-                  <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', selectedTermId === t.id ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>
+          <div className="flex flex-col gap-3">
+            {termGroups.map(group => (
+              <div key={group.yearId} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                {termGroups.length > 1 && (
+                  <span className="w-24 shrink-0 text-xs font-semibold text-muted-foreground">{group.yearName}</span>
                 )}
-              </ChoiceChip>
+                <div className="flex flex-wrap gap-2">
+                  {group.terms.map(t => (
+                    <ChoiceChip key={t.id} active={selectedTermId === t.id} onClick={() => setSelectedTermId(t.id)}>
+                      {t.name}
+                      {t.id === activeTermId && (
+                        <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', selectedTermId === t.id ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>
+                      )}
+                    </ChoiceChip>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -573,7 +624,9 @@ export function MarksSetupTab() {
       {/* ② Exam */}
       {selectedTermId && (
         <StepCard step={2} title="Exam" hint={loadingExams ? 'Loading…' : undefined} done={!!selectedExamType}>
-          {!loadingExams && availableExamTypes.length === 0 ? (
+          {!loadingExams && examsError ? (
+            <LoadError message={examsError} onRetry={() => setExamsReloadToken(t => t + 1)} />
+          ) : !loadingExams && availableExamTypes.length === 0 ? (
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-4">
               <p className="mb-3 text-sm text-muted-foreground">
                 No exams set up yet for <strong className="text-foreground">{selectedTermName}</strong>.
@@ -801,6 +854,17 @@ export function MarksSetupTab() {
           preselectedSubjectId={createSubjectId}
         />
       )}
+    </div>
+  );
+}
+
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+      <span className="min-w-0">{message}</span>
+      <button type="button" onClick={onRetry} className="btn-secondary h-9 shrink-0 px-3 text-xs">
+        <RefreshCw size={14} aria-hidden /> Try again
+      </button>
     </div>
   );
 }
