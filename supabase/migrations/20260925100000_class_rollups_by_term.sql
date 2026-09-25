@@ -85,3 +85,8 @@ revoke execute on function public.school_class_performance_for_term(uuid, uuid, 
 grant execute on function public.school_class_performance_for_term(uuid, uuid, numeric) to service_role;
 revoke execute on function public.school_unmarked_exams_for_term(uuid, uuid) from public;
 grant execute on function public.school_unmarked_exams_for_term(uuid, uuid) to service_role;
+-- Supabase also grants EXECUTE on public functions to anon and authenticated
+-- directly, so the PUBLIC revoke alone left these callable with the browser's
+-- anon key for any school_id. Only the server (service_role) calls them.
+revoke execute on function public.school_class_performance_for_term(uuid, uuid, numeric) from anon, authenticated;
+revoke execute on function public.school_unmarked_exams_for_term(uuid, uuid) from anon, authenticated;
