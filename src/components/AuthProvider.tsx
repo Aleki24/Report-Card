@@ -6,6 +6,10 @@ import type { UserRole } from '@/types';
 import { resolveActiveRole } from '@/lib/roles';
 import { installPreviewFetch } from '@/lib/preview/preview-fetch';
 import { DEMO_SCHOOL_NAME } from '@/lib/preview/demo-school';
+import {
+    DEFAULT_ACCESS, PREVIEW_ACCESS, accessChecks, parseClientAccess,
+    type AccessChecks, type ClientAccess,
+} from '@/lib/platform/client-access';
 
 interface UserProfile {
     id: string;
@@ -23,7 +27,9 @@ interface UserProfile {
 
 export type { UserRole };
 
-interface AuthContextType {
+interface AuthContextType extends AccessChecks {
+    /** Modules the school runs, and what this person's role and duties allow. */
+    access: ClientAccess;
     user: { id: string; email: string } | null;
     profile: UserProfile | null;
     /** The effective role (active_role if switching, otherwise base role) */
@@ -82,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
     const [preview, setPreview] = useState(false);
     const [pendingSchoolName, setPendingSchoolName] = useState<string | null>(null);
+    const [access, setAccess] = useState<ClientAccess>(DEFAULT_ACCESS);
 
     const { userId } = clerkAuth;
 
@@ -146,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (inPreview) {
                     installPreviewFetch();
                     setPreview(true);
+                    setAccess(PREVIEW_ACCESS);
                     setPendingSchoolName(data.schoolName ?? null);
                     setProfile({
                         id: u.id || userId,
@@ -184,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     });
                     setBaseRole(dbBaseRole);
                 }
+                setAccess(parseClientAccess(data.access));
                 if (data.schoolName) setSchoolName(data.schoolName);
                 if (data.schoolOnboardingCompleted !== undefined) setSchoolOnboardingCompleted(data.schoolOnboardingCompleted);
             })
@@ -200,7 +209,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
     }, []);
 
+    const checks = useMemo(() => accessChecks(access), [access]);
+
     const value = useMemo<AuthContextType>(() => ({
+        access,
+        ...checks,
         user: userId && clerkUser
             ? { id: userId, email: clerkUser.emailAddresses?.[0]?.emailAddress || '' }
             : null,
@@ -225,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setDevRoleOverride,
         preview,
         pendingSchoolName,
-    }), [preview, pendingSchoolName, userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
+    }), [access, checks, preview, pendingSchoolName, userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
 
     return (
         <AuthContext.Provider value={value}>

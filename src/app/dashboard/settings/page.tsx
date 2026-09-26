@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, RotateCcw, School, Settings } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, RotateCcw, School, Settings, UserCog } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import EmptyState from '@/components/dashboard/EmptyState';
@@ -13,6 +13,8 @@ import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab, type AcademicYear, type Term } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
+import { ModulesTab } from '@/components/settings/ModulesTab';
+import { DutiesTab } from '@/components/settings/DutiesTab';
 import { SchoolForm, type SchoolProfile } from '@/components/settings/SchoolForm';
 import { isSeniorRankGroup } from '@/lib/ranking';
 import { PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
@@ -35,11 +37,13 @@ interface SettingsData {
   school: SchoolProfile;
 }
 
-type SettingsTab = 'profile' | 'calendar' | 'grading' | 'curriculum' | 'payments';
+type SettingsTab = 'profile' | 'modules' | 'duties' | 'calendar' | 'grading' | 'curriculum' | 'payments';
 type StructureType = 'academic_year' | 'term' | 'grading_system';
 
 const TABS: readonly PageTab<SettingsTab>[] = [
   { id: 'profile', label: 'School profile', shortLabel: 'Profile', icon: School, hue: 'amber' },
+  { id: 'modules', label: 'Modules', icon: LayoutGrid, hue: 'sky' },
+  { id: 'duties', label: 'Roles & duties', shortLabel: 'Duties', icon: UserCog, hue: 'rose' },
   { id: 'calendar', label: 'Academic calendar', shortLabel: 'Calendar', icon: CalendarRange, hue: 'blue' },
   { id: 'grading', label: 'Grading systems', shortLabel: 'Grading', icon: Award, hue: 'violet' },
   { id: 'curriculum', label: 'Curriculum', icon: BookOpen, hue: 'emerald' },
@@ -247,12 +251,12 @@ function SettingsPageInner() {
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-10">
-      <PageHeader title="School settings" eyebrow="Administration" icon={Settings} hue="slate" description="Your school's profile, academic calendar, grading and payments." />
+      <PageHeader title="School settings" eyebrow="Administration" icon={Settings} hue="slate" description="Your school's profile, modules, staff duties, academic calendar, grading and payments." />
 
       <PageTabs tabs={TABS} active={active} onSelect={select} label="Settings" idPrefix="settings" />
 
       <div role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${active}`}>
-        {active === 'payments' ? <PaymentsTab /> : load.state === 'loading' ? (
+        {active === 'payments' ? <PaymentsTab /> : active === 'modules' ? <ModulesTab /> : active === 'duties' ? <DutiesTab /> : load.state === 'loading' ? (
           <ContentSkeleton message="Loading settings..." />
         ) : load.state === 'error' ? (
           <div className="rounded-2xl border border-dashed border-border bg-card">

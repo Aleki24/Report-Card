@@ -89,7 +89,8 @@ function NavLink({ item, collapsed, active, badge, onHint }: NavLinkProps) {
 export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading } = useAuth();
+    const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading, can, hasModule } = useAuth();
+    const viewer = useMemo(() => ({ role, can, hasModule }), [role, can, hasModule]);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [schoolLogo, setSchoolLogo] = useState<string | null>(null);
@@ -119,17 +120,17 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const badges: Record<string, number> = role === "STUDENT" ? { "/student/dashboard": notifCount } : {};
 
     const groups = useMemo(() => {
-        const base = getNavGroups(role);
+        const base = getNavGroups(viewer);
         const q = searchQuery.trim().toLowerCase();
         if (!q) return base;
         return base
             .map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(q)) }))
             .filter((g) => g.items.length > 0);
-    }, [role, searchQuery]);
+    }, [viewer, searchQuery]);
 
-    const pinned = useMemo(() => getPinnedItems(role), [role]);
-    const mobileNav = useMemo(() => getMobileNav(role), [role]);
-    const currentPage = findNavItem(pathname, role);
+    const pinned = useMemo(() => getPinnedItems(viewer), [viewer]);
+    const mobileNav = useMemo(() => getMobileNav(viewer), [viewer]);
+    const currentPage = findNavItem(pathname, viewer);
 
     const handleSignOut = () => router.push("/logout");
     const homeHref = role === "STUDENT" ? "/student/dashboard" : "/dashboard";
