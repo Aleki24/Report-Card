@@ -9,6 +9,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import FilterBar, { FilterField } from '@/components/ui/FilterBar';
 import { Badge, Select } from '@/components/ui';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
+import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 
 interface ExamResult {
     id: string;
@@ -80,6 +81,8 @@ export default function StudentCombinedResultsPage() {
 }
 
 function ExamMarksTab() {
+    // Green from the school's own pass mark, as on its dashboards.
+    const passMark = useSchoolPassMark();
     const [results, setResults] = useState<ExamResult[]>([]);
     const [loading, setLoading] = useState(true);
     const [yearFilter, setYearFilter] = useState('');
@@ -132,11 +135,11 @@ function ExamMarksTab() {
         { key: 'score', header: 'Score', render: r => <span className="font-mono text-muted-foreground">{r.raw_score}/{r.exams?.max_score}</span> },
         {
             key: 'percentage', header: '%', numeric: true,
-            render: r => <span className={`font-bold ${Number(r.percentage) >= 50 ? 'text-emerald-600' : 'text-destructive'}`}>{r.percentage}%</span>,
+            render: r => <span className={`font-bold ${Number(r.percentage) >= passMark ? 'text-emerald-600' : 'text-destructive'}`}>{r.percentage}%</span>,
         },
         {
             key: 'grade', header: 'Grade',
-            render: r => <Badge variant={Number(r.percentage) >= 50 ? 'success' : 'danger'}>{r.grade_symbol || '—'}</Badge>,
+            render: r => <Badge variant={Number(r.percentage) >= passMark ? 'success' : 'danger'}>{r.grade_symbol || '—'}</Badge>,
         },
         { key: 'remarks', header: 'Remarks', hideOnMobile: true, render: r => <span className="text-muted-foreground">{r.remarks || '—'}</span> },
     ];
@@ -188,6 +191,8 @@ function ExamMarksTab() {
 }
 
 function ReportCardsTab() {
+    // Green from the school's own pass mark, as on its dashboards.
+    const passMark = useSchoolPassMark();
     const [reports, setReports] = useState<ReportCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [expanded, setExpanded] = useState<string | null>(null);
@@ -214,11 +219,11 @@ function ReportCardsTab() {
         { key: 'score', header: 'Score', render: s => <span className="text-muted-foreground">{s.total_score ?? '—'}/{s.total_max_score ?? '—'}</span> },
         {
             key: 'percentage', header: '%', numeric: true,
-            render: s => <span className={`font-bold ${(s.percentage ?? 0) >= 50 ? 'text-emerald-600' : 'text-destructive'}`}>{s.percentage ?? 0}%</span>,
+            render: s => <span className={`font-bold ${(s.percentage ?? 0) >= passMark ? 'text-emerald-600' : 'text-destructive'}`}>{s.percentage ?? 0}%</span>,
         },
         {
             key: 'grade', header: 'Grade',
-            render: s => <Badge variant={(s.percentage ?? 0) >= 50 ? 'success' : 'danger'}>{s.grade_symbol || '—'}</Badge>,
+            render: s => <Badge variant={(s.percentage ?? 0) >= passMark ? 'success' : 'danger'}>{s.grade_symbol || '—'}</Badge>,
         },
         { key: 'comment', header: 'Comment', hideOnMobile: true, render: s => <span className="text-muted-foreground">{s.teacher_comment || '—'}</span> },
     ];
@@ -276,7 +281,7 @@ function ReportCardsTab() {
                         <div className="mt-6 flex flex-wrap gap-8 border-t border-border pt-5">
                             <div>
                                 <span className="mb-1 block text-xs font-semibold text-muted-foreground">Overall Average</span>
-                                <strong className={`text-lg ${(rc.overall_average || 0) >= 50 ? 'text-emerald-600' : 'text-destructive'}`}>{rc.overall_average != null ? `${rc.overall_average}%` : '—'}</strong>
+                                <strong className={`text-lg ${(rc.overall_average || 0) >= passMark ? 'text-emerald-600' : 'text-destructive'}`}>{rc.overall_average != null ? `${rc.overall_average}%` : '—'}</strong>
                             </div>
                             {rc.overall_position != null && (
                                 <div>
