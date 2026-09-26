@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { notifyOwnerOfSchoolRequest } from '@/lib/school-approval';
@@ -76,12 +76,15 @@ export async function POST(request: NextRequest) {
 
       // Acknowledge to the requester that the form worked and what happens
       // next — the school is held, so there is no dashboard to land on.
-      if (userData.email) {
-        sendSchoolRequestReceivedEmail(userData.email, userData.first_name, schoolName.trim())
-          .catch(err => console.error('[onboarding] requester acknowledgement failed:', err));
+      // Sent after the response with after(): a promise merely left running
+      // is frozen with the function on Vercel, so these could be cut off.
+      const requesterEmail = userData.email;
+      if (requesterEmail) {
+        after(() => sendSchoolRequestReceivedEmail(requesterEmail, userData.first_name, schoolName.trim())
+          .then(() => undefined, err => console.error('[onboarding] requester acknowledgement failed:', err)));
       }
 
-      notifyOwnerOfSchoolRequest({
+      const ownerRequest = {
           schoolId,
           schoolName: schoolName.trim(),
           schoolEmail: schoolEmail?.trim() || null,
@@ -90,7 +93,8 @@ export async function POST(request: NextRequest) {
           requesterName: userData.first_name,
           requesterEmail: userData.email,
           approvalToken,
-      }).catch(err => console.error('[onboarding] owner notification failed:', err));
+      };
+      after(() => notifyOwnerOfSchoolRequest(ownerRequest));
     }
 
     // 2. Insert Academic Year (Global)

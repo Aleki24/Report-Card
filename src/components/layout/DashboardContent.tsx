@@ -8,6 +8,7 @@ import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { canAccessPath } from '@/components/layout/sidebar/navItems';
 import { homePathForRole } from '@/lib/roles';
 import { PreviewBanner } from '@/components/preview/PreviewMode';
+import { OwnerPendingNotice } from '@/components/platform/OwnerPendingNotice';
 
 const COLLAPSE_KEY = 'sidebar-collapsed';
 
@@ -60,7 +61,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
                 '--sidebar-width': `${sidebarWidth}px`,
                 display: 'flex', flexDirection: 'column',
             } as React.CSSProperties}>
-                <div className="mx-auto w-full max-w-7xl empty:hidden"><PreviewBanner /></div>
+                <div className="mx-auto w-full max-w-7xl empty:hidden"><PreviewBanner /><OwnerPendingNotice /></div>
                 {isForbiddenPath ? <ContentSkeleton /> : children}
             </main>
         </div>
