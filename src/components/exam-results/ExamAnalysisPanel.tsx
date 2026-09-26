@@ -5,12 +5,13 @@ import React from 'react';
 import { gradeSymbolRank } from '@/lib/analytics';
 import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
 import type { MarkRow } from './ExamResultsTable';
+import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 
 interface Props {
     marks: MarkRow[];
 }
 
-function computeStats(marks: MarkRow[]) {
+function computeStats(marks: MarkRow[], passMark: number) {
     if (marks.length === 0) {
         return { mean: 0, median: 0, highest: 0, lowest: 0, passRate: 0, count: 0, gradeDistribution: [] as { grade: string; count: number }[], ranked: [] as { name: string; admNo: string; pct: number; grade: string; rank: number }[] };
     }
@@ -24,7 +25,7 @@ function computeStats(marks: MarkRow[]) {
         : percentages[Math.floor(n / 2)];
     const highest = percentages[n - 1];
     const lowest = percentages[0];
-    const passRate = (percentages.filter(p => p >= 50).length / n) * 100;
+    const passRate = (percentages.filter(p => p >= passMark).length / n) * 100;
 
     // Grade distribution.
     //
@@ -58,7 +59,8 @@ function computeStats(marks: MarkRow[]) {
 }
 
 export function ExamAnalysisPanel({ marks }: Props) {
-    const stats = computeStats(marks);
+    const passMark = useSchoolPassMark();
+    const stats = computeStats(marks, passMark);
 
     if (marks.length === 0) {
         return (
@@ -78,7 +80,7 @@ export function ExamAnalysisPanel({ marks }: Props) {
                 <StatCard label="Median" value={`${Math.round(stats.median)}%`} color="#8B5CF6" />
                 <StatCard label="Highest" value={`${Math.round(stats.highest)}%`} color="#10B981" />
                 <StatCard label="Lowest" value={`${Math.round(stats.lowest)}%`} color="#EF4444" />
-                <StatCard label="Pass Rate" value={`${stats.passRate.toFixed(0)}%`} color="#F59E0B" />
+                <StatCard label={`Pass rate (≥${passMark}%)`} value={`${stats.passRate.toFixed(0)}%`} color="#F59E0B" />
                 <StatCard label="Students" value={String(stats.count)} color="#6366F1" />
             </div>
 

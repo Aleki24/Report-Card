@@ -11,6 +11,7 @@ import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { getCurrentStudent } from './get-current-student';
 import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
 import type { CurrentStudent } from '@/types';
+import { findActiveTermId } from '@/lib/term-calendar';
 
 // ── Profile ─────────────────────────────────────────────────
 
@@ -519,14 +520,15 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
     const materials = materialsRes.status === 'fulfilled' ? materialsRes.value : [];
     const trends = trendsRes.status === 'fulfilled' ? trendsRes.value : [];
 
-    // Current term & year
-    const { data: currentTerm } = await supabase
+    // Current term & year: the same pick as every staff page (today's dates,
+    // then the school's flag). This used to need the "current" flag, so a
+    // school that never set one showed its learners no current term at all.
+    const { data: schoolTerms } = await supabase
         .from('terms')
-        .select('id, name, academic_year_id, academic_years(id, name)')
-        .eq('school_id', student.schoolId)
-        .eq('is_current', true)
-        .limit(1)
-        .maybeSingle();
+        .select('id, name, start_date, end_date, is_current, academic_year_id, academic_years(id, name)')
+        .eq('school_id', student.schoolId);
+    const currentTermId = findActiveTermId(schoolTerms ?? []);
+    const currentTerm = (schoolTerms ?? []).find(t => t.id === currentTermId) ?? null;
 
     // Upcoming exams (next 30 days)
     const today = new Date().toISOString().split('T')[0];
