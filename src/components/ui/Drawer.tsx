@@ -40,7 +40,9 @@ export function Drawer({ isOpen, onClose, title, children, footer, size = 'md' }
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`card fixed inset-y-0 right-0 flex w-full ${sizeClasses[size]} flex-col rounded-none border-y-0 border-r-0 animate-drawer-in outline-none`}
+                // Solid, unlike a .card's 90% fill: the backdrop is barely
+                // dimmed, so the list showed through the form.
+                className={`card fixed inset-y-0 right-0 flex w-full ${sizeClasses[size]} flex-col rounded-none border-y-0 border-r-0 bg-card shadow-2xl hover:border-border/70 hover:shadow-2xl animate-drawer-in outline-none`}
                 style={{ maxHeight: '100vh' }}
             >
                 <div className="flex items-center justify-between border-b border-border px-6 py-5 shrink-0">

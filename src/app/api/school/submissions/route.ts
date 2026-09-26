@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const { userId } = await auth();
         if (!userId) {
@@ -28,7 +28,7 @@ export async function GET() {
         let query = supabase
             .from('assignment_submissions')
             .select(`
-                id, file_url, submission_text, submitted_at, grade, feedback, graded_at,
+                id, assignment_id, file_url, submission_text, submitted_at, grade, feedback, graded_at,
                 assignments ( id, title, due_date, subjects ( name ) ),
                 students!inner (
                     id,
@@ -47,6 +47,9 @@ export async function GET() {
         } else {
             return NextResponse.json({ data: [] });
         }
+        // One assignment's work, for the teacher reviewing it.
+        const assignmentId = new URL(request.url).searchParams.get('assignment_id');
+        if (assignmentId) query = query.eq('assignment_id', assignmentId);
 
         const { data, error } = await query.order('submitted_at', { ascending: false });
 
@@ -54,10 +57,12 @@ export async function GET() {
 
         const mapped = (data ?? []).map((s: any) => ({
             id: s.id,
+            assignmentId: s.assignment_id,
             fileUrl: s.file_url,
             submissionText: s.submission_text,
             submittedAt: s.submitted_at,
-            grade: s.grade ? Number(s.grade) : null,
+            // A grade of 0 is a grade: `s.grade ? … : null` read it as ungraded.
+            grade: s.grade != null ? Number(s.grade) : null,
             feedback: s.feedback,
             gradedAt: s.graded_at,
             assignmentTitle: s.assignments?.title,
