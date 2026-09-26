@@ -80,12 +80,13 @@ const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', role
 const myResults: NavItem = { label: 'My Results', href: '/student/results', roles: ['STUDENT'], module: 'exams', icon: icon(GraduationCap) };
 const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', roles: ['STUDENT'], icon: icon(BookOpen) };
 const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], module: 'attendance', icon: icon(CalendarCheck) };
+const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', roles: ['STUDENT'], module: 'timetable', icon: icon(Clock) };
 const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], module: 'fees', icon: icon(DollarSign) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
-    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myAttendance, myFees] },
+    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myTimetable, myAttendance, myFees] },
     { title: 'Academics', items: [examsMarks, reports, attendance, analytics, calendar, timetable, examPapers, lessonRecords, cbc] },
     { title: 'School', items: [people, myStudents, classes, subjects] },
     { title: 'Finance', items: [fees, billing, expenses] },
