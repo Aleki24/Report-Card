@@ -29,6 +29,7 @@ import {
     subjectClassAverages,
 } from '@/lib/reports/comparatives';
 import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
+import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 
 export const runtime = 'nodejs';
 
@@ -122,10 +123,8 @@ export async function GET(
             return NextResponse.json({ error: 'Student not found' }, { status: 404 });
         }
 
-        // 2. Fetch school name, logo, and address
-        let schoolName = 'School';
-        let schoolLogoUrl: string | undefined;
-        let schoolAddress: string | undefined;
+        // 2. Fetch the school's header and principal's sign-off
+        let school = reportSchoolFields(null);
         
         // Try getting school_id from the student's user relation first (if exists)
         const targetSchoolId = student.users?.school_id;
@@ -154,14 +153,10 @@ export async function GET(
         if (targetSchoolId) {
             const { data: schoolData } = await supabase
                 .from('schools')
-                .select('name, logo_url, address')
+                .select(REPORT_SCHOOL_COLUMNS)
                 .eq('id', targetSchoolId)
                 .maybeSingle();
-            if (schoolData) {
-                schoolName = schoolData.name;
-                schoolLogoUrl = schoolData.logo_url || undefined;
-                schoolAddress = schoolData.address || undefined;
-            }
+            school = reportSchoolFields(schoolData);
         }
 
         // 3. Determine academic level and grading system
@@ -709,9 +704,7 @@ export async function GET(
 
         // 12. Structure data for PDF Generator
         const reportData: ReportCardData = {
-            schoolName,
-            schoolLogoUrl,
-            schoolAddress,
+            ...school,
             examTitle: termTitle,
             academicYear,
             studentName: `${student.users?.first_name} ${student.users?.last_name}`,

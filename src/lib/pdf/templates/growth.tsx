@@ -9,7 +9,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, levelFamily, type ReportModel, type SubjectRow, type LevelFamily } from '../reportModel';
-import { Crest, Trend, BrandFooter, reportFooterMeta, type TrendColors } from '../primitives';
+import { Crest, SignatureImage, Trend, BrandFooter, reportFooterMeta, type TrendColors } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -48,6 +48,7 @@ const s = StyleSheet.create({
     head: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.deep, paddingHorizontal: X, paddingTop: 16.5, paddingBottom: 13.5 },
     school: { fontFamily: display, fontSize: 19.5, color: '#FFFFFF', lineHeight: 1.05 },
     address: { fontSize: 6.8, color: C.mint, marginTop: 3 },
+    motto: { fontFamily: FONTS.sourceSerif, fontStyle: 'italic', fontSize: 7.2, color: C.gold, marginTop: 2 },
     qr: { width: 45, height: 45, backgroundColor: '#FFFFFF', borderRadius: 4.5, padding: 2 },
     band: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.band, paddingHorizontal: X, paddingVertical: 5 },
     tag: { backgroundColor: C.gold, borderRadius: 20, paddingHorizontal: 6.8, paddingVertical: 2 },
@@ -303,12 +304,12 @@ function AgainstClass({ m }: { m: ReportModel }) {
     );
 }
 
-function Remark({ role, text, sign }: { role: string; text: string; sign: string }) {
+function Remark({ role, text, sign, signature }: { role: string; text: string; sign: string; signature?: string }) {
     return (
         <View style={s.remark}>
             <Text style={s.h3}>{role}</Text>
             <Text style={s.remarkText}>{text}</Text>
-            <View style={s.sigLine} />
+            <View style={s.sigLine}><SignatureImage src={signature} lift={-10.5} /></View>
             <Text style={s.sigText}>{sign}</Text>
         </View>
     );
@@ -323,6 +324,7 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={{ flex: 1, marginLeft: 10.5 }}>
                     <Text style={s.school}>{m.school.name}</Text>
                     {m.school.address && <Text style={s.address}>{m.school.address}</Text>}
+                    {m.school.motto && <Text style={s.motto}>{m.school.motto}</Text>}
                 </View>
                 {m.qrCode && <Image src={m.qrCode} style={s.qr} />}
             </View>
@@ -398,7 +400,7 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={[s.remarks, { flexGrow: 1, marginTop: 9 }]} wrap={false}>
                     <Remark role="Class teacher" text={m.teacherComment} sign="Signature" />
                     <View style={{ width: 9 }} />
-                    <Remark role="Principal" text={m.principalComment} sign="Signature" />
+                    <Remark role="Principal" text={m.principalComment} sign={m.principal.name ? `${m.principal.name} · Signature` : 'Signature'} signature={m.principal.signature} />
                     <View style={{ width: 9 }} />
                     <View style={[s.remark, { flex: 0.72, backgroundColor: C.deep, borderColor: C.deep }]}>
                         <Text style={[s.h3, { color: C.gold }]}>{m.exam.openingDate ? 'Next term opens' : 'Parent / Guardian'}</Text>

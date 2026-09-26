@@ -26,6 +26,8 @@ interface OverviewPayload {
     scope: OverviewScope;
     classes: OverviewClass[];
     summary: {
+        /** The school's pass mark, set in Settings. */
+        pass_mark: number;
         classes_with_marks: number;
         classes_total: number;
         learners: number;
@@ -162,7 +164,7 @@ export default function SchoolOverview({ yearId, termId, onSelectClass, onShowWh
                 <div className="flex flex-col gap-1 border-b border-border/70 p-4 sm:p-5">
                     <h2 className="font-semibold">Classes, weakest first</h2>
                     <p className="text-xs leading-snug text-muted-foreground">
-                        Pass rate is the share of marks at or above 50%. CBC and 8-4-4 are graded
+                        Pass rate is the share of marks at or above {summary.pass_mark}%. CBC and 8-4-4 are graded
                         differently, so each row names its curriculum. Open a class for its
                         subjects and merit list.
                     </p>

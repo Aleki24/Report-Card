@@ -1,8 +1,10 @@
 /**
  * Renders every report card template with sample data to PDFs for visual review.
  *   npx tsx scripts/render-report-samples.tsx <outDir>
+ * Set REPORT_SAMPLE_SIGNATURE to a file holding an image data URL to see the
+ * principal's signature on the KCSE samples.
  */
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateStudentReportCardPDF } from '../src/lib/pdfGeneratorServer';
 import { REPORT_TEMPLATES } from '../src/lib/pdf/templateMeta';
@@ -42,6 +44,8 @@ const kcseMarks: SubjectMark[] = kcseRaw.map(([name, cat, pct, avg, prev, teache
 
 const kcse: ReportCardData = {
     schoolName: 'Riverside Heights High School', schoolAddress: 'P.O. Box 1234-00100, Nairobi · info@riverside.ac.ke',
+    schoolMotto: 'Strive to excel', principalName: 'Mrs. J. Wanjiku',
+    principalSignatureUrl: process.env.REPORT_SAMPLE_SIGNATURE ? readFileSync(process.env.REPORT_SAMPLE_SIGNATURE, 'utf8').trim() : undefined,
     examTitle: 'End of Term 2 Examination', academicYear: '2026', studentName: 'Amani Wanjiku Mwangi', enrollmentNumber: 'RHS/2023/0417',
     className: 'Form 3 East', gradingSystemType: 'KCSE', subjectMarks: kcseMarks, overallPercentage: 73.2, overallGrade: 'B+',
     totalPoints: 76, overallPointsGrade: 'B+', rankedBy: 'points', totalMarks: 659, showPositions: true, classRank: 4, totalStudents: 42,

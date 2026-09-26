@@ -31,6 +31,7 @@ import {
     overallClassMean,
     subjectClassAverages,
 } from '@/lib/reports/comparatives';
+import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 export const runtime = 'nodejs';
 
 /*
@@ -163,10 +164,7 @@ export async function GET(
             return NextResponse.json({ error: 'No students found in this class' }, { status: 404 });
         }
 
-        // 2. Fetch school name, logo, and address
-        let schoolName = 'School';
-        let schoolLogoUrl: string | undefined;
-        let schoolAddress: string | undefined;
+        // 2. Fetch the school's header and principal's sign-off
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
@@ -201,7 +199,7 @@ export async function GET(
         // These lookups are all independent of each other — run them together
         // instead of six sequential round-trips on this batch-generation path.
         const [schoolRes, gradeRes, academicLevelRes, gradingSystemsRes, termRes, yearRes] = await Promise.all([
-            targetSchoolId ? supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle() : Promise.resolve({ data: null }),
+            targetSchoolId ? supabase.from('schools').select(REPORT_SCHOOL_COLUMNS).eq('id', targetSchoolId).maybeSingle() : Promise.resolve({ data: null }),
             gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL') : Promise.resolve({ data: [] as any[] }),
@@ -209,11 +207,7 @@ export async function GET(
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
 
-        if (schoolRes.data) {
-            schoolName = schoolRes.data.name;
-            schoolLogoUrl = schoolRes.data.logo_url || undefined;
-            schoolAddress = schoolRes.data.address || undefined;
-        }
+        const school = reportSchoolFields(schoolRes.data);
 
         const gradeLevelCode = gradeRes.data?.code || '';
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
@@ -614,9 +608,7 @@ export async function GET(
             const computedTotalPossible = subjectMarks.reduce((sum: number, m: any) => sum + (m.totalPossible || 0), 0);
 
             const reportData: ReportCardData = {
-                schoolName,
-                schoolLogoUrl,
-                schoolAddress,
+                ...school,
                 examTitle: termTitle,
                 academicYear: academicYearName,
                 studentName: `${firstName} ${lastName}`,

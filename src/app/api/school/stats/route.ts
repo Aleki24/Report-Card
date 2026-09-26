@@ -3,7 +3,7 @@ import { getCaller } from '@/lib/auth-server';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { aggregateStudentPerformance, isKCSEGradeLevel, rankingBasisFor, type ExamMarkWithDetails } from '@/lib/analytics';
-import { PASS_MARK } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -115,11 +115,12 @@ export async function GET(request: NextRequest) {
         // dashboard has been showing "—" for School average and Pass rate on
         // every load. Scoping through exams.school_id also matches how the
         // rest of the app reaches marks; exam_marks has no school column.
+        const passMark = await getSchoolPassMark(supabase, schoolId);
         const [summaryRes, reportsRes] = await Promise.all([
           supabase.rpc('school_mark_summary', {
             p_school_id: schoolId,
             p_academic_year_id: currentYear?.id ?? null,
-            p_pass_mark: PASS_MARK,
+            p_pass_mark: passMark,
           }),
           currentYear
             ? supabase

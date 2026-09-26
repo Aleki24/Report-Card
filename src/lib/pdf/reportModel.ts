@@ -54,7 +54,9 @@ export interface ReportModel {
     /** Label for the grade column: "Grade" or "Level". */
     gradeNoun: string;
 
-    school: { name: string; address?: string; logo?: string; initial: string };
+    school: { name: string; address?: string; logo?: string; initial: string; motto?: string };
+    /** Who signs as principal, from Settings; both optional. */
+    principal: { name?: string; signature?: string };
     learner: { name: string; initials: string; admission: string; className: string; pathway?: string };
     exam: { title: string; year: string; openingDate?: string; issued: string };
 
@@ -268,6 +270,11 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
             address: data.schoolAddress || undefined,
             logo: data.schoolLogoUrl || undefined,
             initial: (data.schoolName || 'S').trim().charAt(0).toUpperCase(),
+            motto: data.schoolMotto?.trim() || undefined,
+        },
+        principal: {
+            name: data.principalName?.trim() || undefined,
+            signature: data.principalSignatureUrl || undefined,
         },
         learner: {
             name: data.studentName,

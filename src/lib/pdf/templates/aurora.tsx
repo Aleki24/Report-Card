@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet, Svg, Rect, Defs, LinearGradient, Stop, C
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, type ReportModel, type SubjectRow } from '../reportModel';
-import { Crest, ScoreRing, Trend, BrandFooter, reportFooterMeta } from '../primitives';
+import { Crest, ScoreRing, SignatureImage, Trend, BrandFooter, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -57,6 +57,7 @@ const s = StyleSheet.create({
     heroTop: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', paddingHorizontal: X, paddingTop: 19 },
     school: { fontWeight: 800, fontSize: 15, color: '#FFFFFF' },
     address: { fontSize: 6.8, color: '#FFFFFF', opacity: 0.78, marginTop: 1.5 },
+    motto: { fontFamily: FONTS.sourceSerif, fontStyle: 'italic', fontSize: 7, color: '#FFFFFF', opacity: 0.9, marginTop: 1.5 },
     chip: { marginLeft: 'auto', backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 4.5, paddingHorizontal: 9 },
     chipText: { fontWeight: 700, fontSize: 7.1, color: C.indigoText },
 
@@ -167,6 +168,7 @@ function Hero({ m }: { m: ReportModel }) {
                 <View style={{ marginLeft: 10.5, flex: 1 }}>
                     <Text style={s.school}>{m.school.name}</Text>
                     {m.school.address && <Text style={s.address}>{m.school.address}</Text>}
+                    {m.school.motto && <Text style={s.motto}>{m.school.motto}</Text>}
                 </View>
                 <View style={s.chip}><Text style={s.chipText}>{m.exam.title} · {m.exam.year}</Text></View>
             </View>
@@ -349,12 +351,15 @@ function ScaleTiles({ m }: { m: ReportModel }) {
     );
 }
 
-function Remark({ role, text, color }: { role: string; text: string; color: string }) {
+function Remark({ role, text, color, signer, signature }: { role: string; text: string; color: string; signer?: string; signature?: string }) {
     return (
         <View style={s.remark}>
             <View style={s.remarkHead}><View style={[s.remarkDot, { backgroundColor: color }]} /><Text style={s.remarkRole}>{role}</Text></View>
             <Text style={s.remarkText}>{text}</Text>
-            <View style={s.sig}><Text style={s.sigText}>Signature</Text></View>
+            <View style={s.sig}>
+                <SignatureImage src={signature} />
+                <Text style={s.sigText}>{signer ? `${signer} · Signature` : 'Signature'}</Text>
+            </View>
         </View>
     );
 }
@@ -375,7 +380,7 @@ export function AuroraLayout({ data, qrCodeDataUri }: LayoutProps) {
                 </View>
                 <View style={[s.remarks, { flexGrow: 1, marginTop: 9 }]} wrap={false}>
                     <View style={{ flex: 1, marginRight: 7.5 }}><Remark role="Class teacher" text={m.teacherComment} color={C.ringA} /></View>
-                    <View style={{ flex: 1 }}><Remark role="Principal" text={m.principalComment} color={C.ringB} /></View>
+                    <View style={{ flex: 1 }}><Remark role="Principal" text={m.principalComment} color={C.ringB} signer={m.principal.name} signature={m.principal.signature} /></View>
                 </View>
                 <View style={s.signRow} wrap={false}>
                     <View style={s.signCell}><View style={s.signLine} /><Text style={s.signLabel}>Parent / Guardian</Text></View>

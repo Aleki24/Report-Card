@@ -7,6 +7,24 @@ import { Text, View, Image, Svg, Circle, Path, Polygon } from '@react-pdf/render
 import type { Style } from '@react-pdf/types';
 import { APP_LOGO, BRAND, FONTS } from './pdfTheme';
 
+/* ── Signature ──────────────────────────────────────────────── */
+
+/**
+ * A scanned signature laid over a signature line. Absolutely positioned so it
+ * takes no height: a card that fits one page still fits with a signature on.
+ * Place it inside the element whose top edge is the line; `lift` is how far
+ * above that edge the image's bottom sits.
+ */
+export function SignatureImage({ src, height = 20, lift = 1 }: { src?: string; height?: number; lift?: number }) {
+    if (!src) return null;
+    return (
+        <Image
+            src={src}
+            style={{ position: 'absolute', left: 0, top: -(height + lift), height, width: height * 3.5, objectFit: 'contain' }}
+        />
+    );
+}
+
 /* ── School crest ───────────────────────────────────────────── */
 
 /** The school's logo in a frame, or its initial when it has none. */

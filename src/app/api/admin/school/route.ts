@@ -4,11 +4,17 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCaller } from '@/lib/auth-server';
 import { internalError } from '@/lib/api-errors';
 import { SENIOR_RANK_GROUPS } from '@/lib/ranking';
+import { PASS_MARK, PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
 
-/** Largest logo kept, as a data URL: the settings page shrinks uploads well below this. */
-const MAX_LOGO_CHARS = 400_000;
+/** Largest image kept, as a data URL: the settings page shrinks uploads well below this. */
+const MAX_IMAGE_CHARS = 400_000;
 
 const optionalText = (max: number) => z.string().trim().max(max).nullish().transform(v => v || null);
+
+/** An inline image (as the settings page uploads) or an https URL; empty clears it. */
+const optionalImage = (noun: string) => z.string().max(MAX_IMAGE_CHARS, `That ${noun} is too large; choose a smaller image`).nullish()
+    .refine(v => !v || /^data:image\/(png|jpeg|webp|gif);base64,/.test(v) || /^https:\/\//.test(v), `The ${noun} must be an image`)
+    .transform(v => v || null);
 
 const schoolUpdateSchema = z.object({
     school_id: z.string().min(1).optional(),
@@ -17,9 +23,12 @@ const schoolUpdateSchema = z.object({
     phone: optionalText(30),
     email: z.string().trim().max(200).nullish().transform(v => v || null)
         .refine(v => v === null || z.string().email().safeParse(v).success, 'Enter a valid email address'),
-    logo_url: z.string().max(MAX_LOGO_CHARS, 'That logo is too large; choose a smaller image').nullish()
-        .refine(v => !v || /^data:image\/(png|jpeg|webp|gif);base64,/.test(v) || /^https:\/\//.test(v), 'The logo must be an image')
-        .transform(v => v || null),
+    logo_url: optionalImage('logo'),
+    motto: optionalText(120),
+    principal_name: optionalText(100),
+    principal_signature_url: optionalImage('signature'),
+    /** Omitted leaves it as is; null resets it to the default. */
+    pass_mark: z.number().min(PASS_MARK_MIN, `The pass mark must be ${PASS_MARK_MIN}–${PASS_MARK_MAX}`).max(PASS_MARK_MAX, `The pass mark must be ${PASS_MARK_MIN}–${PASS_MARK_MAX}`).nullish(),
     min_combination_group_size: z.number().int().min(1).max(200).nullish(),
     overall_grading_system_id: z.string().nullish(),
     cbc_ranking_enabled: z.boolean().optional(),
@@ -58,6 +67,10 @@ export async function POST(request: NextRequest) {
             phone: body.phone,
             email: body.email,
             logo_url: body.logo_url,
+            motto: body.motto,
+            principal_name: body.principal_name,
+            principal_signature_url: body.principal_signature_url,
+            ...(body.pass_mark !== undefined ? { pass_mark: body.pass_mark ?? PASS_MARK } : {}),
             ...(body.min_combination_group_size != null ? { min_combination_group_size: body.min_combination_group_size } : {}),
             ...(body.overall_grading_system_id !== undefined ? { overall_grading_system_id: body.overall_grading_system_id || null } : {}),
             ...(body.cbc_ranking_enabled !== undefined ? { cbc_ranking_enabled: body.cbc_ranking_enabled } : {}),

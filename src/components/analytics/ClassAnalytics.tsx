@@ -32,6 +32,8 @@ interface ClassPayload {
     };
     scope: { term_id: string | null; term_name: string | null; exam_type: string | null };
     summary: {
+        /** The school's pass mark, set in Settings. */
+        pass_mark: number;
         mean_percentage: number;
         pass_rate: number;
         student_count: number;
@@ -211,7 +213,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <StatTile icon={BarChart3} hue="sky" label="Class average" value={`${data.summary.mean_percentage}%`} hint={`${data.summary.mark_count.toLocaleString()} marks`} />
-                <StatTile icon={CheckCircle2} label="Pass rate" value={`${data.summary.pass_rate}%`} hint="at or above 50%" tone={passStatTone(data.summary.pass_rate)} />
+                <StatTile icon={CheckCircle2} label="Pass rate" value={`${data.summary.pass_rate}%`} hint={`at or above ${data.summary.pass_mark}%`} tone={passStatTone(data.summary.pass_rate)} />
                 <StatTile icon={Users} hue="orange" label="Learners" value={data.summary.student_count} hint="with marks" />
                 <StatTile icon={BookOpen} hue="emerald" label="Subjects" value={data.summary.subject_count} hint="assessed" />
             </div>
