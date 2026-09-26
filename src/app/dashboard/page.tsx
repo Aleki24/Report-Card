@@ -6,12 +6,13 @@ import { TONES } from '@/components/ui/tones';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import { Avatar } from '@/components/Avatar';
 import {
-  Users, GraduationCap, FileText,
-  ArrowRight, BarChart3, ClipboardList, Wallet, Bell,
-  BookOpen, Search, CheckCircle2, Plus, MessageSquare,
+  Users, GraduationCap, FileText, ArrowRight, BarChart3, ClipboardList, Wallet,
+  BookOpen, Search, CheckCircle2, Send, Bell, Award, CalendarCheck, UserPlus, Megaphone, Briefcase,
+  type LucideIcon,
 } from 'lucide-react';
+import type { Hue } from '@/components/ui/tones';
+import type { TermSummary, UpcomingRound } from '@/app/api/school/dashboard/route';
 
 interface DashboardData {
   totalStudents: number;
@@ -41,27 +42,43 @@ interface DashboardData {
   hasAttendanceData?: boolean;
   hasLogo: boolean;
   setup: SetupStatus | null;
+  /** Where the school is in its own calendar. */
+  term?: TermSummary;
+  /** Upcoming exams grouped into each class's sitting. */
+  upcomingRounds?: UpcomingRound[];
+  /** Exams this term with marks entered but not yet released. */
+  unreleasedResults?: number;
 }
 
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import KpiTile from '@/components/dashboard/KpiTile';
-import KpiCarousel from '@/components/dashboard/KpiCarousel';
 import GradeResultsCard from '@/components/dashboard/GradeResultsCard';
 import InsightCard from '@/components/dashboard/InsightCard';
 import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
-import { getCurrentTermName } from '@/lib/term-calendar';
 import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
 import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
-import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
 import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
 
 // ── Admin Dashboard ──────────────────────────────────────────
+/*
+  The school's command centre, built around the term.
+
+  It used to open on a gradient banner whose only two buttons were "Generate
+  Report Cards" and "Send SMS Results", as if that were all the app did, under
+  a line saying the school was "running smoothly this term" whatever the data
+  said, with a term name taken from a generic calendar. Marks outstanding,
+  overdue fees and announcements each appeared three times over; a top bar
+  repeated the profile the sidebar already shows.
+
+  Now: where the school is in its own term, what needs doing (each item with
+  its own action, and a clear "all caught up"), the figures once, and every
+  common task given the same weight.
+*/
 function AdminDashboard({ userName }: { userName: string }) {
   const router = useRouter();
-  const { profile, role } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,10 +87,7 @@ function AdminDashboard({ userName }: { userName: string }) {
     (async () => {
       try {
         const res = await fetch('/api/school/dashboard');
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
+        if (res.ok) setData(await res.json());
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       }
@@ -83,13 +97,17 @@ function AdminDashboard({ userName }: { userName: string }) {
 
   if (loading) return <LoadingSkeleton />;
 
-  const greetingName = userName || 'Admin';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const passRate = data?.academicSummary?.markCount ? data.academicSummary.passRate : null;
+  const attendanceTotal = data?.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;
+  const presentRate = attendanceTotal > 0 && data?.attendanceToday ? Math.round((data.attendanceToday.present / attendanceTotal) * 100) : null;
+  const billed = (data?.financeSummary?.totalCollected ?? 0) + (data?.financeSummary?.unpaidBalance ?? 0);
+  const collectedRate = billed > 0 ? Math.round(((data?.financeSummary?.totalCollected ?? 0) / billed) * 100) : null;
 
   return (
-    <div className="relative px-2 sm:px-3 lg:px-4 pb-2 sm:pb-3 lg:pb-4 bg-background text-foreground flex flex-col">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-2 pb-8 sm:px-3 lg:px-4">
       <SetupChecklist
         hasLogo={data?.hasLogo ?? false}
         totalTeachers={data?.totalTeachers ?? 0}
@@ -97,179 +115,263 @@ function AdminDashboard({ userName }: { userName: string }) {
         totalUsers={data?.totalUsers ?? 0}
         setup={data?.setup ?? null}
       />
-      {/* Top Bar — search + profile */}
-      <div className="mb-3 flex shrink-0 items-center justify-between gap-4">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Dashboard</span>
-        <div className="flex min-w-0 items-center gap-3">
-          <form
-            onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
-            className="hidden md:block"
-          >
-            <div className="flex w-64 items-center rounded-xl border border-border/60 bg-card/80 transition-colors focus-within:border-primary/50 lg:w-72">
-              <span className="flex shrink-0 items-center justify-center pl-3 text-muted-foreground">
-                <Search size={15} />
-              </span>
-              <input
-                type="text"
-                placeholder="Search students…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 border-none bg-transparent py-2 pl-2 pr-4 text-sm outline-none placeholder:text-muted-foreground/80"
-              />
-            </div>
-          </form>
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Avatar
-              imageUrl={profile?.imageUrl}
-              firstName={profile?.first_name ?? 'A'}
-              lastName={profile?.last_name}
-              size={36}
-              fontSize={13}
-              background="linear-gradient(to bottom right, #2563eb, #7c3aed)"
+
+      {/* Where the school is in its term */}
+      <header className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">{todayLabel}</p>
+          <h1 className="mt-0.5 font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">{greeting}, {userName || 'there'}</h1>
+          <TermLine term={data?.term ?? null} />
+        </div>
+        <form
+          onSubmit={e => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
+          className="w-full lg:w-80"
+          role="search"
+        >
+          <label className="relative block">
+            <span className="sr-only">Find a learner</span>
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <input
+              type="search"
+              placeholder="Find a learner by name or admission no."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="input-field input-icon-left w-full"
             />
-            <div className="hidden min-w-0 sm:block">
-              <div className="truncate text-[13px] font-semibold leading-tight text-foreground">
-                {profile ? `${profile.first_name} ${profile.last_name}` : greetingName}
-              </div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {role?.replace('_', ' ') ?? 'Admin'}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+          </label>
+        </form>
+      </header>
 
-      {/* Results awaiting approval — teachers have published, admin must approve
-          before report cards can be generated / downloaded. */}
-      {/* Hero Banner */}
-      <div className="relative mb-4 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 px-5 py-5 shadow-sm sm:mb-5 sm:px-8 sm:py-7">
-        <div className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-white/10" aria-hidden />
-        <div className="pointer-events-none absolute -right-16 bottom-[-48px] h-40 w-40 rounded-full bg-white/10" aria-hidden />
-        <div className="relative min-w-0">
-          <h1 className="font-display text-lg font-bold tracking-tight text-white sm:text-2xl">
-            {greeting}, {greetingName} <span aria-hidden>{hour < 12 ? '☀️' : hour < 17 ? '🌤️' : '🌙'}</span>
-          </h1>
-          <p className="mt-0.5 text-xs text-white/80 sm:text-[13px]">
-            {todayLabel} &middot; {getCurrentTermName()} &middot; Your school is running smoothly this term.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all duration-200 hover:-translate-y-px hover:shadow-md sm:text-sm">
-              <FileText size={15} /> Generate Report Cards
-            </Link>
-            <Link href="/dashboard/reports" className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 px-4 py-2 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors duration-200 hover:bg-white/20 sm:text-sm">
-              <MessageSquare size={15} /> Send SMS Results
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* At a Glance — full-width rail from the sidebar to the right edge, max 3 visible */}
-      <section className="mb-4 shrink-0 sm:mb-5">
-        <SectionTitle>At a glance</SectionTitle>
-        <KpiCarousel>
-          <KpiTile title="Students" value={data?.totalStudents ?? 0} icon={<Users size={17} />} href="/dashboard/people" tone="blue" />
-          <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
-          <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
-          <KpiTile title="Reports" value={data?.totalReports ?? 0} icon={<FileText size={17} />} href="/dashboard/reports" tone="purple" />
-          {/* Marks outstanding is the one number here that is always real and
-              always actionable, so it takes a permanent slot. Attendance and
-              fees only appear once the school has started using them. */}
-          <KpiTile title="Marks outstanding" value={data?.examsAwaitingMarks ?? 0} icon={<ClipboardList size={17} />} href="/dashboard/exams-marks" tone={(data?.examsAwaitingMarks ?? 0) > 0 ? 'amber' : undefined} />
-          {data?.hasAttendanceData && (
-            <KpiTile title="Present today" value={data?.attendanceToday?.present ?? 0} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
-          )}
-          {data?.hasFeeData && (
-            <KpiTile title="Overdue fees" value={data?.overdueFeesCount ?? 0} icon={<Wallet size={17} />} href="/dashboard/fees" alert={(data?.overdueFeesCount ?? 0) > 0} tone={(data?.overdueFeesCount ?? 0) > 0 ? 'red' : undefined} />
-          )}
-        </KpiCarousel>
+      {/* What needs doing */}
+      <section aria-labelledby="todo-heading">
+        <SectionTitle><span id="todo-heading">Needs your attention</span></SectionTitle>
+        <TodoList data={data} />
       </section>
 
-      <div className="flex items-start gap-4 md:gap-6">
+      {/* The figures, once */}
+      {/* A grid rather than the 3-wide carousel: every figure in view at once. */}
+      <section aria-label="Key figures" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <KpiTile title="Learners" value={(data?.totalStudents ?? 0).toLocaleString()} icon={<Users size={17} />} href="/dashboard/people" tone="blue" />
+          <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
+          <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
+          {passRate != null && (
+            <KpiTile title={`Pass rate (≥${data?.academicSummary?.passMark ?? 50}%)`} value={`${passRate}%`} icon={<BarChart3 size={17} />} href="/dashboard/analytics" tone={passRate >= 70 ? 'green' : passRate >= 40 ? 'amber' : 'red'} />
+          )}
+          {data?.hasAttendanceData && presentRate != null && (
+            <KpiTile title="Present today" value={`${presentRate}%`} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
+          )}
+          {data?.hasFeeData && collectedRate != null && (
+            <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={<Wallet size={17} />} href="/dashboard/fees" tone={collectedRate >= 80 ? 'green' : 'amber'} />
+          )}
+      </section>
 
-        {/* Main Content Area — full width on mobile; the page itself scrolls */}
-        <div className="min-w-0 flex-1 pb-4 xs:pb-6">
-          <div className="flex flex-col gap-4 xs:gap-5 sm:gap-6">
+      {/* Every common task, the same weight */}
+      <section aria-labelledby="actions-heading">
+        <SectionTitle><span id="actions-heading">Quick actions</span></SectionTitle>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+          {QUICK_ACTIONS.map(a => <QuickAction key={a.label} {...a} />)}
+        </div>
+      </section>
 
-          {/* Exam results by class — ‹ › cycles grades/streams, dropdown filters exams */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3 lg:gap-5">
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:gap-5">
           <section>
             <SectionTitle>Class results</SectionTitle>
             <GradeResultsCard />
           </section>
-
-          {/* Insights — 2 columns */}
-          <section>
-            <SectionTitle>Today&apos;s picture</SectionTitle>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 xs:gap-4">
-              <InsightCard title="How classes are doing" meta={`${(data?.classPerformance ?? []).filter(c => c.markCount > 0).length} with marks`} action={{ label: 'Analytics', href: '/dashboard/analytics' }}>
-                <ClassPerformanceList classes={data?.classPerformance ?? []} passMark={data?.academicSummary?.passMark ?? 50} />
-              </InsightCard>
-
-              <InsightCard title="Marks outstanding" meta="Exams sat, not entered" action={{ label: 'Enter marks', href: '/dashboard/exams-marks' }}>
-                <OutstandingMarks total={data?.examsAwaitingMarks ?? 0} byClass={data?.unmarkedByClass ?? []} />
-              </InsightCard>
-
-              <InsightCard title="Academic performance" meta={`${data?.upcomingExams.length ?? 0} upcoming exams`}>
-                <AcademicSummary summary={data?.academicSummary ?? null} />
-              </InsightCard>
-
-              <InsightCard title="Needs attention" action={{ label: 'Review all', href: '/dashboard/analytics' }}>
-                <AlertList
-                  upcomingExams={data?.upcomingExams ?? []}
-                  overdueFees={data?.hasFeeData ? data?.overdueFeesCount ?? 0 : null}
-                  enrollments={data?.recentEnrollmentsLast7 ?? 0}
-                  announcements={data?.announcementsLast7Days ?? 0}
-                  reports={data?.totalReports ?? 0}
-                  awaitingMarks={data?.examsAwaitingMarks ?? 0}
-                  ungradedSubjects={data?.subjectsWithoutGradingSystem ?? 0}
-                />
-              </InsightCard>
-
-              {/* Only once the school has actually used these. */}
-              {data?.hasAttendanceData && (
-                <InsightCard title="Attendance today" meta={`${totalAttendance(data)} marked`}>
-                  <AttendanceBreakdown present={data?.attendanceToday?.present ?? 0} absent={data?.attendanceToday?.absent ?? 0} late={data?.attendanceToday?.late ?? 0} excused={data?.attendanceToday?.excused ?? 0} />
-                </InsightCard>
-              )}
-
-              {data?.hasFeeData && (
-                <InsightCard title="Fee collection" meta="Current term">
-                  <FinanceSnapshot collected={data?.financeSummary?.totalCollected ?? 0} unpaid={data?.financeSummary?.unpaidBalance ?? 0} overdue={data?.financeSummary?.overdueCount ?? 0} />
-                </InsightCard>
-              )}
-            </div>
-          </section>
-
-          </div>
-
-          {/* Mobile sidebar content — at bottom below md */}
-          <div className="md:hidden flex flex-col gap-3 xs:gap-4 pb-3 xs:pb-4 mt-5">
-            <SideRail data={data} />
-          </div>
+          <InsightCard title="How classes are doing" meta={`${(data?.classPerformance ?? []).filter(c => c.markCount > 0).length} with marks`} action={{ label: 'Analytics', href: '/dashboard/analytics' }}>
+            <ClassPerformanceList classes={data?.classPerformance ?? []} passMark={data?.academicSummary?.passMark ?? 50} />
+          </InsightCard>
         </div>
 
-        {/* Right Sidebar — hidden below md, visible from md up */}
-        <div className="hidden md:flex w-[280px] lg:w-[300px] shrink-0 pb-2 flex-col gap-3 xs:gap-4 md:border-l md:border-border/60 md:pl-6">
-          <SideRail data={data} />
+        <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
+          <InsightCard title="Coming up" meta="Next three weeks" action={{ label: 'Exams', href: '/dashboard/exams-marks' }}>
+            <UpcomingRounds rounds={data?.upcomingRounds ?? []} />
+          </InsightCard>
+          <InsightCard title="Academic performance" meta="This year">
+            <AcademicSummary summary={data?.academicSummary ?? null} />
+          </InsightCard>
+          {data?.hasAttendanceData && (
+            <InsightCard title="Attendance today" meta={`${attendanceTotal} marked`}>
+              <AttendanceBreakdown present={data.attendanceToday?.present ?? 0} absent={data.attendanceToday?.absent ?? 0} late={data.attendanceToday?.late ?? 0} excused={data.attendanceToday?.excused ?? 0} />
+            </InsightCard>
+          )}
+          {data?.hasFeeData && (
+            <InsightCard title="Fee collection" meta="Current term">
+              <FinanceSnapshot collected={data.financeSummary?.totalCollected ?? 0} unpaid={data.financeSummary?.unpaidBalance ?? 0} overdue={data.financeSummary?.overdueCount ?? 0} />
+            </InsightCard>
+          )}
+          <InsightCard title="Recent activity">
+            <RecentActivity activities={data?.recentActivities ?? []} />
+          </InsightCard>
         </div>
       </div>
     </div>
   );
 }
 
-function QuickActionBtn({ icon, label, href }: { icon: React.ReactNode; label: string; href: string }) {
+function totalAttendanceCount(a: NonNullable<DashboardData['attendanceToday']>): number {
+  return a.present + a.absent + a.late + a.excused;
+}
+
+/** "Term 3 · 2026 · Week 5 of 10 · 34 days left", or the break and when school reopens. */
+function TermLine({ term }: { term: DashboardData['term'] | null }) {
+  if (!term || term.kind === 'none') {
+    return (
+      <p className="mt-2 text-sm text-muted-foreground">
+        No term dates set. <Link href="/dashboard/settings?tab=calendar" className="font-medium text-primary hover:underline">Add your terms</Link> to track the calendar.
+      </p>
+    );
+  }
+  if (term.kind === 'break') {
+    const opens = term.nextStart ? new Date(`${term.nextStart}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : null;
+    return (
+      <p className="mt-2 inline-flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span className="rounded-full bg-amber-500/12 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">School break</span>
+        {term.nextName && opens ? `${term.nextName} opens ${opens}` : 'No upcoming term dates set'}
+      </p>
+    );
+  }
+  const progress = Math.round((term.week / term.weeks) * 100);
   return (
-    <Link href={href} className={cn("group flex items-center gap-2.5 rounded-xl border border-border/60 bg-card/90 px-3 py-2.5 no-underline shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:px-4 sm:py-3", TONES[hueForHref(href)].hover)}>
-      <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8', TONES[hueForHref(href)].tile)}>{icon}</div>
-      <span className="text-xs font-semibold leading-tight tracking-tight text-foreground transition-colors group-hover:text-primary sm:text-sm">{label}</span>
-      <ArrowRight size={14} className="ml-auto shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+    <div className="mt-2 max-w-md">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{[term.name, term.year].filter(Boolean).join(' · ')}</span>
+        <span className="text-muted-foreground">Week {term.week} of {term.weeks} · {term.daysLeft === 0 ? 'ends today' : `${term.daysLeft} day${term.daysLeft === 1 ? '' : 's'} left`}</span>
+      </p>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="meter" aria-label="How far through the term" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+        <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  );
+}
+
+interface Todo { key: string; icon: LucideIcon; hue: Hue; title: string; detail: string; cta: string; href: string }
+
+/** What only the school can move forward, most urgent first; empty means all caught up. */
+function buildTodos(data: DashboardData | null): Todo[] {
+  if (!data) return [];
+  const todos: Todo[] = [];
+  const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  if ((data.unreleasedResults ?? 0) > 0) {
+    todos.push({ key: 'release', icon: Send, hue: 'violet', title: `${plural(data.unreleasedResults ?? 0, 'exam')} ready to release`, detail: 'Marks are in, but report cards and parents can’t see them until released.', cta: 'Release results', href: '/dashboard/exams-marks?tab=publish' });
+  }
+  if ((data.examsAwaitingMarks ?? 0) > 0) {
+    const worst = (data.unmarkedByClass ?? []).slice(0, 3).map(c => `${c.label} (${c.count})`).join(', ');
+    todos.push({ key: 'marks', icon: ClipboardList, hue: 'amber', title: `${plural(data.examsAwaitingMarks ?? 0, 'paper')} still need marks`, detail: worst ? `Most behind: ${worst}.` : 'Exams sat but not yet marked.', cta: 'Enter marks', href: '/dashboard/exams-marks' });
+  }
+  if ((data.subjectsWithoutGradingSystem ?? 0) > 0) {
+    todos.push({ key: 'grading', icon: Award, hue: 'rose', title: `${plural(data.subjectsWithoutGradingSystem ?? 0, 'subject')} without a grading scale`, detail: 'No grade can be printed on report cards for these.', cta: 'Set grading', href: '/dashboard/settings?tab=grading' });
+  }
+  const inTerm = data.term?.kind === 'in-term';
+  const weekday = ![0, 6].includes(new Date().getDay());
+  const marked = data.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;
+  const unmarked = Math.max(0, data.totalStudents - marked);
+  if (data.hasAttendanceData && inTerm && weekday && unmarked > 0) {
+    todos.push({ key: 'attendance', icon: CalendarCheck, hue: 'emerald', title: `${plural(unmarked, 'learner')} not on today’s register`, detail: marked === 0 ? 'No register has been taken yet today.' : `${marked.toLocaleString()} marked so far.`, cta: 'Take attendance', href: '/dashboard/attendance' });
+  }
+  if (data.hasFeeData && data.overdueFeesCount > 0) {
+    todos.push({ key: 'fees', icon: Wallet, hue: 'orange', title: `${plural(data.overdueFeesCount, 'fee record')} overdue`, detail: 'Past the due date with a balance still owing.', cta: 'Review fees', href: '/dashboard/fees' });
+  }
+  return todos;
+}
+
+function TodoList({ data }: { data: DashboardData | null }) {
+  const todos = buildTodos(data);
+  if (todos.length === 0) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" aria-hidden><CheckCircle2 className="size-5" /></span>
+        <div>
+          <p className="text-sm font-semibold text-foreground">All caught up</p>
+          <p className="text-xs text-muted-foreground">Every exam sat has marks, results are released and nothing is overdue.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {todos.map(({ key, icon: Icon, hue, title, detail, cta, href }) => (
+        <li key={key} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl', TONES[hue].tile)} aria-hidden><Icon className="size-5" /></span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{detail}</p>
+            </div>
+          </div>
+          <Link href={href} className="btn-secondary mt-auto h-9 w-full text-sm no-underline sm:w-fit">
+            {cta}<ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: 'Enter marks', href: '/dashboard/exams-marks', icon: ClipboardList },
+  { label: 'Report cards', href: '/dashboard/reports', icon: FileText },
+  { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck },
+  { label: 'Add learner', href: '/dashboard/people', icon: UserPlus },
+  { label: 'Add staff', href: '/dashboard/people?tab=teachers', icon: GraduationCap },
+  { label: 'Announcement', href: '/dashboard/announcements', icon: Megaphone },
+  { label: 'Assignment', href: '/dashboard/assignments', icon: Briefcase },
+  { label: 'Record payment', href: '/dashboard/fees', icon: Wallet },
+];
+
+function QuickAction({ label, href, icon: Icon }: { label: string; href: string; icon: LucideIcon }) {
+  const tone = TONES[hueForHref(href)];
+  return (
+    <Link href={href} className={cn('group flex items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 no-underline shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md xl:flex-col xl:items-start xl:gap-2 xl:py-3', tone.hover)}>
+      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', tone.tile)} aria-hidden><Icon className="size-4" /></span>
+      <span className="text-xs font-semibold leading-tight text-foreground sm:text-sm">{label}</span>
     </Link>
   );
 }
 
-function totalAttendance(data: DashboardData | null): string {
-  const a = data?.attendanceToday;
-  if (!a) return '0';
-  return String(a.present + a.absent + a.late + a.excused);
+function UpcomingRounds({ rounds }: { rounds: NonNullable<DashboardData['upcomingRounds']> }) {
+  if (rounds.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">No exams in the next three weeks.</p>;
+  return (
+    <ul className="-mx-1 flex flex-col">
+      {rounds.map(r => {
+        const date = new Date(`${r.firstDate}T00:00:00`);
+        return (
+          <li key={r.key} className="flex items-center gap-3 rounded-xl px-1 py-2">
+            <span className="flex w-11 shrink-0 flex-col items-center rounded-lg bg-muted/60 py-1 text-center" aria-hidden>
+              <span className="text-[10px] font-semibold uppercase text-muted-foreground">{date.toLocaleDateString('en-GB', { month: 'short' })}</span>
+              <span className="text-base font-bold leading-none text-foreground">{date.getDate()}</span>
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{r.className} · {r.label}</p>
+              <p className="text-xs text-muted-foreground">{r.papers} paper{r.papers === 1 ? '' : 's'} · from {date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function RecentActivity({ activities }: { activities: DashboardData['recentActivities'] }) {
+  if (activities.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">Nothing yet this year.</p>;
+  return (
+    <ul className="flex flex-col divide-y divide-border/50">
+      {activities.slice(0, 5).map((act, i) => {
+        const row = (
+          <>
+            <span className="min-w-0 flex-1 text-[13px] text-foreground/85">{act.message}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">{new Date(act.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+          </>
+        );
+        return (
+          <li key={i} className="py-2">
+            {act.href ? <Link href={act.href} className="flex items-start gap-3 no-underline hover:text-primary">{row}</Link> : <div className="flex items-start gap-3">{row}</div>}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 /* Segment order keeps good (present) and bad (absent) non-adjacent so the
@@ -407,116 +509,6 @@ function AcademicSummary({ summary }: { summary: DashboardData['academicSummary'
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * Items that need doing, weakest link first.
- *
- * Every row here used to render whether or not the underlying feature was in
- * use, so an admin read "Overdue fees 0 · Announcements 0" every morning —
- * across all 41 schools on this instance there is not one fee row and not one
- * announcement. A count of zero for something you have never switched on is
- * not information. Rows now drop out when they have nothing to say, except the
- * two that are always worth stating even at zero: marks outstanding (zero
- * means nobody is behind, which is the good news) and upcoming exams.
- */
-function AlertList({ upcomingExams, overdueFees, enrollments, announcements, reports, awaitingMarks, ungradedSubjects }: { awaitingMarks: number; upcomingExams: DashboardData['upcomingExams']; overdueFees: number | null; enrollments: number; announcements: number; reports: number; ungradedSubjects: number }) {
-  const [now] = useState(() => Date.now());
-  const soonExams = upcomingExams.filter(e => (new Date(e.exam_date).getTime() - now) < 3 * 24 * 60 * 60 * 1000).length;
-  const items = [
-    // An exam sat but never marked is the thing an admin can act on today.
-    { label: 'Marks outstanding', count: awaitingMarks, sub: 'exams sat, not entered', href: '/dashboard/exams-marks', alwaysShow: true },
-    { label: 'Upcoming exams', count: upcomingExams.length, sub: soonExams > 0 ? `${soonExams} soon` : null, href: '/dashboard/exams-marks', alwaysShow: true },
-    // A subject with no grading system cannot be graded on a report card
-    // either, so this is a setup gap rather than a statistic.
-    { label: 'Subjects without a grading system', count: ungradedSubjects, sub: 'no grade can be awarded', href: '/dashboard/settings?tab=grading', alwaysShow: false },
-    { label: 'New enrollments', count: enrollments, sub: 'this week', href: '/dashboard/people', alwaysShow: false },
-    { label: 'Overdue fees', count: overdueFees ?? 0, sub: 'past due date', href: '/dashboard/fees', alwaysShow: overdueFees !== null },
-    { label: 'Announcements', count: announcements, sub: 'this week', href: '/dashboard/announcements', alwaysShow: false },
-    { label: 'Report cards', count: reports, sub: 'total generated', href: '/dashboard/reports', alwaysShow: false },
-  ].filter(item => item.alwaysShow || item.count > 0);
-  return (
-    <div className="-mx-1 space-y-0.5">
-      {items.map((item, i) => (
-        <Link key={i} href={item.href} className="group flex items-center gap-3 rounded-xl px-2 py-2 no-underline transition-colors hover:bg-muted/60">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.count > 0 ? 'bg-primary/12' : 'bg-muted/60'}`}>
-            <span className={`text-xs font-bold ${item.count > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{item.count}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-foreground">{item.label}</div>
-            {item.sub && <div className="text-xs text-muted-foreground">{item.sub}</div>}
-          </div>
-          <ArrowRight size={14} className="shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function SideRail({ data }: { data: DashboardData | null }) {
-  return (
-    <>
-      {/* Quick Actions */}
-      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
-        <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">Quick Actions</h3>
-        <div className="flex flex-col gap-2">
-          <QuickActionBtn icon={<Plus size={16} />} label="Add Student" href="/dashboard/people" />
-          <QuickActionBtn icon={<GraduationCap size={16} />} label="Add Teacher" href="/dashboard/people?tab=teachers" />
-          <QuickActionBtn icon={<Wallet size={16} />} label="Record Payment" href="/dashboard/fees" />
-          <QuickActionBtn icon={<FileText size={16} />} label="Generate Reports" href="/dashboard/reports" />
-          <QuickActionBtn icon={<BarChart3 size={16} />} label="View Analytics" href="/dashboard/analytics" />
-        </div>
-      </div>
-
-      {/* This Week Summary */}
-      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
-        <h3 className="font-display font-semibold text-foreground text-[15px] mb-3">This Week</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            { label: 'Exams', value: data?.upcomingExams.length ?? 0, hue: 'blue' },
-            { label: 'Overdue fees', value: data?.overdueFeesCount ?? 0, hue: 'rose' },
-            { label: 'Enrolments', value: data?.recentEnrollmentsLast7 ?? 0, hue: 'orange' },
-            { label: 'Announcements', value: data?.announcementsLast7Days ?? 0, hue: 'violet' },
-          ] as const).map(stat => (
-            <div key={stat.label} className={cn('flex flex-col items-center rounded-xl p-2.5', TONES[stat.hue].tile)}>
-              <span className="text-lg font-bold tabular-nums">{stat.value}</span>
-              <span className="text-[11px] font-medium text-foreground/70">{stat.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="rounded-2xl border border-border/60 bg-card/90 p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-foreground text-[15px]">Recent Activity</h3>
-          <Link href="/dashboard/reports" className="text-primary text-[13px] font-medium hover:underline">View all</Link>
-        </div>
-        <div className="flex flex-col">
-          {(data?.recentActivities ?? []).slice(0, 3).map((act, i) => (
-            <div key={i} className="flex justify-between items-start py-1.5 border-b border-border/50 last:border-0">
-              <span className="text-foreground/80 text-[13px] font-medium pr-4">{act.message}</span>
-              <span className="text-muted-foreground text-[12px] whitespace-nowrap pt-0.5">{new Date(act.timestamp).toLocaleDateString('en-GB')}</span>
-            </div>
-          ))}
-          {(!data?.recentActivities || data.recentActivities.length === 0) && (
-            <div className="text-[13px] text-muted-foreground italic py-1.5">No recent activity.</div>
-          )}
-        </div>
-      </div>
-
-      {/* Announcements */}
-      <Link href="/dashboard/announcements" className="bg-primary text-primary-foreground rounded-2xl px-4 py-3.5 flex items-center gap-3 font-semibold hover:opacity-90 transition-opacity shadow-sm no-underline">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/15">
-          <Bell size={16} />
-        </span>
-        <span className="text-sm leading-none">Announcements</span>
-        {(data?.announcementsLast7Days ?? 0) > 0 && (
-          <span className="ml-auto shrink-0 bg-white/25 text-white text-[11px] font-bold rounded-full px-2 py-0.5 leading-none">{data?.announcementsLast7Days}</span>
-        )}
-      </Link>
-    </>
   );
 }
 
