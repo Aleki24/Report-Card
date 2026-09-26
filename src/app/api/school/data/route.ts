@@ -108,6 +108,12 @@ export async function GET(request: NextRequest) {
                 grade_id: (Array.isArray(student.grade_streams) ? student.grade_streams[0] : student.grade_streams)?.grade_id ?? null,
               }))
             : filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
+          // A class teacher's Students page is their own class, not every
+          // learner they teach a subject to elsewhere.
+          if (!subjectId && searchParams.get('scope') === 'class') {
+            filteredStudents = filteredStudents.filter(student =>
+              perms.isClassTeacher && perms.classTeacherStreams.includes(student.current_grade_stream_id as string));
+          }
         }
 
         // Mark entry passes the exam's subject: only the learners who take it

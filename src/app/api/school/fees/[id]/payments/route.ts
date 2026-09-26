@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MPESA_RECEIPT_UNIQUE_INDEX, internalError, isUniqueViolation, writeErrorMessage } from '@/lib/api-errors';
-import { canViewStudentRecords, getCaller } from '@/lib/auth-server';
+import { canViewStudentFees, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
 
@@ -31,8 +31,8 @@ async function getFeeRecordForCaller(
     if (!fee || fee.school_id !== caller.schoolId) {
         return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
     }
-    // Students see their own fees, class teachers their class's, admins all.
-    if (!(await canViewStudentRecords(caller, fee.student_id))) {
+    // Students see their own fees, the admin everyone's; teachers none.
+    if (!(await canViewStudentFees(caller, fee.student_id))) {
         return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
 
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const result = await getFeeRecordForCaller(supabase, id);
         if (!result.ok) return result.response;
-        if (result.role === 'STUDENT') {
-            return NextResponse.json({ error: 'Only staff can record payments' }, { status: 403 });
+        if (result.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only the admin can record payments' }, { status: 403 });
         }
         const { fee } = result;
 

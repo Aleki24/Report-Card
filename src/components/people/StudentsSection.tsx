@@ -10,6 +10,7 @@ import { UserProfileDialog } from '@/components/users/UserProfileDialog';
 import { StatusBadge, UserAvatar } from '@/components/users/UserBadges';
 import { humanize } from '@/components/users/userMeta';
 import { useJsonList } from '@/hooks/useJsonList';
+import { MANAGED_STREAMS_URL } from '@/lib/managed-streams';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { PATHWAY_ORDER, pathwayLabel } from '@/lib/pathway-definitions';
@@ -59,8 +60,9 @@ interface Lookups {
 }
 
 /** Classes, grades, curricula and combinations the forms and filters choose from. */
-function useStudentLookups(): Lookups {
-  const streams = useJsonList<GradeStreamOption>('/api/school/data?type=grade_streams', 'Could not load classes.');
+/** `ownClassOnly`: a class teacher's classes, for their pickers, rather than the whole school's. */
+function useStudentLookups(ownClassOnly: boolean): Lookups {
+  const streams = useJsonList<GradeStreamOption>(ownClassOnly ? MANAGED_STREAMS_URL : '/api/school/data?type=grade_streams', 'Could not load classes.');
   const combos = useJsonList<CombinationOption>('/api/school/data?type=subject_combinations', 'Could not load combinations.');
   const [structure, setStructure] = useState<{ grades: GradeOption[]; academic_levels: AcademicLevelOption[] }>({ grades: [], academic_levels: [] });
 
@@ -82,8 +84,11 @@ export function StudentsSection({ initialSearch = '' }: { initialSearch?: string
   const { role } = useAuth();
   // Bulk pathway assignment is admin-only on the server.
   const isAdmin = role === 'ADMIN';
-  const students = useJsonList<StudentRow>('/api/school/data?type=students', 'Could not load students.');
-  const { gradeStreams, grades, academicLevels, combinations } = useStudentLookups();
+  // A class teacher's page is their own class: not every learner they teach a
+  // subject to, and not every class in the school in the pickers.
+  const ownClassOnly = role === 'CLASS_TEACHER';
+  const students = useJsonList<StudentRow>(`/api/school/data?type=students${ownClassOnly ? '&scope=class' : ''}`, 'Could not load students.');
+  const { gradeStreams, grades, academicLevels, combinations } = useStudentLookups(ownClassOnly);
 
   const [filters, setFilters] = useState<Filters>({ ...NO_FILTERS, search: initialSearch });
   const [page, setPage] = useState(1);
@@ -231,10 +236,12 @@ export function StudentsSection({ initialSearch = '' }: { initialSearch?: string
           </div>
         </div>
         <div className={hasPathways ? 'mt-3 grid grid-cols-2 gap-2 md:grid-cols-4' : 'mt-3 grid grid-cols-2 gap-2'}>
-          <select className="input-field" aria-label="Filter by class" value={filters.streamId} onChange={e => setFilter('streamId', e.target.value)}>
-            <option value="">All classes</option>
-            {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
-          </select>
+          {gradeStreams.length > 1 && (
+            <select className="input-field" aria-label="Filter by class" value={filters.streamId} onChange={e => setFilter('streamId', e.target.value)}>
+              <option value="">{ownClassOnly ? 'All my classes' : 'All classes'}</option>
+              {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
+            </select>
+          )}
           <select className="input-field" aria-label="Filter by status" value={filters.status} onChange={e => setFilter('status', e.target.value as StatusFilter)}>
             {STATUS_FILTERS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
           </select>

@@ -35,15 +35,19 @@ function PeoplePageInner() {
   const tabs = TABS.filter(t => isRoleIn(role, t.roles));
   // A tab this role cannot see (e.g. ?tab=parents for a class teacher) falls back to the first allowed one.
   const [active, select] = useUrlTab(tabs);
+  // A class teacher sees only their class's learners, so the page is theirs.
+  const isClassTeacher = role === 'CLASS_TEACHER';
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-10">
       <PageHeader
-        title="People"
-        eyebrow="School"
+        title={isClassTeacher ? 'My students' : 'People'}
+        eyebrow={isClassTeacher ? 'My class' : 'School'}
         icon={Users}
         hue="orange"
-        description="Students, staff and parent contacts. Open anyone for their full profile."
+        description={isClassTeacher
+          ? 'The learners in your class, with their guardians. Open anyone for their full profile.'
+          : 'Students, staff and parent contacts. Open anyone for their full profile.'}
       />
 
       {tabs.length > 1 && <PageTabs tabs={tabs} active={active} onSelect={select} label="People" idPrefix="people" />}

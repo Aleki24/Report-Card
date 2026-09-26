@@ -171,6 +171,16 @@ export async function canViewStudentRecords(caller: Caller, studentId: string): 
   return canManageStudent(caller, studentId);
 }
 
+/**
+ * Fee records are the bursar's: the admin (principal or bursar) sees every
+ * learner's, a learner sees their own, and teachers see none. Class teachers
+ * could once read, bill and take payments for their class.
+ */
+export async function canViewStudentFees(caller: Caller, studentId: string): Promise<boolean> {
+  if (caller.role === 'STUDENT') return caller.userId === studentId;
+  return caller.role === 'ADMIN' && canManageStudent(caller, studentId);
+}
+
 /** JSON error response for a caller who is signed out, inactive or not allowed. */
 export function forbidden(message = 'Forbidden', status: 401 | 403 = 403): NextResponse {
   return NextResponse.json({ error: message }, { status });
