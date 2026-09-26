@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     try {
         const caller = await getCaller();
         if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
+        if (caller.role !== 'ADMIN') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         const schoolId = caller.schoolId;
@@ -38,8 +38,6 @@ export async function GET(request: NextRequest) {
             if (termId) query = query.eq('term_id', termId);
             if (status) query = query.eq('status', status);
             if (gradeStreamId) query = query.eq('students.current_grade_stream_id', gradeStreamId);
-            // A class teacher's export covers their own class only.
-            if (caller.role === 'CLASS_TEACHER') query = query.in('students.current_grade_stream_id', caller.classStreamIds);
 
             return query.order('created_at', { ascending: false }).order('id');
         });

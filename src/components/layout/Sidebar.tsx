@@ -129,7 +129,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
 
     const pinned = useMemo(() => getPinnedItems(role), [role]);
     const mobileNav = useMemo(() => getMobileNav(role), [role]);
-    const currentPage = findNavItem(pathname);
+    const currentPage = findNavItem(pathname, role);
 
     const handleSignOut = () => router.push("/logout");
     const homeHref = role === "STUDENT" ? "/student/dashboard" : "/dashboard";

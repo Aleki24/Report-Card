@@ -18,13 +18,10 @@ export async function GET(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { userId, schoolId, role } = caller;
         if (!schoolId) return NextResponse.json({ data: [] });
-        // Students read their own fees, class teachers their class's, admins
-        // everyone's. Other staff have no fee view at all.
-        if (role !== 'ADMIN' && role !== 'CLASS_TEACHER' && role !== 'STUDENT') {
+        // Students read their own fees and the admin (principal or bursar)
+        // everyone's. Teachers and other staff have no fee view.
+        if (role !== 'ADMIN' && role !== 'STUDENT') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-        if (role === 'CLASS_TEACHER' && caller.classStreamIds.length === 0) {
-            return NextResponse.json({ data: [] });
         }
 
         // Paged: a school past 1,000 fee records in a term had its list, and
@@ -42,8 +39,6 @@ export async function GET(request: NextRequest) {
             // Students see only their own fees
             if (role === 'STUDENT') {
                 query = query.eq('student_id', userId);
-            } else if (role === 'CLASS_TEACHER') {
-                query = query.in('students.current_grade_stream_id', caller.classStreamIds);
             }
 
             if (termId) {
@@ -88,8 +83,8 @@ export async function POST(request: NextRequest) {
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (caller.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only the admin can bill students.' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();

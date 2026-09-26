@@ -10,8 +10,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (caller.role !== 'ADMIN' && caller.role !== 'CLASS_TEACHER') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (caller.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only the admin can change fee records.' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();

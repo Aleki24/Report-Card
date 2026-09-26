@@ -37,10 +37,13 @@ const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href:
 const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(FileText) };
 const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(CalendarCheck) };
 const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', roles: adminRoles, icon: icon(LineChart) };
-const people: NavItem = { label: 'People', href: '/dashboard/people', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(Users) };
+const people: NavItem = { label: 'People', href: '/dashboard/people', roles: adminRoles, icon: icon(Users) };
+// The same page, scoped to the class teacher's own class.
+const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', roles: ['CLASS_TEACHER'], icon: icon(Users) };
 const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', roles: adminRoles, icon: icon(School) };
 const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: icon(BookOpen) };
-const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', roles: ['ADMIN', 'CLASS_TEACHER'], icon: icon(DollarSign) };
+// The bursar's page: principal/admin only. Learners see their own under /student/fees.
+const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', roles: adminRoles, icon: icon(DollarSign) };
 const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'], icon: icon(Bell) };
 const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], icon: icon(Briefcase) };
 const users: NavItem = { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: icon(UserCircle) };
@@ -53,7 +56,7 @@ const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', role
 
 /** Flat list (legacy consumers + search). */
 export const navItems: NavItem[] = [
-    dashboard, studentDashboard, examsMarks, reports, attendance, analytics, people, classes,
+    dashboard, studentDashboard, examsMarks, reports, attendance, analytics, people, myStudents, classes,
     subjects, fees, announcements, assignments, users, settings,
     myResults, mySubjects, myAttendance, myFees, myProfile,
 ];
@@ -61,7 +64,7 @@ export const navItems: NavItem[] = [
 const groups: NavGroup[] = [
     { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myAttendance, myFees] },
     { title: 'Academics', items: [examsMarks, reports, attendance, analytics] },
-    { title: 'School', items: [people, classes, subjects] },
+    { title: 'School', items: [people, myStudents, classes, subjects] },
     { title: 'Finance', items: [fees] },
     { title: 'Communication', items: [announcements, assignments] },
 ];
@@ -93,18 +96,22 @@ export const routeMatches = (pathname: string, href: string) =>
  * that covers it. Pages with no entry (onboarding, redirects) stay open; the
  * page or its API still enforces anything finer.
  */
-export function canAccessPath(pathname: string, role: UserRole | null): boolean {
-    const match = [...navItems, ...unlistedRoutes]
-        .filter(item => routeMatches(pathname, item.href))
-        .sort((a, b) => b.href.length - a.href.length)[0];
-    return !match || (!!role && match.roles.includes(role));
+/** Every entry for the most specific page covering `pathname` (one page can have an entry per role). */
+function closestEntries<T extends Pick<NavItem, 'href'>>(items: readonly T[], pathname: string): T[] {
+    const matches = items.filter(item => routeMatches(pathname, item.href));
+    const longest = Math.max(0, ...matches.map(m => m.href.length));
+    return matches.filter(m => m.href.length === longest);
 }
 
-/** The menu entry for the page being viewed (its most specific match), for titles. */
-export function findNavItem(pathname: string): NavItem | null {
-    return navItems
-        .filter(item => routeMatches(pathname, item.href))
-        .sort((a, b) => b.href.length - a.href.length)[0] ?? null;
+export function canAccessPath(pathname: string, role: UserRole | null): boolean {
+    const matches = closestEntries([...navItems, ...unlistedRoutes], pathname);
+    return matches.length === 0 || (!!role && matches.some(m => m.roles.includes(role)));
+}
+
+/** The menu entry for the page being viewed, as this role's menu names it, for titles. */
+export function findNavItem(pathname: string, role: UserRole | null = null): NavItem | null {
+    const matches = closestEntries(navItems, pathname);
+    return matches.find(m => !!role && m.roles.includes(role)) ?? matches[0] ?? null;
 }
 
 export function getNavGroups(role: UserRole | null): NavGroup[] {
@@ -132,9 +139,11 @@ export function getMobileNav(role: UserRole | null): { primary: NavItem[]; overf
     const effective = role;
     const primary = mobilePrimaryByRole[effective].filter(i => forRole(i, effective));
     const primaryHrefs = new Set(primary.map(i => i.href));
+    // The role filter first: People and My Students share a page, and the
+    // one this role cannot see must not take the other's place.
     const overflow = [...navItems, ...pinnedItems]
-        .filter((i, idx, arr) => arr.findIndex(x => x.href === i.href) === idx)
-        .filter(i => forRole(i, effective) && !primaryHrefs.has(i.href));
+        .filter(i => forRole(i, effective) && !primaryHrefs.has(i.href))
+        .filter((i, idx, arr) => arr.findIndex(x => x.href === i.href) === idx);
     return { primary, overflow };
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { canViewStudentRecords, getCaller } from '@/lib/auth-server';
+import { canViewStudentFees, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { generateFeeReceiptPDF } from '@/lib/pdf/feeReceiptServer';
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         if (!payment || !fee || fee.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
-        if (!(await canViewStudentRecords(caller, fee.student_id))) {
+        if (!(await canViewStudentFees(caller, fee.student_id))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
         if (payment.status === 'CANCELLED') {

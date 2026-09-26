@@ -337,6 +337,8 @@ export async function GET(_request: NextRequest) {
       ? Math.round((Number(summary?.pass_count ?? 0) / markCount) * 100)
       : null;
 
+    // Fee figures are the admin's; teachers get the rest of the summary.
+    const seesFees = role === 'ADMIN';
     return NextResponse.json({
       totalStudents,
       totalTeachers,
@@ -346,16 +348,18 @@ export async function GET(_request: NextRequest) {
       attendanceToday: { present: presentCount, absent: absentCount, late: lateCount, excused: excusedCount },
       upcomingExams,
       recentActivities,
-      overdueFeesCount,
+      overdueFeesCount: seesFees ? overdueFeesCount : 0,
       announcementsLast7Days,
       recentEnrollmentsLast7,
-      financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
+      financeSummary: seesFees
+        ? { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount }
+        : { totalCollected: 0, unpaidBalance: 0, overdueCount: 0 },
       academicSummary: { recentAvg, passRate, passMark, markCount },
       examsAwaitingMarks,
       unmarkedByClass,
       classPerformance,
       subjectsWithoutGradingSystem,
-      hasFeeData,
+      hasFeeData: seesFees && hasFeeData,
       hasAttendanceData,
       hasLogo,
       setup,
