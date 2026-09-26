@@ -1,15 +1,15 @@
 "use client";
 
-import React from 'react';
-import { Card, CardContent, Select, Input } from '@/components/ui';
+import React, { useId } from 'react';
+import { Card, CardContent, FormField, InputField, SelectField } from '@/components/ui';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReportRound } from '@/lib/reports/exam-round';
 import { StepHeading } from '@/components/ui/StepHeading';
+import { TermSelect, type TermSelectTerm, type TermSelectYear } from '@/components/ui/TermSelect';
 import { REPORT_TEMPLATES, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 
 interface ReportSettingsProps {
-  selectedAcademicYear: string; setSelectedAcademicYear: (v: string) => void;
   selectedTerm: string; setSelectedTerm: (v: string) => void;
   selectedGradeStream: string; setSelectedGradeStream: (v: string) => void;
   customReportTitle: string; setCustomReportTitle: (v: string) => void;
@@ -19,13 +19,15 @@ interface ReportSettingsProps {
   rounds: ReportRound[] | null;
   /** The round "most recent" resolves to. */
   suggestedRound: string | null;
-  academicYears: { id: string; name: string }[];
-  terms: { id: string; name: string }[];
-  gradeStreams: { id: string; full_name: string }[];
+  /** Newest first; terms are grouped under them. */
+  academicYears: readonly TermSelectYear[];
+  terms: readonly TermSelectTerm[];
+  gradeStreams: readonly { id: string; full_name: string }[];
 }
 
+const TEMPLATE_OPTIONS = REPORT_TEMPLATES.map(t => ({ id: t.id, label: t.name }));
+
 export function ReportSettings({
-  selectedAcademicYear, setSelectedAcademicYear,
   selectedTerm, setSelectedTerm,
   selectedGradeStream, setSelectedGradeStream,
   customReportTitle, setCustomReportTitle,
@@ -34,60 +36,47 @@ export function ReportSettings({
   rounds, suggestedRound,
   academicYears, terms, gradeStreams,
 }: ReportSettingsProps) {
-  const isReady = !!(selectedAcademicYear && selectedTerm && selectedGradeStream && selectedExamType);
+  const id = useId();
+  const isReady = !!(selectedTerm && selectedGradeStream && selectedExamType);
   const canPickRound = !!(selectedTerm && selectedGradeStream);
   return (
-    <Card className="mb-6">
-      <CardContent className="p-5">
+    <Card>
+      <CardContent className="p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <StepHeading step={1} title="Report scope" done={isReady} />
           {isReady ? (
             <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Ready — pick an action below
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Ready — pick an action below
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">Choose year, term, class and exam to unlock actions</span>
+            <span className="text-xs text-muted-foreground">Choose the class, term and exam to unlock the actions</span>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Academic Year <span className="text-red-500">*</span></label>
-            <Select className="w-full h-9 text-sm" value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)}>
-              <option value="">-- Choose Year --</option>
-              {academicYears.map(ay => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
-            </Select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Term <span className="text-red-500">*</span></label>
-            <Select className="w-full h-9 text-sm" value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
-              <option value="">-- Choose Term --</option>
-              {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Class <span className="text-red-500">*</span></label>
-            <Select className="w-full h-9 text-sm" value={selectedGradeStream} onChange={e => setSelectedGradeStream(e.target.value)}>
-              <option value="">{gradeStreams.length === 0 ? 'No classes assigned to you' : '-- Choose Class --'}</option>
-              {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
-            </Select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Custom Title (Optional)</label>
-            <Input className="w-full h-9 text-sm" placeholder="e.g. Mid Term 1 Report" value={customReportTitle} onChange={e => setCustomReportTitle(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-2 font-medium">Card Design</label>
-            <Select
-              className="w-full h-9 text-sm"
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormField label="Class" required htmlFor={`${id}-class`}>
+            <SelectField
+              id={`${id}-class`}
+              value={selectedGradeStream}
+              onChange={setSelectedGradeStream}
+              options={gradeStreams.map(gs => ({ id: gs.id, label: gs.full_name }))}
+              placeholder={gradeStreams.length === 0 ? 'No classes assigned to you' : 'Choose class'}
+            />
+          </FormField>
+          <FormField label="Term" required htmlFor={`${id}-term`}>
+            <TermSelect id={`${id}-term`} terms={terms} years={academicYears} value={selectedTerm} onChange={setSelectedTerm} emptyLabel="Choose term" />
+          </FormField>
+          <FormField label="Title on the card" htmlFor={`${id}-title`} hint="Optional. Replaces the exam name.">
+            <InputField id={`${id}-title`} placeholder="e.g. Mid Term 1 Report" value={customReportTitle} maxLength={80} onChange={e => setCustomReportTitle(e.target.value)} />
+          </FormField>
+          <FormField label="Card design" htmlFor={`${id}-design`} hint={REPORT_TEMPLATES.find(t => t.id === selectedTemplate)?.description}>
+            <SelectField
+              id={`${id}-design`}
               value={selectedTemplate}
-              onChange={e => { if (isReportTemplateId(e.target.value)) setSelectedTemplate(e.target.value); }}
-            >
-              {REPORT_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {REPORT_TEMPLATES.find(t => t.id === selectedTemplate)?.description}
-            </p>
-          </div>
+              onChange={v => { if (isReportTemplateId(v)) setSelectedTemplate(v); }}
+              options={TEMPLATE_OPTIONS}
+              placeholder={null}
+            />
+          </FormField>
         </div>
 
         {/* Which exam: its own row so it cannot be missed, and always explicit. */}

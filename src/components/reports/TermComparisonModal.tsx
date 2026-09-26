@@ -1,167 +1,178 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Card, CardContent, Button, Select } from '@/components/ui';
-import { BarChart3, X, Loader2, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { toast } from 'sonner';
+import React, { useEffect, useId, useMemo, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, BarChart3, Loader2, Minus } from 'lucide-react';
+import { FormField, SelectField } from '@/components/ui';
+import { TermSelect, type TermSelectTerm, type TermSelectYear } from '@/components/ui/TermSelect';
+import { TONES } from '@/components/ui/tones';
+import { apiErrorMessage } from '@/lib/api-error-message';
+import { cn } from '@/lib/utils';
+import type { TermComparisonResponse } from '@/app/api/reports/term-comparison/route';
+import { ReportDialog } from './ReportDialog';
+
+export interface ComparisonTerm extends TermSelectTerm { start_date?: string }
 
 interface TermComparisonModalProps {
-    isOpen: boolean;
     onClose: () => void;
-    academicYears: any[];
-    terms: any[];
-    gradeStreams: any[];
+    /** Newest first. */
+    academicYears: readonly TermSelectYear[];
+    terms: readonly ComparisonTerm[];
+    gradeStreams: readonly { id: string; full_name: string }[];
+    /** The class and term chosen on the page, to start from. */
+    initialStreamId: string;
+    initialTermId: string;
 }
 
-export function TermComparisonModal({ isOpen, onClose, academicYears, terms, gradeStreams }: TermComparisonModalProps) {
-    const [loading, setLoading] = useState(false);
-    const [selectedStream, setSelectedStream] = useState('');
+/** What the request for `key` settled as; a different key means it is still loading. */
+type Settled = { key: string; data: TermComparisonResponse; message?: never } | { key: string; message: string; data?: never };
+type Load = { state: 'idle' } | { state: 'loading' } | { state: 'ready'; data: TermComparisonResponse } | { state: 'error'; message: string };
 
-    const [term1Year, setTerm1Year] = useState('');
-    const [term1Term, setTerm1Term] = useState('');
+/** Terms oldest first, by start date where known. */
+function chronological(terms: readonly ComparisonTerm[]): ComparisonTerm[] {
+    return [...terms].sort((a, b) => (a.start_date ?? '').localeCompare(b.start_date ?? ''));
+}
 
-    const [term2Year, setTerm2Year] = useState('');
-    const [term2Term, setTerm2Term] = useState('');
+function Change({ value, unit = '%' }: { value: number | null; unit?: string }) {
+    if (value == null) return <span className="text-muted-foreground">–</span>;
+    const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus;
+    return (
+        <span className={cn('inline-flex items-center gap-0.5 font-semibold tabular-nums', value > 0 ? 'text-emerald-600 dark:text-emerald-400' : value < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+            <Icon className="size-3.5" aria-hidden />{value > 0 ? '+' : ''}{value}{unit}
+        </span>
+    );
+}
 
-    const [results, setResults] = useState<any>(null);
+function Figure({ label, value, sub }: { label: string; value: React.ReactNode; sub?: React.ReactNode }) {
+    return (
+        <div className="rounded-xl border border-border/70 bg-card p-3 text-center">
+            <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+            <p className="mt-0.5 font-display text-xl font-bold tabular-nums">{value}</p>
+            {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
+        </div>
+    );
+}
 
-    const handleCompare = async () => {
-        if (!selectedStream || !term1Year || !term1Term || !term2Year || !term2Term) {
-            toast.error("Please select all fields.");
-            return;
-        }
-        setLoading(true);
+/** How one class moved between two terms, overall and subject by subject. */
+export function TermComparisonModal({ onClose, academicYears, terms, gradeStreams, initialStreamId, initialTermId }: TermComparisonModalProps) {
+    const id = useId();
+    const ordered = useMemo(() => chronological(terms), [terms]);
+    const [streamId, setStreamId] = useState(initialStreamId || (gradeStreams.length === 1 ? gradeStreams[0].id : ''));
+    const [compareTermId, setCompareTermId] = useState(initialTermId || ordered.at(-1)?.id || '');
+    const [baseTermId, setBaseTermId] = useState(() => {
+        // The term before the one being looked at, by default.
+        const at = ordered.findIndex(t => t.id === (initialTermId || ordered.at(-1)?.id));
+        return at > 0 ? ordered[at - 1].id : '';
+    });
+    const [settled, setSettled] = useState<Settled | null>(null);
 
-        try {
-            const mRes = await fetch(`/api/school/exam-marks/stream?stream_id=${selectedStream}`);
-            if (!mRes.ok) throw new Error('Failed to fetch marks');
-            const { data: marks } = await mRes.json();
-
-            if (!marks || marks.length === 0) {
-                toast.error("No marks found for the selected grade stream.");
-                setLoading(false);
-                return;
-            }
-
-            let t1Sum = 0, t1Count = 0;
-            let t2Sum = 0, t2Count = 0;
-
-            marks.forEach((m: any) => {
-                const exam = m.exams;
-                if (!exam) return;
-                if (exam.term_id === term1Term && exam.academic_year_id === term1Year) {
-                    t1Sum += Number(m.percentage);
-                    t1Count++;
-                } else if (exam.term_id === term2Term && exam.academic_year_id === term2Year) {
-                    t2Sum += Number(m.percentage);
-                    t2Count++;
-                }
-            });
-
-            if (t1Count === 0 || t2Count === 0) {
-                toast.error("Could not find marks for one or both of the selected terms.");
-                setLoading(false);
-                return;
-            }
-
-            const t1Avg = t1Count > 0 ? (t1Sum / t1Count) : 0;
-            const t2Avg = t2Count > 0 ? (t2Sum / t2Count) : 0;
-            const delta = t2Avg - t1Avg;
-
-            setResults({
-                term1Avg: String(Math.round(t1Avg)),
-                term2Avg: String(Math.round(t2Avg)),
-                delta: String(Math.round(delta)),
-                improved: delta > 0,
-                decreased: delta < 0
-            });
-
-        } catch (err: any) {
-            console.error(err);
-            toast.error(err.message || "An error occurred during comparison.");
-        } finally {
-            setLoading(false);
-        }
+    const termLabel = (termId: string) => {
+        const term = terms.find(t => t.id === termId);
+        const year = academicYears.find(y => y.id === term?.academic_year_id);
+        return term ? [term.name, year?.name].filter(Boolean).join(' · ') : '';
     };
 
-    if (!isOpen) return null;
+    const sameTerm = Boolean(baseTermId) && baseTermId === compareTermId;
+    const ready = Boolean(streamId && baseTermId && compareTermId) && !sameTerm;
+
+    const key = ready ? new URLSearchParams({ grade_stream_id: streamId, base_term_id: baseTermId, compare_term_id: compareTermId }).toString() : '';
+
+    useEffect(() => {
+        if (!key) return;
+        const controller = new AbortController();
+        fetch(`/api/reports/term-comparison?${key}`, { signal: controller.signal })
+            .then(async res => {
+                const json: unknown = await res.json().catch(() => null);
+                if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not compare these terms.'));
+                setSettled({ key, data: json as TermComparisonResponse });
+            })
+            .catch((err: unknown) => {
+                if (controller.signal.aborted) return;
+                setSettled({ key, message: err instanceof Error ? err.message : 'Could not compare these terms.' });
+            });
+        return () => controller.abort();
+    }, [key]);
+
+    const load: Load = !key ? { state: 'idle' }
+        : settled?.key !== key ? { state: 'loading' }
+        : settled.data ? { state: 'ready', data: settled.data }
+        : { state: 'error', message: settled.message ?? 'Could not compare these terms.' };
+
+    const data = load.state === 'ready' ? load.data : null;
+    const meanChange = data?.base.mean != null && data.compare.mean != null ? data.compare.mean - data.base.mean : null;
+    const passChange = data?.base.pass_rate != null && data.compare.pass_rate != null ? data.compare.pass_rate - data.base.pass_rate : null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <Card className="w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
-                    <div className="flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-primary" />
-                        <h2 className="text-lg font-bold font-display">Compare Terms</h2>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={onClose} className="text-muted-foreground"><X className="w-4 h-4" /></Button>
-                </div>
+        <ReportDialog
+            title="Compare terms"
+            subtitle="The class's average over every exam it sat each term, overall and by subject."
+            icon={BarChart3}
+            tone={TONES.rose}
+            onClose={onClose}
+            maxWidth="max-w-2xl"
+        >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <FormField label="Class" htmlFor={`${id}-class`}>
+                    <SelectField id={`${id}-class`} value={streamId} onChange={setStreamId} options={gradeStreams.map(g => ({ id: g.id, label: g.full_name }))} placeholder="Choose class" />
+                </FormField>
+                <FormField label="From" htmlFor={`${id}-base`}>
+                    <TermSelect id={`${id}-base`} terms={terms} years={academicYears} value={baseTermId} onChange={setBaseTermId} emptyLabel="Choose term" />
+                </FormField>
+                <FormField label="To" htmlFor={`${id}-compare`} error={sameTerm ? 'Choose a different term.' : undefined}>
+                    <TermSelect id={`${id}-compare`} terms={terms} years={academicYears} value={compareTermId} onChange={setCompareTermId} emptyLabel="Choose term" />
+                </FormField>
+            </div>
 
-                <div className="p-5 overflow-y-auto">
-                    <div className="mb-5">
-                        <label className="block text-xs text-muted-foreground mb-2 font-medium">Grade Stream</label>
-                        <Select className="w-full h-9 text-sm" value={selectedStream} onChange={e => setSelectedStream(e.target.value)}>
-                            <option value="">Select Stream...</option>
-                            {gradeStreams.map((gs: any) => (
-                                <option key={gs.id} value={gs.id}>{gs.full_name}</option>
-                            ))}
-                        </Select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-                        <div className="p-4 rounded-lg border border-border bg-muted">
-                            <h4 className="font-semibold text-sm mb-3">Base Term (Term 1)</h4>
-                            <Select className="w-full h-9 text-sm mb-2" value={term1Year} onChange={e => setTerm1Year(e.target.value)}>
-                                <option value="">Academic Year...</option>
-                                {academicYears.map((ay: any) => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
-                            </Select>
-                            <Select className="w-full h-9 text-sm" value={term1Term} onChange={e => setTerm1Term(e.target.value)}>
-                                <option value="">Term...</option>
-                                {terms.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </Select>
+            <div className="mt-5" aria-live="polite">
+                {load.state === 'idle' && !sameTerm && (
+                    <p className="py-6 text-center text-sm text-muted-foreground">Choose a class and two terms.</p>
+                )}
+                {load.state === 'loading' && (
+                    <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden /> Comparing…</p>
+                )}
+                {load.state === 'error' && <p className="py-6 text-center text-sm text-destructive">{load.message}</p>}
+                {data && (data.base.mark_count === 0 || data.compare.mark_count === 0) && (
+                    <p className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+                        {data.base.mark_count === 0 ? termLabel(baseTermId) : termLabel(compareTermId)} has no marks for this class, so there is nothing to compare it with yet.
+                    </p>
+                )}
+                {data && (
+                    <>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <Figure label={termLabel(baseTermId)} value={data.base.mean != null ? `${data.base.mean}%` : '–'} sub={`${data.base.mark_count.toLocaleString()} marks`} />
+                            <Figure label={termLabel(compareTermId)} value={data.compare.mean != null ? `${data.compare.mean}%` : '–'} sub={`${data.compare.mark_count.toLocaleString()} marks`} />
+                            <Figure label="Average change" value={<Change value={meanChange} />} />
+                            <Figure label="Pass rate change" value={<Change value={passChange} unit=" pts" />} sub={`Pass mark ${data.pass_mark}%`} />
                         </div>
 
-                        <div className="p-4 rounded-lg border border-border bg-muted">
-                            <h4 className="font-semibold text-sm mb-3">Comparison Term (Term 2)</h4>
-                            <Select className="w-full h-9 text-sm mb-2" value={term2Year} onChange={e => setTerm2Year(e.target.value)}>
-                                <option value="">Academic Year...</option>
-                                {academicYears.map((ay: any) => <option key={ay.id} value={ay.id}>{ay.name}</option>)}
-                            </Select>
-                            <Select className="w-full h-9 text-sm" value={term2Term} onChange={e => setTerm2Term(e.target.value)}>
-                                <option value="">Term...</option>
-                                {terms.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </Select>
-                        </div>
-                    </div>
-
-                    <Button variant="primary" size="sm" className="w-full" onClick={handleCompare} disabled={loading}>
-                        {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing...</> : 'Generate Comparison'}
-                    </Button>
-
-                    {results && (
-                        <div className="mt-6 animate-in fade-in duration-200">
-                            <h3 className="text-[11px] font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Results Overview</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="p-4 rounded-lg border border-border bg-card text-center">
-                                    <div className="text-[11px] text-muted-foreground mb-1">Base Term</div>
-                                    <div className="text-xl font-bold">{results.term1Avg}%</div>
-                                </div>
-                                <div className="p-4 rounded-lg border border-border bg-card text-center">
-                                    <div className="text-[11px] text-muted-foreground mb-1">Comparison</div>
-                                    <div className="text-xl font-bold">{results.term2Avg}%</div>
-                                </div>
-                                <div className={`p-4 rounded-lg border text-center ${results.improved ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' : results.decreased ? 'border-red-500/20 bg-red-500/10 text-red-500' : 'border-border bg-card'}`}>
-                                    <div className="text-[11px] opacity-80 mb-1">Delta</div>
-                                    <div className="text-xl font-bold flex items-center justify-center gap-1">
-                                        {results.improved ? <TrendingUp className="w-4 h-4" /> : results.decreased ? <TrendingDown className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                                        {results.improved ? '+' : ''}{results.delta}%
-                                    </div>
-                                </div>
+                        {data.subjects.length > 0 && (
+                            <div className="mt-5 overflow-hidden rounded-xl border border-border/70">
+                                <table className="w-full text-sm">
+                                    <caption className="sr-only">Subject averages in each term</caption>
+                                    <thead className="bg-muted/50 text-[11px] uppercase tracking-wider text-muted-foreground">
+                                        <tr>
+                                            <th scope="col" className="px-3 py-2 text-left font-semibold">Subject</th>
+                                            <th scope="col" className="px-2 py-2 text-right font-semibold">From</th>
+                                            <th scope="col" className="px-2 py-2 text-right font-semibold">To</th>
+                                            <th scope="col" className="px-3 py-2 text-right font-semibold">Change</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/60">
+                                        {data.subjects.map(s => (
+                                            <tr key={s.subject_id}>
+                                                <th scope="row" className="max-w-0 truncate px-3 py-2 text-left font-medium">{s.subject_name}</th>
+                                                <td className="px-2 py-2 text-right tabular-nums">{s.base != null ? `${s.base}%` : '–'}</td>
+                                                <td className="px-2 py-2 text-right tabular-nums">{s.compare != null ? `${s.compare}%` : '–'}</td>
+                                                <td className="px-3 py-2 text-right"><Change value={s.change} /></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        </div>
-                    )}
-                </div>
-            </Card>
-        </div>
+                        )}
+                        <p className="mt-3 text-[11px] text-muted-foreground">Uses the learners in this class today, so a learner who joined or left counts only where they have marks.</p>
+                    </>
+                )}
+            </div>
+        </ReportDialog>
     );
 }

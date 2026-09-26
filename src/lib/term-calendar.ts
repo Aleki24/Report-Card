@@ -53,10 +53,14 @@ export function getCurrentTermName(date?: Date): string {
  * based on the current date and Kenyan calendar.
  *
  * Matching strategy:
- * 1. Try to match by term name containing "Term X" or "X"
- * 2. Try to match by date range (start_date/end_date)
- * 3. Fall back to the one marked is_current
- * 4. Fall back to the first term
+ * 1. The term whose dates contain today
+ * 2. The one the school marked current (between terms, in the holidays)
+ * 3. The newest term named for the calendar term ("Term 3" in September)
+ * 4. The newest term
+ *
+ * The name used to be tried first, against terms listed oldest first, so from
+ * a school's second year on "Term 3" meant last year's Term 3 on every page
+ * that pre-selects a term.
  */
 export function findActiveTermId(
   terms: Array<{ id: string; name: string; start_date?: string; end_date?: string; is_current?: boolean }>,
@@ -65,10 +69,26 @@ export function findActiveTermId(
   if (terms.length === 0) return null;
 
   const d = date || new Date();
-  const currentTermNum = getCurrentTermNumber(d);
+  const now = d.getTime();
+  const newestFirst = [...terms].sort((a, b) => (b.start_date ?? '').localeCompare(a.start_date ?? ''));
 
-  // 1. Match by name (e.g. "Term 1", "Term 2", "Term 3")
-  const byName = terms.find(t => {
+  // 1. Match by date range
+  const byDate = newestFirst.find(t => {
+    if (!t.start_date || !t.end_date) return false;
+    const start = new Date(t.start_date).getTime();
+    // The whole of the last day counts.
+    const end = new Date(t.end_date).getTime() + 24 * 60 * 60 * 1000 - 1;
+    return now >= start && now <= end;
+  });
+  if (byDate) return byDate.id;
+
+  // 2. The school's own choice
+  const byCurrent = newestFirst.find(t => t.is_current);
+  if (byCurrent) return byCurrent.id;
+
+  // 3. Match by name (e.g. "Term 1", "Term 2", "Term 3"), newest first
+  const currentTermNum = getCurrentTermNumber(d);
+  const byName = newestFirst.find(t => {
     const lower = t.name.toLowerCase().trim();
     return (
       lower === `term ${currentTermNum}` ||
@@ -79,20 +99,6 @@ export function findActiveTermId(
   });
   if (byName) return byName.id;
 
-  // 2. Match by date range
-  const now = d.getTime();
-  const byDate = terms.find(t => {
-    if (!t.start_date || !t.end_date) return false;
-    const start = new Date(t.start_date).getTime();
-    const end = new Date(t.end_date).getTime();
-    return now >= start && now <= end;
-  });
-  if (byDate) return byDate.id;
-
-  // 3. Fallback to is_current flag
-  const byCurrent = terms.find(t => t.is_current);
-  if (byCurrent) return byCurrent.id;
-
-  // 4. Fallback to first term
-  return terms[0].id;
+  // 4. The newest term
+  return newestFirst[0].id;
 }

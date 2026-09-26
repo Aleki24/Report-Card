@@ -45,10 +45,10 @@ export function ReportActionCards({
   ];
 
   return (
-    <section className="mb-6" aria-labelledby="report-actions-heading">
+    <section aria-labelledby="report-actions-heading">
       <div id="report-actions-heading" className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <StepHeading step={2} title="Generate & share" />
-        {!isConfigured && <span className="text-xs text-muted-foreground">Choose year, term and class above to unlock these.</span>}
+        {!isConfigured && <span className="text-xs text-muted-foreground">Choose the class, term and exam above to unlock these.</span>}
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {actions.map(({ key, icon: Icon, tone, title, description, cta, busy, primary, alwaysAvailable, onClick }) => {
@@ -72,7 +72,7 @@ export function ReportActionCards({
                 type="button"
                 onClick={onClick}
                 disabled={locked || busy}
-                title={locked ? 'Choose year, term and class above first' : undefined}
+                title={locked ? 'Choose the class, term and exam above first' : undefined}
                 className={cn(primary ? 'btn-primary' : 'btn-secondary', 'h-9 w-full text-sm disabled:pointer-events-none disabled:opacity-60')}
               >
                 {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}

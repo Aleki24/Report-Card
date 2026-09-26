@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { z } from 'zod';
 import { forbidden, getCaller, type Caller } from '@/lib/auth-server';
+import { internalError } from '@/lib/api-errors';
 
 export const runtime = 'nodejs';
 
@@ -96,78 +98,92 @@ export async function GET(request: NextRequest) {
     }
 }
 
+const MAX_COMMENT = 1000;
+const commentText = z.string().trim().max(MAX_COMMENT, `Keep each comment under ${MAX_COMMENT} characters.`).nullish().transform(v => v || null);
+
+const saveCommentsSchema = z.object({
+    term_id: z.string().min(1),
+    academic_year_id: z.string().min(1),
+    grade_stream_id: z.string().min(1),
+    comments: z.array(z.object({
+        student_id: z.string().min(1),
+        comments_class_teacher: commentText,
+        comments_principal: commentText,
+    })).min(1, 'Nothing to save.').max(500),
+});
+
+/**
+ * Saves the comments for any number of the class's learners in one request.
+ * "Save all" used to send one request per learner, edited or not, and report
+ * a partial failure only as a count.
+ */
 export async function POST(request: NextRequest) {
     try {
         const caller = await getCaller();
         if (!caller) return forbidden('Unauthorized', 401);
 
-        const supabase = createSupabaseAdmin();
         const schoolId = caller.schoolId;
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
 
-        const body = await request.json();
-        const { student_id, term_id, academic_year_id, grade_stream_id, comments_class_teacher, comments_principal } = body;
-
-        if (!student_id || !term_id || !academic_year_id || !grade_stream_id) {
-            return NextResponse.json({ error: 'student_id, term_id, academic_year_id, and grade_stream_id are required' }, { status: 400 });
+        const parsed = saveCommentsSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid comments.' }, { status: 400 });
         }
+        const { term_id, academic_year_id, grade_stream_id, comments } = parsed.data;
 
         if (!canCommentOnStream(caller, grade_stream_id)) {
             return forbidden('Only administrators and the class teacher can edit report comments.');
         }
 
-        // Verify the student belongs to the caller's school and to this class
-        const { data: student } = await supabase
-            .from('students')
-            .select('id, current_grade_stream_id, users!inner(school_id)')
-            .eq('id', student_id)
-            .eq('users.school_id', schoolId)
-            .maybeSingle();
+        const supabase = createSupabaseAdmin();
+        const studentIds = [...new Set(comments.map(c => c.student_id))];
 
-        if (!student || student.current_grade_stream_id !== grade_stream_id) {
-            return NextResponse.json({ error: 'Student not found in this class' }, { status: 403 });
+        // Every learner must be this school's and in this class; the term and
+        // year come from the body too, so they must be this school's as well.
+        const [studentsRes, termRes] = await Promise.all([
+            supabase
+                .from('students')
+                .select('id, users!inner(school_id)')
+                .in('id', studentIds)
+                .eq('current_grade_stream_id', grade_stream_id)
+                .eq('users.school_id', schoolId),
+            supabase
+                .from('terms')
+                .select('id')
+                .eq('id', term_id)
+                .eq('academic_year_id', academic_year_id)
+                .eq('school_id', schoolId)
+                .maybeSingle(),
+        ]);
+        if (studentsRes.error) return internalError('report comments students', studentsRes.error);
+        if ((studentsRes.data ?? []).length !== studentIds.length) {
+            return NextResponse.json({ error: 'Some of these learners are no longer in this class. Reload and try again.' }, { status: 403 });
         }
-
-        // The term and year come from the body too; they must be this school's.
-        const { data: term } = await supabase
-            .from('terms')
-            .select('id')
-            .eq('id', term_id)
-            .eq('academic_year_id', academic_year_id)
-            .eq('school_id', schoolId)
-            .maybeSingle();
-        if (!term) {
+        if (!termRes.data) {
             return NextResponse.json({ error: 'Term not found' }, { status: 404 });
         }
 
         // The principal's comment is the admin's to write; a class teacher's
         // save leaves whatever the admin wrote untouched.
-        const comments: { comments_class_teacher: string | null; comments_principal?: string | null } = {
-            comments_class_teacher: comments_class_teacher || null,
-        };
-        if (caller.role === 'ADMIN') comments.comments_principal = comments_principal || null;
+        const isAdmin = caller.role === 'ADMIN';
+        const rows = comments.map(c => ({
+            student_id: c.student_id,
+            term_id,
+            academic_year_id,
+            grade_stream_id,
+            comments_class_teacher: c.comments_class_teacher,
+            ...(isAdmin ? { comments_principal: c.comments_principal } : {}),
+        }));
 
-        // Upsert into report_cards
         const { error } = await supabase
             .from('report_cards')
-            .upsert({
-                student_id,
-                term_id,
-                academic_year_id,
-                grade_stream_id,
-                ...comments,
-            }, {
-                onConflict: 'student_id,term_id,academic_year_id',
-            });
+            .upsert(rows, { onConflict: 'student_id,term_id,academic_year_id' });
+        if (error) return internalError('report comments upsert', error);
 
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, saved: rows.length });
     } catch (err: unknown) {
-        return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to save comments' }, { status: 500 });
+        return internalError('report comments', err);
     }
 }
