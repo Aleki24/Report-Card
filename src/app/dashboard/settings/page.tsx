@@ -1,356 +1,329 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, RotateCcw, School, Settings } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
-import { Settings } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
-import { Card, CardContent, Button } from '@/components/ui';
+import EmptyState from '@/components/dashboard/EmptyState';
+import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
+import { ConfirmDialog, Modal } from '@/components/ui';
+import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
-import { AcademicCalendarTab } from '@/components/settings/AcademicCalendarTab';
+import { AcademicCalendarTab, type AcademicYear, type Term } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { SchoolForm } from '@/components/settings/SchoolForm';
 import { isSeniorRankGroup, type SeniorRankGroup } from '@/lib/ranking';
-import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
 
-interface AcademicLevel { id: string; code: string; name: string; }
-interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
-interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL'; }
-interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; cbc_ranking_enabled?: boolean; senior_rank_group?: SeniorRankGroup; }
-interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
-interface AcademicYear { id: string; name: string; start_date: string; end_date: string; }
-interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null; }
+interface AcademicLevel { id: string; code: string; name: string }
+interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string }
+interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL' }
+interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number }
+interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null }
+interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; cbc_ranking_enabled?: boolean; senior_rank_group?: SeniorRankGroup }
 
-/**
- * The settings tabs, and the only strings `?tab=` accepts. Declared `as const`
- * so the tab union is derived from this list rather than repeated beside it.
- */
-const SETTINGS_TABS = [
-  { key: 'profile', label: 'School Profile' },
-  { key: 'academic', label: 'Academic Structure' },
-  { key: 'grading', label: 'Grading Systems' },
-  { key: 'calendar', label: 'Academic Calendar' },
-  { key: 'payments', label: 'Payments' },
-] as const;
+interface SettingsData {
+  academicLevels: AcademicLevel[];
+  grades: Grade[];
+  gradingSystems: GradingSystem[];
+  gradingScales: GradingScale[];
+  subjects: SubjectOption[];
+  academicYears: AcademicYear[];
+  terms: Term[];
+  school: SchoolProfile;
+}
 
-type SettingsTab = (typeof SETTINGS_TABS)[number]['key'];
+type SettingsTab = 'profile' | 'calendar' | 'grading' | 'curriculum' | 'payments';
+type StructureType = 'academic_year' | 'term' | 'grading_system';
 
-const isSettingsTab = (value: string | null): value is SettingsTab =>
-  SETTINGS_TABS.some(t => t.key === value);
+const TABS: readonly PageTab<SettingsTab>[] = [
+  { id: 'profile', label: 'School profile', shortLabel: 'Profile', icon: School, hue: 'amber' },
+  { id: 'calendar', label: 'Academic calendar', shortLabel: 'Calendar', icon: CalendarRange, hue: 'blue' },
+  { id: 'grading', label: 'Grading systems', shortLabel: 'Grading', icon: Award, hue: 'violet' },
+  { id: 'curriculum', label: 'Curriculum', icon: BookOpen, hue: 'emerald' },
+  { id: 'payments', label: 'Payments', icon: CreditCard, hue: 'teal' },
+];
+
+const STRUCTURE_URL = '/api/admin/academic-structure';
+const DELETE_NOUN: Record<StructureType, string> = { academic_year: 'academic year', term: 'term', grading_system: 'grading system' };
+
+type Load = { state: 'loading' } | { state: 'ready'; data: SettingsData } | { state: 'error'; message: string };
+
+async function readJson(res: Response): Promise<unknown> {
+  return res.json().catch(() => null);
+}
+
+function toSchool(raw: Record<string, unknown> | null | undefined): SchoolProfile {
+  const r = raw ?? {};
+  const str = (key: string) => (typeof r[key] === 'string' ? (r[key] as string) : '');
+  return {
+    id: str('id') || undefined,
+    name: str('name'), address: str('address'), phone: str('phone'), email: str('email'), logo_url: str('logo_url'),
+    teacher_invite_code: str('teacher_invite_code'), student_invite_code: str('student_invite_code'),
+    min_combination_group_size: typeof r.min_combination_group_size === 'number' ? r.min_combination_group_size : 15,
+    overall_grading_system_id: str('overall_grading_system_id') || null,
+    cbc_ranking_enabled: r.cbc_ranking_enabled === true,
+    senior_rank_group: isSeniorRankGroup(r.senior_rank_group) ? r.senior_rank_group : 'GRADE',
+  };
+}
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<ContentSkeleton message="Loading settings..." />}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
+
+function SettingsPageInner() {
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [active, select] = useUrlTab(TABS);
+  const [load, setLoad] = useState<Load>({ state: 'loading' });
+  const [school, setSchool] = useState<SchoolProfile>(() => toSchool(null));
+  const [savedSchool, setSavedSchool] = useState<SchoolProfile | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState<{ type: StructureType; id: string; label: string } | null>(null);
+  const [blocked, setBlocked] = useState<{ label: string; message: string } | null>(null);
 
-  /**
-   * Deep links open on the tab they name — /dashboard/settings?tab=grading.
-   * Read straight off the URL rather than through `useSearchParams`, which
-   * would put the whole page behind a Suspense boundary for one optional
-   * string. Unknown values are ignored, leaving the default tab.
-   */
-  useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab');
-    if (isSettingsTab(tab)) setActiveTab(tab);
-  }, []);
-
-  const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [gradingSystems, setGradingSystems] = useState<GradingSystem[]>([]);
-  const [gradingScales, setGradingScales] = useState<GradingScale[]>([]);
-  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [terms, setTerms] = useState<Term[]>([]);
-  const [selectedCalYearId, setSelectedCalYearId] = useState('');
-
-  const [school, setSchool] = useState<SchoolProfile>({ name: '', address: '', phone: '', email: '', logo_url: '' });
-  const [schoolLoading, setSchoolLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const [calSaving, setCalSaving] = useState(false);
-  const [newYear, setNewYear] = useState({ name: '', start_date: '', end_date: '' });
-  const [newTerm, setNewTerm] = useState({ name: '', start_date: '', end_date: '', midterm_reopening_date: '', reopening_date: '' });
-
-  const fetchAllData = useCallback(async () => {
-    setLoading(true);
-    setSchoolLoading(true);
+  const fetchAll = useCallback(async () => {
     try {
       const [structureRes, schoolRes, yearsRes, termsRes] = await Promise.all([
-        fetch('/api/admin/academic-structure'),
-        fetch('/api/school/data?type=school_profile'),
-        fetch('/api/school/data?type=academic_years'),
-        fetch('/api/school/data?type=terms'),
+        fetch(STRUCTURE_URL, { cache: 'no-store' }),
+        fetch('/api/school/data?type=school_profile', { cache: 'no-store' }),
+        fetch('/api/school/data?type=academic_years', { cache: 'no-store' }),
+        fetch('/api/school/data?type=terms', { cache: 'no-store' }),
       ]);
-      const [structureData, schoolData, yearsData, termsData] = await Promise.all([
-        structureRes.json(), schoolRes.json(), yearsRes.json(), termsRes.json(),
-      ]);
-
-      setAcademicLevels(structureData.academic_levels || []);
-      setGrades(structureData.grades || []);
-      setGradingSystems(structureData.grading_systems || []);
-      setGradingScales(structureData.grading_scales || []);
-      setSubjects(structureData.subjects || []);
-
-      const years = yearsData.data || [];
-      setAcademicYears(years);
-      setTerms(termsData.data || []);
-      if (years.length > 0 && !selectedCalYearId) setSelectedCalYearId(years[0].id);
-
-      if (schoolData.data) {
-        setSchool({
-          id: schoolData.data.id, name: schoolData.data.name || '', address: schoolData.data.address || '',
-          phone: schoolData.data.phone || '', email: schoolData.data.email || '', logo_url: schoolData.data.logo_url || '',
-          teacher_invite_code: schoolData.data.teacher_invite_code || '',
-          student_invite_code: schoolData.data.student_invite_code || '',
-          min_combination_group_size: schoolData.data.min_combination_group_size ?? 15,
-          overall_grading_system_id: schoolData.data.overall_grading_system_id || null,
-          cbc_ranking_enabled: schoolData.data.cbc_ranking_enabled === true,
-          senior_rank_group: isSeniorRankGroup(schoolData.data.senior_rank_group) ? schoolData.data.senior_rank_group : 'GRADE',
-        });
-      }
+      const responses = [structureRes, schoolRes, yearsRes, termsRes];
+      const bodies = await Promise.all(responses.map(readJson));
+      const failedAt = responses.findIndex(r => !r.ok);
+      if (failedAt >= 0) throw new Error(apiErrorMessage(bodies[failedAt], 'Could not load settings.'));
+      const [structure, schoolJson, years, terms] = bodies;
+      const s = (structure ?? {}) as Record<string, unknown[]>;
+      const loadedSchool = toSchool((schoolJson as { data?: Record<string, unknown> } | null)?.data);
+      setLoad({
+        state: 'ready',
+        data: {
+          academicLevels: (s.academic_levels ?? []) as AcademicLevel[],
+          grades: (s.grades ?? []) as Grade[],
+          gradingSystems: (s.grading_systems ?? []) as GradingSystem[],
+          gradingScales: (s.grading_scales ?? []) as GradingScale[],
+          subjects: (s.subjects ?? []) as SubjectOption[],
+          academicYears: ((years as { data?: AcademicYear[] } | null)?.data) ?? [],
+          terms: ((terms as { data?: Term[] } | null)?.data) ?? [],
+          school: loadedSchool,
+        },
+      });
+      setSchool(prev => (savedSchool === null || prev === savedSchool ? loadedSchool : prev));
+      setSavedSchool(loadedSchool);
     } catch (err) {
-      console.error('Error fetching settings data:', err);
-    } finally {
-      setLoading(false);
-      setSchoolLoading(false);
+      const message = err instanceof Error ? err.message : 'Could not load settings.';
+      setLoad(prev => (prev.state === 'ready' ? prev : { state: 'error', message }));
+      if (load.state === 'ready') toast.error(message);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { if (profile?.id) fetchAllData(); }, [profile?.id, fetchAllData]);
+  useEffect(() => { if (profile?.id) void fetchAll(); }, [profile?.id, fetchAll]);
 
-  const handleSaveSchool = async (e: React.FormEvent) => {
+  const data = load.state === 'ready' ? load.data : null;
+  const profileDirty = useMemo(() => savedSchool !== null && JSON.stringify(school) !== JSON.stringify(savedSchool), [school, savedSchool]);
+
+  const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!school.name.trim()) return;
-    setSaving(true);
+    setSavingProfile(true);
     try {
       const res = await fetch('/api/admin/school', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: school.name.trim(), address: school.address.trim() || null, phone: school.phone.trim() || null, email: school.email.trim() || null, logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null, cbc_ranking_enabled: school.cbc_ranking_enabled ?? false, senior_rank_group: school.senior_rank_group ?? 'GRADE', school_id: school.id || null, user_id: profile?.id }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          school_id: school.id, name: school.name, address: school.address, phone: school.phone, email: school.email,
+          logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null,
+          cbc_ranking_enabled: school.cbc_ranking_enabled ?? false, senior_rank_group: school.senior_rank_group ?? 'GRADE',
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error); }
-      else if (data.school_id) {
-        setSchool(prev => ({ ...prev, id: data.school_id }));
-        toast.success(school.id ? 'School profile updated!' : 'School created!');
-        setTimeout(() => window.location.reload(), 1500);
-      }
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
-    finally { setSaving(false); }
-  };
-
-  const postStructure = async (type: string, payload: Record<string, unknown>) => {
-    setCalSaving(true);
-    try {
-      const res = await fetch('/api/admin/academic-structure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, ...payload }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
-      toast.success(`${type.replace('_', ' ')} added successfully`);
-      await fetchAllData();
-      return data.data;
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); return null; }
-    finally { setCalSaving(false); }
-  };
-
-  const deleteStructure = async (type: string, id: string) => {
-    if (!confirm('Are you sure you want to delete this item?')) return;
-    setCalSaving(true);
-    try {
-      const res = await fetch(`/api/admin/academic-structure?type=${type}&id=${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
-      toast.success('Deleted successfully');
-      await fetchAllData();
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
-    finally { setCalSaving(false); }
-  };
-
-  const patchStructure = async (type: string, id: string, payload: Record<string, unknown>) => {
-    setCalSaving(true);
-    try {
-      const res = await fetch('/api/admin/academic-structure', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, ...payload }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
-      toast.success('Updated successfully');
-      await fetchAllData();
-      return data.data;
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); return null; }
-    finally { setCalSaving(false); }
-  };
-
-  const handleSetOverallGradingSystem = async (gradingSystemId: string) => {
-    if (!school.id) return;
-    setCalSaving(true);
-    try {
-      const res = await fetch('/api/admin/school', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ school_id: school.id, name: school.name, address: school.address || null, phone: school.phone || null, email: school.email || null, logo_url: school.logo_url || null, overall_grading_system_id: gradingSystemId || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      toast.success('Overall grading system updated');
-      await fetchAllData();
-    } catch (err) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
-    finally { setCalSaving(false); }
-  };
-
-  const handleAddYear = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newYear.name.trim() || !newYear.start_date || !newYear.end_date) return;
-    const result = await postStructure('academic_year', newYear);
-    if (result) { setNewYear({ name: '', start_date: '', end_date: '' }); setSelectedCalYearId(result.id); }
-  };
-
-  const handleAddTerm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCalYearId || !newTerm.name.trim() || !newTerm.start_date || !newTerm.end_date) return;
-    const result = await postStructure('term', { academic_year_id: selectedCalYearId, ...newTerm });
-    if (result) setNewTerm({ name: '', start_date: '', end_date: '', midterm_reopening_date: '', reopening_date: '' });
-  };
-
-  /**
-   * Reopening dates print on report cards as "Next term begins", so they are
-   * edited in place on the term row and saved immediately. The local list is
-   * updated optimistically so the date picker doesn't snap back while saving.
-   */
-  const handleUpdateTermDates = async (
-    termId: string,
-    field: 'midterm_reopening_date' | 'reopening_date',
-    value: string,
-  ) => {
-    const previous = terms;
-    setTerms(prev => prev.map(t => (t.id === termId ? { ...t, [field]: value || null } : t)));
-    try {
-      const res = await fetch('/api/admin/academic-structure', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'term', id: termId, [field]: value || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed to save the reopening date'));
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save the profile.'));
+      toast.success('School profile saved');
+      // The name and logo also show in the sidebar, which reads them once.
+      const shellChanged = savedSchool && (savedSchool.name !== school.name.trim() || savedSchool.logo_url !== school.logo_url);
+      if (shellChanged) window.location.reload();
+      else await fetchAll();
     } catch (err) {
-      setTerms(previous);
-      toast.error(err instanceof Error ? err.message : 'Failed to save the reopening date');
+      toast.error(err instanceof Error ? err.message : 'Could not save the profile.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
-  const handleSetCurrentTerm = async (term: Term) => {
-    if (term.is_current) return;
-    setCalSaving(true);
+  /** Sends a change; resolves to the saved row, or null after reporting the failure. */
+  const send = async (method: 'POST' | 'PATCH', body: Record<string, unknown>, success: string): Promise<{ id: string } | null> => {
+    setBusy(true);
     try {
-      // Only one term should be current at a time — clear the others in the same year first.
-      const siblings = terms.filter(t => t.academic_year_id === term.academic_year_id && t.is_current && t.id !== term.id);
-      for (const s of siblings) {
-        await fetch('/api/admin/academic-structure', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'term', id: s.id, is_current: false }),
-        });
-      }
-      const res = await fetch('/api/admin/academic-structure', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'term', id: term.id, is_current: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update term');
-      toast.success(`${term.name} is now the current term`);
-      await fetchAllData();
+      const res = await fetch(STRUCTURE_URL, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const json = await readJson(res);
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save.'));
+      toast.success(success);
+      await fetchAll();
+      return ((json as { data?: { id: string } } | null)?.data) ?? { id: '' };
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unknown error');
+      toast.error(err instanceof Error ? err.message : 'Could not save.');
+      return null;
     } finally {
-      setCalSaving(false);
+      setBusy(false);
+    }
+  };
+
+  const create = (type: string, payload: Record<string, unknown>) =>
+    send('POST', { type, ...payload }, `${DELETE_NOUN[type as StructureType] ?? type.replace('_', ' ')} added`.replace(/^./, c => c.toUpperCase()));
+  const patch = (type: string, id: string, payload: Record<string, unknown>) => send('PATCH', { type, id, ...payload }, 'Saved');
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${STRUCTURE_URL}?type=${deleting.type}&id=${encodeURIComponent(deleting.id)}`, { method: 'DELETE' });
+      const json = await readJson(res);
+      if (res.status === 409) {
+        // In use: say why instead of deleting.
+        setBlocked({ label: deleting.label, message: apiErrorMessage(json, 'It is still in use.') });
+        setDeleting(null);
+        return;
+      }
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not delete.'));
+      toast.success(`${deleting.label} deleted`);
+      setDeleting(null);
+      await fetchAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setCurrentTerm = (term: Term) =>
+    void patch('term', term.id, { is_current: true }).then(ok => { if (ok) toast.success(`${term.name} is now the current term`); });
+
+  /** Reopening dates save as they are picked; the list updates at once so the picker doesn't snap back. */
+  const updateTermDates = async (termId: string, field: 'midterm_reopening_date' | 'reopening_date', value: string) => {
+    if (!data) return;
+    const previous = data.terms;
+    setLoad({ state: 'ready', data: { ...data, terms: data.terms.map(t => (t.id === termId ? { ...t, [field]: value || null } : t)) } });
+    try {
+      const res = await fetch(STRUCTURE_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'term', id: termId, [field]: value || null }) });
+      if (!res.ok) throw new Error(apiErrorMessage(await readJson(res), 'Could not save the reopening date.'));
+    } catch (err) {
+      setLoad(prev => (prev.state === 'ready' ? { state: 'ready', data: { ...prev.data, terms: previous } } : prev));
+      toast.error(err instanceof Error ? err.message : 'Could not save the reopening date.');
+    }
+  };
+
+  const setOverallGrading = async (gradingSystemId: string) => {
+    if (!school.id) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/admin/school', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ school_id: school.id, name: savedSchool?.name ?? school.name, address: savedSchool?.address, phone: savedSchool?.phone, email: savedSchool?.email, logo_url: savedSchool?.logo_url || null, overall_grading_system_id: gradingSystemId || null }),
+      });
+      if (!res.ok) throw new Error(apiErrorMessage(await readJson(res), 'Could not change the overall grading.'));
+      toast.success('Overall grading system updated');
+      await fetchAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not change the overall grading.');
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-10">
-      <PageHeader
-        title="School settings"
-        eyebrow="Administration"
-        icon={Settings}
-        hue="slate"
-        description="Your school's profile, academic calendar, grading and payments."
-      />
+    <div className="mx-auto w-full max-w-7xl pb-10">
+      <PageHeader title="School settings" eyebrow="Administration" icon={Settings} hue="slate" description="Your school's profile, academic calendar, grading and payments." />
 
-      <div className="flex border-b border-border mb-8 overflow-x-auto">
-        {SETTINGS_TABS.map(tab => (
-          <button key={tab.key}
-            className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setActiveTab(tab.key)}>
-            {tab.label}
-          </button>
-        ))}
+      <PageTabs tabs={TABS} active={active} onSelect={select} label="Settings" idPrefix="settings" />
+
+      <div role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${active}`}>
+        {active === 'payments' ? <PaymentsTab /> : load.state === 'loading' ? (
+          <ContentSkeleton message="Loading settings..." />
+        ) : load.state === 'error' ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card">
+            <EmptyState
+              hue="rose"
+              icon={<AlertTriangle className="size-6" />}
+              title="Couldn't load settings"
+              description={load.message}
+              action={<button type="button" className="btn-primary" onClick={() => { setLoad({ state: 'loading' }); void fetchAll(); }}><RotateCcw className="size-4" aria-hidden />Try again</button>}
+            />
+          </div>
+        ) : data && (
+          <>
+            {active === 'profile' && (
+              <form onSubmit={saveProfile} className="mx-auto max-w-2xl rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-6">
+                <SchoolForm school={school} setSchool={setSchool} />
+                <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] mt-6 flex items-center justify-end gap-3 border-t border-border/60 bg-card pt-4 min-[768px]:bottom-0">
+                  {profileDirty && (
+                    <button type="button" className="btn-secondary" onClick={() => savedSchool && setSchool(savedSchool)} disabled={savingProfile}>Discard</button>
+                  )}
+                  <button type="submit" className="btn-primary" disabled={savingProfile || !profileDirty || !school.name.trim()}>
+                    {savingProfile ? 'Saving…' : profileDirty ? 'Save changes' : 'Saved'}
+                  </button>
+                </div>
+              </form>
+            )}
+            {active === 'calendar' && (
+              <AcademicCalendarTab
+                academicYears={data.academicYears}
+                terms={data.terms}
+                saving={busy}
+                onCreate={create}
+                onDelete={(type, id, label) => setDeleting({ type, id, label })}
+                onSetCurrentTerm={setCurrentTerm}
+                onUpdateTermDates={(id, field, value) => void updateTermDates(id, field, value)}
+              />
+            )}
+            {active === 'grading' && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <GradingSystemsTab
+                  academicLevels={data.academicLevels}
+                  gradingSystems={data.gradingSystems}
+                  gradingScales={data.gradingScales}
+                  subjects={data.subjects}
+                  overallGradingSystemId={data.school.overall_grading_system_id}
+                  schoolId={data.school.id}
+                  saving={busy}
+                  onCreate={create}
+                  onDelete={async (type, id) => {
+                    const name = data.gradingSystems.find(g => g.id === id)?.name ?? 'This grading system';
+                    setDeleting({ type: type as StructureType, id, label: name });
+                  }}
+                  onPatch={patch}
+                  onSetOverall={setOverallGrading}
+                />
+              </div>
+            )}
+            {active === 'curriculum' && <AcademicStructureTab academicLevels={data.academicLevels} grades={data.grades} />}
+          </>
+        )}
       </div>
 
-      {loading && activeTab !== 'profile' && activeTab !== 'payments' ? (
-        <div className="p-12 text-center text-muted-foreground">Loading configuration...</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {activeTab === 'profile' && (
-            <div className="lg:col-span-3">
-              {schoolLoading ? (
-                <ContentSkeleton message="Loading school profile..." />
-              ) : !school.id ? (
-                <Card className="max-w-[560px] mx-auto">
-                  <CardContent className="p-8">
-                    <div className="text-center mb-6">
-                      <img src="https://em-content.zobj.net/source/apple/354/school_1f3eb.png" alt="School" className="w-16 h-16 object-contain mx-auto mb-4" />
-                      <h2 className="text-xl font-bold font-display mb-2">Setup Your School</h2>
-                      <p className="text-sm text-muted-foreground">Add your school details. This will appear in reports across the app.</p>
-                    </div>
-                    <form onSubmit={handleSaveSchool}>
-                      <SchoolForm school={school} setSchool={setSchool} />
-                      <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
-                        {saving ? 'Creating…' : 'Create school'}
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="max-w-[560px] mx-auto">
-                  <CardContent className="p-8">
-                    <h3 className="font-bold text-lg font-display mb-6">School Profile</h3>
-                    <form onSubmit={handleSaveSchool}>
-                      <SchoolForm school={school} setSchool={setSchool} />
-                      <Button type="submit" variant="primary" className="w-full mt-6" disabled={saving || !school.name.trim()}>
-                        {saving ? '⏳ Saving...' : 'Save Changes'}
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-          {activeTab === 'academic' && <AcademicStructureTab academicLevels={academicLevels} grades={grades} />}
-          {activeTab === 'grading' && (
-            <GradingSystemsTab
-              academicLevels={academicLevels}
-              gradingSystems={gradingSystems}
-              gradingScales={gradingScales}
-              subjects={subjects}
-              overallGradingSystemId={school.overall_grading_system_id}
-              schoolId={school.id}
-              saving={calSaving}
-              onCreate={postStructure}
-              onDelete={deleteStructure}
-              onPatch={patchStructure}
-              onSetOverall={handleSetOverallGradingSystem}
-            />
-          )}
-          {activeTab === 'payments' && <PaymentsTab />}
-          {activeTab === 'calendar' && (
-            <AcademicCalendarTab
-              academicYears={academicYears} terms={terms} selectedCalYearId={selectedCalYearId}
-              setSelectedCalYearId={setSelectedCalYearId} calMsg={''} calSaving={calSaving}
-              newYear={newYear} setNewYear={setNewYear} newTerm={newTerm} setNewTerm={setNewTerm}
-              onAddYear={handleAddYear} onAddTerm={handleAddTerm} onDelete={deleteStructure}
-              onSetCurrentTerm={handleSetCurrentTerm}
-              onUpdateTermDates={handleUpdateTermDates}
-            />
-          )}
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={deleting !== null}
+        onClose={() => { if (!busy) setDeleting(null); }}
+        onConfirm={() => void confirmDelete()}
+        loading={busy}
+        variant="danger"
+        title={`Delete ${deleting?.label ?? ''}?`}
+        message={deleting ? `This removes the ${DELETE_NOUN[deleting.type]}. Anything that still uses it (exams, report cards, fee records) stops the delete, and you'll be told what.` : ''}
+        confirmText="Delete"
+      />
+
+      <Modal isOpen={blocked !== null} onClose={() => setBlocked(null)} title={`${blocked?.label ?? 'This'} is in use`} size="sm" footer={<button type="button" className="btn-primary" onClick={() => setBlocked(null)}>OK</button>}>
+        <p className="text-sm text-muted-foreground">{blocked?.message}</p>
+      </Modal>
     </div>
   );
 }

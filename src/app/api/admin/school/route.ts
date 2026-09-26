@@ -1,114 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { auth } from '@clerk/nextjs/server';
-import { isSeniorRankGroup } from '@/lib/ranking';
+import { getCaller } from '@/lib/auth-server';
+import { internalError } from '@/lib/api-errors';
+import { SENIOR_RANK_GROUPS } from '@/lib/ranking';
 
+/** Largest logo kept, as a data URL: the settings page shrinks uploads well below this. */
+const MAX_LOGO_CHARS = 400_000;
+
+const optionalText = (max: number) => z.string().trim().max(max).nullish().transform(v => v || null);
+
+const schoolUpdateSchema = z.object({
+    school_id: z.string().min(1).optional(),
+    name: z.string().trim().min(1, 'School name is required').max(150),
+    address: optionalText(300),
+    phone: optionalText(30),
+    email: z.string().trim().max(200).nullish().transform(v => v || null)
+        .refine(v => v === null || z.string().email().safeParse(v).success, 'Enter a valid email address'),
+    logo_url: z.string().max(MAX_LOGO_CHARS, 'That logo is too large; choose a smaller image').nullish()
+        .refine(v => !v || /^data:image\/(png|jpeg|webp|gif);base64,/.test(v) || /^https:\/\//.test(v), 'The logo must be an image')
+        .transform(v => v || null),
+    min_combination_group_size: z.number().int().min(1).max(200).nullish(),
+    overall_grading_system_id: z.string().nullish(),
+    cbc_ranking_enabled: z.boolean().optional(),
+    senior_rank_group: z.enum(SENIOR_RANK_GROUPS).optional(),
+});
+
+/**
+ * Updates the caller's school profile. Admin-only, and only their own school.
+ *
+ * This route used to create a school too, for an admin without one. That
+ * skipped the platform owner's approval entirely; new schools are requested
+ * through onboarding instead, which holds them until they are approved.
+ */
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        
-        const user_id = userId;
-        const body = await request.json();
-        const { name, address, phone, email, school_id, logo_url, min_combination_group_size, overall_grading_system_id, cbc_ranking_enabled, senior_rank_group } = body;
-
-        if (cbc_ranking_enabled !== undefined && typeof cbc_ranking_enabled !== 'boolean') {
-            return NextResponse.json({ error: 'cbc_ranking_enabled must be true or false' }, { status: 400 });
-        }
-        if (senior_rank_group !== undefined && !isSeniorRankGroup(senior_rank_group)) {
-            return NextResponse.json({ error: 'senior_rank_group must be GRADE, PATHWAY or COMBINATION' }, { status: 400 });
-        }
-        const rankingUpdate = {
-            ...(cbc_ranking_enabled !== undefined ? { cbc_ranking_enabled } : {}),
-            ...(senior_rank_group !== undefined ? { senior_rank_group } : {}),
-        };
-
-        // CBC ministry minimum learners per subject combination (optional)
-        let minGroupSize: number | undefined;
-        if (min_combination_group_size !== undefined && min_combination_group_size !== null) {
-            const parsed = Number(min_combination_group_size);
-            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 200) {
-                return NextResponse.json({ error: 'min_combination_group_size must be a whole number between 1 and 200' }, { status: 400 });
-            }
-            minGroupSize = parsed;
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (caller.role !== 'ADMIN') return NextResponse.json({ error: 'Only admins can manage the school profile.' }, { status: 403 });
+        if (!caller.schoolId) {
+            return NextResponse.json({ error: 'Set up your school from the onboarding page first.' }, { status: 409 });
         }
 
-        if (!name || !name.trim()) {
-            return NextResponse.json({ error: 'School name is required' }, { status: 400 });
+        const parsed = schoolUpdateSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid school details.' }, { status: 400 });
+        }
+        const body = parsed.data;
+        if (body.school_id && body.school_id !== caller.schoolId) {
+            return NextResponse.json({ error: 'You can only update your own school profile.' }, { status: 403 });
         }
 
-        const supabaseAdmin = createSupabaseAdmin();
+        const supabase = createSupabaseAdmin();
+        const { error } = await supabase.from('schools').update({
+            name: body.name,
+            address: body.address,
+            phone: body.phone,
+            email: body.email,
+            logo_url: body.logo_url,
+            ...(body.min_combination_group_size != null ? { min_combination_group_size: body.min_combination_group_size } : {}),
+            ...(body.overall_grading_system_id !== undefined ? { overall_grading_system_id: body.overall_grading_system_id || null } : {}),
+            ...(body.cbc_ranking_enabled !== undefined ? { cbc_ranking_enabled: body.cbc_ranking_enabled } : {}),
+            ...(body.senior_rank_group !== undefined ? { senior_rank_group: body.senior_rank_group } : {}),
+        }).eq('id', caller.schoolId);
+        if (error) return internalError('admin/school update', error);
 
-        // Verify the user is an ADMIN
-        const { data: userProfile } = await supabaseAdmin
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', user_id)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        if (userProfile.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only admins can manage schools' }, { status: 403 });
-        }
-
-        if (school_id) {
-            // Guard against cross-tenant school updates. An admin with no school
-            // used to skip this check entirely and could edit any school by id.
-            if (userProfile.school_id !== school_id) {
-                return NextResponse.json({ error: 'You can only update your own school profile.' }, { status: 403 });
-            }
-
-            // Update existing school
-            const { error } = await supabaseAdmin.from('schools').update({
-                name: name.trim(),
-                address: address?.trim() || null,
-                phone: phone?.trim() || null,
-                email: email?.trim() || null,
-                logo_url: logo_url || null,
-                ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
-                ...(overall_grading_system_id !== undefined ? { overall_grading_system_id: overall_grading_system_id || null } : {}),
-                ...rankingUpdate,
-            }).eq('id', school_id);
-
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 400 });
-            }
-
-            return NextResponse.json({ success: true, school_id, message: 'School updated' });
-        } else {
-            // Creating a second school would silently detach this admin from
-            // the one they run; new schools go through onboarding instead.
-            if (userProfile.school_id) {
-                return NextResponse.json({ error: 'Your account already belongs to a school.' }, { status: 409 });
-            }
-
-            // Create new school
-            const { data, error } = await supabaseAdmin.from('schools').insert({
-                name: name.trim(),
-                address: address?.trim() || null,
-                phone: phone?.trim() || null,
-                email: email?.trim() || null,
-                logo_url: logo_url || null,
-                ...(minGroupSize !== undefined ? { min_combination_group_size: minGroupSize } : {}),
-                ...rankingUpdate,
-            }).select('id').single();
-
-            if (error) {
-                return NextResponse.json({ error: error.message }, { status: 400 });
-            }
-
-            // Link school to the current user
-            await supabaseAdmin.from('users').update({ school_id: data.id }).eq('id', user_id);
-
-            return NextResponse.json({ success: true, school_id: data.id, message: 'School created' });
-        }
+        return NextResponse.json({ success: true, school_id: caller.schoolId, message: 'School updated' });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'An unknown error occurred';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('admin/school', err);
     }
 }

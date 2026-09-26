@@ -34,15 +34,19 @@ const optionalDate = z
     .preprocess(value => (value === '' ? null : value), isoDate.nullable())
     .optional();
 
+/** A span must end after it starts. */
+const endsAfterStart = (d: { start_date?: string; end_date?: string }) => !d.start_date || !d.end_date || d.end_date > d.start_date;
+const ENDS_AFTER_START = { message: 'The end date must be after the start date', path: ['end_date'] };
+
 export const academicYearSchema = z.object({
-    name: z.string().min(1, 'Name is required').max(100),
+    name: z.string().trim().min(1, 'Name is required').max(100),
     start_date: isoDate,
     end_date: isoDate,
-});
+}).refine(endsAfterStart, ENDS_AFTER_START);
 
 export const termSchema = z.object({
     academic_year_id: z.string().uuid('Invalid academic year ID'),
-    name: z.string().min(1, 'Name is required').max(100),
+    name: z.string().trim().min(1, 'Name is required').max(100),
     start_date: isoDate,
     end_date: isoDate,
     is_current: z.boolean().optional(),
@@ -50,6 +54,23 @@ export const termSchema = z.object({
     midterm_reopening_date: optionalDate,
     /** When learners return after this term ends (i.e. next term begins). */
     reopening_date: optionalDate,
+}).refine(endsAfterStart, ENDS_AFTER_START);
+
+/** Editing a term: any subset of its fields. */
+export const termUpdateSchema = z.object({
+    name: z.string().trim().min(1, 'Name is required').max(100).optional(),
+    start_date: isoDate.optional(),
+    end_date: isoDate.optional(),
+    is_current: z.boolean().optional(),
+    midterm_reopening_date: optionalDate,
+    reopening_date: optionalDate,
+});
+
+/** Editing an academic year. */
+export const academicYearUpdateSchema = z.object({
+    name: z.string().trim().min(1, 'Name is required').max(100).optional(),
+    start_date: isoDate.optional(),
+    end_date: isoDate.optional(),
 });
 
 export const academicLevelSchema = z.object({

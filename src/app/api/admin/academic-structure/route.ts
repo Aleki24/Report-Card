@@ -13,6 +13,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { isOfferedGrade } from '@/lib/classes-overview';
 import { classNameClash } from '@/lib/classes';
 import { classDeleteBlocker, classUsage } from '@/lib/class-usage';
+import { calendarDeleteBlocker } from '@/lib/calendar-usage';
 import { getTeacherPermissions, isStreamVisibleToTeacher, isSubjectVisibleToTeacher } from '@/lib/teacher-utils';
 import { ZodError, ZodIssue } from 'zod';
 import {
@@ -22,6 +23,8 @@ import {
     gradeSchema,
     streamSchema,
     streamUpdateSchema,
+    termUpdateSchema,
+    academicYearUpdateSchema,
     gradingSystemSchema,
     gradingScaleSchema,
     subjectSchema,
@@ -430,6 +433,17 @@ export async function POST(request: NextRequest) {
             term: async () => {
                 if (!schoolId) return NextResponse.json({ error: 'No school set up yet.' }, { status: 400 });
                 const data = termSchema.parse(payload);
+                // The year must be this school's: the id came from the client.
+                const { data: year } = await supabaseAdmin
+                    .from('academic_years')
+                    .select('id')
+                    .eq('id', data.academic_year_id)
+                    .eq('school_id', schoolId)
+                    .maybeSingle();
+                if (!year) return NextResponse.json({ error: 'That academic year is not one of your school\'s.' }, { status: 404 });
+                if (data.is_current) {
+                    await supabaseAdmin.from('terms').update({ is_current: false }).eq('school_id', schoolId).eq('is_current', true);
+                }
                 const { data: result, error } = await supabaseAdmin
                     .from('terms')
                     .insert({ academic_year_id: data.academic_year_id, name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: data.is_current ?? false, midterm_reopening_date: data.midterm_reopening_date || null, reopening_date: data.reopening_date || null, school_id: schoolId })
@@ -739,18 +753,33 @@ export async function PATCH(request: NextRequest) {
         // Build the update payload based on type
         const updateData: Record<string, any> = {};
 
-        if (type === 'academic_year') {
-            if (payload.name !== undefined) updateData.name = payload.name;
-            if (payload.start_date !== undefined) updateData.start_date = payload.start_date;
-            if (payload.end_date !== undefined) updateData.end_date = payload.end_date;
-        } else if (type === 'term') {
-            if (payload.name !== undefined) updateData.name = payload.name;
-            if (payload.start_date !== undefined) updateData.start_date = payload.start_date;
-            if (payload.end_date !== undefined) updateData.end_date = payload.end_date;
-            if (payload.is_current !== undefined) updateData.is_current = payload.is_current;
-            // Reopening dates print on report cards; empty clears them.
-            if (payload.midterm_reopening_date !== undefined) updateData.midterm_reopening_date = payload.midterm_reopening_date || null;
-            if (payload.reopening_date !== undefined) updateData.reopening_date = payload.reopening_date || null;
+        if (type === 'academic_year' || type === 'term') {
+            const data = type === 'term' ? termUpdateSchema.parse(payload) : academicYearUpdateSchema.parse(payload);
+            for (const [key, value] of Object.entries(data)) {
+                // Reopening dates print on report cards; empty clears them.
+                if (value !== undefined) updateData[key] = value === '' ? null : value;
+            }
+            // Dates are checked against the stored ones they are paired with.
+            if (updateData.start_date !== undefined || updateData.end_date !== undefined) {
+                const { data: current } = await supabaseAdmin.from(table).select('start_date, end_date').eq('id', id).single();
+                const start = updateData.start_date ?? current?.start_date;
+                const end = updateData.end_date ?? current?.end_date;
+                if (start && end && end <= start) {
+                    return NextResponse.json({ error: 'The end date must be after the start date.' }, { status: 400 });
+                }
+            }
+            // One current term per school: the report card, attendance and
+            // dashboard all read "the" current term, so making one current
+            // clears every other, in any year.
+            if (type === 'term' && updateData.is_current === true) {
+                const { error: clearError } = await supabaseAdmin
+                    .from('terms')
+                    .update({ is_current: false })
+                    .eq('school_id', schoolId)
+                    .eq('is_current', true)
+                    .neq('id', id);
+                if (clearError) return handleDatabaseError(clearError, 'term');
+            }
         } else if (type === 'stream') {
             const data = streamUpdateSchema.parse(payload);
             const { data: current } = await supabaseAdmin.from('grade_streams').select('grade_id').eq('id', id).single();
@@ -900,6 +929,11 @@ export async function DELETE(request: NextRequest) {
 
             if (!existing || existing.school_id !== schoolId) {
                 return NextResponse.json({ error: 'Not found or access denied' }, { status: 404 });
+            }
+
+            if (type === 'term' || type === 'academic_year') {
+                const blocker = await calendarDeleteBlocker(supabaseAdmin, type, id);
+                if (blocker) return NextResponse.json({ error: blocker }, { status: 409 });
             }
 
             if (type === 'stream') {

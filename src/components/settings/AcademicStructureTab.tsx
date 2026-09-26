@@ -1,64 +1,51 @@
 "use client";
 
 import React from 'react';
-import { InfoGuide } from '@/components/ui/InfoGuide';
+import Link from 'next/link';
+import { ArrowRight, GraduationCap, School } from 'lucide-react';
+import { CardHeading } from '@/components/ui';
 
-interface AcademicLevel { id: string; code: string; name: string; }
-interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string; }
+interface AcademicLevel { id: string; code: string; name: string }
+interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string }
 
-interface AcademicStructureTabProps {
-    academicLevels: AcademicLevel[];
-    grades: Grade[];
-}
-
-export function AcademicStructureTab({ academicLevels, grades }: AcademicStructureTabProps) {
+/**
+ * The national curricula and their grades. They are shared by every school
+ * and managed centrally, so this is for reference; a school chooses which
+ * grades it teaches by giving them classes on the Classes page.
+ */
+export function AcademicStructureTab({ academicLevels, grades }: { academicLevels: AcademicLevel[]; grades: Grade[] }) {
     return (
-        <>
-            <InfoGuide title="How academic structure works:" className="col-span-1 lg:col-span-3">
-                <ul className="list-disc pl-5 space-y-2 opacity-90 mt-2">
-                    <li><strong>Academic Levels</strong> represent curricula (e.g., CBC PP, CBC Grade School, 8-4-4). They're pre-configured but can be renamed.</li>
-                    <li><strong>Grades</strong> are the classes/standards within each level (e.g., PP1, PP2, Grade 1, Form 1). Their numeric order determines promotion sequence.</li>
-                    <li>To add a grade, select an academic level and fill in the code, display name, and numeric order.</li>
-                </ul>
-            </InfoGuide>
+        <div className="space-y-6">
+            <Link
+                href="/dashboard/classes"
+                className="group flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm transition-colors hover:border-primary sm:flex-row sm:items-center sm:justify-between sm:p-5"
+            >
+                <CardHeading icon={School} hue="amber" className="mb-0" title="Choose the grades you teach on the Classes page" description="Add classes (streams) to a grade and it becomes part of your school. The lists below are the national curricula, the same for every school." />
+                <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary">
+                    Open Classes
+                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" aria-hidden />
+                </span>
+            </Link>
 
-            <div className="card col-span-1 lg:col-span-1">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Academic Levels</h3>
-                <p className="text-xs text-muted-foreground mb-4">Kenya&apos;s education curricula</p>
-                <div className="overflow-x-auto">
-                    <table className="data-table w-full sm:whitespace-nowrap">
-                        <thead><tr><th>Code</th><th>Name</th></tr></thead>
-                        <tbody>
-                            {academicLevels.map(lvl => (
-                                <tr key={lvl.id}>
-                                    <td className="font-mono text-sm font-bold">{lvl.code}</td>
-                                    <td>{lvl.name}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+            <div className="grid gap-4 md:grid-cols-2">
+                {academicLevels.map(level => {
+                    const levelGrades = grades.filter(g => g.academic_level_id === level.id).sort((a, b) => a.numeric_order - b.numeric_order);
+                    return (
+                        <section key={level.id} className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+                            <CardHeading icon={GraduationCap} hue={level.code === 'CBC' ? 'emerald' : 'violet'} title={level.name} description={`${levelGrades.length} grade${levelGrades.length === 1 ? '' : 's'} · code ${level.code}`} />
+                            {levelGrades.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No grades listed.</p>
+                            ) : (
+                                <ul className="flex flex-wrap gap-1.5">
+                                    {levelGrades.map(g => (
+                                        <li key={g.id} className="rounded-lg border border-border bg-muted/40 px-2.5 py-1 text-sm">{g.name_display}</li>
+                                    ))}
+                                </ul>
+                            )}
+                        </section>
+                    );
+                })}
             </div>
-
-            <div className="card col-span-1 lg:col-span-2">
-                <h3 className="font-bold text-lg font-[family-name:var(--font-display)] mb-2">Grades / Classes</h3>
-                <div className="overflow-x-auto">
-                    <table className="data-table w-full sm:whitespace-nowrap">
-                        <thead><tr><th>Code</th><th>Display Name</th><th>Curriculum</th></tr></thead>
-                        <tbody>
-                            {grades.map(gr => (
-                                <tr key={gr.id}>
-                                    <td className="font-mono text-sm">{gr.code}</td>
-                                    <td className="font-medium">{gr.name_display}</td>
-                                    <td className="text-muted-foreground text-sm">
-                                        {academicLevels.find(l => l.id === gr.academic_level_id)?.code || '—'}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </>
+        </div>
     );
 }

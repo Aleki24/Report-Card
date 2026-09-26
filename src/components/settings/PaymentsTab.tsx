@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Trash2, Star } from 'lucide-react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
+import { ConfirmDialog } from '@/components/ui';
 import type { FeePayment, PaymentProvider, SchoolBankAccount } from '@/lib/fees';
 
 const KENYA_BANKS = [
@@ -57,6 +58,7 @@ export function PaymentsTab() {
     const [newBranch, setNewBranch] = useState('');
     const [addingBankAccount, setAddingBankAccount] = useState(false);
     const [bankAccountBusyId, setBankAccountBusyId] = useState<string | null>(null);
+    const [removingAccount, setRemovingAccount] = useState<SchoolBankAccount | null>(null);
 
     // Daraja
     const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
@@ -226,12 +228,13 @@ export function PaymentsTab() {
     };
 
     const deleteBankAccount = async (account: SchoolBankAccount) => {
-        if (!confirm(`Remove ${account.bankName} — ${account.accountNumber}? Parents will no longer see it as a pay-in option.`)) return;
+        setRemovingAccount(null);
         setBankAccountBusyId(account.id);
         try {
             const res = await fetch(`/api/school/payment-settings/bank-accounts/${account.id}`, { method: 'DELETE' });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Failed to remove bank account');
+            toast.success(`${account.bankName} account removed`);
             await fetchBankAccounts();
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to remove bank account');
@@ -434,7 +437,7 @@ export function PaymentsTab() {
                                         )}
                                         <button
                                             className="btn-icon text-destructive/80 hover:text-destructive"
-                                            onClick={() => deleteBankAccount(a)}
+                                            onClick={() => setRemovingAccount(a)}
                                             disabled={bankAccountBusyId === a.id}
                                             title="Remove"
                                         >
@@ -539,6 +542,15 @@ export function PaymentsTab() {
                     </div>
                 )}
             </div>
+            <ConfirmDialog
+                isOpen={removingAccount !== null}
+                onClose={() => setRemovingAccount(null)}
+                onConfirm={() => { if (removingAccount) void deleteBankAccount(removingAccount); }}
+                variant="danger"
+                title="Remove this bank account?"
+                message={removingAccount ? `${removingAccount.bankName} (${removingAccount.accountNumber}) will no longer be shown to parents as a way to pay.` : ''}
+                confirmText="Remove account"
+            />
         </div>
     );
 }
