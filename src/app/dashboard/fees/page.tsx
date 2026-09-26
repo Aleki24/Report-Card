@@ -1,12 +1,13 @@
 "use client";
 
 import PageHeader from '@/components/dashboard/PageHeader';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { requestJson, jsonBody } from '@/lib/api-error-message';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog, Modal } from '@/components/ui/Modal';
+import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -142,6 +143,36 @@ function todayIso(): string {
 
 const receiptUrl = (paymentId: string) => `/api/school/fees/payments/${paymentId}/receipt`;
 
+/** Runs `task` over `items`, at most `limit` at a time. */
+async function runLimited<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const item = items[next++];
+            await task(item);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+/** A destructive action waiting for the user to confirm it. */
+interface PendingConfirm {
+    title: string;
+    message: string;
+    confirmText: string;
+    run: () => Promise<void>;
+}
+
+const FEES_TABS: readonly PageTab<FeesMode>[] = [
+    { id: 'list', label: 'Fee records', shortLabel: 'Records', icon: FileText, hue: 'emerald' },
+    // The school-wide log exposes every receipt; it is admin-only on the server.
+    { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
+    { id: 'batch', label: 'Batch entry', shortLabel: 'Batch', icon: Layers, hue: 'violet' },
+];
+
+/** Requests in flight at once while a batch saves. */
+const BATCH_CONCURRENCY = 6;
+
 function formatCurrency(n: number): string {
     return `KSh ${n.toLocaleString()}`;
 }
@@ -164,9 +195,21 @@ const statusBadge = (status: string) => (
 const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
 
 export default function FeesPage() {
-    const { profile, role } = useAuth();
+    return (
+        <Suspense fallback={<div className="mx-auto h-64 w-full max-w-7xl animate-pulse rounded-2xl bg-muted/40" aria-hidden="true" />}>
+            <FeesPageInner />
+        </Suspense>
+    );
+}
+
+function FeesPageInner() {
+    const { role } = useAuth();
     // Deleting a record and voiding receipts are admin-only on the server.
     const isAdmin = role === 'ADMIN';
+    const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || isAdmin), [isAdmin]);
+    const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
+    const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+    const [confirming, setConfirming] = useState(false);
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -190,7 +233,6 @@ export default function FeesPage() {
     const [formNotes, setFormNotes] = useState('');
 
     // Batch entry state
-    const [mode, setMode] = useState<FeesMode>('list');
     const [gradeStreams, setGradeStreams] = useState<StreamOption[]>([]);
     const [batchStream, setBatchStream] = useState('');
     const [batchTerm, setBatchTerm] = useState('');
@@ -221,6 +263,8 @@ export default function FeesPage() {
 
     // Payments log (school-wide transactions view)
     const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
+    /** How many payments match, when the log shows only the newest of them. */
+    const [paymentsLogTotal, setPaymentsLogTotal] = useState<number | null>(null);
     const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
     // Paybill money that could not be matched to a student; assigned in Settings > Payments.
     const [unmatchedCount, setUnmatchedCount] = useState(0);
@@ -267,18 +311,15 @@ export default function FeesPage() {
 
     useEffect(() => {
         (async () => {
-            const [sRes, tRes, gsRes, yRes] = await Promise.all([
-                fetch('/api/school/data?type=students'),
+            const [tRes, gsRes, yRes] = await Promise.all([
                 fetch('/api/school/data?type=terms'),
                 fetch('/api/school/data?type=grade_streams'),
                 fetch('/api/school/data?type=academic_years'),
             ]);
-            const sData: { data?: StudentApiRow[] } = await sRes.json();
             const tData: { data?: (TermOption & { start_date: string; end_date: string })[] } = await tRes.json();
             const gsData: { data?: StreamOption[] } = await gsRes.json();
             const yData: { data?: TermSelectYear[] } = await yRes.json();
 
-            if (sData.data) setStudents(sData.data.map(toStudentOption));
             if (yData.data) setYears(yData.data);
             if (tData.data) {
                 setTerms(tData.data.map(t => ({ id: t.id, name: t.name, academic_year_id: t.academic_year_id })));
@@ -309,15 +350,18 @@ export default function FeesPage() {
         return result;
     }, [fees, search, statusFilter, streamFilter]);
 
+    // The totals follow the class filter, so a class's collection can be read
+    // on its own; search and status only narrow the list.
+    const kpiFees = useMemo(() => (streamFilter ? fees.filter(f => f.gradeStreamId === streamFilter) : fees), [fees, streamFilter]);
     const kpi = useMemo(() => {
-        const expected = fees.reduce((s, f) => s + f.totalFee, 0);
-        const collected = fees.reduce((s, f) => s + f.paidAmount, 0);
-        const outstanding = fees.reduce((s, f) => s + f.balance, 0);
-        const overdue = fees.filter(f => isOverdue(f.dueDate, f.balance));
+        const expected = kpiFees.reduce((s, f) => s + f.totalFee, 0);
+        const collected = kpiFees.reduce((s, f) => s + f.paidAmount, 0);
+        const outstanding = kpiFees.reduce((s, f) => s + f.balance, 0);
+        const overdue = kpiFees.filter(f => isOverdue(f.dueDate, f.balance));
         const overdueAmount = overdue.reduce((s, f) => s + f.balance, 0);
         const collectionRate = expected > 0 ? Math.round((collected / expected) * 100) : 0;
-        return { expected, collected, outstanding, overdueCount: overdue.length, overdueAmount, collectionRate };
-    }, [fees]);
+        return { expected, collected, outstanding, overdueCount: overdue.length, overdueAmount, collectionRate, records: kpiFees.length };
+    }, [kpiFees]);
 
     // Students who've left the school shouldn't show up as billing targets for new records.
     const activeStudents = useMemo(() => students.filter(s => !s.status || s.status === 'ACTIVE'), [students]);
@@ -337,7 +381,23 @@ export default function FeesPage() {
         [activeStudents, billedStudentsForFormTerm, formClass]
     );
 
+    /*
+      Every learner in the school, for the Add dialog's picker. It used to load
+      with the page, whatever tab was open; now it loads the first time the
+      dialog opens.
+    */
+    const studentsRequested = useRef(false);
+    const ensureStudents = () => {
+        if (studentsRequested.current) return;
+        studentsRequested.current = true;
+        fetch('/api/school/data?type=students')
+            .then(r => r.json())
+            .then((json: { data?: StudentApiRow[] }) => setStudents((json.data ?? []).map(toStudentOption)))
+            .catch(() => { studentsRequested.current = false; toast.error('Could not load the student list. Try again.'); });
+    };
+
     const openAdd = () => {
+        ensureStudents();
         setEditingFee(null);
         setFormStudent('');
         setFormClass(streamFilter);
@@ -348,7 +408,7 @@ export default function FeesPage() {
         setShowAddModal(true);
     };
 
-    const openBatch = () => setMode('batch');
+    const openBatch = () => changeMode('batch');
 
     const openEdit = (fee: FeeRecord) => {
         setEditingFee(fee);
@@ -386,16 +446,47 @@ export default function FeesPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Delete this fee record?')) return;
+    const runConfirmed = async () => {
+        if (!pendingConfirm) return;
+        setConfirming(true);
         try {
-            await requestJson(`/api/school/fees/${id}`, { method: 'DELETE' });
-            toast.success('Fee record deleted');
-            await fetchFees();
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to delete the fee record');
+            await pendingConfirm.run();
+            setPendingConfirm(null);
+        } finally {
+            setConfirming(false);
         }
     };
+
+    const handleDelete = (fee: FeeRecord) => setPendingConfirm({
+        title: 'Delete fee record?',
+        message: `${fee.studentName ?? 'This student'}'s ${fee.termName} fee record of ${formatCurrency(fee.totalFee)} will be removed.${fee.paidAmount > 0 ? ` ${formatCurrency(fee.paidAmount)} has been paid against it.` : ''}`,
+        confirmText: 'Delete record',
+        run: async () => {
+            try {
+                await requestJson(`/api/school/fees/${fee.id}`, { method: 'DELETE' });
+                toast.success('Fee record deleted');
+                await fetchFees();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to delete the fee record');
+            }
+        },
+    });
+
+    /** Voids a receipt after confirmation, then refreshes what shows it. */
+    const confirmVoid = (payment: { id: string; receiptNumber: string; amount: number }, feeId: string, after: () => Promise<unknown>) => setPendingConfirm({
+        title: `Void receipt ${payment.receiptNumber}?`,
+        message: `${formatCurrency(payment.amount)} will be taken off the balance it paid. This cannot be undone.`,
+        confirmText: 'Void receipt',
+        run: async () => {
+            try {
+                await requestJson(`/api/school/fees/${feeId}/payments/${payment.id}`, { method: 'DELETE' });
+                toast.success(`Receipt ${payment.receiptNumber} voided`);
+                await after();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
+            }
+        },
+    });
 
     // ── Record payment ──
 
@@ -473,17 +564,10 @@ export default function FeesPage() {
         setHistoryLoading(false);
     };
 
-    const voidPayment = async (payment: FeePayment) => {
-        if (!historyFee) return;
-        if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
-        try {
-            await requestJson(`/api/school/fees/${historyFee.id}/payments/${payment.id}`, { method: 'DELETE' });
-            toast.success(`Receipt ${payment.receiptNumber} voided`);
-            await openHistory(historyFee);
-            await fetchFees();
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
-        }
+    const voidPayment = (payment: FeePayment) => {
+        const fee = historyFee;
+        if (!fee) return;
+        confirmVoid(payment, fee.id, () => Promise.all([openHistory(fee), fetchFees()]));
     };
 
     // ── Payments log (school-wide transactions view) ──
@@ -500,11 +584,15 @@ export default function FeesPage() {
             if (plDateTo) params.set('date_to', plDateTo);
             if (plSearchQuery) params.set('search', plSearchQuery);
             const res = await fetch(`/api/school/fees/payments?${params}`);
-            const json = await res.json();
-            setPaymentsLog(json.data || []);
+            const json: { data?: PaymentLogRow[]; total?: number; truncated?: boolean; error?: string } = await res.json();
+            if (!res.ok) throw new Error(json.error || 'Could not load payments.');
+            setPaymentsLog(json.data ?? []);
+            setPaymentsLogTotal(json.truncated ? json.total ?? null : null);
         } catch (err) {
             console.error('Failed to load payments log:', err);
             setPaymentsLog([]);
+            setPaymentsLogTotal(null);
+            toast.error(err instanceof Error ? err.message : 'Could not load payments.');
         }
         setPaymentsLogLoading(false);
     }, [selectedTerm, plMethod, plStatus, plSource, plDateFrom, plDateTo, plSearchQuery]);
@@ -514,19 +602,11 @@ export default function FeesPage() {
     }, [mode, fetchPaymentsLog]);
 
 
-    const voidLogPayment = async (payment: PaymentLogRow) => {
-        if (!payment.studentFeeId) {
-            alert('This payment is unmatched to a student and has nothing to void — it can only be assigned or left as-is from Settings > Payments.');
-            return;
-        }
-        if (!confirm(`Void receipt ${payment.receiptNumber} for ${formatCurrency(payment.amount)}? This cannot be undone.`)) return;
-        try {
-            await requestJson(`/api/school/fees/${payment.studentFeeId}/payments/${payment.id}`, { method: 'DELETE' });
-            toast.success(`Receipt ${payment.receiptNumber} voided`);
-            await Promise.all([fetchPaymentsLog(), fetchFees()]);
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
-        }
+    // Unmatched payments have no fee to void against; they are assigned from
+    // Settings > Payments, and the log offers no void button for them.
+    const voidLogPayment = (payment: PaymentLogRow) => {
+        if (!payment.studentFeeId) return;
+        confirmVoid(payment, payment.studentFeeId, () => Promise.all([fetchPaymentsLog(), fetchFees()]));
     };
 
     const exportPaymentsLog = () => {
@@ -537,6 +617,8 @@ export default function FeesPage() {
         if (plSource) params.set('source', plSource);
         if (plDateFrom) params.set('date_from', plDateFrom);
         if (plDateTo) params.set('date_to', plDateTo);
+        // The same rows as on screen: the search used to be left out.
+        if (plSearchQuery) params.set('search', plSearchQuery);
         window.location.href = `/api/school/fees/payments/export?${params}`;
     };
 
@@ -599,7 +681,8 @@ export default function FeesPage() {
         let savedPayments = 0;
         const nameOf = (id: string) => batchStudents.find(s => s.id === id)?.name || 'A student';
 
-        await Promise.all(Object.entries(batchEntries).map(async ([studentId, entry]) => {
+        // A few at a time: a class of fifty used to send up to a hundred requests at once.
+        await runLimited(Object.entries(batchEntries), BATCH_CONCURRENCY, async ([studentId, entry]) => {
             const payNow = Number(entry.payNow) || 0;
             const saveFee = feeChanged(entry);
             if (!saveFee && payNow <= 0) return;
@@ -656,7 +739,7 @@ export default function FeesPage() {
                     errors.push(`${nameOf(studentId)}: payment not recorded`);
                 }
             }
-        }));
+        });
 
         // Always reload: rows that did save now have a new "paid so far", and a
         // stale screen is what let a second save record the same money twice.
@@ -679,8 +762,6 @@ export default function FeesPage() {
         setBatchTerm('');
     };
 
-    const totalRecords = fees.length;
-
     const exportExcel = () => {
         const params = new URLSearchParams();
         if (selectedTerm) params.set('term_id', selectedTerm);
@@ -689,18 +770,11 @@ export default function FeesPage() {
         window.location.href = `/api/school/fees/export?${params}`;
     };
 
-    const tabs: { id: FeesMode; label: string; icon: React.ReactNode; show: boolean }[] = [
-        { id: 'list', label: 'Fee records', icon: <FileText className="size-4" aria-hidden="true" />, show: true },
-        // The school-wide log exposes every receipt; it is admin-only on the server.
-        { id: 'payments', label: 'Payments', icon: <Receipt className="size-4" aria-hidden="true" />, show: isAdmin },
-        { id: 'batch', label: 'Batch entry', icon: <Layers className="size-4" aria-hidden="true" />, show: true },
-    ];
-
-    const changeMode = (next: FeesMode) => {
+    function changeMode(next: FeesMode) {
         if (next === mode) return;
         if (mode === 'batch') clearBatch();
-        setMode(next);
-    };
+        selectMode(next);
+    }
 
     return (
         <div className="mx-auto w-full max-w-7xl pb-10">
@@ -738,23 +812,7 @@ export default function FeesPage() {
                 }
             />
 
-            <div role="tablist" aria-label="Fees views" className="-mx-1 mb-5 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/40 p-1 sm:w-fit">
-                {tabs.filter(t => t.show).map(t => (
-                    <button
-                        key={t.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={mode === t.id}
-                        onClick={() => changeMode(t.id)}
-                        className={cn(
-                            'flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none sm:gap-2 sm:px-4',
-                            mode === t.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                        )}
-                    >
-                        {t.icon}{t.label}
-                    </button>
-                ))}
-            </div>
+            <PageTabs tabs={visibleTabs} active={mode} onSelect={changeMode} label="Fees views" idPrefix="fees" />
 
             {unmatchedCount > 0 && (
                 <div role="status" className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -768,7 +826,7 @@ export default function FeesPage() {
 
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile icon={Wallet} hue="blue" label="Expected" value={formatCurrency(kpi.expected)} hint={`${totalRecords} record(s)`} />
+                <StatTile icon={Wallet} hue="blue" label="Expected" value={formatCurrency(kpi.expected)} hint={`${kpi.records} record${kpi.records === 1 ? '' : 's'}${streamFilter ? ` · ${gradeStreams.find(g => g.id === streamFilter)?.full_name ?? 'this class'}` : ''}`} />
                 <StatTile icon={ArrowUpRight} label="Collected" value={formatCurrency(kpi.collected)} hint={`${kpi.collectionRate}% collection rate`} tone="good" />
                 <StatTile icon={Clock} label="Outstanding" value={formatCurrency(kpi.outstanding)} hint="unpaid balance" tone={kpi.outstanding > 0 ? 'warn' : 'default'} />
                 <StatTile icon={AlertTriangle} label="Overdue" value={formatCurrency(kpi.overdueAmount)} hint={`${kpi.overdueCount} overdue record(s)`} tone={kpi.overdueCount > 0 ? 'bad' : 'default'} />
@@ -794,6 +852,7 @@ export default function FeesPage() {
                 </div>
             </div>
 
+            <div role="tabpanel" id="fees-panel" aria-labelledby={`fees-tab-${mode}`}>
             {/* ════════════════════════════════════════════ */}
             {/* BATCH ENTRY MODE                           */}
             {/* ════════════════════════════════════════════ */}
@@ -982,6 +1041,11 @@ export default function FeesPage() {
                         </div>
                     </section>
 
+                    {paymentsLogTotal !== null && (
+                        <p role="status" className="mb-3 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                            Showing the newest {paymentsLog.length.toLocaleString()} of {paymentsLogTotal.toLocaleString()} payments. Narrow the dates or search, or export to Excel for all of them.
+                        </p>
+                    )}
                     <DataTable<PaymentLogRow>
                         columns={[
                             {
@@ -1029,7 +1093,7 @@ export default function FeesPage() {
                         loading={paymentsLogLoading}
                         mobileTitleKey="student"
                         rowActions={p => (
-                            <span className="whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
                                 {p.status !== 'CANCELLED' && (
                                     <a
                                         className="btn-icon text-muted-foreground hover:text-foreground"
@@ -1176,13 +1240,17 @@ export default function FeesPage() {
                                     <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment history" aria-label={`Payment history for ${fee.studentName ?? 'student'}`}><History size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>
-                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee.id)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
+                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
                                 </span>
                             )}
                             emptyState={<p className="text-sm">No matching records found for the current filters.</p>}
                         />
                     )}
+                </>
+            )}
+            </div>
 
+            {/* Dialogs live outside the tabs: "Add record" is in the header on every tab. */}
                     <Modal
                         isOpen={showAddModal}
                         onClose={() => setShowAddModal(false)}
@@ -1198,8 +1266,8 @@ export default function FeesPage() {
                             {!editingFee && (
                                 <>
                                     <div>
-                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
-                                        <TermSelect terms={terms} years={years} value={formTerm} onChange={v => { setFormTerm(v); setFormStudent(''); }} emptyLabel="Select term…" />
+                                        <label htmlFor="fee-term" className="mb-2 block text-xs font-semibold text-muted-foreground">Term *</label>
+                                        <TermSelect id="fee-term" terms={terms} years={years} value={formTerm} onChange={v => { setFormTerm(v); setFormStudent(''); }} emptyLabel="Select term…" />
                                     </div>
                                     <div>
                                         <label htmlFor="fee-class" className="mb-2 block text-xs font-semibold text-muted-foreground">Class</label>
@@ -1209,8 +1277,9 @@ export default function FeesPage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Student *</label>
+                                        <label htmlFor="fee-student" className="mb-2 block text-xs font-semibold text-muted-foreground">Student *</label>
                                         <select
+                                            id="fee-student"
                                             value={formStudent}
                                             onChange={e => setFormStudent(e.target.value)}
                                             className="input-field w-full"
@@ -1229,8 +1298,8 @@ export default function FeesPage() {
                                 </>
                             )}
                             <div>
-                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Total Fee (KShs) *</label>
-                                <input type="number" min="0" step="0.01" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
+                                <label htmlFor="fee-total" className="mb-2 block text-xs font-semibold text-muted-foreground">Total fee (KSh) *</label>
+                                <input id="fee-total" type="number" min="0" step="0.01" value={formTotal} onChange={e => setFormTotal(e.target.value)} placeholder="e.g. 50000" className="input-field w-full" />
                                 {editingFee && (
                                     <p className="mt-1 text-[11px] text-muted-foreground">
                                         {formatCurrency(editingFee.paidAmount)} paid to date — use <strong>Record Payment</strong> from the list to log a new payment.
@@ -1238,12 +1307,12 @@ export default function FeesPage() {
                                 )}
                             </div>
                             <div>
-                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Due Date</label>
-                                <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
+                                <label htmlFor="fee-due" className="mb-2 block text-xs font-semibold text-muted-foreground">Due date</label>
+                                <input id="fee-due" type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
                             </div>
                             <div>
-                                <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
-                                <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={3} placeholder="Optional notes..." className="input-field w-full resize-y" />
+                                <label htmlFor="fee-notes" className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
+                                <textarea id="fee-notes" value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={3} placeholder="Optional notes..." className="input-field w-full resize-y" />
                             </div>
                         </div>
                     </Modal>
@@ -1269,8 +1338,8 @@ export default function FeesPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KShs) *</label>
-                                    <input type="number" inputMode="decimal" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
+                                    <label htmlFor="pay-amount" className="mb-2 block text-xs font-semibold text-muted-foreground">Amount (KSh) *</label>
+                                    <input id="pay-amount" type="number" inputMode="decimal" min="0" step="0.01" value={payAmount} onChange={e => setPayAmount(e.target.value)} className="input-field w-full" />
                                     {payingFee.balance > 0 && (
                                         <p className="mt-1 text-[11px] text-muted-foreground">
                                             Balance {formatCurrency(payingFee.balance)}
@@ -1284,8 +1353,8 @@ export default function FeesPage() {
                                     <p className="mt-1 text-[11px] text-muted-foreground">Change it when recording an older deposit slip or M-Pesa message.</p>
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Payment Method</label>
-                                    <select value={payMethod} onChange={e => setPayMethod(e.target.value as FeePaymentMethod)} className="input-field w-full">
+                                    <label htmlFor="pay-method" className="mb-2 block text-xs font-semibold text-muted-foreground">Payment method</label>
+                                    <select id="pay-method" value={payMethod} onChange={e => setPayMethod(e.target.value as FeePaymentMethod)} className="input-field w-full">
                                         {FEE_PAYMENT_METHODS.map(m => (
                                             <option key={m} value={m}>{methodLabel(m)}</option>
                                         ))}
@@ -1293,22 +1362,22 @@ export default function FeesPage() {
                                 </div>
                                 {payMethod === 'MPESA' && (
                                     <div>
-                                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">M-Pesa Receipt Code</label>
-                                        <input type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
+                                        <label htmlFor="pay-ref" className="mb-2 block text-xs font-semibold text-muted-foreground">M-Pesa receipt code</label>
+                                        <input id="pay-ref" type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
                                         <p className="mt-1 text-[11px] text-muted-foreground">For a paybill payment confirmed by SMS — enter it here until M-Pesa auto-reconciliation is set up.</p>
                                     </div>
                                 )}
                                 <div>
-                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Paid By (optional)</label>
-                                    <input type="text" value={payPayerName} onChange={e => setPayPayerName(e.target.value)} placeholder="Guardian name" className="input-field w-full" />
+                                    <label htmlFor="pay-payer" className="mb-2 block text-xs font-semibold text-muted-foreground">Paid by (optional)</label>
+                                    <input id="pay-payer" type="text" value={payPayerName} onChange={e => setPayPayerName(e.target.value)} placeholder="Guardian name" className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
-                                    <input type="tel" inputMode="tel" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
+                                    <label htmlFor="pay-phone" className="mb-2 block text-xs font-semibold text-muted-foreground">Phone (optional)</label>
+                                    <input id="pay-phone" type="tel" inputMode="tel" value={payPhone} onChange={e => setPayPhone(e.target.value)} placeholder="07XXXXXXXX" className="input-field w-full" />
                                 </div>
                                 <div>
-                                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
-                                    <textarea value={payNotes} onChange={e => setPayNotes(e.target.value)} rows={2} className="input-field w-full resize-y" />
+                                    <label htmlFor="pay-notes" className="mb-2 block text-xs font-semibold text-muted-foreground">Notes</label>
+                                    <textarea id="pay-notes" value={payNotes} onChange={e => setPayNotes(e.target.value)} rows={2} className="input-field w-full resize-y" />
                                 </div>
                                 {payError && <p role="alert" className="text-sm text-destructive">{payError}</p>}
                             </div>
@@ -1390,8 +1459,17 @@ export default function FeesPage() {
                             </div>
                         )}
                     </Modal>
-                </>
-            )}
+
+            <ConfirmDialog
+                isOpen={pendingConfirm !== null}
+                onClose={() => { if (!confirming) setPendingConfirm(null); }}
+                onConfirm={() => void runConfirmed()}
+                title={pendingConfirm?.title ?? ''}
+                message={pendingConfirm?.message ?? ''}
+                confirmText={pendingConfirm?.confirmText}
+                variant="danger"
+                loading={confirming}
+            />
         </div>
     );
 }

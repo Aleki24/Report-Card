@@ -3,7 +3,7 @@ import { internalError } from '@/lib/api-errors';
 import { canManageStudent, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
-import { embedOne } from '@/lib/postgrest';
+import { embedOne, fetchAllRows } from '@/lib/postgrest';
 
 export async function GET(request: NextRequest) {
     try {
@@ -27,31 +27,35 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ data: [] });
         }
 
-        let query = supabase
-            .from('student_fees')
-            .select(`
-                id, total_fee, paid_amount, due_date, status, notes, created_at, updated_at,
-                terms ( id, name ),
-                students!inner ( id, admission_number, current_grade_stream_id, users ( first_name, last_name ), grade_streams ( full_name ) )
-            `)
-            .eq('school_id', schoolId);
+        // Paged: a school past 1,000 fee records in a term had its list, and
+        // the Expected/Collected totals summed from it, silently cut short.
+        const { rows: data, error } = await fetchAllRows(() => {
+            let query = supabase
+                .from('student_fees')
+                .select(`
+                    id, total_fee, paid_amount, due_date, status, notes, created_at, updated_at,
+                    terms ( id, name ),
+                    students!inner ( id, admission_number, current_grade_stream_id, users ( first_name, last_name ), grade_streams ( full_name ) )
+                `)
+                .eq('school_id', schoolId);
 
-        // Students see only their own fees
-        if (role === 'STUDENT') {
-            query = query.eq('student_id', userId);
-        } else if (role === 'CLASS_TEACHER') {
-            query = query.in('students.current_grade_stream_id', caller.classStreamIds);
-        }
+            // Students see only their own fees
+            if (role === 'STUDENT') {
+                query = query.eq('student_id', userId);
+            } else if (role === 'CLASS_TEACHER') {
+                query = query.in('students.current_grade_stream_id', caller.classStreamIds);
+            }
 
-        if (termId) {
-            query = query.eq('term_id', termId);
-        }
+            if (termId) {
+                query = query.eq('term_id', termId);
+            }
 
-        const { data, error } = await query.order('created_at', { ascending: false });
+            return query.order('created_at', { ascending: false }).order('id');
+        });
 
         if (error) throw error;
 
-        const mapped = (data ?? []).map((f: any) => ({
+        const mapped = data.map((f: any) => ({
             id: f.id,
             totalFee: Number(f.total_fee),
             paidAmount: Number(f.paid_amount),
