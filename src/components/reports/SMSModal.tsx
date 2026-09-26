@@ -1,154 +1,152 @@
 "use client";
 
-import React from 'react';
-import { Card, CardContent, Button } from '@/components/ui';
-import { MessageSquare, Search, Loader2, CheckCircle, XCircle, Send, AlertTriangle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Loader2, MessageSquare, Send, XCircle } from 'lucide-react';
+import { SearchBox } from '@/components/ui/SearchBox';
+import { TONES } from '@/components/ui/tones';
+import { cn } from '@/lib/utils';
+import { matchesLearner, type RosterLearner } from '@/lib/reports/class-roster';
+import { LearnerAvatar, ReportDialog } from './ReportDialog';
 
-interface SMSStudent {
-  id: string;
-  admission_number: string;
-  guardian_phone: string | null;
-  guardian_name: string | null;
-  users: { first_name: string; last_name: string } | null;
-  selected: boolean;
-}
+export interface SMSResult { sent: number; failed: number; skipped: number; failureReasons: string[] }
 
 interface SMSModalProps {
   onClose: () => void;
-  streamLabel: string;
-  smsStudents: SMSStudent[];
-  filteredSMSStudents: SMSStudent[];
-  loadingSMSStudents: boolean;
-  smsSearch: string;
-  setSmsSearch: (v: string) => void;
-  smsSelectedCount: number;
-  smsMissingPhoneCount: number;
-  sendingSMS: boolean;
-  smsResult: { sent: number; failed: number; skipped: number; failureReasons: string[] } | null;
-  onToggle: (id: string) => void;
-  onSelectAll: () => void;
-  onDeselectAll: () => void;
-  onSend: () => void;
+  classLabel: string;
+  /** "Term 2 End Term 2026": the exam the texts report. */
+  examLabel: string;
+  /** The chosen class's learners; null while loading. */
+  learners: RosterLearner[] | null;
+  sending: boolean;
+  result: SMSResult | null;
+  /** Resolves true when at least one text went out. */
+  onSend: (studentIds: string[]) => Promise<boolean>;
   messagePreview: string;
 }
 
-export function SMSModal({
-  onClose, streamLabel, smsStudents, filteredSMSStudents, loadingSMSStudents,
-  smsSearch, setSmsSearch, smsSelectedCount, smsMissingPhoneCount,
-  sendingSMS, smsResult, onToggle, onSelectAll, onDeselectAll, onSend, messagePreview,
-}: SMSModalProps) {
+/** Rough Africa's Talking price per SMS in Kenya, for the estimate only. */
+const KES_PER_SMS = 0.8;
+
+export function SMSModal({ onClose, classLabel, examLabel, learners, sending, result, onSend, messagePreview }: SMSModalProps) {
+  const [search, setSearch] = useState('');
+  /** null until the user changes it: everyone with a phone is ticked. */
+  const [picked, setPicked] = useState<ReadonlySet<string> | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const reachable = useMemo(() => (learners ?? []).filter(l => l.guardian_phone), [learners]);
+  const missingPhone = (learners?.length ?? 0) - reachable.length;
+  const shown = useMemo(() => (learners ?? []).filter(l => matchesLearner(l, search)), [learners, search]);
+  const selected = useMemo(() => picked ?? new Set(reachable.map(l => l.id)), [picked, reachable]);
+
+  // Any change to the selection asks for confirmation again.
+  const changeSelection = (update: (next: Set<string>) => void) => {
+    const next = new Set(selected);
+    update(next);
+    setPicked(next);
+    setConfirming(false);
+  };
+  const toggle = (id: string) => changeSelection(next => { if (next.has(id)) next.delete(id); else next.add(id); });
+  const shownReachable = shown.filter(l => l.guardian_phone);
+  const selectShown = (on: boolean) => changeSelection(next => { for (const l of shownReachable) { if (on) next.add(l.id); else next.delete(l.id); } });
+
+  const count = selected.size;
+  const plural = count === 1 ? '' : 's';
+
+  const send = async () => {
+    // Texts cost money and cannot be recalled: the first press asks.
+    if (!confirming) { setConfirming(true); return; }
+    const delivered = await onSend([...selected]);
+    // Clear the ticks so a second press cannot text the same parents twice.
+    if (delivered) setPicked(new Set());
+    setConfirming(false);
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <Card className="w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            <div>
-              <h2 className="text-lg font-bold font-display leading-tight">SMS Results to Parents</h2>
-              <p className="text-xs text-muted-foreground leading-tight">
-                {streamLabel ? <>Class: <strong className="text-foreground">{streamLabel}</strong></> : 'No class selected — pick one in Report Settings above'}
-              </p>
-            </div>
-          </div>
-          <Button variant="secondary" size="xs" onClick={onClose}><XCircle className="w-3 h-3" /> Close</Button>
-        </div>
-
-        <div className="p-5">
-          <div className="p-3 rounded-lg bg-muted border border-border mb-4 text-xs">
-            <p className="font-medium mb-0.5">How it works:</p>
-            <p className="text-muted-foreground">Select students below to send their term results summary to their guardian&apos;s phone via SMS.</p>
-            {smsMissingPhoneCount > 0 && (
-              <p className="mt-1.5 text-amber-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {smsMissingPhoneCount} student{smsMissingPhoneCount > 1 ? 's' : ''} missing guardian phone number.</p>
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
-            <div className="flex items-center input-field input-field-flush overflow-hidden px-0 flex-1">
-              <span className="flex items-center justify-center pl-2.5 text-muted-foreground shrink-0">
-                <Search size={16} />
-              </span>
-              <input className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm" placeholder="Search by name or admission number..." value={smsSearch} onChange={e => setSmsSearch(e.target.value)} autoFocus />
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button variant="secondary" size="xs" onClick={onSelectAll}>Select All</Button>
-              <Button variant="secondary" size="xs" onClick={onDeselectAll}>Deselect All</Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-5">
-          {loadingSMSStudents ? (
-            <div className="flex flex-col items-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">Loading students...</p>
-            </div>
-          ) : filteredSMSStudents.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-6">
-              {smsSearch ? 'No students match your search.' : 'No students found in this class.'}
+    <ReportDialog
+      title="Text results to parents"
+      subtitle={<><strong className="text-foreground">{classLabel}</strong> · {examLabel}</>}
+      icon={MessageSquare}
+      tone={TONES.amber}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      toolbar={
+        <div className="space-y-3">
+          {missingPhone > 0 && (
+            <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              {missingPhone} learner{missingPhone === 1 ? ' has' : 's have'} no guardian phone. Add one on the People page to include them.
             </p>
-          ) : (
-            <div className="flex flex-col gap-1 pb-5">
-              {filteredSMSStudents.map(s => {
-                const name = `${s.users?.first_name || '—'} ${s.users?.last_name || ''}`;
-                const hasPhone = !!s.guardian_phone;
-                return (
-                  <label key={s.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${s.selected ? 'bg-primary/5' : 'hover:bg-muted'} ${!hasPhone ? 'opacity-50' : ''}`}>
-                    <input type="checkbox" checked={s.selected} disabled={!hasPhone} onChange={() => onToggle(s.id)} className="accent-primary w-4 h-4" />
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                      {(s.users?.first_name?.[0] || '?').toUpperCase()}{(s.users?.last_name?.[0] || '').toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{name}</div>
-                      <div className="text-[11px] text-muted-foreground font-mono">{s.admission_number}</div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {hasPhone ? <span className="text-[11px] text-emerald-500 font-mono">{s.guardian_phone}</span> : <span className="text-[11px] text-red-400">No phone</span>}
-                    </div>
-                    {s.guardian_name && hasPhone && (
-                      <div className="text-[11px] text-muted-foreground hidden md:block truncate shrink-0" style={{ maxWidth: 100 }}>{s.guardian_name}</div>
-                    )}
-                  </label>
-                );
-              })}
-            </div>
           )}
-        </div>
-
-        <div className="p-5 border-t border-border space-y-3">
-          {smsSelectedCount > 0 && (
-            <div className="p-3 rounded-lg bg-muted border border-border text-xs font-mono whitespace-pre-wrap">
-              <div className="text-muted-foreground mb-1 font-sans text-[11px] font-semibold">Message Preview:</div>
-              {messagePreview}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <SearchBox value={search} onChange={setSearch} placeholder="Search by name or admission number" className="flex-1" />
+            <div className="flex gap-2">
+              <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => selectShown(true)} disabled={shownReachable.length === 0}>Select all</button>
+              <button type="button" className="btn-secondary h-9 flex-1 text-xs sm:flex-none" onClick={() => selectShown(false)} disabled={count === 0}>Clear</button>
             </div>
-          )}
-
-          {smsResult && (
-            <div className={`p-3 rounded-lg text-xs font-medium border ${smsResult.failed > 0 ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'}`}>
-              <CheckCircle className="w-3 h-3 inline mr-1" /> Sent: <strong>{smsResult.sent}</strong> &nbsp;|&nbsp; <XCircle className="w-3 h-3 inline mr-1" /> Failed: <strong>{smsResult.failed}</strong>
-              {smsResult.skipped > 0 && <> &nbsp;|&nbsp; <AlertTriangle className="w-3 h-3 inline mr-1" /> Skipped: <strong>{smsResult.skipped}</strong></>}
-              {smsResult.failureReasons.length > 0 && (
-                <ul className="mt-2 list-disc pl-4 font-normal opacity-90">
-                  {smsResult.failureReasons.map((reason, i) => <li key={i}>{reason}</li>)}
-                </ul>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {smsSelectedCount} student{smsSelectedCount !== 1 ? 's' : ''} selected
-              {smsSelectedCount > 0 && <span className="ml-1">(~KES {(smsSelectedCount * 0.8).toFixed(1)} est.)</span>}
-            </span>
-            <Button variant="primary" size="sm" onClick={onSend} disabled={sendingSMS || smsSelectedCount === 0}>
-              {sendingSMS ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending...</>
-              ) : (
-                <><Send className="w-3.5 h-3.5" /> Send SMS to {smsSelectedCount} Parent{smsSelectedCount !== 1 ? 's' : ''}</>
-              )}
-            </Button>
           </div>
         </div>
-      </Card>
-    </div>
+      }
+      footer={
+        <div className="space-y-3">
+          {result && (
+            <div role="status" className={cn('rounded-xl border p-3 text-xs', result.failed > 0 || result.sent === 0 ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400')}>
+              <p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium">
+                <span className="inline-flex items-center gap-1"><CheckCircle2 className="size-3.5" aria-hidden />{result.sent} sent</span>
+                <span className="inline-flex items-center gap-1"><XCircle className="size-3.5" aria-hidden />{result.failed} failed</span>
+                {result.skipped > 0 && <span className="inline-flex items-center gap-1"><AlertTriangle className="size-3.5" aria-hidden />{result.skipped} skipped</span>}
+              </p>
+              {result.failureReasons.length > 0 && (
+                <ul className="mt-2 list-disc pl-4">{result.failureReasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
+              )}
+            </div>
+          )}
+          {count > 0 && (
+            <details className="rounded-xl border border-border/70 bg-muted/40 p-3 text-xs">
+              <summary className="cursor-pointer font-semibold text-muted-foreground">Example message</summary>
+              <pre className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed">{messagePreview}</pre>
+            </details>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {count} parent{plural} selected{count > 0 && <> · about KES {(count * KES_PER_SMS).toFixed(1)}</>}
+            </p>
+            <button type="button" className={cn('h-10 text-sm', confirming ? 'btn-primary bg-amber-600 hover:bg-amber-700' : 'btn-primary')} onClick={() => void send()} disabled={sending || count === 0}>
+              {sending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+              {sending ? 'Sending…' : confirming ? `Confirm: send ${count} text${plural}` : `Send to ${count} parent${plural}`}
+            </button>
+          </div>
+        </div>
+      }
+    >
+      {learners === null ? (
+        <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden /> Loading learners…</p>
+      ) : shown.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">{search ? 'No learner matches that search.' : 'This class has no learners yet.'}</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {shown.map(l => {
+            const hasPhone = Boolean(l.guardian_phone);
+            const checked = selected.has(l.id);
+            return (
+              <li key={l.id}>
+                <label className={cn('flex min-h-12 items-center gap-3 rounded-xl px-3 py-2 transition-colors', hasPhone ? 'cursor-pointer' : 'cursor-not-allowed opacity-55', checked ? 'bg-amber-500/[0.07]' : hasPhone && 'hover:bg-muted')}>
+                  <input type="checkbox" className="size-4 shrink-0 accent-primary" checked={checked} disabled={!hasPhone} onChange={() => toggle(l.id)} />
+                  <LearnerAvatar initials={l.initials} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{l.name}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {[l.admission_number, l.guardian_name].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <span className={cn('shrink-0 font-mono text-[11px]', hasPhone ? 'text-muted-foreground' : 'text-destructive')}>
+                    {l.guardian_phone ?? 'No phone'}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </ReportDialog>
   );
 }
