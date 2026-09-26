@@ -13,6 +13,12 @@ export interface ReportCardData {
     schoolName: string;
     schoolLogoUrl?: string;
     schoolAddress?: string;
+    /** Printed under the school name. */
+    schoolMotto?: string;
+    /** Printed on the principal's signature line. */
+    principalName?: string;
+    /** A small image data URL laid over the principal's signature line. */
+    principalSignatureUrl?: string;
     examTitle: string;
     academicYear: string;
     studentName: string;

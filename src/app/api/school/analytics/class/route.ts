@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
-import { PASS_MARK } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
 import type { GradeBand } from '@/types';
 import { getActiveUserProfile } from '@/lib/auth-server';
@@ -129,13 +129,14 @@ export async function GET(request: NextRequest) {
         const termName = terms.find(t => t.id === termId)?.name ?? null;
         const examType = searchParams.get('exam_type');
 
+        const passMark = await getSchoolPassMark(supabaseAdmin, schoolId);
         const [subjectsRes, meritRes, seriesRes, gradingBySubject] = await Promise.all([
             supabaseAdmin.rpc('class_subject_performance', {
                 p_school_id: schoolId,
                 p_grade_stream_id: streamId,
                 p_term_id: termId,
                 p_exam_type: examType,
-                p_pass_mark: PASS_MARK,
+                p_pass_mark: passMark,
             }),
             supabaseAdmin.rpc('class_merit_list', {
                 p_school_id: schoolId,
@@ -290,6 +291,7 @@ export async function GET(request: NextRequest) {
             scope: { term_id: termId, term_name: termName, exam_type: examType },
             terms: terms.map(t => ({ id: t.id, name: t.name, is_current: t.is_current })),
             summary: {
+                pass_mark: passMark,
                 mean_percentage: weightedMean,
                 pass_rate: markCount > 0 ? Math.round((passCount / markCount) * 100) : 0,
                 student_count: merit.length,

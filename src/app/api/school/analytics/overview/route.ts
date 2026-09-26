@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
-import { PASS_MARK } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import { isUuid } from '@/lib/postgrest';
 
@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
+        const passMark = await getSchoolPassMark(supabase, schoolId);
         const { searchParams } = new URL(request.url);
         const yearParam = searchParams.get('academic_year_id');
         const termParam = searchParams.get('term_id');
@@ -88,11 +89,11 @@ export async function GET(request: NextRequest) {
         // the browser from a truncated array of marks.
         const [perfRes, unmarkedRes] = await Promise.all(term
             ? [
-                supabase.rpc('school_class_performance_for_term', { p_school_id: schoolId, p_term_id: term.id, p_pass_mark: PASS_MARK }),
+                supabase.rpc('school_class_performance_for_term', { p_school_id: schoolId, p_term_id: term.id, p_pass_mark: passMark }),
                 supabase.rpc('school_unmarked_exams_for_term', { p_school_id: schoolId, p_term_id: term.id }),
             ]
             : [
-                supabase.rpc('school_class_performance', { p_school_id: schoolId, p_academic_year_id: year?.id ?? null, p_pass_mark: PASS_MARK }),
+                supabase.rpc('school_class_performance', { p_school_id: schoolId, p_academic_year_id: year?.id ?? null, p_pass_mark: passMark }),
                 supabase.rpc('school_unmarked_exams', { p_school_id: schoolId, p_academic_year_id: year?.id ?? null }),
             ]);
 
@@ -152,6 +153,7 @@ export async function GET(request: NextRequest) {
             academic_year: year?.name ?? null,
             classes,
             summary: {
+                pass_mark: passMark,
                 classes_with_marks: withMarks.length,
                 classes_total: classes.length,
                 learners: classes.reduce((sum, c) => sum + c.students, 0),

@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, signed, type ReportModel, type SubjectRow } from '../reportModel';
-import { BrandFooter, reportFooterMeta } from '../primitives';
+import { BrandFooter, SignatureImage, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const INK = '#000000';
@@ -25,6 +25,7 @@ const s = StyleSheet.create({
     head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     school: { fontFamily: serif, fontSize: 22.5, lineHeight: 1 },
     address: { fontSize: 6.4, color: SOFT, marginTop: 5 },
+    motto: { fontFamily: serif, fontStyle: 'italic', fontSize: 8.5, color: SOFT, marginTop: 3 },
     doc: { fontWeight: 600, fontSize: 6, textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'right', lineHeight: 1.5 },
     rule: { height: 2.25, backgroundColor: INK, marginTop: 10.5 },
 
@@ -204,8 +205,8 @@ function Glance({ m }: { m: ReportModel }) {
     );
 }
 
-function Signature({ name }: { name: string }) {
-    return <View><View style={s.sigLine} /><Text style={s.sigText}>{name}</Text></View>;
+function Signature({ name, image }: { name: string; image?: string }) {
+    return <View><View style={s.sigLine}><SignatureImage src={image} lift={-16.5} /></View><Text style={s.sigText}>{name}</Text></View>;
 }
 
 export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
@@ -216,6 +217,7 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={{ flex: 1, paddingRight: 12 }}>
                     <Text style={s.school}>{m.school.name}</Text>
                     {m.school.address && <Text style={s.address}>{m.school.address}</Text>}
+                    {m.school.motto && <Text style={s.motto}>{m.school.motto}</Text>}
                 </View>
                 <Text style={s.doc}>{'Learner\nAcademic\nReport'}</Text>
             </View>
@@ -264,7 +266,7 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                     <View style={{ flex: 1 }}>
                         <Text style={s.label}>Principal</Text>
                         <Text style={[s.remarkText, m.compact ? { minHeight: 28 } : {}]}>{m.principalComment}</Text>
-                        <Signature name="Principal's signature" />
+                        <Signature name={m.principal.name ? `${m.principal.name}, principal` : "Principal's signature"} image={m.principal.signature} />
                     </View>
                 </View>
                 <View style={s.parent} wrap={false}>

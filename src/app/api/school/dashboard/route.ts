@@ -3,7 +3,7 @@ import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { PASS_MARK } from '@/lib/pass-mark';
+import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
 
@@ -96,7 +96,7 @@ export async function GET(_request: NextRequest) {
       supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
       supabase.from('students').select('id, date_enrolled, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
       supabase.from('terms').select('id, name, start_date, end_date, is_current').eq('school_id', schoolId),
-      supabase.from('schools').select('logo_url').eq('id', schoolId).maybeSingle(),
+      supabase.from('schools').select('logo_url, pass_mark').eq('id', schoolId).maybeSingle(),
       // Exams published by teachers and awaiting admin approval before report cards can be downloaded.
     ]);
 
@@ -112,6 +112,7 @@ export async function GET(_request: NextRequest) {
     const announcementsLast7Days = announcementsRes.count ?? 0;
     const recentEnrollmentsLast7 = recentEnrollmentsRes.count ?? 0;
     const hasLogo = Boolean(schoolRes.data?.logo_url);
+    const passMark = passMarkOrDefault(schoolRes.data?.pass_mark);
 
     // What a school must have in place before marks and report cards work —
     // the dashboard's setup checklist walks an admin through it in order.
@@ -148,7 +149,7 @@ export async function GET(_request: NextRequest) {
       supabase.rpc('school_class_performance', {
         p_school_id: schoolId,
         p_academic_year_id: currentYear?.id ?? null,
-        p_pass_mark: PASS_MARK,
+        p_pass_mark: passMark,
       }),
       supabase.rpc('school_unmarked_exams', {
         p_school_id: schoolId,
@@ -271,7 +272,7 @@ export async function GET(_request: NextRequest) {
       supabase.rpc('school_mark_summary', {
         p_school_id: schoolId,
         p_academic_year_id: currentYear?.id ?? null,
-        p_pass_mark: PASS_MARK,
+        p_pass_mark: passMark,
       }),
     ]);
 
@@ -349,7 +350,7 @@ export async function GET(_request: NextRequest) {
       announcementsLast7Days,
       recentEnrollmentsLast7,
       financeSummary: { totalCollected: Math.round(totalCollected * 100) / 100, unpaidBalance: Math.round(unpaidBalance * 100) / 100, overdueCount: overdueFeesCount },
-      academicSummary: { recentAvg, passRate, passMark: PASS_MARK, markCount },
+      academicSummary: { recentAvg, passRate, passMark, markCount },
       examsAwaitingMarks,
       unmarkedByClass,
       classPerformance,

@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, signed, levelFamily, type ReportModel, type SubjectRow, type LevelFamily } from '../reportModel';
-import { Crest, ScoreRing, Trend, BrandFooter, reportFooterMeta } from '../primitives';
+import { Crest, ScoreRing, SignatureImage, Trend, BrandFooter, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -48,6 +48,7 @@ const s = StyleSheet.create({
     title: { flex: 1, alignItems: 'center', paddingHorizontal: 10 },
     school: { fontFamily: serif, fontWeight: 700, fontSize: 18.5, color: C.navy, textAlign: 'center' },
     address: { fontSize: 6.8, color: '#5B6576', marginTop: 3, textAlign: 'center' },
+    motto: { fontFamily: FONTS.sourceSerif, fontStyle: 'italic', fontSize: 7.2, color: C.navy, marginTop: 2, textAlign: 'center' },
     qrWrap: { alignItems: 'center', width: 60 },
     qr: { width: 48, height: 48 },
     qrLabel: { fontSize: 5.2, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 1 },
@@ -324,6 +325,7 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.title}>
                     <Text style={s.school}>{m.school.name}</Text>
                     {m.school.address && <Text style={s.address}>{m.school.address}</Text>}
+                    {m.school.motto && <Text style={s.motto}>{m.school.motto}</Text>}
                 </View>
                 <View style={s.qrWrap}>
                     {m.qrCode ? (<><Image src={m.qrCode} style={s.qr} /><Text style={s.qrLabel}>Verify online</Text></>) : null}
@@ -383,7 +385,7 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.remark2}>
                     <Text style={s.h3}>Principal’s remarks</Text>
                     <Text style={[s.remarkText, m.compact ? { minHeight: 18 } : {}]}>{m.principalComment}</Text>
-                    <View style={s.sig}><Text style={s.sigText}>Principal</Text><Text style={s.sigText}>Signature</Text></View>
+                    <View style={s.sig}><SignatureImage src={m.principal.signature} /><Text style={s.sigText}>{m.principal.name ?? 'Principal'}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={[s.stamp, m.compact ? { width: 52, height: 52, borderRadius: 26 } : {}]}><Text style={s.stampText}>{'Official\nschool stamp'}</Text></View>
             </View>

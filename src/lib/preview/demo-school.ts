@@ -204,7 +204,7 @@ const ANALYTICS_OVERVIEW = {
   scope: { academic_year_id: 'demo-y', academic_year: String(YEAR), term_id: null, term_name: null },
   academic_year: String(YEAR),
   classes: STREAMS.map((s, i) => ({ id: s.id, name: s.full_name, level_code: 'CBC', students: 6, mark_count: 160, mean: CLASS_MEANS[i], pass_rate: CLASS_MEANS[i] + 8, unmarked: i === 2 ? 2 : 0 })),
-  summary: { classes_with_marks: STREAMS.length, classes_total: STREAMS.length, learners: STUDENTS.length, mark_count: 640, exams_awaiting_marks: 3 },
+  summary: { pass_mark: 50, classes_with_marks: STREAMS.length, classes_total: STREAMS.length, learners: STUDENTS.length, mark_count: 640, exams_awaiting_marks: 3 },
 };
 
 const CLASSES_OVERVIEW = {

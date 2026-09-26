@@ -13,8 +13,9 @@ import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
 import { AcademicCalendarTab, type AcademicYear, type Term } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
-import { SchoolForm } from '@/components/settings/SchoolForm';
-import { isSeniorRankGroup, type SeniorRankGroup } from '@/lib/ranking';
+import { SchoolForm, type SchoolProfile } from '@/components/settings/SchoolForm';
+import { isSeniorRankGroup } from '@/lib/ranking';
+import { PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
 import { apiErrorMessage } from '@/lib/api-error-message';
 
 interface AcademicLevel { id: string; code: string; name: string }
@@ -22,7 +23,6 @@ interface Grade { id: string; code: string; name_display: string; numeric_order:
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL' }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number }
 interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null }
-interface SchoolProfile { id?: string; name: string; address: string; phone: string; email: string; logo_url?: string; teacher_invite_code?: string; student_invite_code?: string; min_combination_group_size?: number; overall_grading_system_id?: string | null; cbc_ranking_enabled?: boolean; senior_rank_group?: SeniorRankGroup }
 
 interface SettingsData {
   academicLevels: AcademicLevel[];
@@ -61,7 +61,9 @@ function toSchool(raw: Record<string, unknown> | null | undefined): SchoolProfil
   return {
     id: str('id') || undefined,
     name: str('name'), address: str('address'), phone: str('phone'), email: str('email'), logo_url: str('logo_url'),
-    teacher_invite_code: str('teacher_invite_code'), student_invite_code: str('student_invite_code'),
+    motto: str('motto'), principal_name: str('principal_name'), principal_signature_url: str('principal_signature_url'),
+    // PostgREST can send a numeric column as a string.
+    pass_mark: r.pass_mark != null && Number.isFinite(Number(r.pass_mark)) ? Number(r.pass_mark) : null,
     min_combination_group_size: typeof r.min_combination_group_size === 'number' ? r.min_combination_group_size : 15,
     overall_grading_system_id: str('overall_grading_system_id') || null,
     cbc_ranking_enabled: r.cbc_ranking_enabled === true,
@@ -129,11 +131,12 @@ function SettingsPageInner() {
   useEffect(() => { if (profile?.id) void fetchAll(); }, [profile?.id, fetchAll]);
 
   const data = load.state === 'ready' ? load.data : null;
+  const passMarkValid = school.pass_mark == null || (school.pass_mark >= PASS_MARK_MIN && school.pass_mark <= PASS_MARK_MAX);
   const profileDirty = useMemo(() => savedSchool !== null && JSON.stringify(school) !== JSON.stringify(savedSchool), [school, savedSchool]);
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!school.name.trim()) return;
+    if (!school.name.trim() || !passMarkValid) return;
     setSavingProfile(true);
     try {
       const res = await fetch('/api/admin/school', {
@@ -142,6 +145,8 @@ function SettingsPageInner() {
         body: JSON.stringify({
           school_id: school.id, name: school.name, address: school.address, phone: school.phone, email: school.email,
           logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null,
+          motto: school.motto, principal_name: school.principal_name,
+          principal_signature_url: school.principal_signature_url || null, pass_mark: school.pass_mark,
           cbc_ranking_enabled: school.cbc_ranking_enabled ?? false, senior_rank_group: school.senior_rank_group ?? 'GRADE',
         }),
       });
@@ -268,7 +273,7 @@ function SettingsPageInner() {
                   {profileDirty && (
                     <button type="button" className="btn-secondary" onClick={() => savedSchool && setSchool(savedSchool)} disabled={savingProfile}>Discard</button>
                   )}
-                  <button type="submit" className="btn-primary" disabled={savingProfile || !profileDirty || !school.name.trim()}>
+                  <button type="submit" className="btn-primary" disabled={savingProfile || !profileDirty || !school.name.trim() || !passMarkValid}>
                     {savingProfile ? 'Saving…' : profileDirty ? 'Save changes' : 'Saved'}
                   </button>
                 </div>
