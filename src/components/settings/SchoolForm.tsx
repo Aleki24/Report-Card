@@ -1,9 +1,11 @@
 "use client";
 
 import { CardHeading } from '@/components/ui/CardHeading';
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy, Trophy, KeyRound, School } from 'lucide-react';
+import { Check, Copy, Trophy, KeyRound, School, Upload } from 'lucide-react';
+import { FormField, InputField } from '@/components/ui';
+import { shrinkImageToDataUrl } from '@/lib/client/shrink-image';
 import { cn } from '@/lib/utils';
 import { SENIOR_RANK_GROUPS, SENIOR_RANK_GROUP_OPTIONS, type SeniorRankGroup } from '@/lib/ranking';
 
@@ -75,67 +77,86 @@ function InviteCodeCard({ label, code, tone }: { label: string; code?: string; t
 }
 
 export function SchoolForm({ school, setSchool }: SchoolFormProps) {
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const id = useId();
+  const [processing, setProcessing] = useState(false);
+  const set = (key: 'name' | 'address' | 'phone' | 'email', value: string) => setSchool(prev => ({ ...prev, [key]: value }));
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { toast.error('Logo file MUST be less than 2MB.'); return; }
-    const reader = new FileReader();
-    reader.onload = (event) => { setSchool((prev) => ({ ...prev, logo_url: event.target?.result as string })); };
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith('image/')) { toast.error('Choose an image file (PNG or JPG).'); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error('That image is over 8 MB. Choose a smaller one.'); return; }
+    setProcessing(true);
+    try {
+      // Stored inline for report-card PDFs, so it is shrunk first.
+      const logo = await shrinkImageToDataUrl(file);
+      setSchool(prev => ({ ...prev, logo_url: logo }));
+    } catch {
+      toast.error('Could not read that image. Try a PNG or JPG.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-6 mb-6">
-        <div className="shrink-0">
-          {school.logo_url ? (
-            <img src={school.logo_url} alt="School Logo" className="w-24 h-24 rounded-lg object-contain bg-muted border border-border" />
-          ) : (
-            <div className="flex size-24 items-center justify-center rounded-2xl border border-border bg-amber-500/10 text-amber-600 dark:text-amber-400" aria-hidden><School className="size-10" /></div>
-          )}
-        </div>
-        <div className="flex-1">
-          <label className="block text-sm font-semibold mb-2">School Logo</label>
-          <input type="file" accept="image/*" onChange={handleLogoUpload}
-            className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 file:cursor-pointer transition-colors" />
-          <p className="text-xs text-muted-foreground mt-2">Recommended: Square image, max 2MB. Background should be transparent (PNG).</p>
-        </div>
-      </div>
-      <div>
-        <label className="block text-xs text-muted-foreground mb-2">School Name *</label>
-        <input className="input-field w-full" value={school.name} onChange={e => setSchool((prev) => ({ ...prev, name: e.target.value }))} placeholder="e.g. Sunrise Academy" required />
-      </div>
-      <div>
-        <label className="block text-xs text-muted-foreground mb-2">Address</label>
-        <input className="input-field w-full" value={school.address} onChange={e => setSchool((prev) => ({ ...prev, address: e.target.value }))} placeholder="e.g. 123 School Road, Nairobi" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
-        <div>
-          <label className="block text-xs text-muted-foreground mb-2">Phone</label>
-          <input className="input-field w-full" value={school.phone} onChange={e => setSchool((prev) => ({ ...prev, phone: e.target.value }))} placeholder="e.g. +254 700 000000" />
-        </div>
-        <div>
-          <label className="block text-xs text-muted-foreground mb-2">Email</label>
-          <input className="input-field w-full" type="email" value={school.email} onChange={e => setSchool((prev) => ({ ...prev, email: e.target.value }))} placeholder="e.g. info@school.com" />
+    <div className="space-y-5">
+      <div className="flex flex-col items-start gap-4 rounded-2xl bg-muted/40 p-4 sm:flex-row sm:items-center">
+        {school.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a data URL, not a static asset
+          <img src={school.logo_url} alt="School logo" className="size-20 shrink-0 rounded-xl border border-border bg-card object-contain" />
+        ) : (
+          <div className="flex size-20 shrink-0 items-center justify-center rounded-xl border border-border bg-amber-500/10 text-amber-600 dark:text-amber-400" aria-hidden><School className="size-9" /></div>
+        )}
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">School logo</p>
+          <p className="mb-3 text-xs text-muted-foreground">Printed on report cards and receipts. A square PNG with a clear background works best.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="btn-secondary h-9 cursor-pointer text-xs">
+              <Upload className="size-3.5" aria-hidden />{processing ? 'Processing…' : school.logo_url ? 'Change logo' : 'Upload logo'}
+              <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={processing} onChange={e => void handleLogoUpload(e)} />
+            </label>
+            {school.logo_url && (
+              <button type="button" className="text-xs font-medium text-destructive hover:underline" onClick={() => setSchool(prev => ({ ...prev, logo_url: '' }))}>Remove</button>
+            )}
+          </div>
         </div>
       </div>
-      <div>
-        <label className="block text-xs text-muted-foreground mb-2">Minimum learners per subject combination (CBC Senior School)</label>
-        <input
-          className="input-field w-full sm:w-40"
+
+      <FormField label="School name" required htmlFor={`${id}-name`}>
+        <InputField id={`${id}-name`} value={school.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sunrise Academy" maxLength={150} required />
+      </FormField>
+      <FormField label="Address" htmlFor={`${id}-address`}>
+        <InputField id={`${id}-address`} value={school.address} onChange={e => set('address', e.target.value)} placeholder="e.g. P.O. Box 123, Nairobi" maxLength={300} />
+      </FormField>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <FormField label="Phone" htmlFor={`${id}-phone`}>
+          <InputField id={`${id}-phone`} type="tel" inputMode="tel" value={school.phone} onChange={e => set('phone', e.target.value)} placeholder="e.g. 0700 000 000" maxLength={30} />
+        </FormField>
+        <FormField label="Email" htmlFor={`${id}-email`}>
+          <InputField id={`${id}-email`} type="email" value={school.email} onChange={e => set('email', e.target.value)} placeholder="e.g. info@school.ac.ke" maxLength={200} />
+        </FormField>
+      </div>
+      <FormField
+        label="Minimum learners per subject combination"
+        htmlFor={`${id}-min`}
+        hint="CBC Senior School. The Ministry default is 15: a combination with at least this many learners gets its own report document when class reports are split by combination."
+      >
+        <InputField
+          id={`${id}-min`}
+          className="sm:w-40"
           type="number"
           min={1}
           max={200}
           value={school.min_combination_group_size ?? 15}
-          onChange={e => { const v = parseInt(e.target.value, 10); setSchool((prev) => ({ ...prev, min_combination_group_size: Number.isNaN(v) ? undefined : v })); }}
+          onChange={e => { const v = parseInt(e.target.value, 10); setSchool(prev => ({ ...prev, min_combination_group_size: Number.isNaN(v) ? undefined : v })); }}
         />
-        <p className="text-xs text-muted-foreground mt-1">Ministry default is 15 — combinations with at least this many learners get their own report document when splitting class reports by combination.</p>
-      </div>
+      </FormField>
 
       <RankingSettings school={school} setSchool={setSchool} />
 
       {/* Invite Codes */}
-      <div className="mt-8 pt-6 border-t border-border">
+      <div className="mt-8 border-t border-border pt-6">
         <CardHeading icon={KeyRound} hue="amber" title="Invite codes" description="Share these codes with teachers and students so they can join your school during signup." />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
           <InviteCodeCard label="Teacher Invite Code" code={school.teacher_invite_code} tone="good" />

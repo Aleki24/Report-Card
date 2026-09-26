@@ -434,7 +434,7 @@ export function GradingSystemsTab({
 
                     {viewingOwn && (
                         <div className="flex justify-end mt-4">
-                            <button type="button" className="text-xs font-medium px-3 py-1.5 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50" onClick={() => { onDelete('grading_system', viewing.id); setViewingId(null); }} disabled={saving}>🗑 Delete this grading system</button>
+                            <button type="button" className="text-xs font-medium px-3 py-1.5 rounded-md bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50" onClick={() => { onDelete('grading_system', viewing.id); setViewingId(null); }} disabled={saving}><Trash2 className="mr-1 inline size-3.5" aria-hidden />Delete this grading system</button>
                         </div>
                     )}
                 </ModalOverlay>
