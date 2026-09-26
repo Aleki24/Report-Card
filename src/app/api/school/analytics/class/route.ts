@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
 import { getSchoolPassMark } from '@/lib/pass-mark';
+import { getExamType } from '@/lib/exam-types';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
 import type { GradeBand } from '@/types';
 import { getActiveUserProfile } from '@/lib/auth-server';
@@ -127,10 +128,44 @@ export async function GET(request: NextRequest) {
             termId = terms.find(t => t.is_current)?.id ?? terms[0]?.id ?? null;
         }
         const termName = terms.find(t => t.id === termId)?.name ?? null;
-        const examType = searchParams.get('exam_type');
+        /*
+          Which exam. "latest" means the term's most recent series that has
+          marks, and is what the page opens on: a merit list over every exam of
+          the term averages an Opener with an End Term, so a learner who missed
+          one sitting is ranked on a different set of papers from everyone else.
+        */
+        const requestedExam = searchParams.get('exam_type');
+        const seriesRes = await supabaseAdmin.rpc('class_exam_series', {
+            p_school_id: schoolId,
+            p_grade_stream_id: streamId,
+            p_term_id: termId,
+        });
+        if (seriesRes.error) {
+            console.error('Class analytics series error:', seriesRes.error);
+            return NextResponse.json({ error: 'Failed to load class analytics' }, { status: 500 });
+        }
+        const series: SeriesRow[] = ((seriesRes.data || []) as Record<string, unknown>[])
+            .map(r => {
+                const type = (r.exam_type as string) || 'UNKNOWN';
+                return {
+                    term_id: (r.term_id as string) ?? null,
+                    term_name: (r.term_name as string) ?? null,
+                    exam_type: type,
+                    // The term is already chosen, so the exam's own name is the label.
+                    label: getExamType(type)?.shortName ?? type.charAt(0) + type.slice(1).toLowerCase(),
+                    first_exam_date: (r.first_exam_date as string) ?? null,
+                    subject_count: num(r.subject_count),
+                    mark_count: num(r.mark_count),
+                    mean_percentage: num(r.mean_percentage),
+                };
+            })
+            .sort((a, b) => (a.first_exam_date || '').localeCompare(b.first_exam_date || ''));
+        const examType = requestedExam === 'latest'
+            ? [...series].reverse().find(s => s.mark_count > 0)?.exam_type ?? null
+            : requestedExam;
 
         const passMark = await getSchoolPassMark(supabaseAdmin, schoolId);
-        const [subjectsRes, meritRes, seriesRes, gradingBySubject] = await Promise.all([
+        const [subjectsRes, meritRes, gradingBySubject] = await Promise.all([
             supabaseAdmin.rpc('class_subject_performance', {
                 p_school_id: schoolId,
                 p_grade_stream_id: streamId,
@@ -144,16 +179,11 @@ export async function GET(request: NextRequest) {
                 p_term_id: termId,
                 p_exam_type: examType,
             }),
-            supabaseAdmin.rpc('class_exam_series', {
-                p_school_id: schoolId,
-                p_grade_stream_id: streamId,
-                p_term_id: termId,
-            }),
             gradingSystemBySubject(supabaseAdmin, schoolId),
         ]);
 
-        if (subjectsRes.error || meritRes.error || seriesRes.error) {
-            console.error('Class analytics error:', subjectsRes.error || meritRes.error || seriesRes.error);
+        if (subjectsRes.error || meritRes.error) {
+            console.error('Class analytics error:', subjectsRes.error || meritRes.error);
             return NextResponse.json({ error: 'Failed to load class analytics' }, { status: 500 });
         }
 
@@ -249,23 +279,6 @@ export async function GET(request: NextRequest) {
                 .map(r => ({ ...r, rank: null })),
         ];
 
-        const series: SeriesRow[] = ((seriesRes.data || []) as Record<string, unknown>[])
-            .map(r => ({
-                term_id: (r.term_id as string) ?? null,
-                term_name: (r.term_name as string) ?? null,
-                exam_type: (r.exam_type as string) || 'UNKNOWN',
-                // "Term 2 Endterm" — built from the two columns, not parsed out
-                // of an exam name like "Term 2 Endterm - English".
-                label: [
-                    (r.term_name as string) ?? null,
-                    ((r.exam_type as string) || '').charAt(0) + ((r.exam_type as string) || '').slice(1).toLowerCase(),
-                ].filter(Boolean).join(' '),
-                first_exam_date: (r.first_exam_date as string) ?? null,
-                subject_count: num(r.subject_count),
-                mark_count: num(r.mark_count),
-                mean_percentage: num(r.mean_percentage),
-            }))
-            .sort((a, b) => (a.first_exam_date || '').localeCompare(b.first_exam_date || ''));
 
         const grade = (Array.isArray(stream.grades) ? stream.grades[0] : stream.grades) as
             | { name_display?: string; academic_levels?: { code?: string; name?: string } | { code?: string; name?: string }[] }

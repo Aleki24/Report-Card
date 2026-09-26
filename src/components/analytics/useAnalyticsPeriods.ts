@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { findActiveTermId } from '@/lib/term-calendar';
 
 export interface AcademicYearOption { id: string; name: string; start_date: string }
 export interface TermOption { id: string; name: string; academic_year_id: string; start_date: string; is_current: boolean }
@@ -44,19 +45,22 @@ export const termsOfYear = (terms: TermOption[], yearId: string | null): TermOpt
   terms.filter(t => t.academic_year_id === yearId);
 
 /**
- * The term a class view should open on for a year: the school's current term
- * if it is in that year, else the latest term that has started, else the first.
+ * The term a class view should open on for a year: today's term if it is in
+ * that year (the same pick as every other page), else the latest term that has
+ * started, else the first.
  */
 export function defaultTermFor(terms: TermOption[], yearId: string | null): string | null {
   const inYear = termsOfYear(terms, yearId);
+  const active = findActiveTermId(terms);
   const today = new Date().toISOString().slice(0, 10);
-  return inYear.find(t => t.is_current)?.id
+  return inYear.find(t => t.id === active)?.id
     ?? [...inYear].reverse().find(t => t.start_date <= today)?.id
     ?? inYear[0]?.id
     ?? null;
 }
 
-/** The year the page opens on: the current term's year, else the newest. */
+/** The year the page opens on: today's term's year, else the newest. */
 export function defaultYear(periods: AnalyticsPeriods): string | null {
-  return periods.terms.find(t => t.is_current)?.academic_year_id ?? periods.years[0]?.id ?? null;
+  const active = findActiveTermId(periods.terms);
+  return periods.terms.find(t => t.id === active)?.academic_year_id ?? periods.years[0]?.id ?? null;
 }
