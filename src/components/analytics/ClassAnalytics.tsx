@@ -59,6 +59,9 @@ function barFor(passRate: number): string {
     return 'bg-destructive';
 }
 
+/** Asks the server for the term's most recent exam with marks. */
+const LATEST = 'latest';
+
 const passStatTone = (passRate: number): StatTone => (passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad');
 
 /** Gold, silver and bronze for the top three places. */
@@ -78,8 +81,9 @@ interface ClassAnalyticsProps {
 
 export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassAnalyticsProps) {
     // The page keys this component by class and term, so the exam filter
-    // starts over whenever either changes.
-    const [examType, setExamType] = useState<string | null>(null);
+    // starts over whenever either changes. It opens on the term's latest
+    // exam: a merit list across every exam of the term mixes sittings.
+    const [examChoice, setExamChoice] = useState<string | null>(LATEST);
 
     /*
       Responses keyed by the request that produced them, rather than a `data`
@@ -91,7 +95,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
       Undefined means "not fetched yet", null means "fetched and empty" — the
       distinction is what lets loading be derived instead of tracked.
     */
-    const cacheKey = `${streamId}|${termId ?? 'current'}|${examType ?? 'all'}`;
+    const cacheKey = `${streamId}|${termId ?? 'current'}|${examChoice ?? 'all'}`;
     const [byKey, setByKey] = useState<Record<string, ClassPayload | null>>({});
 
     const data = byKey[cacheKey];
@@ -103,7 +107,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
 
         const params = new URLSearchParams({ stream_id: streamId });
         if (termId) params.set('term_id', termId);
-        if (examType) params.set('exam_type', examType);
+        if (examChoice) params.set('exam_type', examChoice);
 
         fetch(`/api/school/analytics/class?${params.toString()}`)
             .then(r => r.json())
@@ -116,7 +120,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
             });
 
         return () => { cancelled = true; };
-    }, [cacheKey, streamId, termId, examType, byKey]);
+    }, [cacheKey, streamId, termId, examChoice, byKey]);
 
     // Best first, by mean score (the figure subjects are ranked on in a
     // class's results), pass rate breaking ties. Equal scores share a rank.
@@ -166,6 +170,9 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
         );
     }
 
+    // The exam the figures are for, as the server resolved "latest".
+    const examType = data.scope.exam_type;
+    const examLabel = data.series.find(s => s.exam_type === examType)?.label ?? null;
     const curriculum = shortCurriculumLabel(data.class.level_code, data.class.level_name);
     const incompleteCount = data.merit.filter(m => m.incomplete).length;
 
@@ -187,7 +194,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
                     </span>
                     <div role="group" aria-label="Exam" className="-mx-1 flex max-w-full gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1">
                         <button
-                            onClick={() => setExamType(null)}
+                            onClick={() => setExamChoice(null)}
                             aria-pressed={examType === null}
                             className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                                 examType === null ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -198,7 +205,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
                         {data.series.map(s => (
                             <button
                                 key={`${s.term_id}-${s.exam_type}`}
-                                onClick={() => setExamType(s.exam_type)}
+                                onClick={() => setExamChoice(s.exam_type)}
                                 aria-pressed={examType === s.exam_type}
                                 className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                                     examType === s.exam_type ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -264,7 +271,7 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
                     <p className="mt-0.5 text-xs text-muted-foreground">
                         {data.class.full_name}
                         {data.scope.term_name ? `, ${data.scope.term_name}` : ''}
-                        {examType ? '' : ' — all exams this term'}
+                        {examLabel ? ` · ${examLabel}` : ' · every exam this term, averaged'}
                         {incompleteCount > 0 && ` · ${incompleteCount} sat fewer papers and are unranked`}
                     </p>
                 </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import PageHeader from '@/components/dashboard/PageHeader';
-import React, { useEffect, useId, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useId, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, CalendarRange, LineChart } from 'lucide-react';
 import ClassAnalytics from '@/components/analytics/ClassAnalytics';
 import SchoolOverview from '@/components/analytics/SchoolOverview';
@@ -28,6 +29,10 @@ import { defaultTermFor, defaultYear, termsOfYear, useAnalyticsPeriods } from '@
  * The period (year and term) is chosen here, above both levels, and is always
  * on screen: it used to live inside the class view's results, so a term with
  * no marks yet showed an empty state with no way back to the previous term.
+ *
+ * Class, year and term live in the URL. Opening a class is a navigation, so
+ * the browser's Back button returns to the class list rather than leaving
+ * Analytics, and a class's page can be bookmarked or shared.
  */
 
 interface GradeStreamOption {
@@ -37,16 +42,41 @@ interface GradeStreamOption {
 
 const ALL_CLASSES = 'all';
 const WHOLE_YEAR = '';
+/** `?term=year`: the overview's whole-year view. */
+const WHOLE_YEAR_PARAM = 'year';
 
 export default function AnalyticsPage() {
+    return (
+        <Suspense fallback={<div className="mx-auto h-64 w-full max-w-7xl animate-pulse rounded-2xl bg-muted/40" aria-hidden="true" />}>
+            <AnalyticsPageInner />
+        </Suspense>
+    );
+}
+
+function AnalyticsPageInner() {
     const periods = useAnalyticsPeriods();
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
-    const [streamId, setStreamId] = useState<string>(ALL_CLASSES);
-    // null until the user picks one; the defaults are derived from the periods.
-    const [yearChoice, setYearChoice] = useState<string | null>(null);
+    const streamId = searchParams.get('class') || ALL_CLASSES;
+    // Absent until the user picks one; the defaults are derived from the periods.
+    const yearChoice = searchParams.get('year');
+    const termParam = searchParams.get('term');
     // undefined = "the default for this view", null = the whole year (overview only).
-    const [termChoice, setTermChoice] = useState<string | null | undefined>(undefined);
+    const termChoice: string | null | undefined = termParam === WHOLE_YEAR_PARAM ? null : termParam ?? undefined;
     const ids = { cls: useId(), year: useId(), term: useId() };
+
+    /** Sets or clears URL params; `push` makes the change a Back-able step. */
+    const navigate = useCallback((changes: Record<string, string | null>, mode: 'push' | 'replace' = 'replace') => {
+        const params = new URLSearchParams(searchParams.toString());
+        for (const [key, value] of Object.entries(changes)) {
+            if (value === null) params.delete(key); else params.set(key, value);
+        }
+        const query = params.toString();
+        const url = query ? `${pathname}?${query}` : pathname;
+        if (mode === 'push') router.push(url, { scroll: true }); else router.replace(url, { scroll: false });
+    }, [pathname, router, searchParams]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -82,8 +112,11 @@ export default function AnalyticsPage() {
         ...yearTerms.map(t => ({ id: t.id, label: `${t.name}${t.is_current ? ' (current)' : ''}` })),
     ];
 
-    const changeYear = (id: string) => { setYearChoice(id); setTermChoice(undefined); };
-    const changeClass = (id: string) => setStreamId(id);
+    const changeYear = (id: string) => navigate({ year: id, term: null });
+    const setTermChoice = (choice: string | null) => navigate({ term: choice === null ? WHOLE_YEAR_PARAM : choice });
+    // Opening a class from the list is a step Back can undo; the filter replaces.
+    const openClass = (id: string) => navigate({ class: id === ALL_CLASSES ? null : id }, 'push');
+    const changeClass = (id: string) => navigate({ class: id === ALL_CLASSES ? null : id });
 
     return (
         <div className="mx-auto w-full max-w-7xl pb-10">
@@ -141,7 +174,7 @@ export default function AnalyticsPage() {
             {!isOverview && (
                 <button
                     type="button"
-                    onClick={() => setStreamId(ALL_CLASSES)}
+                    onClick={() => changeClass(ALL_CLASSES)}
                     className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                     <ArrowLeft className="size-4" aria-hidden="true" />All classes
@@ -154,7 +187,7 @@ export default function AnalyticsPage() {
                 <SchoolOverview
                     yearId={yearId}
                     termId={termId}
-                    onSelectClass={changeClass}
+                    onSelectClass={openClass}
                     onShowWholeYear={() => setTermChoice(null)}
                 />
             ) : (
