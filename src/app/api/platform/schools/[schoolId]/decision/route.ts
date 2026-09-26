@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
-import { sendSchoolApprovedEmail, sendSchoolRejectedEmail } from '@/lib/email';
+import { sendSchoolRejectedEmail } from '@/lib/email';
+import { notifyRequesterOfApproval } from '@/lib/school-approval';
 import { verifyWebhookToken } from '@/lib/crypto';
 import { escapeHtml } from '@/lib/html';
 
@@ -87,7 +88,7 @@ async function decide(schoolId: string, rawAction: string | null, rawToken: stri
     const supabase = createSupabaseAdmin();
 
     const requester = school.requested_by
-        ? (await supabase.from('users').select('id, email, first_name').eq('id', school.requested_by).maybeSingle()).data
+        ? (await supabase.from('users').select('id, email, first_name, phone').eq('id', school.requested_by).maybeSingle()).data
         : null;
 
     // Each write is conditional on the token still being the one we checked,
@@ -109,9 +110,10 @@ async function decide(schoolId: string, rawAction: string | null, rawToken: stri
     if (action === 'reject') {
         if (!(await claimDecision({ approval_status: 'REJECTED', approval_note: note }))) return alreadyDecided();
 
-        if (requester?.email) {
-            sendSchoolRejectedEmail(requester.email, requester.first_name, school.name, note)
-                .catch(err => console.error('[school-approval] rejection email failed:', err));
+        const rejectedEmail = requester?.email;
+        if (rejectedEmail) {
+            after(() => sendSchoolRejectedEmail(rejectedEmail, requester?.first_name ?? null, school.name, note)
+                .then(() => undefined, err => console.error('[school-approval] rejection email failed:', err)));
         }
         return htmlResult('Rejected', `"${school.name}" was rejected and stays locked out.`, false);
     }
@@ -137,10 +139,15 @@ async function decide(schoolId: string, rawAction: string | null, rawToken: stri
         }
     }
 
-    if (requester?.email) {
-        sendSchoolApprovedEmail(requester.email, requester.first_name, school.name)
-            .catch(err => console.error('[school-approval] approval email failed:', err));
-    }
+    // Email, SMS and WhatsApp to the requester and the school's own number,
+    // after the response so the owner's page isn't held up by them.
+    const { data: schoolContact } = await supabase.from('schools').select('phone').eq('id', schoolId).maybeSingle();
+    after(() => notifyRequesterOfApproval({
+        schoolName: school.name,
+        firstName: requester?.first_name ?? null,
+        email: requester?.email ?? null,
+        phones: [requester?.phone, schoolContact?.phone],
+    }));
 
     return htmlResult('Approved', `"${school.name}" is now live and its administrator can sign in.`, true);
 }

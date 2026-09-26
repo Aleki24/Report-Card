@@ -1,5 +1,6 @@
-import { sendSchoolApprovalRequestEmail, type SchoolApprovalRequest } from '@/lib/email';
+import { sendSchoolApprovalRequestEmail, sendSchoolApprovedEmail, type SchoolApprovalRequest } from '@/lib/email';
 import { sendSMS } from '@/lib/africastalking';
+import { sendWhatsAppTemplate, WHATSAPP_TEMPLATES } from '@/lib/whatsapp';
 
 /**
  * Who to alert when someone asks to create a school.
@@ -33,48 +34,69 @@ export function platformOwnerPhones(): string[] {
     return configured.length > 0 ? configured : DEFAULT_OWNER_PHONES;
 }
 
+const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || 'https://skulbase.com').replace(/\/$/, '');
+
+/** Where the owner reviews every school waiting for approval. */
+export const PENDING_SCHOOLS_PATH = '/dashboard/pending-schools';
+
+/** Whether this email belongs to the platform owner (case-insensitive). */
+export function isPlatformOwnerEmail(email: string | null | undefined): boolean {
+    const e = email?.trim().toLowerCase();
+    return !!e && platformOwnerEmails().some(o => o.toLowerCase() === e);
+}
+
 /**
- * Alert the platform owner that a school is waiting for approval.
+ * Alert the platform owner that a school is waiting for approval: email with
+ * one-click approve/reject links, and SMS and WhatsApp pointing to the list
+ * of waiting schools (the single-use token is too long for a text).
  *
- * Email carries the one-click approve/reject links; the SMS is only a nudge to
- * go read it, because the approval token is far too long to put in a text
- * without splitting it across several messages.
- *
- * Never throws: a mail or SMS outage must not roll back the sign-up. The
- * school is parked as PENDING_APPROVAL either way, so the worst case is the
- * owner finds it in the pending list rather than in their inbox.
+ * Never throws: a mail, SMS or WhatsApp outage must not roll back the
+ * sign-up. The school stays PENDING_APPROVAL either way and is listed on the
+ * owner's pending-schools page, so nothing depends on a message arriving.
  */
 export async function notifyOwnerOfSchoolRequest(req: SchoolApprovalRequest): Promise<void> {
     const emails = platformOwnerEmails();
     const phones = platformOwnerPhones();
+    const reviewUrl = `${appUrl()}${PENDING_SCHOOLS_PATH}`;
+    const from = req.requesterName || req.requesterEmail || 'someone';
+    const contact = [req.schoolPhone, req.schoolEmail || req.requesterEmail].filter(Boolean).join(', ') || 'no contact given';
 
-    if (emails.length === 0 && phones.length === 0) {
-        console.error(
-            '[school-approval] no owner contacts configured — nobody was notified that ' +
-            `"${req.schoolName}" (${req.schoolId}) is awaiting approval. It stays PENDING_APPROVAL ` +
-            'and unusable until approved.'
-        );
-        return;
-    }
-
-    // Sent in parallel so a slow SMS gateway doesn't hold up the email.
-    await Promise.allSettled([
-        ...(emails.length > 0
-            ? [sendSchoolApprovalRequestEmail(emails, req).catch(err => {
-                console.error('[school-approval] owner email failed:', err);
-                throw err;
-              })]
-            : []),
-        ...phones.map(phone =>
-            sendSMS(
-                phone,
-                `Skulbase: "${req.schoolName}" has requested a new school account`
-                + `${req.requesterName ? ` (${req.requesterName})` : ''}.`
-                + ' It stays locked until you approve. Check your email to approve or reject.'
-            ).then(res => {
-                // sendSMS reports failure in its result rather than throwing.
-                if (!res.success) console.error('[school-approval] owner SMS failed:', res.to, res.error);
-            })
-        ),
+    const results = await Promise.allSettled([
+        ...(emails.length > 0 ? [sendSchoolApprovalRequestEmail(emails, req)] : []),
+        ...phones.flatMap(phone => [
+            sendSMS(phone, `Skulbase: "${req.schoolName}" is waiting for your approval (from ${from}). Review: ${reviewUrl}`)
+                .then(res => { if (!res.success) throw new Error(`SMS to ${res.to}: ${res.error}`); }),
+            sendWhatsAppTemplate(phone, WHATSAPP_TEMPLATES.schoolRequest, [req.schoolName, from, contact, reviewUrl])
+                .then(res => { if (!res.ok && res.error !== 'WhatsApp is not configured') throw new Error(`WhatsApp to ${res.to}: ${res.error}`); }),
+        ]),
     ]);
+    for (const r of results) {
+        if (r.status === 'rejected') console.error('[school-approval] owner notification failed:', r.reason);
+    }
+}
+
+/**
+ * Tell the requester their school was approved: email, SMS and WhatsApp to
+ * every number on file for them or the school. Never throws.
+ */
+export async function notifyRequesterOfApproval({ schoolName, firstName, email, phones }: {
+    schoolName: string;
+    firstName: string | null;
+    email: string | null;
+    phones: readonly (string | null | undefined)[];
+}): Promise<void> {
+    const signIn = `${appUrl()}/login`;
+    const numbers = [...new Set(phones.filter((p): p is string => !!p?.trim()))];
+    const results = await Promise.allSettled([
+        ...(email ? [sendSchoolApprovedEmail(email, firstName, schoolName)] : []),
+        ...numbers.flatMap(phone => [
+            sendSMS(phone, `Skulbase: ${schoolName} has been approved. Sign in at ${signIn} to add your classes and invite your teachers.`)
+                .then(res => { if (!res.success) throw new Error(`SMS to ${res.to}: ${res.error}`); }),
+            sendWhatsAppTemplate(phone, WHATSAPP_TEMPLATES.schoolApproved, [firstName || 'there', schoolName, signIn])
+                .then(res => { if (!res.ok && res.error !== 'WhatsApp is not configured') throw new Error(`WhatsApp to ${res.to}: ${res.error}`); }),
+        ]),
+    ]);
+    for (const r of results) {
+        if (r.status === 'rejected') console.error('[school-approval] approval notice failed:', r.reason);
+    }
 }
