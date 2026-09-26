@@ -1,466 +1,508 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Plus, Search, Edit3, Trash2, Eye, FileText, ClockAlert, Paperclip, X, Briefcase } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Briefcase, CalendarClock, CheckCircle2, Edit3, FileText, Inbox, Loader2, Paperclip, Plus, Trash2, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { requestJson, jsonBody } from '@/lib/api-error-message';
 import PageHeader from '@/components/dashboard/PageHeader';
-import StatCard from '@/components/dashboard/StatCard';
-import { Modal } from '@/components/ui/Modal';
+import EmptyState from '@/components/dashboard/EmptyState';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/Modal';
+import { FormField, InputField, SelectField, TextareaField } from '@/components/ui';
+import { SearchBox } from '@/components/ui/SearchBox';
+import { StatFilterTile } from '@/components/ui/StatFilterTile';
+import { useAuth } from '@/components/AuthProvider';
+import { apiErrorMessage } from '@/lib/api-error-message';
+import { cn } from '@/lib/utils';
+import {
+    ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_FEEDBACK_MAX, ASSIGNMENT_TITLE_MAX, dueLabel, dueState, localToday,
+    type Assignment, type DueState, type Submission,
+} from '@/lib/assignments';
 
-interface Assignment {
-    id: string;
-    title: string;
-    description: string | null;
-    dueDate: string;
-    fileUrl: string | null;
-    subject: string;
-    subjectId: string;
-    subjectCode: string;
-    stream: string | null;
-    streamId: string | null;
-    createdBy: string;
-    createdAt: string;
-}
+interface StreamOption { id: string; full_name: string; academicLevelId: string | null }
+interface SubjectOption { id: string; name: string; academicLevelId: string | null; band: string | null }
 
-interface SubjectOption {
-    id: string;
-    name: string;
-    code: string;
-}
+type View = 'upcoming' | 'past' | 'mine' | 'all';
+type Load<T> = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: T };
 
-interface StreamOption {
-    id: string;
-    full_name: string;
-}
+interface Draft { title: string; streamId: string; subjectId: string; dueDate: string; description: string; fileUrl: string }
+const EMPTY_DRAFT: Draft = { title: '', streamId: '', subjectId: '', dueDate: '', description: '', fileUrl: '' };
 
-interface Submission {
-    id: string;
-    fileUrl: string | null;
-    submissionText: string | null;
-    submittedAt: string;
-    grade: number | null;
-    feedback: string | null;
-    studentName: string | null;
-    admissionNumber: string | null;
-    assignmentTitle: string;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+const DUE_TONE: Record<DueState, string> = {
+    overdue: 'text-muted-foreground',
+    today: 'text-rose-600 dark:text-rose-400',
+    soon: 'text-amber-600 dark:text-amber-400',
+    later: 'text-emerald-600 dark:text-emerald-400',
+};
+
+async function getJson<T>(url: string, fallback: string): Promise<T> {
+    const res = await fetch(url, { cache: 'no-store' });
+    const json: unknown = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(apiErrorMessage(json, fallback));
+    return json as T;
 }
 
 export default function AssignmentsPage() {
-    const [assignments, setAssignments] = useState<Assignment[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [editing, setEditing] = useState<Assignment | null>(null);
-    const [saving, setSaving] = useState(false);
+    const { role, profile } = useAuth();
+    const id = useId();
+    const isAdmin = role === 'ADMIN';
+    // The admin manages every assignment; a teacher the ones they set (as the API).
+    const canManage = useCallback((a: Assignment) => isAdmin || (!!profile && a.createdById === profile.id), [isAdmin, profile]);
 
-    // Submissions
-    const [submissions, setSubmissions] = useState<Submission[]>([]);
-    const [showSubmissions, setShowSubmissions] = useState(false);
-    const [gradingId, setGradingId] = useState<string | null>(null);
-    const [gradeVal, setGradeVal] = useState('');
-    const [feedbackVal, setFeedbackVal] = useState('');
-
-    const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+    const [load, setLoad] = useState<Load<Assignment[]>>({ status: 'loading' });
     const [streams, setStreams] = useState<StreamOption[]>([]);
+    const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+    const [view, setView] = useState<View>('upcoming');
+    const [search, setSearch] = useState('');
+    const [classFilter, setClassFilter] = useState('');
 
-    const [formTitle, setFormTitle] = useState('');
-    const [formSubject, setFormSubject] = useState('');
-    const [formStream, setFormStream] = useState('');
-    const [formDueDate, setFormDueDate] = useState('');
-    const [formDesc, setFormDesc] = useState('');
-    const [formFileUrl, setFormFileUrl] = useState('');
-    const [formFile, setFormFile] = useState<File | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [editing, setEditing] = useState<Assignment | null>(null);
+    const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+    const [file, setFile] = useState<File | null>(null);
+    const [saving, setSaving] = useState<'idle' | 'uploading' | 'saving'>('idle');
+    const fileInput = useRef<HTMLInputElement>(null);
 
-    const fetchAssignments = async () => {
+    const [deleting, setDeleting] = useState<Assignment | null>(null);
+    const [deletingBusy, setDeletingBusy] = useState(false);
+    const [reviewing, setReviewing] = useState<Assignment | null>(null);
+
+    const fetchAssignments = useCallback(async () => {
         try {
-            const res = await fetch('/api/school/assignments');
-            const json = await res.json();
-            if (json.data) setAssignments(json.data);
+            const json = await getJson<{ data: Assignment[] }>('/api/school/assignments', 'Could not load assignments.');
+            setLoad({ status: 'ready', data: json.data });
         } catch (err) {
-            console.error('Failed to load assignments:', err);
+            setLoad({ status: 'error', message: err instanceof Error ? err.message : 'Could not load assignments.' });
         }
-        setLoading(false);
-    };
-
-    const fetchSubmissions = async () => {
-        try {
-            const res = await fetch('/api/school/submissions');
-            const json = await res.json();
-            if (json.data) setSubmissions(json.data);
-        } catch (err) {
-            console.error('Failed to load submissions:', err);
-        }
-    };
-
-    useEffect(() => {
-        fetchAssignments();
-        (async () => {
-            const [subjRes, strRes] = await Promise.all([
-                fetch('/api/school/data?type=subjects'),
-                fetch('/api/school/data?type=grade_streams'),
-            ]);
-            const subjData = await subjRes.json();
-            const strData = await strRes.json();
-            if (subjData.data) setSubjects(subjData.data.map((s: any) => ({ id: s.id, name: s.name, code: s.code })));
-            if (strData.data) setStreams(strData.data.map((s: any) => ({ id: s.id, full_name: s.full_name })));
-        })();
     }, []);
 
-    const filtered = assignments.filter(a =>
-        !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.subject.toLowerCase().includes(search.toLowerCase())
-    );
+    useEffect(() => {
+        void fetchAssignments();
+        // The classes this user can see (a teacher's own), and the school's subjects.
+        getJson<{ data: { id: string; full_name: string; grades?: { academic_level_id?: string | null } | null }[] }>('/api/school/data?type=grade_streams', 'Could not load classes.')
+            .then(json => setStreams(json.data.map(s => ({ id: s.id, full_name: s.full_name, academicLevelId: s.grades?.academic_level_id ?? null }))))
+            .catch(() => toast.error('Could not load your classes.'));
+        getJson<{ data: { id: string; name: string; academic_level_id: string | null; band: string | null }[] }>('/api/school/data?type=subjects', 'Could not load subjects.')
+            .then(json => setSubjects(json.data.map(s => ({ id: s.id, name: s.name, academicLevelId: s.academic_level_id, band: s.band }))))
+            .catch(() => toast.error('Could not load subjects.'));
+    }, [fetchAssignments]);
 
-    const stats = {
-        total: assignments.length,
-        upcoming: assignments.filter(a => new Date(a.dueDate) > new Date()).length,
-        overdue: assignments.filter(a => new Date(a.dueDate) < new Date()).length,
-    };
+    const all = useMemo(() => (load.status === 'ready' ? load.data : []), [load]);
+    const today = localToday();
+    const counts = useMemo(() => ({
+        upcoming: all.filter(a => a.dueDate >= today).length,
+        past: all.filter(a => a.dueDate < today).length,
+        mine: all.filter(a => profile && a.createdById === profile.id).length,
+        all: all.length,
+    }), [all, today, profile]);
 
-    const openAdd = () => {
+    const shown = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const list = all.filter(a =>
+            (view === 'all'
+                || (view === 'upcoming' && a.dueDate >= today)
+                || (view === 'past' && a.dueDate < today)
+                || (view === 'mine' && !!profile && a.createdById === profile.id))
+            && (!classFilter || a.streamId === classFilter)
+            && (!q || a.title.toLowerCase().includes(q) || a.subject.toLowerCase().includes(q) || (a.stream ?? '').toLowerCase().includes(q)));
+        // Soonest first while it's coming up; most recent first once it's past.
+        return view === 'past' ? [...list].reverse() : list;
+    }, [all, view, classFilter, search, today, profile]);
+
+    // Subjects for the chosen class's curriculum; the band tells apart subjects
+    // offered at more than one level ("Mathematics" in Lower and Upper Primary).
+    const subjectOptions = useMemo(() => {
+        const level = streams.find(s => s.id === draft.streamId)?.academicLevelId ?? null;
+        const pool = level ? subjects.filter(s => s.academicLevelId === level) : subjects;
+        const repeated = new Set(pool.map(s => s.name).filter((n, i, arr) => arr.indexOf(n) !== i));
+        return pool.map(s => ({ id: s.id, label: repeated.has(s.name) && s.band ? `${s.name} · ${s.band}` : s.name }));
+    }, [streams, subjects, draft.streamId]);
+
+    const openNew = () => {
         setEditing(null);
-        setFormTitle('');
-        setFormSubject('');
-        setFormStream('');
-        setFormDueDate('');
-        setFormDesc('');
-        setFormFileUrl('');
-        setFormFile(null);
-        setShowModal(true);
+        setDraft({ ...EMPTY_DRAFT, streamId: classFilter || (streams.length === 1 ? streams[0].id : '') });
+        setFile(null);
+        setEditorOpen(true);
     };
-
     const openEdit = (a: Assignment) => {
         setEditing(a);
-        setFormTitle(a.title);
-        setFormSubject(a.subjectId);
-        setFormStream(a.streamId || '');
-        setFormDueDate(a.dueDate.split('T')[0]);
-        setFormDesc(a.description || '');
-        setFormFileUrl(a.fileUrl || '');
-        setFormFile(null);
-        setShowModal(true);
+        setDraft({ title: a.title, streamId: a.streamId ?? '', subjectId: a.subjectId, dueDate: a.dueDate, description: a.description ?? '', fileUrl: a.fileUrl ?? '' });
+        setFile(null);
+        setEditorOpen(true);
     };
 
-    const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        if (file.size > 10 * 1024 * 1024) { toast.error('File must be less than 10MB.'); return; }
-        setFormFile(file);
+    const pickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const picked = e.target.files?.[0];
+        e.target.value = '';
+        if (!picked) return;
+        if (picked.size > MAX_UPLOAD_BYTES) { toast.error('Attachments must be under 10 MB.'); return; }
+        setFile(picked);
     };
 
-    const handleSave = async () => {
-        if (!formTitle || !formSubject || !formDueDate) return;
-        setSaving(true);
+    const canSave = Boolean(draft.title.trim() && draft.streamId && draft.subjectId && draft.dueDate) && saving === 'idle';
+
+    const save = async () => {
+        if (!canSave) return;
         try {
-            let fileUrl = formFileUrl;
-            if (formFile) {
-                setUploading(true);
+            let fileUrl = draft.fileUrl;
+            if (file) {
+                setSaving('uploading');
                 const fd = new FormData();
-                fd.append('file', formFile);
-                const uploadRes = await fetch('/api/school/upload', { method: 'POST', body: fd });
-                const uploadJson = await uploadRes.json();
-                setUploading(false);
-                if (!uploadRes.ok || !uploadJson.url) {
-                    toast.error(uploadJson.error || 'File upload failed');
-                    setSaving(false);
-                    return;
-                }
-                fileUrl = uploadJson.url;
+                fd.append('file', file);
+                const uploaded = await fetch('/api/school/upload', { method: 'POST', body: fd });
+                const uploadJson: unknown = await uploaded.json().catch(() => null);
+                if (!uploaded.ok) throw new Error(apiErrorMessage(uploadJson, 'The attachment did not upload.'));
+                fileUrl = (uploadJson as { url: string }).url;
             }
-
-            const payload = JSON.stringify({
-                title: formTitle,
-                subject_id: formSubject,
-                grade_stream_id: formStream || null,
-                due_date: formDueDate,
-                description: formDesc || null,
-                file_url: fileUrl || null,
+            setSaving('saving');
+            const res = await fetch(editing ? `/api/school/assignments/${editing.id}` : '/api/school/assignments', {
+                method: editing ? 'PATCH' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: draft.title,
+                    subject_id: draft.subjectId,
+                    grade_stream_id: draft.streamId,
+                    due_date: draft.dueDate,
+                    description: draft.description,
+                    file_url: fileUrl || null,
+                }),
             });
-
-            const init = { headers: { 'Content-Type': 'application/json' }, body: payload };
-            if (editing) {
-                await requestJson(`/api/school/assignments/${editing.id}`, { method: 'PATCH', ...init });
-            } else {
-                await requestJson('/api/school/assignments', { method: 'POST', ...init });
-            }
-            setShowModal(false);
-            toast.success(editing ? 'Assignment updated' : 'Assignment created');
+            const json: unknown = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save the assignment.'));
+            toast.success(editing ? 'Assignment updated.' : 'Assignment set.');
+            setEditorOpen(false);
             await fetchAssignments();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to save assignment');
+            toast.error(err instanceof Error ? err.message : 'Could not save the assignment.');
         } finally {
-            setUploading(false);
-            setSaving(false);
+            setSaving('idle');
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Delete this assignment?')) return;
+    const confirmDelete = async () => {
+        if (!deleting) return;
+        setDeletingBusy(true);
         try {
-            await requestJson(`/api/school/assignments/${id}`, { method: 'DELETE' });
-            toast.success('Assignment deleted');
+            const res = await fetch(`/api/school/assignments/${deleting.id}`, { method: 'DELETE' });
+            const json: unknown = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not delete the assignment.'));
+            toast.success('Assignment deleted.');
+            setDeleting(null);
             await fetchAssignments();
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to delete assignment');
+            toast.error(err instanceof Error ? err.message : 'Could not delete the assignment.');
+        } finally {
+            setDeletingBusy(false);
         }
     };
 
-    const openSubmissions = async () => {
-        await fetchSubmissions();
-        setShowSubmissions(true);
-    };
-
-    const handleGrade = async (submissionId: string) => {
-        try {
-            await requestJson(`/api/school/submissions/${submissionId}`, jsonBody('PATCH', {
-                grade: parseFloat(gradeVal) || null,
-                feedback: feedbackVal || null,
-            }));
-            setGradingId(null);
-            setGradeVal('');
-            setFeedbackVal('');
-            await fetchSubmissions();
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to save the grade');
-        }
-    };
+    const tiles = [
+        { key: 'upcoming' as const, icon: CalendarClock, hue: 'violet' as const, label: 'Upcoming', value: counts.upcoming, hint: 'due today or later' },
+        { key: 'past' as const, icon: CheckCircle2, hue: 'slate' as const, label: 'Past due', value: counts.past, hint: 'deadline passed' },
+        { key: 'mine' as const, icon: UserRound, hue: 'blue' as const, label: 'Set by me', value: counts.mine, hint: 'that you created' },
+        { key: 'all' as const, icon: Briefcase, hue: 'emerald' as const, label: 'All', value: counts.all, hint: 'across your classes' },
+    ];
 
     return (
-        <div>
+        <div className="mx-auto w-full max-w-6xl pb-10">
             <PageHeader
                 title="Assignments"
                 eyebrow="Communication"
                 icon={Briefcase}
                 hue="violet"
-                description="Create and manage homework and assignments."
+                description="Set homework for a class, attach files, and review and grade what learners hand in."
                 action={
-                    <div className="flex gap-2">
-                        <button className="btn-secondary" onClick={openSubmissions}>
-                            <Eye size={14} /> Submissions ({submissions.length})
-                        </button>
-                        <button className="btn-primary" onClick={openAdd}>
-                            <Plus size={14} /> New Assignment
-                        </button>
-                    </div>
+                    <button type="button" className="btn-primary" onClick={openNew}>
+                        <Plus className="size-4" aria-hidden /> New assignment
+                    </button>
                 }
             />
 
-            {/* Stats Grid */}
-            <div className="mb-6 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-                <StatCard label="Total" value={stats.total} sub="All assignments" icon={FileText} />
-                <StatCard label="Upcoming" value={stats.upcoming} sub="Not yet due" icon={ClockAlert} iconClassName="bg-[color-mix(in_srgb,var(--viz-info)_10%,transparent)] text-[color:var(--viz-info)]" />
-                <StatCard label="Overdue" value={stats.overdue} sub="Past due date" icon={ClockAlert} iconClassName="bg-destructive/10 text-destructive" />
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {tiles.map(({ key, ...tile }) => (
+                    <StatFilterTile key={key} {...tile} loading={load.status === 'loading'} selected={view === key} onClick={() => setView(key)} />
+                ))}
             </div>
 
-            {/* Search */}
-            <div className="flex items-center input-field input-field-flush overflow-hidden px-0 mb-4" style={{ maxWidth: 400 }}>
-                <span className="flex items-center justify-center pl-3 text-muted-foreground shrink-0">
-                    <Search size={16} />
-                </span>
-                <input
-                    type="text"
-                    placeholder="Search assignments..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="flex-1 border-none outline-none bg-transparent py-1.5 pr-3 text-sm"
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+                <SearchBox className="flex-1" value={search} onChange={setSearch} placeholder="Search title, subject or class" />
+                {streams.length > 1 && (
+                    <SelectField
+                        className="sm:w-56"
+                        aria-label="Filter by class"
+                        value={classFilter}
+                        onChange={setClassFilter}
+                        placeholder="All classes"
+                        options={streams.map(s => ({ id: s.id, label: s.full_name }))}
+                    />
+                )}
+            </div>
+
+            {load.status === 'loading' ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-hidden>
+                    {Array.from({ length: 4 }, (_, i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-muted/60" />)}
+                </div>
+            ) : load.status === 'error' ? (
+                <EmptyState hue="rose" icon={<AlertTriangle className="size-6" />} title="Couldn't load assignments" description={load.message}
+                    action={<button type="button" className="btn-secondary" onClick={() => { setLoad({ status: 'loading' }); void fetchAssignments(); }}>Try again</button>} />
+            ) : shown.length === 0 ? (
+                <EmptyState
+                    hue="violet"
+                    icon={<Briefcase className="size-6" />}
+                    title={search || classFilter ? 'Nothing matches these filters' : view === 'upcoming' ? 'Nothing due' : view === 'past' ? 'No past assignments' : view === 'mine' ? "You haven't set any assignments" : 'No assignments yet'}
+                    description={search || classFilter ? 'Clear the search or pick another class.' : 'Set one for a class and learners see it on their dashboard.'}
+                    action={!search && !classFilter ? <button type="button" className="btn-primary" onClick={openNew}><Plus className="size-4" aria-hidden /> New assignment</button> : undefined}
                 />
-            </div>
-
-            {/* Table */}
-            {loading ? (
-                <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading...</div>
-            ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-sm gap-2">
-                    {search ? 'No matching assignments.' : 'No assignments yet. Click "New Assignment" to create one.'}
-                </div>
             ) : (
-                <div style={{ overflowX: 'auto' }}>
-                    <div className="w-full overflow-x-auto">
-                      <table className="data-table">
-                          <thead>
-                              <tr>
-                                  <th>Title</th>
-                                  <th>Subject</th>
-                                  <th>Stream</th>
-                                  <th>Due Date</th>
-                                  <th>Created By</th>
-                                  <th style={{ width: 100 }}>Actions</th>
-                              </tr>
-                          </thead>
-                          <tbody>
-                              {filtered.map(a => {
-                                  const isOverdue = new Date(a.dueDate) < new Date();
-                                  return (
-                                      <tr key={a.id}>
-                                          <td data-label="Title" className="font-semibold">
-                                              <div className="flex items-center gap-1.5">
-                                                  {a.title}
-                                                  {a.fileUrl && (
-                                                      <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" title="View attachment" className="text-muted-foreground hover:text-primary">
-                                                          <Paperclip size={12} />
-                                                      </a>
-                                                  )}
-                                              </div>
-                                              {a.description && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-xs">{a.description}</div>}
-                                          </td>
-                                          <td data-label="Subject">{a.subject}</td>
-                                          <td data-label="Stream" className="text-muted-foreground">{a.stream || 'All streams'}</td>
-                                          <td data-label="Due Date" className={isOverdue ? 'font-semibold text-destructive' : ''}>
-                                              {new Date(a.dueDate).toLocaleDateString('en-GB')}
-                                          </td>
-                                          <td data-label="Created By" className="text-muted-foreground text-xs">{a.createdBy}</td>
-                                          <td data-label="Actions">
-                                              <div className="flex gap-1">
-                                                  <button className="btn-icon" onClick={() => openEdit(a)} title="Edit"><Edit3 size={14} /></button>
-                                                  <button className="btn-icon text-destructive" onClick={() => handleDelete(a.id)} title="Delete"><Trash2 size={14} /></button>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  );
-                              })}
-                          </tbody>
-                      </table>
-                    </div>
-                </div>
+                <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {shown.map(a => {
+                        const state = dueState(a.dueDate, today);
+                        return (
+                            <li key={a.id} className="min-w-0">
+                                <article className={cn('flex h-full flex-col rounded-2xl border bg-card p-4 shadow-sm sm:p-5', state === 'today' ? 'border-rose-500/40' : 'border-border/70')}>
+                                    <header className="flex items-start gap-3">
+                                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden>
+                                            <FileText className="size-5" />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <h2 className="truncate text-sm font-semibold text-foreground sm:text-base">{a.title}</h2>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">{a.subject} · {a.stream ?? 'Whole school'}</p>
+                                        </div>
+                                        {canManage(a) && (
+                                            <div className="flex shrink-0 gap-1">
+                                                <button type="button" className="btn-icon" onClick={() => openEdit(a)} aria-label={`Edit ${a.title}`} title="Edit"><Edit3 className="size-4" /></button>
+                                                <button type="button" className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => setDeleting(a)} aria-label={`Delete ${a.title}`} title="Delete"><Trash2 className="size-4" /></button>
+                                            </div>
+                                        )}
+                                    </header>
+                                    {a.description && <p className="mt-3 line-clamp-3 whitespace-pre-line text-sm text-foreground/80">{a.description}</p>}
+                                    <footer className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 pt-4 text-xs">
+                                        <span className={cn('inline-flex items-center gap-1 font-semibold', DUE_TONE[state])}>
+                                            <CalendarClock className="size-3.5" aria-hidden />{dueLabel(a.dueDate, today)}
+                                        </span>
+                                        {a.fileUrl && (
+                                            <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
+                                                <Paperclip className="size-3.5" aria-hidden />Attachment
+                                            </a>
+                                        )}
+                                        <span className="text-muted-foreground">by {a.createdBy}</span>
+                                        <button type="button" className="btn-secondary ml-auto h-8 text-xs" onClick={() => setReviewing(a)}>
+                                            <Inbox className="size-3.5" aria-hidden />
+                                            {a.submissionCount} submission{a.submissionCount === 1 ? '' : 's'}
+                                        </button>
+                                    </footer>
+                                </article>
+                            </li>
+                        );
+                    })}
+                </ul>
             )}
 
-            {/* Assignment panel — a side drawer rather than a centered popup, so
-                the assignment list stays visible while a teacher writes. */}
             <Drawer
-                isOpen={showModal}
-                onClose={() => setShowModal(false)}
-                title={editing ? 'Edit Assignment' : 'New Assignment'}
+                isOpen={editorOpen}
+                onClose={() => { if (saving === 'idle') setEditorOpen(false); }}
+                title={editing ? 'Edit assignment' : 'New assignment'}
                 size="lg"
                 footer={
                     <>
-                        <button className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                            {uploading ? 'Uploading...' : saving ? 'Saving...' : editing ? 'Update' : 'Create'}
+                        <button type="button" className="btn-secondary" onClick={() => setEditorOpen(false)} disabled={saving !== 'idle'}>Cancel</button>
+                        <button type="button" className="btn-primary" onClick={() => void save()} disabled={!canSave}>
+                            {saving !== 'idle' && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                            {saving === 'uploading' ? 'Uploading…' : saving === 'saving' ? 'Saving…' : editing ? 'Save changes' : 'Set assignment'}
                         </button>
                     </>
                 }
             >
-                <div className="flex flex-col gap-4">
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Title *</label>
-                        <input type="text" value={formTitle} onChange={e => setFormTitle(e.target.value)} placeholder="Assignment title" className="input-field w-full" />
+                <div className="flex flex-col gap-5">
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <FormField label="Class" required htmlFor={`${id}-class`}>
+                            <SelectField id={`${id}-class`} value={draft.streamId} placeholder={streams.length ? 'Choose class' : 'No classes available'}
+                                options={streams.map(s => ({ id: s.id, label: s.full_name }))}
+                                onChange={v => setDraft(d => ({ ...d, streamId: v, subjectId: '' }))} />
+                        </FormField>
+                        <FormField label="Subject" required htmlFor={`${id}-subject`}>
+                            <SelectField id={`${id}-subject`} value={draft.subjectId} options={subjectOptions} disabled={!draft.streamId}
+                                placeholder={draft.streamId ? 'Choose subject' : 'Choose the class first'}
+                                onChange={v => setDraft(d => ({ ...d, subjectId: v }))} />
+                        </FormField>
                     </div>
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Subject *</label>
-                        <select value={formSubject} onChange={e => setFormSubject(e.target.value)} className="input-field w-full">
-                            <option value="">Select subject...</option>
-                            {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Stream (optional)</label>
-                        <select value={formStream} onChange={e => setFormStream(e.target.value)} className="input-field w-full">
-                            <option value="">All streams</option>
-                            {streams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Due Date *</label>
-                        <input type="date" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} className="input-field w-full" />
-                    </div>
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Description</label>
-                        <textarea value={formDesc} onChange={e => setFormDesc(e.target.value)} rows={8} placeholder="Assignment description..." className="input-field w-full resize-y" />
-                    </div>
-                    <div>
-                        <label className="mb-2 block text-xs font-semibold text-muted-foreground">Attachment (optional)</label>
-                        <input ref={fileInputRef} type="file" onChange={handleFilePick} className="hidden" />
-                        {formFile ? (
-                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
-                                <span className="flex min-w-0 items-center gap-2 truncate">
-                                    <Paperclip size={14} className="shrink-0 text-muted-foreground" />
-                                    <span className="truncate">{formFile.name}</span>
-                                </span>
-                                <button type="button" className="btn-icon shrink-0" onClick={() => { setFormFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} title="Remove">
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ) : formFileUrl ? (
-                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
-                                <a href={formFileUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 truncate text-primary hover:underline">
-                                    <Paperclip size={14} className="shrink-0" />
-                                    <span className="truncate">Current attachment</span>
-                                </a>
-                                <button type="button" className="btn-icon shrink-0" onClick={() => setFormFileUrl('')} title="Remove">
-                                    <X size={14} />
+                    <FormField label="Title" required htmlFor={`${id}-title`}>
+                        <InputField id={`${id}-title`} value={draft.title} maxLength={ASSIGNMENT_TITLE_MAX} placeholder="e.g. Fractions worksheet, questions 1–20"
+                            onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Due date" required htmlFor={`${id}-due`} hint={draft.dueDate ? dueLabel(draft.dueDate, today) : undefined}>
+                        <InputField id={`${id}-due`} type="date" className="sm:w-56" value={draft.dueDate} min={editing ? undefined : today}
+                            onChange={e => setDraft(d => ({ ...d, dueDate: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Instructions" htmlFor={`${id}-desc`} hint={`${draft.description.length}/${ASSIGNMENT_DESCRIPTION_MAX}`}>
+                        <TextareaField id={`${id}-desc`} rows={8} value={draft.description} maxLength={ASSIGNMENT_DESCRIPTION_MAX} placeholder="What learners should do, and how to hand it in."
+                            onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} />
+                    </FormField>
+                    <FormField label="Attachment" htmlFor={`${id}-file`} hint="A worksheet or notes: PDF, image or document, up to 10 MB.">
+                        <input ref={fileInput} id={`${id}-file`} type="file" className="sr-only" onChange={pickFile} />
+                        {file || draft.fileUrl ? (
+                            <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm">
+                                {file ? (
+                                    <span className="flex min-w-0 items-center gap-2"><Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden /><span className="truncate">{file.name}</span></span>
+                                ) : (
+                                    <a href={draft.fileUrl} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 text-primary hover:underline">
+                                        <Paperclip className="size-4 shrink-0" aria-hidden /><span className="truncate">Current attachment</span>
+                                    </a>
+                                )}
+                                <button type="button" className="btn-icon shrink-0" aria-label="Remove attachment" onClick={() => { setFile(null); setDraft(d => ({ ...d, fileUrl: '' })); }}>
+                                    <X className="size-4" />
                                 </button>
                             </div>
                         ) : (
-                            <button type="button" className="btn-secondary w-full justify-center" onClick={() => fileInputRef.current?.click()}>
-                                <Paperclip size={14} /> Attach a file
+                            <button type="button" className="btn-secondary w-full" onClick={() => fileInput.current?.click()}>
+                                <Paperclip className="size-4" aria-hidden /> Attach a file
                             </button>
                         )}
-                        <p className="mt-1 text-[11px] text-muted-foreground">PDF, image, or document, up to 10MB.</p>
-                    </div>
+                    </FormField>
                 </div>
             </Drawer>
 
-            {/* Submissions Modal */}
-            <Modal isOpen={showSubmissions} onClose={() => setShowSubmissions(false)} title="Assignment Submissions" size="xl">
-                {submissions.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground text-sm">No submissions yet.</div>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {submissions.map(sub => (
-                            <div key={sub.id} className="rounded-xl border border-border/70 bg-card/50 p-4">
-                                <div className="mb-2 flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="font-bold text-foreground text-sm">{sub.studentName || 'Unknown'}</div>
-                                        <div className="text-xs text-muted-foreground">{sub.admissionNumber || ''} &middot; {sub.assignmentTitle}</div>
-                                    </div>
-                                    <div className="shrink-0 text-[11px] text-muted-foreground">
-                                        {new Date(sub.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                    </div>
+            {reviewing && (
+                <SubmissionsDrawer
+                    assignment={reviewing}
+                    canGrade={canManage(reviewing)}
+                    onClose={() => setReviewing(null)}
+                    onGraded={() => void fetchAssignments()}
+                />
+            )}
+
+            <ConfirmDialog
+                isOpen={deleting !== null}
+                onClose={() => { if (!deletingBusy) setDeleting(null); }}
+                onConfirm={() => void confirmDelete()}
+                title="Delete assignment?"
+                message={deleting ? `“${deleting.title}” for ${deleting.stream ?? 'the whole school'} will be removed${deleting.submissionCount > 0 ? `, with the ${deleting.submissionCount} submission${deleting.submissionCount === 1 ? '' : 's'} handed in` : ''}.` : ''}
+                confirmText="Delete"
+                variant="danger"
+                loading={deletingBusy}
+            />
+        </div>
+    );
+}
+
+/** One assignment's submissions: ungraded first, each graded in place. */
+function SubmissionsDrawer({ assignment, canGrade, onClose, onGraded }: { assignment: Assignment; canGrade: boolean; onClose: () => void; onGraded: () => void }) {
+    const id = useId();
+    const [load, setLoad] = useState<Load<Submission[]>>({ status: 'loading' });
+    const [gradingId, setGradingId] = useState<string | null>(null);
+    const [grade, setGrade] = useState('');
+    const [feedback, setFeedback] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const fetchSubmissions = useCallback(async () => {
+        try {
+            const json = await getJson<{ data: Submission[] }>(`/api/school/submissions?assignment_id=${encodeURIComponent(assignment.id)}`, 'Could not load submissions.');
+            setLoad({ status: 'ready', data: [...json.data].sort((a, b) => Number(a.grade != null) - Number(b.grade != null)) });
+        } catch (err) {
+            setLoad({ status: 'error', message: err instanceof Error ? err.message : 'Could not load submissions.' });
+        }
+    }, [assignment.id]);
+
+    useEffect(() => { void fetchSubmissions(); }, [fetchSubmissions]);
+
+    const startGrading = (s: Submission) => {
+        setGradingId(s.id);
+        setGrade(s.grade != null ? String(s.grade) : '');
+        setFeedback(s.feedback ?? '');
+    };
+
+    const gradeNumber = grade.trim() === '' ? null : Number(grade);
+    const gradeInvalid = gradeNumber != null && (Number.isNaN(gradeNumber) || gradeNumber < 0 || gradeNumber > 100);
+
+    const saveGrade = async () => {
+        if (!gradingId || gradeInvalid) return;
+        setSaving(true);
+        try {
+            const res = await fetch(`/api/school/submissions/${gradingId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ grade: gradeNumber, feedback }),
+            });
+            const json: unknown = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save the grade.'));
+            toast.success('Grade saved.');
+            setGradingId(null);
+            await fetchSubmissions();
+            onGraded();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Could not save the grade.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const graded = load.status === 'ready' ? load.data.filter(s => s.grade != null).length : 0;
+    const total = load.status === 'ready' ? load.data.length : 0;
+
+    return (
+        <Drawer isOpen onClose={onClose} title={assignment.title} size="lg">
+            <p className="mb-4 text-sm text-muted-foreground">
+                {assignment.subject} · {assignment.stream ?? 'Whole school'} · {dueLabel(assignment.dueDate)}
+                {load.status === 'ready' && total > 0 && <> · <strong className="text-foreground">{graded} of {total}</strong> graded</>}
+            </p>
+            {!canGrade && <p className="mb-4 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">Only the teacher who set this assignment, or the admin, can grade it.</p>}
+
+            {load.status === 'loading' ? (
+                <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" aria-hidden /> Loading submissions…</p>
+            ) : load.status === 'error' ? (
+                <p className="py-10 text-center text-sm text-destructive">{load.message}</p>
+            ) : load.data.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">Nothing handed in yet.</p>
+            ) : (
+                <ul className="flex flex-col gap-3">
+                    {load.data.map(s => (
+                        <li key={s.id} className="rounded-xl border border-border/70 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold">{s.studentName ?? 'Unknown learner'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {s.admissionNumber ? `${s.admissionNumber} · ` : ''}
+                                        Handed in {new Date(s.submittedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                        {s.submittedAt.slice(0, 10) > assignment.dueDate && <span className="ml-1 font-semibold text-amber-600 dark:text-amber-400">· late</span>}
+                                    </p>
                                 </div>
-                                {sub.submissionText && (
-                                    <p className="mb-2 rounded-lg border border-border/70 bg-card p-2 text-sm text-foreground">{sub.submissionText}</p>
-                                )}
-                                {sub.fileUrl && (
-                                    <a href={sub.fileUrl} target="_blank" rel="noopener noreferrer" className="mb-2 inline-block text-xs text-primary">
-                                        View Attachment
-                                    </a>
-                                )}
-                                {sub.grade != null ? (
-                                    <div className="mt-2 rounded-lg px-3 py-2 text-sm" style={{ background: 'color-mix(in srgb, var(--viz-good) 10%, transparent)' }}>
-                                        <strong>Grade:</strong> {sub.grade}%{sub.feedback && <span> &middot; Feedback: {sub.feedback}</span>}
-                                    </div>
-                                ) : (
-                                    <div className="mt-2">
-                                        {gradingId === sub.id ? (
-                                            <div className="mt-2 flex flex-col gap-2">
-                                                <div className="flex flex-wrap gap-2">
-                                                    <input type="number" placeholder="Grade (%)" value={gradeVal}
-                                                        onChange={e => setGradeVal(e.target.value)}
-                                                        className="input-field w-28" />
-                                                    <input type="text" placeholder="Feedback" value={feedbackVal}
-                                                        onChange={e => setFeedbackVal(e.target.value)}
-                                                        className="input-field min-w-0 flex-1" />
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    <button className="btn-primary px-3 py-1.5" onClick={() => handleGrade(sub.id)}>Save</button>
-                                                    <button className="btn-secondary px-3 py-1.5" onClick={() => setGradingId(null)}>Cancel</button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <button className="btn-secondary px-3 py-1.5" onClick={() => { setGradingId(sub.id); setGradeVal(''); setFeedbackVal(''); }}>
-                                                Grade Submission
-                                            </button>
-                                        )}
-                                    </div>
+                                {s.grade != null && gradingId !== s.id && (
+                                    <span className="shrink-0 rounded-full bg-emerald-500/12 px-2.5 py-1 text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{s.grade}%</span>
                                 )}
                             </div>
-                        ))}
-                    </div>
-                )}
-            </Modal>
-        </div>
+                            {s.submissionText && <p className="mt-3 whitespace-pre-line rounded-lg bg-muted/40 p-3 text-sm">{s.submissionText}</p>}
+                            {s.fileUrl && (
+                                <a href={s.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-2 flex w-fit items-center gap-1 text-xs font-medium text-primary hover:underline">
+                                    <Paperclip className="size-3.5" aria-hidden /> Open their file
+                                </a>
+                            )}
+                            {s.feedback && gradingId !== s.id && <p className="mt-2 text-xs text-muted-foreground"><span className="font-semibold">Feedback:</span> {s.feedback}</p>}
+
+                            {canGrade && (gradingId === s.id ? (
+                                <div className="mt-3 grid gap-3 sm:grid-cols-[8rem_1fr]">
+                                    <FormField label="Grade (%)" htmlFor={`${id}-${s.id}-grade`} error={gradeInvalid ? '0 to 100' : undefined}>
+                                        <InputField id={`${id}-${s.id}-grade`} type="number" inputMode="decimal" min={0} max={100} value={grade} onChange={e => setGrade(e.target.value)} />
+                                    </FormField>
+                                    <FormField label="Feedback" htmlFor={`${id}-${s.id}-feedback`}>
+                                        <InputField id={`${id}-${s.id}-feedback`} value={feedback} maxLength={ASSIGNMENT_FEEDBACK_MAX} placeholder="Optional" onChange={e => setFeedback(e.target.value)} />
+                                    </FormField>
+                                    <div className="flex gap-2 sm:col-span-2">
+                                        <button type="button" className="btn-primary h-9 text-sm" onClick={() => void saveGrade()} disabled={saving || gradeInvalid}>
+                                            {saving && <Loader2 className="size-4 animate-spin" aria-hidden />}Save grade
+                                        </button>
+                                        <button type="button" className="btn-secondary h-9 text-sm" onClick={() => setGradingId(null)} disabled={saving}>Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button type="button" className="btn-secondary mt-3 h-8 text-xs" onClick={() => startGrading(s)}>
+                                    {s.grade != null ? 'Change grade' : 'Grade'}
+                                </button>
+                            ))}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Drawer>
     );
 }

@@ -9,6 +9,9 @@ interface FormattedTextareaProps {
     placeholder?: string;
     rows?: number;
     minHeight?: number;
+    /** For a `<label htmlFor>`. */
+    id?: string;
+    maxLength?: number;
 }
 
 function wrapSelection(textarea: HTMLTextAreaElement, value: string, onChange: (v: string) => void, marker: string) {
@@ -47,7 +50,7 @@ function toggleBulletLines(textarea: HTMLTextAreaElement, value: string, onChang
  * string safe to render back out (see renderFormattedText) without any
  * HTML-sanitization surface.
  */
-export function FormattedTextarea({ value, onChange, placeholder, rows = 14, minHeight = 320 }: FormattedTextareaProps) {
+export function FormattedTextarea({ value, onChange, placeholder, rows = 14, minHeight = 320, id, maxLength }: FormattedTextareaProps) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const apply = (fn: (ta: HTMLTextAreaElement) => void) => {
@@ -70,6 +73,8 @@ export function FormattedTextarea({ value, onChange, placeholder, rows = 14, min
             </div>
             <textarea
                 ref={textareaRef}
+                id={id}
+                maxLength={maxLength}
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder={placeholder}
