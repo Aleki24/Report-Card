@@ -6,6 +6,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
+import { getExamType } from '@/lib/exam-types';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -31,6 +32,33 @@ interface UnmarkedExamRow {
   level_code: string | null;
   unmarked_count: number | string;
 }
+
+/** Where the school is in its calendar, from its own terms. */
+export type TermSummary =
+  | { kind: 'in-term'; name: string; year: string | null; week: number; weeks: number; daysLeft: number; endDate: string }
+  | { kind: 'break'; lastName: string | null; nextName: string | null; nextStart: string | null }
+  | { kind: 'none' };
+
+type TermRow = { id: string; name: string; start_date: string | null; end_date: string | null; academic_year_id: string | null };
+
+const DAY = 86_400_000;
+const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
+
+function describeTerm(terms: readonly TermRow[], current: TermRow | null, yearName: string | null, today: string): TermSummary {
+  if (current?.start_date && current.end_date && current.start_date <= today && today <= current.end_date) {
+    const weeks = Math.max(1, Math.ceil((days(current.start_date, current.end_date) + 1) / 7));
+    const week = Math.min(weeks, Math.floor(days(current.start_date, today) / 7) + 1);
+    return { kind: 'in-term', name: current.name, year: yearName, week, weeks, daysLeft: days(today, current.end_date), endDate: current.end_date };
+  }
+  const dated = terms.filter(t => t.start_date && t.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
+  if (dated.length === 0) return { kind: 'none' };
+  const next = dated.find(t => t.start_date! > today) ?? null;
+  const last = [...dated].reverse().find(t => t.end_date! < today) ?? null;
+  return { kind: 'break', lastName: last?.name ?? null, nextName: next?.name ?? null, nextStart: next?.start_date ?? null };
+}
+
+/** An exam sitting coming up: one class's round, rather than one row per paper. */
+export interface UpcomingRound { key: string; label: string; className: string; firstDate: string; papers: number }
 
 export async function GET(_request: NextRequest) {
   try {
@@ -86,23 +114,28 @@ export async function GET(_request: NextRequest) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const [studentsRes, usersRes, teachersRes, streamsRes, reportsRes, currentYearRes, overdueFeesRes, announcementsRes, recentEnrollmentsRes, termsRes, schoolRes] = await Promise.all([
-      supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId),
+      // Learners on the roll: transferred and graduated ones are records, not a headcount.
+      supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId).eq('status', 'ACTIVE'),
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('report_cards').select('id, grade_streams!inner(school_id)', { count: 'exact', head: true }).eq('grade_streams.school_id', schoolId),
-      supabase.from('academic_years').select('id').eq('school_id', schoolId).order('start_date', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('academic_years').select('id, name').eq('school_id', schoolId).order('start_date', { ascending: false }),
       supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).not('status', 'eq', 'PAID').lt('due_date', today),
       supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).gte('created_at', sevenDaysAgo),
       supabase.from('students').select('id, date_enrolled, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId).gte('date_enrolled', sevenDaysAgo),
-      supabase.from('terms').select('id, name, start_date, end_date, is_current').eq('school_id', schoolId),
+      supabase.from('terms').select('id, name, start_date, end_date, is_current, academic_year_id').eq('school_id', schoolId),
       supabase.from('schools').select('logo_url, pass_mark').eq('id', schoolId).maybeSingle(),
       // Exams published by teachers and awaiting admin approval before report cards can be downloaded.
     ]);
 
-    const currentYear = currentYearRes?.data;
     const activeTermId = findActiveTermId(termsRes?.data || []);
     const currentTerm = (termsRes?.data || []).find(t => t.id === activeTermId) || null;
+    // The current term's year: the newest year row can be next year's, set
+    // up early, which emptied every figure below until it began.
+    const years = (currentYearRes?.data ?? []) as { id: string; name: string }[];
+    const currentYear = years.find(y => y.id === currentTerm?.academic_year_id) ?? years[0] ?? null;
+    const term = describeTerm(termsRes?.data ?? [], currentTerm, currentYear?.name ?? null, today);
     const totalStudents = studentsRes.count ?? 0;
     const totalUsers = usersRes.count ?? 0;
     const totalTeachers = teachersRes.data?.length ?? 0;
@@ -196,6 +229,7 @@ export async function GET(_request: NextRequest) {
     const subjectsWithoutGradingSystem = ungradedSubjectsRes.count ?? 0;
 
     let upcomingExams: any[] = [];
+    let upcomingRounds: UpcomingRound[] = [];
     if (currentYear) {
       const { data: exams } = await supabase
         .from('exams')
@@ -206,9 +240,10 @@ export async function GET(_request: NextRequest) {
         `)
         .eq('school_id', schoolId)
         .eq('academic_year_id', currentYear.id)
-        .gte('exam_date', new Date().toISOString().split('T')[0])
+        .gte('exam_date', today)
+        .lte('exam_date', new Date(Date.parse(today) + 21 * DAY).toISOString().slice(0, 10))
         .order('exam_date', { ascending: true })
-        .limit(5);
+        .limit(500);
 
       if (exams) {
         upcomingExams = exams.map((e: any) => ({
@@ -219,7 +254,33 @@ export async function GET(_request: NextRequest) {
           subject_name: e.subjects?.name || 'N/A',
           grade_name: e.grades?.name_display || 'N/A',
         }));
+        // One line per class sitting, not one per paper: a round of nine
+        // subjects read as nine separate "upcoming exams".
+        const rounds = new Map<string, UpcomingRound>();
+        for (const e of upcomingExams) {
+          const key = `${e.exam_type}|${e.grade_name}`;
+          const round = rounds.get(key);
+          if (round) round.papers += 1;
+          else rounds.set(key, { key, label: getExamType(e.exam_type)?.shortName ?? e.exam_type, className: e.grade_name, firstDate: e.exam_date, papers: 1 });
+        }
+        upcomingRounds = [...rounds.values()].slice(0, 6);
+        upcomingExams = upcomingExams.slice(0, 5);
       }
+    }
+
+    // Results entered this term but not yet released to parents and the
+    // report cards: the one step only the school can take.
+    let unreleasedResults = 0;
+    if (currentTerm && role === 'ADMIN') {
+      const { data: drafts } = await supabase
+        .from('exams')
+        .select('id, exam_marks(count)')
+        .eq('school_id', schoolId)
+        .eq('term_id', currentTerm.id)
+        .neq('status', 'APPROVED')
+        .limit(1000);
+      unreleasedResults = ((drafts ?? []) as { exam_marks: { count: number }[] | null }[])
+        .filter(d => (d.exam_marks?.[0]?.count ?? 0) > 0).length;
     }
 
     const activities: {
@@ -360,6 +421,9 @@ export async function GET(_request: NextRequest) {
       classPerformance,
       subjectsWithoutGradingSystem,
       hasFeeData: seesFees && hasFeeData,
+      term,
+      upcomingRounds,
+      unreleasedResults,
       hasAttendanceData,
       hasLogo,
       setup,
