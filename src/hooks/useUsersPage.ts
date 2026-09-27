@@ -262,7 +262,7 @@ export function useUsersPage() {
   }, [users]);
 
   const { roleCounts, inactiveCount } = useMemo(() => {
-    const counts: RoleCounts = { ALL: users.length, ADMIN: 0, TEACHER: 0, STAFF: 0, STUDENT: 0 };
+    const counts: RoleCounts = { ALL: users.length, ADMIN: 0, TEACHER: 0, STAFF: 0, STUDENT: 0, PARENT: 0 };
     let inactive = 0;
     for (const u of users) {
       const group = roleGroupOf(u.role);

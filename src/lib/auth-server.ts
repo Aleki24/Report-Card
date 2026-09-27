@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from './supabase-admin';
 import type { UserRole } from '@/types';
+import type { Permission } from '@/lib/platform/permissions';
 
 export interface ServerSession {
   userId: string;
@@ -172,13 +173,14 @@ export async function canViewStudentRecords(caller: Caller, studentId: string): 
 }
 
 /**
- * Fee records are the bursar's: the admin (principal or bursar) sees every
- * learner's, a learner sees their own, and teachers see none. Class teachers
- * could once read, bill and take payments for their class.
+ * Fee records are the bursar's: whoever holds `fees.view` (the admin, or
+ * staff with a finance duty) sees every learner's, a learner sees their own,
+ * and teachers see none. Callers must already have checked the fee belongs to
+ * their school.
  */
-export async function canViewStudentFees(caller: Caller, studentId: string): Promise<boolean> {
+export async function canViewStudentFees(caller: Caller & { can: (p: Permission) => boolean }, studentId: string): Promise<boolean> {
   if (caller.role === 'STUDENT') return caller.userId === studentId;
-  return caller.role === 'ADMIN' && canManageStudent(caller, studentId);
+  return caller.can('fees.view');
 }
 
 /** JSON error response for a caller who is signed out, inactive or not allowed. */

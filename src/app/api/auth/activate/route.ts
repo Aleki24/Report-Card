@@ -5,6 +5,7 @@ import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { createSignInTicket } from '@/lib/sign-in-ticket';
+import { moveUserLinks } from '@/lib/platform/user-links';
 
 type ClerkClient = ReturnType<typeof createClerkClient>;
 
@@ -216,6 +217,7 @@ export async function POST(request: NextRequest) {
                 // user before removing the new row (the FK cascades).
                 await supabaseAdmin.from('class_teachers').update({ user_id: oldUserId }).eq('user_id', clerkUserId);
                 await supabaseAdmin.from('subject_teachers').update({ user_id: oldUserId }).eq('user_id', clerkUserId);
+                await moveUserLinks(clerkUserId, oldUserId);
                 await supabaseAdmin.from('users').delete().eq('id', clerkUserId);
             }
             await supabaseAdmin.from('users').update({ email: user.email, username: user.username }).eq('id', oldUserId);
@@ -277,6 +279,14 @@ export async function POST(request: NextRequest) {
                 await rollback('linked');
                 return NextResponse.json({ error: 'Failed to link your teaching assignments. Please contact your school admin.' }, { status: 500 });
             }
+        }
+
+        // Duties, parent links and driver links given before activation.
+        const linkErr = await moveUserLinks(oldUserId, clerkUserId);
+        if (linkErr) {
+            console.error('[activate] user link swap failed', { oldUserId, clerkUserId, linkErr });
+            await rollback('linked');
+            return NextResponse.json({ error: 'Failed to link your school records. Please contact your school admin.' }, { status: 500 });
         }
 
         // Everything is linked — only now burn the invite code and drop the

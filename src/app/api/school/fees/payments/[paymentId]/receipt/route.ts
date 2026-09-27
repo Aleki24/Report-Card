@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { canViewStudentFees, getCaller } from '@/lib/auth-server';
+import { canViewStudentFees } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { generateFeeReceiptPDF } from '@/lib/pdf/feeReceiptServer';
 
@@ -8,7 +9,7 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
     try {
-        const caller = await getCaller();
+        const caller = await getAccess();
         if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();

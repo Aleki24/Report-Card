@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { accessOrResponse } from '@/lib/platform/access';
 
 /**
  * Void a payment. Financial ledger entries are never hard-deleted — voiding
@@ -14,15 +13,9 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string; paymentId: string }> }
 ) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+        const caller = await accessOrResponse('fees.manage');
+        if (caller instanceof NextResponse) return caller;
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        if (!userProfile || userProfile.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only an admin can void a payment' }, { status: 403 });
-        }
 
         const { id, paymentId } = await params;
 
@@ -32,7 +25,7 @@ export async function DELETE(
             .eq('id', paymentId)
             .maybeSingle();
 
-        if (!payment || payment.school_id !== userProfile.school_id || payment.student_fee_id !== id) {
+        if (!payment || payment.school_id !== caller.schoolId || payment.student_fee_id !== id) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
         if (payment.status === 'CANCELLED') {

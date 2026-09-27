@@ -16,7 +16,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     const router = useRouter();
     const pathname = usePathname();
     const [collapsed, setCollapsedState] = useState(true);
-    const { profile, role, schoolOnboardingCompleted, loading } = useAuth();
+    const { profile, role, schoolOnboardingCompleted, loading, can, hasModule } = useAuth();
 
     useEffect(() => {
         // localStorage is client-only, so the persisted value can't seed
@@ -37,7 +37,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     // Pages are only ever linked for the roles that can use them, but a typed
     // URL, bookmark or stale link could still open, say, Fees as a student and
     // show a page whose every request is refused. Send such visits home.
-    const isForbiddenPath = !loading && !!role && !needsSchoolSetup && !canAccessPath(pathname, role);
+    const isForbiddenPath = !loading && !!role && !needsSchoolSetup && !canAccessPath(pathname, { role, can, hasModule });
 
     React.useEffect(() => {
         if (!loading && needsSchoolSetup && pathname !== '/dashboard/onboarding') {

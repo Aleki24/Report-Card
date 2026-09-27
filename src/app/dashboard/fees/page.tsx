@@ -203,10 +203,12 @@ export default function FeesPage() {
 }
 
 function FeesPageInner() {
-    const { role } = useAuth();
+    const { can } = useAuth();
     // Deleting a record and voiding receipts are admin-only on the server.
-    const isAdmin = role === 'ADMIN';
-    const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || isAdmin), [isAdmin]);
+    // The admin, or staff with a finance duty (bursar, accountant).
+    const canViewAll = can('fees.view');
+    const canManageFees = can('fees.manage');
+    const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || canViewAll), [canViewAll]);
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -278,14 +280,14 @@ function FeesPageInner() {
     const [plDateTo, setPlDateTo] = useState('');
 
     useEffect(() => {
-        if (!isAdmin) return;
+        if (!canViewAll) return;
         const controller = new AbortController();
         fetch('/api/school/fees/unmatched', { cache: 'no-store', signal: controller.signal })
             .then(r => (r.ok ? r.json() : null))
             .then((j: { data?: unknown[] } | null) => setUnmatchedCount(j?.data?.length ?? 0))
             .catch(() => {});
         return () => controller.abort();
-    }, [isAdmin]);
+    }, [canViewAll]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => setPlSearchQuery(plSearch.trim()), 300);
@@ -1240,7 +1242,7 @@ function FeesPageInner() {
                                     <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment history" aria-label={`Payment history for ${fee.studentName ?? 'student'}`}><History size={14} /></button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>
-                                    {isAdmin && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
+                                    {canManageFees && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
                                 </span>
                             )}
                             emptyState={<p className="text-sm">No matching records found for the current filters.</p>}
@@ -1441,7 +1443,7 @@ function FeesPageInner() {
                                                                       >
                                                                           <Receipt size={14} />
                                                                       </a>
-                                                                      {isAdmin && (
+                                                                      {canManageFees && (
                                                                           <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
                                                                               <Ban size={14} />
                                                                           </button>
