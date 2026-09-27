@@ -9,20 +9,7 @@ import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { date as fmtDate, personName, today } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
-import type { TimetableLesson } from '@/lib/timetable/config';
-
-interface Candidate { id: string; name: string; sameSubject: boolean; weeklyLessons: number }
-interface Need { lesson: TimetableLesson; candidates: Candidate[]; coveredBy: string | null }
-
-interface CoverRow {
-    id: string;
-    cover_date: string;
-    reason: string | null;
-    lesson: { day: number; period: number; stream: { full_name: string } | null; subject: { name: string } | null } | null;
-    cover: PersonName | null;
-    absent: PersonName | null;
-}
+import type { CoverNeed as Need, CoverRow } from '@/lib/ops/forms/academics';
 
 /** Arrange cover for an absent teacher: free colleagues ranked by subject match and load. */
 export function CoverPanel() {

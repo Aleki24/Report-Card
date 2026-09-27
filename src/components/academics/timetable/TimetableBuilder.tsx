@@ -6,13 +6,12 @@ import { AlertTriangle, CheckCircle2, Lock, Sparkles, Trash2, Unlock, Upload } f
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { FormField, InputField, SelectField } from '@/components/ui/FormField';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime } from '@/lib/ops/format';
 import type { TimetableConfig, TimetableLesson, TimetableVersion } from '@/lib/timetable/config';
+import { PUBLISH_TIMETABLE_WARNING, VERSION_TONES as STATUS_TONES, lessonClasses, newDraftName } from '@/lib/ops/forms/academics';
 import { TimetableGrid } from './TimetableGrid';
-
-const STATUS_TONES: Record<TimetableVersion['status'], PillTone> = { DRAFT: 'neutral', PUBLISHED: 'good', ARCHIVED: 'warn' };
 
 /**
  * Generate drafts, inspect and adjust them class by class (click a lesson,
@@ -52,11 +51,7 @@ export function TimetableBuilder() {
     useEffect(() => { void loadActive(activeId); }, [activeId, loadActive]);
 
     const active = versions.find(v => v.id === activeId) ?? null;
-    const streams = useMemo(() => {
-        const seen = new Map<string, string>();
-        lessons.forEach(l => seen.set(l.grade_stream_id, l.stream?.full_name ?? ''));
-        return [...seen.entries()].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
-    }, [lessons]);
+    const streams = useMemo(() => lessonClasses(lessons), [lessons]);
     const shownStream = streamId || streams[0]?.id || '';
     const classLessons = lessons.filter(l => l.grade_stream_id === shownStream);
 
@@ -65,7 +60,7 @@ export function TimetableBuilder() {
         try {
             const v = await opsFetch<TimetableVersion>('/api/academics/timetable/generate', {
                 method: 'POST',
-                json: { name: name.trim() || `Draft ${new Date().toLocaleDateString('en-KE')}`, ...(activeId ? { keep_locked_from: activeId } : {}) },
+                json: { name: newDraftName(name), ...(activeId ? { keep_locked_from: activeId } : {}) },
             });
             toast.success('Draft generated.');
             setName('');
@@ -185,7 +180,7 @@ export function TimetableBuilder() {
                 onClose={() => setConfirm(null)}
                 onConfirm={() => void (confirm === 'publish' ? setStatus('PUBLISHED') : remove())}
                 title={confirm === 'publish' ? 'Publish this timetable?' : 'Delete this draft?'}
-                message={confirm === 'publish' ? 'It replaces the timetable teachers and learners see now; the current one is archived.' : 'The draft and its lessons are removed.'}
+                message={confirm === 'publish' ? PUBLISH_TIMETABLE_WARNING : 'The draft and its lessons are removed.'}
                 confirmText={confirm === 'publish' ? 'Publish' : 'Delete'}
                 variant={confirm === 'delete' ? 'danger' : 'default'}
             />

@@ -8,48 +8,17 @@ import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
 import { StatusPill } from '@/components/ops/StatusPill';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
-import { SchemeEditor, SCHEME_TONES } from '@/components/academics/SchemeEditor';
+import { SchemeEditor } from '@/components/academics/SchemeEditor';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { date, personName, today } from '@/lib/ops/format';
 import type { PersonName } from '@/lib/ops/resource';
-import type { SchemeStatus } from '@/lib/academics/schemes-server';
+import {
+    PLAN_FIELDS, RECORDS_TIP, RECORD_FIELDS, SCHEME_FIELDS, SCHEME_TONES, coveragePercent, coverageTone,
+    type Coverage, type LessonPlan as Plan, type Scheme, type WorkRecord,
+} from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
 
-interface Scheme { id: string; title: string; status: SchemeStatus; teacher_id: string; subject: { name: string } | null; stream: { full_name: string } | null; teacher: PersonName | null; term: { name: string } | null }
-interface Plan { id: string; topic: string; lesson_date: string; teacher_id: string; subject: { name: string } | null; stream: { full_name: string } | null; teacher: PersonName | null }
-interface WorkRecord { id: string; work_covered: string; lesson_date: string; teacher_id: string; remarks: string | null; subject: { name: string } | null; stream: { full_name: string } | null; teacher: PersonName | null }
-interface Coverage { schemeId: string; title: string; status: string; teacher: string; subject: string; className: string; planned: number; covered: number; lastTaught: string | null }
-
-const CLASS_SUBJECT = [
-    { name: 'grade_stream_id', label: 'Class', kind: 'lookup', lookup: 'streams', required: true },
-    { name: 'subject_id', label: 'Subject', kind: 'lookup', lookup: 'subjects', required: true },
-] as const;
-
-const SCHEME_FIELDS: readonly FieldDef<FieldName<'schemes'>>[] = [
-    { name: 'title', label: 'Title', kind: 'text', required: true, span: 'full', placeholder: 'e.g. Form 3 Chemistry — Term 2' },
-    ...CLASS_SUBJECT,
-    { name: 'term_id', label: 'Term', kind: 'lookup', lookup: 'terms' },
-];
-
-const PLAN_FIELDS: readonly FieldDef<FieldName<'lesson-plans'>>[] = [
-    ...CLASS_SUBJECT,
-    { name: 'lesson_date', label: 'Lesson date', kind: 'date', required: true },
-    { name: 'topic', label: 'Topic / sub-strand', kind: 'text', required: true },
-    { name: 'objectives', label: 'Specific objectives', kind: 'textarea' },
-    { name: 'introduction', label: 'Introduction', kind: 'textarea' },
-    { name: 'development', label: 'Lesson development', kind: 'textarea' },
-    { name: 'conclusion', label: 'Conclusion', kind: 'textarea' },
-    { name: 'resources', label: 'Resources', kind: 'textarea' },
-    { name: 'reflection', label: 'Self-evaluation', kind: 'textarea', hint: 'After the lesson: what worked, what to change.' },
-];
-
-const RECORD_FIELDS: readonly FieldDef<FieldName<'records-of-work'>>[] = [
-    ...CLASS_SUBJECT,
-    { name: 'lesson_date', label: 'Date taught', kind: 'date', required: true },
-    { name: 'work_covered', label: 'Work covered', kind: 'textarea', required: true },
-    { name: 'remarks', label: 'Remarks', kind: 'textarea' },
-];
+const COVERAGE_BAR = { good: 'bg-emerald-500', warn: 'bg-amber-500', bad: 'bg-rose-500' } as const;
 
 function CoverageTable() {
     const [rows, setRows] = useState<Coverage[] | null>(null);
@@ -65,11 +34,12 @@ function CoverageTable() {
                 { key: 'teacher', header: 'Teacher', hideOnMobile: true, render: r => r.teacher },
                 {
                     key: 'progress', header: 'Coverage', render: r => {
-                        const pct = r.planned ? Math.round((r.covered / r.planned) * 100) : 0;
+                        const pct = coveragePercent(r);
+                        const tone = coverageTone(pct);
                         return (
                             <span className="flex items-center gap-2">
                                 <span className="h-2 w-24 overflow-hidden rounded-full bg-muted" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Syllabus covered">
-                                    <span className={cn('block h-full rounded-full', pct >= 75 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-rose-500')} style={{ width: `${pct}%` }} />
+                                    <span className={cn('block h-full rounded-full', COVERAGE_BAR[tone as keyof typeof COVERAGE_BAR])} style={{ width: `${pct}%` }} />
                                 </span>
                                 <span className="text-xs tabular-nums">{r.covered}/{r.planned} · {pct}%</span>
                             </span>
@@ -156,7 +126,7 @@ export default function LessonRecordsPage() {
                                 canDelete={mine}
                                 defaults={{ lesson_date: today() }}
                                 searchText={r => `${r.work_covered} ${r.subject?.name} ${r.stream?.full_name}`}
-                                header={() => <p className="text-sm text-muted-foreground">Tip: tick lessons as taught inside a scheme of work and they are recorded here and count towards coverage.</p>}
+                                header={() => <p className="text-sm text-muted-foreground">{RECORDS_TIP}</p>}
                                 columns={[
                                     { key: 'work', header: 'Work covered', render: r => <span className="line-clamp-2">{r.work_covered}</span> },
                                     { key: 'class', header: 'Class & subject', hideOnMobile: true, render: r => `${r.stream?.full_name ?? ''} · ${r.subject?.name ?? ''}` },

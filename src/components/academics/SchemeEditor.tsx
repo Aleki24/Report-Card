@@ -6,28 +6,16 @@ import { CheckCircle2, ChevronDown, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { FormField, InputField, TextareaField } from '@/components/ui/FormField';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
-import { personName, today } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
-import type { SchemeEntryInput } from '@/lib/academics/scheme-draft';
-import type { SchemeStatus } from '@/lib/academics/schemes-server';
+import { personName } from '@/lib/ops/format';
+import {
+    SCHEME_ACTION_DONE, SCHEME_DETAIL_FIELDS as DETAIL_FIELDS, SCHEME_TONES, nextSchemeEntry, schemeActions, schemeEntriesPayload, taughtRecord,
+    type SchemeAction, type SchemeDetail, type SchemeEntry as Entry,
+} from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
 
-export const SCHEME_TONES: Record<SchemeStatus, PillTone> = { DRAFT: 'neutral', SUBMITTED: 'info', APPROVED: 'good', RETURNED: 'warn' };
-
-interface Entry extends SchemeEntryInput { id?: string }
-interface SchemeDetail {
-    id: string; title: string; status: SchemeStatus; teacher_id: string; subject_id: string; grade_stream_id: string;
-    review_comment: string | null; editable: boolean;
-    subject: { name: string } | null; stream: { full_name: string } | null;
-    teacher: PersonName | null; reviewer: PersonName | null;
-    entries: (Entry & { id: string })[];
-    covered: string[];
-}
-
-const blank = (week: number, lesson: number): Entry => ({ week, lesson, topic: '', sub_topic: null, objectives: null, activities: null, resources: null, assessment: null });
-const DETAIL_FIELDS = [['objectives', 'Objectives'], ['activities', 'Learning activities'], ['resources', 'Resources'], ['assessment', 'Assessment']] as const;
+export { SCHEME_TONES };
 
 interface Props { schemeId: string; canReview: boolean; userId: string; onClose: () => void; onChanged: () => void }
 
@@ -54,13 +42,9 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
     const edit = (i: number, patch: Partial<Entry>) => { setEntries(es => es.map((e, j) => (j === i ? { ...e, ...patch } : e))); setDirty(true); };
 
     const save = async () => {
-        const rows = entries.filter(e => e.topic.trim());
         setBusy(true);
         try {
-            await opsFetch(`/api/academics/schemes/${schemeId}/entries`, {
-                method: 'PUT',
-                json: { entries: rows.map(e => ({ week: Number(e.week), lesson: Number(e.lesson), topic: e.topic, sub_topic: e.sub_topic, objectives: e.objectives, activities: e.activities, resources: e.resources, assessment: e.assessment })) },
-            });
+            await opsFetch(`/api/academics/schemes/${schemeId}/entries`, { method: 'PUT', json: { entries: schemeEntriesPayload(entries) } });
             toast.success('Scheme saved.');
             await load();
             onChanged();
@@ -81,11 +65,11 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
         finally { setBusy(false); }
     };
 
-    const transition = async (action: 'SUBMIT' | 'APPROVE' | 'RETURN') => {
+    const transition = async (action: SchemeAction) => {
         setBusy(true);
         try {
             await opsFetch(`/api/academics/schemes/${schemeId}/transition`, { method: 'POST', json: { action, comment: comment || undefined } });
-            toast.success(action === 'SUBMIT' ? 'Submitted for review.' : action === 'APPROVE' ? 'Approved.' : 'Returned to the teacher.');
+            toast.success(SCHEME_ACTION_DONE[action]);
             setComment('');
             await load();
             onChanged();
@@ -96,10 +80,7 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
     const markTaught = async (e: Entry & { id: string }) => {
         if (!scheme) return;
         try {
-            await opsFetch('/api/ops/records-of-work', {
-                method: 'POST',
-                json: { scheme_entry_id: e.id, subject_id: scheme.subject_id, grade_stream_id: scheme.grade_stream_id, lesson_date: today(), work_covered: [e.topic, e.sub_topic].filter(Boolean).join(': ') },
-            });
+            await opsFetch('/api/ops/records-of-work', { method: 'POST', json: taughtRecord(scheme, e) });
             toast.success('Recorded as taught.');
             await load();
             onChanged();
@@ -175,22 +156,23 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
                     </ol>
                     {scheme.editable && (
                         <Button variant="outline" size="sm" className="self-start" onClick={() => {
-                            const last = entries.at(-1);
-                            setEntries(es => [...es, blank(last?.week ?? 1, (last?.lesson ?? 0) + 1)]);
+                            setEntries(es => [...es, nextSchemeEntry(es)]);
                             setOpen(entries.length);
                             setDirty(true);
                         }}><Plus />Add lesson</Button>
                     )}
 
-                    {(isOwner && (scheme.status === 'DRAFT' || scheme.status === 'RETURNED')) || (canReview && (scheme.status === 'SUBMITTED' || scheme.status === 'APPROVED')) ? (
+                    {schemeActions(scheme, { owner: isOwner, reviewer: canReview }).length > 0 ? (
                         <section className="flex flex-col gap-3 border-t border-border/60 pt-4">
                             {canReview && scheme.status !== 'DRAFT' && scheme.status !== 'RETURNED' && (
                                 <FormField label="Review comment" htmlFor="scheme-comment"><TextareaField id="scheme-comment" value={comment} onChange={e => setComment(e.target.value)} rows={2} /></FormField>
                             )}
                             <div className="flex flex-wrap gap-2">
-                                {isOwner && (scheme.status === 'DRAFT' || scheme.status === 'RETURNED') && <Button onClick={() => void transition('SUBMIT')} disabled={busy || dirty}>Submit for review</Button>}
-                                {canReview && scheme.status === 'SUBMITTED' && <Button onClick={() => void transition('APPROVE')} disabled={busy}>Approve</Button>}
-                                {canReview && (scheme.status === 'SUBMITTED' || scheme.status === 'APPROVED') && <Button variant="destructive" onClick={() => void transition('RETURN')} disabled={busy}>Return</Button>}
+                                {schemeActions(scheme, { owner: isOwner, reviewer: canReview }).map(a => (
+                                    <Button key={a} variant={a === 'RETURN' ? 'destructive' : 'default'} onClick={() => void transition(a)} disabled={busy || (a === 'SUBMIT' && dirty)}>
+                                        {a === 'SUBMIT' ? 'Submit for review' : a === 'APPROVE' ? 'Approve' : 'Return'}
+                                    </Button>
+                                ))}
                             </div>
                             {dirty && <p className="text-xs text-muted-foreground">Save your changes before submitting.</p>}
                         </section>

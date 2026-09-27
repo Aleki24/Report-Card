@@ -14,14 +14,14 @@ import { ModulePage, type ModuleTab } from '@/components/ops/ModulePage';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { StatusPill } from '@/components/ops/StatusPill';
 import { ExamPaperDrawer } from '@/components/academics/ExamPaperDrawer';
-import { PAPER_STATUS_TONES, PRINT_STATUS_TONES, type ExamPaper } from '@/components/academics/examPaperTypes';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime, personName } from '@/lib/ops/format';
 import type { PaperStatus } from '@/lib/academics/exam-papers';
+import {
+    EMPTY_PAPER_FORM, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint, type ExamPaper,
+} from '@/lib/ops/forms/academics';
 
 type TabId = 'mine' | 'moderation' | 'print' | 'archive';
-
-const EMPTY_FORM = { title: '', subject_id: '', grade_id: '', term_id: '', exam_id: '', paper_label: '', copies_needed: '', release_at: '' };
 
 export default function ExamPapersPage() {
     const { can, profile } = useAuth();
@@ -29,7 +29,7 @@ export default function ExamPapersPage() {
     const [loading, setLoading] = useState(true);
     const [openId, setOpenId] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [form, setForm] = useState(EMPTY_FORM);
+    const [form, setForm] = useState(EMPTY_PAPER_FORM);
     const [files, setFiles] = useState<{ paper: File | null; scheme: File | null }>({ paper: null, scheme: null });
     const [saving, setSaving] = useState(false);
     const [query, setQuery] = useState('');
@@ -47,7 +47,7 @@ export default function ExamPapersPage() {
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        return q ? papers.filter(p => `${p.title} ${p.subject?.name ?? ''} ${personName(p.uploader)}`.toLowerCase().includes(q)) : papers;
+        return q ? papers.filter(p => paperSearchText(p).toLowerCase().includes(q)) : papers;
     }, [papers, query]);
     const byStatus = (...statuses: PaperStatus[]) => filtered.filter(p => statuses.includes(p.status));
 
@@ -67,10 +67,7 @@ export default function ExamPapersPage() {
     const submitUpload = async () => {
         if (!form.title.trim() || !form.subject_id || !files.paper) { toast.error('Add a title, subject and the paper file.'); return; }
         const body = new FormData();
-        Object.entries(form).forEach(([k, v]) => {
-            if (!v) return;
-            body.append(k, k === 'release_at' ? new Date(v).toISOString() : v);
-        });
+        Object.entries(paperFormFields(form)).forEach(([k, v]) => body.append(k, v));
         body.append('paper', files.paper);
         if (files.scheme) body.append('scheme', files.scheme);
         setSaving(true);
@@ -78,7 +75,7 @@ export default function ExamPapersPage() {
             await opsFetch('/api/academics/exam-papers', { method: 'POST', body });
             toast.success('Paper uploaded as a draft. Submit it when ready.');
             setUploading(false);
-            setForm(EMPTY_FORM);
+            setForm(EMPTY_PAPER_FORM);
             setFiles({ paper: null, scheme: null });
             await load();
         } catch (err) { toast.error(errorText(err)); }
@@ -86,7 +83,7 @@ export default function ExamPapersPage() {
     };
 
     const waiting = papers.filter(p => p.status === 'SUBMITTED').length;
-    const toPrint = papers.filter(p => (p.status === 'APPROVED' || p.status === 'LOCKED') && p.print_status !== 'PACKED').length;
+    const toPrint = papersToPrint(papers);
 
     const tabs: ModuleTab<TabId>[] = [
         {
