@@ -57,6 +57,7 @@ import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
 import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
 import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
+import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
 import { homePathForRole } from '@/lib/roles';
 
 // ── Admin Dashboard ──────────────────────────────────────────
@@ -559,6 +560,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">
+      <OperationsOverview className="mb-6 px-1 pt-2 sm:px-2" />
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <TeacherDashboard variant="class" />}
       {role === 'SUBJECT_TEACHER' && <TeacherDashboard variant="subject" />}
@@ -568,7 +570,7 @@ export default function DashboardPage() {
             <div className="pointer-events-none absolute -right-10 -top-14 h-44 w-44 rounded-full bg-white/10" aria-hidden />
             <p className="relative text-xs font-medium text-white/75 sm:text-sm">{profile?.job_title || 'Staff'}</p>
             <h1 className="relative mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">Welcome{userName ? `, ${userName}` : ''}</h1>
-            <p className="relative mt-1.5 max-w-lg text-sm text-white/85">Keep up with school news here. Your administrator can give you more access when you need it.</p>
+            <p className="relative mt-1.5 max-w-lg text-sm text-white/85">Keep up with school news here. Your duties (bursar, nurse, matron, driver…) add their pages to your menu.</p>
           </section>
           <Link href="/dashboard/announcements" className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-5 no-underline shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bell size={20} aria-hidden /></span>

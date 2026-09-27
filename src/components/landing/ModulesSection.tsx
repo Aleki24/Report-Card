@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
-import { comingSoonModules } from '@/lib/modules';
+import { OPTIONAL_MODULES } from './optionalModules';
 import { Section, SectionHeader } from './ui/Section';
 import { LIVE_MODULES, ModuleGrid } from './ui/ModuleGrid';
 
@@ -18,9 +18,9 @@ export default function ModulesSection() {
 
       <div className="mt-10 flex flex-col items-center gap-6 md:mt-14">
         <p className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">Coming next:</span>
-          {comingSoonModules.map((mod) => (
-            <span key={mod.slug} className="rounded-full border border-dashed border-border px-3 py-1 text-xs">
+          <span className="font-semibold text-foreground">Switch on what you need:</span>
+          {OPTIONAL_MODULES.map((mod) => (
+            <span key={mod.key} className="rounded-full border border-border px-3 py-1 text-xs">
               {mod.title}
             </span>
           ))}
