@@ -81,3 +81,36 @@ export function dueLabel(dueDate: string, today = localToday()): string {
     if (state === 'overdue') return `Was due ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
     return `Due ${date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`;
 }
+
+/** The learner's own hand-in for an assignment. */
+export interface MySubmission {
+    submittedAt: string;
+    grade: number | null;
+    feedback: string | null;
+    gradedAt: string | null;
+}
+
+/** An assignment as a learner sees it: the teacher's brief and their own hand-in, if any. */
+export interface StudentAssignment {
+    id: string;
+    title: string;
+    description: string | null;
+    /** YYYY-MM-DD */
+    dueDate: string;
+    fileUrl: string | null;
+    subjectId: string | null;
+    subjectName: string;
+    submission: MySubmission | null;
+}
+
+/** How far back a learner still sees past work, so late hand-ins and grades stay visible. */
+export const STUDENT_ASSIGNMENT_LOOKBACK_DAYS = 21;
+
+export const submitAssignmentSchema = z.object({
+    assignment_id: z.string().uuid('Choose an assignment.'),
+    submission_text: z.string().trim().max(ASSIGNMENT_DESCRIPTION_MAX, `Keep your answer under ${ASSIGNMENT_DESCRIPTION_MAX} characters.`).nullish().transform(v => v || null),
+    file_url: z.string().url('The file link is not valid.').nullish().transform(v => v || null),
+}).refine(v => v.submission_text || v.file_url, { message: 'Type an answer or attach a file.' });
+
+/** The largest file a teacher can attach or a learner can hand in (the upload route's limit). */
+export const ASSIGNMENT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;

@@ -394,7 +394,7 @@ export interface StudentTermTrend {
     yearName: string;
     startDate: string | null;
     overallAverage: number;
-    subjects: { name: string; average: number }[];
+    subjects: { id: string; name: string; average: number }[];
 }
 
 export interface StudentDashboardSummary {

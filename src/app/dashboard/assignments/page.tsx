@@ -14,7 +14,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { cn } from '@/lib/utils';
 import {
-    ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_FEEDBACK_MAX, ASSIGNMENT_TITLE_MAX, dueLabel, dueState, localToday,
+    ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_UPLOAD_MAX_BYTES, ASSIGNMENT_FEEDBACK_MAX, ASSIGNMENT_TITLE_MAX, dueLabel, dueState, localToday,
     type Assignment, type DueState, type Submission,
 } from '@/lib/assignments';
 
@@ -27,7 +27,7 @@ type Load<T> = { status: 'loading' } | { status: 'error'; message: string } | { 
 interface Draft { title: string; streamId: string; subjectId: string; dueDate: string; description: string; fileUrl: string }
 const EMPTY_DRAFT: Draft = { title: '', streamId: '', subjectId: '', dueDate: '', description: '', fileUrl: '' };
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = ASSIGNMENT_UPLOAD_MAX_BYTES;
 
 const DUE_TONE: Record<DueState, string> = {
     overdue: 'text-muted-foreground',

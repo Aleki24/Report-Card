@@ -1,139 +1,80 @@
 "use client";
 
-import React from 'react';
+import { useId } from 'react';
 import {
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ReferenceLine,
-    ResponsiveContainer,
-    Area,
-    AreaChart
+    Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+    type TooltipContentProps,
 } from 'recharts';
+import { PASS_MARK } from '@/lib/pass-mark';
 
-interface TrendPoint {
+export interface TrendPoint {
+    /** Axis label, e.g. "Term 2 2026". */
     examName: string;
+    /** Percentage, 0–100. */
     average: number;
 }
 
 interface Props {
     data: TrendPoint[];
-    improvement?: number;
-    classAverage?: number;
+    /** Drawn as a dashed line; the school's own pass mark. */
+    passMark?: number;
+    /** Plot height in pixels. */
+    height?: number;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    const val = payload[0].value;
+function TrendTooltip({ active, payload, label }: TooltipContentProps<number, string>) {
+    const value = payload?.[0]?.value;
+    if (!active || value == null) return null;
     return (
-        <div style={{
-            background: 'var(--popover)',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-            padding: '10px 14px',
-        }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 4 }}>{label}</p>
-            <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--foreground)' }}>
-                {val}%
-            </p>
+        <div className="rounded-xl border border-border bg-popover px-3.5 py-2.5 shadow-lg">
+            <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+            <p className="font-display text-xl font-extrabold text-foreground tabular-nums">{value}%</p>
         </div>
     );
-};
+}
 
-export function PerformanceTrendChart({ data, improvement, classAverage }: Props) {
-    const hasData = data.length > 0;
-
+/**
+ * A learner's average over time, with the pass mark marked.
+ *
+ * It used to wrap itself in a card titled "Overall Performance Trend · Class
+ * average score across exams" (wrong on a learner's page), and its plot had
+ * no height, so the chart never drew at all.
+ */
+export function PerformanceTrendChart({ data, passMark = PASS_MARK, height = 240 }: Props) {
+    const gradientId = useId();
     return (
-        <div style={{
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
-            borderRadius: 14,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-        }}>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '18px 22px 4px',
-            }}>
-                <div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--foreground)', margin: 0 }}>
-                        Overall Performance Trend
-                    </h3>
-                    <p style={{ fontSize: 12, color: 'var(--muted-foreground)', margin: '2px 0 0' }}>
-                        Class average score across exams
-                    </p>
-                </div>
-                {improvement != null && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: improvement >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-                        background: improvement >= 0 ? 'color-mix(in oklch, var(--color-success) 10%, transparent)' : 'color-mix(in oklch, var(--color-danger) 10%, transparent)',
-                        borderRadius: 8,
-                        padding: '5px 10px',
-                    }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            {improvement >= 0
-                                ? <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></>
-                                : <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></>
-                            }
-                        </svg>
-                        {improvement >= 0 ? '+' : ''}{improvement}%
-                    </div>
-                )}
-            </div>
-            <div style={{ width: '100%', padding: '0 8px' }} className="chart-inner">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data} margin={{ top: 12, right: 16, left: -4, bottom: 4 }}>
-                        <defs>
-                            <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.15} />
-                                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.01} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                        <XAxis
-                            dataKey="examName"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fill: 'var(--muted-foreground)', fontSize: 11, fontWeight: 500 }}
-                            dy={8}
-                        />
-                        <YAxis
-                            domain={[0, 100]}
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fill: 'var(--muted-foreground)', fontSize: 11, fontWeight: 500 }}
-                            tickFormatter={(v: number) => `${v}%`}
-                        />
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--color-border-subtle)', strokeDasharray: '3 3' }} />
-                        <ReferenceLine y={50} stroke="var(--color-danger)" strokeDasharray="4 4" strokeWidth={1.5} strokeOpacity={0.4} />
-                        <Area
-                            type="monotone"
-                            dataKey="average"
-                            stroke="none"
-                            fill="url(#trendGrad)"
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="average"
-                            stroke="var(--primary)"
-                            strokeWidth={2.5}
-                            dot={{ r: 4, fill: 'var(--card)', stroke: 'var(--primary)', strokeWidth: 2 }}
-                            activeDot={{ r: 6, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
+        <div className="w-full" style={{ height }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data} margin={{ top: 12, right: 12, left: -8, bottom: 4 }}>
+                    <defs>
+                        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.2} />
+                            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.02} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="examName" axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} dy={8} interval="preserveStartEnd" />
+                    <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} tickFormatter={(v: number) => `${v}%`} width={44} />
+                    <Tooltip content={TrendTooltip} cursor={{ stroke: 'var(--border)', strokeDasharray: '3 3' }} />
+                    <ReferenceLine
+                        y={passMark}
+                        stroke="var(--color-danger)"
+                        strokeDasharray="4 4"
+                        strokeOpacity={0.5}
+                        label={{ value: `Pass ${passMark}%`, position: 'insideTopRight', fill: 'var(--muted-foreground)', fontSize: 10 }}
+                    />
+                    <Area
+                        type="monotone"
+                        dataKey="average"
+                        stroke="var(--primary)"
+                        strokeWidth={2.5}
+                        fill={`url(#${gradientId})`}
+                        dot={{ r: 4, fill: 'var(--card)', stroke: 'var(--primary)', strokeWidth: 2 }}
+                        activeDot={{ r: 6, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }}
+                        isAnimationActive={false}
+                    />
+                </AreaChart>
+            </ResponsiveContainer>
         </div>
     );
 }
