@@ -10,6 +10,7 @@ import FilterBar, { FilterField } from '@/components/ui/FilterBar';
 import { Badge, Select } from '@/components/ui';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
+import { getExamType } from '@/lib/exam-types';
 
 interface ExamResult {
     id: string;
@@ -19,6 +20,9 @@ interface ExamResult {
     remarks: string | null;
     exams: {
         id: string;
+        name: string;
+        exam_type: string;
+        exam_date: string | null;
         max_score: number;
         subjects: { id: string; name: string } | null;
         academic_years: { id: string; name: string } | null;
@@ -65,13 +69,13 @@ export default function StudentCombinedResultsPage() {
                     onClick={() => setActiveTab('marks')}
                     className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${activeTab === 'marks' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                 >
-                    Granular Exam Marks
+                    Exam marks
                 </button>
                 <button
                     onClick={() => setActiveTab('reports')}
                     className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${activeTab === 'reports' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                 >
-                    Official Report Cards
+                    Report cards
                 </button>
             </div>
 
@@ -80,55 +84,79 @@ export default function StudentCombinedResultsPage() {
     );
 }
 
+interface RoundGroup { key: string; label: string; date: string | null; items: ExamResult[]; average: number }
+interface TermGroup { key: string; term: string; year: string; rounds: RoundGroup[] }
+
+const optionsOf = (results: readonly ExamResult[], pick: (r: ExamResult) => { id: string; name: string } | null | undefined) =>
+    Array.from(new Map(results.flatMap(r => { const o = pick(r); return o ? [[o.id, o.name] as const] : []; })).entries());
+
+/**
+ * Every released mark, by term and then by exam (Midterm, Endterm, …).
+ *
+ * It listed a term's marks in one table with no exam name, so a learner with
+ * a CAT and a Midterm saw "English" twice and couldn't tell which was which,
+ * under a count of "subjects" that was really a count of marks. Its filters
+ * were rebuilt from the filtered results, so choosing a term hid every other
+ * term until the filter was cleared. A learner's released marks are a small
+ * set, so they load once and filter here.
+ */
 function ExamMarksTab() {
     // Green from the school's own pass mark, as on its dashboards.
     const passMark = useSchoolPassMark();
-    const [results, setResults] = useState<ExamResult[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [results, setResults] = useState<ExamResult[] | null>(null);
+    const [failed, setFailed] = useState(false);
     const [yearFilter, setYearFilter] = useState('');
     const [termFilter, setTermFilter] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('');
 
     useEffect(() => {
-        const params = new URLSearchParams();
-        if (yearFilter) params.set('year', yearFilter);
-        if (termFilter) params.set('term', termFilter);
-        if (subjectFilter) params.set('subject', subjectFilter);
-        const qs = params.toString();
+        let cancelled = false;
+        fetch('/api/school/student/results')
+            .then(async r => { if (!r.ok) throw new Error(); return (await r.json()) as { data?: ExamResult[] }; })
+            .then(j => { if (!cancelled) setResults(j.data ?? []); })
+            .catch(() => { if (!cancelled) { setFailed(true); setResults([]); } });
+        return () => { cancelled = true; };
+    }, []);
 
-        setLoading(true);
-        fetch(`/api/school/student/results${qs ? `?${qs}` : ''}`)
-            .then(r => r.json())
-            .then(j => setResults(j.data || []))
-            .catch(() => {})
-            .finally(() => setLoading(false));
-    }, [yearFilter, termFilter, subjectFilter]);
+    const all = useMemo(() => results ?? [], [results]);
+    const years = useMemo(() => optionsOf(all, r => r.exams?.academic_years), [all]);
+    const terms = useMemo(() => optionsOf(all.filter(r => !yearFilter || r.exams?.academic_years?.id === yearFilter), r => r.exams?.terms), [all, yearFilter]);
+    const subjects = useMemo(() => optionsOf(all, r => r.exams?.subjects).sort((a, b) => a[1].localeCompare(b[1])), [all]);
 
-    // Extract unique filter options
-    const { years, terms, subjects } = useMemo(() => {
-        const yrs = new Map<string, string>();
-        const trms = new Map<string, string>();
-        const subs = new Map<string, string>();
-        results.forEach((r) => {
+    const grouped = useMemo<TermGroup[]>(() => {
+        const shown = all.filter(r =>
+            (!yearFilter || r.exams?.academic_years?.id === yearFilter)
+            && (!termFilter || r.exams?.terms?.id === termFilter)
+            && (!subjectFilter || r.exams?.subjects?.id === subjectFilter));
+        const termMap = new Map<string, TermGroup & { roundMap: Map<string, RoundGroup> }>();
+        for (const r of shown) {
             const ex = r.exams;
-            if (ex?.academic_years) yrs.set(ex.academic_years.id, ex.academic_years.name);
-            if (ex?.terms) trms.set(ex.terms.id, ex.terms.name);
-            if (ex?.subjects) subs.set(ex.subjects.id, ex.subjects.name);
-        });
-        return { years: Array.from(yrs.entries()), terms: Array.from(trms.entries()), subjects: Array.from(subs.entries()) };
-    }, [results]);
-
-    // Group by term
-    const grouped = useMemo(() => {
-        const map: Record<string, { term: string; year: string; items: ExamResult[] }> = {};
-        results.forEach((r) => {
-            const ex = r.exams;
-            const key = `${ex?.terms?.id || 'x'}_${ex?.academic_years?.id || 'x'}`;
-            if (!map[key]) map[key] = { term: ex?.terms?.name || '?', year: ex?.academic_years?.name || '', items: [] };
-            map[key].items.push(r);
-        });
-        return Object.values(map);
-    }, [results]);
+            const termKey = `${ex?.academic_years?.id ?? 'x'}_${ex?.terms?.id ?? 'x'}`;
+            let t = termMap.get(termKey);
+            if (!t) {
+                t = { key: termKey, term: ex?.terms?.name ?? 'Term', year: ex?.academic_years?.name ?? '', rounds: [], roundMap: new Map() };
+                termMap.set(termKey, t);
+            }
+            const roundKey = ex?.exam_type ?? 'OTHER';
+            let round = t.roundMap.get(roundKey);
+            if (!round) {
+                round = { key: roundKey, label: (ex?.exam_type && getExamType(ex.exam_type)?.name) || ex?.exam_type || 'Exam', date: ex?.exam_date ?? null, items: [], average: 0 };
+                t.roundMap.set(roundKey, round);
+            }
+            round.items.push(r);
+            if (ex?.exam_date && (!round.date || ex.exam_date > round.date)) round.date = ex.exam_date;
+        }
+        return [...termMap.values()].map(({ roundMap, ...t }) => ({
+            ...t,
+            rounds: [...roundMap.values()]
+                .map(rd => ({
+                    ...rd,
+                    items: [...rd.items].sort((a, b) => (a.exams?.subjects?.name ?? '').localeCompare(b.exams?.subjects?.name ?? '')),
+                    average: Math.round((rd.items.reduce((n, i) => n + Number(i.percentage), 0) / rd.items.length) * 10) / 10,
+                }))
+                .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
+        }));
+    }, [all, yearFilter, termFilter, subjectFilter]);
 
     const columns: DataTableColumn<ExamResult>[] = [
         { key: 'subject', header: 'Subject', render: r => <span className="font-semibold text-foreground">{r.exams?.subjects?.name || '—'}</span> },
@@ -148,41 +176,54 @@ function ExamMarksTab() {
         <div>
             <FilterBar>
                 <FilterField label="Year">
-                    <Select value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-                        <option value="">All Years</option>
+                    <Select value={yearFilter} onChange={e => { setYearFilter(e.target.value); setTermFilter(''); }}>
+                        <option value="">All years</option>
                         {years.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </Select>
                 </FilterField>
                 <FilterField label="Term">
                     <Select value={termFilter} onChange={e => setTermFilter(e.target.value)}>
-                        <option value="">All Terms</option>
+                        <option value="">All terms</option>
                         {terms.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </Select>
                 </FilterField>
                 <FilterField label="Subject">
                     <Select value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)}>
-                        <option value="">All Subjects</option>
+                        <option value="">All subjects</option>
                         {subjects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
                     </Select>
                 </FilterField>
             </FilterBar>
 
-            {loading ? (
+            {results === null ? (
                 <div className="flex flex-col gap-2">
                     {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton-bone h-12 rounded-xl" />)}
                 </div>
-            ) : results.length === 0 ? (
-                <EmptyState icon={<Trophy className="h-6 w-6" />} title="No results yet" description="Results will appear here once your teachers publish exam marks." />
+            ) : failed ? (
+                <EmptyState icon={<Trophy className="h-6 w-6" />} title="Couldn’t load your results" description="Check your connection and reload the page." />
+            ) : grouped.length === 0 ? (
+                <EmptyState
+                    icon={<Trophy className="h-6 w-6" />}
+                    title={all.length === 0 ? 'No results yet' : 'Nothing matches these filters'}
+                    description={all.length === 0 ? 'Your marks appear here once your teachers release them.' : 'Try another year, term or subject.'}
+                />
             ) : (
-                <div className="flex flex-col gap-6">
-                    {grouped.map((g, idx) => (
-                        <div key={idx}>
-                            <div className="mb-2 flex items-center justify-between">
-                                <h3 className="font-display text-[15px] font-bold text-foreground">{g.term} — {g.year}</h3>
-                                <span className="text-xs text-muted-foreground">{g.items.length} subjects recorded</span>
-                            </div>
-                            <DataTable columns={columns} rows={g.items} rowKey={r => r.id} mobileTitleKey="subject" />
-                        </div>
+                <div className="flex flex-col gap-8">
+                    {grouped.map(t => (
+                        <section key={t.key} aria-label={`${t.term} ${t.year}`} className="flex flex-col gap-4">
+                            <h3 className="font-display text-base font-bold text-foreground">{t.term}{t.year ? ` · ${t.year}` : ''}</h3>
+                            {t.rounds.map(rd => (
+                                <div key={rd.key}>
+                                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <h4 className="text-sm font-semibold text-foreground">{rd.label}</h4>
+                                        <span className="text-xs text-muted-foreground">
+                                            {rd.items.length} subject{rd.items.length === 1 ? '' : 's'} · average <strong className={rd.average >= passMark ? 'text-emerald-600' : 'text-destructive'}>{rd.average}%</strong>
+                                        </span>
+                                    </div>
+                                    <DataTable columns={columns} rows={rd.items} rowKey={r => r.id} mobileTitleKey="subject" />
+                                </div>
+                            ))}
+                        </section>
                     ))}
                 </div>
             )}

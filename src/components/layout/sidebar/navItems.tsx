@@ -2,7 +2,7 @@ import React from 'react';
 import {
     LayoutDashboard, GraduationCap, LineChart, FileText, Users, School,
     UserCircle, Settings, BookOpen, ClipboardList, CalendarCheck, Bell,
-    Briefcase, DollarSign,
+    Briefcase, DollarSign, LifeBuoy,
 } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
 
@@ -53,12 +53,15 @@ const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', r
 const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], icon: icon(CalendarCheck) };
 const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], icon: icon(DollarSign) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
+// The user guide for the signed-in role, with its PDF.
+const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', roles: [...staffRoles, 'STAFF'], icon: icon(LifeBuoy) };
+const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', roles: ['STUDENT'], icon: icon(LifeBuoy) };
 
 /** Flat list (legacy consumers + search). */
 export const navItems: NavItem[] = [
     dashboard, studentDashboard, examsMarks, reports, attendance, analytics, people, myStudents, classes,
     subjects, fees, announcements, assignments, users, settings,
-    myResults, mySubjects, myAttendance, myFees, myProfile,
+    myResults, mySubjects, myAttendance, myFees, myProfile, help, studentHelp,
 ];
 
 const groups: NavGroup[] = [
@@ -70,7 +73,7 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings, myProfile];
+const pinnedItems: NavItem[] = [users, settings, myProfile, help, studentHelp];
 
 /* No role yet (still loading, or signed out) shows nothing rather than
    briefly showing every signed-in user the admin menu. */
