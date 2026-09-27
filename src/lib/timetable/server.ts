@@ -32,11 +32,3 @@ export async function loadLessons(versionId: string, filter: { column: 'grade_st
     if (error) throw error;
     return (data ?? []) as unknown as TimetableLesson[];
 }
-
-/** Inserts rows in chunks; PostgREST bodies have a size limit. */
-export async function insertChunked(table: string, rows: Record<string, unknown>[], size = 500) {
-    for (let i = 0; i < rows.length; i += size) {
-        const { error } = await db().from(table).insert(rows.slice(i, i + size));
-        if (error) throw error;
-    }
-}

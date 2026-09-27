@@ -1,26 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { accessOrResponse } from '@/lib/platform/access';
 
 /** Assigns an unmatched (typically M-Pesa Paybill) payment to the correct student's fee record. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const caller = await accessOrResponse('fees.collect');
+        if (caller instanceof NextResponse) return caller;
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        // Unmatched Paybill money is school-level ledger work, handled from
-        // Settings > Payments, which only admins can open.
-        if (!userProfile || userProfile.role !== 'ADMIN' || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
 
         const { paymentId } = await params;
         const body = await request.json();
@@ -34,13 +23,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             supabase.from('student_fees').select('id, school_id').eq('id', student_fee_id).maybeSingle(),
         ]);
 
-        if (!payment || payment.school_id !== userProfile.school_id) {
+        if (!payment || payment.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
         }
         if (payment.student_fee_id) {
             return NextResponse.json({ error: 'Payment is already assigned' }, { status: 400 });
         }
-        if (!targetFee || targetFee.school_id !== userProfile.school_id) {
+        if (!targetFee || targetFee.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Fee record not found in your school' }, { status: 404 });
         }
 

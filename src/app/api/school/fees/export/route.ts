@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { getCaller } from '@/lib/auth-server';
+import { accessOrResponse } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/postgrest';
 import * as XLSX from 'xlsx';
@@ -9,13 +9,9 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
     try {
-        const caller = await getCaller();
-        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        if (caller.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
+        const caller = await accessOrResponse('fees.view');
+        if (caller instanceof NextResponse) return caller;
         const schoolId = caller.schoolId;
-        if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
 
         const supabase = createSupabaseAdmin();
 

@@ -18,7 +18,7 @@ interface RecordFormProps {
 export function RecordForm({ fields, values, onChange, idPrefix }: RecordFormProps) {
     return (
         <FormGrid>
-            {fields.map(field => {
+            {fields.filter(f => f.kind !== 'hidden').map(field => {
                 const id = `${idPrefix}-${field.name}`;
                 const value = values[field.name];
                 const text = typeof value === 'string' ? value : '';

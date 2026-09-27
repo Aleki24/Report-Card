@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { canManageStudent, getCaller } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
 import { embedOne, fetchAllRows } from '@/lib/postgrest';
 
 export async function GET(request: NextRequest) {
     try {
-        const caller = await getCaller();
+        const caller = await getAccess();
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const { userId, schoolId, role } = caller;
         if (!schoolId) return NextResponse.json({ data: [] });
-        // Students read their own fees and the admin (principal or bursar)
-        // everyone's. Teachers and other staff have no fee view.
-        if (role !== 'ADMIN' && role !== 'STUDENT') {
+        // Students read their own fees; the admin and finance staff everyone's.
+        // Teachers and other staff have no fee view.
+        if (role !== 'STUDENT' && !caller.can('fees.view')) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -79,12 +79,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
-        const caller = await getCaller();
+        const caller = await getAccess();
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (caller.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only the admin can bill students.' }, { status: 403 });
+        if (!caller.can('fees.manage')) {
+            return NextResponse.json({ error: 'Only the bursar or admin can bill students.' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
@@ -115,9 +115,6 @@ export async function POST(request: NextRequest) {
         ]);
         if (!studentRow) {
             return NextResponse.json({ error: 'Student not found in your school' }, { status: 404 });
-        }
-        if (!(await canManageStudent(caller, student_id))) {
-            return NextResponse.json({ error: 'You can only manage fees for your own class.' }, { status: 403 });
         }
         if (!termRow) {
             return NextResponse.json({ error: 'Term not found in your school' }, { status: 404 });

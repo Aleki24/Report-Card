@@ -1,30 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { canManageStudent, getCaller } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { computeFeeStatus } from '@/lib/fees';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const caller = await getCaller();
+        const caller = await getAccess();
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (caller.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only the admin can change fee records.' }, { status: 403 });
+        if (!caller.can('fees.manage')) {
+            return NextResponse.json({ error: 'Only the bursar or admin can change fee records.' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
         const { id } = await params;
 
-        // Verify ownership: same school, and the class teacher's own class
+        // Verify ownership: same school
         const { data: currentFee } = await supabase
             .from('student_fees')
             .select('school_id, student_id')
             .eq('id', id)
             .maybeSingle();
 
-        if (!currentFee || currentFee.school_id !== caller.schoolId || !(await canManageStudent(caller, currentFee.student_id))) {
+        if (!currentFee || currentFee.school_id !== caller.schoolId) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
@@ -75,12 +75,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const caller = await getCaller();
+        const caller = await getAccess();
         if (!caller) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        if (caller.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only an admin can delete a fee record' }, { status: 403 });
+        if (!caller.can('fees.manage')) {
+            return NextResponse.json({ error: 'Only the bursar or admin can delete a fee record' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();

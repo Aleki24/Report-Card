@@ -24,6 +24,8 @@ export type FieldDef<N extends string = string> = BaseField<N> & (
     | { kind: 'lookup'; lookup: LookupType; params?: Record<string, string | undefined>; filter?: (o: LookupOption) => boolean }
     | { kind: 'options'; options: readonly LookupOption[] }
     | { kind: 'checkbox' }
+    /** Not shown; sent from `defaults` (a parent record's id). */
+    | { kind: 'hidden' }
     /** Comma-separated numbers, sent as an array (term splits). */
     | { kind: 'numberList'; placeholder?: string }
 );

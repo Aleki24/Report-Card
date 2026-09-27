@@ -172,3 +172,24 @@ export async function assertInSchool(table: string, ids: readonly (string | null
     if (error) throw error;
     if ((data ?? []).length !== wanted.length) throw new HttpError(400, `Unknown ${table.replace(/_/g, ' ')} for this school.`);
 }
+
+/**
+ * For hand-written routes that return their own responses: the caller's
+ * access when they hold `permission`, otherwise the 401/403/404 to return.
+ */
+export async function accessOrResponse(permission: Permission, module?: ModuleKey): Promise<Access | NextResponse> {
+    try {
+        return await requireAccess({ permission, module });
+    } catch (err) {
+        return errorResponse('access', err);
+    }
+}
+
+/** Duties whose work spans every learner, so learner lists are not narrowed to a teacher's classes. */
+const WHOLE_SCHOOL_PERMISSIONS: readonly Permission[] = [
+    'fees.view', 'billing.view', 'health.view', 'boarding.view', 'transport.view', 'discipline.manage', 'library.manage',
+];
+
+export function seesAllStudents(access: Access | null): boolean {
+    return !!access && WHOLE_SCHOOL_PERMISSIONS.some(p => access.can(p));
+}

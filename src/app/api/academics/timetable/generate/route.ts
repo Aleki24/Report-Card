@@ -5,7 +5,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne } from '@/lib/postgrest';
 import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib/timetable/solver';
 import { MORNING_CATEGORIES } from '@/lib/timetable/config';
-import { insertChunked, loadConfig, loadVersion } from '@/lib/timetable/server';
+import { loadConfig, loadVersion } from '@/lib/timetable/server';
+import { insertChunked } from '@/lib/db-batch';
 
 export const maxDuration = 60;
 
