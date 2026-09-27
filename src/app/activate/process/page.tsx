@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus } from '@/components/auth/AuthShell';
+import { homePathForRole, isUserRole } from '@/lib/roles';
 
 const INVITE_KEY = 'activate_invite_code';
 const USERNAME_KEY = 'activate_username';
@@ -92,7 +93,7 @@ export default function ActivateProcessPage() {
         // A full navigation, not router.push: the app may have cached this
         // account as PENDING while it was being linked, which would send the
         // user back through onboarding asking for the invite code again.
-        setTimeout(() => { window.location.href = data.role === 'STUDENT' ? '/student/dashboard' : '/dashboard'; }, 1200);
+        setTimeout(() => { window.location.href = homePathForRole(isUserRole(data.role) ? data.role : null); }, 1200);
       } catch (err) {
         setView({ kind: 'error', message: describe(err) });
       }

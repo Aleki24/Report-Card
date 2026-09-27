@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ALL_EXAM_TYPES } from './exam-types';
 
-export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PENDING']);
+export const UserRole = z.enum(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'PENDING']);
 export type UserRole = z.infer<typeof UserRole>;
 
 // Derived from the single source of truth for exam types (exam-types.ts), which

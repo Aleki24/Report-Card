@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { subjectTakers } from '@/lib/subject-roster';
 import { getCaller } from '@/lib/auth-server';
+import { getAccess, seesAllStudents } from '@/lib/platform/access';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
@@ -96,7 +97,10 @@ export async function GET(request: NextRequest) {
 
         let filteredStudents = data;
         const subjectId = searchParams.get('subject_id');
-        if (auth.role !== 'ADMIN') {
+        // Staff whose duty covers every learner (bursar, nurse, matron,
+        // transport, library) see the whole school, not a teacher's slice.
+        const wholeSchool = auth.role === 'ADMIN' || (!subjectId && seesAllStudents(await getAccess()));
+        if (!wholeSchool) {
           const perms = await getTeacherPermissions(auth.userId);
           // Mark entry: only the streams this teacher teaches the subject in
           // (or their own class), not every learner they can see elsewhere.

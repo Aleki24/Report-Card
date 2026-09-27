@@ -1,4 +1,4 @@
-import { getModuleBySlug, isFullModule } from '@/lib/modules';
+import { getModuleBySlug } from '@/lib/modules';
 import { MarketingShell } from '@/components/landing/ui/MarketingShell';
 import { PageHero } from '@/components/landing/ui/PageHero';
 import { CtaLink } from '@/components/landing/ui/CtaLink';
@@ -12,7 +12,7 @@ interface ModulePageLayoutProps {
   slug: string;
 }
 
-/** The public feature page for one module, or a placeholder for one still to come. */
+/** The public feature page for one module. */
 export default function ModulePageLayout({ slug }: ModulePageLayoutProps) {
   const mod = getModuleBySlug(slug);
 
@@ -24,20 +24,6 @@ export default function ModulePageLayout({ slug }: ModulePageLayoutProps) {
           title="Module not found"
           description={<>There is no module called &ldquo;{slug}&rdquo;.</>}
           actions={<CtaLink href="/features" variant="outline">All Features</CtaLink>}
-        />
-      </MarketingShell>
-    );
-  }
-
-  if (!isFullModule(mod)) {
-    return (
-      <MarketingShell>
-        <PageHero
-          icon={mod.icon}
-          eyebrow="Coming soon"
-          title={mod.title}
-          description={mod.description}
-          actions={<CtaLink href="/features" variant="outline">See what&apos;s live today</CtaLink>}
         />
       </MarketingShell>
     );

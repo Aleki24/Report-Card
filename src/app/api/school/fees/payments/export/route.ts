@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import * as XLSX from 'xlsx';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { accessOrResponse } from '@/lib/platform/access';
 import { loadPaymentLog, parsePaymentLogFilters, recorderNames } from '@/lib/fees-payment-log';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const caller = await accessOrResponse('fees.view');
+        if (caller instanceof NextResponse) return caller;
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        // ADMIN (bursar) only — matches the Payments Log endpoint this exports.
-        if (!userProfile || userProfile.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-        const schoolId = userProfile.school_id;
-        if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
+        const schoolId = caller.schoolId;
 
         const { entries } = await loadPaymentLog(supabase, schoolId, parsePaymentLogFilters(new URL(request.url).searchParams));
         const names = await recorderNames(supabase, entries);

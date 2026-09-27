@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────
-export type ModuleStatus = 'active' | 'coming-soon';
+export type ModuleStatus = 'active';
 export type AudienceRole = 'admin' | 'teacher' | 'parent' | 'student';
 
 export interface Module {
@@ -34,13 +34,6 @@ export interface Module {
   benefits: string[];
 }
 
-export interface ComingSoonModule {
-  title: string;
-  slug: string;
-  description: string;
-  icon: LucideIcon;
-  status: 'coming-soon';
-}
 
 // ── Phase One Modules (Active) ───────────────────────────────
 export const modules: Module[] = [
@@ -485,60 +478,7 @@ export const modules: Module[] = [
   },
 ];
 
-// ── Phase Two Modules (Coming Soon) ──────────────────────────
-// Icon imports are reused from lucide-react; these use placeholder icons
-import {
-  Smartphone,
-  Globe,
-  Bus,
-  Shield,
-  Package,
-} from 'lucide-react';
-
-export const comingSoonModules: ComingSoonModule[] = [
-  {
-    title: 'M-Pesa Integration',
-    slug: 'mpesa',
-    description: 'Accept fee payments via M-Pesa with automatic reconciliation and SMS receipts.',
-    icon: Smartphone,
-    status: 'coming-soon',
-  },
-  {
-    title: 'Parent Portal',
-    slug: 'parent-portal',
-    description: 'Give parents secure access to their children\'s reports, fees, attendance, and communication.',
-    icon: Globe,
-    status: 'coming-soon',
-  },
-  {
-    title: 'Transport',
-    slug: 'transport',
-    description: 'Manage school transport routes, vehicle assignments, and student transport tracking.',
-    icon: Bus,
-    status: 'coming-soon',
-  },
-  {
-    title: 'Discipline',
-    slug: 'discipline',
-    description: 'Track student discipline records, incidents, interventions, and behavioral patterns.',
-    icon: Shield,
-    status: 'coming-soon',
-  },
-  {
-    title: 'Inventory',
-    slug: 'inventory',
-    description: 'Track school assets, supplies, and equipment with inventory management tools.',
-    icon: Package,
-    status: 'coming-soon',
-  },
-];
-
 // ── Helper to find a module by slug ──────────────────────────
-export function getModuleBySlug(slug: string): Module | ComingSoonModule | undefined {
-  return modules.find((m) => m.slug === slug) ?? comingSoonModules.find((m) => m.slug === slug);
-}
-
-/** True for a module with a full feature page; false for a coming-soon placeholder. */
-export function isFullModule(mod: Module | ComingSoonModule): mod is Module {
-  return 'features' in mod;
+export function getModuleBySlug(slug: string): Module | undefined {
+  return modules.find((m) => m.slug === slug);
 }

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MPESA_RECEIPT_UNIQUE_INDEX, internalError, isUniqueViolation, writeErrorMessage } from '@/lib/api-errors';
-import { canViewStudentFees, getCaller } from '@/lib/auth-server';
+import { canViewStudentFees } from '@/lib/auth-server';
+import { getAccess, type Access } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
 
 interface FeeRecordAccess {
     ok: true;
-    role: string;
-    userId: string;
+    caller: Access;
     fee: { id: string; school_id: string; student_id: string; total_fee: number; paid_amount: number; status: string };
 }
 interface FeeRecordAccessError {
@@ -19,7 +19,7 @@ async function getFeeRecordForCaller(
     supabase: ReturnType<typeof createSupabaseAdmin>,
     feeId: string,
 ): Promise<FeeRecordAccess | FeeRecordAccessError> {
-    const caller = await getCaller();
+    const caller = await getAccess();
     if (!caller) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
     const { data: fee } = await supabase
@@ -31,12 +31,12 @@ async function getFeeRecordForCaller(
     if (!fee || fee.school_id !== caller.schoolId) {
         return { ok: false, response: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
     }
-    // Students see their own fees, the admin everyone's; teachers none.
+    // Students see their own fees, finance staff everyone's; teachers none.
     if (!(await canViewStudentFees(caller, fee.student_id))) {
         return { ok: false, response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
 
-    return { ok: true, role: caller.role, userId: caller.userId, fee };
+    return { ok: true, caller, fee };
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const result = await getFeeRecordForCaller(supabase, id);
         if (!result.ok) return result.response;
-        if (result.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Only the admin can record payments' }, { status: 403 });
+        if (!result.caller.can('fees.collect')) {
+            return NextResponse.json({ error: 'Only the bursar, accountant or admin can record payments' }, { status: 403 });
         }
         const { fee } = result;
 
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 mpesa_receipt_number: methodValue === 'MPESA' && typeof mpesa_receipt_number === 'string' && mpesa_receipt_number.trim()
                     ? mpesa_receipt_number.trim().toUpperCase()
                     : null,
-                recorded_by: result.userId,
+                recorded_by: result.caller.userId,
             })
             .select()
             .single();

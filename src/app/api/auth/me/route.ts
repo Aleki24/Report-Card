@@ -3,6 +3,8 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { resolveActiveRole } from '@/lib/roles';
 import { getClassTeacherStreamIds } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
+import type { ClientAccess } from '@/lib/platform/client-access';
 
 export async function GET() {
   try {
@@ -111,8 +113,16 @@ export async function GET() {
       ? requestedRole
       : null;
 
+    // Modules the school runs and what this person's role and duties allow,
+    // so menus and pages hide what the server would refuse anyway.
+    const resolved = await getAccess();
+    const access: ClientAccess = resolved
+      ? { modules: [...resolved.modules], grants: [...resolved.grants], duties: resolved.duties.map(d => d.duty) }
+      : { modules: [], grants: [], duties: [] };
+
     return NextResponse.json({
       profile: dbUser,
+      access,
       user: dbUser, // backwards compatibility
       schoolName,
       schoolOnboardingCompleted,
