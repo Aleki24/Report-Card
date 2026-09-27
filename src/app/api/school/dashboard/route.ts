@@ -7,6 +7,7 @@ import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
 import { getExamType } from '@/lib/exam-types';
+import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -33,11 +34,6 @@ interface UnmarkedExamRow {
   unmarked_count: number | string;
 }
 
-/** Where the school is in its calendar, from its own terms. */
-export type TermSummary =
-  | { kind: 'in-term'; name: string; year: string | null; week: number; weeks: number; daysLeft: number; endDate: string }
-  | { kind: 'break'; lastName: string | null; nextName: string | null; nextStart: string | null }
-  | { kind: 'none' };
 
 type TermRow = { id: string; name: string; start_date: string | null; end_date: string | null; academic_year_id: string | null };
 
@@ -57,8 +53,6 @@ function describeTerm(terms: readonly TermRow[], current: TermRow | null, yearNa
   return { kind: 'break', lastName: last?.name ?? null, nextName: next?.name ?? null, nextStart: next?.start_date ?? null };
 }
 
-/** An exam sitting coming up: one class's round, rather than one row per paper. */
-export interface UpcomingRound { key: string; label: string; className: string; firstDate: string; papers: number }
 
 export async function GET(_request: NextRequest) {
   try {
