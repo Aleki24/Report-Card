@@ -1,3 +1,4 @@
+import { PLAN_FOOTNOTE } from '@/lib/pricing';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { CtaLink } from './ui/CtaLink';
@@ -35,7 +36,7 @@ export default function CTASection() {
           </CtaLink>
         </>
       }
-      footnote="KES 5,000 per term · every module included"
+      footnote={PLAN_FOOTNOTE}
       decoration={FLOATING_ASSETS.map((asset) => (
         <div
           key={asset.src}
