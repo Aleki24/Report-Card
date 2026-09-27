@@ -3,6 +3,8 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
+import { internalError } from '@/lib/api-errors';
+import { submitAssignmentSchema } from '@/lib/assignments';
 
 export async function GET(request: NextRequest) {
     try {
@@ -86,11 +88,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Only students can submit' }, { status: 403 });
         }
 
-        const supabase = createSupabaseAdmin();
-        const body = await request.json();
-        if (!body.assignment_id) {
-            return NextResponse.json({ error: 'assignment_id is required' }, { status: 400 });
+        const parsed = submitAssignmentSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Check your submission and try again.' }, { status: 400 });
         }
+        const body = parsed.data;
+        const supabase = createSupabaseAdmin();
 
         // Verify assignment belongs to the student's school and, if
         // stream-scoped, to the student's own stream.
@@ -109,13 +112,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'This assignment is not assigned to your class' }, { status: 403 });
         }
 
+        // Handing in again replaces the earlier work, which is fine until the
+        // teacher has marked it: after that a resubmission would sit beside a
+        // grade given for different work.
+        const { data: existing } = await supabase
+            .from('assignment_submissions')
+            .select('graded_at, grade')
+            .eq('assignment_id', body.assignment_id)
+            .eq('student_id', student.userId)
+            .maybeSingle();
+        if (existing && (existing.graded_at || existing.grade != null)) {
+            return NextResponse.json({ error: 'Your teacher has already marked this work, so it can’t be changed.' }, { status: 409 });
+        }
+
         const { data, error } = await supabase
             .from('assignment_submissions')
             .upsert({
                 assignment_id: body.assignment_id,
                 student_id: student.userId,
-                file_url: body.file_url || null,
-                submission_text: body.submission_text || null,
+                file_url: body.file_url,
+                submission_text: body.submission_text,
                 submitted_at: new Date().toISOString(),
             }, {
                 // One submission per learner per assignment (UNIQUE in the
@@ -126,10 +142,9 @@ export async function POST(request: NextRequest) {
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) return internalError('submission upsert', error);
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('submission create', err);
     }
 }

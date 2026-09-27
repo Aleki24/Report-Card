@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import {
-    ArrowLeft, BookOpen, FileText, UploadCloud,
-    DownloadCloud, TrendingUp, Send
-} from 'lucide-react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { ArrowDownRight, ArrowUpRight, BookOpen, Minus, TrendingUp } from 'lucide-react';
+import PageHeader from '@/components/dashboard/PageHeader';
+import KpiTile from '@/components/dashboard/KpiTile';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
-import DashboardCard from '@/components/dashboard/DashboardCard';
-import InsightCard from '@/components/dashboard/InsightCard';
-import EmptyState from '@/components/dashboard/EmptyState';
-import { Badge, Modal } from '@/components/ui';
+import HomeworkPanel from '@/components/student/dashboard/HomeworkPanel';
+import { Panel, QuietEmpty } from '@/components/student/dashboard/shared';
+import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
+import type { StudentAssignment } from '@/lib/assignments';
+import type { StudentTermTrend } from '@/types';
 
 interface Subject {
     id: string;
@@ -20,290 +20,156 @@ interface Subject {
     subject_type: 'CORE' | 'ESSENTIAL' | 'OPTIONAL' | null;
 }
 
-interface AssignmentItem {
-    id: string;
-    title: string;
-    dueDate: string;
-    subjectName: string;
+interface Loaded {
+    subject: Subject | null;
+    trends: StudentTermTrend[];
+    assignments: StudentAssignment[];
 }
 
-interface MaterialItem {
-    id: string;
-    title: string;
-    description: string | null;
-    fileUrl: string | null;
-    fileSizeBytes: number | null;
-    fileType: string | null;
-    subjectName: string;
-    createdAt: string;
+const TYPE_LABEL: Record<NonNullable<Subject['subject_type']>, string> = {
+    CORE: 'Core',
+    ESSENTIAL: 'Essential',
+    OPTIONAL: 'Optional',
+};
+
+async function getData<T>(url: string): Promise<T | null> {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return ((await res.json()) as { data?: T }).data ?? null;
 }
 
-interface PerformanceTrendTerm {
-    termName: string;
-    yearName: string;
-    subjects: { name: string; average: number }[];
-}
-
-function typeBadge(type: Subject['subject_type']) {
-    if (type === 'CORE') return <Badge variant="success">Core</Badge>;
-    if (type === 'ESSENTIAL') return <Badge variant="info">Essential</Badge>;
-    return <Badge variant="default">Optional</Badge>;
-}
-
-function getDueLabel(dateStr: string): string {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const due = new Date(dateStr);
-    due.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return 'Overdue';
-    if (diffDays === 0) return 'Due Today';
-    if (diffDays === 1) return 'Due Tomorrow';
-    return `Due in ${diffDays} days`;
-}
-
-function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export default function SubjectAnalysisPage() {
-    const params = useParams();
-    const router = useRouter();
-    const subjectId = params.subjectId as string;
-
-    const [subject, setSubject] = useState<Subject | null>(null);
-    const [performance, setPerformance] = useState<{ examName: string; average: number }[]>([]);
-    const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-    const [materials, setMaterials] = useState<MaterialItem[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    const [submitModal, setSubmitModal] = useState<{ open: boolean; assignment: AssignmentItem | null }>({ open: false, assignment: null });
-    const [subText, setSubText] = useState('');
-    const [subFile, setSubFile] = useState<File | null>(null);
-    const [submitting, setSubmitting] = useState(false);
-
-    const handleSubmitAssignment = async () => {
-        if (!submitModal.assignment) return;
-        setSubmitting(true);
-        try {
-            let fileUrl = '';
-            if (subFile) {
-                const fd = new FormData();
-                fd.append('file', subFile);
-                const uploadRes = await fetch('/api/school/upload', { method: 'POST', body: fd });
-                const uploadJson = await uploadRes.json();
-                if (!uploadRes.ok) throw new Error(uploadJson.error || 'File upload failed');
-                if (uploadJson.url) fileUrl = uploadJson.url;
-            }
-
-            const submitRes = await fetch('/api/school/submissions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    assignment_id: submitModal.assignment.id,
-                    file_url: fileUrl || null,
-                    submission_text: subText || null,
-                }),
-            });
-            if (!submitRes.ok) {
-                const submitJson = await submitRes.json().catch(() => ({}));
-                throw new Error(submitJson.error || 'Submission failed');
-            }
-
-            setSubmitModal({ open: false, assignment: null });
-            setSubText('');
-            setSubFile(null);
-            toast.success('Assignment submitted');
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Submission failed. Please try again.');
-        }
-        setSubmitting(false);
+async function loadSubject(subjectId: string): Promise<Loaded> {
+    const [subjects, trends, dashboard] = await Promise.all([
+        getData<Subject[]>('/api/school/student/subjects'),
+        getData<StudentTermTrend[]>('/api/school/student/performance'),
+        getData<{ assignments?: StudentAssignment[] }>('/api/school/student/dashboard'),
+    ]);
+    return {
+        subject: subjects?.find(s => s.id === subjectId) ?? null,
+        trends: trends ?? [],
+        assignments: (dashboard?.assignments ?? []).filter(a => a.subjectId === subjectId),
     };
+}
 
-    useEffect(() => {
-        Promise.all([
-            fetch('/api/school/student/subjects').then(r => r.json()),
-            fetch('/api/school/student/performance').then(r => r.json()),
-            fetch('/api/school/student/dashboard').then(r => r.json()),
-        ]).then(([subRes, perfRes, dashRes]) => {
-            const subs: Subject[] = subRes.data || [];
-            const found = subs.find((s) => s.id === subjectId) ?? null;
-            setSubject(found);
+/**
+ * One subject for the learner: how they've done each term and the homework
+ * set for it.
+ *
+ * Homework and marks used to be matched to the subject by name, and its
+ * "learning materials" list only ever saw the five newest materials across
+ * every subject (and nothing in the app creates them), so it was always
+ * empty. Everything is keyed by the subject's id now.
+ */
+export default function StudentSubjectPage() {
+    const { subjectId } = useParams<{ subjectId: string }>();
+    const passMark = useSchoolPassMark();
+    const [data, setData] = useState<Loaded | null>(null);
+    const [failed, setFailed] = useState(false);
 
-            if (found && perfRes.data) {
-                const trends: PerformanceTrendTerm[] = perfRes.data;
-                const trendData = trends
-                    .map((term) => {
-                        const subjectMark = term.subjects.find((s) => s.name === found.name);
-                        return subjectMark ? { examName: `${term.termName} ${term.yearName}`.trim(), average: subjectMark.average } : null;
-                    })
-                    .filter((t): t is { examName: string; average: number } => t !== null);
-
-                setPerformance(trendData);
-            }
-
-            if (found && dashRes.data) {
-                const allAssignments: AssignmentItem[] = dashRes.data.assignments || [];
-                const allMaterials: MaterialItem[] = dashRes.data.materials || [];
-                setAssignments(allAssignments.filter(a => a.subjectName === found.name));
-                setMaterials(allMaterials.filter(m => m.subjectName === found.name));
-            }
-
-            setLoading(false);
-        }).catch(() => {
-            setLoading(false);
-        });
+    const load = useCallback(() => {
+        loadSubject(subjectId).then(
+            loaded => { setData(loaded); setFailed(false); },
+            () => setFailed(true),
+        );
     }, [subjectId]);
 
-    if (loading) {
+    useEffect(load, [load]);
+
+    const series = useMemo(() => (data?.trends ?? []).flatMap(t => {
+        const mark = t.subjects.find(s => s.id === subjectId);
+        return mark ? [{ examName: `${t.termName} ${t.yearName}`.trim(), average: mark.average }] : [];
+    }), [data, subjectId]);
+
+    if (failed) {
         return (
-            <div className="w-full mx-auto max-w-[1100px] py-10">
-                <div className="skeleton-spinner mx-auto" />
+            <div className="mx-auto w-full max-w-[1100px] py-16 text-center">
+                <p className="text-sm text-muted-foreground">We couldn&apos;t load this subject.</p>
+                <button type="button" onClick={load} className="btn-secondary mt-4">Try again</button>
             </div>
         );
     }
 
+    if (!data) {
+        return (
+            <div className="mx-auto w-full max-w-[1100px]">
+                <div className="skeleton-bone mb-6 h-12 w-2/5 rounded-xl" />
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                    {[1, 2, 3].map(i => <div key={i} className="skeleton-bone h-[96px] rounded-2xl" />)}
+                </div>
+                <div className="skeleton-bone mt-5 h-[280px] rounded-2xl" />
+            </div>
+        );
+    }
+
+    const { subject } = data;
     if (!subject) {
         return (
-            <div className="w-full mx-auto max-w-[1100px] py-24 text-center">
-                <h2 className="mb-2 text-2xl font-bold text-foreground">Subject Not Found</h2>
-                <p className="mb-6 text-muted-foreground">The subject you are looking for does not exist or you don&apos;t have access to it.</p>
-                <button onClick={() => router.back()} className="btn-secondary">Go Back</button>
+            <div className="mx-auto w-full max-w-[1100px] py-20 text-center">
+                <h1 className="font-display text-2xl font-bold text-foreground">Subject not found</h1>
+                <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">This subject isn&apos;t one of yours, or it has been removed from your class.</p>
+                <Link href="/student/subjects" className="btn-secondary mt-6 no-underline">Back to my subjects</Link>
             </div>
         );
     }
 
+    const latest = series.at(-1);
+    const previous = series.at(-2);
+    const change = latest && previous ? Math.round((latest.average - previous.average) * 10) / 10 : null;
+    const best = series.length > 0 ? Math.max(...series.map(s => s.average)) : null;
+    const badge = TYPE_LABEL[subject.subject_type ?? 'OPTIONAL'];
+    const ChangeIcon = change == null || change === 0 ? Minus : change > 0 ? ArrowUpRight : ArrowDownRight;
+
     return (
-        <div className="w-full mx-auto max-w-[1100px] pb-10">
-            {/* Header */}
-            <div className="mb-8 flex items-center gap-4">
-                <button
-                    onClick={() => router.back()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-muted/70"
-                >
-                    <ArrowLeft size={20} />
-                </button>
-                <div>
-                    <h1 className="font-display text-2xl font-bold text-foreground">{subject.name}</h1>
-                    <div className="mt-1 flex items-center gap-3">
-                        <span className="text-[13px] font-semibold text-muted-foreground">{subject.code || 'No Code'}</span>
-                        {typeBadge(subject.subject_type)}
-                    </div>
-                </div>
-            </div>
+        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 pb-10">
+            <PageHeader
+                className="mb-0"
+                title={subject.name}
+                eyebrow="My subjects"
+                icon={BookOpen}
+                hue="emerald"
+                breadcrumbs={[{ label: 'My subjects', href: '/student/subjects' }, { label: subject.name }]}
+                description={[subject.code, `${badge} subject`].filter(Boolean).join(' · ')}
+            />
 
-            <div className="flex flex-col gap-5">
-                {/* Performance Trend */}
-                <InsightCard title="Performance Analysis">
-                    <div className="mt-1 h-[300px] w-full">
-                        {performance.length > 1 ? (
-                            <PerformanceTrendChart data={performance} />
-                        ) : (
-                            <div className="flex h-full flex-col items-center justify-center px-5 text-center text-sm text-muted-foreground">
-                                <TrendingUp size={48} className="mb-4 opacity-20" />
-                                Need more than one term of results to show a performance trend for {subject.name}.
-                            </div>
-                        )}
-                    </div>
-                </InsightCard>
+            <section aria-label="Summary" className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <KpiTile
+                    href="/student/results"
+                    title={latest ? `${latest.examName} average` : 'Latest average'}
+                    value={latest ? `${latest.average}%` : '—'}
+                    icon={<TrendingUp size={17} />}
+                    tone={latest ? (latest.average >= passMark ? 'green' : 'amber') : undefined}
+                />
+                <KpiTile
+                    href="/student/results"
+                    title={previous ? `Change since ${previous.examName}` : 'Change since last term'}
+                    value={change == null ? '—' : `${change > 0 ? '+' : ''}${change} pts`}
+                    icon={<ChangeIcon size={17} />}
+                    tone={change == null || change === 0 ? undefined : change > 0 ? 'green' : 'red'}
+                />
+                <div className="col-span-2 lg:col-span-1"><KpiTile href="/student/results" title="Best term" value={best == null ? '—' : `${best}%`} icon={<ArrowUpRight size={17} />} hue="violet" /></div>
+            </section>
 
-                {/* Assignments & Homework */}
-                <InsightCard title="Active Assignments">
-                    {assignments.length === 0 ? (
-                        <EmptyState icon={<FileText className="h-6 w-6" />} title="No assignments" description={`No assignments for ${subject.name} right now.`} />
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+                <Panel title="Term by term" subtitle={`Your ${subject.name} average each term · pass mark ${passMark}%`} className="lg:col-span-3">
+                    {series.length > 1 ? (
+                        <PerformanceTrendChart data={series} passMark={passMark} height={260} />
                     ) : (
-                        <div className="flex flex-col gap-3">
-                            {assignments.map(a => (
-                                <div key={a.id} className="flex items-center gap-3 rounded-xl border border-border p-3">
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
-                                        <FileText size={16} />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-[13px] font-bold text-foreground">{a.title}</div>
-                                        <div className="mt-0.5 text-[11px] font-semibold text-destructive">{getDueLabel(a.dueDate)}</div>
-                                    </div>
-                                    <button
-                                        onClick={() => setSubmitModal({ open: true, assignment: a })}
-                                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-muted/70"
-                                    >
-                                        <UploadCloud size={14} /> Submit
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
+                        <QuietEmpty icon={<TrendingUp size={18} />}>
+                            {series.length === 1
+                                ? `Your trend appears once you have ${subject.name} results for a second term.`
+                                : `No released ${subject.name} results yet.`}
+                        </QuietEmpty>
                     )}
-                </InsightCard>
-
-                {/* Learning Materials */}
-                <InsightCard title="Learning Materials & Notes">
-                    {materials.length === 0 ? (
-                        <EmptyState icon={<BookOpen className="h-6 w-6" />} title="No materials" description={`No learning materials for ${subject.name} yet.`} />
-                    ) : (
-                        <div className="grid grid-cols-1 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))]">
-                            {materials.map(m => {
-                                const fileLabel = m.fileType
-                                    ? `${m.fileType}${m.fileSizeBytes ? ` · ${formatFileSize(m.fileSizeBytes)}` : ''}`
-                                    : m.fileSizeBytes ? formatFileSize(m.fileSizeBytes) : 'Resource';
-                                return (
-                                    <DashboardCard key={m.id} className="flex items-start gap-4 px-4 py-4">
-                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
-                                            <FileText size={20} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="mb-1 text-sm font-bold text-foreground">{m.title}</div>
-                                            {m.description && <div className="mb-2 text-xs text-muted-foreground">{m.description}</div>}
-                                            <span className="text-[11px] font-semibold text-muted-foreground">{fileLabel}</span>
-                                        </div>
-                                        {m.fileUrl && (
-                                            <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-card text-primary no-underline">
-                                                <DownloadCloud size={16} />
-                                            </a>
-                                        )}
-                                    </DashboardCard>
-                                );
-                            })}
-                        </div>
-                    )}
-                </InsightCard>
-            </div>
-
-            {/* Submission Modal */}
-            <Modal
-                isOpen={submitModal.open}
-                onClose={() => setSubmitModal({ open: false, assignment: null })}
-                title="Submit Assignment"
-                footer={(
-                    <>
-                        <button onClick={() => setSubmitModal({ open: false, assignment: null })} className="btn-secondary">Cancel</button>
-                        <button onClick={handleSubmitAssignment} disabled={submitting || (!subText && !subFile)} className="btn-primary inline-flex items-center gap-1.5">
-                            <Send size={14} /> {submitting ? 'Submitting...' : 'Submit'}
-                        </button>
-                    </>
-                )}
-            >
-                <div className="mb-4">
-                    <div className="text-sm font-bold text-foreground">{submitModal.assignment?.title}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">{subject.name}</div>
-                    {submitModal.assignment && <div className="mt-0.5 text-xs text-destructive">{getDueLabel(submitModal.assignment.dueDate)}</div>}
-                </div>
-                <div className="mb-4">
-                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Your Answer / Notes</label>
-                    <textarea
-                        value={subText}
-                        onChange={e => setSubText(e.target.value)}
-                        rows={5}
-                        placeholder="Type your submission here..."
-                        className="input-field"
+                </Panel>
+                <div className="lg:col-span-2">
+                    <HomeworkPanel
+                        title={`${subject.name} homework`}
+                        emptyText={`No ${subject.name} homework right now.`}
+                        assignments={data.assignments}
+                        onChanged={load}
                     />
                 </div>
-                <div>
-                    <label className="mb-2 block text-xs font-semibold text-muted-foreground">Upload File (optional)</label>
-                    <input type="file" onChange={e => setSubFile(e.target.files?.[0] || null)} className="w-full text-sm" />
-                    <div className="mt-1 text-[11px] text-muted-foreground">Max 10MB. PDF, DOC, images accepted.</div>
-                </div>
-            </Modal>
+            </div>
         </div>
     );
 }

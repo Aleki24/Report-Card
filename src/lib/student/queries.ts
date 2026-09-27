@@ -12,6 +12,8 @@ import { getCurrentStudent } from './get-current-student';
 import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
 import type { CurrentStudent } from '@/types';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { embedOne } from '@/lib/postgrest';
+import { STUDENT_ASSIGNMENT_LOOKBACK_DAYS, type StudentAssignment } from '@/lib/assignments';
 
 // ── Profile ─────────────────────────────────────────────────
 
@@ -376,6 +378,7 @@ export async function getStudentPerformanceTrends(student: CurrentStudent) {
         });
 
         const subjects = subjectEntries.map(s => ({
+            id: s.subject_id,
             name: s.subjectName || '',
             average: Math.round(s.raw_score * 10) / 10,
         }));
@@ -439,29 +442,55 @@ export async function getSchoolAnnouncements(student: CurrentStudent) {
 
 // ── Assignments ─────────────────────────────────────────────
 
-export async function getStudentAssignments(student: CurrentStudent) {
+/**
+ * The learner's homework: everything due from three weeks ago onwards, with
+ * their own hand-in and any grade.
+ *
+ * This used to take the five oldest assignments by due date, so once a class
+ * had been set five pieces of work nothing new ever appeared, and it never
+ * said which ones the learner had already handed in.
+ */
+export async function getStudentAssignments(student: CurrentStudent): Promise<StudentAssignment[]> {
     const supabase = createSupabaseAdmin();
+    const since = new Date(Date.now() - STUDENT_ASSIGNMENT_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('assignments')
         .select(`
-            id, title, description, due_date, file_url, created_at,
-            subjects!subject_id ( name )
+            id, title, description, due_date, file_url,
+            subjects!subject_id ( id, name ),
+            assignment_submissions ( student_id, submitted_at, grade, feedback, graded_at )
         `)
         .eq('school_id', student.schoolId)
-        .or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`)
-        .order('due_date', { ascending: true })
-        .limit(5);
+        .eq('assignment_submissions.student_id', student.userId)
+        .gte('due_date', since);
+    query = student.gradeStreamId
+        ? query.or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`)
+        : query.is('grade_stream_id', null);
 
+    const { data, error } = await query.order('due_date', { ascending: true }).limit(50);
     if (error) return [];
-    return (data ?? []).map((a: any) => ({
-        id: a.id,
-        title: a.title,
-        description: a.description,
-        dueDate: a.due_date,
-        fileUrl: a.file_url,
-        subjectName: a.subjects?.name || 'Unknown',
-    }));
+
+    type Row = {
+        id: string; title: string; description: string | null; due_date: string; file_url: string | null;
+        subjects: { id: string; name: string } | { id: string; name: string }[] | null;
+        assignment_submissions: { submitted_at: string; grade: number | null; feedback: string | null; graded_at: string | null }[] | null;
+    };
+    return ((data ?? []) as unknown as Row[]).map(a => {
+        const mine = a.assignment_submissions?.[0];
+        return {
+            id: a.id,
+            title: a.title,
+            description: a.description,
+            dueDate: a.due_date,
+            fileUrl: a.file_url,
+            subjectId: embedOne(a.subjects)?.id ?? null,
+            subjectName: embedOne(a.subjects)?.name ?? 'Unknown subject',
+            submission: mine
+                ? { submittedAt: mine.submitted_at, grade: mine.grade == null ? null : Number(mine.grade), feedback: mine.feedback, gradedAt: mine.graded_at }
+                : null,
+        };
+    });
 }
 
 // ── Learning Materials ──────────────────────────────────────

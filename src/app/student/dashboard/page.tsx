@@ -6,28 +6,28 @@ import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import {
     ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, CalendarDays, Clock3, DownloadCloud,
-    FileText, GraduationCap, Megaphone, Minus, RefreshCw, Send, TrendingUp, UploadCloud, Wallet,
+    FileText, GraduationCap, Megaphone, Minus, RefreshCw, TrendingUp, Wallet,
 } from 'lucide-react';
 import type { StudentDashboardSummary } from '@/types';
 import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
-import { Modal } from '@/components/ui';
 import KpiTile from '@/components/dashboard/KpiTile';
 import SectionTitle from '@/components/dashboard/SectionTitle';
 import { Bone } from '@/components/dashboard/LoadingSkeleton';
 import StudyGoalsCard from '@/components/student/StudyGoalsCard';
 import LatestResultsCard from '@/components/student/dashboard/LatestResultsCard';
 import { Panel, QuietEmpty, ScoreRing, daysUntil, relativeDay, timeAgo } from '@/components/student/dashboard/shared';
-import { getCurrentTermName } from '@/lib/term-calendar';
+import { localToday, type StudentAssignment } from '@/lib/assignments';
+import HomeworkPanel from '@/components/student/dashboard/HomeworkPanel';
+import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { cn } from '@/lib/utils';
 
 interface Announcement { id: string; title: string; content: string; isImportant: boolean; createdAt: string }
-interface Assignment { id: string; title: string; subjectName: string; dueDate: string; fileUrl: string | null }
 interface LearningMaterial { id: string; title: string; subjectName: string; fileUrl: string | null; fileType: string | null; fileSizeBytes: number | null }
 interface FeeRecord { balance: number }
 
 type DashboardData = Partial<StudentDashboardSummary> & {
     announcements?: Announcement[];
-    assignments?: Assignment[];
+    assignments?: StudentAssignment[];
     materials?: LearningMaterial[];
 };
 
@@ -48,16 +48,13 @@ function formatFileSize(bytes: number): string {
 
 export default function StudentDashboardPage() {
     const { profile, loading: authLoading } = useAuth();
+    const passMark = useSchoolPassMark();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
     const [feesData, setFeesData] = useState<FeeRecord[]>([]);
-    const [submitModal, setSubmitModal] = useState<Assignment | null>(null);
-    const [subText, setSubText] = useState('');
-    const [subFile, setSubFile] = useState<File | null>(null);
-    const [submitting, setSubmitting] = useState(false);
 
     // Ticks so the greeting and countdowns stay right when the tab is left
     // open (or backgrounded) across the day.
@@ -135,12 +132,14 @@ export default function StudentDashboardPage() {
     const hour = now.getHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const className = data?.profile?.grade_streams?.full_name ?? null;
-    const termLabel = data?.currentTerm?.name ?? getCurrentTermName();
+    const termLabel = data?.currentTerm?.name ?? null;
     const nextExam = upcomingExams
         .map(exam => ({ exam, days: daysUntil(exam.exam_date, now) }))
         .filter(e => e.days >= 0)
         .sort((a, b) => a.days - b.days)[0];
-    const dueSoon = assignments.filter(a => daysUntil(a.dueDate, now) <= 2).length;
+    const today = localToday(now);
+    // Still to hand in and due within two days, or already late.
+    const dueSoon = assignments.filter(a => !a.submission && (Date.parse(a.dueDate) - Date.parse(today)) / 86_400_000 <= 2).length;
 
     const studentId = data?.profile?.id;
     const reportHref = latestReport && studentId
@@ -161,39 +160,6 @@ export default function StudentDashboardPage() {
         kpis.push(<KpiTile key="fees" title="Fees balance" value={`KShs ${feesBalance.toLocaleString()}`} icon={<Wallet size={17} />} href="/student/fees" alert={feesBalance > 0} tone={feesBalance > 0 ? 'red' : 'green'} />);
     }
 
-    const handleSubmitAssignment = async () => {
-        if (!submitModal) return;
-        setSubmitting(true);
-        try {
-            let fileUrl = '';
-            if (subFile) {
-                const fd = new FormData();
-                fd.append('file', subFile);
-                const uploadRes = await fetch('/api/school/upload', { method: 'POST', body: fd });
-                const uploadJson = (await uploadRes.json()) as { url?: string; error?: string };
-                if (!uploadRes.ok) throw new Error(uploadJson.error || 'File upload failed');
-                if (uploadJson.url) fileUrl = uploadJson.url;
-            }
-            const submitRes = await fetch('/api/school/submissions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assignment_id: submitModal.id, file_url: fileUrl || null, submission_text: subText || null }),
-            });
-            if (!submitRes.ok) {
-                const submitJson = (await submitRes.json().catch(() => ({}))) as { error?: string };
-                throw new Error(submitJson.error || 'Submission failed');
-            }
-            setSubmitModal(null);
-            setSubText('');
-            setSubFile(null);
-            toast.success('Assignment submitted');
-        } catch (err) {
-            console.error('Submission failed:', err);
-            toast.error(err instanceof Error ? err.message : 'Submission failed. Please try again.');
-        }
-        setSubmitting(false);
-    };
-
     return (
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 px-2 pb-6 sm:px-3">
             {/* ── Hero ── */}
@@ -203,7 +169,7 @@ export default function StudentDashboardPage() {
                 <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <div className="min-w-0">
                         <p className="text-xs font-medium text-white/75 sm:text-sm">
-                            {now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {termLabel}{className ? ` · ${className}` : ''}
+                            {[now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }), termLabel, className].filter(Boolean).join(' · ')}
                         </p>
                         <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
                             {greeting}{profile?.first_name ? `, ${profile.first_name}` : ''}
@@ -216,7 +182,7 @@ export default function StudentDashboardPage() {
                             )}
                             {dueSoon > 0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400/25 px-3 py-1.5 ring-1 ring-inset ring-amber-200/40">
-                                    <FileText size={14} aria-hidden /> {dueSoon} assignment{dueSoon !== 1 ? 's' : ''} due soon
+                                    <FileText size={14} aria-hidden /> {dueSoon} piece{dueSoon !== 1 ? 's' : ''} of homework to hand in
                                 </span>
                             )}
                         </div>
@@ -287,9 +253,7 @@ export default function StudentDashboardPage() {
 
                     <Panel title="Progress over time" subtitle={trends.length > 1 ? 'Your average each term' : undefined}>
                         {trends.length > 1 ? (
-                            <div className="h-[220px] w-full">
-                                <PerformanceTrendChart data={trends.map(t => ({ examName: `${t.termName} ${t.yearName}`.trim(), average: t.overallAverage }))} />
-                            </div>
+                            <PerformanceTrendChart passMark={passMark} data={trends.map(t => ({ examName: `${t.termName} ${t.yearName}`.trim(), average: t.overallAverage }))} />
                         ) : (
                             <QuietEmpty icon={<TrendingUp size={18} />}>Your progress chart appears after your second term of results.</QuietEmpty>
                         )}
@@ -324,34 +288,7 @@ export default function StudentDashboardPage() {
                         )}
                     </Panel>
 
-                    <Panel title="Homework" subtitle={assignments.length > 0 ? `${assignments.length} to hand in` : undefined}>
-                        {assignments.length === 0 ? (
-                            <QuietEmpty icon={<FileText size={18} />}>Nothing to hand in right now.</QuietEmpty>
-                        ) : (
-                            <ul className="flex flex-col gap-2">
-                                {assignments.map(a => {
-                                    const days = daysUntil(a.dueDate, now);
-                                    return (
-                                        <li key={a.id} className="flex items-center gap-3 rounded-xl border border-border/60 p-2.5">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate text-sm font-semibold text-foreground">{a.title}</div>
-                                                <div className="truncate text-xs text-muted-foreground">
-                                                    {a.subjectName} · <span className={cn('font-semibold', days < 0 ? 'text-red-600 dark:text-red-400' : days <= 2 ? 'text-amber-600' : '')}>{days < 0 ? 'Overdue' : `Due ${relativeDay(days).toLowerCase()}`}</span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setSubmitModal(a)}
-                                                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
-                                            >
-                                                <UploadCloud size={14} aria-hidden /> Submit
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
-                    </Panel>
+                    <HomeworkPanel assignments={assignments} onChanged={() => void fetchDashboard({ silent: true })} />
                 </div>
             </div>
 
@@ -413,38 +350,6 @@ export default function StudentDashboardPage() {
                 </Panel>
             )}
 
-            {/* ── Submit homework ── */}
-            <Modal
-                isOpen={!!submitModal}
-                onClose={() => setSubmitModal(null)}
-                title="Submit assignment"
-                footer={(
-                    <>
-                        <button type="button" onClick={() => setSubmitModal(null)} className="btn-secondary">Cancel</button>
-                        <button type="button" onClick={() => void handleSubmitAssignment()} disabled={submitting || (!subText && !subFile)} className="btn-primary inline-flex items-center gap-1.5">
-                            <Send size={14} aria-hidden /> {submitting ? 'Submitting…' : 'Submit'}
-                        </button>
-                    </>
-                )}
-            >
-                {submitModal && (
-                    <div className="mb-4">
-                        <div className="text-sm font-bold text-foreground">{submitModal.title}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                            {submitModal.subjectName} · {(() => { const d = daysUntil(submitModal.dueDate, now); return d < 0 ? 'Overdue' : `Due ${relativeDay(d).toLowerCase()}`; })()}
-                        </div>
-                    </div>
-                )}
-                <label className="mb-4 block">
-                    <span className="mb-2 block text-xs font-semibold text-muted-foreground">Your answer / notes</span>
-                    <textarea value={subText} onChange={e => setSubText(e.target.value)} rows={5} placeholder="Type your submission here…" className="input-field" />
-                </label>
-                <label className="block">
-                    <span className="mb-2 block text-xs font-semibold text-muted-foreground">Upload a file (optional)</span>
-                    <input type="file" onChange={e => setSubFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
-                    <span className="mt-1 block text-[11px] text-muted-foreground">Max 10MB. PDF, DOC and images accepted.</span>
-                </label>
-            </Modal>
         </div>
     );
 }
