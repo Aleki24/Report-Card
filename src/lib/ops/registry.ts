@@ -12,7 +12,7 @@ import {
 import { voteHeads, feeStructures, feeStructureItems, feeAwards, suppliers, expenses } from './resources/finance';
 import {
     dorms, dormAllocations, exeats, dormInspections,
-    medicalProfiles, medicineStock, medicationLogs, disciplineIncidents,
+    medicalProfiles, clinicVisits, medicineStock, medicationLogs, disciplineIncidents,
 } from './resources/welfare';
 import {
     vehicles, transportCrew, transportRoutes, routeStops, studentTransport, trips, vehicleLogs,
@@ -39,6 +39,7 @@ export const RESOURCES = {
     'exeats': exeats,
     'dorm-inspections': dormInspections,
     'medical-profiles': medicalProfiles,
+    'clinic-visits': clinicVisits,
     'medicine-stock': medicineStock,
     'medication-logs': medicationLogs,
     'discipline': disciplineIncidents,

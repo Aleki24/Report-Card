@@ -130,6 +130,33 @@ export const medicalProfiles = defineResource({
     maxRows: 5000,
 });
 
+export const clinicVisits = defineResource({
+    table: 'clinic_visits',
+    module: 'health',
+    label: { singular: 'Clinic visit', plural: 'Clinic visits' },
+    read: ['health.clinical'],
+    write: ['health.manage'],
+    schema: z.object({
+        student_id: personId,
+        visited_at: isoDateTime,
+        complaint: text(500),
+        temperature_c: z.preprocess(v => (v === '' || v === undefined || v === null ? null : Number(v)), z.number().min(30).max(45).nullable()).optional(),
+        diagnosis: optionalText(1000),
+        treatment: optionalText(1000),
+        outcome: oneOf(VISIT_OUTCOMES).default('RETURNED_TO_CLASS'),
+        referred_to: optionalText(200),
+        discharged_at: z.preprocess(v => (v === '' ? null : v), isoDateTime.nullable()).optional(),
+    }),
+    select: `*, ${STUDENT_JOIN}, ${personJoin('attendant', 'clinic_visits', 'attended_by')}`,
+    order: { column: 'visited_at', ascending: false },
+    filters: ['student_id', 'outcome'],
+    flags: { in_bay: { column: 'discharged_at', isNull: true } },
+    refs: { student_id: 'students' },
+    createdByColumn: 'attended_by',
+    audit: true,
+    maxRows: 2000,
+});
+
 export const medicineStock = defineResource({
     table: 'medicine_stock',
     module: 'health',
