@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Hue } from '@/components/ui/tones';
-import type { TermSummary, UpcomingRound } from '@/app/api/school/dashboard/route';
+import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 
 interface DashboardData {
   totalStudents: number;
@@ -61,6 +61,8 @@ import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
 import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
 import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 
 // ── Admin Dashboard ──────────────────────────────────────────
 /*
@@ -97,9 +99,6 @@ function AdminDashboard({ userName }: { userName: string }) {
 
   if (loading) return <LoadingSkeleton />;
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const passRate = data?.academicSummary?.markCount ? data.academicSummary.passRate : null;
   const attendanceTotal = data?.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;
   const presentRate = attendanceTotal > 0 && data?.attendanceToday ? Math.round((data.attendanceToday.present / attendanceTotal) * 100) : null;
@@ -117,12 +116,7 @@ function AdminDashboard({ userName }: { userName: string }) {
       />
 
       {/* Where the school is in its term */}
-      <header className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{todayLabel}</p>
-          <h1 className="mt-0.5 font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">{greeting}, {userName || 'there'}</h1>
-          <TermLine term={data?.term ?? null} />
-        </div>
+      <DashboardHeader name={userName} term={data?.term ?? null} canEditTerms>
         <form
           onSubmit={e => { e.preventDefault(); if (searchQuery.trim()) router.push(`/dashboard/people?search=${encodeURIComponent(searchQuery.trim())}`); }}
           className="w-full lg:w-80"
@@ -140,7 +134,7 @@ function AdminDashboard({ userName }: { userName: string }) {
             />
           </label>
         </form>
-      </header>
+      </DashboardHeader>
 
       {/* What needs doing */}
       <section aria-labelledby="todo-heading">
@@ -212,38 +206,6 @@ function AdminDashboard({ userName }: { userName: string }) {
 
 function totalAttendanceCount(a: NonNullable<DashboardData['attendanceToday']>): number {
   return a.present + a.absent + a.late + a.excused;
-}
-
-/** "Term 3 · 2026 · Week 5 of 10 · 34 days left", or the break and when school reopens. */
-function TermLine({ term }: { term: DashboardData['term'] | null }) {
-  if (!term || term.kind === 'none') {
-    return (
-      <p className="mt-2 text-sm text-muted-foreground">
-        No term dates set. <Link href="/dashboard/settings?tab=calendar" className="font-medium text-primary hover:underline">Add your terms</Link> to track the calendar.
-      </p>
-    );
-  }
-  if (term.kind === 'break') {
-    const opens = term.nextStart ? new Date(`${term.nextStart}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : null;
-    return (
-      <p className="mt-2 inline-flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <span className="rounded-full bg-amber-500/12 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">School break</span>
-        {term.nextName && opens ? `${term.nextName} opens ${opens}` : 'No upcoming term dates set'}
-      </p>
-    );
-  }
-  const progress = Math.round((term.week / term.weeks) * 100);
-  return (
-    <div className="mt-2 max-w-md">
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{[term.name, term.year].filter(Boolean).join(' · ')}</span>
-        <span className="text-muted-foreground">Week {term.week} of {term.weeks} · {term.daysLeft === 0 ? 'ends today' : `${term.daysLeft} day${term.daysLeft === 1 ? '' : 's'} left`}</span>
-      </p>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="meter" aria-label="How far through the term" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-        <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
-      </div>
-    </div>
-  );
 }
 
 interface Todo { key: string; icon: LucideIcon; hue: Hue; title: string; detail: string; cta: string; href: string }
@@ -327,29 +289,6 @@ function QuickAction({ label, href, icon: Icon }: { label: string; href: string;
       <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', tone.tile)} aria-hidden><Icon className="size-4" /></span>
       <span className="text-xs font-semibold leading-tight text-foreground sm:text-sm">{label}</span>
     </Link>
-  );
-}
-
-function UpcomingRounds({ rounds }: { rounds: NonNullable<DashboardData['upcomingRounds']> }) {
-  if (rounds.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">No exams in the next three weeks.</p>;
-  return (
-    <ul className="-mx-1 flex flex-col">
-      {rounds.map(r => {
-        const date = new Date(`${r.firstDate}T00:00:00`);
-        return (
-          <li key={r.key} className="flex items-center gap-3 rounded-xl px-1 py-2">
-            <span className="flex w-11 shrink-0 flex-col items-center rounded-lg bg-muted/60 py-1 text-center" aria-hidden>
-              <span className="text-[10px] font-semibold uppercase text-muted-foreground">{date.toLocaleDateString('en-GB', { month: 'short' })}</span>
-              <span className="text-base font-bold leading-none text-foreground">{date.getDate()}</span>
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">{r.className} · {r.label}</p>
-              <p className="text-xs text-muted-foreground">{r.papers} paper{r.papers === 1 ? '' : 's'} · from {date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
