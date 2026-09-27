@@ -186,7 +186,8 @@ export function MarksSetupTab() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/admin/academic-structure', { cache: 'no-store' });
+        // Only the curricula and grades this school has classes in.
+        const res = await fetch('/api/admin/academic-structure?scope=school', { cache: 'no-store' });
         const data = (await res.json()) as { academic_levels?: AcademicLevel[]; grades?: GradeItem[] };
         setAcademicLevels(data.academic_levels ?? []);
         setAllGrades(data.grades ?? []);

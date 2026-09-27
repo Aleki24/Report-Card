@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Image from 'next/image';
+import { AlertTriangle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 
 /** Full-width gradient call to action used on every auth screen. */
 export const AUTH_PRIMARY_BUTTON =
@@ -95,6 +96,39 @@ export function AuthDivider({ label = 'or continue with' }: { label?: string }) 
       <div className="h-px flex-1 bg-black/[0.08] dark:bg-white/10" />
       <span className="text-xs font-medium text-slate-400 dark:text-slate-500">{label}</span>
       <div className="h-px flex-1 bg-black/[0.08] dark:bg-white/10" />
+    </div>
+  );
+}
+
+export type AuthStatusTone = 'working' | 'success' | 'error' | 'waiting';
+
+const STATUS_ICON: Record<AuthStatusTone, { wrap: string; icon: ReactNode }> = {
+  working: { wrap: 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-300', icon: <Loader2 className="size-7 animate-spin" aria-hidden /> },
+  success: { wrap: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', icon: <CheckCircle2 className="size-7" aria-hidden /> },
+  error: { wrap: 'bg-red-500/10 text-red-600 dark:text-red-400', icon: <AlertTriangle className="size-7" aria-hidden /> },
+  waiting: { wrap: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', icon: <Clock className="size-7" aria-hidden /> },
+};
+
+interface AuthStatusProps {
+  tone: AuthStatusTone;
+  /** What is happening, or what happened. */
+  message: ReactNode;
+  /** Buttons or links to move on. */
+  children?: ReactNode;
+}
+
+/**
+ * Body of a card that reports progress rather than asking for input: OAuth
+ * callbacks, account linking, payment confirmation. Announced to screen
+ * readers as it changes.
+ */
+export function AuthStatus({ tone, message, children }: AuthStatusProps) {
+  const { wrap, icon } = STATUS_ICON[tone];
+  return (
+    <div className="flex flex-col items-center gap-5 text-center" role={tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+      <span className={`flex size-14 items-center justify-center rounded-2xl ${wrap}`}>{icon}</span>
+      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{message}</p>
+      {children && <div className="flex w-full flex-col gap-3">{children}</div>}
     </div>
   );
 }

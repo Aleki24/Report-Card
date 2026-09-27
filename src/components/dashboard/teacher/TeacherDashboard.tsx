@@ -6,24 +6,26 @@ import { TONES } from '@/components/ui/tones';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, BarChart3, BookOpen, CalendarCheck, CheckCircle2, ClipboardList, FileText,
-  GraduationCap, Megaphone, NotebookPen, PenLine, Send, Users,
+  ArrowRight, BarChart3, CalendarCheck, CheckCircle2, ClipboardList, FileText,
+  GraduationCap, Hash, Megaphone, NotebookPen, PenLine, Send, Users,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { DashboardSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import KpiTile from '@/components/dashboard/KpiTile';
 import SectionTitle from '@/components/dashboard/SectionTitle';
-import UpcomingExamsCard, { type UpcomingExam } from '@/components/dashboard/UpcomingExamsCard';
+import InsightCard from '@/components/dashboard/InsightCard';
+import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 import MarkingProgressPanel from './MarkingProgressPanel';
-import { getCurrentTermName } from '@/lib/term-calendar';
 import { markEntryHref, markingState, type MarkingProgressResponse } from '@/lib/marking-progress';
 
 type Variant = 'class' | 'subject';
 
 interface ClassStats { streamName: string; studentCount: number; streamAvg: string; reportsPending: number }
 interface SubjectStats { examCount: number; avg: string; markCount: number }
-interface DashboardSummary { upcomingExams: UpcomingExam[] }
+interface DashboardSummary { term?: TermSummary; upcomingRounds?: UpcomingRound[] }
 
 interface QuickLink { label: string; desc: string; href: string; icon: React.ReactNode }
 
@@ -33,7 +35,7 @@ const QUICK_LINKS: Record<Variant, QuickLink[]> = {
     { label: 'Class results', desc: 'Broadsheet and rankings', href: '/dashboard/exams-marks?tab=results', icon: <BarChart3 size={16} /> },
     { label: 'Report cards', desc: 'Generate and send to parents', href: '/dashboard/reports', icon: <FileText size={16} /> },
     { label: 'Attendance', desc: 'Mark today’s register', href: '/dashboard/attendance', icon: <CalendarCheck size={16} /> },
-    { label: 'My learners', desc: 'Class roster', href: '/dashboard/people', icon: <Users size={16} /> },
+    { label: 'My students', desc: 'Your class roster', href: '/dashboard/people', icon: <Users size={16} /> },
   ],
   subject: [
     { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: <PenLine size={16} /> },
@@ -51,10 +53,6 @@ async function getJson<T>(url: string): Promise<T | null> {
   } catch {
     return null;
   }
-}
-
-function greetingFor(hour: number): string {
-  return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 }
 
 /**
@@ -108,60 +106,37 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
 
   if (loading) return <DashboardSkeleton />;
 
-  const now = new Date();
   const firstName = profile?.first_name ?? '';
-  const upcoming = summary?.upcomingExams ?? [];
-  const termLabel = marking?.term?.name ?? getCurrentTermName();
+  const streamName = classStats?.streamName && classStats.streamName !== '—' ? classStats.streamName : null;
   const avg = variant === 'class' ? classStats?.streamAvg : subjectStats?.avg;
   const avgText = avg && avg !== '—' ? `${avg}%` : '—';
+  const markingSummary = markingLoading
+    ? null
+    : progress.left > 0
+      ? `You have ${progress.left.toLocaleString()} mark${progress.left !== 1 ? 's' : ''} left to enter this term.`
+      : items.length > 0
+        ? 'All your marks are in for this term. Nice work.'
+        : 'No exams to mark yet this term.';
 
   return (
     <div className="flex flex-col gap-5 px-1 pb-6 sm:px-2 lg:px-3">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 px-5 py-6 text-white shadow-sm sm:px-8 sm:py-8">
-        <div className="pointer-events-none absolute -right-10 -top-14 h-48 w-48 rounded-full bg-white/10" aria-hidden />
-        <div className="pointer-events-none absolute -bottom-16 right-24 h-40 w-40 rounded-full bg-white/5" aria-hidden />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-white/75 sm:text-sm">
-              {now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {termLabel}
-            </p>
-            <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              {greetingFor(now.getHours())}{firstName ? `, ${firstName}` : ''}
-            </h1>
-            <p className="mt-1.5 max-w-xl text-sm text-white/85">
-              {markingLoading
-                ? (variant === 'class' ? `Here's how ${classStats?.streamName && classStats.streamName !== '—' ? classStats.streamName : 'your class'} is doing.` : 'Here is your marking for the term.')
-                : progress.left > 0
-                  ? `You have ${progress.left.toLocaleString()} mark${progress.left !== 1 ? 's' : ''} left to enter this term.`
-                  : items.length > 0
-                    ? 'All your marks are in for this term. Nice work.'
-                    : variant === 'class' ? 'Your class at a glance.' : 'No exams to mark yet this term.'}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 xs:flex-row">
-            {progress.next ? (
-              <Link
-                href={markEntryHref(progress.next.termId, progress.next.examId)}
-                className="inline-flex min-w-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-all hover:-translate-y-px hover:shadow-md"
-              >
-                <PenLine size={16} className="shrink-0" aria-hidden />
-                <span className="truncate">Continue: {progress.next.subjectName} · {progress.next.className}</span>
-              </Link>
-            ) : (
-              <Link href="/dashboard/exams-marks" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-all hover:-translate-y-px hover:shadow-md">
-                <PenLine size={16} aria-hidden /> Enter or correct marks
-              </Link>
-            )}
-            <Link
-              href={variant === 'class' ? '/dashboard/reports' : '/dashboard/exams-marks?tab=results'}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/20"
-            >
-              {variant === 'class' ? <><FileText size={16} aria-hidden /> Report cards</> : <><BarChart3 size={16} aria-hidden /> View results</>}
+      <DashboardHeader name={firstName} term={summary?.term ?? null} canEditTerms={false} summary={markingSummary}>
+        <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
+          {progress.next ? (
+            <Link href={markEntryHref(progress.next.termId, progress.next.examId)} className="btn-primary min-w-0 no-underline">
+              <PenLine size={16} className="shrink-0" aria-hidden />
+              <span className="truncate">Continue: {progress.next.subjectName} · {progress.next.className}</span>
             </Link>
-          </div>
+          ) : (
+            <Link href="/dashboard/exams-marks" className="btn-primary no-underline">
+              <PenLine size={16} aria-hidden /> Enter or correct marks
+            </Link>
+          )}
+          <Link href={variant === 'class' ? '/dashboard/reports' : '/dashboard/exams-marks?tab=results'} className="btn-secondary no-underline">
+            {variant === 'class' ? <><FileText size={16} aria-hidden /> Report cards</> : <><BarChart3 size={16} aria-hidden /> View results</>}
+          </Link>
         </div>
-      </section>
+      </DashboardHeader>
 
       {/* At a glance */}
       <section>
@@ -185,13 +160,13 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           />
           {variant === 'class' ? (
             <>
-              <KpiTile title={classStats?.streamName && classStats.streamName !== '—' ? `Learners in ${classStats.streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
+              <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
               <KpiTile title="Class average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
             </>
           ) : (
             <>
               <KpiTile title="Subject average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
-              <KpiTile title="Upcoming exams" value={upcoming.length} icon={<BookOpen size={17} />} href="/dashboard/exams-marks" hue="sky" />
+              <KpiTile title="Marks entered" value={(subjectStats?.markCount ?? 0).toLocaleString()} icon={<Hash size={17} />} href="/dashboard/exams-marks" hue="sky" />
             </>
           )}
         </div>
@@ -221,7 +196,9 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
             </ul>
           </section>
 
-          <UpcomingExamsCard exams={upcoming} />
+          <InsightCard title="Coming up" meta="Next three weeks" action={{ label: 'Exams', href: '/dashboard/exams-marks' }}>
+            <UpcomingRounds rounds={summary?.upcomingRounds ?? []} />
+          </InsightCard>
 
           {variant === 'class' && (classStats?.reportsPending ?? 0) > 0 && (
             <Link href="/dashboard/reports" className="flex items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 no-underline transition-colors hover:bg-amber-500/15">

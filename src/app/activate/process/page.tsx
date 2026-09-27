@@ -1,170 +1,122 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
-import { homePathForRole } from '@/lib/roles';
+import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
+import { AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus } from '@/components/auth/AuthShell';
+import { homePathForRole, isUserRole } from '@/lib/roles';
 
-export default function ActivateCallbackPage() {
-    const router = useRouter();
-    const { isLoaded: isSignUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
-    const { isLoaded: isSignInLoaded, signIn, setActive: setSignInActive } = useSignIn();
-    const [status, setStatus] = useState('Processing your Google sign-in...');
-    const [error, setError] = useState<string | null>(null);
+const INVITE_KEY = 'activate_invite_code';
+const USERNAME_KEY = 'activate_username';
 
-    useEffect(() => {
-        async function handleCallback() {
-            if (!isSignUpLoaded || !isSignInLoaded) return;
+interface ActivateResponse { error?: string; role?: string }
 
-            try {
-                const inviteCode = sessionStorage.getItem('activate_invite_code');
-                const storedUsername = sessionStorage.getItem('activate_username');
+type View =
+  | { kind: 'working'; message: string }
+  | { kind: 'done' }
+  | { kind: 'error'; message: string; existingAccount?: boolean };
 
-                if (!inviteCode) {
-                    setError('No invite code found. Please go back and start again.');
-                    return;
-                }
+function describe(err: unknown): string {
+  if (isClerkAPIResponseError(err)) return err.errors[0]?.longMessage ?? err.errors[0]?.message ?? 'Google sign-in failed.';
+  return err instanceof Error ? err.message : 'Something went wrong while activating your account.';
+}
 
-                let clerkUserId: string | undefined;
-                let activeSessionId: string | undefined;
-                let setActiveFn: any;
+/**
+ * After Google hands back during activation: finish the Clerk sign-up (adding
+ * the username the learner or teacher chose), activate the session, then link
+ * it to the account their school created, using the invite code saved before
+ * they left for Google.
+ */
+export default function ActivateProcessPage() {
+  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp();
+  const { isLoaded: signInLoaded, signIn } = useSignIn();
+  const [view, setView] = useState<View>({ kind: 'working', message: 'Checking your Google sign-in…' });
+  // Clerk objects change identity as they load; link the account only once.
+  const started = useRef(false);
 
-                // 1. Check if this resolved as a Sign In (user already had this Google account in Clerk)
-                if (signIn && signIn.status === 'complete' && signIn.createdSessionId) {
-                    // It's possible the user already existed in Clerk via Google
-                    setStatus('Linking your existing Google account...');
-                    // User ID is in signIn
-                    // But wait, signIn object doesn't expose createdUserId easily, we can just get it from the session later, 
-                    // or maybe it's in signIn.userData? signIn.identifier?
-                    // Actually, if signIn is complete, let's just setActive and then the session will be active.
-                    // However, we need the user ID for our backend API.
-                    // For now, let's assume they are a new user.
-                }
+  useEffect(() => {
+    if (!signUpLoaded || !signInLoaded || started.current) return;
+    // Clerk is still finishing the redirect; wait for the next update.
+    if (!signUp?.status && !signIn?.status) return;
+    started.current = true;
 
-                // 2. Check if it's a Sign Up
-                if (signUp && signUp.status) {
-                    if (signUp.status === 'missing_requirements') {
-                        setStatus('Setting up your username...');
-                        // Google doesn't provide a username, and our app requires it.
-                        // We stored the chosen username in sessionStorage!
-                        if (storedUsername) {
-                            const updatedSignUp = await signUp.update({ username: storedUsername });
-                            if (updatedSignUp.status === 'complete' && updatedSignUp.createdSessionId) {
-                                clerkUserId = updatedSignUp.createdUserId || undefined;
-                                activeSessionId = updatedSignUp.createdSessionId;
-                                setActiveFn = setSignUpActive;
-                            } else {
-                                setError(`Still missing requirements: ${updatedSignUp.status}`);
-                                return;
-                            }
-                        } else {
-                            setError('Missing username requirement and no username found in storage.');
-                            return;
-                        }
-                    } else if (signUp.status === 'complete' && signUp.createdSessionId) {
-                        clerkUserId = signUp.createdUserId || undefined;
-                        activeSessionId = signUp.createdSessionId;
-                        setActiveFn = setSignUpActive;
-                    }
-                }
+    void (async () => {
+      const inviteCode = sessionStorage.getItem(INVITE_KEY);
+      const username = sessionStorage.getItem(USERNAME_KEY);
+      if (!inviteCode) {
+        setView({ kind: 'error', message: 'We couldn’t find your invite code. It is only kept in this browser tab, so start activation again here.' });
+        return;
+      }
 
-                // If neither worked, maybe it's still null because the redirect component hasn't finished yet
-                if (!clerkUserId) {
-                    // Let's not throw an error immediately if status is null, just wait.
-                    if ((!signUp || signUp.status === null) && (!signIn || signIn.status === null)) {
-                        return; // wait for clerk to process
-                    }
-                    if (error) return; // already set error
-                    setError(`Unable to complete sign up. Status: ${signUp?.status || 'Unknown'}`);
-                    return;
-                }
-
-                // Activate the Clerk session FIRST so the request to our API carries an
-                // authenticated session — /api/auth/activate-google verifies that the
-                // clerk_user_id in the body matches the signed-in user, and rejects the
-                // call otherwise. Setting the session after the call left the request
-                // unauthenticated and could bind the invite against the wrong account.
-                if (setActiveFn && activeSessionId) {
-                    await setActiveFn({ session: activeSessionId });
-                }
-
-                setStatus('Linking your account...');
-
-                // Call our API to link the Google Clerk account to the pending user
-                const res = await fetch('/api/auth/activate-google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        code: inviteCode,
-                        clerk_user_id: clerkUserId,
-                        username: storedUsername,
-                    }),
-                });
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    setError(data.error || 'Failed to link account.');
-                    return;
-                }
-
-                // Clean up sessionStorage
-                sessionStorage.removeItem('activate_invite_code');
-                sessionStorage.removeItem('activate_username');
-
-                setStatus('Account activated! Redirecting...');
-                // Full page navigation (not router.push): AuthProvider fetched
-                // /api/auth/me while this account was still being linked and may
-                // have cached a stale 'PENDING' profile — a client-side route
-                // change would bounce the user into /dashboard/onboarding and
-                // ask for the invite code all over again. A hard reload
-                // re-fetches the profile with the real role.
-                const target = homePathForRole(data.role);
-                setTimeout(() => {
-                    window.location.href = target;
-                }, 1500);
-
-            } catch (err: any) {
-                console.error('Callback error:', err);
-                // Don't show error if it's just "not ready"
-                if (!error) {
-                    setError(err.errors?.[0]?.message || err.message || 'An error occurred during activation.');
-                }
-            }
+      try {
+        // This Google account already has a Skulbase login. Linking it would
+        // take over whatever account it belongs to, so stop here.
+        if (signIn?.status === 'complete') {
+          setView({ kind: 'error', existingAccount: true, message: 'This Google account is already linked to a Skulbase account. Sign in with it, or activate your invite with a different Google account.' });
+          return;
         }
 
-        handleCallback();
-    }, [isSignUpLoaded, isSignInLoaded, signUp, signIn, setSignUpActive, setSignInActive, router]);
+        let result = signUp;
+        if (result?.status === 'missing_requirements') {
+          if (!username) {
+            setView({ kind: 'error', message: 'Your chosen username was lost on the way back from Google. Start activation again.' });
+            return;
+          }
+          setView({ kind: 'working', message: 'Saving your username…' });
+          result = await result.update({ username });
+        }
+        if (result?.status !== 'complete' || !result.createdSessionId || !result.createdUserId) {
+          setView({ kind: 'error', message: 'Google sign-up didn’t finish. Start activation again.' });
+          return;
+        }
 
+        // The session must be active first: the API checks that the account
+        // being linked belongs to the signed-in user.
+        await setActive?.({ session: result.createdSessionId });
+
+        setView({ kind: 'working', message: 'Linking your account to your school…' });
+        const res = await fetch('/api/auth/activate-google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: inviteCode, clerk_user_id: result.createdUserId, username }),
+        });
+        const data = (await res.json().catch(() => ({}))) as ActivateResponse;
+        if (!res.ok) {
+          setView({ kind: 'error', message: data.error ?? 'We couldn’t link your account. Ask your school administrator for a new invite code.' });
+          return;
+        }
+
+        sessionStorage.removeItem(INVITE_KEY);
+        sessionStorage.removeItem(USERNAME_KEY);
+        setView({ kind: 'done' });
+        // A full navigation, not router.push: the app may have cached this
+        // account as PENDING while it was being linked, which would send the
+        // user back through onboarding asking for the invite code again.
+        setTimeout(() => { window.location.href = homePathForRole(isUserRole(data.role) ? data.role : null); }, 1200);
+      } catch (err) {
+        setView({ kind: 'error', message: describe(err) });
+      }
+    })();
+  }, [signUpLoaded, signInLoaded, signUp, signIn, setActive]);
+
+  if (view.kind === 'error') {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-            <div className="w-full max-w-md p-8 bg-card border border-border/50 rounded-2xl shadow-xl text-center">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                    {error ? (
-                        <span className="text-2xl">❌</span>
-                    ) : (
-                        <div className="h-8 w-8 border-3 border-muted-foreground/20 border-t-primary rounded-full animate-spin" />
-                    )}
-                </div>
-
-                {error ? (
-                    <>
-                        <h2 className="text-lg font-bold mb-2 text-red-500">Activation Failed</h2>
-                        <p className="text-sm text-muted-foreground mb-6">{error}</p>
-                        <button
-                            onClick={() => router.push('/activate')}
-                            className="btn-primary w-full py-3 text-sm"
-                        >
-                            Try Again
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        <h2 className="text-lg font-bold mb-2">{status}</h2>
-                        <p className="text-sm text-muted-foreground">Please wait while we set up your account.</p>
-                    </>
-                )}
-            </div>
-        </div>
+      <AuthShell title="Activation didn’t finish">
+        <AuthStatus tone="error" message={view.message}>
+          <Link href="/activate" className={`${AUTH_PRIMARY_BUTTON} no-underline`}>Start activation again</Link>
+          {view.existingAccount && <Link href="/login" className={`${AUTH_SECONDARY_BUTTON} no-underline`}>Sign in instead</Link>}
+        </AuthStatus>
+      </AuthShell>
     );
+  }
+
+  return (
+    <AuthShell title={view.kind === 'done' ? 'You’re all set' : 'Activating your account'}>
+      <AuthStatus
+        tone={view.kind === 'done' ? 'success' : 'working'}
+        message={view.kind === 'done' ? 'Your account is active. Taking you to your dashboard…' : view.message}
+      />
+    </AuthShell>
+  );
 }

@@ -32,7 +32,7 @@ export function ModalOverlay({ children, onClose, maxWidth = 'max-w-lg', classNa
         aria-label={ariaLabel}
         tabIndex={-1}
         // .card only pads itself on narrow screens; dialogs need it at every width.
-        className={cn('card w-full max-h-[90vh] overflow-y-auto p-5 outline-none animate-fade-in sm:p-6', maxWidth, className)}
+        className={cn('card w-full max-h-[90vh] overflow-y-auto bg-card p-5 outline-none animate-fade-in hover:border-border/70 sm:p-6', maxWidth, className)}
       >
         {children}
       </div>

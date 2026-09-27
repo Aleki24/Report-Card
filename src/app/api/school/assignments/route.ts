@@ -1,132 +1,123 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getCaller } from '@/lib/auth-server';
+import { internalError } from '@/lib/api-errors';
+import { fetchAllRows, embedOne } from '@/lib/postgrest';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
-import { streamBelongsToSchool } from '@/lib/tenant-scope';
+import { assignmentSchema, type Assignment } from '@/lib/assignments';
+import { assignmentRefsBelongToSchool } from '@/lib/assignments-server';
 
+type Named = { id: string; first_name: string | null; last_name: string | null };
+interface AssignmentRow {
+    id: string;
+    title: string;
+    description: string | null;
+    due_date: string;
+    file_url: string | null;
+    created_at: string;
+    created_by: string | null;
+    subjects: { id: string; name: string } | { id: string; name: string }[] | null;
+    grade_streams: { id: string; full_name: string } | { id: string; full_name: string }[] | null;
+    users: Named | Named[] | null;
+    assignment_submissions: { count: number }[] | null;
+}
+
+const toAssignment = (a: AssignmentRow): Assignment => {
+    const subject = embedOne(a.subjects);
+    const stream = embedOne(a.grade_streams);
+    const author = embedOne(a.users);
+    return {
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        dueDate: a.due_date,
+        fileUrl: a.file_url,
+        subject: subject?.name ?? 'Unknown subject',
+        subjectId: subject?.id ?? '',
+        stream: stream?.full_name ?? null,
+        streamId: stream?.id ?? null,
+        createdBy: author ? `${author.first_name ?? ''} ${author.last_name ?? ''}`.trim() : 'Unknown',
+        createdById: a.created_by,
+        createdAt: a.created_at,
+        submissionCount: a.assignment_submissions?.[0]?.count ?? 0,
+    };
+};
+
+/**
+ * The school's assignments, soonest due first.
+ *
+ * This returned the first 50 by due date, oldest first, so once a school had
+ * set 50 pieces of work every new one was cut off the end of the list.
+ */
 export async function GET() {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const schoolId = userProfile?.school_id;
-        const role = userProfile?.role;
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { schoolId, role } = caller;
         if (!schoolId) return NextResponse.json({ data: [] });
 
-        let query = supabase
-            .from('assignments')
-            .select(`
-                id, title, description, due_date, file_url, created_at,
-                subjects!subject_id ( id, code, name ),
-                grade_streams!grade_stream_id ( id, name, full_name ),
-                users!created_by ( id, first_name, last_name )
-            `)
-            .eq('school_id', schoolId)
-            .order('due_date', { ascending: true })
-            .limit(50);
+        const student = role === 'STUDENT' ? await getCurrentStudent() : null;
+        const supabase = createSupabaseAdmin();
+        const { rows, error } = await fetchAllRows<AssignmentRow>(() => {
+            let query = supabase
+                .from('assignments')
+                .select(`
+                    id, title, description, due_date, file_url, created_at, created_by,
+                    subjects!subject_id ( id, name ),
+                    grade_streams!grade_stream_id ( id, full_name ),
+                    users!created_by ( id, first_name, last_name ),
+                    assignment_submissions ( count )
+                `)
+                .eq('school_id', schoolId);
+            // Students see their class's work, and anything set for the whole
+            // school; a student with no class sees only the latter.
+            if (role === 'STUDENT') {
+                query = student?.gradeStreamId
+                    ? query.or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`)
+                    : query.is('grade_stream_id', null);
+            }
+            return query.order('due_date', { ascending: true }).order('id') as unknown as {
+                range: (from: number, to: number) => PromiseLike<{ data: AssignmentRow[] | null; error: unknown }>;
+            };
+        });
+        if (error) return internalError('assignments list', error);
 
-        // Students see only assignments for their stream
-        if (role === 'STUDENT') {
-            const student = await getCurrentStudent();
-            // A student with no class sees only school-wide work, never every
-            // class's assignments.
-            query = student?.gradeStreamId
-                ? query.or(`grade_stream_id.eq.${student.gradeStreamId},grade_stream_id.is.null`)
-                : query.is('grade_stream_id', null);
-        }
-
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        const mapped = (data ?? []).map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            description: a.description,
-            dueDate: a.due_date,
-            fileUrl: a.file_url,
-            subject: a.subjects?.name || 'Unknown',
-            subjectId: a.subjects?.id,
-            subjectCode: a.subjects?.code,
-            stream: a.grade_streams?.full_name || null,
-            streamId: a.grade_streams?.id,
-            createdBy: a.users ? `${a.users.first_name} ${a.users.last_name}` : 'Unknown',
-            createdAt: a.created_at,
-        }));
-
-        return NextResponse.json({ data: mapped });
+        const data = rows.map(toAssignment);
+        // A learner has no business counting the class's submissions.
+        if (role === 'STUDENT') for (const a of data) a.submissionCount = 0;
+        return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('assignments', err);
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, role, is_active')
-            .eq('id', userId)
-            .single();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const schoolId = userProfile?.school_id;
-        const role = userProfile?.role;
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { schoolId, userId, role } = caller;
         if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
-
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
+            return NextResponse.json({ error: 'Only admins and teachers can set assignments.' }, { status: 403 });
         }
 
-        const body = await request.json();
-        if (!body.title || !body.subject_id || !body.due_date) {
-            return NextResponse.json({ error: 'title, subject_id, and due_date are required' }, { status: 400 });
+        const parsed = assignmentSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid assignment.' }, { status: 400 });
         }
-        if (body.grade_stream_id && !(await streamBelongsToSchool(body.grade_stream_id, schoolId))) {
-            return NextResponse.json({ error: 'Class not found in your school' }, { status: 404 });
-        }
+        const body = parsed.data;
+        const refsProblem = await assignmentRefsBelongToSchool(schoolId, body.subject_id, body.grade_stream_id);
+        if (refsProblem) return NextResponse.json({ error: refsProblem }, { status: 404 });
 
-        const { data, error } = await supabase
+        const { data, error } = await createSupabaseAdmin()
             .from('assignments')
-            .insert({
-                school_id: schoolId,
-                subject_id: body.subject_id,
-                grade_stream_id: body.grade_stream_id || null,
-                title: body.title,
-                description: body.description || null,
-                due_date: body.due_date,
-                file_url: body.file_url || null,
-                created_by: userId,
-            })
-            .select()
+            .insert({ school_id: schoolId, created_by: userId, ...body })
+            .select('id')
             .single();
-
-        if (error) throw error;
+        if (error) return internalError('assignment insert', error);
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('assignment create', err);
     }
 }

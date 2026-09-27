@@ -70,7 +70,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const fetchDropdowns = useCallback(async () => {
     setDropdownsLoading(true);
     try {
-      const res = await fetch('/api/admin/academic-structure');
+      // Only the curricula and grades this school has classes in.
+      const res = await fetch('/api/admin/academic-structure?scope=school');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load form data');
       if (data.subjects) setSubjects(data.subjects);

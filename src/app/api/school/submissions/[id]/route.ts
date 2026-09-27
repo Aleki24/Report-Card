@@ -1,67 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { internalError } from '@/lib/api-errors';
+import { gradeSubmissionSchema } from '@/lib/assignments';
+import { authorizeAssignment } from '@/lib/assignments-server';
 
+/**
+ * Grades a submission. The admin, or the teacher who set the assignment:
+ * the same people who may edit it. Any teacher in the school could once
+ * grade any submission, and a grade of 0 was saved as "no grade".
+ */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
         const { id } = await params;
-        const body = await request.json();
+        const supabase = createSupabaseAdmin();
 
-        // Verify submission belongs to the grader's school
-        const { data: subCheck } = await supabase
+        const { data: submission } = await supabase
             .from('assignment_submissions')
-            .select(`
-                id,
-                students!inner (
-                    users!inner ( school_id )
-                )
-            `)
+            .select('id, assignment_id')
             .eq('id', id)
-            .eq('students.users.school_id', userProfile.school_id)
             .maybeSingle();
+        if (!submission) return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
 
-        if (!subCheck) {
-            return NextResponse.json({ error: 'Submission not found in your school' }, { status: 404 });
+        // Checks the assignment is the caller's school's and theirs to grade.
+        const access = await authorizeAssignment(submission.assignment_id, 'edit');
+        if (!access.ok) return access.response;
+
+        const parsed = gradeSubmissionSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid grade.' }, { status: 400 });
         }
-
-        const updateData: Record<string, any> = {
-            graded_by: userId,
-            graded_at: new Date().toISOString(),
-        };
-
-        if (body.grade !== undefined) updateData.grade = body.grade;
-        if (body.feedback !== undefined) updateData.feedback = body.feedback;
 
         const { data, error } = await supabase
             .from('assignment_submissions')
-            .update(updateData)
+            .update({
+                ...parsed.data,
+                graded_by: access.caller.userId,
+                graded_at: new Date().toISOString(),
+            })
             .eq('id', id)
-            .select()
+            .select('id')
             .single();
-
-        if (error) throw error;
+        if (error) return internalError('submission grade', error);
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('submission grade', err);
     }
 }

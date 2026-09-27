@@ -1,98 +1,77 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus, type AuthStatusTone } from '@/components/auth/AuthShell';
 
-type ViewState = 'checking' | 'completed' | 'failed' | 'pending' | 'unknown';
+type ViewState = 'checking' | 'completed' | 'failed' | 'pending';
+
+const POLL_ATTEMPTS = 8;
+const POLL_INTERVAL_MS = 2500;
+
+const VIEWS: Record<ViewState, { tone: AuthStatusTone; title: string; message: string }> = {
+  checking: { tone: 'working', title: 'Confirming your payment', message: 'Checking with Pesapal. Please keep this tab open.' },
+  completed: { tone: 'success', title: 'Payment received', message: 'Your fee balance has been updated. You can close this tab and go back to Skulbase.' },
+  failed: { tone: 'error', title: 'Payment not completed', message: 'Nothing was charged. Go back to your fees page to try again.' },
+  pending: { tone: 'waiting', title: 'Still processing', message: 'If you finished paying, your balance will update as soon as Pesapal confirms it. You can close this tab.' },
+};
+
+interface StatusResponse { data?: { status?: string } }
 
 /**
- * Pesapal redirects the payer's browser here after they finish (or cancel)
- * checkout on Pesapal's hosted page. This tab is informational only — the
- * actual ledger update comes from the IPN webhook (server-to-server) and
- * the original tab's own polling; this page just gives the payer a clear
- * result instead of a blank redirect target, using the same browser
- * session (still logged in) to check status for a nicer message.
+ * Pesapal sends the payer's browser here after checkout. The ledger itself is
+ * updated by the IPN webhook; this page only tells the payer how it went.
  */
 function PesapalCallbackContent() {
-    const searchParams = useSearchParams();
-    const orderTrackingId = searchParams.get('OrderTrackingId') || searchParams.get('orderTrackingId');
-    const [view, setView] = useState<ViewState>('checking');
+  const searchParams = useSearchParams();
+  const orderTrackingId = searchParams.get('OrderTrackingId') ?? searchParams.get('orderTrackingId');
+  const [view, setView] = useState<ViewState>(orderTrackingId ? 'checking' : 'pending');
 
-    useEffect(() => {
-        if (!orderTrackingId) {
-            setView('unknown');
-            return;
+  useEffect(() => {
+    if (!orderTrackingId) return;
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const check = async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/pesapal/status?order_tracking_id=${encodeURIComponent(orderTrackingId)}`);
+        if (res.ok) {
+          const status = ((await res.json()) as StatusResponse).data?.status;
+          if (cancelled) return;
+          if (status === 'COMPLETED') return setView('completed');
+          if (status === 'FAILED') return setView('failed');
         }
-        let cancelled = false;
-        let attempts = 0;
+      } catch {
+        // A dropped request just uses up one attempt.
+      }
+      if (cancelled) return;
+      if (attempts >= POLL_ATTEMPTS) setView('pending');
+      else timer = setTimeout(check, POLL_INTERVAL_MS);
+    };
 
-        const check = async () => {
-            attempts++;
-            try {
-                const res = await fetch(`/api/pesapal/status?order_tracking_id=${encodeURIComponent(orderTrackingId)}`);
-                if (res.ok) {
-                    const json = await res.json();
-                    const status = json.data?.status;
-                    if (cancelled) return;
-                    if (status === 'COMPLETED') return setView('completed');
-                    if (status === 'FAILED') return setView('failed');
-                }
-            } catch {
-                // ignore transient errors, keep polling until the attempt budget runs out
-            }
-            if (cancelled) return;
-            if (attempts >= 8) {
-                setView('pending');
-            } else {
-                setTimeout(check, 2500);
-            }
-        };
+    void check();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [orderTrackingId]);
 
-        check();
-        return () => { cancelled = true; };
-    }, [orderTrackingId]);
-
-    return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-            {view === 'checking' && (
-                <>
-                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                    <p className="text-lg font-semibold">Confirming your payment…</p>
-                    <p className="text-sm text-muted-foreground">Please wait a moment.</p>
-                </>
-            )}
-            {view === 'completed' && (
-                <>
-                    <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-                    <p className="text-lg font-semibold">Payment received</p>
-                    <p className="text-sm text-muted-foreground">You can close this tab and return to the app — your balance has been updated.</p>
-                </>
-            )}
-            {view === 'failed' && (
-                <>
-                    <AlertTriangle className="h-12 w-12 text-destructive" />
-                    <p className="text-lg font-semibold">Payment not completed</p>
-                    <p className="text-sm text-muted-foreground">You can close this tab and try again from the app.</p>
-                </>
-            )}
-            {(view === 'pending' || view === 'unknown') && (
-                <>
-                    <Loader2 className="h-10 w-10 text-muted-foreground" />
-                    <p className="text-lg font-semibold">Still processing</p>
-                    <p className="text-sm text-muted-foreground">
-                        You can close this tab. If you completed the payment, your balance will update shortly once it&apos;s confirmed.
-                    </p>
-                </>
-            )}
-        </div>
-    );
+  const { tone, title, message } = VIEWS[view];
+  return (
+    <AuthShell title={title}>
+      <AuthStatus tone={tone} message={message}>
+        {view !== 'checking' && (
+          <Link href="/student/fees" className={`${AUTH_SECONDARY_BUTTON} no-underline`}>Go to my fees</Link>
+        )}
+      </AuthStatus>
+    </AuthShell>
+  );
 }
 
 export default function PesapalCallbackPage() {
-    return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>}>
-            <PesapalCallbackContent />
-        </Suspense>
-    );
+  return (
+    <Suspense fallback={<AuthShell title="Confirming your payment"><AuthStatus tone="working" message="Loading…" /></AuthShell>}>
+      <PesapalCallbackContent />
+    </Suspense>
+  );
 }

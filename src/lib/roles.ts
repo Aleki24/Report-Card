@@ -51,3 +51,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     PARENT: 'Parent',
     PENDING: 'Pending',
 };
+
+/** Narrows an untrusted value (an API response) to a known role. */
+export const isUserRole = (value: unknown): value is UserRole =>
+    typeof value === 'string' && Object.hasOwn(ROLE_LABELS, value);

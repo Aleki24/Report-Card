@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
-import { getActiveUserProfile } from '@/lib/auth-server';
-
-const MAX_TITLE_LENGTH = 200;
-const MAX_CONTENT_LENGTH = 5000;
+import { getCaller } from '@/lib/auth-server';
+import { internalError } from '@/lib/api-errors';
+import { escapeLikePattern } from '@/lib/postgrest';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
+import {
+    ANNOUNCEMENTS_PAGE_SIZE, announcementCreateSchema, announcementSmsText,
+    type Announcement, type AnnouncementCounts, type AnnouncementSmsResult, type AnnouncementsResponse,
+} from '@/lib/announcements';
 
 const ROLE_LABELS: Record<string, string> = {
     ADMIN: 'Admin',
@@ -15,135 +18,159 @@ const ROLE_LABELS: Record<string, string> = {
     STAFF: 'Staff',
 };
 
-function formatPostedBy(poster: { first_name: string; last_name: string; role: string } | null | undefined) {
-    if (!poster) return 'School';
-    const roleLabel = ROLE_LABELS[poster.role] || poster.role;
-    return `${roleLabel} ${poster.first_name} ${poster.last_name}`.trim();
+type Poster = { first_name: string | null; last_name: string | null; role: string | null };
+interface AnnouncementRow {
+    id: string;
+    title: string;
+    content: string;
+    is_important: boolean;
+    created_at: string;
+    posted_by: string | null;
+    users: Poster | Poster[] | null;
 }
 
-export async function GET() {
+function formatPostedBy(poster: Poster | null) {
+    if (!poster) return 'School';
+    const roleLabel = poster.role ? ROLE_LABELS[poster.role] || poster.role : '';
+    return `${roleLabel} ${poster.first_name ?? ''} ${poster.last_name ?? ''}`.replace(/\s+/g, ' ').trim();
+}
+
+const toAnnouncement = (a: AnnouncementRow): Announcement => ({
+    id: a.id,
+    title: a.title,
+    content: a.content,
+    isImportant: a.is_important,
+    createdAt: a.created_at,
+    postedBy: formatPostedBy(Array.isArray(a.users) ? a.users[0] ?? null : a.users),
+    postedById: a.posted_by ?? null,
+});
+
+/** A value quoted for a PostgREST `or=` filter, where commas and brackets are syntax. */
+const quoted = (value: string) => `"${value.replace(/["\\]/g, '\\$&')}"`;
+
+/**
+ * One page of the school's announcements, newest first, optionally filtered.
+ *
+ * Only the newest 20 were ever returned, with no way to reach older ones, and
+ * search ran in the browser over those 20. Pages now continue with `before`
+ * (the last one's created_at) and the filters run in the database.
+ */
+export async function GET(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { schoolId, userId } = caller;
+        if (!schoolId) return NextResponse.json({ data: [], nextCursor: null } satisfies AnnouncementsResponse);
+
+        const { searchParams } = new URL(request.url);
+        const filter = searchParams.get('filter');
+        const before = searchParams.get('before');
+        const q = searchParams.get('q')?.trim().slice(0, 100) ?? '';
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        const schoolId = userProfile?.school_id;
-        if (!schoolId) return NextResponse.json({ data: [] });
-
-        const { data, error } = await supabase
+        let query = supabase
             .from('announcements')
-            .select(`
-                id, title, content, is_important, created_at, posted_by,
-                users!posted_by ( first_name, last_name, role )
-            `)
-            .eq('school_id', schoolId)
+            .select('id, title, content, is_important, created_at, posted_by, users!posted_by ( first_name, last_name, role )')
+            .eq('school_id', schoolId);
+        if (filter === 'important') query = query.eq('is_important', true);
+        if (filter === 'mine') query = query.eq('posted_by', userId);
+        if (q) {
+            const pattern = quoted(`%${escapeLikePattern(q)}%`);
+            query = query.or(`title.ilike.${pattern},content.ilike.${pattern}`);
+        }
+        if (before) query = query.lt('created_at', before);
+
+        const { data, error } = await query
             .order('created_at', { ascending: false })
-            .limit(20);
+            .limit(ANNOUNCEMENTS_PAGE_SIZE + 1);
+        if (error) return internalError('announcements list', error);
 
-        if (error) throw error;
+        const rows = (data ?? []) as unknown as AnnouncementRow[];
+        const page = rows.slice(0, ANNOUNCEMENTS_PAGE_SIZE).map(toAnnouncement);
+        const body: AnnouncementsResponse = {
+            data: page,
+            nextCursor: rows.length > ANNOUNCEMENTS_PAGE_SIZE ? page[page.length - 1].createdAt : null,
+        };
 
-        const mapped = (data ?? []).map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            content: a.content,
-            isImportant: a.is_important,
-            createdAt: a.created_at,
-            postedBy: formatPostedBy(a.users),
-            postedById: a.posted_by ?? null,
-        }));
+        // The filter tiles' figures, once per load rather than per page.
+        if (!before) {
+            const count = (build: (q: ReturnType<typeof base>) => ReturnType<typeof base>) => build(base());
+            const base = () => supabase.from('announcements').select('id', { count: 'exact', head: true }).eq('school_id', schoolId);
+            const [all, important, mine] = await Promise.all([
+                count(q => q),
+                count(q => q.eq('is_important', true)),
+                count(q => q.eq('posted_by', userId)),
+            ]);
+            const counts: AnnouncementCounts = { all: all.count ?? 0, important: important.count ?? 0, mine: mine.count ?? 0 };
+            body.counts = counts;
+        }
 
-        return NextResponse.json({ data: mapped });
+        return NextResponse.json(body);
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('announcements', err);
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const caller = await getCaller();
+        if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { schoolId, userId, role } = caller;
+        if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
+        if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
+            return NextResponse.json({ error: 'Only admins and teachers can post announcements.' }, { status: 403 });
+        }
+
+        const parsed = announcementCreateSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid announcement.' }, { status: 400 });
+        }
+        const { title, content, is_important, send_sms } = parsed.data;
+        // Texting every guardian costs the school money: the admin's call.
+        if (send_sms && role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Only the admin can text announcements to guardians.' }, { status: 403 });
         }
 
         const supabase = createSupabaseAdmin();
-        const userProfile = await getActiveUserProfile(userId);
-
-        if (!userProfile) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        }
-        if (userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const schoolId = userProfile.school_id;
-        if (!schoolId) return NextResponse.json({ error: 'No school' }, { status: 400 });
-
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        const body = await request.json();
-        if (!body.title || !body.content) {
-            return NextResponse.json({ error: 'title and content are required' }, { status: 400 });
-        }
-        if (typeof body.title !== 'string' || body.title.length > MAX_TITLE_LENGTH) {
-            return NextResponse.json({ error: `Title must be at most ${MAX_TITLE_LENGTH} characters` }, { status: 400 });
-        }
-        if (typeof body.content !== 'string' || body.content.length > MAX_CONTENT_LENGTH) {
-            return NextResponse.json({ error: `Content must be at most ${MAX_CONTENT_LENGTH} characters` }, { status: 400 });
-        }
-
         const { data, error } = await supabase
             .from('announcements')
-            .insert({
-                school_id: schoolId,
-                title: body.title,
-                content: body.content,
-                is_important: body.is_important ?? false,
-                posted_by: userId,
-            })
-            .select()
+            .insert({ school_id: schoolId, title, content, is_important, posted_by: userId })
+            .select('id')
             .single();
+        if (error) return internalError('announcement insert', error);
 
-        if (error) throw error;
-
-        let sms: { sent: number; failed: number; total: number } | undefined;
-        if (body.send_sms) {
+        let sms: AnnouncementSmsResult | undefined;
+        let warning: string | undefined;
+        if (send_sms) {
             const smsLimit = rateLimit(`announcement-sms:${userId}`, { maxRequests: 3, windowMs: 60_000 });
             if (!smsLimit.allowed) {
-                return NextResponse.json(
-                    { data, sms: { sent: 0, failed: 0, total: 0 }, warning: 'SMS blast rate limit reached. The announcement was posted but SMS was not sent. Please wait a minute and try again.' },
-                    { status: 429 }
-                );
-            }
-            const { data: students } = await supabase
-                .from('students')
-                .select('guardian_phone, users!inner(school_id)')
-                .eq('users.school_id', schoolId)
-                .eq('status', 'ACTIVE')
-                .not('guardian_phone', 'is', null);
-
-            const phones = Array.from(new Set((students ?? [])
-                .map((s: { guardian_phone: string | null }) => s.guardian_phone)
-                .filter((p: string | null): p is string => !!p && p.trim().length > 0)));
-
-            if (phones.length > 0) {
-                const smsBody = `${body.title}: ${body.content}`.slice(0, 300);
-                const result = await sendBulkSMS(phones.map(phone => ({ phone, message: smsBody })));
-                sms = { sent: result.sent, failed: result.failed, total: phones.length };
+                // The announcement is posted either way; answering with an
+                // error here made the page offer to post it again.
+                warning = 'The announcement was posted, but texts were not sent: too many SMS blasts in the last minute. Try again shortly.';
             } else {
-                sms = { sent: 0, failed: 0, total: 0 };
+                const { data: students } = await supabase
+                    .from('students')
+                    .select('guardian_phone, users!inner(school_id)')
+                    .eq('users.school_id', schoolId)
+                    .eq('status', 'ACTIVE')
+                    .not('guardian_phone', 'is', null);
+
+                const phones = Array.from(new Set((students ?? [])
+                    .map((s: { guardian_phone: string | null }) => s.guardian_phone?.trim() ?? '')
+                    .filter(Boolean)));
+
+                if (phones.length > 0) {
+                    const message = announcementSmsText(title, content);
+                    const result = await sendBulkSMS(phones.map(phone => ({ phone, message })));
+                    sms = { sent: result.sent, failed: result.failed, total: phones.length };
+                } else {
+                    sms = { sent: 0, failed: 0, total: 0 };
+                }
             }
         }
 
-        return NextResponse.json({ data, sms });
+        return NextResponse.json({ data, sms, warning });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('announcement create', err);
     }
 }

@@ -22,7 +22,6 @@ type DataType =
   | 'academic_years'
   | 'terms'
   | 'users'
-  | 'pending_invites'
   | 'school_profile'
   | 'grading_scales'
   | 'exams'
@@ -44,7 +43,6 @@ async function getSessionSchoolId(): Promise<{ schoolId: string | null; userId: 
 const TYPE_ROLES: Partial<Record<DataType, readonly UserRole[]>> = {
   parents: ['ADMIN'],
   users: ['ADMIN'],
-  pending_invites: ['ADMIN'],
   teachers: [...STAFF_TEACHING_ROLES, 'STAFF'],
   exam_slots: STAFF_TEACHING_ROLES,
   exam_marks: STAFF_TEACHING_ROLES,
@@ -348,17 +346,6 @@ export async function GET(request: NextRequest) {
           };
         });
         return NextResponse.json({ data: mapped });
-      }
-
-      case 'pending_invites': {
-        const { data, error } = await supabase
-          .from('pending_invites')
-          .select('id, first_name, last_name, phone, role, invite_code, created_at')
-          .eq('school_id', schoolId)
-          .order('created_at', { ascending: false });
-
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
       }
 
       case 'school_profile': {

@@ -118,6 +118,8 @@ export async function GET(request: NextRequest) {
         let gsData: any[] = [];
         let gscData: any[] = [];
         let combinationsData: any[] = [];
+        /** Grades the school has at least one class in, whoever is asking. */
+        let schoolGradeIds = new Set<string>();
 
         if (schoolId) {
             const [yearsRes, termsRes, streamsRes, subjectsRes, gsRes, combosRes] = await Promise.all([
@@ -135,6 +137,7 @@ export async function GET(request: NextRequest) {
             yearsData = yearsRes.data ?? [];
             termsData = termsRes.data ?? [];
             streamsData = streamsRes.data ?? [];
+            schoolGradeIds = new Set(streamsData.map(s => s.grade_id).filter(Boolean));
             subjectsData = subjectsRes.data ?? [];
             gsData = gsRes.data ?? [];
             if (gsData.length > 0) {
@@ -177,15 +180,27 @@ export async function GET(request: NextRequest) {
              subjectsData = [];
         }
 
-        const filteredGrades = (gradesRes.data || []).filter(g => isOfferedGrade(g.name_display));
+        const offeredGrades = (gradesRes.data || []).filter(g => isOfferedGrade(g.name_display));
+
+        /*
+          ?scope=school: only the curricula and grades this school teaches,
+          meaning the grades it has classes in. Pickers such as mark entry used
+          the national list, so a CBC-only school was offered every 8-4-4 form
+          too. A school with no classes yet still gets everything, so it can
+          start somewhere.
+        */
+        const schoolScoped = new URL(request.url).searchParams.get('scope') === 'school' && schoolGradeIds.size > 0;
+        const grades = schoolScoped ? offeredGrades.filter(g => schoolGradeIds.has(g.id)) : offeredGrades;
+        const levelIds = new Set(grades.map(g => g.academic_level_id));
+        const levels = schoolScoped ? (levelsRes.data || []).filter(l => levelIds.has(l.id)) : levelsRes.data || [];
 
         return NextResponse.json({
             academic_years: yearsData,
             terms: termsData,
-            grades: filteredGrades,
+            grades,
             grade_streams: streamsData,
             subjects: subjectsData,
-            academic_levels: levelsRes.data || [],
+            academic_levels: levels,
             grading_systems: gsData,
             grading_scales: gscData,
             subject_combinations: combinationsData,

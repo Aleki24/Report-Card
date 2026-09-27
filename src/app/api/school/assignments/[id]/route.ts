@@ -1,112 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { streamBelongsToSchool } from '@/lib/tenant-scope';
+import { internalError } from '@/lib/api-errors';
+import { assignmentSchema } from '@/lib/assignments';
+import { assignmentRefsBelongToSchool, authorizeAssignment } from '@/lib/assignments-server';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
         const { id } = await params;
-        
-        // Verify ownership
-        const { data: currentItem } = await supabase
-            .from('assignments')
-            .select('school_id')
-            .eq('id', id)
-            .maybeSingle();
+        const access = await authorizeAssignment(id, 'edit');
+        if (!access.ok) return access.response;
 
-        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const parsed = assignmentSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid assignment.' }, { status: 400 });
         }
+        const body = parsed.data;
+        const refsProblem = await assignmentRefsBelongToSchool(access.caller.schoolId as string, body.subject_id, body.grade_stream_id);
+        if (refsProblem) return NextResponse.json({ error: refsProblem }, { status: 404 });
 
-        const body = await request.json();
-
-        const updateData: Record<string, any> = {};
-        if (body.title !== undefined) updateData.title = body.title;
-        if (body.description !== undefined) updateData.description = body.description;
-        if (body.due_date !== undefined) updateData.due_date = body.due_date;
-        if (body.file_url !== undefined) updateData.file_url = body.file_url;
-        if (body.subject_id !== undefined) updateData.subject_id = body.subject_id;
-        if (body.grade_stream_id !== undefined) {
-            if (body.grade_stream_id && !(await streamBelongsToSchool(body.grade_stream_id, currentItem.school_id))) {
-                return NextResponse.json({ error: 'Class not found in your school' }, { status: 404 });
-            }
-            updateData.grade_stream_id = body.grade_stream_id;
-        }
-
-        const { data, error } = await supabase
+        const { data, error } = await createSupabaseAdmin()
             .from('assignments')
-            .update(updateData)
+            .update(body)
             .eq('id', id)
-            .select()
+            .select('id')
             .single();
-
-        if (error) throw error;
+        if (error) return internalError('assignment update', error);
         return NextResponse.json({ data });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('assignment update', err);
     }
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
-        const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .single();
-
-        if (!userProfile || userProfile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'].includes(userProfile.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
         const { id } = await params;
+        const access = await authorizeAssignment(id, 'delete');
+        if (!access.ok) return access.response;
 
-        // Verify ownership
-        const { data: currentItem } = await supabase
-            .from('assignments')
-            .select('school_id')
-            .eq('id', id)
-            .single();
-
-        if (!currentItem || currentItem.school_id !== userProfile.school_id) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        const { error } = await supabase.from('assignments').delete().eq('id', id);
-        if (error) throw error;
-
+        const { error } = await createSupabaseAdmin().from('assignments').delete().eq('id', id);
+        if (error) return internalError('assignment delete', error);
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return internalError('assignment delete', err);
     }
 }

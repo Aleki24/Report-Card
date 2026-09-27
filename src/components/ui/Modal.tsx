@@ -36,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto animate-modal-in p-5 outline-none sm:p-6`}
+                className={`card w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto bg-card animate-modal-in p-5 outline-none hover:border-border/70 sm:p-6`}
             >
                 <div className="flex items-center justify-between mb-6">
                     <h2 id={titleId} className="text-lg font-bold font-[family-name:var(--font-display)]">{title}</h2>
