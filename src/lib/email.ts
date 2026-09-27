@@ -51,28 +51,6 @@ export async function sendEmail({ to, subject, html, from, replyTo }: SendEmailP
   return result;
 }
 
-export async function sendInviteEmail(email: string, inviteCode: string, schoolName: string) {
-  const registerUrl = `${process.env.NEXT_PUBLIC_APP_URL}/register?code=${encodeURIComponent(inviteCode)}`;
-  return sendEmail({
-    to: email,
-    subject: `You've been invited to ${schoolName} on Skulbase`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #1a1a2e;">You're Invited!</h1>
-        <p>You have been invited to join <strong>${escapeHtml(schoolName)}</strong> on Skulbase.</p>
-        <p>Click the button below to set up your account:</p>
-        <div style="margin: 24px 0;">
-          <a href="${escapeHtml(registerUrl)}"
-             style="background: #1a1a2e; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
-            Accept Invitation
-          </a>
-        </div>
-        <p style="color: #666; font-size: 14px;">Your invite code: <code style="background: #f0f0f0; padding: 2px 6px;">${escapeHtml(inviteCode)}</code></p>
-      </div>
-    `,
-  });
-}
-
 /* ── School sign-up approval ───────────────────────────────────────────────
  * A self-service school sign-up is held until the platform owner approves it.
  * These are the three messages that workflow sends.

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email';
 import { rateLimit } from '@/lib/rate-limit';
 import { escapeHtml } from '@/lib/html';
+import { CONTACT_DETAILS, contactSchema } from '@/lib/contact';
 
-const CONTACT_INBOX = 'alexotieno293@gmail.com';
+const CONTACT_INBOX = CONTACT_DETAILS.email;
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,18 +14,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many messages sent. Please wait a minute and try again.' }, { status: 429 });
         }
 
-        const body: Record<string, unknown> = await request.json();
-        // Everything here is typed by an anonymous visitor and ends up inside
-        // an HTML email, so it is coerced to text and escaped below.
-        const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-        const name = text(body.name);
-        const email = text(body.email);
-        const schoolName = text(body.schoolName);
-        const message = text(body.message);
-
-        if (!name || !email || !message) {
-            return NextResponse.json({ error: 'Name, email, and message are required.' }, { status: 400 });
+        const parsed = contactSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Check the form and try again.' }, { status: 400 });
         }
+        // Typed by an anonymous visitor and placed in an HTML email, so every
+        // value is escaped below.
+        const { name, email, schoolName, message } = parsed.data;
 
         await sendEmail({
             to: CONTACT_INBOX,
