@@ -7,19 +7,39 @@ loop.
 
 ## Modules
 
-- **People** — students, teachers, parents, and user/role management
-- **Academic structure** — classes, subjects, and term/grading setup
-- **Exams & Marks** — mark entry, including photo marksheet scanning
-  (📷 Scan Sheet) for fast bulk entry
-- **Report Cards** — professional, branded report card generation with
-  marks, grades, comments, and PDF export
-- **Attendance** — daily attendance tracking with parent notifications
-- **Fees** — fee tracking and management
-- **Assignments & Announcements** — classwork and school-wide communication
-- **Analytics** — school-wide performance and engagement insights
-- **Administration & Settings** — school onboarding, roles, and configuration
-- **SMS notifications** — results, attendance, and announcements sent
-  straight to parents' phones via Africa's Talking
+Every school turns on only what it runs (**Settings → Modules**, with presets
+such as *Day secondary* or *Boarding secondary*). Modules that existed before
+the registry stay on by default; the rest start off. A module that is off
+disappears from menus and dashboards, its API answers 404, and its data is
+kept.
+
+**Always available** — people and user management, classes and subjects,
+announcements, settings.
+
+| Area | Modules |
+| --- | --- |
+| Academics | Exams & Marks (with photo scanning), Report Cards, Attendance, Analytics, Assignments, School Calendar, **Exam Paper Bank** (moderation, printing, watermarked downloads), **Timetable** (generator, publishing, lesson cover), **Professional Records** (schemes of work with AI drafting, lesson plans, records of work, syllabus coverage), **CBC Assessment** (EE/ME/AE/BE rubric) |
+| Finance | Fees & Payments (M-Pesa, Pesapal, bank), **Fee Structures & Billing** (vote heads, 50:30:20 split, bulk invoicing, bursaries, vote-head statement, SMS reminders), **Expenses** (vouchers, approval, suppliers) |
+| Welfare | **Boarding** (dorms and beds, roll call, exeats with gate pass, inspections), **Health & Sick Bay** (clinic visits, medical profiles, medication and stock, outbreak alert), **Discipline** |
+| Operations | **Transport** (fleet and NTSA compliance, crew, routes and stops, trips with boarding check-in), **Live Bus Tracking** (driver phone GPS, live map, speeding alerts), **Library**, **Inventory & Stores** |
+| People | **Parent Portal** (parents follow each child: results, fees, attendance, bus, notices), **Staff Leave** |
+
+### Roles and duties
+
+A login role (`ADMIN`, `CLASS_TEACHER`, `SUBJECT_TEACHER`, `STAFF`, `STUDENT`,
+`PARENT`) says what kind of account someone has. **Duties** (Settings → Roles &
+duties) are the jobs they hold — Principal, Deputy, DOS, HOD, Timetabler,
+Exams Officer, Bursar, Accountant, Matron, Patron, Nurse, Discipline Master,
+Transport Manager, Driver, Librarian, Storekeeper, HR — and grant permissions
+on top of the role, optionally limited to a class, dorm or route. A teacher
+can also be DOS and a patron; a bursar or nurse signs in as Staff and gets
+their module. Code checks permissions (`can('fees.collect')`), and every
+permission belongs to a module, so one check covers both.
+
+Where it lives: `src/lib/platform/` (modules, permissions, access, audit),
+`src/lib/ops/` (the shared school-scoped record API behind
+`/api/ops/[resource]`), and one migration per area in `supabase/migrations/`
+dated `20260927…`. The full plan is in `docs/SCHOOL_OPERATIONS_PLAN.md`.
 
 ## Getting Started
 
@@ -50,6 +70,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 | `PLATFORM_OWNER_PHONE` | optional | Overrides who is texted about new school sign-ups (comma-separated). Defaults as above |
 | `ANTHROPIC_API_KEY` | for scanning | Powers marksheet photo scanning |
 | `ANTHROPIC_SCAN_MODEL` | optional | Overrides the default scan model (`claude-opus-4-8`) |
+| `ANTHROPIC_DRAFT_MODEL` | optional | Overrides the model that drafts schemes of work (`claude-opus-5`, with an Opus 4.8 refusal fallback) |
+| `NEXT_PUBLIC_MAP_TILE_URL` | optional | Map tiles for live bus tracking (defaults to OpenStreetMap; use your own tile provider for heavy use) |
 
 ### School sign-up approval
 

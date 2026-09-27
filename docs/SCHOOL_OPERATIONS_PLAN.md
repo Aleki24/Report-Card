@@ -1,5 +1,9 @@
 # Skulbase — School Operations Expansion Plan
 
+> **Status (27 Sep 2026): Phases 0–6 are implemented** on branch
+> `claude/school-mgmt-roles-features-ikcsqd`. See "Implementation notes" at
+> the end for what shipped, what differs from this plan, and what is left.
+
 **Goal:** give every person who runs a Kenyan school a portal built for their job:
 the Director of Studies (DOS), heads of department, subject and class teachers,
 students, parents, the bursar, matrons and patrons, the nurse, drivers and the
@@ -510,3 +514,43 @@ active.
    telematics integration later? *(Recommended.)*
 4. **Timetable solver:** build it ourselves in TypeScript (recommended: no new
    infrastructure) or integrate an existing timetabling product?
+
+
+---
+
+## 14. Implementation notes
+
+**Shipped:** everything in Phases 0–6 above, plus the principal's cockpit.
+Apply the seven migrations dated `20260927090000`–`20260927096000` (the last
+one starts with `ALTER TYPE … ADD VALUE 'PARENT'`, which must run outside a
+transaction if your runner wraps files in one). They were checked against
+PostgreSQL 16: they apply cleanly, re-run safely, and their triggers and
+constraints behave as intended.
+
+**Different from the plan**
+
+- Duties are scoped to a class, dorm or route. Departments are not modelled
+  yet, so HOD is school-wide. Only patrons' roll calls enforce their scope
+  today.
+- Drivers are tied to trips through the crew record's linked login, not a
+  vehicle-scoped duty.
+- Live tracking polls every 10 seconds instead of Supabase Realtime (the app
+  keeps all table access server-side). Positions come from the driver's phone
+  browser; the KEBS telematics provider feed is not integrated.
+- Supabase types are not generated (that needs database access). New code
+  is typed through Zod schemas and explicit row interfaces instead.
+- The ~190 older `role === 'ADMIN'` checks remain, except the fee routes,
+  which now use permissions so a bursar can work. Migrate the rest module by
+  module.
+
+**Not done yet**
+
+- The onboarding wizard's "What does your school run?" step (presets exist
+  under Settings → Modules).
+- Automatic excusal in attendance for learners in sick bay.
+- Lesson attendance, question bank, TPAD evidence folder, clubs, admissions,
+  payroll.
+- KEMIS/KNEC exports.
+- Mobile (Expo) screens for the new modules. Driver mode works in the
+  phone's browser.
+- Per-plan `entitled` flags need a platform-owner UI.
