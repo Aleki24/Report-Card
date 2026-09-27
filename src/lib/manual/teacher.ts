@@ -3,6 +3,7 @@ import {
     activateSection, announcementsSection, assignmentsSection, attendanceSection, helpChapter,
     marksChapter, navigationSection, phoneSection, signInSection,
 } from './shared';
+import { everydayToolsChapter, teachingRecordsChapter } from './modules';
 import type { Manual, ManualChapter } from './types';
 
 const startChapter: ManualChapter = {
@@ -13,6 +14,8 @@ const startChapter: ManualChapter = {
 };
 
 const marksIntro = 'Entering marks is the main job in Skulbase. You only see the classes and subjects your administrator has assigned to you; if one is missing, ask them to add it on the Subjects page.';
+
+const everydayTools = everydayToolsChapter('Tools every teacher has: the school calendar, your timetable, leave, and requests to the store and the bursar.');
 
 const communicationChapter: ManualChapter = {
     id: 'communication',
@@ -25,7 +28,7 @@ export const classTeacherManual: Manual = {
     slug: 'class-teacher',
     title: 'Class teacher guide',
     audience: 'Teachers who are responsible for a class',
-    summary: 'How to enter and correct marks, keep your class’s register, look after your class list, and produce report cards for parents.',
+    summary: 'How to enter and correct marks, keep your class’s register, look after your class list, produce report cards, set homework, upload exam papers, keep schemes of work, assess CBC strands, and use the calendar, timetable, leave and store requests.',
     chapters: [
         startChapter,
         {
@@ -76,6 +79,8 @@ export const classTeacherManual: Manual = {
             ],
         },
         communicationChapter,
+        teachingRecordsChapter,
+        everydayTools,
         { id: 'phone', title: 'On your phone', intro: 'You can enter marks and take the register from a phone.', sections: [phoneSection('mobile-teacher-marks', 'Entering marks on a phone. The bottom bar holds Dashboard, Exams, Attendance and Reports.')] },
         helpChapter,
     ],
@@ -85,7 +90,7 @@ export const subjectTeacherManual: Manual = {
     slug: 'subject-teacher',
     title: 'Subject teacher guide',
     audience: 'Teachers who teach subjects in one or more classes',
-    summary: 'How to enter and correct marks for the subjects you teach, release results, set and mark homework, and post announcements.',
+    summary: 'How to enter and correct marks for the subjects you teach, release results, set and mark homework, upload exam papers, keep schemes of work and lesson plans, assess CBC strands, and use the calendar, timetable, leave and store requests.',
     chapters: [
         startChapter,
         {
@@ -106,6 +111,8 @@ export const subjectTeacherManual: Manual = {
         },
         marksChapter(marksIntro),
         communicationChapter,
+        teachingRecordsChapter,
+        everydayTools,
         { id: 'phone', title: 'On your phone', intro: 'You can enter marks from a phone, even on a weak connection.', sections: [phoneSection('mobile-teacher-marks', 'Entering marks on a phone.')] },
         helpChapter,
     ],

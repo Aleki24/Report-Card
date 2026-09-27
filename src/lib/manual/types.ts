@@ -3,7 +3,9 @@
  * the app, on the public /help pages and into the downloadable PDFs.
  */
 
-export type ManualSlug = 'admin' | 'class-teacher' | 'subject-teacher' | 'staff' | 'student';
+export type ManualSlug =
+    | 'admin' | 'class-teacher' | 'subject-teacher' | 'staff' | 'student' | 'parent'
+    | 'leadership' | 'finance' | 'welfare' | 'health' | 'transport' | 'operations';
 
 /** A screenshot of the real app (captured from the demo school). */
 export interface ManualFigure {

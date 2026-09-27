@@ -388,7 +388,7 @@ export default function OnboardingWizard() {
             </div>
           </button>
         </div>
-        <GuideLinks slugs={['admin', 'class-teacher', 'student']} lead="Not sure where to start? Read a guide:" className="mx-auto mt-10 max-w-4xl" />
+        <GuideLinks slugs={['admin', 'class-teacher', 'staff', 'student', 'parent']} lead="Not sure where to start? Read a guide:" className="mx-auto mt-10 max-w-4xl" />
       </div>
     );
   }

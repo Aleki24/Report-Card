@@ -3,13 +3,14 @@ import {
     activateSection, announcementsSection, assignmentsSection, attendanceSection, helpChapter,
     marksChapter, navigationSection, phoneSection, signInSection,
 } from './shared';
+import { parentAccountsSection } from './modules';
 import type { Manual } from './types';
 
 export const adminManual: Manual = {
     slug: 'admin',
     title: 'Administrator guide',
     audience: 'Principals, deputy principals, directors of studies and school administrators',
-    summary: 'Everything needed to set a school up on Skulbase and run it through the term: the school’s calendar and grading, classes and subjects, staff and learner accounts, marks and report cards, attendance, fees, and messages to parents.',
+    summary: 'Everything needed to set a school up on Skulbase and run it through the term: the school’s calendar and grading, the modules it runs and the duties staff hold, classes and subjects, staff, learner and parent accounts, marks and report cards, attendance, fees, and messages to parents.',
     chapters: [
         {
             id: 'start',
@@ -53,6 +54,12 @@ export const adminManual: Manual = {
                         'Further down: each class’s latest results, how classes compare, exams coming up in the next three weeks, attendance and fee summaries, and recent activity.',
                         'The search box finds a learner by name or admission number.',
                     ],
+                },
+                {
+                    id: 'operations-overview',
+                    title: 'Across the school',
+                    summary: 'When your school runs modules such as boarding, health, expenses or transport, live figures from each appear at the very top of the dashboard: learners in the sick bay, learners out on exeat, vouchers to approve, buses on the road, papers awaiting moderation and leave requests. Tap a tile to open its page.',
+                    figure: shot('admin-operations', 'Operations tiles at the top of the dashboard', '“Across the school” tiles above the dashboard.'),
                 },
                 {
                     id: 'setup-checklist',
@@ -129,6 +136,34 @@ export const adminManual: Manual = {
                     ],
                 },
                 {
+                    id: 'modules',
+                    title: 'Choose what your school runs (modules)',
+                    summary: 'Settings → Modules switches parts of Skulbase on and off for your school. A module that is off disappears from menus and dashboards for everyone; its data is kept, and switching it back on brings everything back.',
+                    figure: shot('settings-modules', 'Settings Modules tab with presets and a switch for each module', 'Settings → Modules: start from a preset, then switch individual modules on or off.'),
+                    steps: [
+                        { title: 'Start from a preset', body: 'Pick the kind of school you run: day primary or junior school, day secondary, boarding secondary, or private academy with transport. The preset switches on the modules that kind of school usually needs.' },
+                        { title: 'Fine-tune', body: 'Switch individual modules on or off: academics (exams, report cards, attendance, analytics, assignments, calendar, exam paper bank, timetable, professional records, CBC assessment), finance (fees, billing, expenses), welfare (boarding, health, discipline), operations (transport, live bus tracking, library, inventory) and people (parent portal, staff leave).' },
+                        { title: 'Dependencies', body: 'Some modules need another first (for example report cards need Exams & Marks, and live tracking needs Transport); these are turned on together, and turning one off turns off what depends on it.' },
+                    ],
+                    tip: 'A module marked “Not included in your plan” needs to be enabled by Skulbase first.',
+                },
+                {
+                    id: 'duties',
+                    title: 'Give staff their duties',
+                    summary: 'Settings → Roles & duties gives people the jobs they hold on top of their account type: a teacher can also be the DOS and a house patron; a bursar, nurse or driver signs in as Staff and gets their pages from their duty.',
+                    figure: shot('settings-duties', 'Roles & duties with each person, their duty, scope and dates', 'Settings → Roles & duties, with “What each duty can do” below.'),
+                    steps: [
+                        { title: 'Assign a duty', body: 'Press “Assign duty”, choose the person and the duty: Principal, Deputy Principal, DOS, HOD, Timetabler, Exams Officer, Bursar, Accountant, Matron, Patron, School Nurse, Discipline Master, Transport Manager, Driver, Librarian, Storekeeper or HR / Secretary.' },
+                        { title: 'Limit it (optional)', body: 'Some duties can be limited to one class, dorm or route (for example a patron to their own dorm). Leave it empty for the whole school.' },
+                        { title: 'Set dates (optional)', body: 'Give a start and end date for a duty that only lasts a term, such as a duty roster.' },
+                    ],
+                    points: [
+                        '“What each duty can do” lists exactly what every duty unlocks.',
+                        'The person sees their new pages the next time they open Skulbase. Each duty has its own guide under Help & guide.',
+                        'Duties only show pages for modules the school has switched on.',
+                    ],
+                },
+                {
                     id: 'payments-settings',
                     title: 'Online fee payments (optional)',
                     summary: 'Settings → Payments lets learners and parents pay fees from the learner’s Fees page. Payments are matched to the right learner automatically.',
@@ -191,6 +226,7 @@ export const adminManual: Manual = {
                         '“Print activation codes” prints codes for everyone who has not activated yet, for example to hand out to a class.',
                     ],
                 },
+                parentAccountsSection,
                 {
                     id: 'staff-and-parents',
                     title: 'Staff and parents directories',
@@ -269,7 +305,7 @@ export const adminManual: Manual = {
         {
             id: 'fees-chapter',
             title: 'Fees',
-            intro: 'Fees tracks what each learner has been billed for the term, what they have paid, and what is still owed. Only administrators can see the Fees page; learners see their own fees in their portal.',
+            intro: 'Fees tracks what each learner has been billed for the term, what they have paid, and what is still owed. Administrators, and staff given the Bursar or Accountant duty, see the Fees page; learners see their own fees in their portal. Billing from fee structures, bursaries and expenses are in the Bursar and finance guide.',
             sections: [
                 {
                     id: 'fee-records',
@@ -337,6 +373,25 @@ export const adminManual: Manual = {
                 summary: 'Choose a class (or all classes), an academic year and a term. The page shows averages and pass rates against your pass mark, which classes and subjects are strongest and weakest, and which classes still have exams to mark.',
                 figure: shot('analytics', 'The Analytics page', 'Analytics for the whole school.'),
                 tip: 'The filters are kept in the page address, so you can bookmark or share a view (for example Grade 8, Term 2).',
+            }],
+        },
+        {
+            id: 'more-modules',
+            title: 'Other modules',
+            intro: 'Each optional module has its own illustrated guide for the people who run it, and you can open every one of them as administrator. They are all under Help & guide and at skulbase.com/help.',
+            sections: [{
+                id: 'module-guides',
+                title: 'Where each module is explained',
+                summary: 'Share the right guide with each person when you assign their duty.',
+                points: [
+                    'Calendar, timetable, exam paper bank, professional records and CBC assessment: the Academic leadership guide (and the teacher guides for the teacher side).',
+                    'Billing (vote heads, fee structures, invoicing, bursaries) and expenses: the Bursar and finance guide.',
+                    'Boarding (roll calls, exeats, dorms, inspections) and discipline: the Boarding and discipline guide.',
+                    'Health and the sick bay: the School nurse guide.',
+                    'Transport and live bus tracking: the Transport guide.',
+                    'Library, inventory and staff leave: the Library, stores and HR guide.',
+                    'The parent portal: the Parent guide.',
+                ],
             }],
         },
         {

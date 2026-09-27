@@ -4,9 +4,9 @@ import type { Manual } from './types';
 
 export const studentManual: Manual = {
     slug: 'student',
-    title: 'Learner and parent guide',
-    audience: 'Learners, and the parents and guardians who help them',
-    summary: 'How to activate your account, see your results and report cards, hand in homework, check attendance and pay fees. The last chapter is for parents and guardians.',
+    title: 'Learner guide',
+    audience: 'Learners (parents have their own Parent guide)',
+    summary: 'How to activate your account, see your results and report cards, follow your timetable, hand in homework, check attendance and pay fees. Parents have their own guide; the last chapter summarises what they receive.',
     chapters: [
         {
             id: 'start',
@@ -69,6 +69,12 @@ export const studentManual: Manual = {
                     ],
                 },
                 {
+                    id: 'my-timetable',
+                    title: 'My timetable',
+                    summary: 'If your school uses the timetable, My timetable shows your class’s lessons for the week: each period with the subject, teacher and room. On a phone it shows one day at a time.',
+                    figure: shot('student-timetable', 'A learner’s weekly timetable', 'My timetable.'),
+                },
+                {
                     id: 'my-subjects',
                     title: 'My subjects',
                     summary: 'My Subjects lists the subjects you take. Open one to see how you have done in it each term and the homework set for it.',
@@ -110,7 +116,7 @@ export const studentManual: Manual = {
         {
             id: 'parents',
             title: 'For parents and guardians',
-            intro: 'Parents do not need an account. Skulbase reaches you by SMS on the phone number the school has for you.',
+            intro: 'If your school uses the Parent Portal, parents get their own login to follow every child (see the Parent guide). Without one, Skulbase reaches parents by SMS on the phone number the school has for them.',
             sections: [{
                 id: 'parents-info',
                 title: 'What parents receive',
@@ -120,7 +126,7 @@ export const studentManual: Manual = {
                     'A text if your child is marked absent, when the class teacher sends absence notices.',
                     'Important announcements, such as closing and opening dates.',
                     'Printed report cards carry a QR code. Scan it with your phone camera to open a page that shows the results the school approved, so you can check the card is genuine.',
-                    'To see everything (every term’s results, homework, attendance and fees), sign in with your child on their learner account.',
+                    'To pay fees online, sign in with your child on their learner account and use the Fees page.',
                 ],
             }],
         },

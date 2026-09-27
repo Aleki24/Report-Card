@@ -88,6 +88,7 @@ const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', role
 // The user guide for the signed-in role, with its PDF.
 const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', roles: [...staffRoles, 'STAFF'], icon: icon(LifeBuoy) };
 const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', roles: ['STUDENT'], icon: icon(LifeBuoy) };
+const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', roles: ['PARENT'], icon: icon(LifeBuoy) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
@@ -101,7 +102,7 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings, myProfile, help, studentHelp];
+const pinnedItems: NavItem[] = [users, settings, myProfile, help, studentHelp, parentHelp];
 
 /** Flat list (access checks + search). Derived, so it can never miss an item. */
 export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedItems];
@@ -119,7 +120,7 @@ export function canSee(item: NavItem, viewer: NavViewer): boolean {
 }
 
 /** Home links match only themselves, not every page nested below them. */
-export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href]);
+export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href, parentHome.href]);
 
 
 /**

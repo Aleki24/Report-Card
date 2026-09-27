@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { Download, GraduationCap, PenLine, School, UserRound, Users, type LucideIcon } from 'lucide-react';
+import {
+    BedDouble, Briefcase, Bus, Download, GraduationCap, HeartHandshake, HeartPulse, Landmark, Library, PenLine, School, UserRound, Users,
+    type LucideIcon,
+} from 'lucide-react';
 import { MANUALS, MANUAL_SLUGS, manualPdfHref, type ManualSlug } from '@/lib/manual';
 
 const ICONS: Record<ManualSlug, LucideIcon> = {
@@ -8,6 +11,13 @@ const ICONS: Record<ManualSlug, LucideIcon> = {
     'subject-teacher': PenLine,
     staff: UserRound,
     student: GraduationCap,
+    parent: HeartHandshake,
+    leadership: Briefcase,
+    finance: Landmark,
+    welfare: BedDouble,
+    health: HeartPulse,
+    transport: Bus,
+    operations: Library,
 };
 
 /** One card per guide: read it online or download the PDF. */
