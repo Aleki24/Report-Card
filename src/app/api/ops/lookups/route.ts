@@ -53,6 +53,11 @@ const LOADERS: Record<LookupType, Loader> = {
             group: u.role as string,
         }));
     },
+    /** Learners and staff together (library borrowers). */
+    async people(schoolId, params) {
+        const [students, staff] = await Promise.all([LOADERS.students(schoolId, params), LOADERS.staff(schoolId, params)]);
+        return [...students, ...staff.map(s => ({ ...s, hint: `Staff · ${s.hint ?? ''}` }))].sort((a, b) => a.label.localeCompare(b.label));
+    },
     async streams(schoolId) {
         const rows = orThrow(await db().from('grade_streams')
             .select('id, full_name, grade_id, grade:grades(numeric_order)')

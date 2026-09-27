@@ -3,7 +3,7 @@
  * staff, a class, a subject, a term). Client-safe types; served by
  * `/api/ops/lookups?type=…`.
  */
-export const LOOKUP_TYPES = ['students', 'staff', 'streams', 'subjects', 'terms', 'years', 'grades', 'exams'] as const;
+export const LOOKUP_TYPES = ['students', 'staff', 'people', 'streams', 'subjects', 'terms', 'years', 'grades', 'exams'] as const;
 export type LookupType = (typeof LOOKUP_TYPES)[number];
 
 export interface LookupOption {
