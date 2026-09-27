@@ -10,24 +10,22 @@ import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, today } from '@/lib/ops/format';
 import { ROLL_SESSIONS, ROLL_STATUSES, type RollSession, type RollStatus } from '@/lib/ops/resources/welfare';
+import { ROLL_SHORT, currentRollSession, rollSavedMessage, type Roll } from '@/lib/ops/forms/welfare';
 import { cn } from '@/lib/utils';
 
-interface Entry { studentId: string; name: string; admissionNumber: string | null; bed: string | null; status: RollStatus | null; suggested: RollStatus | null }
-interface Roll { taken: boolean; notes: string | null; entries: Entry[] }
-
-const STATUS_STYLE: Record<RollStatus, { short: string; on: string }> = {
-    PRESENT: { short: 'P', on: 'bg-emerald-500 text-white' },
-    ABSENT: { short: 'A', on: 'bg-rose-500 text-white' },
-    LATE: { short: 'L', on: 'bg-amber-500 text-white' },
-    EXEAT: { short: 'E', on: 'bg-sky-500 text-white' },
-    SICK_BAY: { short: 'S', on: 'bg-violet-500 text-white' },
+const STATUS_ON: Record<RollStatus, string> = {
+    PRESENT: 'bg-emerald-500 text-white',
+    ABSENT: 'bg-rose-500 text-white',
+    LATE: 'bg-amber-500 text-white',
+    EXEAT: 'bg-sky-500 text-white',
+    SICK_BAY: 'bg-violet-500 text-white',
 };
 
 /** Morning, evening or night roll for a dorm, pre-filled for learners on exeat or in sick bay. */
 export function RollCallPanel() {
     const dorms = useOpsList<{ id: string; name: string; house: string | null }>('dorms');
     const [dormId, setDormId] = useState('');
-    const [session, setSession] = useState<RollSession>(() => (new Date().getHours() < 12 ? 'MORNING' : new Date().getHours() < 20 ? 'EVENING' : 'NIGHT'));
+    const [session, setSession] = useState<RollSession>(currentRollSession);
     const [day, setDay] = useState(today());
     const [roll, setRoll] = useState<Roll | null>(null);
     const [notes, setNotes] = useState('');
@@ -54,7 +52,7 @@ export function RollCallPanel() {
                 method: 'PUT',
                 json: { dorm_id: dormId, session, date: day, notes: notes || undefined, entries: roll.entries.map(e => ({ student_id: e.studentId, status: e.status })) },
             });
-            toast.success(r.absent > 0 ? `Roll saved. ${r.absent} absent — follow up now.` : 'Roll saved. Everyone accounted for.');
+            toast.success(rollSavedMessage(r.absent));
             setRoll(x => x && { ...x, taken: true });
         } catch (err) { toast.error(errorText(err)); }
         finally { setSaving(false); }
@@ -88,8 +86,8 @@ export function RollCallPanel() {
                                 <div role="radiogroup" aria-label={`Status for ${e.name}`} className="flex gap-1.5">
                                     {ROLL_STATUSES.map(s => (
                                         <button key={s} type="button" role="radio" aria-checked={e.status === s} title={humanize(s)} onClick={() => setStatus(e.studentId, s)}
-                                            className={cn('size-10 rounded-lg text-xs font-bold', e.status === s ? STATUS_STYLE[s].on : 'bg-muted text-muted-foreground')}>
-                                            {STATUS_STYLE[s].short}
+                                            className={cn('size-10 rounded-lg text-xs font-bold', e.status === s ? STATUS_ON[s] : 'bg-muted text-muted-foreground')}>
+                                            {ROLL_SHORT[s]}
                                         </button>
                                     ))}
                                 </div>

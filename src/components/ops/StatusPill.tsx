@@ -1,8 +1,9 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { humanize } from '@/lib/ops/format';
+import type { PillTone } from '@/lib/ops/tones';
 
-export type PillTone = 'neutral' | 'info' | 'good' | 'warn' | 'bad' | 'violet';
+export type { PillTone };
 
 const TONE_CLASS: Record<PillTone, string> = {
     neutral: 'bg-muted text-muted-foreground',

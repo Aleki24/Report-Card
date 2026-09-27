@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineResource } from '../resource';
 import { optionalDate, optionalUuid, personId, oneOf } from '../zod-fields';
-import { DUTY_KEYS, SCOPE_TYPES, type DutyKey } from '@/lib/platform/permissions';
+import { DUTY_KEYS, SCOPE_TYPES, type DutyKey } from '../../platform/permissions';
 
 export const userDuties = defineResource({
     table: 'user_duties',

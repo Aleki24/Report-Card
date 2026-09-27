@@ -19,6 +19,8 @@ export interface CurrentUserProfile {
 
 export interface MeResponse {
     profile: CurrentUserProfile;
+    /** Modules the school runs and this person's grants and duties (parsed by `parseClientAccess`). */
+    access?: unknown;
     schoolName: string | null;
     schoolOnboardingCompleted: boolean;
     activeRole: UserRole | null;

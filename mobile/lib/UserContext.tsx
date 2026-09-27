@@ -1,10 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { accessChecks, parseClientAccess, type AccessChecks, type ClientAccess } from '@shared/platform/client-access';
 import { ApiError, useApi } from './api';
 import { errorMessage } from './format';
-import { resolveEffectiveRole, type UserRole } from './roles';
+import { resolveEffectiveRole, type UserRole, type Viewer } from './roles';
 import type { CurrentUserProfile, MeResponse } from './types';
 
-interface UserContextValue {
+interface UserContextValue extends AccessChecks {
     loading: boolean;
     error: string | null;
     /** True when the backend locked this account out (ACCOUNT_DEACTIVATED). */
@@ -15,6 +16,10 @@ interface UserContextValue {
     /** The stored role, before any class-teacher switch. */
     baseRole: UserRole | null;
     schoolName: string | null;
+    /** Modules the school runs and what this person's role and duties allow (the web's `/api/auth/me` access). */
+    access: ClientAccess;
+    /** Role plus access checks, for `canAccessStaffScreen` and friends. */
+    viewer: Viewer;
     reload: () => void;
 }
 
@@ -49,14 +54,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }, [load]);
 
     const baseRole = me?.profile.role ?? null;
+    const role = resolveEffectiveRole(baseRole, me?.activeRole);
+    const access = useMemo(() => parseClientAccess(me?.access), [me]);
+    const checks = useMemo(() => accessChecks(access), [access]);
+    const viewer = useMemo<Viewer>(() => ({ role, can: checks.can, hasModule: checks.hasModule }), [role, checks]);
     const value: UserContextValue = {
         loading,
         error,
         deactivated,
         profile: me?.profile ?? null,
-        role: resolveEffectiveRole(baseRole, me?.activeRole),
+        role,
         baseRole,
         schoolName: me?.schoolName ?? null,
+        access,
+        viewer,
+        ...checks,
         reload: load,
     };
 

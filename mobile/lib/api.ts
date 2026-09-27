@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useMemo } from 'react';
 import { Platform } from 'react-native';
+import { apiErrorMessage } from '@shared/api-error-message';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -46,7 +47,8 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     const json: unknown = await res.json().catch(() => ({}));
     if (!res.ok) {
         const body = (json ?? {}) as ErrorBody;
-        throw new ApiError(body.error ?? `Request failed (${res.status})`, res.status, body.code ?? null);
+        // Zod `details` name the rejected fields; fold them in as the web does.
+        throw new ApiError(apiErrorMessage(json, `Request failed (${res.status})`), res.status, body.code ?? null);
     }
     return json as T;
 }

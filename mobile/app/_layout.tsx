@@ -6,13 +6,14 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
+import { ToastProvider } from '@/components/Toast';
 import { ErrorBanner, LoadingView } from '@/components/ui';
 import { colors, radius, spacing } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT'] as const;
+const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
 function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
     const { signOut } = useAuth();
@@ -84,7 +85,9 @@ export default function RootLayout() {
     return (
         <ClerkProvider tokenCache={tokenCache}>
             <StatusBar style="dark" />
-            <AuthGate />
+            <ToastProvider>
+                <AuthGate />
+            </ToastProvider>
         </ClerkProvider>
     );
 }

@@ -12,7 +12,7 @@
  *
  * Client-safe: shared by API routes, the sidebar and pages.
  */
-import type { UserRole } from '@/types';
+import type { UserRole } from '../../types';
 import type { ModuleKey } from './modules';
 
 export const PERMISSIONS = [

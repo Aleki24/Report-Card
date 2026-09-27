@@ -46,3 +46,6 @@ export const toLocalInput = (iso: string | null | undefined) => {
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+/** Now as a `datetime-local` value, for a form's default time. */
+export const nowLocalInput = () => toLocalInput(new Date().toISOString());

@@ -6,39 +6,15 @@ import { StatTile } from '@/components/ui/StatTile';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { ActionButton } from '@/components/ops/ActionButton';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
 import { useOpsList } from '@/hooks/useOpsList';
-import { date, daysUntil, money, personName, today } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
-
-interface Book { id: string; title: string; author: string | null; isbn: string | null; category: string | null; shelf: string | null; copies_total: number }
-interface Loan { id: string; book_id: string; issued_on: string; due_on: string; returned_on: string | null; fine_amount: number; book: { title: string; author: string | null } | null; borrower: PersonName | null }
-
-type LoanState = 'OUT' | 'OVERDUE' | 'RETURNED';
-const LOAN_TONES: Record<LoanState, PillTone> = { OUT: 'info', OVERDUE: 'bad', RETURNED: 'good' };
-const loanState = (l: Loan): LoanState => (l.returned_on ? 'RETURNED' : (daysUntil(l.due_on) ?? 0) < 0 ? 'OVERDUE' : 'OUT');
-const inTwoWeeks = () => new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
-
-const BOOK_FIELDS: readonly FieldDef<FieldName<'books'>>[] = [
-    { name: 'title', label: 'Title', kind: 'text', required: true, span: 'full' },
-    { name: 'author', label: 'Author', kind: 'text' },
-    { name: 'isbn', label: 'ISBN', kind: 'text' },
-    { name: 'category', label: 'Category', kind: 'text', hint: 'Class text, set book, reference, fiction…' },
-    { name: 'shelf', label: 'Shelf', kind: 'text' },
-    { name: 'copies_total', label: 'Copies', kind: 'number', required: true },
-];
+import { date, money, personName, today } from '@/lib/ops/format';
+import { BOOK_DEFAULTS, BOOK_FIELDS, LOAN_TONES, copiesOut, loanDefaults, loanFields, loanState, type Book, type Loan } from '@/lib/ops/forms/operations';
 
 function LoansPanel({ manage }: { manage: boolean }) {
     const books = useOpsList<Book>('books');
-    const fields: readonly FieldDef<FieldName<'loans'>>[] = [
-        { name: 'book_id', label: 'Book', kind: 'options', options: books.rows.map(b => ({ id: b.id, label: b.title, hint: b.author ?? undefined })), required: true, span: 'full' },
-        { name: 'borrower_id', label: 'Borrower', kind: 'lookup', lookup: 'people', required: true, span: 'full' },
-        { name: 'issued_on', label: 'Issued', kind: 'date', required: true },
-        { name: 'due_on', label: 'Due back', kind: 'date', required: true },
-        { name: 'fine_amount', label: 'Fine (KES)', kind: 'number' },
-    ];
+    const fields = loanFields(books.rows);
     return (
         <ResourceManager<'loans', Loan>
             resource="loans"
@@ -46,7 +22,7 @@ function LoansPanel({ manage }: { manage: boolean }) {
             canCreate={manage}
             canEdit={manage}
             canDelete={manage}
-            defaults={{ issued_on: today(), due_on: inTwoWeeks(), fine_amount: '0' }}
+            defaults={loanDefaults()}
             addLabel="Issue book"
             searchText={l => `${l.book?.title} ${personName(l.borrower)}`}
             header={rows => {
@@ -77,8 +53,7 @@ export default function LibraryPage() {
     const { can } = useAuth();
     const manage = can('library.manage');
     const openLoans = useOpsList<Loan>('loans', { open: '1' }, { enabled: manage });
-    const outByBook = new Map<string, number>();
-    openLoans.rows.forEach(l => outByBook.set(l.book_id, (outByBook.get(l.book_id) ?? 0) + 1));
+    const outByBook = copiesOut(openLoans.rows);
 
     return (
         <ModulePage
@@ -98,7 +73,7 @@ export default function LibraryPage() {
                             canCreate={manage}
                             canEdit={manage}
                             canDelete={manage}
-                            defaults={{ copies_total: '1' }}
+                            defaults={BOOK_DEFAULTS}
                             searchText={b => `${b.title} ${b.author ?? ''} ${b.isbn ?? ''} ${b.category ?? ''}`}
                             columns={[
                                 { key: 'title', header: 'Title', render: b => <span className="font-medium">{b.title}</span> },
