@@ -158,6 +158,8 @@ export const ROLE_GRANTS: Record<UserRole, readonly PermissionPattern[]> = {
     SUBJECT_TEACHER: ['calendar.view', 'timetable.view', 'exam_papers.upload', 'lesson_records.write', 'cbc.assess', 'cbc.view', 'discipline.record', 'library.view', 'inventory.request', 'hr.request', 'expenses.request'],
     STAFF: ['calendar.view', 'library.view', 'inventory.request', 'hr.request'],
     STUDENT: ['calendar.view', 'timetable.view', 'library.view'],
+    // Parents see their own children through the parent portal, not staff pages.
+    PARENT: [],
     PENDING: [],
 };
 

@@ -11,6 +11,7 @@ import SubjectsStep from '@/components/onboarding/SubjectsStep';
 import { parseStreamNames } from '@/lib/classes';
 import { CURRICULA, ONBOARDING_TERMS, type Curriculum, type OnboardingInput } from '@/lib/schemas';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
+import { homePathForRole } from '@/lib/roles';
 
 type OnboardingRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | null;
 
@@ -71,7 +72,7 @@ export default function OnboardingWizard() {
 
   useEffect(() => {
     if (alreadyOnboarded) {
-      router.replace(nextPath || (role === 'STUDENT' ? '/student/dashboard' : '/dashboard'));
+      router.replace(nextPath || homePathForRole(role));
     } else if (sendToPreview) {
       router.replace('/dashboard');
     }

@@ -36,6 +36,7 @@ export function resolveActiveRole(baseRole: UserRole | null, activeRole: unknown
 /** Where a role lands when it opens a page it may not use. */
 export function homePathForRole(role: UserRole | null): string {
     if (role === 'STUDENT') return '/student/dashboard';
+    if (role === 'PARENT') return '/parent';
     if (role === 'PENDING') return '/dashboard/onboarding';
     return '/dashboard';
 }
@@ -47,5 +48,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     SUBJECT_TEACHER: 'Subject Teacher',
     STAFF: 'Staff',
     STUDENT: 'Student',
+    PARENT: 'Parent',
     PENDING: 'Pending',
 };

@@ -57,6 +57,7 @@ import type { SetupStatus } from '@/lib/setup-status';
 import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
 import OutstandingMarks from '@/components/dashboard/OutstandingMarks';
 import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
+import { homePathForRole } from '@/lib/roles';
 
 // ── Admin Dashboard ──────────────────────────────────────────
 function AdminDashboard({ userName }: { userName: string }) {
@@ -536,8 +537,8 @@ export default function DashboardPage() {
     // client-side check reads the real role from AuthProvider (backed by Supabase, not
     // the JWT), so it catches those cases and avoids ever rendering a student-facing
     // dashboard here.
-    if (!loading && role === 'STUDENT') {
-      router.replace('/student/dashboard');
+    if (!loading && (role === 'STUDENT' || role === 'PARENT')) {
+      router.replace(homePathForRole(role));
       return;
     }
     // A user who signed up but never finished redeeming an invite code stays in role

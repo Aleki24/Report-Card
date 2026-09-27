@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
+import { homePathForRole } from '@/lib/roles';
 
 export default function ActivateCallbackPage() {
     const router = useRouter();
@@ -118,7 +119,7 @@ export default function ActivateCallbackPage() {
                 // change would bounce the user into /dashboard/onboarding and
                 // ask for the invite code all over again. A hard reload
                 // re-fetches the profile with the real role.
-                const target = data.role === 'STUDENT' ? '/student/dashboard' : '/dashboard';
+                const target = homePathForRole(data.role);
                 setTimeout(() => {
                     window.location.href = target;
                 }, 1500);

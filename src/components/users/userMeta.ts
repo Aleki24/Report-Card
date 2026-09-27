@@ -1,5 +1,5 @@
 import {
-  Briefcase, GraduationCap, Hourglass, ShieldCheck, UserRound, Users, BookOpen,
+  Briefcase, GraduationCap, Hourglass, ShieldCheck, UserRound, Users, BookOpen, HeartHandshake,
   type LucideIcon,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
@@ -7,7 +7,7 @@ import type { UserRow } from '@/hooks/useUsersPage';
 import { TEACHER_ROLES, isRoleIn } from '@/lib/roles';
 
 /** The groups the directory filters by. Class and subject teachers are one "Teacher" group in the UI. */
-export type RoleGroup = 'ADMIN' | 'TEACHER' | 'STAFF' | 'STUDENT';
+export type RoleGroup = 'ADMIN' | 'TEACHER' | 'STAFF' | 'STUDENT' | 'PARENT';
 export type RoleFilter = 'ALL' | RoleGroup;
 export type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 export type UserSort = 'newest' | 'name';
@@ -38,6 +38,7 @@ export const ROLE_META: Record<UserRole, RoleMeta> = {
   CLASS_TEACHER: { label: 'Class Teacher', icon: GraduationCap, badge: 'bg-blue-500/10 text-blue-600 border-blue-500/25 dark:text-blue-400', gradient: 'from-blue-500 to-cyan-400' },
   SUBJECT_TEACHER: { label: 'Subject Teacher', icon: BookOpen, badge: 'bg-violet-500/10 text-violet-600 border-violet-500/25 dark:text-violet-400', gradient: 'from-violet-500 to-fuchsia-400' },
   STAFF: { label: 'Staff', icon: Briefcase, badge: 'bg-sky-500/10 text-sky-600 border-sky-500/25 dark:text-sky-400', gradient: 'from-sky-500 to-teal-400' },
+  PARENT: { label: 'Parent', icon: HeartHandshake, badge: 'bg-pink-500/10 text-pink-600 border-pink-500/25 dark:text-pink-400', gradient: 'from-pink-500 to-rose-400' },
   STUDENT: { label: 'Student', icon: UserRound, badge: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25 dark:text-emerald-400', gradient: 'from-emerald-500 to-lime-400' },
   PENDING: { label: 'Pending', icon: Hourglass, badge: 'bg-amber-500/10 text-amber-600 border-amber-500/25 dark:text-amber-400', gradient: 'from-amber-500 to-yellow-400' },
 };
@@ -48,6 +49,7 @@ export const ROLE_FILTERS: readonly { value: RoleFilter; label: string; icon: Lu
   { value: 'TEACHER', label: 'Teachers', icon: GraduationCap },
   { value: 'ADMIN', label: 'Admins', icon: ShieldCheck },
   { value: 'STAFF', label: 'Staff', icon: Briefcase },
+  { value: 'PARENT', label: 'Parents', icon: HeartHandshake },
 ];
 
 export const fullName = (u: { first_name: string | null; last_name: string | null }): string =>

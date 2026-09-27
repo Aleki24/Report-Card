@@ -3,7 +3,7 @@ import {
     LayoutDashboard, GraduationCap, LineChart, FileText, Users, School,
     UserCircle, Settings, BookOpen, ClipboardList, CalendarCheck, Bell,
     Briefcase, DollarSign, CalendarDays, FileLock2, Clock, NotebookPen, Target,
-    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane,
+    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake,
 } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
 import type { ModuleKey } from '@/lib/platform/modules';
@@ -60,6 +60,7 @@ const cbc: NavItem = { label: 'CBC Assessment', shortLabel: 'CBC', href: '/dashb
 const people: NavItem = { label: 'People', href: '/dashboard/people', roles: adminRoles, icon: icon(Users) };
 // The same page, scoped to the class teacher's own class.
 const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', roles: ['CLASS_TEACHER'], icon: icon(Users) };
+const parentAccounts: NavItem = { label: 'Parent accounts', shortLabel: 'Parents', href: '/dashboard/parent-accounts', roles: adminRoles, module: 'parent_portal', icon: icon(HeartHandshake) };
 const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', roles: adminRoles, icon: icon(School) };
 const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: icon(BookOpen) };
 // The bursar's page: the principal/admin, or anyone holding a finance duty. Learners see their own under /student/fees.
@@ -82,13 +83,14 @@ const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', r
 const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], module: 'attendance', icon: icon(CalendarCheck) };
 const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', roles: ['STUDENT'], module: 'timetable', icon: icon(Clock) };
 const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], module: 'fees', icon: icon(DollarSign) };
+const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', roles: ['PARENT'], module: 'parent_portal', icon: icon(Users) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
-    { title: null, items: [dashboard, studentDashboard, myResults, mySubjects, myTimetable, myAttendance, myFees] },
+    { title: null, items: [dashboard, studentDashboard, parentHome, myResults, mySubjects, myTimetable, myAttendance, myFees] },
     { title: 'Academics', items: [examsMarks, reports, attendance, analytics, calendar, timetable, examPapers, lessonRecords, cbc] },
-    { title: 'School', items: [people, myStudents, classes, subjects] },
+    { title: 'School', items: [people, myStudents, parentAccounts, classes, subjects] },
     { title: 'Finance', items: [fees, billing, expenses] },
     { title: 'Welfare', items: [boarding, health, discipline] },
     { title: 'Operations', items: [transport, library, inventory, leave] },
@@ -169,6 +171,7 @@ const mobilePrimaryByRole: Record<Exclude<UserRole, 'PENDING'>, NavItem[]> = {
     SUBJECT_TEACHER: [dashboard, examsMarks, assignments, announcements],
     STAFF: [dashboard, announcements],
     STUDENT: [studentDashboard, myResults, mySubjects],
+    PARENT: [parentHome],
 };
 
 export function getMobileNav(viewer: NavViewer): { primary: NavItem[]; overflow: NavItem[] } {
@@ -192,5 +195,6 @@ export const roleBadgeColors: Record<UserRole, string> = {
     SUBJECT_TEACHER: '#8B5CF6',
     STAFF: '#0EA5E9',
     STUDENT: '#10B981',
+    PARENT: '#EC4899',
     PENDING: '#F59E0B',
 };

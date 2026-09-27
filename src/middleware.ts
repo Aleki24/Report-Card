@@ -1,7 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
-const isProtected = createRouteMatcher(['/dashboard(.*)', '/student(.*)']);
+const isProtected = createRouteMatcher(['/dashboard(.*)', '/student(.*)', '/parent(.*)']);
 
 export default clerkMiddleware(async (auth, request) => {
   const { userId, sessionClaims } = await auth();
@@ -33,7 +33,7 @@ export default clerkMiddleware(async (auth, request) => {
       const safeRequested = requested && requested.startsWith('/') && !requested.startsWith('//')
         ? requested
         : null;
-      const dest = safeRequested ?? (role === 'STUDENT' ? '/student/dashboard' : '/dashboard');
+      const dest = safeRequested ?? (role === 'STUDENT' ? '/student/dashboard' : role === 'PARENT' ? '/parent' : '/dashboard');
       return NextResponse.redirect(new URL(dest, request.url));
     }
 

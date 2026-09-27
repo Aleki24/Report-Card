@@ -8,7 +8,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid, Search, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { Avatar } from "@/components/Avatar";
 import { Wordmark } from "@/components/Wordmark";
-import { ROLE_LABELS } from "@/lib/roles";
+import { ROLE_LABELS, homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { findNavItem, getMobileNav, getNavGroups, getPinnedItems, roleBadgeColors, routeMatches, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
@@ -133,7 +133,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const currentPage = findNavItem(pathname, viewer);
 
     const handleSignOut = () => router.push("/logout");
-    const homeHref = role === "STUDENT" ? "/student/dashboard" : "/dashboard";
+    const homeHref = homePathForRole(role);
     const roleLabel = role ? ROLE_LABELS[role] : "";
 
     const focusSearch = useCallback(() => {
