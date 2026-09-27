@@ -6,75 +6,37 @@ import { Drawer } from '@/components/ui/Drawer';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
 import { InvoicingPanel } from '@/components/finance/InvoicingPanel';
 import { ResidencePanel } from '@/components/finance/ResidencePanel';
 import { VoteHeadReport } from '@/components/finance/VoteHeadReport';
 import { useOpsList } from '@/hooks/useOpsList';
-import { AWARD_KINDS, STRUCTURE_RESIDENCES } from '@/lib/ops/resources/finance';
 import { admissionNo, humanize, money, studentName } from '@/lib/ops/format';
-import type { StudentEmbed } from '@/lib/ops/resource';
-
-interface VoteHead { id: string; name: string; code: string | null; priority: number; is_active: boolean }
-interface StructureItem { id: string; vote_head_id: string; annual_amount: number; vote_head: { name: string } | null }
-interface Structure {
-    id: string; name: string; residence: string; term_split: number[]; notes: string | null;
-    year: { name: string } | null; grade: { name_display: string } | null;
-    items: StructureItem[];
-}
-interface Award { id: string; kind: string; sponsor: string | null; amount: number; reference: string | null; term: { name: string } | null; student: StudentEmbed | null }
-
-const VOTE_HEAD_FIELDS: readonly FieldDef<FieldName<'vote-heads'>>[] = [
-    { name: 'name', label: 'Name', kind: 'text', required: true, hint: 'e.g. Tuition, Boarding equipment & stores, Activity' },
-    { name: 'code', label: 'Code', kind: 'text' },
-    { name: 'priority', label: 'Allocation order', kind: 'number', hint: 'Payments fill lower numbers first.' },
-    { name: 'is_active', label: 'In use', kind: 'checkbox' },
-];
-
-const STRUCTURE_FIELDS: readonly FieldDef<FieldName<'fee-structures'>>[] = [
-    { name: 'name', label: 'Name', kind: 'text', required: true, span: 'full', hint: 'e.g. Grade 10 boarders 2026' },
-    { name: 'academic_year_id', label: 'Academic year', kind: 'lookup', lookup: 'years', required: true },
-    { name: 'grade_id', label: 'Class level', kind: 'lookup', lookup: 'grades', hint: 'Leave empty for every class.' },
-    { name: 'residence', label: 'Applies to', kind: 'enum', values: STRUCTURE_RESIDENCES, required: true, labels: { ALL: 'Day scholars and boarders', DAY: 'Day scholars', BOARDER: 'Boarders' } },
-    { name: 'term_split', label: 'Share per term (%)', kind: 'numberList', placeholder: '50, 30, 20', hint: 'Ministry guideline: 50, 30, 20.' },
-    { name: 'notes', label: 'Notes', kind: 'textarea' },
-];
-
-const AWARD_FIELDS: readonly FieldDef<FieldName<'fee-awards'>>[] = [
-    { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-    { name: 'term_id', label: 'Term', kind: 'lookup', lookup: 'terms', required: true },
-    { name: 'kind', label: 'Kind', kind: 'enum', values: AWARD_KINDS, required: true },
-    { name: 'amount', label: 'Amount (KES)', kind: 'number', required: true },
-    { name: 'sponsor', label: 'Sponsor', kind: 'text', hint: 'CDF, county, church, company…' },
-    { name: 'reference', label: 'Reference', kind: 'text' },
-    { name: 'notes', label: 'Notes', kind: 'textarea' },
-];
+import {
+    AWARDS_NOTE, AWARD_DEFAULTS, AWARD_FIELDS, STRUCTURE_DEFAULTS, STRUCTURE_FIELDS, VOTE_HEAD_DEFAULTS, VOTE_HEAD_FIELDS,
+    structureItemFields, structureTotal, termShare, type Award, type Structure, type StructureItem, type VoteHead,
+} from '@/lib/ops/forms/finance';
 
 /** The vote heads of one structure, with annual amounts. */
 function StructureItems({ structure, canManage }: { structure: Structure; canManage: boolean }) {
     const voteHeads = useOpsList<VoteHead>('vote-heads');
-    const fields: readonly FieldDef<FieldName<'fee-structure-items'>>[] = [
-        { name: 'vote_head_id', label: 'Vote head', kind: 'options', options: voteHeads.rows.filter(v => v.is_active).map(v => ({ id: v.id, label: v.name })), required: true },
-        { name: 'annual_amount', label: 'Amount for the year (KES)', kind: 'number', required: true },
-    ];
     return (
         <ResourceManager<'fee-structure-items', StructureItem>
             resource="fee-structure-items"
             params={{ structure_id: structure.id }}
             defaults={{ structure_id: structure.id }}
-            fields={[{ name: 'structure_id', label: 'Structure', kind: 'hidden' }, ...fields]}
+            fields={structureItemFields(voteHeads.rows)}
             canCreate={canManage}
             canEdit={canManage}
             canDelete={canManage}
             header={rows => (
                 <p className="text-sm text-muted-foreground">
-                    Year total {money(rows.reduce((n, r) => n + Number(r.annual_amount), 0))} · split {structure.term_split.join(' / ')}%
+                    Year total {money(structureTotal(rows))} · split {structure.term_split.join(' / ')}%
                 </p>
             )}
             columns={[
                 { key: 'vh', header: 'Vote head', render: i => <span className="font-medium">{i.vote_head?.name}</span> },
                 { key: 'amount', header: 'Per year', numeric: true, render: i => money(i.annual_amount) },
-                ...structure.term_split.map((pct, t) => ({ key: `t${t}`, header: `Term ${t + 1}`, numeric: true, hideOnMobile: true, render: (i: StructureItem) => money(Math.round(Number(i.annual_amount) * pct / 100)) })),
+                ...structure.term_split.map((pct, t) => ({ key: `t${t}`, header: `Term ${t + 1}`, numeric: true, hideOnMobile: true, render: (i: StructureItem) => money(termShare(i.annual_amount, pct)) })),
             ]}
             emptyText="Add the vote heads this structure charges."
         />
@@ -93,13 +55,13 @@ function Structures({ canManage }: { canManage: boolean }) {
                     canCreate={canManage}
                     canEdit={canManage}
                     canDelete={canManage}
-                    defaults={{ residence: 'ALL', term_split: '50, 30, 20' }}
+                    defaults={STRUCTURE_DEFAULTS}
                     onRowClick={setOpen}
                     columns={[
                         { key: 'name', header: 'Structure', render: s => <span className="font-medium">{s.name}</span> },
                         { key: 'who', header: 'For', render: s => `${s.grade?.name_display ?? 'All classes'} · ${humanize(s.residence)}` },
                         { key: 'year', header: 'Year', hideOnMobile: true, render: s => s.year?.name },
-                        { key: 'total', header: 'Per year', numeric: true, render: s => money(s.items.reduce((n, i) => n + Number(i.annual_amount), 0)) },
+                        { key: 'total', header: 'Per year', numeric: true, render: s => money(structureTotal(s.items)) },
                     ]}
                     emptyText="No fee structures yet. Add vote heads, then a structure per class level and day/boarding."
                 />
@@ -112,7 +74,7 @@ function Structures({ canManage }: { canManage: boolean }) {
                     canCreate={canManage}
                     canEdit={canManage}
                     canDelete={canManage}
-                    defaults={{ priority: '100', is_active: true }}
+                    defaults={VOTE_HEAD_DEFAULTS}
                     columns={[
                         { key: 'name', header: 'Vote head', render: v => <span className={v.is_active ? 'font-medium' : 'text-muted-foreground line-through'}>{v.name}</span> },
                         { key: 'priority', header: 'Order', numeric: true, render: v => v.priority },
@@ -149,9 +111,9 @@ export default function BillingPage() {
                             canCreate={manage}
                             canEdit={manage}
                             canDelete={manage}
-                            defaults={{ kind: 'BURSARY' }}
+                            defaults={AWARD_DEFAULTS}
                             searchText={a => `${studentName(a.student)} ${admissionNo(a.student)} ${a.sponsor ?? ''}`}
-                            header={() => <p className="text-sm text-muted-foreground">Awards reduce what a learner owes when the term is billed (bill again after adding one).</p>}
+                            header={() => <p className="text-sm text-muted-foreground">{AWARDS_NOTE}</p>}
                             columns={[
                                 { key: 'student', header: 'Learner', render: a => <span className="font-medium">{studentName(a.student)}</span> },
                                 { key: 'kind', header: 'Kind', render: a => humanize(a.kind) },

@@ -3,7 +3,7 @@
  * crew member to run a trip. Client-safe, so the fleet pages and the trip
  * start check share one list.
  */
-import { daysUntil } from '@/lib/ops/format';
+import { daysUntil } from '../ops/format';
 
 export const VEHICLE_DOCUMENTS = {
     insurance_expiry: 'Insurance',

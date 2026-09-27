@@ -11,10 +11,7 @@ import { StatTile } from '@/components/ui/StatTile';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { admissionNo, money, studentName } from '@/lib/ops/format';
-import type { StudentEmbed } from '@/lib/ops/resource';
-
-interface Summary { learners: number; unbilled: number; billed: number; awards: number; dry_run: boolean }
-interface Invoice { id: string; total: number; structure: { name: string } | null; student: StudentEmbed | null; lines: { id: string; description: string; amount: number }[] }
+import { BILL_TERM_WARNING, type Invoice, type InvoiceSummary as Summary } from '@/lib/ops/forms/finance';
 
 /** Bill a term from the fee structures, previewing totals first. */
 export function InvoicingPanel({ canManage }: { canManage: boolean }) {
@@ -82,7 +79,7 @@ export function InvoicingPanel({ canManage }: { canManage: boolean }) {
                 onConfirm={() => void run(false)}
                 loading={busy}
                 title="Bill this term?"
-                message="Each learner's fee for the term is set from their fee structure (and transport), less bursaries. Payments already made are kept. Running it again replaces the term's invoices."
+                message={BILL_TERM_WARNING}
                 confirmText="Bill term"
             />
         </div>
