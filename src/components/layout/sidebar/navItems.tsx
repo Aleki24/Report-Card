@@ -6,38 +6,25 @@ import {
     Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake, LifeBuoy,
 } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
-import type { ModuleKey } from '@/lib/platform/modules';
-import type { Permission } from '@/lib/platform/permissions';
+import { PAGE_ACCESS, canViewPage, type PageAccess, type PageViewer } from '@/lib/platform/pages';
 
-export interface NavItem {
+/** A menu entry: who may open the page (shared with the mobile app) plus how it is shown. */
+export interface NavItem extends PageAccess {
     label: string;
     /** Shorter name for the phone's bottom bar, where each tab is a fifth of the width. */
     shortLabel?: string;
     href: string;
     icon: React.ReactNode;
-    /** Login roles that always see the item. */
-    roles: UserRole[];
-    /** Also shown to anyone granted one of these (a bursar on Fees, a nurse on Health). */
-    permissions?: readonly Permission[];
-    /** Hidden while the school has this module off. */
-    module?: ModuleKey;
 }
 
 /** Who is looking at the menu: their role and what their duties and school allow. */
-export interface NavViewer {
-    role: UserRole | null;
-    can: (permission: Permission) => boolean;
-    hasModule: (module: ModuleKey) => boolean;
-}
+export type NavViewer = PageViewer;
 
 export interface NavGroup {
     /** null = no group header (top-level items like Dashboard). */
     title: string | null;
     items: NavItem[];
 }
-
-const staffRoles: UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'];
-const adminRoles: UserRole[] = ['ADMIN'];
 
 const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSProperties }>) => (
     <I size={18} style={{ flexShrink: 0 }} />
@@ -46,49 +33,48 @@ const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSPropertie
 /* Items are named constants and groups reference them directly, so a group
    can never point at a nav item that doesn't exist (the old label-string
    lookup silently dropped items when the strings drifted). */
-const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', roles: [...staffRoles, 'STAFF'], icon: icon(LayoutDashboard) };
-const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', roles: ['STUDENT'], icon: icon(LayoutDashboard) };
-const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href: '/dashboard/exams-marks', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], module: 'exams', icon: icon(ClipboardList) };
-const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', roles: ['ADMIN', 'CLASS_TEACHER'], module: 'report_cards', icon: icon(FileText) };
-const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', roles: ['ADMIN', 'CLASS_TEACHER'], module: 'attendance', icon: icon(CalendarCheck) };
-const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', roles: adminRoles, module: 'analytics', icon: icon(LineChart) };
-const calendar: NavItem = { label: 'Calendar', href: '/dashboard/calendar', roles: [], permissions: ['calendar.view'], module: 'calendar', icon: icon(CalendarDays) };
-const examPapers: NavItem = { label: 'Exam Papers', shortLabel: 'Papers', href: '/dashboard/exam-papers', roles: [], permissions: ['exam_papers.upload', 'exam_papers.moderate', 'exam_papers.manage'], module: 'exam_papers', icon: icon(FileLock2) };
-const timetable: NavItem = { label: 'Timetable', href: '/dashboard/timetable', roles: [], permissions: ['timetable.view'], module: 'timetable', icon: icon(Clock) };
-const lessonRecords: NavItem = { label: 'Professional Records', shortLabel: 'Records', href: '/dashboard/lesson-records', roles: [], permissions: ['lesson_records.write', 'lesson_records.review'], module: 'lesson_records', icon: icon(NotebookPen) };
-const cbc: NavItem = { label: 'CBC Assessment', shortLabel: 'CBC', href: '/dashboard/cbc', roles: [], permissions: ['cbc.assess', 'cbc.view'], module: 'cbc_assessment', icon: icon(Target) };
-const people: NavItem = { label: 'People', href: '/dashboard/people', roles: adminRoles, icon: icon(Users) };
+const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', ...PAGE_ACCESS.dashboard, icon: icon(LayoutDashboard) };
+const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', ...PAGE_ACCESS.studentDashboard, icon: icon(LayoutDashboard) };
+const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href: '/dashboard/exams-marks', ...PAGE_ACCESS.examsMarks, icon: icon(ClipboardList) };
+const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', ...PAGE_ACCESS.reports, icon: icon(FileText) };
+const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', ...PAGE_ACCESS.attendance, icon: icon(CalendarCheck) };
+const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', ...PAGE_ACCESS.analytics, icon: icon(LineChart) };
+const calendar: NavItem = { label: 'Calendar', href: '/dashboard/calendar', ...PAGE_ACCESS.calendar, icon: icon(CalendarDays) };
+const examPapers: NavItem = { label: 'Exam Papers', shortLabel: 'Papers', href: '/dashboard/exam-papers', ...PAGE_ACCESS.examPapers, icon: icon(FileLock2) };
+const timetable: NavItem = { label: 'Timetable', href: '/dashboard/timetable', ...PAGE_ACCESS.timetable, icon: icon(Clock) };
+const lessonRecords: NavItem = { label: 'Professional Records', shortLabel: 'Records', href: '/dashboard/lesson-records', ...PAGE_ACCESS.lessonRecords, icon: icon(NotebookPen) };
+const cbc: NavItem = { label: 'CBC Assessment', shortLabel: 'CBC', href: '/dashboard/cbc', ...PAGE_ACCESS.cbc, icon: icon(Target) };
+const people: NavItem = { label: 'People', href: '/dashboard/people', ...PAGE_ACCESS.people, icon: icon(Users) };
 // The same page, scoped to the class teacher's own class.
-const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', roles: ['CLASS_TEACHER'], icon: icon(Users) };
-const parentAccounts: NavItem = { label: 'Parent accounts', shortLabel: 'Parents', href: '/dashboard/parent-accounts', roles: adminRoles, module: 'parent_portal', icon: icon(HeartHandshake) };
-const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', roles: adminRoles, icon: icon(School) };
-const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', roles: adminRoles, icon: icon(BookOpen) };
+const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', ...PAGE_ACCESS.myStudents, icon: icon(Users) };
+const parentAccounts: NavItem = { label: 'Parent accounts', shortLabel: 'Parents', href: '/dashboard/parent-accounts', ...PAGE_ACCESS.parentAccounts, icon: icon(HeartHandshake) };
+const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', ...PAGE_ACCESS.classes, icon: icon(School) };
+const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', ...PAGE_ACCESS.subjects, icon: icon(BookOpen) };
 // The bursar's page: the principal/admin, or anyone holding a finance duty. Learners see their own under /student/fees.
-const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', roles: adminRoles, permissions: ['fees.view'], module: 'fees', icon: icon(DollarSign) };
-const billing: NavItem = { label: 'Billing', href: '/dashboard/billing', roles: [], permissions: ['billing.view'], module: 'fee_structures', icon: icon(Receipt) };
-const expenses: NavItem = { label: 'Expenses', href: '/dashboard/expenses', roles: [], permissions: ['expenses.request', 'expenses.view', 'expenses.approve'], module: 'expenses', icon: icon(Wallet) };
-const boarding: NavItem = { label: 'Boarding', href: '/dashboard/boarding', roles: [], permissions: ['boarding.view'], module: 'boarding', icon: icon(BedDouble) };
-const health: NavItem = { label: 'Health', href: '/dashboard/health', roles: [], permissions: ['health.view'], module: 'health', icon: icon(HeartPulse) };
-const discipline: NavItem = { label: 'Discipline', href: '/dashboard/discipline', roles: [], permissions: ['discipline.record', 'discipline.manage'], module: 'discipline', icon: icon(ShieldAlert) };
-const transport: NavItem = { label: 'Transport', href: '/dashboard/transport', roles: [], permissions: ['transport.view', 'transport.drive'], module: 'transport', icon: icon(Bus) };
-const library: NavItem = { label: 'Library', href: '/dashboard/library', roles: [], permissions: ['library.view'], module: 'library', icon: icon(Library) };
-const inventory: NavItem = { label: 'Inventory', href: '/dashboard/inventory', roles: [], permissions: ['inventory.request', 'inventory.manage'], module: 'inventory', icon: icon(Package) };
-const leave: NavItem = { label: 'Staff Leave', shortLabel: 'Leave', href: '/dashboard/leave', roles: [], permissions: ['hr.request', 'hr.manage'], module: 'staff_hr', icon: icon(Plane) };
-const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'], icon: icon(Bell) };
-const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', roles: ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'], module: 'assignments', icon: icon(Briefcase) };
-const users: NavItem = { label: 'Users', href: '/dashboard/users', roles: adminRoles, icon: icon(UserCircle) };
-const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', roles: adminRoles, icon: icon(Settings) };
-const myResults: NavItem = { label: 'My Results', href: '/student/results', roles: ['STUDENT'], module: 'exams', icon: icon(GraduationCap) };
-const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', roles: ['STUDENT'], icon: icon(BookOpen) };
-const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', roles: ['STUDENT'], module: 'attendance', icon: icon(CalendarCheck) };
-const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', roles: ['STUDENT'], module: 'timetable', icon: icon(Clock) };
-const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], module: 'fees', icon: icon(DollarSign) };
-const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', roles: ['PARENT'], module: 'parent_portal', icon: icon(Users) };
-const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
-// The user guide for the signed-in role, with its PDF.
-const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', roles: [...staffRoles, 'STAFF'], icon: icon(LifeBuoy) };
-const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', roles: ['STUDENT'], icon: icon(LifeBuoy) };
-const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', roles: ['PARENT'], icon: icon(LifeBuoy) };
+const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', ...PAGE_ACCESS.fees, icon: icon(DollarSign) };
+const billing: NavItem = { label: 'Billing', href: '/dashboard/billing', ...PAGE_ACCESS.billing, icon: icon(Receipt) };
+const expenses: NavItem = { label: 'Expenses', href: '/dashboard/expenses', ...PAGE_ACCESS.expenses, icon: icon(Wallet) };
+const boarding: NavItem = { label: 'Boarding', href: '/dashboard/boarding', ...PAGE_ACCESS.boarding, icon: icon(BedDouble) };
+const health: NavItem = { label: 'Health', href: '/dashboard/health', ...PAGE_ACCESS.health, icon: icon(HeartPulse) };
+const discipline: NavItem = { label: 'Discipline', href: '/dashboard/discipline', ...PAGE_ACCESS.discipline, icon: icon(ShieldAlert) };
+const transport: NavItem = { label: 'Transport', href: '/dashboard/transport', ...PAGE_ACCESS.transport, icon: icon(Bus) };
+const library: NavItem = { label: 'Library', href: '/dashboard/library', ...PAGE_ACCESS.library, icon: icon(Library) };
+const inventory: NavItem = { label: 'Inventory', href: '/dashboard/inventory', ...PAGE_ACCESS.inventory, icon: icon(Package) };
+const leave: NavItem = { label: 'Staff Leave', shortLabel: 'Leave', href: '/dashboard/leave', ...PAGE_ACCESS.leave, icon: icon(Plane) };
+const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', ...PAGE_ACCESS.announcements, icon: icon(Bell) };
+const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', ...PAGE_ACCESS.assignments, icon: icon(Briefcase) };
+const users: NavItem = { label: 'Users', href: '/dashboard/users', ...PAGE_ACCESS.users, icon: icon(UserCircle) };
+const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', ...PAGE_ACCESS.settings, icon: icon(Settings) };
+const myResults: NavItem = { label: 'My Results', href: '/student/results', ...PAGE_ACCESS.myResults, icon: icon(GraduationCap) };
+const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', ...PAGE_ACCESS.mySubjects, icon: icon(BookOpen) };
+const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', ...PAGE_ACCESS.myAttendance, icon: icon(CalendarCheck) };
+const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', ...PAGE_ACCESS.myTimetable, icon: icon(Clock) };
+const myFees: NavItem = { label: 'Fees', href: '/student/fees', ...PAGE_ACCESS.myFees, icon: icon(DollarSign) };
+const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', ...PAGE_ACCESS.parentHome, icon: icon(Users) };
+const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', ...PAGE_ACCESS.myProfile, icon: icon(UserCircle) };
+const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', ...PAGE_ACCESS.help, icon: icon(LifeBuoy) };
+const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', ...PAGE_ACCESS.studentHelp, icon: icon(LifeBuoy) };
+const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', ...PAGE_ACCESS.parentHelp, icon: icon(LifeBuoy) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
@@ -108,17 +94,7 @@ const pinnedItems: NavItem[] = [users, settings, myProfile, ...helpItems];
 /** Flat list (access checks + search). Derived, so it can never miss an item. */
 export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedItems];
 
-/* No role yet (still loading, or signed out) shows nothing rather than
-   briefly showing every signed-in user the admin menu. Students never pick up
-   staff pages through a permission (they hold calendar.view, for instance). */
-export function canSee(item: NavItem, viewer: NavViewer): boolean {
-    const { role } = viewer;
-    if (!role) return false;
-    if (item.module && !viewer.hasModule(item.module)) return false;
-    if (item.roles.includes(role)) return true;
-    if (role === 'STUDENT' || role === 'PENDING') return false;
-    return !!item.permissions?.some(p => viewer.can(p));
-}
+export const canSee: (item: NavItem, viewer: NavViewer) => boolean = canViewPage;
 
 /** Home links match only themselves, not every page nested below them. */
 export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href, parentHome.href]);

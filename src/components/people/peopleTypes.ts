@@ -43,22 +43,8 @@ export interface GradeOption { id: string; code: string | null; name_display: st
 export interface AcademicLevelOption { id: string; name: string; code?: string }
 
 /** One student row read from an import file, as sent to /api/admin/bulk-import-students. */
-export interface ImportRow {
-  first_name: string;
-  last_name: string;
-  admission_number: string;
-  gender: string;
-  date_of_birth: string;
-  guardian_phone: string;
-  guardian_name: string;
-  guardian_email: string;
-  class: string;
-  stream: string;
-  academic_level_id: string;
-}
-
-/** Sign-in details made for new students; shown once. */
-export interface CreatedCredential { first_name: string; last_name: string; username: string; invite_code: string }
+/** Import rows and the credentials they create, shared with the mobile app. */
+export type { CreatedCredential, ImportRow } from '@/lib/import/student-rows';
 
 /** Admission numbers are optional, so every display falls back to a dash. */
 export const admNoLabel = (value: string | null | undefined) => value?.trim() || '—';

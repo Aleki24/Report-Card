@@ -7,7 +7,7 @@
  * which electives they sit. Pure functions and shared types only — used by
  * the placement API and its screen alike.
  */
-import { PREDEFINED_SUBJECTS, type SeniorPathway } from '@/lib/subject-definitions';
+import { PREDEFINED_SUBJECTS, type SeniorPathway } from '../subject-definitions';
 import {
     CORE_MATHEMATICS_CODE,
     ESSENTIAL_MATHEMATICS_CODE,
@@ -16,7 +16,7 @@ import {
     isMathsCode,
     type CbcPathway,
     type MathsCode,
-} from '@/lib/pathway-definitions';
+} from '../pathway-definitions';
 
 export type PlacementMode = 'senior' | '844';
 

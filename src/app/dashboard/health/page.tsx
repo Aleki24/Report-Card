@@ -8,67 +8,20 @@ import { StatTile } from '@/components/ui/StatTile';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
-import { admissionNo, date, dateTime, daysUntil, humanize, personName, studentName } from '@/lib/ops/format';
-import type { PersonName, StudentEmbed } from '@/lib/ops/resource';
-import { BLOOD_GROUPS, VISIT_OUTCOMES, type VisitOutcome } from '@/lib/ops/resources/welfare';
-
-interface Visit {
-    id: string; visited_at: string; complaint: string; temperature_c: number | null; diagnosis: string | null; treatment: string | null;
-    outcome: VisitOutcome; referred_to: string | null; parent_notified: boolean; discharged_at: string | null;
-    student: StudentEmbed | null; attendant: PersonName | null;
-}
-interface StatusVisit { id: string; visited_at: string; outcome: VisitOutcome; student: StudentEmbed | null }
-interface Status { sickBay: StatusVisit[]; wentHome: StatusVisit[]; trends: { complaint: string; visits: number; alert: boolean }[] }
-interface Profile { id: string; blood_group: string | null; allergies: string | null; conditions: string | null; regular_medication: string | null; emergency_phone: string | null; consent_on_file: boolean; student: StudentEmbed | null }
-interface Stock { id: string; name: string; unit: string; quantity: number; reorder_level: number; batch: string | null; expiry_date: string | null }
-interface Dose { id: string; medicine: string; dose: string | null; quantity: number; given_at: string; student: StudentEmbed | null; giver: PersonName | null }
-
-const OUTCOME_TONES: Record<VisitOutcome, PillTone> = { RETURNED_TO_CLASS: 'good', SICK_BAY: 'violet', SENT_HOME: 'warn', REFERRED: 'bad' };
-const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-
-const VISIT_FIELDS: readonly FieldDef<FieldName<'clinic-visits'>>[] = [
-    { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-    { name: 'visited_at', label: 'Time', kind: 'datetime', required: true },
-    { name: 'temperature_c', label: 'Temperature (°C)', kind: 'number', step: '0.1' },
-    { name: 'complaint', label: 'Complaint', kind: 'text', required: true, span: 'full' },
-    { name: 'diagnosis', label: 'Assessment', kind: 'textarea' },
-    { name: 'treatment', label: 'Treatment given', kind: 'textarea' },
-    { name: 'outcome', label: 'Outcome', kind: 'enum', values: VISIT_OUTCOMES, required: true },
-    { name: 'referred_to', label: 'Referred to', kind: 'text', hint: 'Hospital or clinic, if referred.' },
-];
-
-const PROFILE_FIELDS: readonly FieldDef<FieldName<'medical-profiles'>>[] = [
-    { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-    { name: 'blood_group', label: 'Blood group', kind: 'enum', values: BLOOD_GROUPS, labels: Object.fromEntries(BLOOD_GROUPS.map(b => [b, b])) },
-    { name: 'sha_number', label: 'SHA number', kind: 'text' },
-    { name: 'allergies', label: 'Allergies', kind: 'textarea' },
-    { name: 'conditions', label: 'Chronic conditions', kind: 'textarea', hint: 'Asthma, diabetes, sickle cell, epilepsy…' },
-    { name: 'regular_medication', label: 'Regular medication', kind: 'textarea' },
-    { name: 'doctor_name', label: 'Family doctor', kind: 'text' },
-    { name: 'doctor_phone', label: 'Doctor phone', kind: 'tel' },
-    { name: 'emergency_contact', label: 'Emergency contact', kind: 'text' },
-    { name: 'emergency_phone', label: 'Emergency phone', kind: 'tel' },
-    { name: 'consent_on_file', label: 'Treatment consent form on file', kind: 'checkbox' },
-    { name: 'notes', label: 'Notes', kind: 'textarea' },
-];
-
-const STOCK_FIELDS: readonly FieldDef<FieldName<'medicine-stock'>>[] = [
-    { name: 'name', label: 'Medicine', kind: 'text', required: true, span: 'full' },
-    { name: 'unit', label: 'Unit', kind: 'text', required: true, placeholder: 'tablet, bottle, sachet' },
-    { name: 'quantity', label: 'In stock', kind: 'number', required: true },
-    { name: 'reorder_level', label: 'Reorder at', kind: 'number' },
-    { name: 'batch', label: 'Batch', kind: 'text' },
-    { name: 'expiry_date', label: 'Expiry', kind: 'date' },
-];
+import { admissionNo, date, dateTime, humanize, personName, studentName } from '@/lib/ops/format';
+import {
+    OUTCOME_TONES, PROFILE_FIELDS, STOCK_DEFAULTS, STOCK_FIELDS, VISIT_FIELDS, canDischarge, doseDefaults, doseFields,
+    outbreakMessage, shouldTellParent, stockExpiring, stockLow, visitDefaults, visitOutcomeLabel,
+    type Dose, type HealthStatus, type MedicalProfile, type Stock, type StatusVisit, type Visit,
+} from '@/lib/ops/forms/welfare';
 
 /** Today at a glance for any staff: who is in sick bay or went home, no clinical detail. */
 function TodayPanel() {
-    const [status, setStatus] = useState<Status | null>(null);
-    useEffect(() => { opsFetch<Status>('/api/health/status').then(setStatus).catch(err => toast.error(errorText(err))); }, []);
+    const [status, setStatus] = useState<HealthStatus | null>(null);
+    useEffect(() => { opsFetch<HealthStatus>('/api/health/status').then(setStatus).catch(err => toast.error(errorText(err))); }, []);
     if (!status) return <div className="skeleton-bone h-48 rounded-2xl" />;
     const list = (rows: StatusVisit[], empty: string) => rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : (
         <ul className="flex flex-col gap-2">
@@ -86,10 +39,10 @@ function TodayPanel() {
                 <StatTile icon={BedSingle} label="In sick bay" value={status.sickBay.length} hue="violet" />
                 <StatTile icon={Activity} label="Sent home / referred today" value={status.wentHome.length} tone={status.wentHome.length > 0 ? 'warn' : 'default'} />
             </div>
-            {status.trends.some(t => t.alert) && (
+            {outbreakMessage(status) && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-                    <span>Possible outbreak: {status.trends.filter(t => t.alert).map(t => `“${t.complaint}” (${t.visits} visits in 48h)`).join(', ')}. Inform the principal.</span>
+                    <span>{outbreakMessage(status)}</span>
                 </div>
             )}
             <section><h2 className="mb-2 text-sm font-semibold">Sick bay now</h2>{list(status.sickBay, 'Nobody is in sick bay.')}</section>
@@ -112,11 +65,11 @@ function StockPanel({ canManage }: { canManage: boolean }) {
             canCreate={canManage}
             canEdit={canManage}
             canDelete={canManage}
-            defaults={{ unit: 'tablet', reorder_level: '0' }}
+            defaults={STOCK_DEFAULTS}
             searchText={s => s.name}
             header={rows => {
-                const low = rows.filter(r => r.quantity <= r.reorder_level).length;
-                const expiring = rows.filter(r => { const d = daysUntil(r.expiry_date); return d !== null && d <= 60; }).length;
+                const low = rows.filter(stockLow).length;
+                const expiring = rows.filter(stockExpiring).length;
                 return (
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                         <StatTile icon={Package} label="To reorder" value={low} tone={low > 0 ? 'warn' : 'good'} />
@@ -126,8 +79,8 @@ function StockPanel({ canManage }: { canManage: boolean }) {
             }}
             columns={[
                 { key: 'name', header: 'Medicine', render: s => <span className="font-medium">{s.name}</span> },
-                { key: 'qty', header: 'In stock', numeric: true, render: s => <span className={s.quantity <= s.reorder_level ? 'font-semibold text-amber-600' : ''}>{s.quantity} {s.unit}</span> },
-                { key: 'expiry', header: 'Expiry', render: s => { const d = daysUntil(s.expiry_date); return <span className={d !== null && d <= 60 ? 'text-destructive' : ''}>{date(s.expiry_date)}</span>; } },
+                { key: 'qty', header: 'In stock', numeric: true, render: s => <span className={stockLow(s) ? 'font-semibold text-amber-600' : ''}>{s.quantity} {s.unit}</span> },
+                { key: 'expiry', header: 'Expiry', render: s => <span className={stockExpiring(s) ? 'text-destructive' : ''}>{date(s.expiry_date)}</span> },
                 { key: 'batch', header: 'Batch', hideOnMobile: true, render: s => s.batch ?? '—' },
             ]}
         />
@@ -136,21 +89,13 @@ function StockPanel({ canManage }: { canManage: boolean }) {
 
 function DosesPanel({ canManage }: { canManage: boolean }) {
     const stock = useOpsList<Stock>('medicine-stock');
-    const fields: readonly FieldDef<FieldName<'medication-logs'>>[] = [
-        { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-        { name: 'stock_id', label: 'From stock', kind: 'options', options: stock.rows.map(s => ({ id: s.id, label: s.name, hint: `${s.quantity} ${s.unit} left` })), hint: 'Takes the quantity off the shelf.' },
-        { name: 'medicine', label: 'Medicine', kind: 'text', required: true },
-        { name: 'dose', label: 'Dose', kind: 'text', placeholder: 'e.g. 500mg' },
-        { name: 'quantity', label: 'Quantity', kind: 'number' },
-        { name: 'given_at', label: 'Given at', kind: 'datetime', required: true },
-        { name: 'notes', label: 'Notes', kind: 'textarea' },
-    ];
+    const fields = doseFields(stock.rows);
     return (
         <ResourceManager<'medication-logs', Dose>
             resource="medication-logs"
             fields={fields}
             canCreate={canManage}
-            defaults={{ quantity: '1', given_at: nowLocal() }}
+            defaults={doseDefaults()}
             searchText={d => `${studentName(d.student)} ${d.medicine}`}
             columns={[
                 { key: 'learner', header: 'Learner', render: d => <span className="font-medium">{studentName(d.student)}</span> },
@@ -185,18 +130,18 @@ export default function HealthPage() {
                             fields={VISIT_FIELDS}
                             canCreate={manage}
                             canEdit={manage}
-                            defaults={{ visited_at: nowLocal(), outcome: 'RETURNED_TO_CLASS' }}
+                            defaults={visitDefaults()}
                             addLabel="Record visit"
                             searchText={v => `${studentName(v.student)} ${admissionNo(v.student)} ${v.complaint}`}
                             rowActions={(v, reload) => manage ? (
                                 <>
-                                    {v.outcome === 'SICK_BAY' && !v.discharged_at && (
+                                    {canDischarge(v) && (
                                         <Button size="xs" variant="outline" onClick={async () => {
                                             try { await opsFetch(`/api/ops/clinic-visits/${v.id}`, { method: 'PATCH', json: { discharged_at: new Date().toISOString() } }); toast.success('Discharged.'); await reload(); }
                                             catch (err) { toast.error(errorText(err)); }
                                         }}>Discharge</Button>
                                     )}
-                                    {!v.parent_notified && v.outcome !== 'RETURNED_TO_CLASS' && (
+                                    {shouldTellParent(v) && (
                                         <Button size="xs" onClick={async () => {
                                             try { await opsFetch(`/api/health/visits/${v.id}/notify`, { method: 'POST' }); toast.success('Guardian notified by SMS.'); await reload(); }
                                             catch (err) { toast.error(errorText(err)); }
@@ -208,7 +153,7 @@ export default function HealthPage() {
                                 { key: 'learner', header: 'Learner', render: v => <span className="font-medium">{studentName(v.student)}</span> },
                                 { key: 'complaint', header: 'Complaint', render: v => <span className="line-clamp-1">{v.complaint}{v.temperature_c ? ` · ${v.temperature_c}°C` : ''}</span> },
                                 { key: 'when', header: 'When', hideOnMobile: true, render: v => dateTime(v.visited_at) },
-                                { key: 'outcome', header: 'Outcome', render: v => <StatusPill status={v.outcome} tones={OUTCOME_TONES} label={v.outcome === 'SICK_BAY' && v.discharged_at ? 'Discharged' : humanize(v.outcome)} /> },
+                                { key: 'outcome', header: 'Outcome', render: v => <StatusPill status={v.outcome} tones={OUTCOME_TONES} label={visitOutcomeLabel(v) ?? humanize(v.outcome)} /> },
                             ]}
                         />
                     ),
@@ -216,7 +161,7 @@ export default function HealthPage() {
                 {
                     id: 'profiles', label: 'Medical profiles', shortLabel: 'Profiles', icon: FileHeart, hue: 'blue', visible: clinical,
                     render: () => (
-                        <ResourceManager<'medical-profiles', Profile>
+                        <ResourceManager<'medical-profiles', MedicalProfile>
                             resource="medical-profiles"
                             fields={PROFILE_FIELDS}
                             canCreate={manage}

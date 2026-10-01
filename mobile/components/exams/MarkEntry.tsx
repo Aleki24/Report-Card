@@ -4,7 +4,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { compositePercentage, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
-import { errorMessage, formatDate, pluralize, scoreColor } from '@/lib/format';
+import { errorMessage, formatDate, fullName, pluralize, scoreColor } from '@/lib/format';
 import { colors, radius, spacing } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, SearchField, TextField,
@@ -12,6 +12,7 @@ import {
 import { PaperSetup } from './PaperSetup';
 import type { AcademicStructure, ExamMark, ExamPaperScheme, ExamSlot, MarkEntryInput, StudentListItem } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { MarkFillTools, type FillSummary } from './MarkFillTools';
 
 interface Entry {
     score: string;
@@ -166,6 +167,19 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
         });
     };
 
+    // Learners as the scan / file matcher sees them.
+    const candidates = useMemo(() => roster.map((s) => ({ id: s.id, name: fullName(s.users), admission_number: s.admission_number ?? '' })), [roster]);
+
+    /** Puts filled marks into the list (unsaved) and says what still needs a look. */
+    const applyFill = ({ filled, unmatched }: FillSummary) => {
+        filled.forEach((f) => update(f.studentId, (e) => ({ ...e, score: f.score })));
+        const check = filled.filter((f) => f.ambiguous || f.lowConfidence).length;
+        const parts = [`Filled ${pluralize(filled.length, 'mark')} — check them, then save.`];
+        if (check > 0) parts.push(`${check} matched loosely; confirm the names.`);
+        if (unmatched.length > 0) parts.push(`Not matched: ${unmatched.slice(0, 8).join(', ')}${unmatched.length > 8 ? ` and ${unmatched.length - 8} more` : ''}.`);
+        setMessage({ tone: filled.length > 0 ? 'info' : 'danger', text: filled.length > 0 ? parts.join(' ') : `No marks matched a learner in this class. ${parts.slice(1).join(' ')}` });
+    };
+
     const focusNext = (studentId: string) => {
         const idx = visible.findIndex((s) => s.id === studentId);
         const next = visible[idx + 1];
@@ -250,6 +264,12 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                 <ButtonRow>
                     <Button size="sm" variant="secondary" label={scheme ? 'Edit papers' : 'Set up papers (P1/P2…)'} onPress={() => setEditingPapers((v) => !v)} />
                 </ButtonRow>
+                <MarkFillTools
+                    maxScore={exam.max_score}
+                    roster={candidates}
+                    disabledReason={scheme ? 'Scanning and file fill take one score per learner; enter multi-paper marks per paper below.' : undefined}
+                    onFill={applyFill}
+                />
             </Card>
 
             {editingPapers ? (

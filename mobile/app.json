@@ -35,10 +35,25 @@
           "resizeMode": "contain",
           "backgroundColor": "#4f46e5"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Share the bus's location with the school while you drive a trip."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Take a photo of a mark sheet so its marks can be read in.",
+          "photosPermission": "Choose a photo of a mark sheet so its marks can be read in."
+        }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "tsconfigPaths": false,
+      "onDemandFilesystem": false
     }
   }
 }

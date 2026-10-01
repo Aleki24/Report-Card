@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField, InputField } from '@/components/ui/FormField';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { WEEKDAYS, WEEKDAY_LABELS, type TimetableConfig } from '@/lib/timetable/config';
+import { withAddedPeriod } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
 
 const URL = '/api/academics/timetable/config';
@@ -32,16 +33,7 @@ export function DayStructureEditor() {
         finally { setSaving(false); }
     };
 
-    const addPeriod = (isBreak: boolean) => setConfig(c => {
-        if (!c) return c;
-        const last = c.periods[c.periods.length - 1];
-        const start = last?.end ?? '08:00';
-        const [h, m] = start.split(':').map(Number);
-        const endMin = h * 60 + m + (isBreak ? 20 : 40);
-        const end = `${String(Math.floor(endMin / 60) % 24).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
-        const teaching = c.periods.filter(p => !p.is_break).length;
-        return { ...c, periods: [...c.periods, { label: isBreak ? 'Break' : `P${teaching + 1}`, start, end, is_break: isBreak }] };
-    });
+    const addPeriod = (isBreak: boolean) => setConfig(c => c && withAddedPeriod(c, isBreak));
 
     return (
         <section className="flex flex-col gap-5 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">

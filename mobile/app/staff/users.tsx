@@ -134,7 +134,7 @@ function UsersContent() {
             <View style={{ marginTop: spacing.md }}>
                 <SearchField value={search} onChangeText={setSearch} placeholder="Search name, username or phone" />
                 <ChipSelect
-                    options={[{ value: 'ALL' as Filter, label: 'All' }, ...(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PENDING'] as const).map((r) => ({ value: r as Filter, label: ROLE_LABELS[r] }))]}
+                    options={[{ value: 'ALL' as Filter, label: 'All' }, ...(['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'PENDING'] as const).map((r) => ({ value: r as Filter, label: ROLE_LABELS[r] }))]}
                     value={filter}
                     onChange={setFilter}
                 />

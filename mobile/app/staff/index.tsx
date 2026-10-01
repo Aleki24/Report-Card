@@ -2,6 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
+import { OperationsOverview } from '@/components/OperationsOverview';
+import { STAFF_SCREENS, getStaffNav } from '@/lib/roles';
 import { useApiQuery } from '@/lib/useApiQuery';
 import {
     Button, ButtonRow, Card, DateBadge, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView,
@@ -134,6 +136,7 @@ function AdminDashboard({ name }: { name: string }) {
                 <HeroButton label="📄 Report cards" href="/staff/reports" solid />
                 <HeroButton label="📝 Enter marks" href="/staff/exams" />
             </Hero>
+            <OperationsOverview />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
             {data ? (
@@ -458,6 +461,7 @@ function TeacherDashboard({ name, kind }: { name: string; kind: 'class_teacher' 
                 <HeroButton label="📝 Enter marks" href="/staff/exams" solid />
                 {kind === 'class_teacher' ? <HeroButton label="📅 Attendance" href="/staff/attendance" /> : <HeroButton label="📚 Assignments" href="/staff/assignments" />}
             </Hero>
+            <OperationsOverview />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
             {stats.data ? (
@@ -512,14 +516,35 @@ function SubjectTeacherKpis({ stats }: { stats: SubjectTeacherStats }) {
 
 function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | null }) {
     const router = useRouter();
+    const { viewer } = useCurrentUser();
+    const nav = getStaffNav(viewer);
+    // The pages their duties open (Health for a nurse, Billing for a bursar…).
+    const work = [...nav.primary, ...nav.overflow].filter((s) => !['index', 'announcements', 'profile'].includes(s));
     return (
         <Screen>
             <Hero name={name} />
+            <OperationsOverview />
+            {work.length > 0 ? (
+                <>
+                    <SectionLabel>Your work</SectionLabel>
+                    <ListCard>
+                        {work.map((s) => (
+                            <ListRow
+                                key={s}
+                                title={STAFF_SCREENS[s].title}
+                                subtitle={STAFF_SCREENS[s].description}
+                                left={<Text style={{ fontSize: 22 }}>{STAFF_SCREENS[s].icon}</Text>}
+                                onPress={() => router.push(STAFF_SCREENS[s].href as Href)}
+                            />
+                        ))}
+                    </ListCard>
+                </>
+            ) : null}
             <Card>
                 <Text style={styles.cardTitle}>Welcome{name ? `, ${name}` : ''} 👋</Text>
                 <Text style={styles.muted}>{jobTitle ? `You're signed in as ${jobTitle}.` : "You're signed in as staff."}</Text>
                 <Text style={[styles.muted, { marginTop: spacing.sm }]}>
-                    Use Announcements to stay up to date. Your administrator can grant you more access when needed.
+                    {work.length > 0 ? 'Your duties open the pages above. ' : ''}Use Announcements to stay up to date. Your administrator can grant you more access when needed.
                 </Text>
                 <ButtonRow>
                     <Button label="Open announcements" onPress={() => router.push('/staff/announcements')} />

@@ -8,24 +8,19 @@ import { FormField, InputField } from '@/components/ui/FormField';
 import { useAuth } from '@/components/AuthProvider';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime, humanize, studentName } from '@/lib/ops/format';
-import type { StudentEmbed } from '@/lib/ops/resource';
 import { SPEED_LIMIT_KMH } from '@/lib/transport/compliance';
+import {
+    FLUSH_BATCH, FLUSH_MS, QUEUE_LIMIT, byStop, gpsQueueKey as queueKey, toFix,
+    type BoardEvent, type Fix, type MyTrip, type TripRiders,
+} from '@/lib/ops/forms/transport';
 import { cn } from '@/lib/utils';
-
-interface MyTrip { id: string; direction: string; scheduled_at: string; status: 'SCHEDULED' | 'IN_PROGRESS'; route: { name: string } | null; vehicle: { registration: string } | null }
-interface Rider { student_id: string; stop: { name: string; sequence: number; pickup_time: string | null } | null; student: StudentEmbed | null }
-type BoardEvent = 'BOARDED' | 'ALIGHTED' | 'ABSENT';
-interface Fix { lat: number; lng: number; speed_kmh: number | null; heading: number | null; accuracy_m: number | null; recorded_at: string }
-
-const FLUSH_MS = 15_000;
-const queueKey = (tripId: string) => `trip-gps-queue:${tripId}`;
 
 /** Fixes waiting to upload survive a reload or a dead network. */
 function readQueue(tripId: string): Fix[] {
     try { return JSON.parse(localStorage.getItem(queueKey(tripId)) ?? '[]') as Fix[]; } catch { return []; }
 }
 function writeQueue(tripId: string, fixes: Fix[]) {
-    try { localStorage.setItem(queueKey(tripId), JSON.stringify(fixes.slice(-5000))); } catch { /* storage full or blocked: keep in memory only */ }
+    try { localStorage.setItem(queueKey(tripId), JSON.stringify(fixes.slice(-QUEUE_LIMIT))); } catch { /* storage full or blocked: keep in memory only */ }
 }
 
 /**
@@ -39,7 +34,7 @@ export function DriverMode() {
     const [trips, setTrips] = useState<MyTrip[]>([]);
     const [active, setActive] = useState<MyTrip | null>(null);
     const [odometer, setOdometer] = useState('');
-    const [riders, setRiders] = useState<Rider[]>([]);
+    const [riders, setRiders] = useState<TripRiders['riders']>([]);
     const [events, setEvents] = useState<Map<string, BoardEvent>>(new Map());
     const [queued, setQueued] = useState(0);
     const [lastFix, setLastFix] = useState<Fix | null>(null);
@@ -59,8 +54,8 @@ export function DriverMode() {
 
     const loadRiders = useCallback(async (tripId: string) => {
         try {
-            const r = await opsFetch<{ riders: Rider[]; events: { student_id: string; event: BoardEvent }[] }>(`/api/transport/trips/${tripId}/riders`);
-            setRiders([...r.riders].sort((a, b) => (a.stop?.sequence ?? 999) - (b.stop?.sequence ?? 999)));
+            const r = await opsFetch<TripRiders>(`/api/transport/trips/${tripId}/riders`);
+            setRiders(byStop(r.riders));
             setEvents(new Map(r.events.map(e => [e.student_id, e.event])));
         } catch (err) { toast.error(errorText(err)); }
     }, []);
@@ -70,7 +65,7 @@ export function DriverMode() {
         setQueued(pending.length);
         if (pending.length === 0) return;
         try {
-            const batch = pending.slice(0, 500);
+            const batch = pending.slice(0, FLUSH_BATCH);
             await opsFetch(`/api/transport/trips/${tripId}/positions`, { method: 'POST', json: { points: batch } });
             const rest = readQueue(tripId).slice(batch.length);
             writeQueue(tripId, rest);
@@ -95,14 +90,7 @@ export function DriverMode() {
         if (!tracking) return;
         if (!('geolocation' in navigator)) { toast.error('This phone cannot share its location.'); return; }
         watchRef.current = navigator.geolocation.watchPosition(pos => {
-            const fix: Fix = {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                speed_kmh: pos.coords.speed != null ? Math.round(pos.coords.speed * 3.6 * 10) / 10 : null,
-                heading: pos.coords.heading != null && !Number.isNaN(pos.coords.heading) ? pos.coords.heading : null,
-                accuracy_m: pos.coords.accuracy ?? null,
-                recorded_at: new Date(pos.timestamp).toISOString(),
-            };
+            const fix = toFix(pos.coords, pos.timestamp);
             writeQueue(active.id, [...readQueue(active.id), fix]);
             setLastFix(fix);
             setQueued(q => q + 1);

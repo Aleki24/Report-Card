@@ -9,6 +9,7 @@ export default function RootIndex() {
     if (loading) return <LoadingView />;
 
     if (role === 'STUDENT') return <Redirect href="/student" />;
+    if (role === 'PARENT') return <Redirect href="/parent" />;
     if (isRoleIn(role, STAFF_ROLES)) return <Redirect href="/staff" />;
 
     // RoleGate in the root layout already handles PENDING/unsupported roles

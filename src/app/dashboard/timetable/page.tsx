@@ -8,41 +8,16 @@ import { FormField, InputField } from '@/components/ui/FormField';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
 import { TimetableViewer } from '@/components/academics/timetable/TimetableViewer';
 import { TimetableBuilder } from '@/components/academics/timetable/TimetableBuilder';
 import { DayStructureEditor } from '@/components/academics/timetable/DayStructureEditor';
 import { CoverPanel } from '@/components/academics/timetable/CoverPanel';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
-import { ROOM_TYPES } from '@/lib/ops/resources/academics';
-
-interface Room { id: string; name: string; room_type: string; capacity: number | null }
-interface Load {
-    id: string;
-    lessons_per_week: number;
-    double_lessons: number;
-    room_type: string | null;
-    stream: { full_name: string } | null;
-    subject: { name: string; code: string } | null;
-    teacher: PersonName | null;
-}
-
-const ROOM_FIELDS: readonly FieldDef<FieldName<'rooms'>>[] = [
-    { name: 'name', label: 'Name', kind: 'text', required: true },
-    { name: 'room_type', label: 'Type', kind: 'enum', values: ROOM_TYPES, required: true },
-    { name: 'capacity', label: 'Seats', kind: 'number' },
-];
-
-const LOAD_FIELDS: readonly FieldDef<FieldName<'timetable-requirements'>>[] = [
-    { name: 'grade_stream_id', label: 'Class', kind: 'lookup', lookup: 'streams', required: true },
-    { name: 'subject_id', label: 'Subject', kind: 'lookup', lookup: 'subjects', required: true },
-    { name: 'teacher_id', label: 'Teacher', kind: 'lookup', lookup: 'staff', span: 'full' },
-    { name: 'lessons_per_week', label: 'Lessons a week', kind: 'number', required: true },
-    { name: 'double_lessons', label: 'Of which doubles', kind: 'number', hint: 'Each double uses two lessons (sciences often have one).' },
-    { name: 'room_type', label: 'Needs a room type', kind: 'enum', values: ROOM_TYPES, hint: 'e.g. LAB for practicals.' },
-];
+import {
+    LOAD_DEFAULTS, LOAD_FIELDS, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, weeklyLessonsPerClass,
+    type Room, type TeachingLoad as Load,
+} from '@/lib/ops/forms/academics';
 
 function Loads() {
     const [perWeek, setPerWeek] = useState('5');
@@ -53,7 +28,7 @@ function Loads() {
         setImporting(true);
         try {
             const r = await opsFetch<{ created: number }>('/api/academics/timetable/requirements/import', { method: 'POST', json: { lessons_per_week: Number(perWeek) || 5 } });
-            toast.success(r.created === 0 ? 'Every assignment already has a load.' : `${r.created} teaching loads added. Adjust lessons per week below.`);
+            toast.success(importLoadsMessage(r.created));
             setKey(k => k + 1);
         } catch (err) { toast.error(errorText(err)); }
         finally { setImporting(false); }
@@ -78,22 +53,16 @@ function Loads() {
                 canCreate
                 canEdit
                 canDelete
-                defaults={{ lessons_per_week: '5', double_lessons: '0' }}
+                defaults={LOAD_DEFAULTS}
                 searchText={l => `${l.stream?.full_name} ${l.subject?.name} ${personName(l.teacher)}`}
-                header={rows => {
-                    const perClass = new Map<string, number>();
-                    rows.forEach(r => perClass.set(r.stream?.full_name ?? '', (perClass.get(r.stream?.full_name ?? '') ?? 0) + r.lessons_per_week));
-                    return rows.length > 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                            Weekly lessons per class: {[...perClass.entries()].sort().map(([c, n]) => `${c} ${n}`).join(' · ')}
-                        </p>
-                    ) : null;
-                }}
+                header={rows => (rows.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">Weekly lessons per class: {weeklyLessonsPerClass(rows)}</p>
+                ) : null)}
                 columns={[
                     { key: 'class', header: 'Class', render: l => <span className="font-medium">{l.stream?.full_name}</span> },
                     { key: 'subject', header: 'Subject', render: l => l.subject?.name },
                     { key: 'teacher', header: 'Teacher', render: l => (l.teacher ? personName(l.teacher) : <span className="text-destructive">Unassigned</span>) },
-                    { key: 'lessons', header: 'Lessons', numeric: true, render: l => `${l.lessons_per_week}${l.double_lessons ? ` (${l.double_lessons}×2)` : ''}` },
+                    { key: 'lessons', header: 'Lessons', numeric: true, render: l => loadLessonsLabel(l) },
                     { key: 'room', header: 'Room', hideOnMobile: true, render: l => (l.room_type ? humanize(l.room_type) : 'Any') },
                 ]}
             />
@@ -127,7 +96,7 @@ export default function TimetablePage() {
                                 canCreate
                                 canEdit
                                 canDelete
-                                defaults={{ room_type: 'CLASSROOM' }}
+                                defaults={ROOM_DEFAULTS}
                                 columns={[
                                     { key: 'name', header: 'Room', render: r => <span className="font-medium">{r.name}</span> },
                                     { key: 'type', header: 'Type', render: r => humanize(r.room_type) },

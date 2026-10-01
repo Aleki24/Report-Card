@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useMemo } from 'react';
 import { Platform } from 'react-native';
+import { apiErrorMessage } from '@shared/api-error-message';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -46,7 +47,8 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     const json: unknown = await res.json().catch(() => ({}));
     if (!res.ok) {
         const body = (json ?? {}) as ErrorBody;
-        throw new ApiError(body.error ?? `Request failed (${res.status})`, res.status, body.code ?? null);
+        // Zod `details` name the rejected fields; fold them in as the web does.
+        throw new ApiError(apiErrorMessage(json, `Request failed (${res.status})`), res.status, body.code ?? null);
     }
     return json as T;
 }
@@ -75,6 +77,20 @@ export interface Api {
      * Resolves to the public URL, or null if the user cancelled.
      */
     pickAndUploadImage: (path?: string) => Promise<string | null>;
+    /** Lets the user pick one file of the given MIME types; null if they cancelled. */
+    pickFile: (types: readonly string[]) => Promise<PickedFile | null>;
+    /** A multipart request (text fields plus picked files), answered with JSON like every other call. */
+    sendForm: <T>(method: 'POST' | 'PATCH', path: string, fields: Readonly<Record<string, string>>, files: Readonly<Record<string, PickedFile | null>>) => Promise<T>;
+}
+
+/** A file chosen with the system picker, ready to upload. */
+export interface PickedFile {
+    uri: string;
+    name: string;
+    type: string;
+    size: number | null;
+    /** The browser's File, in the web build. */
+    blob?: Blob;
 }
 
 /**
@@ -112,6 +128,27 @@ export function useApi(): Api {
             const token = await getToken();
             return request<T>(path, token, { method, body: body === undefined ? undefined : JSON.stringify(body) });
         };
+        const pickFile = async (types: readonly string[]): Promise<PickedFile | null> => {
+            const picked = await DocumentPicker.getDocumentAsync({ type: [...types], copyToCacheDirectory: true });
+            if (picked.canceled || picked.assets.length === 0) return null;
+            const asset = picked.assets[0];
+            return { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/octet-stream', size: asset.size ?? null, blob: asset.file };
+        };
+        const sendForm = async <T,>(method: 'POST' | 'PATCH', path: string, fields: Readonly<Record<string, string>>, files: Readonly<Record<string, PickedFile | null>>): Promise<T> => {
+            const form = new FormData();
+            Object.entries(fields).forEach(([k, v]) => form.append(k, v));
+            Object.entries(files).forEach(([k, f]) => {
+                if (!f) return;
+                // React Native's FormData takes a { uri, name, type } descriptor for files.
+                if (Platform.OS === 'web' && f.blob) form.append(k, f.blob, f.name);
+                else form.append(k, { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
+            });
+            const token = await getToken();
+            const res = await fetch(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            const json: unknown = await res.json().catch(() => ({}));
+            if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
+            return json as T;
+        };
         return {
             get: (path) => send('GET', path),
             post: (path, body) => send('POST', path, body),
@@ -146,26 +183,15 @@ export function useApi(): Api {
                 }
                 await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: fileName });
             },
+            pickFile,
+            sendForm,
             pickAndUploadImage: async (path = '/api/school/upload') => {
-                const picked = await DocumentPicker.getDocumentAsync({ type: UPLOAD_TYPES, copyToCacheDirectory: true });
-                if (picked.canceled || picked.assets.length === 0) return null;
-                const asset = picked.assets[0];
-                const type = asset.mimeType ?? 'image/jpeg';
-                if (!UPLOAD_TYPES.includes(type)) throw new ApiError('Choose a JPEG, PNG, GIF or WebP image.', 400);
-                if ((asset.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Images must be 10 MB or smaller.', 400);
-
-                const form = new FormData();
-                // React Native's FormData takes a { uri, name, type } descriptor for files.
-                if (Platform.OS === 'web' && asset.file) form.append('file', asset.file, asset.name);
-                else form.append('file', { uri: asset.uri, name: asset.name, type } as unknown as Blob);
-                const token = await getToken();
-                const res = await fetch(`${API_URL}${path}`, {
-                    method: 'POST',
-                    body: form,
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                const json = (await res.json().catch(() => ({}))) as ErrorBody & { url?: string };
-                if (!res.ok || !json.url) throw new ApiError(json.error ?? 'Upload failed', res.status, json.code ?? null);
+                const picked = await pickFile(UPLOAD_TYPES);
+                if (!picked) return null;
+                if (!UPLOAD_TYPES.includes(picked.type)) throw new ApiError('Choose a JPEG, PNG, GIF or WebP image.', 400);
+                if ((picked.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Images must be 10 MB or smaller.', 400);
+                const json = await sendForm<{ url?: string }>('POST', path, {}, { file: picked });
+                if (!json.url) throw new ApiError('Upload failed', 0);
                 return json.url;
             },
         };

@@ -3,6 +3,8 @@ import { Linking, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
+import type { CreatedCredential } from '@shared/import/student-rows';
+import { ImportStudentsSheet } from '@/components/people/ImportStudentsSheet';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
@@ -74,7 +76,9 @@ function StudentsSection() {
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
     const [limit, setLimit] = useState(PAGE);
     const [adding, setAdding] = useState(false);
+    const [importing, setImporting] = useState(false);
     const [created, setCreated] = useState<AddStudentResult | null>(null);
+    const [imported, setImported] = useState<CreatedCredential[]>([]);
 
     const students = data ?? [];
     const filtered = useMemo(() => {
@@ -123,9 +127,25 @@ function StudentsSection() {
                 />
             ) : (
                 <ButtonRow>
+                    <Button variant="secondary" label="Import CSV / Excel" onPress={() => setImporting(true)} />
                     <Button label="+ Add student" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
+            {importing ? (
+                <ImportStudentsSheet
+                    streams={streams}
+                    defaultClassId={stream}
+                    onClose={() => setImporting(false)}
+                    onImported={(list) => { if (list.length > 0) setImported(list); refresh(); }}
+                />
+            ) : null}
+            {imported.length > 0 ? (
+                <Notice
+                    tone="info"
+                    onDismiss={() => setImported([])}
+                    message={`New sign-ins (shown once): ${imported.map((c) => `${c.first_name} ${c.last_name} — ${c.username} / ${c.invite_code}`).join('; ')}`}
+                />
+            ) : null}
 
             <SearchField value={search} onChangeText={setSearch} placeholder="Search name, admission no. or guardian phone" />
             {streams.length > 1 ? (

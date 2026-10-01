@@ -13,19 +13,8 @@ import { useOpsList } from '@/hooks/useOpsList';
 import { useLookup } from '@/hooks/useLookup';
 import { DUTIES, DUTY_KEYS, SCOPE_LABELS, dutyDefinition, type DutyKey, type ScopeType } from '@/lib/platform/permissions';
 import { date, personName } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
 import type { LookupOption } from '@/lib/ops/lookups';
-
-interface DutyRow {
-    id: string;
-    user_id: string;
-    duty: DutyKey;
-    scope_type: ScopeType | null;
-    scope_id: string | null;
-    starts_on: string | null;
-    ends_on: string | null;
-    user: PersonName & { role: string } | null;
-}
+import { EMPTY_DUTY_FORM as EMPTY, dutyPayload, type DutyRow } from '@/lib/ops/forms/platform';
 
 interface Named { id: string; name?: string; registration?: string }
 
@@ -43,8 +32,6 @@ function useScopeOptions(scope: ScopeType | undefined): { options: LookupOption[
         }
     }, [scope, streams, dorms.rows, dorms.loading, routes.rows, routes.loading]);
 }
-
-const EMPTY = { user_id: '', duty: '' as DutyKey | '', scope_id: '', starts_on: '', ends_on: '' };
 
 /**
  * Who holds which job: DOS, bursar, matron, nurse, driver… Each duty grants
@@ -76,14 +63,7 @@ export function DutiesTab() {
     const save = async () => {
         if (!form.user_id || !form.duty) { toast.error('Choose a person and a duty.'); return; }
         setSaving(true);
-        const ok = await create({
-            user_id: form.user_id,
-            duty: form.duty,
-            scope_type: scope && form.scope_id ? scope : null,
-            scope_id: scope && form.scope_id ? form.scope_id : null,
-            starts_on: form.starts_on,
-            ends_on: form.ends_on,
-        }, 'Duty assigned.');
+        const ok = await create(dutyPayload(form, scope), 'Duty assigned.');
         setSaving(false);
         if (ok) { setOpen(false); setForm(EMPTY); }
     };

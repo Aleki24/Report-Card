@@ -5,10 +5,9 @@ import { cn } from '@/lib/utils';
 import { classNames, parseStreamNames } from '@/lib/classes';
 import type { Curriculum } from '@/lib/schemas';
 
-export type StandardGrade = { id: string; code: string; name: string; curriculum: Curriculum };
+import { gradesMissingStreams, type ClassPlan, type StandardGrade } from '@/lib/onboarding/plan';
 
-/** A ticked grade: one class named after the grade, or named streams. */
-export type ClassPlan = { hasStreams: boolean; streams: string };
+export { gradesMissingStreams, type ClassPlan, type StandardGrade };
 
 type Props = {
     grades: StandardGrade[];
@@ -18,11 +17,6 @@ type Props = {
 };
 
 const CURRICULUM_LABELS: Record<Curriculum, string> = { CBC: 'CBC', '844': '8-4-4' };
-
-/** Grades ticked with streams switched on but none named yet. */
-export function gradesMissingStreams(plans: Record<string, ClassPlan>): string[] {
-    return Object.entries(plans).filter(([, p]) => p.hasStreams && parseStreamNames(p.streams).length === 0).map(([id]) => id);
-}
 
 /**
  * Pick the grades the school teaches from the standard list. Each is either

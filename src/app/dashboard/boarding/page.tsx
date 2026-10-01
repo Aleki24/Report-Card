@@ -9,50 +9,24 @@ import { InputField } from '@/components/ui/FormField';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { RollCallPanel } from '@/components/welfare/RollCallPanel';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { admissionNo, date, dateTime, humanize, personName, studentName, today } from '@/lib/ops/format';
-import type { PersonName, StudentEmbed } from '@/lib/ops/resource';
-import { DORM_GENDERS, EXEAT_TYPES, type ExeatStatus } from '@/lib/ops/resources/welfare';
-
-interface Dorm { id: string; name: string; house: string | null; gender: string; capacity: number; patron: PersonName | null }
-interface Allocation { id: string; bed_label: string | null; allocated_on: string; student: StudentEmbed | null }
-interface Exeat { id: string; exeat_type: string; leave_at: string; return_by: string; reason: string | null; status: ExeatStatus; pass_code: string | null; student: StudentEmbed | null; requester: PersonName | null }
-interface Inspection { id: string; inspected_on: string; score: number; remarks: string | null; dorm: { name: string } | null; inspector: PersonName | null }
-
-const EXEAT_TONES: Record<ExeatStatus, PillTone> = { PENDING: 'warn', APPROVED: 'info', REJECTED: 'bad', OUT: 'violet', RETURNED: 'good' };
-
-const DORM_FIELDS: readonly FieldDef<FieldName<'dorms'>>[] = [
-    { name: 'name', label: 'Dorm name', kind: 'text', required: true },
-    { name: 'house', label: 'House', kind: 'text' },
-    { name: 'gender', label: 'For', kind: 'enum', values: DORM_GENDERS, required: true, labels: { MALE: 'Boys', FEMALE: 'Girls', MIXED: 'Mixed' } },
-    { name: 'capacity', label: 'Beds', kind: 'number' },
-    { name: 'patron_id', label: 'Patron / house master', kind: 'lookup', lookup: 'staff', span: 'full' },
-];
-
-const EXEAT_FIELDS: readonly FieldDef<FieldName<'exeats'>>[] = [
-    { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-    { name: 'exeat_type', label: 'Type', kind: 'enum', values: EXEAT_TYPES, required: true },
-    { name: 'leave_at', label: 'Leaving', kind: 'datetime', required: true },
-    { name: 'return_by', label: 'Back by', kind: 'datetime', required: true },
-    { name: 'reason', label: 'Reason', kind: 'textarea' },
-];
+import {
+    ALLOCATION_FIELDS, DORM_DEFAULTS, DORM_FIELDS, DORM_GENDER_LABELS, EXEAT_DEFAULTS, EXEAT_FIELDS, EXEAT_TONES,
+    allocationDefaults, exeatActionMessage, exeatActions, inspectionFields,
+    type Allocation, type Dorm, type Exeat, type ExeatAction, type Inspection,
+} from '@/lib/ops/forms/welfare';
 
 function Allocations({ dorm, canManage }: { dorm: Dorm; canManage: boolean }) {
     return (
         <ResourceManager<'dorm-allocations', Allocation>
             resource="dorm-allocations"
             params={{ dorm_id: dorm.id, current: '1' }}
-            defaults={{ dorm_id: dorm.id, allocated_on: today() }}
-            fields={[
-                { name: 'dorm_id', label: 'Dorm', kind: 'hidden' },
-                { name: 'student_id', label: 'Learner', kind: 'lookup', lookup: 'students', required: true, span: 'full' },
-                { name: 'bed_label', label: 'Bed / cubicle', kind: 'text' },
-                { name: 'allocated_on', label: 'From', kind: 'date', required: true },
-            ]}
+            defaults={allocationDefaults(dorm.id)}
+            fields={ALLOCATION_FIELDS}
             canCreate={canManage}
             addLabel="Allocate bed"
             searchText={a => `${studentName(a.student)} ${admissionNo(a.student)} ${a.bed_label ?? ''}`}
@@ -103,10 +77,10 @@ export default function BoardingPage() {
     const rollcall = can('boarding.rollcall') || manage;
     const [openDorm, setOpenDorm] = useState<Dorm | null>(null);
 
-    const exeatAction = async (id: string, action: 'APPROVE' | 'REJECT' | 'CHECK_OUT' | 'CHECK_IN', reload: () => Promise<void>) => {
+    const exeatAction = async (id: string, action: ExeatAction, reload: () => Promise<void>) => {
         try {
             const r = await opsFetch<{ pass_code: string | null; notified?: boolean }>(`/api/welfare/exeats/${id}/transition`, { method: 'POST', json: { action } });
-            toast.success(action === 'APPROVE' ? `Approved. Gate pass code: ${r.pass_code}` : action === 'CHECK_OUT' || action === 'CHECK_IN' ? `Recorded${r.notified ? '; guardian notified' : ''}.` : 'Rejected.');
+            toast.success(exeatActionMessage(action, r));
             await reload();
         } catch (err) { toast.error(errorText(err)); }
     };
@@ -133,15 +107,16 @@ export default function BoardingPage() {
                                     canCreate={manage || rollcall}
                                     canEdit={e => manage && e.status === 'PENDING'}
                                     canDelete={e => manage && e.status === 'PENDING'}
-                                    defaults={{ exeat_type: 'WEEKEND' }}
+                                    defaults={EXEAT_DEFAULTS}
                                     addLabel="Request exeat"
                                     searchText={e => `${studentName(e.student)} ${admissionNo(e.student)} ${e.pass_code ?? ''}`}
                                     rowActions={(e, reload) => (
                                         <>
-                                            {manage && e.status === 'PENDING' && <Button size="xs" onClick={() => void exeatAction(e.id, 'APPROVE', reload)}>Approve</Button>}
-                                            {manage && (e.status === 'PENDING' || e.status === 'APPROVED') && <Button size="xs" variant="destructive" onClick={() => void exeatAction(e.id, 'REJECT', reload)}>Reject</Button>}
-                                            {rollcall && e.status === 'APPROVED' && <Button size="xs" variant="outline" onClick={() => void exeatAction(e.id, 'CHECK_OUT', reload)}><LogOut />Out</Button>}
-                                            {rollcall && e.status === 'OUT' && <Button size="xs" variant="outline" onClick={() => void exeatAction(e.id, 'CHECK_IN', reload)}><LogIn />Back</Button>}
+                                            {exeatActions(e.status, { manage, rollcall }).map(a => (
+                                                <Button key={a.action} size="xs" variant={a.action === 'REJECT' ? 'destructive' : a.action === 'APPROVE' ? 'default' : 'outline'} onClick={() => void exeatAction(e.id, a.action, reload)}>
+                                                    {a.action === 'CHECK_OUT' && <LogOut />}{a.action === 'CHECK_IN' && <LogIn />}{a.label}
+                                                </Button>
+                                            ))}
                                         </>
                                     )}
                                     columns={[
@@ -164,12 +139,12 @@ export default function BoardingPage() {
                                 canCreate={manage}
                                 canEdit={manage}
                                 canDelete={manage}
-                                defaults={{ gender: 'MIXED' }}
+                                defaults={DORM_DEFAULTS}
                                 onRowClick={setOpenDorm}
                                 columns={[
                                     { key: 'name', header: 'Dorm', render: d => <span className="font-medium">{d.name}</span> },
                                     { key: 'house', header: 'House', render: d => d.house ?? '—' },
-                                    { key: 'for', header: 'For', hideOnMobile: true, render: d => ({ MALE: 'Boys', FEMALE: 'Girls', MIXED: 'Mixed' } as Record<string, string>)[d.gender] },
+                                    { key: 'for', header: 'For', hideOnMobile: true, render: d => (DORM_GENDER_LABELS as Record<string, string>)[d.gender] },
                                     { key: 'beds', header: 'Beds', numeric: true, render: d => d.capacity },
                                     { key: 'patron', header: 'Patron', hideOnMobile: true, render: d => personName(d.patron) },
                                 ]}
@@ -192,12 +167,7 @@ export default function BoardingPage() {
 
 function Inspections({ canRecord }: { canRecord: boolean }) {
     const dorms = useOpsList<{ id: string; name: string }>('dorms');
-    const fields: readonly FieldDef<FieldName<'dorm-inspections'>>[] = [
-        { name: 'dorm_id', label: 'Dorm', kind: 'options', options: dorms.rows.map(d => ({ id: d.id, label: d.name })), required: true },
-        { name: 'inspected_on', label: 'Date', kind: 'date', required: true },
-        { name: 'score', label: 'Score (0–100)', kind: 'number', required: true },
-        { name: 'remarks', label: 'Remarks', kind: 'textarea' },
-    ];
+    const fields = inspectionFields(dorms.rows);
     return (
         <ResourceManager<'dorm-inspections', Inspection>
             resource="dorm-inspections"

@@ -10,9 +10,7 @@ import { FormField, InputField } from '@/components/ui/FormField';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { money } from '@/lib/ops/format';
-
-interface Line { voteHeadId: string | null; name: string; billed: number; collected: number; outstanding: number; spent: number }
-interface Report { lines: Line[]; overpaid: number }
+import { statementTotal, type VoteHeadStatement as Report } from '@/lib/ops/forms/finance';
 
 /** Billed, collected, owed and spent per vote head for a term, and balance reminders by SMS. */
 export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
@@ -39,7 +37,7 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
         finally { setSending(false); }
     };
 
-    const total = (key: keyof Omit<Line, 'voteHeadId' | 'name'>) => report?.lines.reduce((n, l) => n + l[key], 0) ?? 0;
+    const total = (key: Parameters<typeof statementTotal>[1]) => statementTotal(report, key);
 
     return (
         <div className="flex flex-col gap-5">

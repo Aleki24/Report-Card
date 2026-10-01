@@ -7,7 +7,7 @@
  * The teacher who uploads a paper submits it; an HOD or DOS moderates; the
  * DOS or exams officer locks it for printing and releases it after the exam.
  */
-import type { Permission } from '@/lib/platform/permissions';
+import type { Permission } from '../platform/permissions';
 
 export const PAPER_STATUSES = ['DRAFT', 'SUBMITTED', 'RETURNED', 'APPROVED', 'LOCKED', 'RELEASED'] as const;
 export type PaperStatus = (typeof PAPER_STATUSES)[number];

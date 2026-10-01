@@ -7,11 +7,8 @@ import { FormField } from '@/components/ui/FormField';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { personName } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
-import type { Residence } from '@/lib/finance/billing';
+import type { ResidenceLearner as Learner, Residence } from '@/lib/ops/forms/finance';
 import { cn } from '@/lib/utils';
-
-interface Learner { id: string; admission_number: string | null; residence: Residence; user: PersonName | null }
 
 /** Day scholar or boarder, class by class: decides fee structures and who sleeps in. */
 export function ResidencePanel({ canEdit }: { canEdit: boolean }) {

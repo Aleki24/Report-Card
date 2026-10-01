@@ -4,9 +4,9 @@ import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
-import { personName } from '@/lib/ops/format';
+import { cellLines, type GridMode } from '@/lib/ops/forms/academics';
 
-export type GridMode = 'class' | 'teacher' | 'room';
+export type { GridMode };
 
 interface Props {
     config: TimetableConfig;
@@ -15,14 +15,6 @@ interface Props {
     /** Editing: the lesson picked to move, and what a click on a cell does. */
     selectedId?: string | null;
     onCellClick?: (day: number, period: number, lesson: TimetableLesson | null) => void;
-}
-
-/** What a cell shows depends on whose timetable it is. */
-function cellLines(l: TimetableLesson, mode: GridMode): [string, string] {
-    const subject = l.subject?.code || l.subject?.name || 'Lesson';
-    if (mode === 'class') return [subject, [l.teacher ? personName(l.teacher) : '', l.room?.name ?? ''].filter(Boolean).join(' · ')];
-    if (mode === 'teacher') return [subject, [l.stream?.full_name ?? '', l.room?.name ?? ''].filter(Boolean).join(' · ')];
-    return [subject, [l.stream?.full_name ?? '', l.teacher ? personName(l.teacher) : ''].filter(Boolean).join(' · ')];
 }
 
 function LessonCell({ lesson, mode, selected }: { lesson: TimetableLesson; mode: GridMode; selected: boolean }) {

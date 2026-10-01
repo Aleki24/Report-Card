@@ -1,29 +1,19 @@
 import { Tabs } from 'expo-router/js-tabs';
-import { Text, type ColorValue } from 'react-native';
-import { colors } from '@/lib/theme';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { STUDENT_PRIMARY, STUDENT_SCREENS, type StudentScreen } from '@/lib/roles';
-
-function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
-    return <Text style={{ fontSize: 20, color }}>{emoji}</Text>;
-}
+import { useCurrentUser } from '@/lib/UserContext';
+import { STUDENT_SCREENS, getStudentNav, type StudentScreen } from '@/lib/roles';
+import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
 
 export default function StudentTabsLayout() {
     // Same unread count the web sidebar badges on the student dashboard.
     const notifications = useApiQuery<{ count: number }>('/api/school/student/notifications');
     const unread = notifications.data?.count ?? 0;
-    const primary = new Set<StudentScreen>(STUDENT_PRIMARY);
+    const { viewer } = useCurrentUser();
+    const nav = getStudentNav(viewer);
+    const primary = new Set<StudentScreen>(nav.primary);
 
     return (
-        <Tabs
-            screenOptions={{
-                tabBarActiveTintColor: colors.primary,
-                tabBarInactiveTintColor: colors.muted,
-                headerStyle: { backgroundColor: colors.card },
-                headerTitleStyle: { color: colors.foreground, fontWeight: '700' },
-                headerShadowVisible: false,
-            }}
-        >
+        <Tabs screenOptions={TAB_SCREEN_OPTIONS}>
             {(Object.keys(STUDENT_SCREENS) as StudentScreen[]).map((name) => {
                 const meta = STUDENT_SCREENS[name];
                 return (
@@ -40,7 +30,7 @@ export default function StudentTabsLayout() {
                     />
                 );
             })}
-            <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} /> }} />
+            <Tabs.Screen name="more" options={{ title: 'More', href: nav.overflow.length > 0 ? undefined : null, tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} /> }} />
             <Tabs.Screen name="subjects/[subjectId]" options={{ href: null, title: 'Subject' }} />
         </Tabs>
     );

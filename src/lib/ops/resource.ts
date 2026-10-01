@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import type { ModuleKey } from '@/lib/platform/modules';
-import type { Permission } from '@/lib/platform/permissions';
+import type { ModuleKey } from '../platform/modules';
+import type { Permission } from '../platform/permissions';
 
 /**
  * A school-scoped table served by the shared operations API

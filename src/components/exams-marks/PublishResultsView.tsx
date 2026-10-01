@@ -255,22 +255,36 @@ export function PublishResultsView() {
     };
 
     const notReleased = exams.filter(e => !isReleased(e.status));
+    // The server refuses to release an exam nobody has marked (often an empty
+    // duplicate of a subject's real exam), so "Release all" only sends the
+    // exams that have marks and says which it left out.
+    const releasable = notReleased.filter(e => (markedByExam.get(e.id) ?? 0) > 0);
+    const unmarkedCount = notReleased.length - releasable.length;
     const releaseAll = async () => {
-        if (notReleased.length === 0) { toast.info('Everything is already released.'); return; }
-        if (!window.confirm(`Release ${notReleased.length} subject${notReleased.length !== 1 ? 's' : ''} to learners? Learners with no mark in a subject simply won't see it, and a missing paper counts as 0.`)) return;
+        if (releasable.length === 0) {
+            toast.info(notReleased.length === 0 ? 'Everything is already released.' : 'Enter marks before releasing — none of the hidden subjects has any yet.');
+            return;
+        }
+        const skipNote = unmarkedCount > 0 ? ` ${unmarkedCount} with no marks yet will stay hidden.` : '';
+        if (!window.confirm(`Release ${releasable.length} subject${releasable.length !== 1 ? 's' : ''} to learners? Learners with no mark in a subject simply won't see it, and a missing paper counts as 0.${skipNote}`)) return;
         setBulkBusy(true);
-        let ok = 0, fail = 0;
-        for (const ex of notReleased) {
+        let ok = 0;
+        const failures: string[] = [];
+        for (const ex of releasable) {
             try {
                 const res = await fetch(`/api/school/exams/${ex.id}/status`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'publish', confirm: true }),
                 });
-                if (res.ok) ok++; else fail++;
-            } catch { fail++; }
+                if (res.ok) { ok++; continue; }
+                const data = (await res.json().catch(() => ({}))) as { error?: string };
+                failures.push(`${ex.subject_name}: ${data.error ?? `error ${res.status}`}`);
+            } catch { failures.push(`${ex.subject_name}: network error`); }
         }
         setBulkBusy(false);
-        toast[fail === 0 ? 'success' : 'warning'](`Released ${ok} subject${ok !== 1 ? 's' : ''}${fail ? `, ${fail} failed` : ''}.`);
+        const summary = `Released ${ok} subject${ok !== 1 ? 's' : ''}${unmarkedCount ? `; ${unmarkedCount} left hidden (no marks)` : ''}.`;
+        if (failures.length === 0) toast.success(summary);
+        else toast.warning(`${summary} ${failures.length} failed`, { description: failures.join('\n'), duration: 10_000 });
         await loadExams();
     };
 
@@ -366,9 +380,10 @@ export function PublishResultsView() {
                                     </>
                                 )}
                             </div>
-                            <button type="button" className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50" onClick={() => void releaseAll()} disabled={bulkBusy || notReleased.length === 0}>
+                            <button type="button" className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50" onClick={() => void releaseAll()} disabled={bulkBusy || loadingPreview || releasable.length === 0}
+                                title={releasable.length === 0 && notReleased.length > 0 ? 'Enter marks before releasing' : undefined}>
                                 {bulkBusy ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />}
-                                {notReleased.length > 0 ? `Release all (${notReleased.length})` : 'All released'}
+                                {notReleased.length === 0 ? 'All released' : releasable.length > 0 ? `Release all marked (${releasable.length})` : 'Nothing marked yet'}
                             </button>
                         </header>
 

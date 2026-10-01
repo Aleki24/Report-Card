@@ -5,12 +5,13 @@ import React, { useState } from 'react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 
+import { editRow, firstRow, gradingSystemPayload, nextRowFrom, type DraftRow, type SystemKind } from '@/lib/grading/draft';
+
 interface AcademicLevel { id: string; code: string; name: string; }
 interface GradingSystem { id: string; name: string; description: string | null; academic_level_id: string; school_id?: string | null; system_kind?: 'SUBJECT' | 'OVERALL'; }
 interface GradingScale { id: string; grading_system_id: string; min_percentage: number; max_percentage: number; symbol: string; label: string; points: number | null; order_index: number; }
 interface SubjectOption { id: string; name: string; academic_level_id: string; grading_system_id: string | null; }
 
-type SystemKind = 'SUBJECT' | 'OVERALL';
 
 interface GradingSystemsTabProps {
     academicLevels: AcademicLevel[];
@@ -26,32 +27,6 @@ interface GradingSystemsTabProps {
     onSetOverall: (gradingSystemId: string) => Promise<void>;
 }
 
-interface DraftRow { symbol: string; label: string; min_percentage: string; max_percentage: string; points: string; }
-
-const emptyRow = (): DraftRow => ({ symbol: '', label: '', min_percentage: '', max_percentage: '', points: '' });
-
-// Standard KCSE 12-point scale — points follow definitively from the grade
-// (A = 12, A- = 11 … E = 1), so they auto-fill and the user rarely types them.
-const STANDARD_GRADE_POINTS: Record<string, number> = {
-    'A': 12, 'A-': 11, 'B+': 10, 'B': 9, 'B-': 8, 'C+': 7,
-    'C': 6, 'C-': 5, 'D+': 4, 'D': 3, 'D-': 2, 'E': 1,
-};
-const GRADE_SEQUENCE = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'E'];
-
-function pointsForSymbol(symbol: string): string {
-    const p = STANDARD_GRADE_POINTS[symbol.trim().toUpperCase()];
-    return p !== undefined ? String(p) : '';
-}
-
-function nextRowFrom(last: DraftRow | undefined): DraftRow {
-    if (!last) return emptyRow();
-    const idx = GRADE_SEQUENCE.indexOf(last.symbol.trim().toUpperCase());
-    const nextSymbol = idx >= 0 && idx < GRADE_SEQUENCE.length - 1 ? GRADE_SEQUENCE[idx + 1] : '';
-    const lastLow = Number(last.min_percentage);
-    const nextHigh = last.min_percentage !== '' && !Number.isNaN(lastLow) ? String(lastLow - 1) : '';
-    return { symbol: nextSymbol, label: '', min_percentage: '', max_percentage: nextHigh, points: pointsForSymbol(nextSymbol) };
-}
-
 export function GradingSystemsTab({
     academicLevels, gradingSystems, gradingScales, subjects, overallGradingSystemId,
     schoolId, saving, onCreate, onDelete, onPatch, onSetOverall,
@@ -60,7 +35,7 @@ export function GradingSystemsTab({
     const [kind, setKind] = useState<SystemKind>('SUBJECT');
     const [name, setName] = useState('');
     const [academicLevelId, setAcademicLevelId] = useState('');
-    const [rows, setRows] = useState<DraftRow[]>([{ symbol: 'A', label: '', min_percentage: '', max_percentage: '100', points: '12' }]);
+    const [rows, setRows] = useState<DraftRow[]>([firstRow()]);
     const [groupSubjectIds, setGroupSubjectIds] = useState<string[]>([]);
     const [formError, setFormError] = useState('');
     const [viewingId, setViewingId] = useState<string | null>(null);
@@ -71,21 +46,12 @@ export function GradingSystemsTab({
 
     const resetForm = () => {
         setKind('SUBJECT'); setName(''); setAcademicLevelId('');
-        setRows([{ symbol: 'A', label: '', min_percentage: '', max_percentage: '100', points: '12' }]);
+        setRows([firstRow()]);
         setGroupSubjectIds([]); setFormError('');
     };
 
     const updateRow = (i: number, field: keyof DraftRow, value: string) => {
-        setRows(prev => prev.map((r, idx) => {
-            if (idx !== i) return r;
-            const next = { ...r, [field]: value };
-            // Points follow the grade automatically (still editable afterwards).
-            if (field === 'symbol') {
-                const auto = pointsForSymbol(value);
-                if (auto) next.points = auto;
-            }
-            return next;
-        }));
+        setRows(prev => prev.map((r, idx) => (idx === i ? editRow(r, field, value) : r)));
     };
 
     const addRow = () => setRows(prev => [...prev, nextRowFrom(prev[prev.length - 1])]);
@@ -100,33 +66,9 @@ export function GradingSystemsTab({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError('');
-        if (!name.trim()) { setFormError('Grading system name is required.'); return; }
-        if (!academicLevelId) { setFormError('Please select an academic level.'); return; }
-
-        const filledRows = rows.filter(r => r.symbol.trim() || r.min_percentage !== '' || r.max_percentage !== '');
-        if (filledRows.length === 0) { setFormError('Add at least one grade row to the grading grid.'); return; }
-
-        const ceiling = isOverall ? 100000 : 100;
-        const boundLabel = isOverall ? 'points' : '%';
-        const scales = [];
-        for (const r of filledRows) {
-            if (!r.symbol.trim()) { setFormError('Every row needs a grade (e.g. A, B+, E).'); return; }
-            if (r.min_percentage === '' || r.max_percentage === '') { setFormError(`Row "${r.symbol}" needs both a Low and High value.`); return; }
-            const min = Number(r.min_percentage);
-            const max = Number(r.max_percentage);
-            if (Number.isNaN(min) || Number.isNaN(max) || min < 0 || max > ceiling) { setFormError(`Row "${r.symbol}": Low/High must be between 0 and ${ceiling} ${boundLabel}.`); return; }
-            if (min > max) { setFormError(`Row "${r.symbol}": Low cannot be greater than High.`); return; }
-            scales.push({
-                symbol: r.symbol.trim(),
-                label: r.label.trim(),
-                min_percentage: min,
-                max_percentage: max,
-                points: isOverall ? undefined : (r.points === '' ? undefined : Number(r.points)),
-            });
-        }
-
-        const payload: Record<string, unknown> = { name: name.trim(), academic_level_id: academicLevelId, system_kind: kind, scales };
-        if (!isOverall) payload.subject_ids = groupSubjectIds;
+        const built = gradingSystemPayload({ name, academicLevelId, kind, rows, subjectIds: groupSubjectIds });
+        if (!built.ok) { setFormError(built.error); return; }
+        const payload = built.payload;
 
         const result = await onCreate('grading_system', payload);
         if (result) { setShowCreate(false); resetForm(); }

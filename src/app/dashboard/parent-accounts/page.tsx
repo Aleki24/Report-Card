@@ -10,11 +10,10 @@ import { ModulePage } from '@/components/ops/ModulePage';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize } from '@/lib/ops/format';
-
-interface Link { id: string; relationship: string; is_primary: boolean; parent: { id: string; first_name: string; last_name: string; phone: string | null; is_active: boolean } | null }
-
-const RELATIONSHIPS = ['MOTHER', 'FATHER', 'GUARDIAN', 'SPONSOR', 'OTHER'] as const;
-const EMPTY = { first_name: '', last_name: '', phone: '', relationship: 'GUARDIAN' as (typeof RELATIONSHIPS)[number] };
+import {
+    EMPTY_PARENT_FORM as EMPTY, GUARDIAN_RELATIONSHIPS as RELATIONSHIPS, guardianName, guardianStatus, parentLinkedMessage,
+    type GuardianLink as Link, type ParentLinkResult,
+} from '@/lib/ops/forms/platform';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
@@ -34,9 +33,9 @@ function ParentLinks() {
         if (!form.first_name.trim() || !form.last_name.trim() || !form.phone.trim()) { toast.error('Fill in the parent’s name and phone.'); return; }
         setSaving(true);
         try {
-            const r = await opsFetch<{ invite_code: string | null; reused: boolean }>('/api/admin/parents', { method: 'POST', json: { ...form, student_id: studentId } });
+            const r = await opsFetch<ParentLinkResult>('/api/admin/parents', { method: 'POST', json: { ...form, student_id: studentId } });
             setCode(r.invite_code);
-            toast.success(r.reused ? 'Linked to the parent’s existing account.' : 'Parent account created; invite code sent by SMS.');
+            toast.success(parentLinkedMessage(r));
             setForm(EMPTY);
             await load(studentId);
         } catch (err) { toast.error(errorText(err)); }
@@ -60,10 +59,10 @@ function ParentLinks() {
                         rowKey={l => l.id}
                         emptyState="No parents linked to this learner yet."
                         columns={[
-                            { key: 'name', header: 'Parent', render: l => <span className="font-medium">{l.parent ? `${l.parent.first_name} ${l.parent.last_name}` : '—'}</span> },
+                            { key: 'name', header: 'Parent', render: l => <span className="font-medium">{guardianName(l)}</span> },
                             { key: 'rel', header: 'Relationship', render: l => humanize(l.relationship) },
                             { key: 'phone', header: 'Phone', hideOnMobile: true, render: l => l.parent?.phone ?? '—' },
-                            { key: 'status', header: 'Account', render: l => (l.parent?.is_active ? 'Active' : 'Invite sent') },
+                            { key: 'status', header: 'Account', render: l => guardianStatus(l) },
                         ]}
                         rowActions={l => <Button variant="ghost" size="icon-sm" aria-label="Unlink parent" onClick={() => void unlink(l.id)}><Trash2 className="text-destructive" /></Button>}
                     />

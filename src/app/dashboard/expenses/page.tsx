@@ -10,38 +10,22 @@ import { StatTile } from '@/components/ui/StatTile';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
-import type { FieldDef, FieldName } from '@/components/ops/fields';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
-import { date, humanize, money, personName, today } from '@/lib/ops/format';
-import { EXPENSE_METHODS, type ExpenseStatus } from '@/lib/ops/resources/finance';
-import type { PersonName } from '@/lib/ops/resource';
+import { date, humanize, money, personName } from '@/lib/ops/format';
+import { EXPENSE_METHODS } from '@/lib/ops/resources/finance';
+import {
+    EXPENSE_DECISION_DONE, EXPENSE_DECISION_TITLES, EXPENSE_TONES, SUPPLIER_FIELDS, expenseDecisions, expenseDefaults, expenseFields, expenseTotal,
+    type Expense, type ExpenseDecision, type Named, type Supplier,
+} from '@/lib/ops/forms/finance';
 
-interface Expense {
-    id: string; description: string; amount: number; expense_date: string; status: ExpenseStatus;
-    payment_method: string | null; reference: string | null; decision_note: string | null; requested_by: string | null;
-    supplier: { name: string } | null; vote_head: { name: string } | null;
-    requester: PersonName | null; decider: PersonName | null;
-}
-interface Named { id: string; name: string }
+type Decision = { expense: Expense; decision: ExpenseDecision };
 
-const STATUS_TONES: Record<ExpenseStatus, PillTone> = { PENDING: 'warn', APPROVED: 'info', REJECTED: 'bad', PAID: 'good' };
-
-type Decision = { expense: Expense; decision: 'APPROVE' | 'REJECT' | 'PAID' };
-
-function useExpenseFields(): readonly FieldDef<FieldName<'expenses'>>[] {
+function useExpenseFields() {
     const suppliers = useOpsList<Named>('suppliers');
-    const voteHeads = useOpsList<Named>('vote-heads', {}, { enabled: true });
-    return [
-        { name: 'description', label: 'What for', kind: 'text', required: true, span: 'full' },
-        { name: 'amount', label: 'Amount (KES)', kind: 'number', required: true },
-        { name: 'expense_date', label: 'Date', kind: 'date', required: true },
-        { name: 'supplier_id', label: 'Supplier', kind: 'options', options: suppliers.rows.map(s => ({ id: s.id, label: s.name })) },
-        { name: 'vote_head_id', label: 'Vote head', kind: 'options', options: voteHeads.rows.map(v => ({ id: v.id, label: v.name })) },
-        { name: 'payment_method', label: 'Payment method', kind: 'enum', values: EXPENSE_METHODS },
-        { name: 'reference', label: 'Invoice / reference', kind: 'text' },
-    ];
+    const voteHeads = useOpsList<Named>('vote-heads');
+    return expenseFields(suppliers.rows, voteHeads.rows);
 }
 
 export default function ExpensesPage() {
@@ -64,7 +48,7 @@ export default function ExpensesPage() {
                 method: 'POST',
                 json: { decision: decision.decision, note: note || undefined, payment_method: method || undefined, reference: reference || undefined },
             });
-            toast.success(decision.decision === 'PAID' ? 'Marked paid.' : decision.decision === 'APPROVE' ? 'Approved.' : 'Rejected.');
+            toast.success(EXPENSE_DECISION_DONE[decision.decision]);
             setDecision(null);
             setNote(''); setMethod(''); setReference('');
             setVersion(v => v + 1);
@@ -77,7 +61,7 @@ export default function ExpensesPage() {
         { key: 'amount', header: 'Amount', numeric: true, render: (e: Expense) => money(e.amount) },
         { key: 'date', header: 'Date', hideOnMobile: true, render: (e: Expense) => date(e.expense_date) },
         { key: 'vh', header: 'Vote head', hideOnMobile: true, render: (e: Expense) => e.vote_head?.name ?? '—' },
-        { key: 'status', header: 'Status', render: (e: Expense) => <StatusPill status={e.status} tones={STATUS_TONES} /> },
+        { key: 'status', header: 'Status', render: (e: Expense) => <StatusPill status={e.status} tones={EXPENSE_TONES} /> },
     ];
 
     return (
@@ -100,7 +84,7 @@ export default function ExpensesPage() {
                                 canEdit={e => e.status === 'PENDING'}
                                 canDelete={e => e.status === 'PENDING'}
                                 addLabel="Request payment"
-                                defaults={{ expense_date: today() }}
+                                defaults={expenseDefaults()}
                                 columns={columns}
                             />
                         ),
@@ -116,10 +100,10 @@ export default function ExpensesPage() {
                                 canEdit={e => approver ? e.status === 'PENDING' : e.status === 'PENDING' && e.requested_by === profile?.id}
                                 canDelete={e => e.status === 'PENDING' && (approver || e.requested_by === profile?.id)}
                                 addLabel="Record expense"
-                                defaults={{ expense_date: today() }}
+                                defaults={expenseDefaults()}
                                 searchText={e => `${e.description} ${e.supplier?.name ?? ''} ${e.vote_head?.name ?? ''}`}
                                 header={rows => {
-                                    const sum = (s: ExpenseStatus[]) => rows.filter(r => s.includes(r.status)).reduce((n, r) => n + Number(r.amount), 0);
+                                    const sum = (s: Parameters<typeof expenseTotal>[1]) => expenseTotal(rows, s);
                                     return (
                                         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                                             <StatTile icon={ClipboardList} label="Awaiting approval" value={money(sum(['PENDING']))} tone="warn" />
@@ -131,9 +115,12 @@ export default function ExpensesPage() {
                                 }}
                                 rowActions={e => approver ? (
                                     <>
-                                        {e.status === 'PENDING' && e.requested_by !== profile?.id && <Button size="xs" onClick={() => setDecision({ expense: e, decision: 'APPROVE' })}><Check />Approve</Button>}
-                                        {e.status === 'PENDING' && <Button size="xs" variant="destructive" onClick={() => setDecision({ expense: e, decision: 'REJECT' })}><X />Reject</Button>}
-                                        {e.status === 'APPROVED' && <Button size="xs" variant="outline" onClick={() => { setMethod(e.payment_method ?? ''); setDecision({ expense: e, decision: 'PAID' }); }}><Banknote />Paid</Button>}
+                                        {expenseDecisions(e, profile?.id).map(d => (
+                                            <Button key={d} size="xs" variant={d === 'REJECT' ? 'destructive' : d === 'PAID' ? 'outline' : 'default'}
+                                                onClick={() => { if (d === 'PAID') setMethod(e.payment_method ?? ''); setDecision({ expense: e, decision: d }); }}>
+                                                {d === 'APPROVE' ? <><Check />Approve</> : d === 'REJECT' ? <><X />Reject</> : <><Banknote />Paid</>}
+                                            </Button>
+                                        ))}
                                     </>
                                 ) : null}
                                 columns={[...columns, { key: 'by', header: 'Raised by', hideOnMobile: true, render: (e: Expense) => personName(e.requester) }]}
@@ -143,15 +130,9 @@ export default function ExpensesPage() {
                     {
                         id: 'suppliers', label: 'Suppliers', icon: Truck, hue: 'slate',
                         render: () => (
-                            <ResourceManager<'suppliers', Named & { phone: string | null; kra_pin: string | null; category: string | null }>
+                            <ResourceManager<'suppliers', Supplier>
                                 resource="suppliers"
-                                fields={[
-                                    { name: 'name', label: 'Name', kind: 'text', required: true, span: 'full' },
-                                    { name: 'phone', label: 'Phone', kind: 'tel' },
-                                    { name: 'email', label: 'Email', kind: 'email' },
-                                    { name: 'kra_pin', label: 'KRA PIN', kind: 'text' },
-                                    { name: 'category', label: 'Category', kind: 'text', hint: 'Food, stationery, fuel…' },
-                                ]}
+                                fields={SUPPLIER_FIELDS}
                                 canCreate={approver}
                                 canEdit={approver}
                                 canDelete={approver}
@@ -171,7 +152,7 @@ export default function ExpensesPage() {
             <Modal
                 isOpen={decision !== null}
                 onClose={() => setDecision(null)}
-                title={decision?.decision === 'PAID' ? 'Mark as paid' : decision?.decision === 'APPROVE' ? 'Approve expense' : 'Reject expense'}
+                title={decision ? EXPENSE_DECISION_TITLES[decision.decision] : ''}
                 footer={<>
                     <Button variant="outline" onClick={() => setDecision(null)} disabled={busy}>Cancel</Button>
                     <Button variant={decision?.decision === 'REJECT' ? 'destructive' : 'default'} onClick={decide} disabled={busy}>Confirm</Button>

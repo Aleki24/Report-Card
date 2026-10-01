@@ -3,22 +3,9 @@
 import { CardHeading } from '@/components/ui/CardHeading';
 import { Camera, ScanLine, AlertTriangle } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-
-interface StudentOption {
-    id: string;
-    name: string;
-    admission_number: string;
-}
+import { matchStudent, type MatchCandidate as StudentOption, type ScanRow } from '@/lib/marks/scan-match';
 
 interface StreamItem { id: string; full_name: string; grade_id: string; }
-
-interface ScanRow {
-    row: number;
-    student_name: string;
-    admission_number: string | null;
-    score: number | null;
-    confidence: 'high' | 'medium' | 'low';
-}
 
 interface ReviewRow {
     key: number;
@@ -39,64 +26,6 @@ interface Props {
     gradeStreamId?: string | null;
     /** The exam's subject — scopes name matching to enrolled takers */
     subjectId?: string;
-}
-
-/* ── Name matching ─────────────────────────────────────────── */
-
-const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-function levenshtein(a: string, b: string): number {
-    if (a === b) return 0;
-    const m = a.length, n = b.length;
-    if (m === 0) return n;
-    if (n === 0) return m;
-    let prev = Array.from({ length: n + 1 }, (_, i) => i);
-    for (let i = 1; i <= m; i++) {
-        const curr = [i];
-        for (let j = 1; j <= n; j++) {
-            curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-        }
-        prev = curr;
-    }
-    return prev[n];
-}
-
-/** 0..1 similarity between an extracted name and a roster name (token-order tolerant). */
-function nameSimilarity(extracted: string, roster: string): number {
-    const a = normalize(extracted), b = normalize(roster);
-    if (!a || !b) return 0;
-    if (a === b) return 1;
-    const aTokens = a.split(' '), bTokens = b.split(' ');
-    // Score each extracted token against its best roster token
-    let total = 0;
-    for (const at of aTokens) {
-        let best = 0;
-        for (const bt of bTokens) {
-            const d = levenshtein(at, bt);
-            const sim = 1 - d / Math.max(at.length, bt.length);
-            if (sim > best) best = sim;
-        }
-        total += best;
-    }
-    return total / aTokens.length;
-}
-
-function matchStudent(row: ScanRow, students: StudentOption[]): { id: string; ambiguous: boolean } {
-    // 1. Exact admission-number match wins outright
-    if (row.admission_number) {
-        const adm = row.admission_number.trim().toLowerCase();
-        const byAdm = students.find(s => s.admission_number.trim().toLowerCase() === adm);
-        if (byAdm) return { id: byAdm.id, ambiguous: false };
-    }
-    // 2. Fuzzy name match
-    const scored = students
-        .map(s => ({ s, sim: nameSimilarity(row.student_name, s.name) }))
-        .sort((x, y) => y.sim - x.sim);
-    const best = scored[0], second = scored[1];
-    if (!best || best.sim < 0.55) return { id: '', ambiguous: false };
-    // Ambiguous when the runner-up is nearly as good, or the match itself is soft
-    const ambiguous = best.sim < 0.8 || (second !== undefined && best.sim - second.sim < 0.12);
-    return { id: best.s.id, ambiguous };
 }
 
 /* ── Image downscaling ─────────────────────────────────────── */

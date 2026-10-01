@@ -6,12 +6,8 @@ import { SelectField, FormField } from '@/components/ui/FormField';
 import { LookupSelect, SearchableSelect } from '@/components/ops/SearchableSelect';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
-import type { TimetableConfig, TimetableLesson } from '@/lib/timetable/config';
-import { TimetableGrid, type GridMode } from './TimetableGrid';
-
-type View = 'mine' | GridMode;
-
-interface ViewResult { config: TimetableConfig; lessons: TimetableLesson[]; published: boolean }
+import { TIMETABLE_VIEWS, type TimetableView as View, type TimetableViewResult as ViewResult } from '@/lib/ops/forms/academics';
+import { TimetableGrid } from './TimetableGrid';
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
@@ -36,7 +32,7 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-2xl">
                     <FormField label="Show" htmlFor="tt-view">
                         <SelectField id="tt-view" value={view} placeholder={null} onChange={v => { setView(v as View); setTargetId(''); }}
-                            options={[{ id: 'mine', label: 'My timetable' }, { id: 'class', label: 'A class' }, { id: 'teacher', label: 'A teacher' }, { id: 'room', label: 'A room' }]} />
+                            options={TIMETABLE_VIEWS} />
                     </FormField>
                     {view === 'class' && <FormField label="Class" htmlFor="tt-target"><LookupSelect id="tt-target" lookup="streams" value={targetId} onChange={setTargetId} /></FormField>}
                     {view === 'teacher' && <FormField label="Teacher" htmlFor="tt-target"><LookupSelect id="tt-target" lookup="staff" value={targetId} onChange={setTargetId} /></FormField>}

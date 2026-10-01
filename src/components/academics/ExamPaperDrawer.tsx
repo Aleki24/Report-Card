@@ -14,15 +14,13 @@ import {
     EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles,
     type PaperAction, type PaperFileKind,
 } from '@/lib/academics/exam-papers';
-import { PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from './examPaperTypes';
+import { PAPER_ACTION_ORDER as ACTION_ORDER, PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from '@/lib/ops/forms/academics';
 
 interface Props {
     paperId: string | null;
     onClose: () => void;
     onChanged: () => void;
 }
-
-const ACTION_ORDER: readonly PaperAction[] = ['SUBMIT', 'APPROVE', 'RETURN', 'LOCK', 'RELEASE'];
 
 /** A paper's details, files, moderation history and the actions open to the viewer. */
 export function ExamPaperDrawer({ paperId, onClose, onChanged }: Props) {

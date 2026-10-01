@@ -6,32 +6,14 @@ import { Bell, Bus, CalendarCheck, CalendarDays, DollarSign, FileText, Graduatio
 import { StatTile } from '@/components/ui/StatTile';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { ModulePage } from '@/components/ops/ModulePage';
-import { StatusPill, type PillTone } from '@/components/ops/StatusPill';
+import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { date, dateTime, humanize, money, personName } from '@/lib/ops/format';
-import type { PersonName } from '@/lib/ops/resource';
+import {
+    ATTENDANCE_TONES, FEE_STATUS_TONES as FEE_TONES, absences as countAbsences, feeBalance, rideLine,
+    type ChildLink, type ChildOverview as Overview,
+} from '@/lib/ops/forms/platform';
 import { cn } from '@/lib/utils';
-
-interface ChildLink { relationship: string; student: { id: string; admission_number: string | null; stream: { full_name: string } | null; user: PersonName | null } | null }
-interface Result { id: string; percentage: number | null; grade_symbol: string | null; exams: { name: string; exam_date: string; subjects: { name: string } | null } | null }
-interface Overview {
-    child: { id: string; name: string; admissionNumber: string };
-    summary: {
-        stats: { averageScore: number; attendanceRate: number; examsTaken: number; attendanceRecords: number };
-        latestResults: Result[];
-        announcements: { id: string; title: string; content: string; createdAt: string; isImportant: boolean }[];
-        currentTerm?: { name: string };
-    } | null;
-    reports: { id: string; overall_average: number | null; overall_position: number | null; comments_class_teacher: string | null; comments_principal: string | null }[];
-    attendance: { id: string; date: string; status: string }[];
-    fees: { id: string; total_fee: number; paid_amount: number; status: string; due_date: string | null; term: { name: string } | null }[];
-    events: { id: string; title: string; event_type: string; starts_on: string; ends_on: string | null }[];
-    ride: { route: { name: string } | null; stop: { name: string; pickup_time: string | null; dropoff_time: string | null } | null } | null;
-    bus: { status: string; last_seen_at: string | null; vehicle: { registration: string } | null; boarded: string | null } | null;
-}
-
-const FEE_TONES: Record<string, PillTone> = { PENDING: 'warn', PARTIAL: 'info', PAID: 'good', OVERPAID: 'violet' };
-const ATTENDANCE_TONES: Record<string, PillTone> = { present: 'good', absent: 'bad', late: 'warn', excused: 'info' };
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
     return (
@@ -51,8 +33,8 @@ function ChildOverview({ childId }: { childId: string }) {
     }, [childId]);
 
     if (!data) return <div className="skeleton-bone h-72 rounded-2xl" />;
-    const balance = data.fees.reduce((n, f) => n + Number(f.total_fee) - Number(f.paid_amount), 0);
-    const absences = data.attendance.filter(a => a.status === 'absent').length;
+    const balance = feeBalance(data);
+    const absences = countAbsences(data);
 
     return (
         <div className="flex flex-col gap-5">
@@ -130,7 +112,7 @@ function ChildOverview({ childId }: { childId: string }) {
 
                 {data.ride && (
                     <Section title="Transport" icon={Bus}>
-                        <p className="text-sm">{data.ride.route?.name} · {data.ride.stop?.name ?? 'stop not set'}{data.ride.stop?.pickup_time ? ` · pick-up ${data.ride.stop.pickup_time.slice(0, 5)}` : ''}{data.ride.stop?.dropoff_time ? ` · drop-off ${data.ride.stop.dropoff_time.slice(0, 5)}` : ''}</p>
+                        <p className="text-sm">{rideLine(data.ride)}</p>
                     </Section>
                 )}
 

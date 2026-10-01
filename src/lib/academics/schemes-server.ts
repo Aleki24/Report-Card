@@ -1,7 +1,8 @@
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { HttpError, type Access } from '@/lib/platform/access';
+import type { SchemeStatus } from '@/lib/ops/forms/academics';
 
-export type SchemeStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'RETURNED';
+export type { SchemeStatus };
 
 export interface SchemeRow {
     id: string;

@@ -3,8 +3,27 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ],
+      "@shared/*": [
+        "../src/lib/*"
+      ],
+      "zod": [
+        "./node_modules/zod"
+      ],
+      "xlsx": [
+        "./node_modules/xlsx"
+      ],
+      "papaparse": [
+        "./node_modules/@types/papaparse"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

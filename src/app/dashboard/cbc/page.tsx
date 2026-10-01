@@ -10,11 +10,8 @@ import { ModulePage } from '@/components/ops/ModulePage';
 import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { CBC_LEVELS, CBC_LEVEL_LABELS } from '@/lib/ops/resources/academics';
+import { EMPTY_CBC_FILTER, cbcCounts, cbcFilterReady, type CbcLevel as Level, type CbcRow as Row, type StrandOption } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
-
-type Level = (typeof CBC_LEVELS)[number];
-interface Row { studentId: string; name: string; admissionNumber: string | null; level: Level | null; comment: string | null }
-interface StrandOption { strand: string; subStrands: string[] }
 
 const LEVEL_STYLE: Record<Level, string> = {
     EE: 'bg-emerald-500 text-white',
@@ -28,13 +25,13 @@ function RubricGrid() {
     const canAssess = can('cbc.assess');
     const listId = useId();
     const subListId = useId();
-    const [filter, setFilter] = useState({ grade_stream_id: '', subject_id: '', term_id: '', strand: '', sub_strand: '' });
+    const [filter, setFilter] = useState(EMPTY_CBC_FILTER);
     const [strands, setStrands] = useState<StrandOption[]>([]);
     const [rows, setRows] = useState<Row[] | null>(null);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    const ready = filter.grade_stream_id && filter.subject_id && filter.term_id && filter.strand.trim();
+    const ready = cbcFilterReady(filter);
 
     useEffect(() => {
         if (!filter.subject_id) return;
@@ -70,7 +67,7 @@ function RubricGrid() {
         setDirty(true);
     };
 
-    const counts = useMemo(() => Object.fromEntries(CBC_LEVELS.map(l => [l, rows?.filter(r => r.level === l).length ?? 0])) as Record<Level, number>, [rows]);
+    const counts = useMemo(() => cbcCounts(rows), [rows]);
     const subStrands = strands.find(s => s.strand === filter.strand)?.subStrands ?? [];
     const set = (patch: Partial<typeof filter>) => { setFilter(f => ({ ...f, ...patch })); setRows(null); };
 

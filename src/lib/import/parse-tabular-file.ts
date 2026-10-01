@@ -31,9 +31,14 @@ const SPREADSHEET_EXTENSIONS = ['xlsx', 'xlsm', 'xlsb', 'xls', 'ods'];
 /** The `accept` attribute every import file input should use. */
 export const IMPORT_FILE_ACCEPT = '.csv,.tsv,.xlsx,.xlsm,.xlsb,.xls,.ods';
 
-export function isSpreadsheetFile(file: File): boolean {
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+/** Whether a file name is a spreadsheet (read with SheetJS) rather than CSV/TSV text. */
+export function isSpreadsheetName(name: string): boolean {
+    const ext = name.split('.').pop()?.toLowerCase() ?? '';
     return SPREADSHEET_EXTENSIONS.includes(ext);
+}
+
+export function isSpreadsheetFile(file: File): boolean {
+    return isSpreadsheetName(file.name);
 }
 
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -143,11 +148,10 @@ function gridToRows(grid: unknown[][]): SpreadsheetParseResult {
     return { rows, headers: headers.filter(Boolean) };
 }
 
-async function parseSpreadsheet(file: File): Promise<SpreadsheetParseResult> {
+async function parseSpreadsheet(buffer: ArrayBuffer): Promise<SpreadsheetParseResult> {
     // Loaded on demand: SheetJS is large and most users never open a
     // spreadsheet, so it should not sit in the page's initial bundle.
     const XLSX = await import('xlsx');
-    const buffer = await file.arrayBuffer();
     const book = XLSX.read(buffer, { type: 'array', cellDates: true });
 
     const sheetName = book.SheetNames[0];
@@ -161,22 +165,25 @@ async function parseSpreadsheet(file: File): Promise<SpreadsheetParseResult> {
     return gridToRows(grid);
 }
 
-function parseDelimited(file: File): Promise<SpreadsheetParseResult> {
-    return new Promise((resolve, reject) => {
-        // Parsed without headers so CSV goes through the same heading-row
-        // detection as Excel — a titled CSV used to fail the same way.
-        Papa.parse<string[]>(file, {
-            header: false,
-            skipEmptyLines: true,
-            complete: results => resolve(gridToRows((results.data || []) as unknown[][])),
-            error: err => reject(err),
-        });
-    });
+function parseDelimited(text: string): SpreadsheetParseResult {
+    // Parsed without headers so CSV goes through the same heading-row
+    // detection as Excel — a titled CSV used to fail the same way.
+    const results = Papa.parse<string[]>(text, { header: false, skipEmptyLines: true });
+    return gridToRows((results.data || []) as unknown[][]);
+}
+
+/**
+ * Parse a file's contents by its name: the bytes of a spreadsheet, or the
+ * text of a CSV/TSV. Platform-neutral, so the mobile app (which reads picked
+ * files itself) shares it.
+ */
+export async function parseTabularData(name: string, read: { bytes: () => Promise<ArrayBuffer>; text: () => Promise<string> }): Promise<SpreadsheetParseResult> {
+    return isSpreadsheetName(name) ? parseSpreadsheet(await read.bytes()) : parseDelimited(await read.text());
 }
 
 /** Parse a CSV/TSV or Excel upload into rows keyed by column heading. */
 export function parseTabularFile(file: File): Promise<SpreadsheetParseResult> {
-    return isSpreadsheetFile(file) ? parseSpreadsheet(file) : parseDelimited(file);
+    return parseTabularData(file.name, { bytes: () => file.arrayBuffer(), text: () => file.text() });
 }
 
 /**
