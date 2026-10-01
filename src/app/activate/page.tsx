@@ -221,6 +221,7 @@ export default function ActivatePage() {
                     {!invite?.reset && (
                         <span>Setting up a new school? <Link href="/signup" className={AUTH_LINK}>Create an account</Link></span>
                     )}
+                    <span>Need help? <Link href="/help" className={AUTH_LINK}>Read the user guides</Link></span>
                 </>
             )}
         >

@@ -3,7 +3,7 @@ import {
     LayoutDashboard, GraduationCap, LineChart, FileText, Users, School,
     UserCircle, Settings, BookOpen, ClipboardList, CalendarCheck, Bell,
     Briefcase, DollarSign, CalendarDays, FileLock2, Clock, NotebookPen, Target,
-    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake,
+    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake, LifeBuoy,
 } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
 import { PAGE_ACCESS, canViewPage, type PageAccess, type PageViewer } from '@/lib/platform/pages';
@@ -72,6 +72,9 @@ const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', .
 const myFees: NavItem = { label: 'Fees', href: '/student/fees', ...PAGE_ACCESS.myFees, icon: icon(DollarSign) };
 const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', ...PAGE_ACCESS.parentHome, icon: icon(Users) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', ...PAGE_ACCESS.myProfile, icon: icon(UserCircle) };
+const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', ...PAGE_ACCESS.help, icon: icon(LifeBuoy) };
+const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', ...PAGE_ACCESS.studentHelp, icon: icon(LifeBuoy) };
+const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', ...PAGE_ACCESS.parentHelp, icon: icon(LifeBuoy) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
@@ -85,7 +88,8 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings, myProfile];
+const helpItems: readonly NavItem[] = [help, studentHelp, parentHelp];
+const pinnedItems: NavItem[] = [users, settings, myProfile, ...helpItems];
 
 /** Flat list (access checks + search). Derived, so it can never miss an item. */
 export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedItems];
@@ -93,7 +97,7 @@ export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedIt
 export const canSee: (item: NavItem, viewer: NavViewer) => boolean = canViewPage;
 
 /** Home links match only themselves, not every page nested below them. */
-export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href]);
+export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href, parentHome.href]);
 
 
 /**
@@ -137,6 +141,11 @@ export function getPinnedItems(viewer: NavViewer): NavItem[] {
     return pinnedItems.filter(i => canSee(i, viewer));
 }
 
+/** This viewer's Help & guide page, offered in the account menus as well as the sidebar. */
+export function getHelpItem(viewer: NavViewer): NavItem | null {
+    return helpItems.find(i => canSee(i, viewer)) ?? null;
+}
+
 /* Mobile bottom bar: a curated four per role — never an arbitrary slice.
    Someone whose role has fewer (non-teaching staff) gets their duty pages in
    the free slots, so a nurse finds Health one tap away. Everything else stays
@@ -163,7 +172,8 @@ export function getMobileNav(viewer: NavViewer): { primary: NavItem[]; overflow:
     const extra = visible.filter(i => !curated.includes(i) && !pinnedItems.includes(i));
     const primary = [...curated, ...extra].slice(0, Math.max(curated.length, MOBILE_PRIMARY_SLOTS));
     const primaryHrefs = new Set(primary.map(i => i.href));
-    return { primary, overflow: visible.filter(i => !primaryHrefs.has(i.href)) };
+    // Help has its own row in the More sheet's account section.
+    return { primary, overflow: visible.filter(i => !primaryHrefs.has(i.href) && !helpItems.includes(i)) };
 }
 
 export const roleBadgeColors: Record<UserRole, string> = {

@@ -68,6 +68,10 @@ export const PAGE_ACCESS = {
     myFees: { roles: ['STUDENT'], module: 'fees' },
     parentHome: { roles: ['PARENT'], module: 'parent_portal' },
     myProfile: { roles: ['STUDENT'] },
+    // The user guide for the signed-in role, with its PDF.
+    help: { roles: [...STAFF, 'STAFF'] },
+    studentHelp: { roles: ['STUDENT'] },
+    parentHelp: { roles: ['PARENT'] },
 } as const satisfies Record<string, PageAccess>;
 
 export type PageKey = keyof typeof PAGE_ACCESS;

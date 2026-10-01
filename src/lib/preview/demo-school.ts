@@ -4,6 +4,10 @@
  * Every name here is invented. Client-only.
  */
 
+import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
+import type { Announcement } from '@/lib/announcements';
+import type { ReportRoundsResponse } from '@/lib/reports/exam-round';
+
 const DAY = 86_400_000;
 const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * DAY).toISOString();
 const date = (offsetDays: number) => iso(offsetDays).slice(0, 10);
@@ -169,6 +173,29 @@ function examsFor(url: URL) {
     && (!type || e.exam_type === type));
 }
 
+/** Where the demo school is in its term, worked out the way the dashboard route does it. */
+function demoTerm(): TermSummary {
+  const today = date(0);
+  const current = TERMS.find(t => t.start_date <= today && today <= t.end_date);
+  if (!current) {
+    const next = TERMS.find(t => t.start_date > today) ?? null;
+    return { kind: 'break', lastName: null, nextName: next?.name ?? null, nextStart: next?.start_date ?? null };
+  }
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / DAY);
+  const weeks = Math.max(1, Math.ceil((days(current.start_date, current.end_date) + 1) / 7));
+  return {
+    kind: 'in-term', name: current.name, year: String(YEAR),
+    week: Math.min(weeks, Math.floor(days(current.start_date, today) / 7) + 1), weeks,
+    daysLeft: days(today, current.end_date), endDate: current.end_date,
+  };
+}
+
+const UPCOMING_ROUNDS: UpcomingRound[] = [
+  { key: 'endterm-g8', label: 'Endterm', className: 'Grade 8', firstDate: date(6), papers: SUBJECTS.length },
+  { key: 'endterm-g9', label: 'Endterm', className: 'Grade 9', firstDate: date(8), papers: SUBJECTS.length },
+  { key: 'cat-g7', label: 'CAT', className: 'Grade 7', firstDate: date(13), papers: 3 },
+];
+
 const DASHBOARD = {
   totalStudents: STUDENTS.filter(s => s.status === 'ACTIVE').length,
   totalTeachers: TEACHERS.filter(t => t.profile.role.includes('TEACHER')).length,
@@ -198,6 +225,9 @@ const DASHBOARD = {
   hasAttendanceData: true,
   hasLogo: false,
   setup: { hasCurrentTerm: true, classes: STREAMS.length, subjectsOffered: SUBJECTS.length, classesWithoutClassTeacher: 1, subjectTeacherAssignments: 12, learnersWithoutClass: 0 },
+  term: demoTerm(),
+  upcomingRounds: UPCOMING_ROUNDS,
+  unreleasedResults: 2,
 };
 
 const ANALYTICS_OVERVIEW = {
@@ -231,10 +261,49 @@ const ACADEMIC_STRUCTURE = {
 
 const SCHOOL_PROFILE = { id: 'demo-school', name: 'Demo Academy', email: 'office@demo.school', phone: '0700 000 000', address: 'Nairobi', motto: 'Learning for life', logo_url: null, min_combination_group_size: 15 };
 
-const ANNOUNCEMENTS = [
-  { id: 'demo-a1', title: 'Half-term break', content: 'School closes on Friday for the half-term break and reopens the following Tuesday.', audience: 'ALL', created_at: iso(-2), posted_by_name: 'Mary Wambui' },
-  { id: 'demo-a2', title: 'Parents meeting', content: 'Grade 9 parents are invited to a meeting on Saturday at 10am.', audience: 'PARENTS', created_at: iso(-5), posted_by_name: 'Mary Wambui' },
+const ANNOUNCEMENTS: Announcement[] = [
+  { id: 'demo-a1', title: 'Half-term break', content: 'School closes on Friday for the half-term break and reopens the following Tuesday at 8am.', isImportant: true, createdAt: iso(-2), postedBy: 'Mary Wambui', postedById: 'demo-t0' },
+  { id: 'demo-a2', title: 'Grade 9 parents meeting', content: 'Grade 9 parents are invited to a meeting on Saturday at 10am in the school hall to discuss the end-of-year exams.', isImportant: false, createdAt: iso(-5), postedBy: 'Mary Wambui', postedById: 'demo-t0' },
+  { id: 'demo-a3', title: 'Science fair entries', content: 'Learners who want to take part in the county science fair should give their project titles to Mr Kiprono by Wednesday.', isImportant: false, createdAt: iso(-9), postedBy: 'Joseph Kiprono', postedById: 'demo-t3' },
 ];
+
+/** `/api/school/exam-marks/stream`: every mark a class has this term, for Release Results. */
+function streamMarksFor(url: URL) {
+  const stream = url.searchParams.get('stream_id');
+  const gradeId = STREAMS.find(st => st.id === stream)?.grade_id;
+  const learners = new Map(STUDENTS.filter(st => st.current_grade_stream_id === stream).map(st => [st.id, st]));
+  return EXAMS.filter(e => e.grade_id === gradeId).flatMap(e => examMarks(e.id)
+    .filter(m => learners.has(m.student_id))
+    .map(m => {
+      const st = learners.get(m.student_id);
+      return { exam_id: e.id, student_id: m.student_id, percentage: m.percentage, grade_symbol: m.grade_symbol, students: { admission_number: st?.admission_number ?? null, users: st?.users ?? null } };
+    }));
+}
+
+/** `/api/reports/rounds`: the exam rounds a class sat this term, for the Report Cards page. */
+const REPORT_ROUNDS: ReportRoundsResponse = {
+  rounds: [
+    { exam_type: 'MIDTERM', label: 'Midterm', subjects_total: SUBJECTS.length, subjects_with_marks: SUBJECTS.length, marks: SUBJECTS.length * 6, date: date(-14) },
+    { exam_type: 'ENDTERM', label: 'Endterm', subjects_total: SUBJECTS.length, subjects_with_marks: SUBJECTS.length - 2, marks: (SUBJECTS.length - 2) * 4, date: date(6) },
+  ],
+  suggested: 'MIDTERM',
+};
+
+/** `/api/school/analytics`: the released midterm's marks, for the dashboard's class results. */
+function analyticsFor(url: URL) {
+  const stream = url.searchParams.get('stream_id');
+  const gradeId = stream ? STREAMS.find(st => st.id === stream)?.grade_id : null;
+  const marks = EXAMS
+    .filter(e => e.exam_type === 'MIDTERM' && (!gradeId || e.grade_id === gradeId))
+    .flatMap(e => examMarks(e.id)
+      .filter(m => !stream || STUDENTS.find(st => st.id === m.student_id)?.current_grade_stream_id === stream)
+      .map(m => ({ subject_id: e.subject_id, subject_name: e.subject_name, percentage: m.percentage, exam_id: e.id, exam_name: e.name, exam_date: date(-14) })));
+  return {
+    marks,
+    subjects: SUBJECTS.map(sub => ({ id: sub.id, name: sub.name, academic_level_id: 'demo-cbc', level_code: 'CBC', level_name: 'CBC', grading_system_id: 'demo-gs' })),
+    gradingScales: { 'demo-gs': SCALES },
+  };
+}
 
 /** `/api/school/data?type=…` answers. */
 const DATA_BY_TYPE: Record<string, unknown> = {
@@ -268,7 +337,10 @@ export function demoResponse(url: URL): unknown {
     case '/api/admin/academic-structure': return ACADEMIC_STRUCTURE;
     case '/api/school/analytics/overview': return ANALYTICS_OVERVIEW;
     case '/api/school/fees': return { data: FEES };
-    case '/api/school/announcements': return { data: ANNOUNCEMENTS };
+    case '/api/school/announcements': return { data: ANNOUNCEMENTS, nextCursor: null, counts: { all: ANNOUNCEMENTS.length, important: ANNOUNCEMENTS.filter(a => a.isImportant).length, mine: 2 } };
+    case '/api/school/analytics': return analyticsFor(url);
+    case '/api/reports/rounds': return REPORT_ROUNDS;
+    case '/api/school/exam-marks/stream': return { data: streamMarksFor(url) };
     case '/api/school/managed-streams': return { data: STREAMS.map(s => ({ id: s.id, full_name: s.full_name, grade_id: s.grade_id })) };
     case '/api/admin/school': return { data: SCHOOL_PROFILE, school: SCHOOL_PROFILE };
     default: return { data: [] };
