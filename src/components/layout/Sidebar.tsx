@@ -10,7 +10,7 @@ import { Avatar } from "@/components/Avatar";
 import { Wordmark } from "@/components/Wordmark";
 import { ROLE_LABELS, homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import { findNavItem, getMobileNav, getNavGroups, getPinnedItems, roleBadgeColors, routeMatches, type NavItem } from "./sidebar/navItems";
+import { findNavItem, getHelpItem, getMobileNav, getNavGroups, getPinnedItems, roleBadgeColors, routeMatches, type NavItem } from "./sidebar/navItems";
 import { DesktopUserMenu } from "./sidebar/DesktopUserMenu";
 import { MobileMoreMenu } from "./sidebar/MobileMoreMenu";
 
@@ -129,6 +129,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     }, [viewer, searchQuery]);
 
     const pinned = useMemo(() => getPinnedItems(viewer), [viewer]);
+    const helpHref = useMemo(() => getHelpItem(viewer)?.href ?? null, [viewer]);
     const mobileNav = useMemo(() => getMobileNav(viewer), [viewer]);
     const currentPage = findNavItem(pathname, viewer);
 
@@ -167,7 +168,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
         }
     };
 
-    const moreActive = showMoreMenu || mobileNav.overflow.some((i) => routeMatches(pathname, i.href));
+    const moreActive = showMoreMenu || (helpHref !== null && routeMatches(pathname, helpHref)) || mobileNav.overflow.some((i) => routeMatches(pathname, i.href));
 
     return (
         <>
@@ -273,6 +274,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                         role={role}
                         baseRole={baseRole}
                         availableRoles={availableRoles}
+                        helpHref={helpHref}
                         collapsed={collapsed}
                         showUserMenu={showUserMenu}
                         setShowUserMenu={setShowUserMenu}
@@ -346,6 +348,7 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
                 baseRole={baseRole}
                 availableRoles={availableRoles}
                 switchRole={switchRole}
+                helpHref={helpHref}
             />
         </>
     );

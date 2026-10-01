@@ -1,7 +1,8 @@
 "use client";
 
 import React from 'react';
-import { Check, LogOut, Moon, Sun } from 'lucide-react';
+import Link from 'next/link';
+import { Check, ChevronRight, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import type { UserRole } from '@/components/AuthProvider';
 import { ROLE_LABELS } from '@/lib/roles';
@@ -10,7 +11,7 @@ import { roleBadgeColors } from './navItems';
 
 /**
  * Account actions shared by the desktop profile menu and the mobile "More"
- * sheet, so both offer the same theme switch, role switch and sign out.
+ * sheet, so both offer the same help link, theme switch, role switch and sign out.
  */
 
 /** Teachers who are also a class teacher can switch between their two views. */
@@ -102,5 +103,34 @@ export function SignOutButton({ onSignOut, className }: { onSignOut: () => void;
     >
       <LogOut className="size-4" aria-hidden />Sign out
     </button>
+  );
+}
+
+interface HelpLinkProps {
+  href: string;
+  onNavigate?: () => void;
+  className?: string;
+}
+
+/** Opens the viewer's illustrated user guides, which can be read in the app or downloaded as PDFs. */
+export function HelpLink({ href, onNavigate, className }: HelpLinkProps) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        className,
+      )}
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <LifeBuoy className="size-[18px]" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">User guide &amp; help</span>
+        <span className="block text-xs leading-snug text-muted-foreground">Read or download as PDF</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+    </Link>
   );
 }

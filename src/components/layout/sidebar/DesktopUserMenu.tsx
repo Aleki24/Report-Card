@@ -7,13 +7,15 @@ import { Avatar } from '@/components/Avatar';
 import { ROLE_LABELS } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { roleBadgeColors } from './navItems';
-import { RoleDot, RoleSwitcher, SignOutButton, ThemeSwitch, canSwitchRole } from './AccountControls';
+import { HelpLink, RoleDot, RoleSwitcher, SignOutButton, ThemeSwitch, canSwitchRole } from './AccountControls';
 
 interface DesktopUserMenuProps {
     profile: { id: string; first_name: string; last_name: string; email?: string | null; role: UserRole; imageUrl?: string | null };
     role: UserRole | null;
     baseRole: UserRole | null;
     availableRoles: UserRole[];
+    /** The viewer's Help & guide page, if their role has one. */
+    helpHref: string | null;
     collapsed: boolean;
     showUserMenu: boolean;
     setShowUserMenu: (val: boolean) => void;
@@ -23,7 +25,7 @@ interface DesktopUserMenuProps {
 
 /** The profile card at the foot of the sidebar and the account menu it opens. */
 export function DesktopUserMenu({
-    profile, role, baseRole, availableRoles, collapsed,
+    profile, role, baseRole, availableRoles, helpHref, collapsed,
     showUserMenu, setShowUserMenu, switchRole, onSignOut,
 }: DesktopUserMenuProps) {
     const rootRef = useRef<HTMLDivElement>(null);
@@ -68,6 +70,13 @@ export function DesktopUserMenu({
                             <p className="truncate text-xs text-muted-foreground">{profile.email || 'No email on file'}</p>
                         </div>
                     </div>
+
+                    {helpHref && (
+                        <>
+                            <div className="my-1.5 h-px bg-border" />
+                            <HelpLink href={helpHref} onNavigate={() => setShowUserMenu(false)} />
+                        </>
+                    )}
 
                     <div className="my-1.5 h-px bg-border" />
                     <div className="px-1 py-1">
