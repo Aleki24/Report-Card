@@ -9,7 +9,7 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ROLE_LABELS } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { type NavItem, roleBadgeColors, routeMatches } from './navItems';
-import { RoleDot, RoleSwitcher, SignOutButton, ThemeSwitch, canSwitchRole } from './AccountControls';
+import { HelpLink, RoleDot, RoleSwitcher, SignOutButton, ThemeSwitch, canSwitchRole } from './AccountControls';
 
 interface MobileMoreMenuProps {
     showMoreMenu: boolean;
@@ -22,6 +22,8 @@ interface MobileMoreMenuProps {
     baseRole: UserRole | null;
     availableRoles: UserRole[];
     switchRole: (role: UserRole) => Promise<void>;
+    /** The viewer's Help & guide page, if their role has one. */
+    helpHref: string | null;
 }
 
 /**
@@ -31,7 +33,7 @@ interface MobileMoreMenuProps {
  */
 export function MobileMoreMenu({
     showMoreMenu, setShowMoreMenu, overflowItems, pathname, onSignOut,
-    profile, role, baseRole, availableRoles, switchRole,
+    profile, role, baseRole, availableRoles, switchRole, helpHref,
 }: MobileMoreMenuProps) {
     const close = () => setShowMoreMenu(false);
     const { panelRef, backdropProps } = useDialogBehavior(showMoreMenu, close);
@@ -67,6 +69,14 @@ export function MobileMoreMenu({
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+                    {helpHref && (
+                        <HelpLink
+                            href={helpHref}
+                            onNavigate={close}
+                            className={cn('mb-4 border py-2.5', routeMatches(pathname, helpHref) ? 'border-primary/40 bg-primary/10' : 'border-border/70 bg-background')}
+                        />
+                    )}
+
                     {overflowItems.length > 0 && (
                         <nav aria-label="All pages" className="mb-4">
                             <p className="mb-2 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Pages</p>

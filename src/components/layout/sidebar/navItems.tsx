@@ -102,7 +102,8 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings, myProfile, help, studentHelp, parentHelp];
+const helpItems: readonly NavItem[] = [help, studentHelp, parentHelp];
+const pinnedItems: NavItem[] = [users, settings, myProfile, ...helpItems];
 
 /** Flat list (access checks + search). Derived, so it can never miss an item. */
 export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedItems];
@@ -164,6 +165,11 @@ export function getPinnedItems(viewer: NavViewer): NavItem[] {
     return pinnedItems.filter(i => canSee(i, viewer));
 }
 
+/** This viewer's Help & guide page, offered in the account menus as well as the sidebar. */
+export function getHelpItem(viewer: NavViewer): NavItem | null {
+    return helpItems.find(i => canSee(i, viewer)) ?? null;
+}
+
 /* Mobile bottom bar: a curated four per role — never an arbitrary slice.
    Someone whose role has fewer (non-teaching staff) gets their duty pages in
    the free slots, so a nurse finds Health one tap away. Everything else stays
@@ -190,7 +196,8 @@ export function getMobileNav(viewer: NavViewer): { primary: NavItem[]; overflow:
     const extra = visible.filter(i => !curated.includes(i) && !pinnedItems.includes(i));
     const primary = [...curated, ...extra].slice(0, Math.max(curated.length, MOBILE_PRIMARY_SLOTS));
     const primaryHrefs = new Set(primary.map(i => i.href));
-    return { primary, overflow: visible.filter(i => !primaryHrefs.has(i.href)) };
+    // Help has its own row in the More sheet's account section.
+    return { primary, overflow: visible.filter(i => !primaryHrefs.has(i.href) && !helpItems.includes(i)) };
 }
 
 export const roleBadgeColors: Record<UserRole, string> = {
