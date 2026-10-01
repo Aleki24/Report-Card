@@ -11,8 +11,7 @@ import {
     MODULES, MODULE_CATEGORIES, MODULE_CATEGORY_LABELS, MODULE_LIST, MODULE_PRESETS,
     dependents, withDependencies, type ModuleKey, type ModulePresetId,
 } from '@/lib/platform/modules';
-
-interface ModuleState { key: ModuleKey; enabled: boolean; entitled: boolean }
+import { PRESET_WARNING, moduleChangeMessage, type ModuleChange, type ModuleState } from '@/lib/ops/forms/platform';
 
 const URL = '/api/platform/modules';
 
@@ -35,7 +34,7 @@ export function ModulesTab() {
 
     const byKey = useMemo(() => new Map((states ?? []).map(s => [s.key, s])), [states]);
 
-    const apply = async (body: { module: ModuleKey; enabled: boolean } | { preset: ModulePresetId }) => {
+    const apply = async (body: ModuleChange) => {
         setBusy(true);
         try {
             setStates(await opsFetch<ModuleState[]>(URL, { method: 'PUT', json: body }));
@@ -140,10 +139,8 @@ export function ModulesTab() {
                 title={pending?.kind === 'preset' ? `Apply “${pending.name}”?` : pending?.enabled ? `Turn on ${MODULES[pending.key].name}?` : `Turn off ${pending ? MODULES[pending.key].name : ''}?`}
                 message={
                     pending?.kind === 'preset'
-                        ? 'Modules in the preset are switched on and the rest off. Data in switched-off modules is kept and comes back when you switch them on again.'
-                        : pending
-                            ? `${pending.enabled ? 'It needs' : 'These depend on it and will also be switched off'}: ${pending.also.map(k => MODULES[k].name).join(', ')}.`
-                            : ''
+                        ? PRESET_WARNING
+                        : pending ? moduleChangeMessage(pending.enabled, pending.also) : ''
                 }
                 confirmText="Continue"
             />

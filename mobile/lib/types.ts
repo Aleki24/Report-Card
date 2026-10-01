@@ -335,6 +335,8 @@ export interface GradingSystem {
     name: string;
     academic_level_id: string | null;
     system_kind?: 'SUBJECT' | 'OVERALL' | null;
+    /** Null for the built-in templates every school shares; set for the school's own. */
+    school_id?: string | null;
 }
 
 export interface GradingScale {

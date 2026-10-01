@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { accessChecks, parseClientAccess, type AccessChecks, type ClientAccess } from '@shared/platform/client-access';
 import { ApiError, useApi } from './api';
 import { errorMessage } from './format';
@@ -34,11 +34,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     // /api/auth/me resolves the real role from the database rather than the
     // possibly-stale Clerk JWT claim, the same way the web's AuthProvider does.
+    // Later reloads (after a module switch) refresh in place instead of
+    // blanking the app behind a loading screen.
+    const loaded = useRef(false);
     const load = useCallback(() => {
-        setLoading(true);
+        if (!loaded.current) setLoading(true);
         setError(null);
         api.get<MeResponse>('/api/auth/me')
             .then((res) => {
+                loaded.current = true;
                 setMe(res);
                 setDeactivated(false);
             })

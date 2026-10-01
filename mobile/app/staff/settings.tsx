@@ -10,6 +10,9 @@ import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs, TextField, ToggleRow,
 } from '@/components/ui';
+import { DutiesPanel, ModulesPanel } from '@/components/settings/ModulesAndDuties';
+import { PaymentsSetup } from '@/components/settings/PaymentsSetup';
+import { NewGradingSystemSheet, OwnSystemActions } from '@/components/settings/GradingEditor';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { PaymentSettingsStatus, Term } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -27,7 +30,7 @@ interface SchoolProfile {
     overall_grading_system_id: string | null;
 }
 
-type Tab = 'school' | 'calendar' | 'grading' | 'payments';
+type Tab = 'school' | 'calendar' | 'grading' | 'payments' | 'modules' | 'duties';
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
 
 export default function SettingsScreen() {
@@ -42,18 +45,21 @@ function SettingsContent() {
     const [tab, setTab] = useState<Tab>('school');
     return (
         <Screen>
-            <ScreenHeader title="Settings" description="School profile, calendar, grading and payments." />
-            <SegmentedTabs
-                tabs={[
+            <ScreenHeader title="Settings" description="School profile, calendar, grading, payments, modules and duties." />
+            <ChipSelect
+                options={[
                     { value: 'school', label: 'School' },
                     { value: 'calendar', label: 'Calendar' },
                     { value: 'grading', label: 'Grading' },
                     { value: 'payments', label: 'Payments' },
+                    { value: 'modules', label: 'Modules' },
+                    { value: 'duties', label: 'Duties' },
                 ]}
                 value={tab}
                 onChange={setTab}
             />
-            {tab === 'school' ? <SchoolTab /> : tab === 'calendar' ? <CalendarTab /> : tab === 'grading' ? <GradingTab /> : <PaymentsTab />}
+            {tab === 'school' ? <SchoolTab /> : tab === 'calendar' ? <CalendarTab /> : tab === 'grading' ? <GradingTab />
+                : tab === 'payments' ? <PaymentsTab /> : tab === 'modules' ? <ModulesPanel /> : <DutiesPanel />}
         </Screen>
     );
 }
@@ -283,9 +289,11 @@ function GradingTab() {
     const profile = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');
     const [open, setOpen] = useState<string | null>(null);
     const [message, setMessage] = useState<Msg>(null);
+    const [creating, setCreating] = useState(false);
 
     if (structure.loading || profile.loading) return <LoadingView />;
     const systems = structure.data?.grading_systems ?? [];
+    const subjects = structure.data?.subjects ?? [];
     const scales = structure.data?.grading_scales ?? [];
     const levels = structure.data?.academic_levels ?? [];
     const overall = systems.filter((s) => s.system_kind === 'OVERALL');
@@ -320,7 +328,11 @@ function GradingTab() {
                         <ListCard>
                             {inLevel.map((s) => (
                                 <View key={s.id}>
-                                    <ListRow title={s.name} subtitle={s.system_kind === 'OVERALL' ? 'Overall (points)' : 'Subject (percent)'} onPress={() => setOpen(open === s.id ? null : s.id)} />
+                                    <ListRow
+                                        title={s.name}
+                                        subtitle={`${s.system_kind === 'OVERALL' ? 'Overall (points)' : 'Subject (percent)'}${s.school_id ? ' · your school' : ' · built-in'}`}
+                                        onPress={() => setOpen(open === s.id ? null : s.id)}
+                                    />
                                     {open === s.id ? (
                                         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
                                             {scales
@@ -328,6 +340,7 @@ function GradingTab() {
                                                 .map((sc) => (
                                                     <InfoRow key={`${sc.symbol}-${sc.min_percentage}`} label={`${sc.symbol}${sc.label && sc.label !== sc.symbol ? ` · ${sc.label}` : ''}`} value={`${sc.min_percentage} – ${sc.max_percentage}`} />
                                                 ))}
+                                            {s.school_id ? <OwnSystemActions system={s} subjects={subjects} onChanged={structure.reload} /> : null}
                                         </View>
                                     ) : null}
                                 </View>
@@ -336,7 +349,11 @@ function GradingTab() {
                     </View>
                 );
             })}
-            <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.md }}>Grading systems are shared templates; editing band boundaries stays on the web.</Text>
+            <View style={{ marginTop: spacing.md }}>
+                <Button label="+ New grading system" onPress={() => setCreating(true)} block />
+                <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.sm }}>Built-in systems are shared templates; make your own to change the bands.</Text>
+            </View>
+            {creating ? <NewGradingSystemSheet levels={levels} subjects={subjects} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); structure.reload(); }} /> : null}
         </View>
     );
 }
@@ -344,29 +361,5 @@ function GradingTab() {
 // ── Payments ───────────────────────────────────────────────
 
 function PaymentsTab() {
-    const { data, loading, error, reload } = useApiQuery<PaymentSettingsStatus>('/api/school/payment-settings/status');
-    if (loading) return <LoadingView />;
-    if (error) return <ErrorBanner message={error} onRetry={reload} />;
-    const provider = data?.provider ?? 'NONE';
-    return (
-        <View>
-            <Card style={{ marginBottom: spacing.md }}>
-                <InfoRow label="Online payments" value={provider === 'DARAJA' ? 'M-Pesa (Daraja)' : provider === 'PESAPAL' ? 'Pesapal' : 'Not set up'} />
-                <InfoRow label="Bank transfers" value={data?.bankEnabled ? 'Shown to parents' : 'Off'} />
-                <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.sm }}>
-                    Paybill keys and callback URLs are secrets; set them up from Settings → Payments on the web, on a trusted computer.
-                </Text>
-            </Card>
-            {(data?.bankAccounts ?? []).length > 0 ? (
-                <>
-                    <SectionLabel>Bank accounts</SectionLabel>
-                    <ListCard>
-                        {(data?.bankAccounts ?? []).map((a) => (
-                            <ListRow key={a.id} title={`${a.bankName} · ${a.accountNumber}`} subtitle={`${a.accountName}${a.branch ? ` · ${a.branch}` : ''}`} right={a.isPrimary ? <Badge label="Primary" variant="info" /> : undefined} />
-                        ))}
-                    </ListCard>
-                </>
-            ) : null}
-        </View>
-    );
+    return <PaymentsSetup />;
 }

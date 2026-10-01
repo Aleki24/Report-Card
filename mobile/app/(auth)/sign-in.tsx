@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSignIn, useSSO } from '@clerk/clerk-expo';
 import { isClerkAPIResponseError } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 import { colors, radius, spacing } from '@/lib/theme';
 import { publicPost } from '@/lib/api';
 import { describeCodeError, useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
@@ -39,6 +40,7 @@ async function resolveIdentifier(value: string): Promise<string> {
 }
 
 export default function SignInScreen() {
+    const router = useRouter();
     const { isLoaded, signIn } = useSignIn();
     const { startSSOFlow } = useSSO();
     const verification = useSignInCodeVerification();
@@ -248,9 +250,9 @@ export default function SignInScreen() {
                                 )}
                             </Pressable>
 
-                            <Text style={styles.footnote}>
-                                New here? Ask your school admin for an invite, then finish setting up your account on the web app first.
-                            </Text>
+                            <Pressable onPress={() => router.push('/(auth)/activate')} accessibilityRole="link" style={{ marginTop: spacing.lg }}>
+                                <Text style={[styles.footnote, { color: colors.primary, fontWeight: '700' }]}>Have an invite code? Activate your account</Text>
+                            </Pressable>
                         </>
                     )}
                 </ScrollView>

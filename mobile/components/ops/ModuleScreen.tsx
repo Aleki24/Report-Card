@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { ChipSelect, EmptyState, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffScreen } from '@/lib/roles';
@@ -33,7 +34,9 @@ export function ModuleScreen<Id extends string>({ screen, title, description, ta
 
 function ModuleBody<Id extends string>({ title, description, tabs, action }: { title: string; description: string; tabs: readonly ModuleTab<Id>[]; action?: React.ReactNode }) {
     const visible = useMemo(() => tabs.filter((t) => t.visible !== false), [tabs]);
-    const [active, setActive] = useState<Id | null>(null);
+    // `?tab=` opens a given tab, as the web's links do (the dashboard's tiles use it).
+    const { tab } = useLocalSearchParams<{ tab?: string }>();
+    const [active, setActive] = useState<Id | null>(() => (visible.find((t) => t.id === tab)?.id ?? null));
     const [signal, setSignal] = useState(0);
     const current = visible.find((t) => t.id === active) ?? visible[0];
     const options = visible.map((t) => ({ value: t.id, label: t.label }));

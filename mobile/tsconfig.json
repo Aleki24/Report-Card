@@ -11,6 +11,12 @@
       ],
       "zod": [
         "./node_modules/zod"
+      ],
+      "xlsx": [
+        "./node_modules/xlsx"
+      ],
+      "papaparse": [
+        "./node_modules/@types/papaparse"
       ]
     }
   },

@@ -4,44 +4,11 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, FileSpreadsheet, Upload } from 'lucide-react';
 import { FormField, Modal, SelectField } from '@/components/ui';
-import { parseTabularFile, normalizeRowKeys, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
+import { parseTabularFile, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
+import { namedRows, toImportRow, type ImportResponse } from '@/lib/import/student-rows';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { cn } from '@/lib/utils';
-import { normalizeGender } from '@/lib/gender';
 import type { AcademicLevelOption, CreatedCredential, GradeStreamOption, ImportRow } from './peopleTypes';
-
-interface ImportResponse {
-  imported?: number;
-  message?: string;
-  skipped_rows?: { row: ImportRow; reason: string }[];
-  created_credentials?: CreatedCredential[];
-}
-
-/** Reads one spreadsheet row, accepting the column names schools actually use. */
-function toImportRow(raw: Record<string, string>, academicLevelId: string): ImportRow {
-  const row = normalizeRowKeys(raw);
-  let first = row.firstname || row.first || '';
-  let last = row.lastname || row.last || row.surname || '';
-  const full = row.name || row.fullname || row.studentname;
-  if (!first && !last && full) {
-    const parts = full.trim().split(/\s+/);
-    first = parts[0];
-    last = parts.slice(1).join(' ');
-  }
-  return {
-    first_name: first,
-    last_name: last,
-    admission_number: row.admissionnumber || row.admissionno || row.admno || row.adm || '',
-    gender: normalizeGender(row.gender || row.sex) ?? '',
-    date_of_birth: row.dateofbirth || row.dob || row.birthdate || '',
-    guardian_phone: row.guardianphone || row.phone || row.parentphone || row.contact || '',
-    guardian_name: row.guardianname || row.parentname || row.guardian || row.parent || '',
-    guardian_email: row.guardianemail || row.parentemail || row.email || '',
-    class: row.class || row.grade || row.form || row.level || '',
-    stream: row.stream || row.section || '',
-    academic_level_id: academicLevelId,
-  };
-}
 
 const EDITABLE: readonly { key: 'first_name' | 'last_name' | 'admission_number'; label: string; placeholder?: string }[] = [
   { key: 'first_name', label: 'First name' },
@@ -82,7 +49,7 @@ function ImportStudents({ onClose, onImported, gradeStreams, academicLevels, def
       // Excel as well as CSV: schools keep their rosters in .xlsx.
       const { rows: raw } = await parseTabularFile(file);
       const levelId = academicLevels.length === 1 ? academicLevels[0].id : '';
-      const parsed = raw.map(r => toImportRow(r, levelId)).filter(r => r.first_name || r.last_name);
+      const parsed = namedRows(raw.map(r => toImportRow(r, levelId)));
       if (parsed.length === 0) {
         toast.error('No student rows found. Check the file has a heading row with a name column.');
         return;

@@ -7,37 +7,9 @@ import { InfoGuide } from '@/components/ui/InfoGuide';
 import { ConfirmDialog } from '@/components/ui';
 import type { FeePayment, PaymentProvider, SchoolBankAccount } from '@/lib/fees';
 
-const KENYA_BANKS = [
-    'KCB Bank', 'Equity Bank', 'Co-operative Bank', 'NCBA Bank', 'Absa Bank Kenya',
-    'Standard Chartered Bank', 'Stanbic Bank', 'Diamond Trust Bank (DTB)', 'Family Bank',
-    'I&M Bank', 'National Bank of Kenya', 'Sidian Bank', 'Prime Bank', 'Bank of Africa',
-    'Housing Finance Company (HFC)', 'Other',
-];
-
-interface PaymentSettings {
-    activeProvider: PaymentProvider;
-    bankEnabled: boolean;
-    // Daraja
-    environment: 'sandbox' | 'production';
-    shortcode: string;
-    consumerKey: string;
-    hasPasskey: boolean;
-    hasConsumerSecret: boolean;
-    configured: boolean;
-    // Pesapal
-    pesapalEnvironment: 'sandbox' | 'live';
-    pesapalConsumerKey: string;
-    hasPesapalConsumerSecret: boolean;
-    pesapalConfigured: boolean;
-}
+import { KENYA_BANKS, PAYMENT_PROVIDERS as PROVIDERS, paymentSettingsPayload, type PaymentSettings } from '@/lib/payments/settings';
 
 interface TermOption { id: string; name: string; }
-
-const PROVIDERS: { value: PaymentProvider; label: string; description: string }[] = [
-    { value: 'NONE', label: 'None', description: 'No online payments — record fees manually only.' },
-    { value: 'DARAJA', label: 'M-Pesa (Direct)', description: 'Your own Safaricom Paybill/Till via the Daraja API.' },
-    { value: 'PESAPAL', label: 'Pesapal', description: 'M-Pesa, cards, and more via a Pesapal merchant account — no Safaricom developer app needed.' },
-];
 
 export function PaymentsTab() {
     const [settings, setSettings] = useState<PaymentSettings | null>(null);
@@ -51,7 +23,7 @@ export function PaymentsTab() {
     // Bank transfer
     const [bankAccounts, setBankAccounts] = useState<SchoolBankAccount[]>([]);
     const [bankAccountsLoading, setBankAccountsLoading] = useState(true);
-    const [newBankChoice, setNewBankChoice] = useState(KENYA_BANKS[0]);
+    const [newBankChoice, setNewBankChoice] = useState<string>(KENYA_BANKS[0]);
     const [newBankOther, setNewBankOther] = useState('');
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountNumber, setNewAccountNumber] = useState('');
@@ -137,18 +109,10 @@ export function PaymentsTab() {
             const res = await fetch('/api/school/payment-settings', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    active_provider: activeProvider,
-                    bank_enabled: bankEnabled,
-                    environment,
-                    shortcode: shortcode || null,
-                    consumer_key: consumerKey || undefined,
-                    consumer_secret: consumerSecret || undefined,
-                    passkey: passkey || undefined,
-                    pesapal_environment: pesapalEnvironment,
-                    pesapal_consumer_key: pesapalConsumerKey || undefined,
-                    pesapal_consumer_secret: pesapalConsumerSecret || undefined,
-                }),
+                body: JSON.stringify(paymentSettingsPayload({
+                    activeProvider, bankEnabled, environment, shortcode, consumerKey, consumerSecret, passkey,
+                    pesapalEnvironment, pesapalConsumerKey, pesapalConsumerSecret,
+                })),
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || 'Failed to save');
