@@ -16,6 +16,8 @@ interface UserContextValue extends AccessChecks {
     /** The stored role, before any class-teacher switch. */
     baseRole: UserRole | null;
     schoolName: string | null;
+    /** No school yet, or an admin whose school setup is unfinished — show onboarding (the web's /dashboard/onboarding). */
+    needsOnboarding: boolean;
     /** Modules the school runs and what this person's role and duties allow (the web's `/api/auth/me` access). */
     access: ClientAccess;
     /** Role plus access checks, for `canAccessStaffScreen` and friends. */
@@ -70,6 +72,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         role,
         baseRole,
         schoolName: me?.schoolName ?? null,
+        needsOnboarding: !!me && (baseRole === 'PENDING' || !me.profile.school_id || (baseRole === 'ADMIN' && !me.schoolOnboardingCompleted)),
         access,
         viewer,
         ...checks,

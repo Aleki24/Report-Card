@@ -3,6 +3,7 @@
 // src/app/dashboard/** consume them.
 
 import type { UserRole } from './roles';
+import type { CombinationRow } from '@shared/pathway/combination-forms';
 
 // ── Current user ───────────────────────────────────────────
 
@@ -328,6 +329,8 @@ export interface Grade {
     id: string;
     name_display: string;
     academic_level_id: string;
+    code?: string | null;
+    numeric_order: number;
 }
 
 export interface GradingSystem {
@@ -357,6 +360,7 @@ export interface StructureSubject {
 
 /** GET /api/admin/academic-structure (the parts the mobile app reads). */
 export interface AcademicStructure {
+    subject_combinations?: CombinationRow[];
     academic_levels?: AcademicLevel[];
     grades?: Grade[];
     grade_streams?: GradeStream[];

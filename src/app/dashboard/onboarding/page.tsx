@@ -6,9 +6,9 @@ import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Buildin
 import { useAuth } from '@/components/AuthProvider';
 import { Wordmark } from '@/components/Wordmark';
 import { toast } from 'sonner';
-import ClassesStep, { gradesMissingStreams, type ClassPlan, type StandardGrade } from '@/components/onboarding/ClassesStep';
+import ClassesStep, { type ClassPlan, type StandardGrade } from '@/components/onboarding/ClassesStep';
+import { chosenGrades as chosenGradesOf, onboardingPayload, onboardingStepProblem, type OnboardingState } from '@/lib/onboarding/plan';
 import SubjectsStep from '@/components/onboarding/SubjectsStep';
-import { parseStreamNames } from '@/lib/classes';
 import { CURRICULA, ONBOARDING_TERMS, type Curriculum, type OnboardingInput } from '@/lib/schemas';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
 import { homePathForRole } from '@/lib/roles';
@@ -116,26 +116,12 @@ export default function OnboardingWizard() {
       .catch((err: Error) => toast.error(err.message));
   }, [selectedRole, standardGrades.length]);
 
+  const onboardingState: OnboardingState = { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, term, curricula, classPlans, offerSubjects };
   /** Ticked grades still inside the chosen curricula (unticking a curriculum drops its grades). */
-  const chosenGrades = standardGrades.filter(g => classPlans[g.id] && curricula.includes(g.curriculum));
+  const chosenGrades = chosenGradesOf(onboardingState, standardGrades);
 
   /** Why the current step can't continue yet, or null. */
-  const stepProblem = (step: number): string | null => {
-    if (step === 1 && !schoolName.trim()) return 'School name is required';
-    if (step === 2) {
-      if (!/^\d{4}$/.test(academicYear)) return 'Enter the academic year, e.g. 2026';
-      if (!term.start_date || !term.end_date) return `Enter when ${term.name} starts and ends`;
-      if (term.end_date <= term.start_date) return 'The term must end after it starts';
-      if (!term.start_date.startsWith(academicYear)) return 'The term should start in the academic year you entered';
-    }
-    if (step === 3 && curricula.length === 0) return 'Pick at least one curriculum';
-    if (step === 4) {
-      if (chosenGrades.length === 0) return 'Tick at least one grade';
-      const missing = gradesMissingStreams(classPlans).filter(id => chosenGrades.some(g => g.id === id));
-      if (missing.length > 0) return `Name the streams for ${standardGrades.find(g => g.id === missing[0])?.name}, or choose "One class"`;
-    }
-    return null;
-  };
+  const stepProblem = (step: number): string | null => onboardingStepProblem(step, onboardingState, standardGrades);
 
   // --- Teacher/Student Form State ---
   const [inviteCode, setInviteCode] = useState('');
@@ -197,20 +183,7 @@ export default function OnboardingWizard() {
       const res = await fetch('/api/school/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schoolName,
-          schoolEmail,
-          schoolPhone,
-          schoolAddress,
-          academicYear,
-          term,
-          curricula,
-          classes: chosenGrades.map(g => ({
-            grade_id: g.id,
-            streams: classPlans[g.id].hasStreams ? parseStreamNames(classPlans[g.id].streams) : [],
-          })),
-          offerCompulsorySubjects: offerSubjects,
-        } satisfies OnboardingInput),
+        body: JSON.stringify(onboardingPayload(onboardingState, standardGrades)),
       });
 
       const data = await res.json();

@@ -9,6 +9,8 @@ import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs,
 } from '@/components/ui';
+import { CombinationsPanel } from '@/components/subjects/CombinationsPanel';
+import { PlacementPanel } from '@/components/subjects/PlacementPanel';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AcademicStructure, StructureSubject } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -33,15 +35,18 @@ export default function SubjectsScreen() {
 }
 
 function SubjectsContent() {
-    const [tab, setTab] = useState<'offered' | 'teachers'>('offered');
+    const [tab, setTab] = useState<'offered' | 'teachers' | 'combinations' | 'placement'>('offered');
     const structure = useAcademicStructure();
+    const profile = useApiQuery<{ min_combination_group_size: number | null }>('/api/school/data?type=school_profile');
     return (
         <Screen onRefresh={structure.refresh} refreshing={structure.refreshing}>
             <ScreenHeader title="Subjects" description="What your school offers, how each is graded, and who teaches it." />
-            <SegmentedTabs
-                tabs={[
+            <ChipSelect
+                options={[
                     { value: 'offered', label: 'Offered' },
                     { value: 'teachers', label: 'Teachers' },
+                    { value: 'combinations', label: 'Combinations' },
+                    { value: 'placement', label: 'Placement' },
                 ]}
                 value={tab}
                 onChange={setTab}
@@ -52,8 +57,12 @@ function SubjectsContent() {
                 <ErrorBanner message={structure.error} onRetry={structure.reload} />
             ) : tab === 'offered' ? (
                 <Offered structure={structure.data} onChanged={structure.refresh} />
-            ) : (
+            ) : tab === 'teachers' ? (
                 <SubjectTeachers structure={structure.data} />
+            ) : tab === 'combinations' ? (
+                <CombinationsPanel structure={structure.data} minGroupSize={profile.data?.min_combination_group_size ?? 15} onChanged={structure.refresh} />
+            ) : (
+                <PlacementPanel structure={structure.data} />
             )}
         </Screen>
     );

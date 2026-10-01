@@ -3,16 +3,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, Search, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-    MINISTRY_COMBINATION_TEMPLATES,
-    PATHWAYS,
-    PATHWAY_ORDER,
-    type CbcPathway,
-} from '@/lib/pathway-definitions';
+import { PATHWAYS, PATHWAY_ORDER, type CbcPathway } from '@/lib/pathway-definitions';
 import type { SchoolCombinationOption } from '@/lib/pathway/placement';
+import { ministryChoiceOptions, schoolChoiceOptions, type ChoiceOption } from '@/lib/pathway/placement-ui';
 
 /** One pickable combination; `value` is the placement choice ("existing:…", "official:…", "custom:…"). */
-export type ChoiceOption = { value: string; code: string; name: string; detail: string };
+export type { ChoiceOption };
 
 type Props = {
     open: boolean;
@@ -61,34 +57,8 @@ export default function CombinationChooser({ open, subject, current, suggestion,
         return !q || code.toLowerCase().includes(q) || name.toLowerCase().includes(q);
     };
 
-    const schoolOptions = useMemo<ChoiceOption[]>(
-        () => schoolCombinations.map(c => ({
-            value: `existing:${c.id}`,
-            code: c.code,
-            name: c.name,
-            detail: [PATHWAYS[c.pathway]?.label, c.track].filter(Boolean).join(' · '),
-        })),
-        [schoolCombinations],
-    );
-
-    const ministryOptions = useMemo(() => {
-        const taken = new Set(schoolCombinations.map(c => c.code.trim().toUpperCase()));
-        const rank = (p: CbcPathway) => PATHWAY_ORDER.indexOf(p);
-        return MINISTRY_COMBINATION_TEMPLATES
-            .filter(t => !taken.has(t.code))
-            .sort((a, b) => rank(a.pathway) - rank(b.pathway) || a.code.localeCompare(b.code))
-            .map(t => {
-                const missing = t.subjectCodes.filter(c => !offeredCodes.has(c));
-                return {
-                    value: `official:${t.code}`,
-                    code: t.code,
-                    name: t.name,
-                    pathway: t.pathway,
-                    detail: `${PATHWAYS[t.pathway].label} · ${t.track}${missing.length ? ` · not offered yet: ${missing.join(', ')}` : ''}`,
-                    runnable: missing.length === 0,
-                };
-            });
-    }, [schoolCombinations, offeredCodes]);
+    const schoolOptions = useMemo(() => schoolChoiceOptions(schoolCombinations), [schoolCombinations]);
+    const ministryOptions = useMemo(() => ministryChoiceOptions(schoolCombinations, offeredCodes), [schoolCombinations, offeredCodes]);
 
     const visibleSchool = schoolOptions.filter(o => matchesQuery(o.code, o.name));
     const ministryMatches = ministryOptions.filter(o =>

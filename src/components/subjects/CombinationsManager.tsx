@@ -13,20 +13,12 @@ import {
     type MinistryCombinationTemplate,
 } from '@/lib/pathway-definitions';
 import MinistryCombinationPicker from './MinistryCombinationPicker';
-import { isSubjectOfferedInBand } from '@/lib/curriculum-bands';
 import { apiErrorMessage } from '@/lib/api-error-message';
-
-interface SubjectOption { id: string; name: string; code: string; academic_level_id?: string; }
-interface CombinationRow {
-    id: string;
-    code: string;
-    name: string;
-    pathway: CbcPathway;
-    track?: string | null;
-    is_active: boolean;
-    subjects?: { id: string; name: string; code: string }[];
-    student_count?: number;
-}
+import {
+    canSaveCombination, combinationFormFrom, combinationPayload, electiveOptions as electivesFor, emptyCombinationForm,
+    officialCombinationPayload, offeredIdByCode as offeredMap,
+    type CombinationForm, type CombinationRow, type CombinationSubject as SubjectOption,
+} from '@/lib/pathway/combination-forms';
 
 interface Props {
     combinations: CombinationRow[];
@@ -37,49 +29,22 @@ interface Props {
     onChanged: () => Promise<void> | void;
 }
 
-const emptyForm = {
-    code: '',
-    name: '',
-    pathway: 'STEM' as CbcPathway,
-    track: '',
-    subject_ids: ['', '', ''] as [string, string, string],
-};
-
 export default function CombinationsManager({ combinations, subjects, cbcLevelId, minGroupSize, isAdmin, onChanged }: Props) {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState({ ...emptyForm });
+    const [form, setForm] = useState<CombinationForm>(emptyCombinationForm);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<{ combo: CombinationRow; studentCount: number | null } | null>(null);
 
-    // Electives can come from any pathway (2+1 blends are legal), but a
-    // combination is a Senior School construct, so only Senior School subjects
-    // belong in it. Filtering on the CBC academic level alone was not enough:
-    // that one level covers Grade 1 to Grade 12, so Lower Primary learning
-    // areas like "Environmental Activities" were offered as Grade 10 electives.
-    // `sync-student-subjects` already narrows to this band when it writes the
-    // student's subject list, so the picker was offering options the sync would
-    // then refuse.
-    const electiveOptions = useMemo(
-        () =>
-            subjects.filter(
-                s =>
-                    (!cbcLevelId || s.academic_level_id === cbcLevelId) &&
-                    isSubjectOfferedInBand(s, 'CBC_SENIOR_SCHOOL')
-            ),
-        [subjects, cbcLevelId]
-    );
-    const offeredIdByCode = useMemo(
-        () => new Map(electiveOptions.map(s => [s.code.trim().toUpperCase(), s.id])),
-        [electiveOptions]
-    );
+    const electiveOptions = useMemo(() => electivesFor(subjects, cbcLevelId), [subjects, cbcLevelId]);
+    const offeredIdByCode = useMemo(() => offeredMap(electiveOptions), [electiveOptions]);
     const existingCodes = useMemo(
         () => new Set(combinations.map(c => c.code.trim().toUpperCase())),
         [combinations]
     );
 
     const resetForm = () => {
-        setForm({ ...emptyForm });
+        setForm(emptyCombinationForm());
         setEditingId(null);
     };
 
@@ -88,20 +53,13 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
         setSaving(true);
         const failed: string[] = [];
         for (const t of templates) {
-            const subjectIds = t.subjectCodes.map(c => offeredIdByCode.get(c));
+            const body = officialCombinationPayload(t, offeredIdByCode);
             try {
-                if (subjectIds.some(id => !id)) throw new Error('subject not offered');
+                if (!body) throw new Error('subject not offered');
                 const res = await fetch('/api/admin/academic-structure', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'subject_combination',
-                        code: t.code,
-                        name: t.name,
-                        pathway: t.pathway,
-                        track: t.track,
-                        subject_ids: subjectIds,
-                    }),
+                    body: JSON.stringify(body),
                 });
                 if (!res.ok) throw new Error(apiErrorMessage(await res.json(), 'Failed'));
             } catch {
@@ -117,27 +75,14 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
 
     const startEdit = (combo: CombinationRow) => {
         setEditingId(combo.id);
-        const ids = (combo.subjects ?? []).map(s => s.id);
-        setForm({
-            code: combo.code,
-            name: combo.name,
-            pathway: combo.pathway,
-            track: combo.track || '',
-            subject_ids: [ids[0] || '', ids[1] || '', ids[2] || ''],
-        });
+        setForm(combinationFormFrom(combo));
         setShowForm(true);
     };
 
     const save = async () => {
         setSaving(true);
         try {
-            const payload = {
-                code: form.code.trim().toUpperCase(),
-                name: form.name.trim(),
-                pathway: form.pathway,
-                track: form.track.trim() || null,
-                subject_ids: form.subject_ids,
-            };
+            const payload = combinationPayload(form);
             const res = await fetch('/api/admin/academic-structure', {
                 method: editingId ? 'PATCH' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -245,8 +190,7 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
         },
     ];
 
-    const canSave = form.code.trim() && form.name.trim() && form.subject_ids.every(Boolean)
-        && new Set(form.subject_ids).size === 3;
+    const canSave = canSaveCombination(form);
 
     return (
         <div>

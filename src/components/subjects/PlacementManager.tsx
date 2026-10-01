@@ -3,25 +3,19 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, ChevronDown, CircleAlert, CircleDashed, Layers, Sparkles, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import {
     MATHS_CODES,
     MATHS_LABELS,
-    MINISTRY_COMBINATION_TEMPLATES,
     SENIOR_CORE_SUBJECT_CODES,
     type MathsCode,
 } from '@/lib/pathway-definitions';
-import CombinationChooser, { type ChoiceOption } from '@/components/subjects/CombinationChooser';
+import CombinationChooser from '@/components/subjects/CombinationChooser';
+import type { ElectivePlacementResponse, PlacementResponse, SeniorLearnerRow, SeniorPlacementResponse } from '@/lib/pathway/placement';
 import {
-    customCombinationCode,
-    type ElectivePlacementResponse,
-    type PlacementResponse,
-    type PlacementTarget,
-    type SchoolCombinationOption,
-    type SeniorLearnerRow,
-    type SeniorPlacementResponse,
-} from '@/lib/pathway/placement';
+    MATHS_DEFAULT_NOTE, choiceLabel, initialDraft, placeableStreams as placeable, placedMessage, seniorPlacements, suggestionCounts, suggestionOption,
+    type SeniorDraft,
+} from '@/lib/pathway/placement-ui';
 
 type Grade = { id: string; code?: string | null; name_display: string; academic_level_id: string; numeric_order: number };
 type Stream = { id: string; full_name: string; grade_id: string };
@@ -29,19 +23,7 @@ type Level = { id: string; code: string };
 
 type Props = { grades: Grade[]; streams: Stream[]; academicLevels: Level[] };
 
-/** Placement applies to CBC Senior School (Grades 10-12) and every 8-4-4 class. */
-function placeableStreams({ grades, streams, academicLevels }: Props): Stream[] {
-    const codeByLevel = new Map(academicLevels.map(l => [l.id, l.code]));
-    const eligible = new Set(
-        grades
-            .filter(g => {
-                const code = codeByLevel.get(g.academic_level_id);
-                return code === '844' || (code === 'CBC' && isSeniorSchoolGrade(g));
-            })
-            .map(g => g.id),
-    );
-    return streams.filter(s => eligible.has(s.grade_id)).sort((a, b) => a.full_name.localeCompare(b.full_name));
-}
+const placeableStreams = ({ grades, streams, academicLevels }: Props) => placeable(grades, streams, academicLevels);
 
 export default function PlacementManager(props: Props) {
     const streams = useMemo(() => placeableStreams(props), [props]);
@@ -81,7 +63,7 @@ export default function PlacementManager(props: Props) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not save'));
-        setMsg(summary + (json.combinationsCreated ? ` ${json.combinationsCreated} new combination(s) were added to your school.` : ''));
+        setMsg(placedMessage(summary, json));
         await load(streamId);
     };
 
@@ -127,71 +109,13 @@ export default function PlacementManager(props: Props) {
 
 // ── CBC Senior School ───────────────────────────────────────────────────
 
-type SeniorDraft = { include: boolean; choice: string; maths: MathsCode | '' };
-
 /** Everyone takes these, so they say nothing about a learner's placement. */
 const COMPULSORY = new Set<string>(SENIOR_CORE_SUBJECT_CODES);
 type ApplyFn = (body: object, summary: string) => Promise<void>;
 type TableProps<T> = { data: T; onApply: ApplyFn; onError: (msg: string) => void };
 
-const OFFICIAL_BY_CODE = new Map(MINISTRY_COMBINATION_TEMPLATES.map(t => [t.code as string, t]));
-
 /** Columns shared by the header and every row from `lg` up; below that each learner is a stacked card. */
 const SENIOR_COLUMNS = 'lg:grid-cols-[1.5rem_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.6fr)_13rem_minmax(0,1fr)] lg:gap-x-4';
-
-/** Select values: "existing:<id>", "official:<code>", or "custom:<code,code,code>". */
-function suggestedChoice(row: SeniorLearnerRow): string {
-    if (row.matchingCombinationId) return `existing:${row.matchingCombinationId}`;
-    if (row.suggestion.kind === 'official') return `official:${row.suggestion.code}`;
-    if (row.suggestion.kind === 'custom') return `custom:${row.suggestion.electiveCodes.join(',')}`;
-    return row.currentCombinationId ? `existing:${row.currentCombinationId}` : '';
-}
-
-function initialDraft(row: SeniorLearnerRow): SeniorDraft {
-    const choice = suggestedChoice(row);
-    const maths = row.currentMaths ?? (row.suggestion.kind === 'no-marks' ? null : row.suggestion.maths) ?? '';
-    const alreadyThere = choice === `existing:${row.currentCombinationId}` && (maths === '' || maths === row.currentMaths);
-    const confident = row.suggestion.kind === 'official' || row.suggestion.kind === 'custom';
-    return { include: confident && !alreadyThere && choice !== '', choice, maths };
-}
-
-function toTarget(choice: string, row: SeniorLearnerRow): PlacementTarget | null {
-    const [type, value] = [choice.slice(0, choice.indexOf(':')), choice.slice(choice.indexOf(':') + 1)];
-    if (type === 'existing') return { type: 'existing', combinationId: value };
-    if (type === 'official') return { type: 'official', code: value };
-    if (type === 'custom' && row.suggestion.kind === 'custom') {
-        return { type: 'custom', electiveCodes: row.suggestion.electiveCodes, pathway: row.suggestion.pathway, name: row.suggestion.name };
-    }
-    return null;
-}
-
-/** What a learner's marks point to, as a chooser option — null when they point nowhere. */
-function suggestionOption(row: SeniorLearnerRow, combinations: SchoolCombinationOption[]): ChoiceOption | null {
-    const s = row.suggestion;
-    if (s.kind !== 'official' && s.kind !== 'custom') return null;
-    const existing = combinations.find(c => c.id === row.matchingCombinationId);
-    if (existing) return { value: `existing:${existing.id}`, code: existing.code, name: existing.name, detail: 'Already set up at your school' };
-    return s.kind === 'official'
-        ? { value: `official:${s.code}`, code: s.code, name: s.name, detail: `Official · ${s.track} — added to your school when you place` }
-        : { value: `custom:${s.electiveCodes.join(',')}`, code: customCombinationCode(s.electiveCodes), name: s.name, detail: 'Not on the Ministry list — added as a custom combination when you place' };
-}
-
-/** "CODE · name" for a choice, or null when nothing is chosen. */
-function choiceLabel(choice: string, row: SeniorLearnerRow | null, combinations: SchoolCombinationOption[]): string | null {
-    const value = choice.slice(choice.indexOf(':') + 1);
-    if (choice.startsWith('existing:')) {
-        const c = combinations.find(x => x.id === value);
-        return c ? `${c.code} · ${c.name}` : null;
-    }
-    if (choice.startsWith('official:')) {
-        const t = OFFICIAL_BY_CODE.get(value);
-        return t ? `${t.code} · ${t.name}` : value;
-    }
-    if (choice.startsWith('custom:') && row?.suggestion.kind === 'custom') {
-        return `${customCombinationCode(row.suggestion.electiveCodes)} · ${row.suggestion.name} (custom)`;
-    }
-    return null;
-}
 
 function SeniorStatus({ row, draft }: { row: SeniorLearnerRow; draft: SeniorDraft }) {
     const s = row.suggestion;
@@ -249,11 +173,7 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
     const submit = async () => {
         setSaving(true);
         try {
-            const placements = chosen.flatMap(l => {
-                const draft = drafts[l.studentId];
-                const target = toTarget(draft.choice, l);
-                return target ? [{ student_id: l.studentId, target, maths: draft.maths || null }] : [];
-            });
+            const placements = seniorPlacements(chosen, drafts);
             await onApply({ mode: 'senior', placements }, `Placed ${placements.length} learner(s).`);
         } catch (err) {
             onError(err instanceof Error ? err.message : 'Unknown error');
@@ -262,7 +182,7 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
         }
     };
 
-    const counts = data.learners.reduce<Record<string, number>>((acc, l) => ({ ...acc, [l.suggestion.kind]: (acc[l.suggestion.kind] ?? 0) + 1 }), {});
+    const counts = suggestionCounts(data.learners);
     const chooserRow = chooser?.kind === 'row' ? chooser.row : null;
 
     return (
@@ -356,7 +276,7 @@ function SeniorTable({ data, onApply, onError }: TableProps<SeniorPlacementRespo
                 <p className="text-xs text-muted-foreground">
                     {missingChoice > 0 && <span className="text-caution">{missingChoice} ticked learner(s) still need a combination. </span>}
                     {newCustom.size > 0 && `${newCustom.size} custom combination(s) not on the Ministry list will be added to your school. `}
-                    &ldquo;Default&rdquo; maths keeps what the learner takes now, else Core for STEM and Essential otherwise.
+                    {MATHS_DEFAULT_NOTE}
                 </p>
                 <button type="button" className="btn-primary h-10 w-full shrink-0 px-4 text-sm sm:h-9 sm:w-auto" disabled={saving || chosen.length === 0} onClick={submit}>
                     <Users size={14} aria-hidden /> {saving ? 'Placing…' : `Place ${chosen.length} learner${chosen.length === 1 ? '' : 's'}`}

@@ -1,7 +1,8 @@
 # Report Card — Mobile (Expo)
 
 Mobile app for the Report Card school-management system, covering every role: students,
-subject teachers, class teachers, and admins. Talks directly to the same Next.js backend
+parents, subject teachers, class teachers, non-teaching staff, and admins. It matches the web
+feature for feature. Talks directly to the same Next.js backend
 as the web app (`../src/app/api/**`) — no separate mobile API, no separate database. Auth
 is the same Clerk project as the web app; a Clerk session token is sent as
 `Authorization: Bearer <token>` on every request, which the backend already accepts
@@ -12,7 +13,7 @@ token or the web session cookie).
 
 After sign-in, `GET /api/auth/me` resolves the account's real role (not the possibly-stale
 Clerk JWT claim — same reasoning as the web app's `auth-server.ts`), including a subject
-teacher's switch to the class-teacher view, and routes to one of two tab trees. Each tree
+teacher's switch to the class-teacher view, and routes to one of three tab trees. Each tree
 mirrors the web's phone navigation: four curated tabs per role, everything else under
 **More** (`lib/roles.ts` holds the same role lists as the web sidebar's `navItems.tsx`).
 
@@ -29,19 +30,40 @@ mirrors the web's phone navigation: four curated tabs per role, everything else 
   - Report Cards: class cards, mark sheet and single-learner PDFs, comments, SMS results.
   - Attendance, Analytics (school → class), People (students, staff, parents), Fees
     (billing, payments, receipts, ledger, unmatched M-Pesa), Announcements, Assignments
-    (+ submissions grading), Classes, Subjects (+ subject teachers), Users, Settings.
+    (+ submissions grading), Classes, Subjects (+ subject teachers, combinations, senior
+    placement), Users, Settings (modules, duties, payment providers and bank accounts,
+    grading systems).
+  - School operations, each shown only when the school runs the module and the person's
+    role or duty allows it: Calendar, Exam papers, Timetable, Lesson records (schemes,
+    plans, records of work), CBC assessment, Library, Inventory, Staff leave, Discipline,
+    Health, Boarding (+ roll call), Expenses, Billing, Transport (fleet, routes, riders,
+    live map, driver mode with GPS sharing), Parent accounts.
+  - Exams also take scanned mark sheets (camera or photo) and CSV/Excel fill; People
+    takes bulk CSV/Excel student import.
+- **`/parent`** — each linked child's overview: results, attendance, fees, and profile.
 
-A screen is only reachable by the roles the web allows on the same page
-(`components/RequireScreen.tsx`); the backend still enforces the finer rules. An account
-with no role yet (`PENDING`) or a deactivated account gets a clear screen with sign-out.
+Accounts with no school yet get the web's onboarding (`components/Onboarding.tsx`): set
+up a school in five steps (sent for approval), or join one with an invite code; the
+waiting and not-approved states come from `/api/school/approval-status`. Invite links
+open `(auth)/activate`.
 
-## Web-only
+A screen is only reachable when the web would show the same page
+(`PAGE_ACCESS` / `canViewPage` from `src/lib/platform/pages.ts`, via
+`components/RequireScreen.tsx`); the backend still enforces the finer rules.
 
-- Account activation via invite code (`/activate`), school onboarding and the landing site.
-- Bulk CSV/Excel student import and scanned mark sheets.
-- Payment provider credentials (paybill keys, callback registration) — secrets belong on
-  a trusted computer; the app shows the configured status and bank accounts.
-- Editing grading-band boundaries and subject combinations (viewing works on mobile).
+## Shared code with the web
+
+`@shared/*` resolves to `../src/lib/*` (a custom resolver in `metro.config.js`, and
+`paths` in `tsconfig.json`). Form fields, row types, workflow rules, payload builders and
+page access live there once and both apps use them, for example `src/lib/ops/forms/*`,
+`src/lib/onboarding/plan.ts`, `src/lib/marks/scan-match.ts` and
+`src/lib/payments/settings.ts`. Files under `src/lib` that the app imports must use
+relative imports only (no `@/`), and must not pull in server-only code.
+
+Native modules added for parity: `expo-location` (driver GPS), `expo-keep-awake`,
+`react-native-webview` (live map), `expo-image-picker` (mark-sheet photos), plus `zod`,
+`xlsx` and `papaparse` for the shared validation and file parsing. The app asks for
+location and camera/photo permissions only when those features are used.
 
 ## Setup
 
@@ -62,7 +84,7 @@ on a physical device. `npm run web` also works for quick browser-based smoke tes
 - `app/` — file-based routing (Expo Router). `(auth)` = sign-in stack. `app/_layout.tsx`
   gates the tree on Clerk's `SignedIn`/`SignedOut` state, then on the resolved role via
   `lib/UserContext.tsx`. `app/index.tsx` redirects to `/student` or `/staff` once the role
-  is known.
+  is known (`/parent` for parents).
 - `lib/api.ts` — fetch wrapper that attaches the Clerk token, plus authenticated file
   download → share sheet (PDF/XLSX from the server) and image upload.
   `lib/useApiQuery.ts` is the load/refresh/error hook used by every screen.
@@ -78,7 +100,8 @@ on a physical device. `npm run web` also works for quick browser-based smoke tes
 
 ## Notes
 
-- No backend changes were needed; every screen uses the same routes as the web.
+- Every screen uses the same API routes as the web; there is no mobile-only backend.
+- Run `npx expo export --platform web` to check that the shared `@shared` imports bundle.
 - `expo install` for compatibility checks may fail in network-restricted environments
   (it calls `reactnative.directory` / `api.expo.dev`); plain `npm install` works fine
   against the public npm registry.
