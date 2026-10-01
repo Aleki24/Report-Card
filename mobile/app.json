@@ -49,7 +49,10 @@
           "photosPermission": "Choose a photo of a mark sheet so its marks can be read in.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
