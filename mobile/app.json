@@ -55,6 +55,12 @@
       "typedRoutes": true,
       "tsconfigPaths": false,
       "onDemandFilesystem": false
+    },
+    "owner": "alexotis-team",
+    "extra": {
+      "eas": {
+        "projectId": "2de9e93f-553d-4b0a-9988-100e744aad0a"
+      }
     }
   }
 }
