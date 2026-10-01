@@ -79,6 +79,26 @@ npm start
 Then press `i` (iOS simulator), `a` (Android emulator), or scan the QR code with Expo Go
 on a physical device. `npm run web` also works for quick browser-based smoke testing.
 
+## Building with EAS
+
+`eas.json` has two profiles:
+
+- `preview` — an installable Android `.apk` and an internal iOS build, for testing on phones.
+- `production` — store builds (`.aab` for Google Play, App Store for iOS), with the build
+  number raised automatically.
+
+EAS uploads the whole repository, so the shared `../src/lib` code is included.
+`EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` and `EXPO_PUBLIC_API_URL` must be set as EAS environment
+variables for the `preview` and `production` environments (expo.dev → project →
+Environment variables), because `.env.local` is not uploaded.
+
+```bash
+npx eas-cli login              # or set EXPO_TOKEN
+npx eas-cli init               # first time only: links the project (adds projectId to app.json)
+npx eas-cli build -p android --profile preview
+npx eas-cli build -p all --profile production
+```
+
 ## Structure
 
 - `app/` — file-based routing (Expo Router). `(auth)` = sign-in stack. `app/_layout.tsx`
