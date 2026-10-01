@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School, Library, Hourglass, Ban } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { Wordmark } from '@/components/Wordmark';
+import { GuideLinks } from '@/components/manual/GuideLinks';
 import { toast } from 'sonner';
 import ClassesStep, { gradesMissingStreams, type ClassPlan, type StandardGrade } from '@/components/onboarding/ClassesStep';
 import SubjectsStep from '@/components/onboarding/SubjectsStep';
@@ -313,6 +314,7 @@ export default function OnboardingWizard() {
               Sign out
             </a>
           </div>
+          <GuideLinks slugs={['admin']} lead="Get ready while you wait:" className="mt-8" />
         </div>
       </div>
     );
@@ -386,6 +388,7 @@ export default function OnboardingWizard() {
             </div>
           </button>
         </div>
+        <GuideLinks slugs={['admin', 'class-teacher', 'staff', 'student', 'parent']} lead="Not sure where to start? Read a guide:" className="mx-auto mt-10 max-w-4xl" />
       </div>
     );
   }
@@ -399,6 +402,11 @@ export default function OnboardingWizard() {
           <h1 className="text-3xl font-bold font-display text-foreground mb-2">
             {selectedRole === 'ADMIN' ? 'Set up your School' : `Join as a ${selectedRole === 'TEACHER' ? 'Teacher' : 'Student'}`}
           </h1>
+          <GuideLinks
+            slugs={selectedRole === 'ADMIN' ? ['admin'] : selectedRole === 'TEACHER' ? ['class-teacher', 'subject-teacher'] : ['student']}
+            lead="Your guide:"
+            className="mx-auto mt-4 max-w-xl"
+          />
           <p className="text-muted-foreground text-lg">
             {selectedRole === 'ADMIN'
               ? "Let's get your school's configuration ready."

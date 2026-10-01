@@ -168,6 +168,7 @@ export default function LoginPage() {
         <>
           <span>Don&apos;t have an account? <Link href="/signup" className={AUTH_LINK}>Create one</Link></span>
           <span>First time? <Link href="/activate" className={AUTH_LINK}>Activate your account</Link></span>
+          <span>Need help? <Link href="/help" className={AUTH_LINK}>Read the user guides</Link></span>
           <span className="mt-4">Access is role-based · Admin · Class Teacher · Subject Teacher · Student</span>
         </>
       }

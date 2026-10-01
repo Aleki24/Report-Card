@@ -3,7 +3,7 @@ import {
     LayoutDashboard, GraduationCap, LineChart, FileText, Users, School,
     UserCircle, Settings, BookOpen, ClipboardList, CalendarCheck, Bell,
     Briefcase, DollarSign, CalendarDays, FileLock2, Clock, NotebookPen, Target,
-    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake,
+    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake, LifeBuoy,
 } from 'lucide-react';
 import { type UserRole } from '@/components/AuthProvider';
 import type { ModuleKey } from '@/lib/platform/modules';
@@ -85,6 +85,10 @@ const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', r
 const myFees: NavItem = { label: 'Fees', href: '/student/fees', roles: ['STUDENT'], module: 'fees', icon: icon(DollarSign) };
 const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', roles: ['PARENT'], module: 'parent_portal', icon: icon(Users) };
 const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', roles: ['STUDENT'], icon: icon(UserCircle) };
+// The user guide for the signed-in role, with its PDF.
+const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', roles: [...staffRoles, 'STAFF'], icon: icon(LifeBuoy) };
+const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', roles: ['STUDENT'], icon: icon(LifeBuoy) };
+const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', roles: ['PARENT'], icon: icon(LifeBuoy) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [
@@ -98,7 +102,7 @@ const groups: NavGroup[] = [
 ];
 
 /** Pinned to the sidebar bottom, outside the scrolling group list. */
-const pinnedItems: NavItem[] = [users, settings, myProfile];
+const pinnedItems: NavItem[] = [users, settings, myProfile, help, studentHelp, parentHelp];
 
 /** Flat list (access checks + search). Derived, so it can never miss an item. */
 export const navItems: NavItem[] = [...groups.flatMap(g => g.items), ...pinnedItems];
@@ -116,7 +120,7 @@ export function canSee(item: NavItem, viewer: NavViewer): boolean {
 }
 
 /** Home links match only themselves, not every page nested below them. */
-export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href]);
+export const EXACT_MATCH_HREFS: ReadonlySet<string> = new Set([dashboard.href, studentDashboard.href, parentHome.href]);
 
 
 /**
