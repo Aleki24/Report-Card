@@ -14,6 +14,10 @@ import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Expo inlines EXPO_PUBLIC_* only in app code, not inside node_modules, so
+// Clerk cannot read this itself in a release build: pass it explicitly.
+const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
 function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
@@ -84,9 +88,24 @@ function AuthGate() {
     );
 }
 
-export default function RootLayout() {
+function MissingConfigScreen() {
+    useEffect(() => {
+        SplashScreen.hideAsync().catch(() => {});
+    }, []);
+
     return (
-        <ClerkProvider tokenCache={tokenCache}>
+        <View style={styles.centered}>
+            <Text style={styles.title}>App not configured</Text>
+            <Text style={styles.body}>This build is missing its sign-in key. Please install the latest version of the app.</Text>
+        </View>
+    );
+}
+
+export default function RootLayout() {
+    if (!CLERK_PUBLISHABLE_KEY) return <MissingConfigScreen />;
+
+    return (
+        <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
             <StatusBar style="dark" />
             <ToastProvider>
                 <AuthGate />
