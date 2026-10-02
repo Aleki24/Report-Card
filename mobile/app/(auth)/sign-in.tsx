@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Image,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -135,8 +136,11 @@ export default function SignInScreen() {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
                     <View style={styles.hero}>
-                        <View style={styles.logoDot} />
-                        <Text style={styles.title}>Report Card</Text>
+                        <Image source={require('@/assets/splash-icon.png')} style={styles.logo} accessibilityIgnoresInvertColors />
+                        <Text style={styles.title} accessibilityRole="header">
+                            <Text style={{ color: colors.info }}>Skul</Text>
+                            <Text style={{ color: colors.success }}>base</Text>
+                        </Text>
                         <Text style={styles.subtitle}>Sign in to view your results, attendance and more.</Text>
                     </View>
 
@@ -265,7 +269,7 @@ const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
     hero: { alignItems: 'center', marginBottom: spacing.xl },
-    logoDot: { width: 56, height: 56, borderRadius: 18, backgroundColor: colors.primary, marginBottom: spacing.md },
+    logo: { width: 96, height: 96, marginBottom: spacing.sm },
     title: { fontSize: 26, fontWeight: '800', color: colors.foreground },
     subtitle: { fontSize: 14, color: colors.muted, marginTop: spacing.xs, textAlign: 'center' },
     errorBox: {

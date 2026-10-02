@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Report Card",
+    "name": "Skulbase",
     "slug": "report-card-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     "android": {
       "package": "com.reportcard.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -31,9 +31,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon.png",
+          "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#4f46e5"
+          "backgroundColor": "#FFFFFF",
+          "imageWidth": 200
         }
       ],
       [
