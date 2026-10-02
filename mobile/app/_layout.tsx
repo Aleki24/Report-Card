@@ -1,9 +1,9 @@
 import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
-import { Redirect, Slot } from 'expo-router';
+import { Redirect, Slot, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
@@ -11,6 +11,7 @@ import { Onboarding } from '@/components/Onboarding';
 import { ErrorBanner, LoadingView } from '@/components/ui';
 import { colors, radius, spacing } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
+import { describeError } from '@/lib/fatalErrorAlert';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -101,6 +102,23 @@ function MissingConfigScreen() {
     );
 }
 
+/** Shown instead of closing the app when rendering throws, so the error can be reported. */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+    useEffect(() => {
+        SplashScreen.hideAsync().catch(() => {});
+    }, []);
+
+    return (
+        <ScrollView contentContainerStyle={styles.errorScroll}>
+            <Text style={styles.title}>Something went wrong</Text>
+            <Text selectable style={styles.errorDetail}>{describeError(error)}</Text>
+            <Pressable onPress={() => void retry()} style={styles.retryButton}>
+                <Text style={styles.retryText}>Try again</Text>
+            </Pressable>
+        </ScrollView>
+    );
+}
+
 export default function RootLayout() {
     if (!CLERK_PUBLISHABLE_KEY) return <MissingConfigScreen />;
 
@@ -120,4 +138,8 @@ const styles = StyleSheet.create({
     body: { fontSize: 13, color: colors.muted, textAlign: 'center' },
     signOutButton: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl, marginTop: spacing.md },
     signOutText: { color: colors.danger, fontWeight: '700' },
+    errorScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
+    errorDetail: { fontSize: 12, color: colors.foreground, fontFamily: 'monospace' },
+    retryButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl },
+    retryText: { color: colors.white, fontWeight: '700' },
 });
