@@ -9,10 +9,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.reportcard.mobile"
+      "bundleIdentifier": "com.skulbase.app"
     },
     "android": {
-      "package": "com.reportcard.mobile",
+      "package": "com.skulbase.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
