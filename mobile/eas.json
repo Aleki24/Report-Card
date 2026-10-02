@@ -13,9 +13,6 @@
       "environment": "preview",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a,armeabi-v7a,x86_64"
       }
     },
     "production": {
