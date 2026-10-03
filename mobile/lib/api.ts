@@ -2,7 +2,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { apiErrorMessage } from '@shared/api-error-message';
 
@@ -122,10 +122,15 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 // `@clerk/nextjs/server` reads either.
 export function useApi(): Api {
     const { getToken } = useAuth();
+    // @clerk/clerk-expo's useAuth returns a new getToken on every render. Reading
+    // it through a ref keeps this client stable; otherwise every screen's query
+    // effect re-runs after each render and refetches forever.
+    const getTokenRef = useRef(getToken);
+    getTokenRef.current = getToken;
 
     return useMemo<Api>(() => {
         const send = async <T,>(method: string, path: string, body?: unknown): Promise<T> => {
-            const token = await getToken();
+            const token = await getTokenRef.current();
             return request<T>(path, token, { method, body: body === undefined ? undefined : JSON.stringify(body) });
         };
         const pickFile = async (types: readonly string[]): Promise<PickedFile | null> => {
@@ -143,7 +148,7 @@ export function useApi(): Api {
                 if (Platform.OS === 'web' && f.blob) form.append(k, f.blob, f.name);
                 else form.append(k, { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
             });
-            const token = await getToken();
+            const token = await getTokenRef.current();
             const res = await fetch(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
             const json: unknown = await res.json().catch(() => ({}));
             if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
@@ -156,7 +161,7 @@ export function useApi(): Api {
             put: (path, body) => send('PUT', path, body),
             del: (path) => send('DELETE', path),
             downloadAndShare: async (path, fileName, mimeType = 'application/pdf') => {
-                const token = await getToken();
+                const token = await getTokenRef.current();
                 if (Platform.OS === 'web') return downloadInBrowser(`${API_URL}${path}`, token, fileName);
                 const target = new File(Paths.cache, fileName);
                 if (target.exists) target.delete();
@@ -195,5 +200,5 @@ export function useApi(): Api {
                 return json.url;
             },
         };
-    }, [getToken]);
+    }, []);
 }
