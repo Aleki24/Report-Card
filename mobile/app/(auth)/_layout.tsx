@@ -1,16 +1,11 @@
-import { SignedIn } from '@clerk/clerk-expo';
-import { Redirect, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 
+// Signed-in users are kept out of this group by the root layout's Stack.Protected.
 export default function AuthLayout() {
     return (
-        <>
-            <SignedIn>
-                <Redirect href="/" />
-            </SignedIn>
-            <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="sign-in" />
-                <Stack.Screen name="activate" />
-            </Stack>
-        </>
+        <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="activate" />
+        </Stack>
     );
 }

@@ -1,6 +1,6 @@
-import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
+import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
-import { Redirect, Slot, type ErrorBoundaryProps } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -34,6 +34,27 @@ function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { tit
     );
 }
 
+/**
+ * The one navigator for the whole app, always mounted while it is shown.
+ * Protected groups send signed-out users to (auth) and signed-in users away
+ * from it; redirecting from a layout that renders no navigator loops forever.
+ */
+function RootStack({ signedIn }: { signedIn: boolean }) {
+    return (
+        <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Protected guard={signedIn}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="staff" />
+                <Stack.Screen name="student" />
+                <Stack.Screen name="parent" />
+            </Stack.Protected>
+            <Stack.Protected guard={!signedIn}>
+                <Stack.Screen name="(auth)" />
+            </Stack.Protected>
+        </Stack>
+    );
+}
+
 function RoleGate() {
     const { loading, error, deactivated, role, needsOnboarding, reload } = useCurrentUser();
 
@@ -63,11 +84,11 @@ function RoleGate() {
         );
     }
 
-    return <Slot />;
+    return <RootStack signedIn />;
 }
 
 function AuthGate() {
-    const { isLoaded } = useAuth();
+    const { isLoaded, isSignedIn } = useAuth();
 
     useEffect(() => {
         if (isLoaded) SplashScreen.hideAsync().catch(() => {});
@@ -75,17 +96,12 @@ function AuthGate() {
 
     if (!isLoaded) return null;
 
+    if (!isSignedIn) return <RootStack signedIn={false} />;
+
     return (
-        <>
-            <SignedIn>
-                <UserProvider>
-                    <RoleGate />
-                </UserProvider>
-            </SignedIn>
-            <SignedOut>
-                <Redirect href="/(auth)/sign-in" />
-            </SignedOut>
-        </>
+        <UserProvider>
+            <RoleGate />
+        </UserProvider>
     );
 }
 
