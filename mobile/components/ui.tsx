@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -17,9 +17,10 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { ArrowLeft, ChevronLeft, ChevronRight, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
 import { colors, radius, shadow, spacing, fonts } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
+import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
 
 // ── Layout ─────────────────────────────────────────────────
 
@@ -35,6 +36,15 @@ export function Screen({
     /** Pinned below the scroll area (e.g. a save bar). */
     footer?: React.ReactNode;
 }) {
+    // Without its own handler, pulling down reloads every query rendered on the screen.
+    const registry = useScreenRefreshRegistry();
+    const [pulling, setPulling] = useState(false);
+    const refreshAll = () => {
+        setPulling(true);
+        void registry.reloadAll().finally(() => setPulling(false));
+    };
+    const handleRefresh = onRefresh ?? refreshAll;
+    const isRefreshing = onRefresh ? !!refreshing : pulling;
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
             {/* Android 15 draws edge to edge, so the window no longer resizes for the keyboard:
@@ -44,9 +54,11 @@ export function Screen({
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
                     bottomOffset={spacing.xl}
-                    refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}
+                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
                 >
-                    <View style={styles.content}>{children}</View>
+                    <ScreenRefreshProvider registry={registry}>
+                        <View style={styles.content}>{children}</View>
+                    </ScreenRefreshProvider>
                 </KeyboardAwareScrollView>
                 {footer ? <View style={styles.footer}>{footer}</View> : null}
             </KeyboardAvoidingView>
@@ -193,9 +205,11 @@ export function Badge({ label, variant = 'default' }: { label: string; variant?:
     );
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+/** A friendly "nothing here yet": an icon, what is missing, and what to do next. */
+export function EmptyState({ title, description, action, icon: Icon = Inbox }: { title: string; description?: string; action?: React.ReactNode; icon?: LucideIcon }) {
     return (
         <View style={styles.empty}>
+            <View style={styles.emptyIcon}><Icon size={22} color={colors.muted} /></View>
             <Text style={styles.emptyTitle}>{title}</Text>
             {description ? <Text style={styles.emptyDesc}>{description}</Text> : null}
             {action ? <View style={{ marginTop: spacing.md }}>{action}</View> : null}
@@ -517,6 +531,7 @@ const styles = StyleSheet.create({
     badge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' },
     badgeText: { fontSize: 11, fontFamily: fonts.bold },
     empty: { alignItems: 'center', paddingVertical: spacing.xl * 1.5, paddingHorizontal: spacing.lg },
+    emptyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
     emptyTitle: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground, textAlign: 'center' },
     emptyDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4, textAlign: 'center' },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl * 2 },

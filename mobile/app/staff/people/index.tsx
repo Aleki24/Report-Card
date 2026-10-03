@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Text } from 'react-native';
+import { UserCheck, Users } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -130,8 +131,8 @@ function StudentsSection() {
             ) : null}
 
             <StatGrid>
-                <StatTile label="Total" value={students.length} />
-                <StatTile label="Active" value={students.filter((s) => s.status === 'ACTIVE').length} />
+                <StatTile label="Total" value={students.length} icon={Users} />
+                <StatTile label="Active" value={students.filter((s) => s.status === 'ACTIVE').length} icon={UserCheck} />
             </StatGrid>
 
             {adding ? (

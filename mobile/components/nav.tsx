@@ -17,6 +17,9 @@ export function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorV
  */
 export const TAB_SCREEN_OPTIONS = {
     animation: 'shift' as const,
+    // Each screen draws its own heading (ScreenHeader, the dashboard greeting, a detail's name),
+    // so the bar title only repeated it and pushed content down.
+    headerShown: false,
     freezeOnBlur: true,
     sceneStyle: { backgroundColor: colors.background },
     tabBarActiveTintColor: colors.primary,

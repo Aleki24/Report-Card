@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from './api';
 import { errorMessage } from './format';
+import { useRegisterScreenRefresh } from './screenRefresh';
 
 export interface ApiQuery<T> {
     data: T | null;
@@ -64,6 +65,9 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
     useEffect(() => {
         void load(false);
     }, [load]);
+
+    // Pull-to-refresh on the enclosing screen reloads this query in place.
+    useRegisterScreenRefresh(() => load(true));
 
     return {
         data,

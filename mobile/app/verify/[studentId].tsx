@@ -67,9 +67,8 @@ export default function VerifyResultsScreen() {
         return (
             <Screen>
                 <BackLink />
-                <Card style={styles.center}>
-                    <SearchX size={32} color={colors.muted} />
-                    <EmptyState title="Results not found" description={`${load.message} Check you scanned the code on a Skulbase report card, or ask the school.`} />
+                <Card>
+                    <EmptyState icon={SearchX} title="Results not found" description={`${load.message} Check you scanned the code on a Skulbase report card, or ask the school.`} />
                 </Card>
             </Screen>
         );

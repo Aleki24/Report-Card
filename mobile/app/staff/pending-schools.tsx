@@ -60,8 +60,7 @@ export default function PendingSchoolsScreen() {
                 <ErrorBanner message={error} onRetry={refresh} />
             ) : (data ?? []).length === 0 ? (
                 <Card>
-                    <View style={{ alignItems: 'center' }}><CircleCheck size={28} color={colors.success} /></View>
-                    <EmptyState title="All caught up" description="No schools are waiting for approval." />
+                    <EmptyState icon={CircleCheck} title="All caught up" description="No schools are waiting for approval." />
                 </Card>
             ) : (
                 (data ?? []).map((s) => <SchoolCard key={s.id} school={s} />)
