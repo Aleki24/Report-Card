@@ -163,7 +163,8 @@ function TeacherView({ id }: { id: string }) {
     const api = useApi();
     const { role } = useCurrentUser();
     const { data, loading, error, reload } = useApiQuery<TeacherDetail>(`/api/school/teachers/${id}`, { raw: true });
-    const [edit, setEdit] = useState<{ first_name: string; last_name: string; phone: string } | null>(null);
+    const [edit, setEdit] = useState<{ first_name: string; last_name: string; phone: string; avatar_url: string } | null>(null);
+    const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
 
@@ -175,7 +176,7 @@ function TeacherView({ id }: { id: string }) {
         if (!edit) return;
         setSaving(true);
         try {
-            await api.patch('/api/admin/update-teacher', { teacher_id: id, first_name: edit.first_name.trim(), last_name: edit.last_name.trim(), phone: edit.phone.trim() || null });
+            await api.patch('/api/admin/update-teacher', { teacher_id: id, first_name: edit.first_name.trim(), last_name: edit.last_name.trim(), phone: edit.phone.trim() || null, avatar_url: edit.avatar_url });
             setEdit(null);
             reload();
         } catch (err) {
@@ -185,12 +186,26 @@ function TeacherView({ id }: { id: string }) {
         }
     };
 
+    // The web's staff photo: uploaded to storage (/api/admin/upload-photo), saved with the edit.
+    const changePhoto = async () => {
+        if (!edit) return;
+        setUploading(true);
+        try {
+            const url = await api.pickAndUploadImage('/api/admin/upload-photo');
+            if (url) setEdit({ ...edit, avatar_url: url });
+        } catch (err) {
+            setMessage(errorMessage(err, 'Could not upload the photo.'));
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <>
             <BackLink />
             {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
             <View style={styles.headerRow}>
-                <Avatar label={initials(p)} color={colors.info} />
+                <Avatar label={initials(p)} color={colors.info} uri={edit ? edit.avatar_url || null : p.avatar_url} />
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>{fullName(p)}</Text>
                     <Text style={styles.subtitle}>{roleLabel(p.role)}</Text>
@@ -200,6 +215,10 @@ function TeacherView({ id }: { id: string }) {
 
             {edit ? (
                 <Card style={{ marginBottom: spacing.md }}>
+                    <ButtonRow>
+                        {edit.avatar_url ? <Button size="sm" variant="ghost" label="Remove photo" onPress={() => setEdit({ ...edit, avatar_url: '' })} /> : null}
+                        <Button size="sm" variant="secondary" label={edit.avatar_url ? 'Change photo' : 'Add photo'} onPress={() => void changePhoto()} loading={uploading} />
+                    </ButtonRow>
                     <TextField label="First name" value={edit.first_name} onChangeText={(first_name) => setEdit({ ...edit, first_name })} />
                     <TextField label="Last name" value={edit.last_name} onChangeText={(last_name) => setEdit({ ...edit, last_name })} />
                     <TextField label="Phone" value={edit.phone} onChangeText={(phone) => setEdit({ ...edit, phone })} keyboardType="phone-pad" />
@@ -215,7 +234,7 @@ function TeacherView({ id }: { id: string }) {
                     <InfoRow label="Joined" value={formatDate(p.created_at)} />
                     <ButtonRow>
                         {p.phone ? <Button size="sm" variant="ghost" label="Call" onPress={() => void Linking.openURL(`tel:${p.phone}`)} /> : null}
-                        {role === 'ADMIN' ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEdit({ first_name: p.first_name, last_name: p.last_name, phone: p.phone ?? '' })} /> : null}
+                        {role === 'ADMIN' ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEdit({ first_name: p.first_name, last_name: p.last_name, phone: p.phone ?? '', avatar_url: p.avatar_url ?? '' })} /> : null}
                     </ButtonRow>
                 </Card>
             )}

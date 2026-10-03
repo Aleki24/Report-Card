@@ -474,6 +474,11 @@ export interface StudentListItem {
     guardian_phone: string | null;
     users: { first_name: string; last_name: string; email: string | null } | null;
     grade_streams: { id: string; full_name: string; grade_id: string } | null;
+    /** CBC Senior School (Grades 10–12) only. */
+    pathway?: string | null;
+    track?: string | null;
+    subject_combination_id?: string | null;
+    subject_combinations?: { name: string; code: string } | null;
 }
 
 export interface TeacherListItem {
@@ -509,7 +514,7 @@ export interface StudentDetail {
 }
 
 export interface TeacherDetail {
-    profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: UserRole; is_active: boolean; created_at: string };
+    profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: UserRole; is_active: boolean; created_at: string; avatar_url?: string | null };
     classAssignments: { id: string; stream: string; year: string }[];
     subjectAssignments: { subject: string; subject_code: string; category: string; grade: string }[];
 }

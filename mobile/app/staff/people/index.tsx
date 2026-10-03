@@ -5,7 +5,10 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
 import type { CreatedCredential } from '@shared/import/student-rows';
 import { ImportStudentsSheet } from '@/components/people/ImportStudentsSheet';
-import { useGradeStreams } from '@/lib/useSchoolData';
+import { useAcademicStructure, useGradeStreams } from '@/lib/useSchoolData';
+import { isSeniorSchoolGrade } from '@shared/curriculum-bands';
+import { PATHWAY_ORDER, pathwayLabel } from '@shared/pathway-definitions';
+import { BulkPathwaySheet, type CombinationOption } from '@/components/people/BulkPathwaySheet';
 import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
 import { colors, spacing } from '@/lib/theme';
@@ -69,8 +72,24 @@ function PeopleContent() {
 
 function StudentsSection() {
     const router = useRouter();
+    const { role } = useCurrentUser();
     const { data, loading, error, refresh } = useApiQuery<StudentListItem[]>('/api/school/data?type=students');
     const { streams } = useGradeStreams();
+    const structure = useAcademicStructure();
+    const combinations = useApiQuery<CombinationOption[]>('/api/school/data?type=subject_combinations');
+    const [pathway, setPathway] = useState<string>('');
+    const [assigning, setAssigning] = useState(false);
+    const [pathwayNotice, setPathwayNotice] = useState<string | null>(null);
+
+    // Pathways and combinations only apply to CBC Senior School (Grades 10–12), as on the web.
+    const seniorStreams = useMemo(() => {
+        const levels = structure.data?.academic_levels ?? [];
+        const grades = structure.data?.grades ?? [];
+        const cbc = new Set(levels.filter((l) => l.code === 'CBC').map((l) => l.id));
+        const seniorGrades = new Set(grades.filter((g) => cbc.has(g.academic_level_id) && isSeniorSchoolGrade(g)).map((g) => g.id));
+        return streams.filter((s) => seniorGrades.has(s.grade_id));
+    }, [structure.data, streams]);
+    const hasPathways = (combinations.data ?? []).length > 0;
     const [search, setSearch] = useState('');
     const [stream, setStream] = useState<string>('');
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
@@ -88,9 +107,10 @@ function StudentsSection() {
             if (status === 'ACTIVE' && s.status !== 'ACTIVE') return false;
             // There is no INACTIVE status; "inactive" is anything not ACTIVE.
             if (status === 'INACTIVE' && s.status === 'ACTIVE') return false;
+            if (pathway && (pathway === 'UNASSIGNED' ? !!s.pathway : s.pathway !== pathway)) return false;
             return !q || `${fullName(s.users)} ${s.admission_number ?? ''} ${s.guardian_phone ?? ''}`.toLowerCase().includes(q);
         });
-    }, [students, search, stream, status]);
+    }, [students, search, stream, status, pathway]);
 
     if (loading) return <LoadingView />;
 
@@ -127,10 +147,25 @@ function StudentsSection() {
                 />
             ) : (
                 <ButtonRow>
+                    {role === 'ADMIN' && hasPathways && seniorStreams.length > 0 ? (
+                        <Button variant="secondary" label="Pathways" onPress={() => setAssigning(true)} />
+                    ) : null}
                     <Button variant="secondary" label="Import CSV / Excel" onPress={() => setImporting(true)} />
                     <Button label="+ Add student" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
+            {pathwayNotice ? <Notice tone="success" message={pathwayNotice} onDismiss={() => setPathwayNotice(null)} /> : null}
+            {assigning ? (
+                <BulkPathwaySheet
+                    visible
+                    onClose={() => setAssigning(false)}
+                    onSaved={(message) => { setPathwayNotice(message); refresh(); }}
+                    students={students}
+                    seniorStreams={seniorStreams}
+                    combinations={combinations.data ?? []}
+                    defaultStreamId={stream}
+                />
+            ) : null}
             {importing ? (
                 <ImportStudentsSheet
                     streams={streams}
@@ -160,6 +195,17 @@ function StudentsSection() {
                 value={status}
                 onChange={setStatus}
             />
+            {hasPathways && seniorStreams.length > 0 ? (
+                <ChipSelect
+                    options={[
+                        { value: '', label: 'Any pathway' },
+                        ...PATHWAY_ORDER.map((p) => ({ value: p, label: pathwayLabel(p) })),
+                        { value: 'UNASSIGNED', label: 'No pathway' },
+                    ]}
+                    value={pathway}
+                    onChange={setPathway}
+                />
+            ) : null}
 
             {filtered.length === 0 ? (
                 <EmptyState title="No students found" />
@@ -171,7 +217,7 @@ function StudentsSection() {
                             <ListRow
                                 key={s.id}
                                 title={fullName(s.users)}
-                                subtitle={`${s.admission_number ?? '—'} · ${s.grade_streams?.full_name ?? 'Unassigned'}`}
+                                subtitle={`${s.admission_number ?? '—'} · ${s.grade_streams?.full_name ?? 'Unassigned'}${s.pathway ? ` · ${pathwayLabel(s.pathway)}${s.subject_combinations ? ` (${s.subject_combinations.code})` : ''}` : ''}`}
                                 right={s.status !== 'ACTIVE' ? <Badge label={s.status ?? '—'} /> : undefined}
                                 onPress={() => router.push(`/staff/people/${s.id}?type=student`)}
                             />

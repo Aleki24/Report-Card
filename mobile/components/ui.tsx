@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     ActivityIndicator,
+    Image,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -447,9 +448,12 @@ export function DateStepper({ value, onChange, max }: { value: string; onChange:
     );
 }
 
-export function Avatar({ label, size = 56, color = colors.primary }: { label: string; size?: number; color?: string }) {
+/** Initials on a coloured disc, or the person's photo when they have one. */
+export function Avatar({ label, size = 56, color = colors.primary, uri }: { label: string; size?: number; color?: string; uri?: string | null }) {
+    const frame = { width: size, height: size, borderRadius: size / 2 };
+    if (uri) return <Image source={{ uri }} style={[frame, { backgroundColor: colors.mutedBg }]} accessibilityLabel={label} />;
     return (
-        <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
+        <View style={[styles.avatar, frame, { backgroundColor: color }]}>
             <Text style={[styles.avatarText, { fontSize: size * 0.36 }]}>{label}</Text>
         </View>
     );

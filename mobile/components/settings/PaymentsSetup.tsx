@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { UnmatchedPayments } from './UnmatchedPayments';
 import { Text, View } from 'react-native';
 import type { SchoolBankAccount } from '@shared/fees';
 import {
@@ -137,6 +138,8 @@ export function PaymentsSetup() {
                 <TextField label="Branch (optional)" value={bank.branch} onChangeText={setBankField('branch')} />
                 <Button label="Add account" loading={busy === 'add'} onPress={addAccount} block />
             </Card>
+
+            <UnmatchedPayments />
         </View>
     );
 }

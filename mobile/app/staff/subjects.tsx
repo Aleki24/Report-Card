@@ -12,6 +12,7 @@ import {
 import { CombinationsPanel } from '@/components/subjects/CombinationsPanel';
 import { PlacementPanel } from '@/components/subjects/PlacementPanel';
 import { RequireScreen } from '@/components/RequireScreen';
+import { SubjectRosterSheet } from '@/components/subjects/SubjectRosterSheet';
 import type { AcademicStructure, StructureSubject } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
@@ -69,6 +70,8 @@ function SubjectsContent() {
 }
 
 function Offered({ structure, onChanged }: { structure: AcademicStructure | null; onChanged: () => void }) {
+    const [rosterFor, setRosterFor] = useState<{ id: string; name: string } | null>(null);
+    const [rosterNotice, setRosterNotice] = useState<string | null>(null);
     const api = useApi();
     const [open, setOpen] = useState<string | null>(null);
     const [search, setSearch] = useState('');
@@ -129,6 +132,8 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
     return (
         <View>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
+            {rosterNotice ? <Notice tone="success" message={rosterNotice} onDismiss={() => setRosterNotice(null)} /> : null}
+            {rosterFor ? <SubjectRosterSheet subject={rosterFor} onClose={() => setRosterFor(null)} onSaved={setRosterNotice} /> : null}
             {ungraded > 0 ? <Notice tone="warning" message={`${pluralize(ungraded, 'subject')} ${ungraded === 1 ? 'has' : 'have'} no grading system, so no grade can be awarded. Tap a subject to set one.`} /> : null}
 
             <Card style={{ marginBottom: spacing.md }}>
@@ -171,6 +176,7 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
                                                     onChange={(id) => void setGrading(s, id)}
                                                 />
                                                 <ButtonRow>
+                                                    <Button size="sm" variant="secondary" label="Who takes it" onPress={() => setRosterFor({ id: s.id, name: s.name })} />
                                                     {s.grading_system_id ? <Button size="sm" variant="ghost" label="Clear grading" onPress={() => void setGrading(s, null)} /> : null}
                                                     <Button size="sm" variant="danger" label="Remove subject" onPress={() => remove(s)} loading={busy === s.id} />
                                                 </ButtonRow>
