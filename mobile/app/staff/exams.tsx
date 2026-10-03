@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
-import { useAcademicStructure } from '@/lib/useSchoolData';
+import { useAcademicStructure, useExams } from '@/lib/useSchoolData';
 import { errorMessage } from '@/lib/format';
 import { Button, ButtonRow, EmptyState, LoadingView, Notice, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -37,7 +37,7 @@ export default function ExamsScreen() {
 }
 
 function ExamsContent() {
-    const params = useLocalSearchParams<{ tab?: string }>();
+    const params = useLocalSearchParams<{ tab?: string; exam?: string; term?: string }>();
     const [tab, setTab] = useState<Tab>(parseTab(params.tab));
     const [exam, setExam] = useState<ExamSlot | null>(null);
     const [pickerKey, setPickerKey] = useState(0);
@@ -47,6 +47,17 @@ function ExamsContent() {
     useEffect(() => {
         if (params.tab) setTab(parseTab(params.tab));
     }, [params.tab]);
+
+    // ?exam=<id>&term=<id> (the dashboard's marking list) opens that exam's mark sheet directly.
+    const linked = useExams(params.exam ? { term_id: params.term ?? null } : null);
+    useEffect(() => {
+        if (!params.exam) return;
+        const found = linked.exams.find((e) => e.id === params.exam);
+        if (found) {
+            setExam(found);
+            setTab(params.tab ? parseTab(params.tab) : 'entry');
+        }
+    }, [params.exam, params.tab, linked.exams]);
 
     const selectTab = (t: Tab) => {
         setTab(t);

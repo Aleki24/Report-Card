@@ -7,6 +7,8 @@ import {
 import { useCurrentUser } from '@/lib/UserContext';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { PendingSchoolsNotice } from '@/components/platform/PendingSchools';
+import { MarkingProgress } from '@/components/dashboard/MarkingProgress';
+import { GradeResults } from '@/components/dashboard/GradeResults';
 import { STAFF_SCREENS, getStaffNav } from '@/lib/roles';
 import { useApiQuery } from '@/lib/useApiQuery';
 import {
@@ -179,6 +181,8 @@ function AdminDashboard({ name }: { name: string }) {
                             />
                         ) : null}
                     </StatGrid>
+
+                    <GradeResults />
 
                     <SectionLabel action={<Text style={styles.link} onPress={() => router.push('/staff/analytics')}>Analytics ›</Text>}>
                         How classes are doing
@@ -482,6 +486,8 @@ function TeacherDashboard({ name, kind }: { name: string; kind: 'class_teacher' 
                     <SubjectTeacherKpis stats={stats.data as SubjectTeacherStats} />
                 )
             ) : null}
+
+            <MarkingProgress />
 
             {summary.data ? (
                 <>
