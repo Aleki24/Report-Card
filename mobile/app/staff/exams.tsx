@@ -4,24 +4,26 @@ import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage } from '@/lib/format';
-import { Button, ButtonRow, Notice, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
+import { Button, ButtonRow, EmptyState, LoadingView, Notice, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import { ExamPicker } from '@/components/exams/ExamPicker';
 import { MarkEntry } from '@/components/exams/MarkEntry';
 import { ExamResults } from '@/components/exams/ExamResults';
 import { PublishList } from '@/components/exams/PublishList';
+import { Broadsheet } from '@/components/exams/Broadsheet';
 import { CreateExamToggle } from '@/components/exams/CreateExamForm';
 import type { ExamSlot, Term } from '@/lib/types';
 
-type Tab = 'entry' | 'results' | 'publish';
+type Tab = 'entry' | 'results' | 'all' | 'publish';
 
 const TABS = [
     { value: 'entry', label: 'Mark entry' },
     { value: 'results', label: 'Results' },
+    { value: 'all', label: 'All subjects' },
     { value: 'publish', label: 'Publish' },
 ] as const;
 
-const parseTab = (t: string | undefined): Tab => (t === 'results' || t === 'publish' ? t : 'entry');
+const parseTab = (t: string | undefined): Tab => (t === 'results' || t === 'all' || t === 'publish' ? t : 'entry');
 
 /** Standard term exams an admin can set up in one tap, as on the web. */
 const STANDARD_TERM_EXAMS = ['OPENER', 'MIDTERM', 'ENDTERM'] as const;
@@ -48,7 +50,7 @@ function ExamsContent() {
 
     const selectTab = (t: Tab) => {
         setTab(t);
-        if (t === 'publish') setExam(null);
+        if (t === 'publish' || t === 'all') setExam(null);
     };
 
     return (
@@ -58,6 +60,10 @@ function ExamsContent() {
 
             {tab === 'publish' ? (
                 <PublishList />
+            ) : tab === 'all' ? (
+                structure.loading ? <LoadingView />
+                    : structure.data?.grade_streams?.length ? <Broadsheet streams={structure.data.grade_streams} />
+                    : <EmptyState title="No classes yet" description="Add classes in Classes, then their marks appear here side by side." />
             ) : exam ? (
                 <>
                     <ButtonRow>

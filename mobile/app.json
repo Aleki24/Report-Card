@@ -19,7 +19,39 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "skulbase.com",
+              "pathPrefix": "/verify"
+            },
+            {
+              "scheme": "https",
+              "host": "skulbase.com",
+              "pathPrefix": "/activate"
+            },
+            {
+              "scheme": "https",
+              "host": "www.skulbase.com",
+              "pathPrefix": "/verify"
+            },
+            {
+              "scheme": "https",
+              "host": "www.skulbase.com",
+              "pathPrefix": "/activate"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

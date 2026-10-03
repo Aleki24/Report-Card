@@ -31,8 +31,13 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         const passed = pcts.filter((p) => p >= PASS_MARK).length;
         const grades = new Map<string, number>();
         for (const m of ranked) grades.set(m.grade_symbol || '—', (grades.get(m.grade_symbol || '—') ?? 0) + 1);
+        const sorted = [...pcts].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
         return {
             mean,
+            median,
+            count: pcts.length,
             passRate: (passed / pcts.length) * 100,
             highest: Math.max(...pcts),
             lowest: Math.min(...pcts),
@@ -93,6 +98,8 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
                         <StatTile label="Pass rate" value={formatPercent(summary.passRate)} sub={`at or above ${PASS_MARK}%`} />
                         <StatTile label="Highest" value={formatPercent(summary.highest, 1)} />
                         <StatTile label="Lowest" value={formatPercent(summary.lowest, 1)} />
+                        <StatTile label="Median" value={formatPercent(summary.median, 1)} />
+                        <StatTile label="Learners" value={summary.count} />
                     </StatGrid>
                     <Card style={{ marginTop: spacing.md }}>
                         <Text style={styles.cardTitle}>Grade spread · {pluralize(ranked.length, 'learner')}</Text>
