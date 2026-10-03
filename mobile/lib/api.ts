@@ -58,6 +58,11 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     return json as T;
 }
 
+/** GET a public (signed-out) endpoint, e.g. result verification. Throws ApiError. */
+export function publicGet<T>(path: string): Promise<T> {
+    return request<T>(path, null);
+}
+
 /** POST to a public (signed-out) endpoint, e.g. during sign-in. Throws ApiError. */
 export function publicPost<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, null, { method: 'POST', body: JSON.stringify(body) });

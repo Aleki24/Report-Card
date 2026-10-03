@@ -66,6 +66,7 @@ function RootStack({ signedIn }: { signedIn: boolean }) {
             <Stack.Screen name="help/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="help/[slug]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="help/contact" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="verify/[studentId]" options={{ animation: 'slide_from_right' }} />
         </Stack>
     );
 }

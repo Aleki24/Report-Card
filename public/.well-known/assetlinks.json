@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.skulbase.app",
+      "sha256_cert_fingerprints": ["9A:7F:1E:08:6F:27:BA:84:AD:75:E6:E2:ED:D7:1F:A8:AD:49:C8:4C:C7:16:EF:F1:83:AC:3C:63:2C:F2:91:22"]
+    }
+  }
+]

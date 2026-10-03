@@ -16,6 +16,15 @@ export function describeAuthError(err: unknown, fallback: string): string {
     return err instanceof Error ? err.message : fallback;
 }
 
+/** A friendlier message for known Clerk error codes, else Clerk's own (as the web's clerkMessage). */
+export function clerkMessage(err: unknown, byCode: Readonly<Record<string, string>>, fallback: string): string {
+    if (isClerkAPIResponseError(err)) {
+        const first = err.errors[0];
+        return (first?.code && byCode[first.code]) || first?.longMessage || first?.message || fallback;
+    }
+    return err instanceof Error ? err.message : fallback;
+}
+
 /** "Continue with Google", shared by sign-in and sign-up: the same Clerk SSO flow the web uses. */
 export function useGoogleSignIn() {
     const { startSSOFlow } = useSSO();

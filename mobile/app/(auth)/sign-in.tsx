@@ -3,7 +3,7 @@ import { useSignIn } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LogIn } from 'lucide-react-native';
-import { publicPost, webUrl } from '@/lib/api';
+import { publicPost } from '@/lib/api';
 import { describeAuthError, useGoogleSignIn } from '@/lib/useGoogleSignIn';
 import { useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
 import {
@@ -110,7 +110,7 @@ export default function SignInScreen() {
                         placeholder="Enter your password"
                         returnKeyType="go"
                         onSubmitEditing={() => { if (canSubmit) void handleSignIn(); }}
-                        hint={<AuthLink label="Forgot password?" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/forgot-password'))} />}
+                        hint={<AuthLink label="Forgot password?" onPress={() => router.push('/(auth)/forgot-password')} />}
                     />
                     <AuthPrimaryButton label="Sign In" icon={LogIn} onPress={() => void handleSignIn()} loading={loading} disabled={!canSubmit || google.loading} />
                     <AuthDivider />

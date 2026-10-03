@@ -6,6 +6,7 @@ import {
 } from 'lucide-react-native';
 import { useCurrentUser } from '@/lib/UserContext';
 import { OperationsOverview } from '@/components/OperationsOverview';
+import { PendingSchoolsNotice } from '@/components/platform/PendingSchools';
 import { STAFF_SCREENS, getStaffNav } from '@/lib/roles';
 import { useApiQuery } from '@/lib/useApiQuery';
 import {
@@ -141,6 +142,7 @@ function AdminDashboard({ name }: { name: string }) {
 
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
+            <PendingSchoolsNotice />
             <Hero name={name}>
                 <HeroButton label="Report cards" href="/staff/reports" icon={FileText} solid />
                 <HeroButton label="Enter marks" href="/staff/exams" icon={ClipboardList} />

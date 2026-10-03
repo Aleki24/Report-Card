@@ -5,7 +5,7 @@ import { STAFF_SCREENS, getStaffNav, type StaffScreen } from '@/lib/roles';
 import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
 
 /** Routes that exist in the tree but never get a tab of their own. */
-const DETAIL_ROUTES = ['people/[id]'] as const;
+const DETAIL_ROUTES = ['people/[id]', 'pending-schools'] as const;
 
 export default function StaffTabsLayout() {
     const { viewer } = useCurrentUser();
