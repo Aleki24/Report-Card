@@ -33,6 +33,11 @@ const GROUPS: FooterGroup[] = [
   },
 ];
 
+const LEGAL_LINKS: FooterLink[] = [
+  { label: 'Privacy policy', href: '/privacy' },
+  { label: 'Delete account', href: '/delete-account' },
+];
+
 export default function Footer() {
   return (
     <footer className="relative z-10 border-t border-border px-4 py-12 sm:px-6 md:py-16 lg:px-12">
@@ -70,7 +75,14 @@ export default function Footer() {
         <span>
           © {new Date().getFullYear()} <Wordmark className="font-semibold" /> School Management System. All rights reserved.
         </span>
-        <span>Built for Kenyan schools 🇰🇪</span>
+        <nav aria-label="Legal" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
+          {LEGAL_LINKS.map((link) => (
+            <Link key={link.href} href={link.href} className="inline-flex min-h-9 items-center transition-colors duration-200 hover:text-foreground focus-visible:text-foreground focus-visible:underline focus-visible:outline-none">
+              {link.label}
+            </Link>
+          ))}
+          <span>Built for Kenyan schools 🇰🇪</span>
+        </nav>
       </div>
     </footer>
   );

@@ -58,6 +58,7 @@ function RootStack({ signedIn }: { signedIn: boolean }) {
                 <Stack.Screen name="staff" />
                 <Stack.Screen name="student" />
                 <Stack.Screen name="parent" />
+                <Stack.Screen name="account/delete" options={{ animation: 'slide_from_right' }} />
             </Stack.Protected>
             <Stack.Protected guard={!signedIn}>
                 <Stack.Screen name="(auth)" />

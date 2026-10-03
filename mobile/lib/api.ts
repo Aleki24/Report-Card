@@ -73,7 +73,7 @@ export interface Api {
     post: <T>(path: string, body?: unknown) => Promise<T>;
     patch: <T>(path: string, body?: unknown) => Promise<T>;
     put: <T>(path: string, body?: unknown) => Promise<T>;
-    del: <T>(path: string) => Promise<T>;
+    del: <T>(path: string, body?: unknown) => Promise<T>;
     /**
      * Downloads a server-rendered file (report cards, mark sheets) with the
      * Clerk token attached, then opens the system share sheet so it can be
@@ -169,7 +169,7 @@ export function useApi(): Api {
             post: (path, body) => send('POST', path, body),
             patch: (path, body) => send('PATCH', path, body),
             put: (path, body) => send('PUT', path, body),
-            del: (path) => send('DELETE', path),
+            del: (path, body) => send('DELETE', path, body),
             downloadAndShare: async (path, fileName, mimeType = 'application/pdf') => {
                 const token = await getTokenRef.current();
                 if (Platform.OS === 'web') return downloadInBrowser(`${API_URL}${path}`, token, fileName);

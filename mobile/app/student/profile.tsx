@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAuth } from '@clerk/clerk-expo';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -8,9 +7,9 @@ import { errorMessage, formatDate, fullName, initials } from '@/lib/format';
 import { colors, spacing, fonts } from '@/lib/theme';
 import { Avatar, Button, ButtonRow, Card, ErrorBanner, InfoRow, LoadingView, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
 import type { StudentProfile } from '@/lib/types';
+import { AccountActions } from '@/components/account/AccountActions';
 
 export default function ProfileScreen() {
-    const { signOut } = useAuth();
     const api = useApi();
     const { schoolName } = useCurrentUser();
     const { data: profile, loading, error, refresh, refreshing } = useApiQuery<StudentProfile>('/api/school/student/profile');
@@ -86,7 +85,7 @@ export default function ProfileScreen() {
                 </Card>
             ) : null}
 
-            <Button variant="danger" block label="Sign out" onPress={() => void signOut()} />
+            <AccountActions />
         </Screen>
     );
 }
