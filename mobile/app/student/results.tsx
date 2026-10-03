@@ -4,7 +4,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, fileSafe, formatPercent, scoreColor } from '@/lib/format';
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam, type ReportTemplateId } from '@/lib/reportTemplates';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs,
@@ -187,22 +187,22 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 function Comment({ label, text }: { label: string; text: string }) {
     return (
         <Text style={styles.comment}>
-            <Text style={{ fontWeight: '700' }}>{label}: </Text>
+            <Text style={{ fontFamily: fonts.bold }}>{label}: </Text>
             {text}
         </Text>
     );
 }
 
 const styles = StyleSheet.create({
-    avg: { fontSize: 12, fontWeight: '800' },
-    pct: { fontSize: 14, fontWeight: '800' },
-    title: { fontSize: 16, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    avg: { fontSize: 12, fontFamily: fonts.display },
+    pct: { fontSize: 14, fontFamily: fonts.display },
+    title: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     stats: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-    statLabel: { fontSize: 11, fontWeight: '600', color: colors.muted, marginBottom: 2 },
-    statValue: { fontSize: 16, fontWeight: '800', color: colors.foreground },
-    comment: { fontSize: 12, color: colors.foreground, lineHeight: 18, marginBottom: spacing.sm },
+    statLabel: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, marginBottom: 2 },
+    statValue: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground },
+    comment: { fontFamily: fonts.regular, fontSize: 12, color: colors.foreground, lineHeight: 18, marginBottom: spacing.sm },
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-    subjectName: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.foreground },
-    subjectScore: { fontSize: 12, color: colors.muted },
+    subjectName: { flex: 1, fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
+    subjectScore: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
 });

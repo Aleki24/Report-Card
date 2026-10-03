@@ -13,7 +13,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 /** Bill a term from the fee structures, previewing totals first — the web's invoicing panel. */
 export function Invoicing({ canManage }: { canManage: boolean }) {
@@ -233,13 +233,13 @@ export function VoteHeadStatementPanel({ canRemind }: { canRemind: boolean }) {
 }
 
 const styles = StyleSheet.create({
-    amount: { fontSize: 14, fontWeight: '800', color: colors.foreground },
-    note: { fontSize: 13, color: colors.muted, marginVertical: spacing.sm },
+    amount: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    note: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginVertical: spacing.sm },
     learner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    meta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     toggle: { flexDirection: 'row', backgroundColor: colors.mutedBg, borderRadius: radius.sm, padding: 2 },
     toggleBtn: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.sm - 2 },
     toggleOn: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-    toggleText: { fontSize: 12, fontWeight: '700', color: colors.muted },
+    toggleText: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
 });

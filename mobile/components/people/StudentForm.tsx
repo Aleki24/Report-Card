@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField } from '@/components/ui';
 import type { GradeStream } from '@/lib/types';
 
@@ -117,7 +117,7 @@ export function StudentForm({
 
     return (
         <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.foreground, marginBottom: spacing.md }}>{studentId ? 'Edit student' : 'Add student'}</Text>
+            <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>{studentId ? 'Edit student' : 'Add student'}</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <TextField label="First name" value={v.first_name} onChangeText={(t) => set('first_name', t)} autoCapitalize="words" />
             <TextField label="Last name" value={v.last_name} onChangeText={(t) => set('last_name', t)} autoCapitalize="words" />

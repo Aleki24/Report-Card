@@ -12,7 +12,7 @@ import { StatusPill } from '@/components/ops/bits';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 const ACTION_LABELS: Record<SchemeAction, string> = { SUBMIT: 'Submit for review', APPROVE: 'Approve', RETURN: 'Return' };
 
@@ -106,7 +106,7 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
                     {scheme.editable ? (
                         <Card style={styles.draft}>
                             <Pressable onPress={() => setShowDraft((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: showDraft }}>
-                                <Text style={styles.title}>✨ Draft with AI {showDraft ? '▴' : '▾'}</Text>
+                                <Text style={styles.title}>Draft with AI {showDraft ? '▴' : '▾'}</Text>
                             </Pressable>
                             {showDraft ? (
                                 <View style={{ marginTop: spacing.md }}>
@@ -135,7 +135,7 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
                                     ) : (
                                         <Text style={[styles.title, { flex: 1 }]}>{e.topic}{e.sub_topic ? <Text style={styles.muted}> · {e.sub_topic}</Text> : null}</Text>
                                     )}
-                                    {taught ? <Text style={{ color: colors.success, fontWeight: '800' }}>✓</Text> : null}
+                                    {taught ? <Text style={{ color: colors.success, fontFamily: fonts.display }}>✓</Text> : null}
                                 </View>
                                 <ButtonRow>
                                     {!taught && e.id && isOwner && !dirty ? <Button size="sm" variant="secondary" label="Taught" onPress={() => markTaught(e as SchemeEntry & { id: string })} /> : null}
@@ -190,13 +190,13 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
 }
 
 const styles = StyleSheet.create({
-    muted: { fontSize: 12, color: colors.muted },
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     draft: { marginTop: spacing.md, padding: spacing.md, borderStyle: 'dashed' },
     row2: { flexDirection: 'row', gap: spacing.sm },
     entry: { marginBottom: spacing.sm, padding: spacing.md },
     entryHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    weekTag: { width: 64, fontSize: 12, fontWeight: '700', color: colors.muted },
-    fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.muted },
-    body: { fontSize: 13, color: colors.foreground },
+    weekTag: { width: 64, fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
+    fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
+    body: { fontFamily: fonts.regular, fontSize: 13, color: colors.foreground },
 });

@@ -13,7 +13,7 @@ import { SelectField } from '@/components/ops/SelectField';
 import { ApiError, useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import type { AcademicStructure } from '@/lib/types';
 
 const STRUCTURE = '/api/admin/academic-structure';
@@ -29,7 +29,7 @@ function OfficialPicker({ offered, existing, onAdd, busy }: { offered: ReadonlyM
 
     return (
         <Card style={{ marginBottom: spacing.md }}>
-            <Text style={{ fontWeight: '700', color: colors.foreground }}>Add official combinations</Text>
+            <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Add official combinations</Text>
             <ChipSelect options={[{ value: 'ALL', label: 'All pathways' }, ...PATHWAY_ORDER.map((p) => ({ value: p, label: PATHWAYS[p].label }))]} value={pathway} onChange={setPathway} />
             <ToggleRow label="Only ones we can run" description="Every elective is a subject your school offers." value={runnableOnly} onValueChange={setRunnableOnly} />
             {shown.length === 0 ? (
@@ -136,7 +136,7 @@ export function CombinationsPanel({ structure, minGroupSize, onChanged }: { stru
                 const below = count > 0 && count < minGroupSize;
                 return (
                     <Card key={c.id} style={{ marginTop: spacing.sm, padding: spacing.md }}>
-                        <Text style={{ fontWeight: '800', color: colors.foreground }}>{c.code} <Text style={{ fontWeight: '400', color: colors.muted }}>· {c.name}</Text></Text>
+                        <Text style={{ fontFamily: fonts.display, color: colors.foreground }}>{c.code} <Text style={{ fontFamily: fonts.regular, color: colors.muted }}>· {c.name}</Text></Text>
                         <Text style={{ fontSize: 12, color: colors.muted }}>{pathwayLabel(c.pathway)}{c.track ? ` — ${c.track}` : ''} · {(c.subjects ?? []).map((s) => s.name).join(', ')}</Text>
                         <Text style={{ fontSize: 12, color: below ? colors.warning : colors.muted }}>{count} learner{count === 1 ? '' : 's'}{below ? ` · below the ${minGroupSize}-learner minimum` : ''}</Text>
                         <ButtonRow>

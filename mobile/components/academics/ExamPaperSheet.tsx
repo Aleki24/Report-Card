@@ -11,7 +11,7 @@ import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage, fileSafe } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 type Detail = ExamPaper & { reviews: PaperReview[] };
 
@@ -146,7 +146,7 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
 }
 
 const styles = StyleSheet.create({
-    note: { fontSize: 12, color: colors.muted, marginTop: 4 },
+    note: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 4 },
     review: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.md, marginBottom: spacing.sm },
-    reviewHead: { fontSize: 13, fontWeight: '700', color: colors.foreground },
+    reviewHead: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
 });

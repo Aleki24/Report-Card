@@ -5,7 +5,7 @@ import type { PillTone } from '@shared/ops/tones';
 import { Button } from '@/components/ui';
 import { useApi } from '@/lib/api';
 import { useAction } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 const TONE: Record<PillTone, { bg: string; fg: string }> = {
     neutral: { bg: colors.mutedBg, fg: colors.muted },
@@ -89,5 +89,5 @@ export function useRefreshSignal(reload: () => unknown) {
 
 const styles = StyleSheet.create({
     pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
-    pillText: { fontSize: 11, fontWeight: '700' },
+    pillText: { fontSize: 11, fontFamily: fonts.bold },
 });

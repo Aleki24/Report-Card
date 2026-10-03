@@ -5,7 +5,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { currentTermNumber } from '@/lib/academics';
 import { daysUntil, formatCurrency, formatLongToday, formatPercent, getDueLabel, getGreeting, getTimeAgo, isSoon, scoreColor } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, Card, DateBadge, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar,
     Screen, SectionLabel, StatGrid, StatTile,
@@ -171,14 +171,14 @@ export default function StudentDashboardScreen() {
 
 const styles = StyleSheet.create({
     hero: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md },
-    heroGreeting: { color: colors.white, fontSize: 20, fontWeight: '800' },
-    heroDate: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
-    heroPill: { alignSelf: 'flex-start', marginTop: spacing.md, backgroundColor: 'rgba(255,255,255,0.18)', color: colors.white, fontWeight: '700', fontSize: 12, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.md, overflow: 'hidden' },
+    heroGreeting: { color: colors.white, fontSize: 20, fontFamily: fonts.display },
+    heroDate: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.regular, fontSize: 13, marginTop: 4 },
+    heroPill: { alignSelf: 'flex-start', marginTop: spacing.md, backgroundColor: 'rgba(255,255,255,0.18)', color: colors.white, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.md, overflow: 'hidden' },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
-    cardTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    cardTitle: { flex: 1, fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    trendLabel: { width: 110, fontSize: 12, fontWeight: '600', color: colors.foreground },
-    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
+    trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
+    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
 });

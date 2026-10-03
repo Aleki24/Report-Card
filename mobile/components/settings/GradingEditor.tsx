@@ -7,7 +7,7 @@ import { FormSheet } from '@/components/ops/FormSheet';
 import { useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import type { AcademicLevel, GradingSystem, StructureSubject } from '@/lib/types';
 
 const STRUCTURE = '/api/admin/academic-structure';
@@ -65,7 +65,7 @@ export function NewGradingSystemSheet({ levels, subjects, onClose, onSaved }: {
             <TextField label="Name *" value={name} onChangeText={setName} placeholder={isOverall ? 'e.g. KCSE overall' : 'e.g. Sciences 2026'} />
             <ChipSelect label="Academic level *" wrap options={levels.map((l) => ({ value: l.id, label: l.name }))} value={levelId || null} onChange={(v) => { setLevelId(v); setSubjectIds([]); }} />
 
-            <Text style={{ fontWeight: '700', color: colors.foreground, marginVertical: spacing.sm }}>Grades ({isOverall ? 'points' : '%'} ranges)</Text>
+            <Text style={{ fontFamily: fonts.bold, color: colors.foreground, marginVertical: spacing.sm }}>Grades ({isOverall ? 'points' : '%'} ranges)</Text>
             {rows.map((r, i) => (
                 <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md }}>
                     <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -84,7 +84,7 @@ export function NewGradingSystemSheet({ levels, subjects, onClose, onSaved }: {
 
             {!isOverall && levelId ? (
                 <View style={{ marginTop: spacing.md }}>
-                    <Text style={{ fontWeight: '700', color: colors.foreground, marginBottom: spacing.sm }}>Use for these subjects (optional)</Text>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm }}>Use for these subjects (optional)</Text>
                     <SubjectPicker subjects={subjects.filter((s) => s.academic_level_id === levelId)} selected={subjectIds} onToggle={(id) => setSubjectIds((l) => toggle(l, id))} />
                 </View>
             ) : null}

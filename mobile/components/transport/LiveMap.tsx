@@ -6,7 +6,7 @@ import { Card, EmptyState } from '@/components/ui';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { MapFrame, type MapFrameHandle } from './MapFrame';
 
 const POLL_MS = 10_000;
@@ -53,10 +53,10 @@ export function LiveMap() {
             {trips.map((t) => (
                 <Pressable key={t.id} onPress={() => focus(t)} accessibilityRole="button" accessibilityHint="Shows this bus on the map">
                     <Card style={[styles.card, t.alerts.length > 0 && { borderColor: colors.danger }]}>
-                        <Text style={styles.title}>🚌 {t.vehicle?.registration} <Text style={styles.muted}>· {t.route?.name ?? 'No route'}</Text></Text>
+                        <Text style={styles.title}>{t.vehicle?.registration} <Text style={styles.muted}>· {t.route?.name ?? 'No route'}</Text></Text>
                         <Text style={styles.muted}>{t.driver?.full_name ?? 'No driver'} · {Math.round(Number(t.last_speed_kmh ?? 0))} km/h · seen {dateTime(t.last_seen_at)}</Text>
                         {t.driver?.phone ? (
-                            <Text style={styles.link} onPress={() => void Linking.openURL(`tel:${t.driver?.phone}`)}>📞 {t.driver.phone}</Text>
+                            <Text style={styles.link} onPress={() => void Linking.openURL(`tel:${t.driver?.phone}`)}>Call {t.driver.phone}</Text>
                         ) : null}
                         {t.alerts.map((a) => <Text key={a} style={styles.alert}>⚠︎ {a}</Text>)}
                     </Card>
@@ -67,10 +67,10 @@ export function LiveMap() {
 }
 
 const styles = StyleSheet.create({
-    status: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+    status: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
     card: { marginBottom: spacing.sm, padding: spacing.md, gap: 2 },
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, fontWeight: '400' },
-    link: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: 2 },
-    alert: { fontSize: 12, color: colors.danger, fontWeight: '700' },
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    muted: { fontSize: 12, color: colors.muted, fontFamily: fonts.regular },
+    link: { fontSize: 12, color: colors.primary, fontFamily: fonts.bold, marginTop: 2 },
+    alert: { fontSize: 12, color: colors.danger, fontFamily: fonts.bold },
 });

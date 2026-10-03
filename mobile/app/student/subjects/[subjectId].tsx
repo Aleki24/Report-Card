@@ -3,7 +3,7 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { formatPercent, getDueLabel, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     BackLink, Badge, Button, Card, EmptyState, ListCard, ListRow, LoadingView, Notice, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
@@ -126,9 +126,9 @@ export default function SubjectDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 22, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm },
+    title: { fontSize: 22, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm },
     badgeRow: { flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.lg },
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    trendLabel: { width: 110, fontSize: 12, fontWeight: '600', color: colors.foreground },
-    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
+    trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
+    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
 });

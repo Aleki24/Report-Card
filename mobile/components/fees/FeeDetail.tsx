@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -191,5 +191,5 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
 
 const styles = StyleSheet.create({
     wrap: { padding: spacing.md, backgroundColor: colors.mutedBg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    foot: { fontSize: 11, color: colors.muted, marginTop: spacing.sm },
+    foot: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm },
 });

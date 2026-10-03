@@ -87,7 +87,7 @@ export function MarkFillTools({ maxScore, roster, disabledReason, onFill }: {
 
     return (
         <ButtonRow>
-            <Button size="sm" variant="secondary" label={busy === 'scan' ? 'Reading…' : '📷 Scan sheet'} loading={busy === 'scan'} disabled={busy !== null} onPress={() => void scan('camera')} />
+            <Button size="sm" variant="secondary" label={busy === 'scan' ? 'Reading…' : 'Scan sheet'} loading={busy === 'scan'} disabled={busy !== null} onPress={() => void scan('camera')} />
             <Button size="sm" variant="secondary" label="Photo" disabled={busy !== null} onPress={() => void scan('library')} />
             <Button size="sm" variant="secondary" label={busy === 'file' ? 'Reading…' : 'Fill from file'} loading={busy === 'file'} disabled={busy !== null} onPress={() => void fromFile()} />
         </ButtonRow>

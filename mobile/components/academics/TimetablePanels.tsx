@@ -14,7 +14,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage, formatDate } from '@/lib/format';
 import { opsGet, useOpsList } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { TimetableGrid } from './TimetableGrid';
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
@@ -175,7 +175,7 @@ export function TimetableBuilder() {
                     ) : null}
                     {selected ? (
                         <Card style={{ marginVertical: spacing.sm, padding: spacing.md, backgroundColor: colors.infoBg }}>
-                            <Text style={{ fontWeight: '700', color: colors.foreground }}>Moving {selected.subject?.name}: tap a slot</Text>
+                            <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Moving {selected.subject?.name}: tap a slot</Text>
                             <ButtonRow>
                                 <Button size="sm" variant="secondary" label={selected.locked ? 'Unpin' : 'Pin here'} onPress={() => void patchLesson(selected, { locked: !selected.locked })} />
                                 <Button size="sm" variant="ghost" label="Cancel" onPress={() => setSelected(null)} />
@@ -308,7 +308,7 @@ export function CoverPanel() {
                 <EmptyState title={`That teacher has no lessons on ${fmtDate(day)}.`} />
             ) : needs.map((n) => (
                 <Card key={n.lesson.id} style={{ marginBottom: spacing.sm, padding: spacing.md }}>
-                    <Text style={{ fontWeight: '700', color: colors.foreground }}>{n.lesson.stream?.full_name} · {n.lesson.subject?.name}</Text>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{n.lesson.stream?.full_name} · {n.lesson.subject?.name}</Text>
                     {n.coveredBy ? <Text style={{ color: colors.success, marginTop: 4 }}>✓ Covered</Text>
                         : n.candidates.length === 0 ? <Text style={{ color: colors.danger, marginTop: 4 }}>Nobody is free in this period.</Text>
                             : (

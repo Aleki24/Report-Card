@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router/js-tabs';
+import { Menu } from 'lucide-react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STUDENT_SCREENS, getStudentNav, type StudentScreen } from '@/lib/roles';
@@ -25,12 +26,12 @@ export default function StudentTabsLayout() {
                             tabBarLabel: meta.tabLabel,
                             href: primary.has(name) ? undefined : null,
                             tabBarBadge: name === 'index' && unread > 0 ? unread : undefined,
-                            tabBarIcon: ({ color }) => <TabIcon emoji={meta.icon} color={color} />,
+                            tabBarIcon: ({ color }) => <TabIcon icon={meta.icon} color={color} />,
                         }}
                     />
                 );
             })}
-            <Tabs.Screen name="more" options={{ title: 'More', href: nav.overflow.length > 0 ? undefined : null, tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} /> }} />
+            <Tabs.Screen name="more" options={{ title: 'More', href: nav.overflow.length > 0 ? undefined : null, tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} /> }} />
             <Tabs.Screen name="subjects/[subjectId]" options={{ href: null, title: 'Subject' }} />
         </Tabs>
     );

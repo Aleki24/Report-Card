@@ -13,7 +13,7 @@ import { useToast } from './Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 interface Approval { hasSchool?: boolean; status?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | null; schoolName?: string | null; note?: string | null }
 type Mode = 'choose' | 'school' | 'join';
@@ -241,10 +241,10 @@ const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
     content: { width: '100%', maxWidth: 560, alignSelf: 'center' },
-    title: { fontSize: 22, fontWeight: '800', color: colors.foreground, marginBottom: spacing.xs },
-    body: { fontSize: 14, color: colors.muted, marginBottom: spacing.md },
-    muted: { fontSize: 12, color: colors.muted, marginVertical: spacing.sm },
+    title: { fontSize: 22, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.xs },
+    body: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginBottom: spacing.md },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginVertical: spacing.sm },
     choice: { marginBottom: spacing.md, gap: spacing.sm },
-    choiceTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+    choiceTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
     grade: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingBottom: spacing.sm, marginBottom: spacing.sm },
 });

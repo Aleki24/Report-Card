@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 export type ToastTone = 'success' | 'danger' | 'info' | 'warning';
 
@@ -83,6 +83,6 @@ export function useToast(): ToastApi {
 const styles = StyleSheet.create({
     wrap: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'center' },
     toast: { maxWidth: 560, width: '100%', borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
-    message: { fontSize: 14, fontWeight: '700' },
-    detail: { fontSize: 12, marginTop: 4 },
+    message: { fontSize: 14, fontFamily: fonts.bold },
+    detail: { fontFamily: fonts.regular, fontSize: 12, marginTop: 4 },
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 /**
  * A full-height sheet for a form: title, scrolling body, and a pinned
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
     flex: { flex: 1 },
     header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card },
-    title: { fontSize: 18, fontWeight: '800', color: colors.foreground, maxWidth: 760, width: '100%', alignSelf: 'center' },
+    title: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, maxWidth: 760, width: '100%', alignSelf: 'center' },
     body: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },

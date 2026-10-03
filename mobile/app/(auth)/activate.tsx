@@ -7,7 +7,7 @@ import { Button, Card, ErrorBanner, Notice, TextField } from '@/components/ui';
 import { publicPost } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 interface Invite { username: string; name: string; role: string; reset: boolean }
 interface Activated { username: string; ticket?: string | null; reset?: boolean }
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
     content: { width: '100%', maxWidth: 440, alignSelf: 'center' },
-    title: { fontSize: 24, fontWeight: '800', color: colors.foreground, textAlign: 'center' },
-    subtitle: { fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
-    name: { fontSize: 18, fontWeight: '800', color: colors.foreground, textAlign: 'center' },
+    title: { fontSize: 24, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
+    subtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
+    name: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
 });

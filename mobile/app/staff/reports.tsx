@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Square, SquareCheck } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicYears, useExams, useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
@@ -349,7 +350,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
                             key={s.id}
                             title={fullName(s.users)}
                             subtitle={s.guardian_phone ?? 'No guardian phone'}
-                            left={<Text style={{ fontSize: 18, color: on ? colors.primary : colors.muted }}>{on ? '☑' : '☐'}</Text>}
+                            left={on ? <SquareCheck size={20} color={colors.primary} /> : <Square size={20} color={colors.muted} />}
                             onPress={s.guardian_phone ? () => toggle(s.id) : undefined}
                             right={<View />}
                         />
@@ -361,6 +362,6 @@ function SmsPanel({ scope }: { scope: Scope }) {
 }
 
 const styles = StyleSheet.create({
-    cardTitle: { fontSize: 14, fontWeight: '800', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    cardTitle: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
 });

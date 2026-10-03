@@ -1,15 +1,18 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
+import {
+    BookOpen, CalendarCheck, ChartLine, ClipboardList, DollarSign, FileText, GraduationCap, School, Users, type LucideIcon,
+} from 'lucide-react-native';
 import { useCurrentUser } from '@/lib/UserContext';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { STAFF_SCREENS, getStaffNav } from '@/lib/roles';
 import { useApiQuery } from '@/lib/useApiQuery';
 import {
     Button, ButtonRow, Card, DateBadge, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView,
-    ProgressBar, Screen, SectionLabel, StatGrid, StatTile, Badge,
+    IconTile, ProgressBar, Screen, SectionLabel, StatGrid, StatTile, Badge,
 } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts, shadow } from '@/lib/theme';
 import {
     TONE_COLORS, formatCurrency, formatLongToday, getGreeting, getTimeAgo, isSoon,
     passRateLabel, passRateTone, pluralize, shortCurriculumLabel,
@@ -31,23 +34,29 @@ export default function StaffDashboardScreen() {
 function Hero({ name, children }: { name: string; children?: React.ReactNode }) {
     return (
         <View style={styles.hero}>
+            <Text style={styles.heroDate}>{formatLongToday()}</Text>
             <Text style={styles.heroGreeting}>
                 {getGreeting()}, {name || 'there'}
             </Text>
-            <Text style={styles.heroDate}>
-                {formatLongToday()} · Term {currentTermNumber()}
-            </Text>
+            <Text style={styles.heroTerm}>Term {currentTermNumber()}</Text>
             {children ? <View style={styles.heroActions}>{children}</View> : null}
         </View>
     );
 }
 
-function HeroButton({ label, href, solid }: { label: string; href: Href; solid?: boolean }) {
+/** The web header's `btn-primary` / `btn-secondary` pair, with the same Lucide icons. */
+function HeroButton({ label, href, icon: Icon, solid }: { label: string; href: Href; icon: LucideIcon; solid?: boolean }) {
     const router = useRouter();
+    const color = solid ? colors.white : colors.foreground;
     return (
-        <Text onPress={() => router.push(href)} style={[styles.heroButton, solid ? styles.heroButtonSolid : styles.heroButtonGhost]}>
-            {label}
-        </Text>
+        <Pressable
+            onPress={() => router.push(href)}
+            accessibilityRole="link"
+            style={({ pressed }) => [styles.heroButton, solid ? styles.heroButtonSolid : styles.heroButtonGhost, pressed && { opacity: 0.85 }]}
+        >
+            <Icon size={16} color={color} />
+            <Text style={[styles.heroButtonText, { color }]}>{label}</Text>
+        </Pressable>
     );
 }
 
@@ -133,8 +142,8 @@ function AdminDashboard({ name }: { name: string }) {
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
             <Hero name={name}>
-                <HeroButton label="📄 Report cards" href="/staff/reports" solid />
-                <HeroButton label="📝 Enter marks" href="/staff/exams" />
+                <HeroButton label="Report cards" href="/staff/reports" icon={FileText} solid />
+                <HeroButton label="Enter marks" href="/staff/exams" icon={ClipboardList} />
             </Hero>
             <OperationsOverview />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
@@ -145,23 +154,23 @@ function AdminDashboard({ name }: { name: string }) {
 
                     <SectionLabel>At a glance</SectionLabel>
                     <StatGrid>
-                        <StatTile label="Students" value={data.totalStudents} onPress={() => router.push('/staff/people')} />
-                        <StatTile label="Teachers" value={data.totalTeachers} onPress={() => router.push('/staff/people?tab=teachers')} />
-                        <StatTile label="Classes" value={data.totalClasses} onPress={() => router.push('/staff/classes')} />
-                        <StatTile label="Reports" value={data.totalReports} onPress={() => router.push('/staff/reports')} />
+                        <StatTile label="Students" icon={Users} value={data.totalStudents} onPress={() => router.push('/staff/people')} />
+                        <StatTile label="Teachers" icon={GraduationCap} value={data.totalTeachers} onPress={() => router.push('/staff/people?tab=teachers')} />
+                        <StatTile label="Classes" icon={School} value={data.totalClasses} onPress={() => router.push('/staff/classes')} />
+                        <StatTile label="Reports" icon={FileText} value={data.totalReports} onPress={() => router.push('/staff/reports')} />
                         {/* Always shown: zero outstanding is the good news. */}
                         <StatTile
-                            label="Marks outstanding"
+                            label="Marks outstanding" icon={ClipboardList}
                             value={data.examsAwaitingMarks}
                             tone={data.examsAwaitingMarks > 0 ? colors.warning : undefined}
                             onPress={() => router.push('/staff/exams')}
                         />
                         {data.hasAttendanceData ? (
-                            <StatTile label="Present today" value={data.attendanceToday?.present ?? 0} tone={colors.success} onPress={() => router.push('/staff/attendance')} />
+                            <StatTile label="Present today" icon={CalendarCheck} value={data.attendanceToday?.present ?? 0} tone={colors.success} onPress={() => router.push('/staff/attendance')} />
                         ) : null}
                         {data.hasFeeData ? (
                             <StatTile
-                                label="Overdue fees"
+                                label="Overdue fees" icon={DollarSign}
                                 value={data.overdueFeesCount}
                                 tone={data.overdueFeesCount > 0 ? colors.danger : undefined}
                                 onPress={() => router.push('/staff/fees')}
@@ -312,7 +321,7 @@ function AcademicSummary({ summary }: { summary: StaffDashboardSummary['academic
                 <ProgressBar value={summary.passRate} color={tone} />
             </View>
             <Text style={[styles.muted, { marginTop: spacing.sm }]}>
-                <Text style={{ color: tone, fontWeight: '700' }}>{passRateLabel(summary.passRate)}</Text>
+                <Text style={{ color: tone, fontFamily: fonts.bold }}>{passRateLabel(summary.passRate)}</Text>
                 {summary.recentAvg != null ? ` · ${summary.recentAvg}% average across ${pluralize(summary.markCount, 'mark')}` : ''}
             </Text>
         </Card>
@@ -386,7 +395,7 @@ function AttendanceBreakdown({ counts }: { counts: StaffDashboardSummary['attend
                     <View key={s.key} style={styles.legendItem}>
                         <View style={[styles.dot, { backgroundColor: s.color }]} />
                         <Text style={styles.legendText}>
-                            <Text style={{ fontWeight: '700', color: colors.foreground }}>{counts[s.key]}</Text> {s.label.toLowerCase()}
+                            <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{counts[s.key]}</Text> {s.label.toLowerCase()}
                         </Text>
                     </View>
                 ))}
@@ -419,7 +428,7 @@ function FinanceSnapshot({ totalCollected, unpaidBalance, overdueCount }: StaffD
                 <Text style={[styles.muted, { marginTop: spacing.md }]}>No fees billed yet this term</Text>
             )}
             <Text style={[styles.muted, { marginTop: spacing.sm }]}>
-                {overdueCount > 0 ? `⚠️ ${pluralize(overdueCount, 'invoice')} overdue` : 'No overdue invoices'}
+                {overdueCount > 0 ? `${pluralize(overdueCount, 'invoice')} overdue` : 'No overdue invoices'}
             </Text>
         </Card>
     );
@@ -458,8 +467,8 @@ function TeacherDashboard({ name, kind }: { name: string; kind: 'class_teacher' 
     return (
         <Screen onRefresh={refresh} refreshing={summary.refreshing || stats.refreshing}>
             <Hero name={name}>
-                <HeroButton label="📝 Enter marks" href="/staff/exams" solid />
-                {kind === 'class_teacher' ? <HeroButton label="📅 Attendance" href="/staff/attendance" /> : <HeroButton label="📚 Assignments" href="/staff/assignments" />}
+                <HeroButton label="Enter marks" href="/staff/exams" icon={ClipboardList} solid />
+                {kind === 'class_teacher' ? <HeroButton label="Attendance" href="/staff/attendance" icon={CalendarCheck} /> : <HeroButton label="Assignments" href="/staff/assignments" icon={BookOpen} />}
             </Hero>
             <OperationsOverview />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
@@ -490,10 +499,10 @@ function ClassTeacherKpis({ stats }: { stats: ClassTeacherStats }) {
         <>
             <SectionLabel>{stats.streamName && stats.streamName !== '—' ? stats.streamName : 'Your class'}</SectionLabel>
             <StatGrid>
-                <StatTile label="My stream" value={stats.streamName || '—'} sub="Assigned homeroom" />
-                <StatTile label="Stream students" value={stats.studentCount} sub={stats.studentCount ? 'Enrolled' : 'No students yet'} />
-                <StatTile label="Stream average" value={hasAvg ? `${stats.streamAvg}%` : '—'} sub={hasAvg ? 'Class average' : 'Enter marks to see'} />
-                <StatTile label="Reports pending" value={stats.reportsPending} sub={stats.reportsPending > 0 ? 'Need generation' : 'All done!'} />
+                <StatTile label="My stream" icon={School} value={stats.streamName || '—'} sub="Assigned homeroom" />
+                <StatTile label="Stream students" icon={Users} value={stats.studentCount} sub={stats.studentCount ? 'Enrolled' : 'No students yet'} />
+                <StatTile label="Stream average" icon={ChartLine} value={hasAvg ? `${stats.streamAvg}%` : '—'} sub={hasAvg ? 'Class average' : 'Enter marks to see'} />
+                <StatTile label="Reports pending" icon={FileText} value={stats.reportsPending} sub={stats.reportsPending > 0 ? 'Need generation' : 'All done!'} />
             </StatGrid>
         </>
     );
@@ -504,9 +513,9 @@ function SubjectTeacherKpis({ stats }: { stats: SubjectTeacherStats }) {
         <>
             <SectionLabel>Your subjects</SectionLabel>
             <StatGrid>
-                <StatTile label="My exams" value={stats.examCount} sub={stats.examCount > 0 ? 'Created' : 'No exams yet'} />
-                <StatTile label="Subject average" value={stats.avg !== '—' ? `${stats.avg}%` : '—'} sub={stats.markCount > 0 ? `From ${pluralize(stats.markCount, 'mark')}` : 'Enter marks to see'} />
-                <StatTile label="Students assessed" value={stats.markCount} sub={stats.markCount > 0 ? 'Total mark entries' : 'No data yet'} />
+                <StatTile label="My exams" icon={ClipboardList} value={stats.examCount} sub={stats.examCount > 0 ? 'Created' : 'No exams yet'} />
+                <StatTile label="Subject average" icon={ChartLine} value={stats.avg !== '—' ? `${stats.avg}%` : '—'} sub={stats.markCount > 0 ? `From ${pluralize(stats.markCount, 'mark')}` : 'Enter marks to see'} />
+                <StatTile label="Students assessed" icon={Users} value={stats.markCount} sub={stats.markCount > 0 ? 'Total mark entries' : 'No data yet'} />
             </StatGrid>
         </>
     );
@@ -533,7 +542,7 @@ function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | nul
                                 key={s}
                                 title={STAFF_SCREENS[s].title}
                                 subtitle={STAFF_SCREENS[s].description}
-                                left={<Text style={{ fontSize: 22 }}>{STAFF_SCREENS[s].icon}</Text>}
+                                left={<IconTile icon={STAFF_SCREENS[s].icon} />}
                                 onPress={() => router.push(STAFF_SCREENS[s].href as Href)}
                             />
                         ))}
@@ -541,7 +550,7 @@ function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | nul
                 </>
             ) : null}
             <Card>
-                <Text style={styles.cardTitle}>Welcome{name ? `, ${name}` : ''} 👋</Text>
+                <Text style={styles.cardTitle}>Welcome{name ? `, ${name}` : ''}</Text>
                 <Text style={styles.muted}>{jobTitle ? `You're signed in as ${jobTitle}.` : "You're signed in as staff."}</Text>
                 <Text style={[styles.muted, { marginTop: spacing.sm }]}>
                     {work.length > 0 ? 'Your duties open the pages above. ' : ''}Use Announcements to stay up to date. Your administrator can grant you more access when needed.
@@ -555,29 +564,31 @@ function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | nul
 }
 
 const styles = StyleSheet.create({
-    hero: { backgroundColor: colors.primaryDark, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md },
-    heroGreeting: { color: colors.white, fontSize: 20, fontWeight: '800' },
-    heroDate: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
+    hero: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginBottom: spacing.md, ...shadow },
+    heroGreeting: { color: colors.foreground, fontSize: 21, fontFamily: fonts.display, letterSpacing: -0.3, marginTop: 2 },
+    heroDate: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
+    heroTerm: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, marginTop: 4 },
     heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-    heroButton: { borderRadius: radius.md, paddingVertical: 8, paddingHorizontal: spacing.md, fontSize: 13, fontWeight: '700', overflow: 'hidden' },
-    heroButtonSolid: { backgroundColor: colors.white, color: colors.primaryDark },
-    heroButtonGhost: { backgroundColor: 'rgba(255,255,255,0.15)', color: colors.white },
-    link: { color: colors.primary, fontSize: 12, fontWeight: '700' },
-    muted: { fontSize: 12, color: colors.muted },
-    cardTitle: { fontSize: 14, fontWeight: '800', color: colors.foreground, marginBottom: 2 },
-    bigNumber: { fontSize: 32, fontWeight: '800', color: colors.foreground },
-    moneyBig: { fontSize: 20, fontWeight: '800', color: colors.foreground },
-    moneySmall: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+    heroButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radius.xl, borderWidth: 1, minHeight: 40, paddingHorizontal: spacing.lg },
+    heroButtonText: { fontSize: 14, fontFamily: fonts.medium },
+    heroButtonSolid: { backgroundColor: colors.primary, borderColor: colors.primary },
+    heroButtonGhost: { backgroundColor: colors.mutedBg, borderColor: colors.border },
+    link: { color: colors.primary, fontSize: 12, fontFamily: fonts.bold },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+    cardTitle: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground, marginBottom: 2 },
+    bigNumber: { fontSize: 32, fontFamily: fonts.display, color: colors.foreground },
+    moneyBig: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground },
+    moneySmall: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
     perfRow: { padding: spacing.md, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     perfHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
-    perfName: { fontSize: 14, fontWeight: '700', color: colors.foreground, flex: 1 },
-    perfRate: { fontSize: 14, fontWeight: '800' },
-    perfMeta: { fontSize: 11, color: colors.muted },
+    perfName: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, flex: 1 },
+    perfRate: { fontSize: 14, fontFamily: fonts.display },
+    perfMeta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
     countBox: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
-    countText: { fontSize: 13, fontWeight: '800', color: colors.muted },
+    countText: { fontSize: 13, fontFamily: fonts.display, color: colors.muted },
     stackedBar: { flexDirection: 'row', height: 12, borderRadius: 999, overflow: 'hidden', gap: 2, marginTop: spacing.md },
     legend: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.md },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendText: { fontSize: 12, color: colors.muted },
+    legendText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
     dot: { width: 10, height: 10, borderRadius: 5 },
 });

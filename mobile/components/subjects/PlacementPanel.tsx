@@ -11,7 +11,7 @@ import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, Lo
 import { SelectField } from '@/components/ops/SelectField';
 import { useApi, withQuery } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import type { AcademicStructure } from '@/lib/types';
 
 type Apply = (body: object, summary: string) => Promise<void>;
@@ -82,7 +82,7 @@ function SeniorTable({ data, onApply }: { data: SeniorPlacementResponse; onApply
                         <Pressable onPress={() => update(row.studentId, { include: !draft.include })} accessibilityRole="checkbox" accessibilityState={{ checked: draft.include }} style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
                             <View style={{ width: 22, height: 22, borderRadius: radius.sm - 2, borderWidth: 2, borderColor: colors.primary, backgroundColor: draft.include ? colors.primary : 'transparent' }} />
                             <View style={{ flex: 1 }}>
-                                <Text style={{ fontWeight: '700', color: colors.foreground }}>{row.name}</Text>
+                                <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{row.name}</Text>
                                 <Text style={{ fontSize: 12, color: colors.muted }}>{row.admissionNumber} · marks in: {marked || '—'}</Text>
                             </View>
                         </Pressable>
@@ -133,7 +133,7 @@ function ElectiveTable({ data, onApply }: { data: ElectivePlacementResponse; onA
                 const marked = new Set(l.markedSubjectIds);
                 return (
                     <Card key={l.studentId} style={{ marginBottom: spacing.sm, padding: spacing.md, borderColor: changed.includes(l) ? colors.primary : colors.border }}>
-                        <Text style={{ fontWeight: '700', color: colors.foreground }}>{l.name} <Text style={{ fontWeight: '400', color: colors.muted }}>{l.admissionNumber}</Text></Text>
+                        <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{l.name} <Text style={{ fontFamily: fonts.regular, color: colors.muted }}>{l.admissionNumber}</Text></Text>
                         <ButtonRow>
                             {data.electives.map((e) => (
                                 <Button key={e.id} size="sm" variant={set.has(e.id) ? 'primary' : 'secondary'} label={`${marked.has(e.id) ? '• ' : ''}${e.name}`} onPress={() => toggle(l.studentId, e.id)} />

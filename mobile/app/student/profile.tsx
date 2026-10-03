@@ -5,7 +5,7 @@ import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { errorMessage, formatDate, fullName, initials } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { Avatar, Button, ButtonRow, Card, ErrorBanner, InfoRow, LoadingView, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
 import type { StudentProfile } from '@/lib/types';
 
@@ -93,8 +93,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
     avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    name: { fontSize: 17, fontWeight: '800', color: colors.foreground },
-    email: { fontSize: 13, color: colors.muted, marginTop: 2 },
-    cardTitle: { fontSize: 13, fontWeight: '700', color: colors.foreground, marginBottom: spacing.sm },
+    name: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
+    email: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
+    cardTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm },
     phoneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

@@ -8,7 +8,7 @@ import { ResourceList } from '@/components/ops/ResourceList';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
 import { useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 const eventWhen = (e: SchoolEvent) => (e.ends_on && e.ends_on !== e.starts_on ? `${date(e.starts_on)} – ${date(e.ends_on)}` : date(e.starts_on));
 
@@ -86,8 +86,8 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
     event: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
     day: { width: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBg, borderRadius: radius.md, paddingVertical: 6 },
-    weekday: { fontSize: 10, fontWeight: '700', color: colors.muted },
-    dayNum: { fontSize: 18, fontWeight: '800', color: colors.foreground },
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    meta: { fontSize: 12, color: colors.muted },
+    weekday: { fontSize: 10, fontFamily: fonts.bold, color: colors.muted },
+    dayNum: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
 });

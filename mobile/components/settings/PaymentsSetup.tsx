@@ -11,7 +11,7 @@ import { SelectField } from '@/components/ops/SelectField';
 import { useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 const SETTINGS = '/api/school/payment-settings';
 const ACCOUNTS = '/api/school/payment-settings/bank-accounts';
@@ -129,7 +129,7 @@ export function PaymentsSetup() {
             ) : <Text style={{ color: colors.muted, fontSize: 13 }}>No bank accounts yet.</Text>}
 
             <Card style={{ marginTop: spacing.md }}>
-                <Text style={{ fontWeight: '700', color: colors.foreground, marginBottom: spacing.sm }}>Add a bank account</Text>
+                <Text style={{ fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm }}>Add a bank account</Text>
                 <SelectField label="Bank" value={bank.bank} onChange={setBankField('bank')} options={KENYA_BANKS.map((b) => ({ id: b, label: b }))} />
                 {bank.bank === 'Other' ? <TextField label="Bank name" value={bank.otherBank} onChangeText={setBankField('otherBank')} /> : null}
                 <TextField label="Account name" value={bank.accountName} onChangeText={setBankField('accountName')} />

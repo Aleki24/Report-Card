@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Square, SquareCheck } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -96,7 +97,7 @@ export function StudyGoals() {
                                 key={g.id}
                                 left={
                                     <Pressable onPress={() => void toggle(g)} hitSlop={8} accessibilityRole="checkbox" accessibilityState={{ checked: g.completed }}>
-                                        <Text style={{ fontSize: 20, color: g.completed ? colors.success : colors.muted }}>{g.completed ? '☑' : '☐'}</Text>
+                                        {g.completed ? <SquareCheck size={22} color={colors.success} /> : <Square size={22} color={colors.muted} />}
                                     </Pressable>
                                 }
                                 title={g.title}

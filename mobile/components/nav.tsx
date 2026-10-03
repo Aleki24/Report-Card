@@ -1,20 +1,23 @@
 import React from 'react';
-import { Text, type ColorValue } from 'react-native';
+import type { ColorValue } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import { colors } from '@/lib/theme';
-import { ListCard, ListRow, Screen, ScreenHeader } from './ui';
+import type { LucideIcon } from 'lucide-react-native';
+import { colors, fonts } from '@/lib/theme';
+import { IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
 
-/** The emoji icon every tab bar uses. */
-export function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
-    return <Text style={{ fontSize: 20, color }}>{emoji}</Text>;
+/** A tab bar icon: the web menu's Lucide icon in the tab's tint. */
+export function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorValue }) {
+    return <Icon size={22} color={color as string} strokeWidth={2} />;
 }
 
 /** Shared by the staff, student and parent tab trees. */
 export const TAB_SCREEN_OPTIONS = {
     tabBarActiveTintColor: colors.primary,
     tabBarInactiveTintColor: colors.muted,
+    tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
+    tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
     headerStyle: { backgroundColor: colors.card },
-    headerTitleStyle: { color: colors.foreground, fontWeight: '700' as const },
+    headerTitleStyle: { color: colors.foreground, fontFamily: fonts.display, fontSize: 20 },
     headerShadowVisible: false,
 };
 
@@ -22,7 +25,7 @@ export interface MoreItem {
     key: string;
     title: string;
     description: string;
-    icon: string;
+    icon: LucideIcon;
     href: string;
 }
 
@@ -38,7 +41,7 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
                         key={item.key}
                         title={item.title}
                         subtitle={item.description}
-                        left={<Text style={{ fontSize: 22 }}>{item.icon}</Text>}
+                        left={<IconTile icon={item.icon} />}
                         onPress={() => router.push(item.href as Href)}
                     />
                 ))}

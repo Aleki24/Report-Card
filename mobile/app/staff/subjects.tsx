@@ -4,7 +4,7 @@ import { ApiError, useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs,
@@ -132,7 +132,7 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
             {ungraded > 0 ? <Notice tone="warning" message={`${pluralize(ungraded, 'subject')} ${ungraded === 1 ? 'has' : 'have'} no grading system, so no grade can be awarded. Tap a subject to set one.`} /> : null}
 
             <Card style={{ marginBottom: spacing.md }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.foreground }}>Add a curriculum's standard subjects</Text>
+                <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground }}>Add a curriculum's standard subjects</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>Subjects come from the official catalogue with their real codes; ones you already offer are skipped.</Text>
                 <ButtonRow>
                     {BANDS.map((b) => (

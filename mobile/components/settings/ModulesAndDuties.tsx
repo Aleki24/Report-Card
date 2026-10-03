@@ -19,7 +19,7 @@ import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet, useLookup, useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 
 const MODULES_PATH = '/api/platform/modules';
 
@@ -73,7 +73,7 @@ export function ModulesPanel() {
     return (
         <View>
             <Card style={{ marginBottom: spacing.md }}>
-                <Text style={styles.title}>✨ Start from a preset</Text>
+                <Text style={styles.title}>Start from a preset</Text>
                 <Text style={styles.muted}>Pick the kind of school you run; you can fine-tune each module below. Nothing is ever deleted. {states.filter((s) => s.enabled).length} of {states.length} modules on.</Text>
                 <ButtonRow>
                     {MODULE_PRESETS.map((p) => (
@@ -228,8 +228,8 @@ export function DutiesPanel() {
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    needs: { fontSize: 11, color: colors.muted, marginTop: spacing.xs, fontWeight: '600' },
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    needs: { fontSize: 11, color: colors.muted, marginTop: spacing.xs, fontFamily: fonts.semibold },
     module: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
 });

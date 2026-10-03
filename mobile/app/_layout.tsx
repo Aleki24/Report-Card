@@ -2,6 +2,13 @@ import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
+import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
+import { Syne_800ExtraBold } from '@expo-google-fonts/syne/800ExtraBold';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -9,7 +16,7 @@ import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
 import { Onboarding } from '@/components/Onboarding';
 import { ErrorBanner, LoadingView } from '@/components/ui';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import { describeError } from '@/lib/fatalErrorAlert';
 
@@ -18,6 +25,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 // Expo inlines EXPO_PUBLIC_* only in app code, not inside node_modules, so
 // Clerk cannot read this itself in a release build: pass it explicitly.
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+// The families named in `fonts` (lib/theme.ts); the keys are the family names.
+const FONT_FILES = { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Syne_700Bold, Syne_800ExtraBold };
 
 const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
@@ -136,6 +146,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
+    // A font that fails to load falls back to the system font rather than blocking the app.
+    const [fontsLoaded, fontError] = useFonts(FONT_FILES);
+    if (!fontsLoaded && !fontError) return null;
     if (!CLERK_PUBLISHABLE_KEY) return <MissingConfigScreen />;
 
     return (
@@ -150,12 +163,12 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
-    title: { fontSize: 18, fontWeight: '800', color: colors.foreground },
-    body: { fontSize: 13, color: colors.muted, textAlign: 'center' },
+    title: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
+    body: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' },
     signOutButton: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl, marginTop: spacing.md },
-    signOutText: { color: colors.danger, fontWeight: '700' },
+    signOutText: { color: colors.danger, fontFamily: fonts.bold },
     errorScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
     errorDetail: { fontSize: 12, color: colors.foreground, fontFamily: 'monospace' },
     retryButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl },
-    retryText: { color: colors.white, fontWeight: '700' },
+    retryText: { color: colors.white, fontFamily: fonts.bold },
 });

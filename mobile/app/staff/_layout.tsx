@@ -1,4 +1,5 @@
 import { Tabs } from 'expo-router/js-tabs';
+import { Menu } from 'lucide-react-native';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STAFF_SCREENS, getStaffNav, type StaffScreen } from '@/lib/roles';
 import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
@@ -24,7 +25,7 @@ export default function StaffTabsLayout() {
                             tabBarLabel: meta.tabLabel,
                             // Everything outside the role's four is reached through More.
                             href: tabs.has(name) ? undefined : null,
-                            tabBarIcon: ({ color }) => <TabIcon emoji={meta.icon} color={color} />,
+                            tabBarIcon: ({ color }) => <TabIcon icon={meta.icon} color={color} />,
                         }}
                     />
                 );
@@ -34,7 +35,7 @@ export default function StaffTabsLayout() {
                 options={{
                     title: 'More',
                     href: overflow.length > 0 ? undefined : null,
-                    tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} />,
+                    tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} />,
                 }}
             />
             {DETAIL_ROUTES.map((name) => (

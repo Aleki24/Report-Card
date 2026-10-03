@@ -6,7 +6,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, fullName, initials } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { Avatar, Button, Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
 interface AvailableRoles {
@@ -73,6 +73,6 @@ export default function StaffProfileScreen() {
 
 const styles = StyleSheet.create({
     avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    name: { fontSize: 17, fontWeight: '800', color: colors.foreground },
-    email: { fontSize: 13, color: colors.muted, marginTop: 2 },
+    name: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
+    email: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
 });

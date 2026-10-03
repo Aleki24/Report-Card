@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate, isOverdue } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile, TextField,
@@ -243,6 +243,6 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-    hint: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.sm },
+    title: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
+    hint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.sm },
 });

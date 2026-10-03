@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure, useAcademicYears, useTerms } from '@/lib/useSchoolData';
 import { findActiveTermId } from '@/lib/academics';
 import { errorMessage, formatDate } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs, TextField, ToggleRow,
@@ -145,7 +145,7 @@ function SchoolTab() {
             </Card>
             {form.teacher_invite_code || form.student_invite_code ? (
                 <Card>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>
+                    <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>
                     <InfoRow label="Teachers" value={form.teacher_invite_code} />
                     <InfoRow label="Students" value={form.student_invite_code} />
                 </Card>

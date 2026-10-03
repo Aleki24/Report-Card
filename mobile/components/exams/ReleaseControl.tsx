@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { Button, ButtonRow, Card, ErrorBanner } from '@/components/ui';
 import { StatusBadge } from './ExamPicker';
 import type { ExamSlot, PublishReadiness, PublishResponse } from '@/lib/types';
@@ -88,8 +88,8 @@ export function ReleaseControl({ exam, onChanged, compact }: { exam: ExamSlot; o
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted },
-    warn: { fontSize: 12, color: colors.warning, marginTop: spacing.sm },
+    title: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+    warn: { fontFamily: fonts.regular, fontSize: 12, color: colors.warning, marginTop: spacing.sm },
     bar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
 });

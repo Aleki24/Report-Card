@@ -6,7 +6,7 @@ import { Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, LoadingView,
 import { useToast } from '@/components/Toast';
 import { confirmAlert } from '@/lib/confirm';
 import { useOpsList, type QueryParams } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { FormSheet } from './FormSheet';
 import { RecordForm } from './RecordForm';
 import { useRefreshSignal } from './bits';
@@ -169,6 +169,6 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
 const styles = StyleSheet.create({
     card: { marginBottom: spacing.sm, padding: spacing.md },
     head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
-    title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    title: { flex: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
 });

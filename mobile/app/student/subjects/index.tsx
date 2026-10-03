@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { Badge, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, ScreenHeader } from '@/components/ui';
 import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import type { Subject } from '@/lib/types';
 
 type Filter = 'ALL' | 'CORE' | 'ELECTIVE';
@@ -60,6 +60,6 @@ export default function SubjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-    count: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+    count: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
     badges: { alignItems: 'flex-end', gap: 4 },
 });

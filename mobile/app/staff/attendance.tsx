@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, StatGrid, StatTile,
 } from '@/components/ui';
@@ -203,9 +203,9 @@ function AttendanceContent() {
 
 const styles = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: spacing.sm },
-    rowTitle: { fontSize: 13, fontWeight: '700', color: colors.foreground },
-    rowSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+    rowTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
+    rowSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: 6 },
     statusChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-    statusChipText: { fontSize: 12, fontWeight: '800', color: colors.muted },
+    statusChipText: { fontSize: 12, fontFamily: fonts.display, color: colors.muted },
 });

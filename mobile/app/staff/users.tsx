@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, StatGrid, StatTile, TextField, ToggleRow,
@@ -217,7 +217,7 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
 
     return (
         <Card style={{ marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.foreground, marginBottom: spacing.md }}>Invite a user</Text>
+            <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>Invite a user</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <ChipSelect label="Role" options={INVITE_ROLES} value={role} onChange={setRole} />
             <TextField label="First name" value={first} onChangeText={setFirst} autoCapitalize="words" />

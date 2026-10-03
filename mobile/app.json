@@ -54,7 +54,8 @@
       "expo-secure-store",
       "expo-sharing",
       "expo-web-browser",
-      "./plugins/withCrashReporter"
+      "./plugins/withCrashReporter",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

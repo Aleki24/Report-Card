@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import { Badge, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView } from '@/components/ui';
-import { colors } from '@/lib/theme';
+import { colors, fonts } from '@/lib/theme';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
 import { examClasses, examLabel, useExams, useTerms } from '@/lib/useSchoolData';
 import type { ExamSlot, Term } from '@/lib/types';
@@ -85,7 +85,7 @@ export function ExamPicker({
                     ) : null}
                     {effectiveGrade ? (
                         <>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 6 }}>④ Subject</Text>
+                            <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 }}>④ Subject</Text>
                             <ListCard>
                                 {slots.map((e) => (
                                     <ListRow

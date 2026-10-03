@@ -4,7 +4,7 @@ import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, formatDate, getDueLabel, pluralize, shiftISODate, toISODate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SegmentedTabs, TextField,
@@ -280,7 +280,7 @@ function Submissions() {
 
 const styles = StyleSheet.create({
     titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-    title: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    body: { fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
+    title: { flex: 1, fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    body: { fontFamily: fonts.regular, fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
 });

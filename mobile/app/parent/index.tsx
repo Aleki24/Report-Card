@@ -10,7 +10,7 @@ import { Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, 
 import { StatusPill, toneColor } from '@/components/ops/bits';
 import { useOpsData } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
@@ -42,7 +42,7 @@ function Overview({ childId }: { childId: string }) {
                 <Section title="School bus">
                     <Card>
                         <Text style={styles.body}>
-                            🚌 {data.bus.vehicle?.registration} is on the road{data.bus.last_seen_at ? `, last seen ${dateTime(data.bus.last_seen_at)}` : ''}.
+                            {data.bus.vehicle?.registration} is on the road{data.bus.last_seen_at ? `, last seen ${dateTime(data.bus.last_seen_at)}` : ''}.
                             {data.bus.boarded ? ` Your child: ${humanize(data.bus.boarded)}.` : ''}
                         </Text>
                     </Card>
@@ -119,7 +119,7 @@ function Overview({ childId }: { childId: string }) {
                 <Section title="Notices">
                     {data.summary.announcements.map((a) => (
                         <Card key={a.id} style={styles.card}>
-                            <Text style={styles.title}>{a.isImportant ? '❗ ' : ''}{a.title}</Text>
+                            <Text style={styles.title}>{a.isImportant ? 'Important: ' : ''}{a.title}</Text>
                             <Text style={styles.muted} numberOfLines={4}>{a.content}</Text>
                         </Card>
                     ))}
@@ -175,10 +175,10 @@ export default function ParentHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    body: { fontSize: 14, color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    score: { fontSize: 14, fontWeight: '800', color: colors.foreground },
+    body: { fontFamily: fonts.regular, fontSize: 14, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    score: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
     card: { marginBottom: spacing.sm, padding: spacing.md },
     wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     child: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

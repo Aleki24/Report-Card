@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { roleLabel } from '@/lib/roles';
 import { errorMessage, formatDate, formatPercent, fullName, initials, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Avatar, BackLink, Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow,
     LoadingView, Notice, ProgressBar, Screen, SectionLabel, TextField,
@@ -243,12 +243,12 @@ function TeacherView({ id }: { id: string }) {
 
 const styles = StyleSheet.create({
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    title: { fontSize: 20, fontWeight: '800', color: colors.foreground },
-    subtitle: { fontSize: 13, color: colors.muted, marginTop: 2 },
+    title: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground },
+    subtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
     termHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-    termName: { fontSize: 14, fontWeight: '800', color: colors.foreground },
-    termAvg: { fontSize: 14, fontWeight: '800' },
+    termName: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    termAvg: { fontSize: 14, fontFamily: fonts.display },
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
-    subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontWeight: '600' },
-    subjectPct: { width: 44, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
+    subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontFamily: fonts.semibold },
+    subjectPct: { width: 44, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
 });

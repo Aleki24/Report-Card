@@ -16,7 +16,7 @@ import { useSignIn, useSSO } from '@clerk/clerk-expo';
 import { isClerkAPIResponseError } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import { publicPost } from '@/lib/api';
 import { describeCodeError, useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
 
@@ -255,7 +255,7 @@ export default function SignInScreen() {
                             </Pressable>
 
                             <Pressable onPress={() => router.push('/(auth)/activate')} accessibilityRole="link" style={{ marginTop: spacing.lg }}>
-                                <Text style={[styles.footnote, { color: colors.primary, fontWeight: '700' }]}>Have an invite code? Activate your account</Text>
+                                <Text style={[styles.footnote, { color: colors.primary, fontFamily: fonts.bold }]}>Have an invite code? Activate your account</Text>
                             </Pressable>
                         </>
                     )}
@@ -270,8 +270,8 @@ const styles = StyleSheet.create({
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
     hero: { alignItems: 'center', marginBottom: spacing.xl },
     logo: { width: 96, height: 96, marginBottom: spacing.sm },
-    title: { fontSize: 26, fontWeight: '800', color: colors.foreground },
-    subtitle: { fontSize: 14, color: colors.muted, marginTop: spacing.xs, textAlign: 'center' },
+    title: { fontSize: 26, fontFamily: fonts.display, color: colors.foreground },
+    subtitle: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginTop: spacing.xs, textAlign: 'center' },
     errorBox: {
         backgroundColor: colors.dangerBg,
         borderRadius: radius.md,
@@ -280,9 +280,9 @@ const styles = StyleSheet.create({
         padding: spacing.md,
         marginBottom: spacing.lg,
     },
-    errorText: { color: colors.danger, fontSize: 13 },
+    errorText: { color: colors.danger, fontFamily: fonts.regular, fontSize: 13 },
     field: { marginBottom: spacing.md },
-    label: { fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 6 },
+    label: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     input: {
         borderWidth: 1,
         borderColor: colors.border,
@@ -300,11 +300,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: spacing.sm,
     },
-    primaryButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+    primaryButtonText: { color: colors.white, fontSize: 15, fontFamily: fonts.bold },
     buttonDisabled: { opacity: 0.6 },
     divider: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg },
     dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-    dividerText: { marginHorizontal: spacing.sm, color: colors.muted, fontSize: 12 },
+    dividerText: { marginHorizontal: spacing.sm, color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
     secondaryButton: {
         borderWidth: 1,
         borderColor: colors.border,
@@ -313,14 +313,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.card,
     },
-    secondaryButtonText: { color: colors.foreground, fontSize: 15, fontWeight: '700' },
-    notice: { color: colors.muted, fontSize: 13, textAlign: 'center', marginBottom: spacing.md },
-    codeHeading: { fontSize: 18, fontWeight: '800', color: colors.foreground, textAlign: 'center' },
-    codeHint: { fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
-    codeTarget: { fontWeight: '700', color: colors.foreground },
-    codeInput: { fontSize: 22, letterSpacing: 8, textAlign: 'center' },
+    secondaryButtonText: { color: colors.foreground, fontSize: 15, fontFamily: fonts.bold },
+    notice: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', marginBottom: spacing.md },
+    codeHeading: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
+    codeHint: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
+    codeTarget: { fontFamily: fonts.bold, color: colors.foreground },
+    codeInput: { fontFamily: fonts.regular, fontSize: 22, letterSpacing: 8, textAlign: 'center' },
     codeActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg },
-    link: { color: colors.primary, fontSize: 14, fontWeight: '700' },
-    linkMuted: { color: colors.muted, fontSize: 14, fontWeight: '600' },
-    footnote: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: spacing.xl },
+    link: { color: colors.primary, fontSize: 14, fontFamily: fonts.bold },
+    linkMuted: { color: colors.muted, fontSize: 14, fontFamily: fonts.semibold },
+    footnote: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: spacing.xl },
 });

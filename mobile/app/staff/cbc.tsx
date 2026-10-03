@@ -14,7 +14,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 function RubricGrid() {
     const api = useApi();
@@ -127,9 +127,9 @@ export default function CbcScreen() {
 const styles = StyleSheet.create({
     counts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
     row: { marginTop: spacing.sm, padding: spacing.md },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    adm: { fontSize: 12, fontWeight: '400', color: colors.muted },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    adm: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },
     levels: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     level: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
-    levelText: { fontSize: 13, fontWeight: '800', color: colors.muted },
+    levelText: { fontSize: 13, fontFamily: fonts.display, color: colors.muted },
 });

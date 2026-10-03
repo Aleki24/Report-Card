@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner } from '@/components/ui';
 import type { AggregationMethod, ExamPaperScheme } from '@/lib/types';
 
@@ -96,9 +96,9 @@ export function PaperSetup({
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.md },
-    hint: { fontSize: 12, color: colors.muted, marginTop: -spacing.sm, marginBottom: spacing.md },
+    title: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.md },
+    hint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: -spacing.sm, marginBottom: spacing.md },
     paperRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, minHeight: 40, fontSize: 14, color: colors.foreground, backgroundColor: colors.card },
+    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.sm, minHeight: 40, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, backgroundColor: colors.card },
 });

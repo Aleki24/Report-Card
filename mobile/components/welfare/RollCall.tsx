@@ -10,7 +10,7 @@ import { toneColor } from '@/components/ops/bits';
 import { useApi, withQuery } from '@/lib/api';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { errorMessage } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 /** Morning, evening or night roll for a dorm, pre-filled for learners on exeat or in sick bay — the web's roll call. */
 export function RollCall() {
@@ -133,9 +133,9 @@ export function RollCall() {
 const styles = StyleSheet.create({
     counts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     entry: { marginBottom: spacing.sm, padding: spacing.md },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    meta: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     statusBtn: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
-    statusText: { fontSize: 13, fontWeight: '800', color: colors.muted },
+    statusText: { fontSize: 13, fontFamily: fonts.display, color: colors.muted },
 });

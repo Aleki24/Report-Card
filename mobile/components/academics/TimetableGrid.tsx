@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
 import { cellLines, type GridMode } from '@shared/ops/forms/academics';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 interface Props {
     config: TimetableConfig;
@@ -99,20 +99,20 @@ const styles = StyleSheet.create({
     cellWrap: { minHeight: 48, flex: 1 },
     lesson: { flex: 1, justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.infoBg },
     lessonSelected: { backgroundColor: colors.primary },
-    lessonTop: { fontSize: 12, fontWeight: '700', color: colors.foreground },
-    lessonBottom: { fontSize: 10, color: colors.muted },
+    lessonTop: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+    lessonBottom: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted },
     free: { flex: 1, minHeight: 48, borderRadius: radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
-    breakRow: { textAlign: 'center', fontSize: 11, fontWeight: '600', color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
+    breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginBottom: spacing.sm },
-    periodLabel: { fontSize: 12, fontWeight: '700', color: colors.foreground },
-    periodTime: { fontSize: 11, color: colors.muted },
+    periodLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+    periodTime: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
     dayTabs: { gap: spacing.xs, marginBottom: spacing.md },
     dayTab: { minHeight: 40, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.mutedBg, justifyContent: 'center' },
     dayTabOn: { backgroundColor: colors.primary },
-    dayTabText: { fontSize: 13, fontWeight: '700', color: colors.muted },
+    dayTabText: { fontSize: 13, fontFamily: fonts.bold, color: colors.muted },
     week: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.card, padding: spacing.sm },
     weekRow: { flexDirection: 'row', gap: 4, marginBottom: 4 },
-    weekHead: { fontSize: 11, fontWeight: '700', color: colors.muted, paddingVertical: 6 },
+    weekHead: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, paddingVertical: 6 },
     periodCol: { width: 88, justifyContent: 'center' },
     dayCol: { flex: 1, minWidth: 110 },
 });

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import type { OverviewTile, TileTone } from '@shared/ops/overview';
 import { useOpsData } from '@/lib/ops';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 import { SectionLabel } from './ui';
 
 const VALUE_COLOR: Record<TileTone, string> = { default: colors.foreground, good: colors.success, warn: colors.warning, bad: colors.danger };
@@ -38,7 +38,7 @@ export function OperationsOverview() {
 const styles = StyleSheet.create({
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     tile: { flexBasis: '47%', flexGrow: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: 2 },
-    label: { fontSize: 10, fontWeight: '700', color: colors.muted, letterSpacing: 0.4 },
-    value: { fontSize: 20, fontWeight: '800' },
-    hint: { fontSize: 11, color: colors.muted },
+    label: { fontSize: 10, fontFamily: fonts.bold, color: colors.muted, letterSpacing: 0.4 },
+    value: { fontSize: 20, fontFamily: fonts.display },
+    hint: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
 });

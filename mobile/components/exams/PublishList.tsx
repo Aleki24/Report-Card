@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, SectionLabel } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import { examTypeLabel } from '@/lib/academics';
 import { examLabel, useExams, useTerms } from '@/lib/useSchoolData';
 import { ReleaseControl } from './ReleaseControl';
@@ -66,6 +66,6 @@ export function PublishList() {
 }
 
 const styles = StyleSheet.create({
-    help: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
+    help: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
 });

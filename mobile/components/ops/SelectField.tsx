@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { LookupOption, LookupType } from '@shared/ops/lookups';
 import { Button, SearchField } from '@/components/ui';
 import { useLookup } from '@/lib/ops';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, fonts } from '@/lib/theme';
 
 const MAX_SHOWN = 200;
 
@@ -81,7 +81,7 @@ export function SelectField({ label, value, onChange, options, placeholder = 'Se
                                         <Text style={[styles.optionLabel, active && { color: colors.primary }]}>{item.label}</Text>
                                         {item.hint ? <Text style={styles.optionHint}>{item.hint}</Text> : null}
                                     </View>
-                                    {active ? <Text style={{ color: colors.primary, fontWeight: '800' }}>✓</Text> : null}
+                                    {active ? <Text style={{ color: colors.primary, fontFamily: fonts.display }}>✓</Text> : null}
                                 </Pressable>
                             );
                         }}
@@ -105,16 +105,16 @@ export function LookupField({ lookup, params, filter, ...rest }: Omit<SelectFiel
 
 const styles = StyleSheet.create({
     field: { marginBottom: spacing.md },
-    label: { fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 6 },
+    label: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     control: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.md, minHeight: 44, backgroundColor: colors.card, gap: spacing.sm },
-    value: { flex: 1, fontSize: 14, color: colors.foreground },
-    caret: { color: colors.muted, fontSize: 14 },
-    hint: { fontSize: 11, color: colors.muted, marginTop: 4 },
+    value: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground },
+    caret: { color: colors.muted, fontFamily: fonts.regular, fontSize: 14 },
+    hint: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 4 },
     sheet: { flex: 1, backgroundColor: colors.background },
     sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-    sheetTitle: { fontSize: 18, fontWeight: '800', color: colors.foreground },
+    sheetTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
     option: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    optionLabel: { fontSize: 14, fontWeight: '600', color: colors.foreground },
-    optionHint: { fontSize: 12, color: colors.muted, marginTop: 2 },
+    optionLabel: { fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
+    optionHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     empty: { textAlign: 'center', color: colors.muted, padding: spacing.xl },
 });

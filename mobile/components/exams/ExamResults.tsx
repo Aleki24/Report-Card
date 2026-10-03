@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar, SearchField, StatGrid, StatTile,
 } from '@/components/ui';
@@ -137,13 +137,13 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
 }
 
 const styles = StyleSheet.create({
-    title: { fontSize: 17, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    cardTitle: { fontSize: 13, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm },
+    title: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    cardTitle: { fontSize: 13, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm },
     spreadRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 6 },
-    spreadGrade: { width: 36, fontSize: 13, fontWeight: '800', color: colors.foreground },
-    spreadCount: { width: 32, textAlign: 'right', fontSize: 12, color: colors.muted },
-    rank: { width: 28, textAlign: 'center', fontSize: 14, fontWeight: '800', color: colors.muted },
-    pct: { fontSize: 14, fontWeight: '800' },
-    grade: { fontSize: 12, fontWeight: '700', color: colors.muted },
+    spreadGrade: { width: 36, fontSize: 13, fontFamily: fonts.display, color: colors.foreground },
+    spreadCount: { width: 32, textAlign: 'right', fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+    rank: { width: 28, textAlign: 'center', fontSize: 14, fontFamily: fonts.display, color: colors.muted },
+    pct: { fontSize: 14, fontFamily: fonts.display },
+    grade: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
 });

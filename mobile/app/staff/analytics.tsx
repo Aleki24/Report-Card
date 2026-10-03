@@ -5,7 +5,7 @@ import { withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
 import { TONE_COLORS, formatPercent, passRateTone, pluralize, scoreColor, shortCurriculumLabel } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { colors, spacing, fonts } from '@/lib/theme';
 import {
     Badge, Button, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile,
@@ -198,11 +198,11 @@ function ClassView({ streamId }: { streamId: string }) {
 const styles = StyleSheet.create({
     classRow: { padding: spacing.md, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     classHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    className: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.primary },
-    rate: { fontSize: 14, fontWeight: '800' },
-    meta: { fontSize: 11, color: colors.muted },
-    rank: { width: 28, textAlign: 'center', fontSize: 14, fontWeight: '800', color: colors.muted },
+    className: { flex: 1, fontSize: 14, fontFamily: fonts.bold, color: colors.primary },
+    rate: { fontSize: 14, fontFamily: fonts.display },
+    meta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
+    rank: { width: 28, textAlign: 'center', fontSize: 14, fontFamily: fonts.display, color: colors.muted },
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    trendLabel: { width: 110, fontSize: 12, fontWeight: '600', color: colors.foreground },
-    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
+    trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
+    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
 });
