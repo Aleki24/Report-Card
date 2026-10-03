@@ -1,26 +1,16 @@
 import React, { useCallback, useState } from 'react';
-import {
-    ActivityIndicator,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSignIn, useSSO } from '@clerk/clerk-expo';
-import { isClerkAPIResponseError } from '@clerk/clerk-expo';
+import { useSignIn } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter } from 'expo-router';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
-import { publicPost } from '@/lib/api';
-import { describeCodeError, useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
-
-const CODE_LENGTH = 6;
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { LogIn } from 'lucide-react-native';
+import { publicPost, webUrl } from '@/lib/api';
+import { describeAuthError, useGoogleSignIn } from '@/lib/useGoogleSignIn';
+import { useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
+import {
+    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton, Wordmark,
+} from '@/components/auth/AuthShell';
+import { VerificationCodeStep } from '@/components/auth/VerificationCodeStep';
+import { Notice } from '@/components/ui';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -40,287 +30,93 @@ async function resolveIdentifier(value: string): Promise<string> {
     }
 }
 
+/** The web's /login. A completed sign-in moves the app on by itself (root layout). */
 export default function SignInScreen() {
     const router = useRouter();
+    const { created } = useLocalSearchParams<{ created?: string }>();
     const { isLoaded, signIn } = useSignIn();
-    const { startSSOFlow } = useSSO();
     const verification = useSignInCodeVerification();
+    const google = useGoogleSignIn();
 
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [code, setCode] = useState('');
-    const [notice, setNotice] = useState<string | null>(null);
 
     const handleSignIn = useCallback(async () => {
         if (!isLoaded || !signIn) return;
         setError(null);
+        google.clearError();
         setLoading(true);
         try {
-            const identifier = await resolveIdentifier(email.trim());
-            const result = await signIn.create({ identifier, password });
-            const outcome = await verification.continueSignIn(result, { identifier, password });
-            if (outcome === 'verify') {
-                setCode('');
-            } else if (outcome === 'unsupported') {
+            const resolved = await resolveIdentifier(identifier.trim());
+            const result = await signIn.create({ identifier: resolved, password });
+            const outcome = await verification.continueSignIn(result, { identifier: resolved, password });
+            if (outcome === 'unsupported') {
                 setError('This account needs a verification method the app doesn’t support yet. Please sign in on the web.');
             }
         } catch (err) {
-            if (isClerkAPIResponseError(err)) {
-                setError(err.errors[0]?.longMessage ?? err.errors[0]?.message ?? 'Sign in failed.');
-            } else {
-                setError(err instanceof Error ? err.message : 'Sign in failed.');
-            }
+            setError(describeAuthError(err, 'Sign in failed.'));
         } finally {
             setLoading(false);
         }
-    }, [isLoaded, signIn, email, password, verification]);
+    }, [isLoaded, signIn, identifier, password, verification, google]);
 
-    const handleVerify = useCallback(async () => {
-        setError(null);
-        setNotice(null);
-        setLoading(true);
-        try {
-            if (!(await verification.verifyCode(code))) {
-                setError('Verification could not be completed. Request a new code and try again.');
-            }
-        } catch (err) {
-            setError(describeCodeError(err));
-        } finally {
-            setLoading(false);
-        }
-    }, [verification, code]);
-
-    const handleResend = useCallback(async () => {
-        setError(null);
-        setNotice(null);
-        try {
-            await verification.resendCode();
-            setCode('');
-            setNotice('A new code is on its way.');
-        } catch (err) {
-            setError(describeCodeError(err));
-        }
-    }, [verification]);
-
-    const handleBack = useCallback(() => {
-        verification.reset();
-        setCode('');
-        setError(null);
-        setNotice(null);
-    }, [verification]);
-
-    const handleGoogleSignIn = useCallback(async () => {
-        setError(null);
-        setGoogleLoading(true);
-        try {
-            const { createdSessionId, setActive: setActiveSSO } = await startSSOFlow({ strategy: 'oauth_google' });
-            if (createdSessionId && setActiveSSO) {
-                await setActiveSSO({ session: createdSessionId });
-            }
-        } catch (err) {
-            if (isClerkAPIResponseError(err)) {
-                setError(err.errors[0]?.longMessage ?? err.errors[0]?.message ?? 'Google sign-in failed.');
-            } else {
-                setError(err instanceof Error ? err.message : 'Google sign-in failed.');
-            }
-        } finally {
-            setGoogleLoading(false);
-        }
-    }, [startSSOFlow]);
+    const canSubmit = identifier.trim().length > 0 && password.length > 0;
 
     return (
-        <SafeAreaView style={styles.safe}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                    <View style={styles.hero}>
-                        <Image source={require('@/assets/splash-icon.png')} style={styles.logo} accessibilityIgnoresInvertColors />
-                        <Text style={styles.title} accessibilityRole="header">
-                            <Text style={{ color: colors.info }}>Skul</Text>
-                            <Text style={{ color: colors.success }}>base</Text>
-                        </Text>
-                        <Text style={styles.subtitle}>Sign in to view your results, attendance and more.</Text>
-                    </View>
-
-                    {error ? (
-                        <View style={styles.errorBox}>
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    ) : null}
-
-                    {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-
-                    {verification.pending ? (
-                        <>
-                            <Text style={styles.codeHeading}>
-                                Check your {verification.pending.strategy === 'email_code' ? 'email' : 'phone'}
-                            </Text>
-                            <Text style={styles.codeHint}>
-                                We sent a {CODE_LENGTH}-digit verification code to{' '}
-                                <Text style={styles.codeTarget}>{verification.pending.safeIdentifier}</Text>.
-                            </Text>
-
-                            <View style={styles.field}>
-                                <Text style={styles.label}>Verification code</Text>
-                                <TextInput
-                                    value={code}
-                                    onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, CODE_LENGTH))}
-                                    keyboardType="number-pad"
-                                    textContentType="oneTimeCode"
-                                    autoComplete="one-time-code"
-                                    maxLength={CODE_LENGTH}
-                                    autoFocus
-                                    placeholder="••••••"
-                                    placeholderTextColor={colors.muted}
-                                    style={[styles.input, styles.codeInput]}
-                                />
-                            </View>
-
-                            <Pressable
-                                onPress={handleVerify}
-                                disabled={loading || code.length !== CODE_LENGTH}
-                                style={[styles.primaryButton, (loading || code.length !== CODE_LENGTH) && styles.buttonDisabled]}
-                            >
-                                {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Verify and continue</Text>}
-                            </Pressable>
-
-                            <View style={styles.codeActions}>
-                                <Pressable onPress={handleBack} hitSlop={8}>
-                                    <Text style={styles.linkMuted}>Back</Text>
-                                </Pressable>
-                                <Pressable onPress={handleResend} disabled={verification.cooldown > 0} hitSlop={8}>
-                                    <Text style={verification.cooldown > 0 ? styles.linkMuted : styles.link}>
-                                        {verification.cooldown > 0 ? `Resend code in ${verification.cooldown}s` : 'Resend code'}
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        </>
-                    ) : (
-                        <>
-                            <View style={styles.field}>
-                                <Text style={styles.label}>Email or username</Text>
-                                <TextInput
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    keyboardType="email-address"
-                                    textContentType="username"
-                                    autoComplete="username"
-                                    placeholder="you@example.com or your username"
-                                    placeholderTextColor={colors.muted}
-                                    style={styles.input}
-                                />
-                            </View>
-
-                            <View style={styles.field}>
-                                <Text style={styles.label}>Password</Text>
-                                <TextInput
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                    textContentType="password"
-                                    placeholder="••••••••"
-                                    placeholderTextColor={colors.muted}
-                                    style={styles.input}
-                                />
-                            </View>
-
-                            <Pressable
-                                onPress={handleSignIn}
-                                disabled={loading || !email || !password}
-                                style={[styles.primaryButton, (loading || !email || !password) && styles.buttonDisabled]}
-                            >
-                                {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Sign In</Text>}
-                            </Pressable>
-
-                            <View style={styles.divider}>
-                                <View style={styles.dividerLine} />
-                                <Text style={styles.dividerText}>or</Text>
-                                <View style={styles.dividerLine} />
-                            </View>
-
-                            <Pressable
-                                onPress={handleGoogleSignIn}
-                                disabled={googleLoading}
-                                style={[styles.secondaryButton, googleLoading && styles.buttonDisabled]}
-                            >
-                                {googleLoading ? (
-                                    <ActivityIndicator color={colors.foreground} />
-                                ) : (
-                                    <Text style={styles.secondaryButtonText}>Continue with Google</Text>
-                                )}
-                            </Pressable>
-
-                            <Pressable onPress={() => router.push('/(auth)/activate')} accessibilityRole="link" style={{ marginTop: spacing.lg }}>
-                                <Text style={[styles.footnote, { color: colors.primary, fontFamily: fonts.bold }]}>Have an invite code? Activate your account</Text>
-                            </Pressable>
-                        </>
-                    )}
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+        <AuthShell
+            title={verification.pending ? 'Check your inbox' : 'Welcome back'}
+            subtitle={verification.pending ? 'Confirm it’s you to finish signing in.' : <>Sign in to your <Wordmark /> account to continue</>}
+            footer={verification.pending ? null : (
+                <>
+                    <AuthFootnote>Don’t have an account? <AuthLink label="Create one" onPress={() => router.push('/(auth)/sign-up')} /></AuthFootnote>
+                    <AuthFootnote>First time? <AuthLink label="Activate your account" onPress={() => router.push('/(auth)/activate')} /></AuthFootnote>
+                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/help'))} /></AuthFootnote>
+                </>
+            )}
+        >
+            {verification.pending ? (
+                <VerificationCodeStep
+                    pending={verification.pending}
+                    cooldown={verification.cooldown}
+                    onVerify={verification.verifyCode}
+                    onResend={verification.resendCode}
+                    onBack={verification.reset}
+                />
+            ) : (
+                <AuthStack>
+                    {created ? <Notice tone="success" message="Account created! Sign in with your credentials." /> : null}
+                    <AuthError message={error ?? google.error} />
+                    <AuthField
+                        label="Email or username"
+                        value={identifier}
+                        onChangeText={setIdentifier}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="email-address"
+                        textContentType="username"
+                        autoComplete="username"
+                        placeholder="Enter your email or username"
+                        returnKeyType="next"
+                    />
+                    <AuthField
+                        label="Password"
+                        password
+                        value={password}
+                        onChangeText={setPassword}
+                        textContentType="password"
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        returnKeyType="go"
+                        onSubmitEditing={() => { if (canSubmit) void handleSignIn(); }}
+                        hint={<AuthLink label="Forgot password?" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/forgot-password'))} />}
+                    />
+                    <AuthPrimaryButton label="Sign In" icon={LogIn} onPress={() => void handleSignIn()} loading={loading} disabled={!canSubmit || google.loading} />
+                    <AuthDivider />
+                    <GoogleButton onPress={() => void google.start()} loading={google.loading} disabled={loading} />
+                </AuthStack>
+            )}
+        </AuthShell>
     );
 }
-
-const styles = StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.background },
-    scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl },
-    hero: { alignItems: 'center', marginBottom: spacing.xl },
-    logo: { width: 96, height: 96, marginBottom: spacing.sm },
-    title: { fontSize: 26, fontFamily: fonts.display, color: colors.foreground },
-    subtitle: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginTop: spacing.xs, textAlign: 'center' },
-    errorBox: {
-        backgroundColor: colors.dangerBg,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        borderColor: colors.danger,
-        padding: spacing.md,
-        marginBottom: spacing.lg,
-    },
-    errorText: { color: colors.danger, fontFamily: fonts.regular, fontSize: 13 },
-    field: { marginBottom: spacing.md },
-    label: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
-    input: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.md,
-        paddingHorizontal: spacing.md,
-        paddingVertical: 12,
-        fontSize: 15,
-        color: colors.foreground,
-        backgroundColor: colors.card,
-    },
-    primaryButton: {
-        backgroundColor: colors.primary,
-        borderRadius: radius.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: spacing.sm,
-    },
-    primaryButtonText: { color: colors.white, fontSize: 15, fontFamily: fonts.bold },
-    buttonDisabled: { opacity: 0.6 },
-    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg },
-    dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-    dividerText: { marginHorizontal: spacing.sm, color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
-    secondaryButton: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-        backgroundColor: colors.card,
-    },
-    secondaryButtonText: { color: colors.foreground, fontSize: 15, fontFamily: fonts.bold },
-    notice: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, textAlign: 'center', marginBottom: spacing.md },
-    codeHeading: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
-    codeHint: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
-    codeTarget: { fontFamily: fonts.bold, color: colors.foreground },
-    codeInput: { fontFamily: fonts.regular, fontSize: 22, letterSpacing: 8, textAlign: 'center' },
-    codeActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.lg },
-    link: { color: colors.primary, fontSize: 14, fontFamily: fonts.bold },
-    linkMuted: { color: colors.muted, fontSize: 14, fontFamily: fonts.semibold },
-    footnote: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: spacing.xl },
-});

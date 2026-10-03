@@ -10,8 +10,15 @@ export function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorV
     return <Icon size={22} color={color as string} strokeWidth={2} />;
 }
 
-/** Shared by the staff, student and parent tab trees. */
+/**
+ * Shared by the staff, student and parent tab trees. `shift` animates tab
+ * changes, `freezeOnBlur` stops hidden tabs re-rendering behind the visible
+ * one, and a scene background avoids a white flash between screens.
+ */
 export const TAB_SCREEN_OPTIONS = {
+    animation: 'shift' as const,
+    freezeOnBlur: true,
+    sceneStyle: { backgroundColor: colors.background },
     tabBarActiveTintColor: colors.primary,
     tabBarInactiveTintColor: colors.muted,
     tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },

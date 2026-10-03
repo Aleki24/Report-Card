@@ -8,6 +8,11 @@ import { apiErrorMessage } from '@shared/api-error-message';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
+/** A page on the web app (same origin as the API), for flows the app hands to the browser. */
+export function webUrl(path: `/${string}`): string {
+    return `${API_URL}${path}`;
+}
+
 export class ApiError extends Error {
     readonly status: number;
     readonly code: string | null;

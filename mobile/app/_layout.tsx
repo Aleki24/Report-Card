@@ -12,6 +12,7 @@ import { Syne_800ExtraBold } from '@expo-google-fonts/syne/800ExtraBold';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
 import { Onboarding } from '@/components/Onboarding';
@@ -51,7 +52,7 @@ function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { tit
  */
 function RootStack({ signedIn }: { signedIn: boolean }) {
     return (
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Protected guard={signedIn}>
                 <Stack.Screen name="index" />
                 <Stack.Screen name="staff" />
@@ -152,12 +153,14 @@ export default function RootLayout() {
     if (!CLERK_PUBLISHABLE_KEY) return <MissingConfigScreen />;
 
     return (
-        <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
-            <StatusBar style="dark" />
-            <ToastProvider>
-                <AuthGate />
-            </ToastProvider>
-        </ClerkProvider>
+        <KeyboardProvider>
+            <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+                <StatusBar style="dark" />
+                <ToastProvider>
+                    <AuthGate />
+                </ToastProvider>
+            </ClerkProvider>
+        </KeyboardProvider>
     );
 }
 

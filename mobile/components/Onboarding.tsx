@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
@@ -13,6 +14,7 @@ import { useToast } from './Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
+import { takePendingInviteCode } from '@/lib/pendingInvite';
 import { colors, spacing, fonts } from '@/lib/theme';
 
 interface Approval { hasSchool?: boolean; status?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | null; schoolName?: string | null; note?: string | null }
@@ -30,11 +32,13 @@ export function Onboarding() {
     const { baseRole, reload } = useCurrentUser();
     const [approval, setApproval] = useState<Approval | null>(null);
     const [checked, setChecked] = useState(false);
-    const [mode, setMode] = useState<Mode>(baseRole === 'ADMIN' ? 'school' : 'choose');
+    // A code verified on the activation screen before choosing Google.
+    const [handedOff] = useState(takePendingInviteCode);
+    const [mode, setMode] = useState<Mode>(handedOff ? 'join' : baseRole === 'ADMIN' ? 'school' : 'choose');
     const [step, setStep] = useState(1);
     const [state, setState] = useState<OnboardingState>(initialOnboarding);
     const [grades, setGrades] = useState<StandardGrade[]>([]);
-    const [code, setCode] = useState('');
+    const [code, setCode] = useState(handedOff ?? '');
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -70,11 +74,11 @@ export function Onboarding() {
         }
     };
 
-    const join = async () => {
-        if (code.length !== INVITE_CODE_LENGTH) { toast.error(`Enter the ${INVITE_CODE_LENGTH}-character invite code from your school`); return; }
+    const join = async (inviteCode: string = code) => {
+        if (inviteCode.length !== INVITE_CODE_LENGTH) { toast.error(`Enter the ${INVITE_CODE_LENGTH}-character invite code from your school`); return; }
         setBusy(true);
         try {
-            await api.post('/api/school/join', { inviteCode: code });
+            await api.post('/api/school/join', { inviteCode });
             toast.success('Successfully joined the school!');
             reload();
         } catch (err) {
@@ -84,16 +88,24 @@ export function Onboarding() {
         }
     };
 
+    // Finish a Google activation straight away, as the web's /activate/callback does.
+    const joinedHandOff = useRef(false);
+    useEffect(() => {
+        if (!handedOff || joinedHandOff.current) return;
+        joinedHandOff.current = true;
+        void join(handedOff);
+        // Runs once on arrival with the handed-off code.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [handedOff]);
+
     const frame = (body: React.ReactNode) => (
         <SafeAreaView style={styles.safe}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                    <View style={styles.content}>
-                        {body}
-                        <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label="Sign out" onPress={() => void signOut()} /></View>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
+            <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
+                <View style={styles.content}>
+                    {body}
+                    <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label="Sign out" onPress={() => void signOut()} /></View>
+                </View>
+            </KeyboardAwareScrollView>
         </SafeAreaView>
     );
 

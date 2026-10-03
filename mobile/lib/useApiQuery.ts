@@ -9,7 +9,7 @@ export interface ApiQuery<T> {
     error: string | null;
     /** Reload in place, keeping current data visible (pull-to-refresh). */
     refresh: () => void;
-    /** Reload showing the loading state. */
+    /** Reload; keeps current data visible when it is for the same path. */
     reload: () => void;
 }
 
@@ -28,20 +28,27 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
     // Ignore responses for a path the screen has already moved away from.
     const latest = useRef(path);
     latest.current = path;
+    // The path `data` belongs to: reloading the same path refreshes in place
+    // instead of blanking the screen behind a spinner.
+    const dataPath = useRef<string | null>(null);
 
     const load = useCallback(
         async (silent: boolean) => {
             if (path === null) {
                 setData(null);
+                dataPath.current = null;
                 setLoading(false);
                 return;
             }
-            if (silent) setRefreshing(true);
+            if (silent || dataPath.current === path) setRefreshing(true);
             else setLoading(true);
             setError(null);
             try {
                 const json = await api.get<T | { data: T }>(path);
-                if (latest.current === path) setData(raw ? (json as T) : (json as { data: T }).data);
+                if (latest.current === path) {
+                    setData(raw ? (json as T) : (json as { data: T }).data);
+                    dataPath.current = path;
+                }
             } catch (err) {
                 if (latest.current === path) setError(errorMessage(err, 'Failed to load'));
             } finally {

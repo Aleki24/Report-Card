@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ArrowLeft, ChevronLeft, ChevronRight, X, type LucideIcon } from 'lucide-react-native';
 import { colors, radius, shadow, spacing, fonts } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
@@ -35,14 +36,19 @@ export function Screen({
 }) {
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
-            >
-                <View style={styles.content}>{children}</View>
-            </ScrollView>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
+            {/* Android 15 draws edge to edge, so the window no longer resizes for the keyboard:
+                scroll the focused field into view, and lift a pinned save bar above the keyboard. */}
+            <KeyboardAvoidingView behavior="padding" enabled={!!footer} style={styles.fill}>
+                <KeyboardAwareScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    bottomOffset={spacing.xl}
+                    refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}
+                >
+                    <View style={styles.content}>{children}</View>
+                </KeyboardAwareScrollView>
+                {footer ? <View style={styles.footer}>{footer}</View> : null}
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -476,6 +482,7 @@ const buttonTextStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
+    fill: { flex: 1 },
     scrollContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     // Cap line length on tablets so screens stay readable at every width.
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },

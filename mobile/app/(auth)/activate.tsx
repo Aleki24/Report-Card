@@ -1,116 +1,314 @@
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSignIn } from '@clerk/clerk-expo';
-import { useRouter } from 'expo-router';
-import { Button, Card, ErrorBanner, Notice, TextField } from '@/components/ui';
-import { publicPost } from '@/lib/api';
+import * as WebBrowser from 'expo-web-browser';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ArrowRight, CircleCheck, KeyRound } from 'lucide-react-native';
+import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
+import { publicPost, webUrl } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { useGoogleSignIn } from '@/lib/useGoogleSignIn';
+import { setPendingInviteCode } from '@/lib/pendingInvite';
+import {
+    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton, authColors,
+} from '@/components/auth/AuthShell';
 
-interface Invite { username: string; name: string; role: string; reset: boolean }
-interface Activated { username: string; ticket?: string | null; reset?: boolean }
+const MIN_PASSWORD_LENGTH = 8;
+const MIN_USERNAME_LENGTH = 3;
+const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
 
-const MIN_PASSWORD = 8;
+/** What /api/auth/activate says about a valid code (verify_only). */
+interface InviteDetails {
+    name: string;
+    role: string | null;
+    username: string;
+    /** The code resets an existing account's password rather than creating one. */
+    reset: boolean;
+}
+
+interface ActivateResponse {
+    ticket?: string | null;
+}
+
+type Stage = 'code' | 'details' | 'done';
+
+/** Why the chosen username can't be used yet, or null. */
+function usernameProblem(username: string): string | null {
+    if (username.length < MIN_USERNAME_LENGTH) return `Username must be at least ${MIN_USERNAME_LENGTH} characters.`;
+    if (!USERNAME_PATTERN.test(username)) return 'Username can only contain letters, numbers, dots, dashes and underscores.';
+    return null;
+}
+
+function initials(name: string): string {
+    return name.split(' ').map((part) => part[0] ?? '').join('').slice(0, 2).toUpperCase();
+}
 
 /**
- * Activate an account with the invite code the school sent (parents get
- * theirs by SMS), or set a new password with a reset code — the web's
- * /activate page. The server answers with a one-time ticket, so there is no
- * second sign-in afterwards.
+ * The web's /activate: redeem an invite (or admin password-reset) code, then
+ * confirm who you are and choose a username and password — or Google — and
+ * land signed in. skulbase://activate?code=A7X3K9 skips typing the code.
  */
 export default function ActivateScreen() {
     const router = useRouter();
-    const { signIn, setActive, isLoaded } = useSignIn();
-    const [code, setCode] = useState('');
-    const [invite, setInvite] = useState<Invite | null>(null);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirm, setConfirm] = useState('');
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [done, setDone] = useState<string | null>(null);
+    const params = useLocalSearchParams<{ code?: string }>();
+    const { isLoaded, signIn, setActive } = useSignIn();
+    const google = useGoogleSignIn();
 
-    const check = async () => {
-        setBusy(true);
+    const [stage, setStage] = useState<Stage>('code');
+    const [code, setCode] = useState('');
+    const [invite, setInvite] = useState<InviteDetails | null>(null);
+    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [verifying, setVerifying] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [doneMessage, setDoneMessage] = useState('');
+
+    const verifyCode = useCallback(async (value: string) => {
+        if (value.length !== INVITE_CODE_LENGTH) return;
         setError(null);
+        setVerifying(true);
         try {
-            const r = await publicPost<Invite>('/api/auth/activate', { code: code.trim(), verify_only: true });
-            setInvite(r);
-            setUsername(r.username);
+            const data = await publicPost<{ name?: string; role?: string; username?: string; reset?: boolean }>('/api/auth/activate', { code: value, verify_only: true });
+            setInvite({ name: data.name?.trim() || '', role: data.role ?? null, username: data.username || '', reset: !!data.reset });
+            setUsername(data.username || '');
+            setStage('details');
         } catch (err) {
-            setError(errorMessage(err, 'That code did not work.'));
+            setError(errorMessage(err, 'That invite code wasn’t recognised.'));
         } finally {
-            setBusy(false);
+            setVerifying(false);
         }
+    }, []);
+
+    // An activation link fills the code in and checks it on arrival.
+    const linkChecked = useRef(false);
+    useEffect(() => {
+        if (linkChecked.current || !params.code) return;
+        linkChecked.current = true;
+        const fromLink = extractInviteCode(params.code);
+        setCode(fromLink);
+        void verifyCode(fromLink);
+    }, [params.code, verifyCode]);
+
+    const handleCodeChange = (raw: string) => {
+        const next = extractInviteCode(raw);
+        setCode(next);
+        setError(null);
+        // Typing or pasting the last character checks it — no extra tap needed.
+        if (next.length === INVITE_CODE_LENGTH && next !== code) void verifyCode(next);
     };
 
-    const activate = async () => {
-        if (password.length < MIN_PASSWORD) { setError(`Use at least ${MIN_PASSWORD} characters.`); return; }
-        if (password !== confirm) { setError('The passwords do not match.'); return; }
-        setBusy(true);
+    const startOver = () => {
+        setStage('code');
+        setInvite(null);
+        setCode('');
+        setPassword('');
+        setEmail('');
         setError(null);
+    };
+
+    const handleGoogle = () => {
+        // Onboarding joins the school with this code once Google has signed the person in.
+        setPendingInviteCode(code);
+        void google.start().then(() => setPendingInviteCode(null), () => setPendingInviteCode(null));
+    };
+
+    const submit = async () => {
+        const problem = usernameProblem(username)
+            ?? (password.length < MIN_PASSWORD_LENGTH ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` : null);
+        if (problem) { setError(problem); return; }
+        setError(null);
+        setSubmitting(true);
+        let data: ActivateResponse;
         try {
-            const r = await publicPost<Activated>('/api/auth/activate', { code: code.trim(), password, username: username.trim() });
-            if (r.ticket && isLoaded && signIn) {
-                const result = await signIn.create({ strategy: 'ticket', ticket: r.ticket });
-                if (result.status === 'complete') {
-                    await setActive?.({ session: result.createdSessionId });
-                    return;
-                }
-            }
-            setDone(`${r.reset ? 'Password updated' : 'Account activated'}. Sign in as ${r.username}.`);
+            data = await publicPost<ActivateResponse>('/api/auth/activate', { code, username, password, email: email.trim() || undefined });
         } catch (err) {
             setError(errorMessage(err, 'Activation failed. Please try again.'));
-        } finally {
-            setBusy(false);
+            setSubmitting(false);
+            return;
+        }
+        setDoneMessage(invite?.reset ? 'Your password has been updated.' : 'Your account is ready.');
+        setStage('done');
+        setSubmitting(false);
+        // The server issues a one-time ticket, so there's no second login. If it
+        // can't be used, the done screen's "Go to sign in" is the way on.
+        if (!data.ticket || !isLoaded || !signIn) return;
+        try {
+            const result = await signIn.create({ strategy: 'ticket', ticket: data.ticket });
+            if (result.status === 'complete') await setActive?.({ session: result.createdSessionId });
+        } catch {
+            // Fall back to signing in by hand.
         }
     };
 
+    const firstName = invite?.name.split(' ')[0] || '';
+    const title = stage === 'code' ? 'Activate your account'
+        : stage === 'done' ? 'You’re all set'
+        : invite?.reset ? 'Reset your password'
+        : firstName ? `Welcome, ${firstName}!` : 'Welcome!';
+    const subtitle = stage === 'code' ? 'Enter the invite code from your school to get started.'
+        : stage === 'done' ? doneMessage
+        : invite?.reset ? 'Choose a new password for your account.'
+        : 'Choose how you’ll sign in. It takes less than a minute.';
+
     return (
-        <SafeAreaView style={styles.safe}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                    <View style={styles.content}>
-                        <Text style={styles.title}>Activate your account</Text>
-                        <Text style={styles.subtitle}>Enter the invite code from your school. A reset code from your administrator works here too.</Text>
-                        {error ? <ErrorBanner message={error} /> : null}
-                        {done ? (
-                            <>
-                                <Notice tone="success" message={done} />
-                                <Button label="Go to sign in" onPress={() => router.replace('/(auth)/sign-in')} block />
-                            </>
-                        ) : !invite ? (
-                            <Card>
-                                <TextField label="Invite code" value={code} onChangeText={(v) => setCode(v.toUpperCase())} autoCapitalize="characters" placeholder="e.g. 7KD2QX" />
-                                <Button label="Continue" onPress={() => void check()} loading={busy} disabled={!code.trim()} block />
-                            </Card>
-                        ) : (
-                            <Card>
-                                <Text style={styles.name}>{invite.name}</Text>
-                                <Text style={styles.subtitle}>{roleLabel(invite.role)}{invite.reset ? ' · setting a new password' : ''}</Text>
-                                <TextField label="Username" value={username} onChangeText={setUsername} autoCapitalize="none" />
-                                <TextField label="Password" value={password} onChangeText={setPassword} secureTextEntry placeholder={`At least ${MIN_PASSWORD} characters`} />
-                                <TextField label="Confirm password" value={confirm} onChangeText={setConfirm} secureTextEntry />
-                                <Button label={invite.reset ? 'Set password' : 'Activate'} onPress={() => void activate()} loading={busy} block />
-                            </Card>
-                        )}
-                        <View style={{ marginTop: spacing.lg }}>
-                            <Button variant="ghost" label="Back to sign in" onPress={() => router.replace('/(auth)/sign-in')} />
+        <AuthShell
+            title={title}
+            subtitle={subtitle}
+            footer={stage === 'done' ? null : (
+                <>
+                    <AuthFootnote>Already activated? <AuthLink label="Sign in" onPress={() => router.replace('/(auth)/sign-in')} /></AuthFootnote>
+                    {!invite?.reset ? (
+                        <AuthFootnote>Setting up a new school? <AuthLink label="Create an account" onPress={() => router.replace('/(auth)/sign-up')} /></AuthFootnote>
+                    ) : null}
+                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/help'))} /></AuthFootnote>
+                </>
+            )}
+        >
+            {stage === 'code' ? (
+                <AuthStack>
+                    <AuthError message={error} />
+                    <AuthField
+                        label="Invite code"
+                        value={code}
+                        onChangeText={handleCodeChange}
+                        placeholder="A7X3K9"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        autoComplete="one-time-code"
+                        autoFocus
+                        editable={!verifying}
+                        invalid={error !== null}
+                        hint="6 letters and numbers from your school. You can also paste the link you were sent."
+                    />
+                    <AuthPrimaryButton
+                        label={verifying ? 'Checking your code…' : 'Continue'}
+                        icon={ArrowRight}
+                        onPress={() => void verifyCode(code)}
+                        loading={verifying}
+                        disabled={code.length !== INVITE_CODE_LENGTH}
+                    />
+                    <AuthFootnote>No code yet? Ask your school administrator. They can send it to you as a link.</AuthFootnote>
+                </AuthStack>
+            ) : null}
+
+            {stage === 'details' && invite ? (
+                <AuthStack>
+                    <View style={styles.inviteCard}>
+                        <View style={styles.avatar}>
+                            {initials(invite.name) ? <Text style={styles.avatarText}>{initials(invite.name)}</Text> : <KeyRound size={20} color={colors.white} />}
                         </View>
+                        <View style={styles.inviteBody}>
+                            <Text style={styles.inviteName} numberOfLines={1}>{invite.name || 'Your account'}</Text>
+                            <Text style={styles.inviteMeta} numberOfLines={1}>
+                                {invite.role ? `${roleLabel(invite.role)} · ` : ''}
+                                <Text style={styles.inviteCode}>{code}</Text>
+                            </Text>
+                        </View>
+                        <AuthLink label="Not you?" onPress={startOver} />
                     </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+
+                    <AuthError message={error ?? google.error} />
+
+                    <AuthField
+                        label="Username"
+                        value={username}
+                        onChangeText={(v) => setUsername(v.toLowerCase().replace(/\s/g, ''))}
+                        placeholder="Choose a username"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="username"
+                        textContentType="username"
+                        editable={!submitting}
+                        hint={
+                            <>
+                                You’ll use this to sign in.
+                                {invite.username && username !== invite.username ? (
+                                    <> Suggested: <AuthLink label={invite.username} onPress={() => setUsername(invite.username)} /></>
+                                ) : null}
+                            </>
+                        }
+                    />
+                    <AuthField
+                        label={invite.reset ? 'New password' : 'Password'}
+                        password
+                        value={password}
+                        onChangeText={setPassword}
+                        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                        autoComplete="new-password"
+                        textContentType="newPassword"
+                        editable={!submitting}
+                        hint={
+                            <Text style={password.length >= MIN_PASSWORD_LENGTH ? styles.passwordOk : undefined}>
+                                {password.length >= MIN_PASSWORD_LENGTH ? '✓ ' : ''}At least {MIN_PASSWORD_LENGTH} characters
+                            </Text>
+                        }
+                    />
+                    {!invite.reset ? (
+                        <AuthField
+                            label={<>Email <Text style={styles.optional}>(optional)</Text></>}
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="you@example.com"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            autoComplete="email"
+                            editable={!submitting}
+                            hint="Lets you reset your password yourself if you forget it."
+                        />
+                    ) : null}
+                    <AuthPrimaryButton
+                        label={submitting ? (invite.reset ? 'Updating…' : 'Activating…') : invite.reset ? 'Update password & sign in' : 'Activate & sign in'}
+                        onPress={() => void submit()}
+                        loading={submitting}
+                        disabled={google.loading}
+                    />
+                    {!invite.reset ? (
+                        <>
+                            <AuthDivider label="or" />
+                            <GoogleButton onPress={handleGoogle} loading={google.loading} disabled={submitting} />
+                        </>
+                    ) : null}
+                </AuthStack>
+            ) : null}
+
+            {stage === 'done' ? (
+                <AuthStack>
+                    <View style={styles.doneIcon}>
+                        <CircleCheck size={28} color={colors.success} />
+                    </View>
+                    <AuthFootnote>
+                        Signing you in… If nothing happens, sign in with your username <Text style={styles.inviteCode}>{username}</Text> and the password you just chose.
+                    </AuthFootnote>
+                    <AuthPrimaryButton label="Go to sign in" icon={ArrowRight} onPress={() => router.replace('/(auth)/sign-in')} />
+                </AuthStack>
+            ) : null}
+        </AuthShell>
     );
 }
 
 const styles = StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.background },
-    scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
-    content: { width: '100%', maxWidth: 440, alignSelf: 'center' },
-    title: { fontSize: 24, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
-    subtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.lg },
-    name: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, textAlign: 'center' },
+    inviteCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        borderRadius: radius.xl,
+        borderWidth: 1,
+        borderColor: 'rgba(99,102,241,0.15)',
+        backgroundColor: 'rgba(99,102,241,0.05)',
+        padding: spacing.md,
+    },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: authColors.accent, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold },
+    inviteBody: { flex: 1, minWidth: 0 },
+    inviteName: { fontSize: 14, fontFamily: fonts.semibold, color: authColors.heading },
+    inviteMeta: { fontSize: 12, fontFamily: fonts.regular, color: authColors.body, marginTop: 2 },
+    inviteCode: { fontFamily: fonts.semibold, letterSpacing: 1, color: authColors.label },
+    passwordOk: { color: colors.success },
+    optional: { fontFamily: fonts.regular, color: authColors.faint },
+    doneIcon: { alignSelf: 'center', width: 56, height: 56, borderRadius: 28, backgroundColor: colors.successBg, alignItems: 'center', justifyContent: 'center' },
 });

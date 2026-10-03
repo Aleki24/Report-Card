@@ -1,5 +1,6 @@
 import React from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
 import { colors, spacing, fonts } from '@/lib/theme';
@@ -29,13 +30,14 @@ export function FormSheet({
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
             <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-                <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                {/* Lifts the save bar above the keyboard on both platforms (Android 15 no longer resizes the window). */}
+                <KeyboardAvoidingView style={styles.flex} behavior="padding">
                     <View style={styles.header}>
                         <Text style={styles.title} numberOfLines={2}>{title}</Text>
                     </View>
-                    <ScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+                    <KeyboardAwareScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bottomOffset={spacing.lg}>
                         <View style={styles.content}>{children}</View>
-                    </ScrollView>
+                    </KeyboardAwareScrollView>
                     <View style={styles.footer}>
                         <Button label={onSubmit ? 'Cancel' : 'Close'} variant="secondary" onPress={onClose} disabled={submitting} />
                         {onSubmit ? <Button label={submitting ? 'Saving…' : submitLabel} onPress={onSubmit} loading={submitting} /> : null}
