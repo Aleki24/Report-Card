@@ -31,7 +31,7 @@ export default function StudentTabsLayout() {
                     />
                 );
             })}
-            <Tabs.Screen name="more" options={{ title: 'More', href: nav.overflow.length > 0 ? undefined : null, tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} /> }} />
+            <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} /> }} />
             <Tabs.Screen name="subjects/[subjectId]" options={{ href: null, title: 'Subject' }} />
         </Tabs>
     );

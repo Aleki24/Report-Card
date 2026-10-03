@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSignIn } from '@clerk/clerk-expo';
-import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowRight, CircleCheck, KeyRound } from 'lucide-react-native';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
-import { publicPost, webUrl } from '@/lib/api';
+import { publicPost } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
 import { colors, fonts, radius, spacing } from '@/lib/theme';
@@ -164,7 +163,7 @@ export default function ActivateScreen() {
                     {!invite?.reset ? (
                         <AuthFootnote>Setting up a new school? <AuthLink label="Create an account" onPress={() => router.replace('/(auth)/sign-up')} /></AuthFootnote>
                     ) : null}
-                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/help'))} /></AuthFootnote>
+                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => router.push('/help')} /></AuthFootnote>
                 </>
             )}
         >

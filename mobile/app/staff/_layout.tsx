@@ -9,7 +9,7 @@ const DETAIL_ROUTES = ['people/[id]'] as const;
 
 export default function StaffTabsLayout() {
     const { viewer } = useCurrentUser();
-    const { primary, overflow } = getStaffNav(viewer);
+    const { primary } = getStaffNav(viewer);
     const tabs = new Set<StaffScreen>(primary);
 
     return (
@@ -34,8 +34,7 @@ export default function StaffTabsLayout() {
                 name="more"
                 options={{
                     title: 'More',
-                    href: overflow.length > 0 ? undefined : null,
-                    tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} />,
+                                        tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} />,
                 }}
             />
             {DETAIL_ROUTES.map((name) => (

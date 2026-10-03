@@ -7,7 +7,9 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, fullName, initials } from '@/lib/format';
 import { colors, spacing, fonts } from '@/lib/theme';
-import { Avatar, Button, Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
+import { useRouter } from 'expo-router';
+import { LifeBuoy } from 'lucide-react-native';
+import { Avatar, Button, Card, ChipSelect, IconTile, InfoRow, ListCard, ListRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
 interface AvailableRoles {
     roles: UserRole[];
@@ -16,6 +18,7 @@ interface AvailableRoles {
 
 export default function StaffProfileScreen() {
     const { signOut } = useAuth();
+    const router = useRouter();
     const api = useApi();
     const { profile, role, baseRole, schoolName, reload } = useCurrentUser();
     const isTeacher = baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER';
@@ -65,6 +68,10 @@ export default function StaffProfileScreen() {
                     <Text style={styles.email}>{switching ? 'Switching…' : 'You also run a class, so you can switch to the class-teacher view.'}</Text>
                 </Card>
             ) : null}
+
+            <ListCard style={{ marginBottom: spacing.lg }}>
+                <ListRow title="Help & guides" subtitle="Guides for your account and how to reach support" left={<IconTile icon={LifeBuoy} />} onPress={() => router.push('/help')} />
+            </ListCard>
 
             <Button variant="danger" block label="Sign out" onPress={() => void signOut()} />
         </Screen>

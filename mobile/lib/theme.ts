@@ -18,6 +18,8 @@ export const colors = {
     foreground: '#0f172b',
     /** --muted-foreground (darkened on the web for legibility) */
     muted: '#3d4e66',
+    /** Placeholder text (the web's `placeholder:text-slate-400`): clearly lighter than typed text. */
+    placeholder: '#90a1b9',
     /** --muted / --secondary */
     mutedBg: '#f1f5f9',
     /** --viz-good */

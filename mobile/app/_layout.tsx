@@ -62,6 +62,10 @@ function RootStack({ signedIn }: { signedIn: boolean }) {
             <Stack.Protected guard={!signedIn}>
                 <Stack.Screen name="(auth)" />
             </Stack.Protected>
+            {/* Open signed in or out, as on the web: user guides, support and result verification. */}
+            <Stack.Screen name="help/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="help/[slug]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="help/contact" options={{ animation: 'slide_from_right' }} />
         </Stack>
     );
 }

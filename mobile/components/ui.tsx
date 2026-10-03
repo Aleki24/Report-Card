@@ -68,7 +68,7 @@ export function ScreenHeader({ title, description, action }: { title: string; de
 export function BackLink({ label = 'Back' }: { label?: string }) {
     const router = useRouter();
     return (
-        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backLink} accessibilityRole="link">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={8} style={styles.backLink} accessibilityRole="link">
             <ArrowLeft size={16} color={colors.primary} />
             <Text style={styles.link}>{label}</Text>
         </Pressable>
@@ -320,7 +320,7 @@ export function TextField({
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.placeholder}
                 multiline={multiline}
                 keyboardType={keyboardType}
                 secureTextEntry={secureTextEntry}
@@ -338,7 +338,7 @@ export function SearchField({ value, onChangeText, placeholder = 'Search…' }: 
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.placeholder}
             autoCorrect={false}
             clearButtonMode="while-editing"
             style={[styles.input, styles.search]}

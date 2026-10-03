@@ -72,7 +72,7 @@ export default function SignInScreen() {
                 <>
                     <AuthFootnote>Don’t have an account? <AuthLink label="Create one" onPress={() => router.push('/(auth)/sign-up')} /></AuthFootnote>
                     <AuthFootnote>First time? <AuthLink label="Activate your account" onPress={() => router.push('/(auth)/activate')} /></AuthFootnote>
-                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => void WebBrowser.openBrowserAsync(webUrl('/help'))} /></AuthFootnote>
+                    <AuthFootnote>Need help? <AuthLink label="Read the user guides" onPress={() => router.push('/help')} /></AuthFootnote>
                 </>
             )}
         >

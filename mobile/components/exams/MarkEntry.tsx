@@ -331,7 +331,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                                             blurOnSubmit={false}
                                             onSubmitEditing={() => focusNext(s.id)}
                                             placeholder={`/${exam.max_score}`}
-                                            placeholderTextColor={colors.muted}
+                                            placeholderTextColor={colors.placeholder}
                                             style={[styles.scoreInput, err ? { borderColor: colors.danger } : null]}
                                             accessibilityLabel={`Score for ${s.users?.first_name}`}
                                         />

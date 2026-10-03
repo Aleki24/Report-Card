@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ColorValue } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
-import type { LucideIcon } from 'lucide-react-native';
+import { LifeBuoy, type LucideIcon } from 'lucide-react-native';
 import { colors, fonts } from '@/lib/theme';
 import { IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
 
@@ -52,6 +52,14 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
                         onPress={() => router.push(item.href as Href)}
                     />
                 ))}
+            </ListCard>
+            <ListCard style={{ marginTop: 16 }}>
+                <ListRow
+                    title="Help & guides"
+                    subtitle="Step-by-step guides for your role, and how to reach support"
+                    left={<IconTile icon={LifeBuoy} />}
+                    onPress={() => router.push('/help')}
+                />
             </ListCard>
         </Screen>
     );

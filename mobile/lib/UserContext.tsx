@@ -82,6 +82,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 
+/** The signed-in user, or null on screens that are also open signed out (help, verify). */
+export function useOptionalCurrentUser(): UserContextValue | null {
+    return useContext(UserContext) ?? null;
+}
+
 export function useCurrentUser(): UserContextValue {
     const ctx = useContext(UserContext);
     if (!ctx) throw new Error('useCurrentUser must be used within a UserProvider');
