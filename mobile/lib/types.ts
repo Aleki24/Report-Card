@@ -220,61 +220,8 @@ export interface StudentProfile {
 
 // ── Staff: dashboard ───────────────────────────────────────
 
-export interface ClassPerformance {
-    id: string;
-    name: string;
-    levelCode: string | null;
-    students: number;
-    markCount: number;
-    mean: number | null;
-    passRate: number | null;
-}
-
-export interface UnmarkedClass {
-    label: string;
-    levelCode: string | null;
-    count: number;
-}
-
-export interface StaffUpcomingExam {
-    id: string;
-    name: string;
-    exam_type: string;
-    exam_date: string;
-    subject_name: string;
-    grade_name: string;
-}
-
-export interface AttendanceCounts {
-    present: number;
-    absent: number;
-    late: number;
-    excused: number;
-}
-
-/** GET /api/school/dashboard */
-export interface StaffDashboardSummary {
-    totalStudents: number;
-    totalTeachers: number;
-    totalUsers: number;
-    totalClasses: number;
-    totalReports: number;
-    attendanceToday: AttendanceCounts | null;
-    upcomingExams: StaffUpcomingExam[];
-    recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
-    overdueFeesCount: number;
-    announcementsLast7Days: number;
-    recentEnrollmentsLast7: number;
-    financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
-    academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
-    examsAwaitingMarks: number;
-    unmarkedByClass: UnmarkedClass[];
-    classPerformance: ClassPerformance[];
-    subjectsWithoutGradingSystem: number;
-    hasFeeData: boolean;
-    hasAttendanceData: boolean;
-    hasLogo: boolean;
-}
+/** GET /api/school/dashboard: one shape for the web and the app. */
+export type { DashboardData as StaffDashboardSummary, ClassPerformance, AttendanceToday as AttendanceCounts } from '@shared/dashboard';
 
 /** GET /api/school/stats?role=class_teacher */
 export interface ClassTeacherStats {

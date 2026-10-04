@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { ApiError, useApi, withQuery } from '@/lib/api';
+import { useTabParam } from '@/lib/useTabParam';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
@@ -35,8 +36,10 @@ export default function SubjectsScreen() {
     );
 }
 
+const SUBJECT_TABS = ['offered', 'teachers', 'combinations', 'placement'] as const;
+
 function SubjectsContent() {
-    const [tab, setTab] = useState<'offered' | 'teachers' | 'combinations' | 'placement'>('offered');
+    const [tab, setTab] = useTabParam(SUBJECT_TABS, 'offered');
     const structure = useAcademicStructure();
     const profile = useApiQuery<{ min_combination_group_size: number | null }>('/api/school/data?type=school_profile');
     return (

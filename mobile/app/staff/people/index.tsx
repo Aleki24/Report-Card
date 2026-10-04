@@ -43,14 +43,15 @@ export default function PeopleScreen() {
 
 function PeopleContent() {
     const { role } = useCurrentUser();
-    const params = useLocalSearchParams<{ tab?: string }>();
+    const params = useLocalSearchParams<{ tab?: string; search?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
 
     // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
     useEffect(() => {
         if (isAdmin && (params.tab === 'teachers' || params.tab === 'parents' || params.tab === 'students')) setTab(params.tab);
-    }, [isAdmin, params.tab]);
+        else if (params.search) setTab('students');
+    }, [isAdmin, params.tab, params.search]);
 
     return (
         <Screen>
@@ -92,7 +93,10 @@ function StudentsSection() {
         return streams.filter((s) => seniorGrades.has(s.grade_id));
     }, [structure.data, streams]);
     const hasPathways = (combinations.data ?? []).length > 0;
-    const [search, setSearch] = useState('');
+    // The dashboard's "Find a learner" opens here with ?search=.
+    const { search: searchParam } = useLocalSearchParams<{ search?: string }>();
+    const [search, setSearch] = useState(searchParam ?? '');
+    useEffect(() => { if (searchParam) setSearch(searchParam); }, [searchParam]);
     const [stream, setStream] = useState<string>('');
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
     const [limit, setLimit] = useState(PAGE);

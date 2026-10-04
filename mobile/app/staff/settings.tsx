@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -30,7 +31,8 @@ interface SchoolProfile {
     overall_grading_system_id: string | null;
 }
 
-type Tab = 'school' | 'calendar' | 'grading' | 'payments' | 'modules' | 'duties';
+const SETTINGS_TABS = ['school', 'calendar', 'grading', 'payments', 'modules', 'duties'] as const;
+type Tab = (typeof SETTINGS_TABS)[number];
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
 
 export default function SettingsScreen() {
@@ -42,7 +44,7 @@ export default function SettingsScreen() {
 }
 
 function SettingsContent() {
-    const [tab, setTab] = useState<Tab>('school');
+    const [tab, setTab] = useTabParam<Tab>(SETTINGS_TABS, 'school');
     return (
         <Screen>
             <ScreenHeader title="Settings" description="School profile, calendar, grading, payments, modules and duties." />

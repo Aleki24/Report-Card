@@ -27,6 +27,13 @@ export function getGreeting(hour: number = new Date().getHours()): string {
     return 'Good evening';
 }
 
+/** The same greeting in Kiswahili, as a Kenyan school says it. */
+export function getSwahiliGreeting(hour: number = new Date().getHours()): string {
+    if (hour < 12) return 'Habari za asubuhi';
+    if (hour < 17) return 'Habari za mchana';
+    return 'Habari za jioni';
+}
+
 export function formatDate(value: string | Date, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }): string {
     return new Date(value).toLocaleDateString('en-GB', opts);
 }

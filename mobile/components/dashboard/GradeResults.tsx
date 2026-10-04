@@ -6,7 +6,8 @@ import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { fonts, radius, spacing, makeStyles, type Palette, useTheme } from '@/lib/theme';
-import { Card, ChipSelect, EmptyState, LoadingView, SectionLabel } from '@/components/ui';
+import { Card, ChipSelect, EmptyState, LoadingView } from '@/components/ui';
+import { Meter, SectionTitle } from './kit';
 
 /** GET /api/school/analytics (the parts the web's GradeResultsCard reads). */
 interface Mark { subject_id: string | null; subject_name: string; percentage: number | null; exam_id: string; exam_name: string; exam_date: string | null }
@@ -114,7 +115,7 @@ export function GradeResults() {
 
     return (
         <>
-            <SectionLabel>Exam results by subject</SectionLabel>
+            <SectionTitle title="Class results" />
             <Card>
                 <ChipSelect
                     label="Class"
@@ -138,9 +139,7 @@ export function GradeResults() {
                         {subjects.map((s) => (
                             <View key={s.key} style={styles.row}>
                                 <Text style={styles.subject} numberOfLines={1}>{s.subject}</Text>
-                                <View style={styles.track}>
-                                    <View style={[styles.fill, { width: `${Math.max(2, Math.min(100, s.avg))}%`, backgroundColor: sevColor(colors, s.avg) }]} />
-                                </View>
+                                <View style={styles.track}><Meter value={Math.max(2, s.avg)} color={sevColor(colors, s.avg)} track={colors.mutedBg} /></View>
                                 <Text style={styles.avg}>{s.avg}%</Text>
                                 <Text style={[styles.grade, !s.grade && styles.noGrade]}>{s.grade ?? '–'}</Text>
                             </View>
@@ -159,8 +158,7 @@ const useStyles = makeStyles((colors) => ({
     meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
     subject: { width: 108, fontSize: 13, fontFamily: fonts.medium, color: colors.foreground },
-    track: { flex: 1, height: 8, borderRadius: 999, backgroundColor: colors.mutedBg, overflow: 'hidden' },
-    fill: { height: '100%', borderRadius: 999 },
+    track: { flex: 1 },
     avg: { width: 40, textAlign: 'right', fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
     grade: { width: 32, textAlign: 'center', fontSize: 12, fontFamily: fonts.bold, color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 2, overflow: 'hidden' },
     noGrade: { color: colors.muted, backgroundColor: colors.mutedBg },

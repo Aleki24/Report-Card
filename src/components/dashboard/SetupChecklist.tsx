@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { SetupStatus } from '@/lib/setup-status';
+import { buildSetupSteps, type SetupStatus } from '@/lib/dashboard';
 
 /**
  * Setup progress for a new school.
@@ -31,14 +31,6 @@ interface SetupChecklistProps {
     schoolId?: string | null;
 }
 
-interface Step {
-    id: string;
-    done: boolean;
-    label: string;
-    hint: string;
-    href: string;
-    cta: string;
-}
 
 const DISMISS_KEY = 'skulbase:setup-checklist-dismissed';
 
@@ -63,98 +55,9 @@ export function SetupChecklist({
         }
     }, [storageKey]);
 
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
     // In the order a school actually has to do them: each step is something
     // the next one depends on.
-    const steps: Step[] = [
-        {
-            id: 'logo',
-            done: hasLogo,
-            label: 'Add your school logo',
-            hint: 'It prints on every report card.',
-            href: '/dashboard/settings',
-            cta: 'Open settings',
-        },
-        ...(setup ? [
-            {
-                id: 'term',
-                done: setup.hasCurrentTerm,
-                label: 'Set the current term and its dates',
-                hint: 'Exams, attendance and report cards are filed under a term.',
-                href: '/dashboard/settings?tab=calendar',
-                cta: 'Open calendar',
-            },
-            {
-                id: 'classes',
-                done: setup.classes > 0,
-                label: 'Create your classes',
-                hint: 'One class per grade, or several streams — learners and teachers belong to a class.',
-                href: '/dashboard/classes',
-                cta: 'Add classes',
-            },
-            {
-                id: 'subjects',
-                done: setup.subjectsOffered > 0,
-                label: 'Choose the subjects you offer',
-                hint: 'Exams and mark sheets are set per subject.',
-                href: '/dashboard/subjects',
-                cta: 'Choose subjects',
-            },
-        ] : []),
-        {
-            id: 'teachers',
-            done: totalTeachers > 0,
-            label: 'Add teachers',
-            hint: 'They enter marks and take attendance.',
-            href: '/dashboard/people?tab=teachers',
-            cta: 'Add teachers',
-        },
-        ...(setup ? [
-            {
-                id: 'class-teachers',
-                done: setup.classes > 0 && setup.classesWithoutClassTeacher === 0,
-                label: 'Give every class a class teacher',
-                hint: setup.classesWithoutClassTeacher > 0
-                    ? `${plural(setup.classesWithoutClassTeacher, 'class')} without one. Class teachers write report-card remarks.`
-                    : 'Class teachers write report-card remarks.',
-                href: '/dashboard/users',
-                cta: 'Assign',
-            },
-            {
-                id: 'subject-teachers',
-                done: setup.subjectTeacherAssignments > 0,
-                label: 'Assign subject teachers',
-                hint: 'Per stream, or for the whole grade — each teacher then sees only their own learners.',
-                href: '/dashboard/subjects?tab=teachers',
-                cta: 'Assign',
-            },
-        ] : []),
-        {
-            id: 'students',
-            done: totalStudents > 0,
-            label: 'Enrol students',
-            hint: 'Classes, marks and fees all hang off this.',
-            href: '/dashboard/people',
-            cta: 'Add students',
-        },
-        ...(setup && setup.learnersWithoutClass > 0 ? [{
-            id: 'unplaced',
-            done: false,
-            label: `Put ${plural(setup.learnersWithoutClass, 'learner')} in a class`,
-            hint: 'Learners without a class get no mark sheets or report cards.',
-            href: '/dashboard/people',
-            cta: 'Fix',
-        }] : []),
-        {
-            id: 'users',
-            done: totalUsers > totalTeachers + 1,
-            label: 'Add support staff',
-            hint: 'Bursars and administrators, if you have them.',
-            href: '/dashboard/users',
-            cta: 'Add users',
-        },
-    ];
+    const steps = buildSetupSteps({ hasLogo, totalTeachers, totalStudents, totalUsers, setup });
 
     const remaining = steps.filter(s => !s.done);
     if (dismissed || remaining.length === 0) return null;
