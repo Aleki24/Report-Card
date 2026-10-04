@@ -59,3 +59,14 @@ headless web build against a mocked API.
 
 Each item is verified with the type check and a headless web build (mocked
 API), then committed; an EAS preview build follows the batch.
+
+## Redesign (dashboards, dark mode, identity)
+
+- ✅ Theme: light, dark or automatic (Profile → Appearance), applied live;
+  every screen reads `useTheme`/`makeStyles`. Plus Jakarta Sans throughout.
+- ✅ Dashboards carry the web's content in its order for admins, teachers,
+  staff, learners and parents; the to-do rules, setup steps and data shape
+  are shared from `src/lib/dashboard.ts`.
+- ✅ Every screen header shows the web's section icon, hue and eyebrow
+  (`lib/hues.ts`); links, tiles and the More list use the same hues.
+- ✅ Kenyan touches: Kiswahili greetings, beadwork on the home hero.

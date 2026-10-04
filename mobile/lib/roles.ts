@@ -209,3 +209,9 @@ export function canAccessStudentScreen(screen: StudentScreen, viewer: Viewer): b
 export function getStudentNav(viewer: Viewer): { primary: StudentScreen[]; overflow: StudentScreen[] } {
     return splitNav(STUDENT_ORDER, ['index', 'results', 'subjects/index', 'fees'], ['profile'], (s) => canAccessStudentScreen(s, viewer));
 }
+
+/** The menu icon of the screen at this exact route, for its header. */
+export function screenIconFor(pathname: string): LucideIcon | null {
+    const all: readonly ScreenMeta<string>[] = [...Object.values(STAFF_SCREENS), ...Object.values(STUDENT_SCREENS)];
+    return all.find((s) => s.href === pathname)?.icon ?? null;
+}

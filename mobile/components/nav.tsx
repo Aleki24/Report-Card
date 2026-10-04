@@ -3,6 +3,7 @@ import type { ColorValue } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { LifeBuoy, type LucideIcon } from 'lucide-react-native';
 import { fonts, useTheme } from '@/lib/theme';
+import { hueForHref } from '@/lib/hues';
 import { IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
 
 /** A tab bar icon: the web menu's Lucide icon in the tab's tint. */
@@ -54,7 +55,7 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
                         key={item.key}
                         title={item.title}
                         subtitle={item.description}
-                        left={<IconTile icon={item.icon} />}
+                        left={<IconTile icon={item.icon} hue={hueForHref(item.href)} />}
                         onPress={() => router.push(item.href as Href)}
                     />
                 ))}

@@ -14,7 +14,11 @@ import {
     type StyleProp,
     type ViewStyle,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { pageIdentity } from '@/lib/hues';
+import { CountUp } from './dashboard/kit';
+import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
@@ -68,12 +72,36 @@ export function Screen({
     );
 }
 
-export function ScreenHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+/**
+ * Every screen's title block, as the web's PageHeader: the menu icon on a
+ * gradient tile in the section's colour, the section name above the title.
+ * Taken from the route, so screens need not pass them.
+ */
+export function ScreenHeader({ title, description, action, icon, hue, eyebrow }: {
+    title: string;
+    description?: string;
+    action?: React.ReactNode;
+    icon?: LucideIcon;
+    hue?: Hue;
+    eyebrow?: string;
+}) {
+    const { tones } = useTheme();
     const styles = useStyles();
+    const pathname = usePathname();
+    const identity = pageIdentity(pathname);
+    const Icon = icon ?? screenIconFor(pathname);
+    const tone = tones[hue ?? identity?.hue ?? 'blue'];
+    const label = eyebrow ?? identity?.eyebrow;
     return (
         <View style={styles.header}>
+            {Icon ? (
+                <LinearGradient colors={tone.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerIcon}>
+                    <Icon size={22} color="#ffffff" strokeWidth={2.2} />
+                </LinearGradient>
+            ) : null}
             <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.headerTitle}>{title}</Text>
+                {label ? <Text style={[styles.headerEyebrow, { color: tone.fg }]}>{label.toUpperCase()}</Text> : null}
+                <Text style={styles.headerTitle} accessibilityRole="header">{title}</Text>
                 {description ? <Text style={styles.headerDesc}>{description}</Text> : null}
             </View>
             {action}
@@ -188,7 +216,7 @@ export function StatTile({ label, value, sub, tone, icon, onPress }: { label: st
             {icon ? <IconTile icon={icon} /> : null}
             <View style={styles.statBody}>
                 <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
-                <Text style={[styles.statValue, tone ? { color: tone } : null]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+                <CountUp value={value} style={[styles.statValue, tone ? { color: tone } : null]} />
                 {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
             </View>
         </>
@@ -557,8 +585,10 @@ const useStyles = makeStyles((colors) => ({
     // Cap line length on tablets so screens stay readable at every width.
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-    header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.lg },
-    headerTitle: { fontSize: 24, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.3 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+    headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
+    headerEyebrow: { fontSize: 11, fontFamily: fonts.bold, letterSpacing: 1.2, marginBottom: 1 },
+    headerTitle: { fontSize: 24, lineHeight: 30, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.5 },
     headerDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4 },
     backLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md, alignSelf: 'flex-start' },
     link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 14 },
