@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
+import { inviteDeliveryMessage, type InviteDelivery } from '@shared/invite-delivery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
@@ -63,7 +64,7 @@ function UsersContent() {
     const [inviting, setInviting] = useState(false);
     const [editing, setEditing] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
-    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+    const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'warning'; text: string } | null>(null);
 
     const users = data ?? [];
     const filtered = useMemo(() => {
@@ -79,8 +80,9 @@ function UsersContent() {
                 onPress: async () => {
                     setBusy(u.id);
                     try {
-                        const res = await api.post<{ password: string; notified?: boolean }>('/api/admin/reset-user-password', { user_id: u.id });
-                        setMessage({ tone: 'success', text: `New invite code for ${fullName(u)}: ${res.password}${res.notified ? ' (sent by SMS)' : ''}` });
+                        const res = await api.post<{ password: string; notified?: InviteDelivery }>('/api/admin/reset-user-password', { user_id: u.id });
+                        const delivery = inviteDeliveryMessage(res.notified);
+                        setMessage({ tone: delivery && !delivery.sent ? 'warning' : 'success', text: `New invite code for ${fullName(u)}: ${res.password}. ${delivery?.text ?? ''}`.trim() });
                         refresh();
                     } catch (err) {
                         setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to reset') });
@@ -210,8 +212,8 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
         setSaving(true);
         setError(null);
         try {
-            const res = await api.post<{ credentials: { username: string; invite_code: string }; notified?: boolean }>('/api/admin/create-user', payload);
-            onDone(`Invited ${first.trim()} ${last.trim()}. Username ${res.credentials.username} · invite code ${res.credentials.invite_code}${res.notified ? ' (sent by SMS)' : ''}. Assign subjects under Subjects → Teachers.`);
+            const res = await api.post<{ credentials: { username: string; invite_code: string }; notified?: InviteDelivery }>('/api/admin/create-user', payload);
+            onDone(`Invited ${first.trim()} ${last.trim()}. Username ${res.credentials.username} · invite code ${res.credentials.invite_code}. ${inviteDeliveryMessage(res.notified)?.text ?? ''} Assign subjects under Subjects → Teachers.`);
         } catch (err) {
             setError(errorMessage(err, 'Failed to invite'));
         } finally {

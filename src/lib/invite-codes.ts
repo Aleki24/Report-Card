@@ -70,10 +70,8 @@ export async function createInviteCode(
   throw new Error('Failed to generate a unique invite code after multiple attempts');
 }
 
-export interface InviteNotifyResult {
-  sms: boolean;
-  email: boolean;
-}
+export type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
+import type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
 
 /**
  * Best-effort delivery of a freshly generated invite code by SMS and/or
@@ -91,15 +89,19 @@ export async function notifyInviteCode(params: {
   const { phone, email, firstName, schoolName, code } = params;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
   const link = activationUrl(code, appUrl);
-  const result: InviteNotifyResult = { sms: false, email: false };
+  const result: InviteNotifyResult = { sms: false, email: false, noPhone: !phone };
 
   if (phone) {
     try {
       const message = `Hi ${firstName}, your Skulbase invite code for ${schoolName} is ${code}. Open ${link} to set up your account.`;
       const smsRes = await sendSMS(phone, message);
       result.sms = smsRes.success;
-      if (!smsRes.success) console.error('[invite] SMS send failed:', smsRes.error);
+      if (!smsRes.success) {
+        result.smsError = smsRes.error ?? 'SMS send failed';
+        console.error('[invite] SMS send failed:', smsRes.error);
+      }
     } catch (err) {
+      result.smsError = err instanceof Error ? err.message : 'SMS send failed';
       console.error('[invite] SMS send threw:', err);
     }
   }

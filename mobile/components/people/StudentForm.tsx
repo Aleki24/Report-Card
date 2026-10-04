@@ -1,3 +1,4 @@
+import type { InviteDelivery } from '@shared/invite-delivery';
 import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -39,6 +40,8 @@ export interface AddStudentResult {
     name: string;
     username?: string;
     invite_code?: string;
+    /** Whether the code reached the guardian by SMS. */
+    notified?: InviteDelivery;
 }
 
 /** Same checks the web runs before saving, so bad data can't silently break SMS later. */

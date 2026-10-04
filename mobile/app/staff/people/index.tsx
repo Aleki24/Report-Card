@@ -4,6 +4,7 @@ import { UserCheck, Users } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
+import { inviteDeliveryMessage } from '@shared/invite-delivery';
 import type { CreatedCredential } from '@shared/import/student-rows';
 import { ImportStudentsSheet } from '@/components/people/ImportStudentsSheet';
 import { useAcademicStructure, useGradeStreams } from '@/lib/useSchoolData';
@@ -129,7 +130,7 @@ function StudentsSection() {
                     onDismiss={() => setCreated(null)}
                     message={
                         created.invite_code
-                            ? `${created.name} added. Username: ${created.username} · Invite code: ${created.invite_code} — share it so they can activate their account.`
+                            ? `${created.name} added. Username: ${created.username} · Invite code: ${created.invite_code}. ${inviteDeliveryMessage(created.notified)?.text ?? 'Share it so they can activate their account.'}`
                             : `${created.name} added.`
                     }
                 />

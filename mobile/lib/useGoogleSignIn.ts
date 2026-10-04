@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { isClerkAPIResponseError, useSSO } from '@clerk/clerk-expo';
 import * as AuthSession from 'expo-auth-session';
+import { NETWORK_ERROR_MESSAGE } from './api';
 
 /**
  * Where Google sends the browser back to the app. A production Clerk instance
@@ -10,10 +11,16 @@ import * as AuthSession from 'expo-auth-session';
  */
 export const SSO_REDIRECT_URL = AuthSession.makeRedirectUri({ scheme: 'skulbase', path: 'sso-callback' });
 
+/** Network failures from Clerk or our API ("fetch failed: java.net…", "Network request failed"). */
+function networkMessage(err: unknown): string | null {
+    const text = err instanceof Error ? err.message : '';
+    return /fetch failed|network request failed|java\.net|socket|timed? ?out|connection/i.test(text) ? NETWORK_ERROR_MESSAGE : null;
+}
+
 /** Turns a Clerk or network failure into the message the auth screens show. */
 export function describeAuthError(err: unknown, fallback: string): string {
     if (isClerkAPIResponseError(err)) return err.errors[0]?.longMessage ?? err.errors[0]?.message ?? fallback;
-    return err instanceof Error ? err.message : fallback;
+    return networkMessage(err) ?? (err instanceof Error ? err.message : fallback);
 }
 
 /** A friendlier message for known Clerk error codes, else Clerk's own (as the web's clerkMessage). */
@@ -22,7 +29,7 @@ export function clerkMessage(err: unknown, byCode: Readonly<Record<string, strin
         const first = err.errors[0];
         return (first?.code && byCode[first.code]) || first?.longMessage || first?.message || fallback;
     }
-    return err instanceof Error ? err.message : fallback;
+    return networkMessage(err) ?? (err instanceof Error ? err.message : fallback);
 }
 
 /** "Continue with Google", shared by sign-in and sign-up: the same Clerk SSO flow the web uses. */

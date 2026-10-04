@@ -40,8 +40,31 @@ interface ErrorBody {
     code?: string;
 }
 
+/** Shown when the phone can't reach the server at all (no data, dropped connection). */
+export const NETWORK_ERROR_MESSAGE = 'Couldn’t reach Skulbase. Check your internet connection and try again.';
+export const NETWORK_ERROR_CODE = 'NETWORK';
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * fetch, retried when the request never got an answer. Mobile networks drop
+ * connections, and a pooled connection the server already closed fails with
+ * "Connection reset" on first use, so a quick retry usually succeeds. The
+ * raw Java/OkHttp error never reaches the screen.
+ */
+export async function fetchWithRetry(url: string, init?: RequestInit, attempts = 3): Promise<Response> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await fetch(url, init);
+        } catch {
+            if (attempt >= attempts) throw new ApiError(NETWORK_ERROR_MESSAGE, 0, NETWORK_ERROR_CODE);
+            await wait(500 * attempt);
+        }
+    }
+}
+
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetchWithRetry(`${API_URL}${path}`, {
         ...init,
         headers: {
             'Content-Type': 'application/json',
@@ -159,7 +182,7 @@ export function useApi(): Api {
                 else form.append(k, { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
             });
             const token = await getTokenRef.current();
-            const res = await fetch(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            const res = await fetchWithRetry(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
             const json: unknown = await res.json().catch(() => ({}));
             if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
             return json as T;

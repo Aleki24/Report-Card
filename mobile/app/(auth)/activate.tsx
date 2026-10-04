@@ -4,7 +4,7 @@ import { useSignIn } from '@clerk/clerk-expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowRight, CircleCheck, KeyRound } from 'lucide-react-native';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
-import { publicPost } from '@/lib/api';
+import { ApiError, publicPost } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
 import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
@@ -117,6 +117,19 @@ export default function ActivateScreen() {
         void google.start().then(() => setPendingInviteCode(null), () => setPendingInviteCode(null));
     };
 
+    /** Signs in with the username and password just chosen; false if that fails. */
+    const signInWithPassword = async (): Promise<boolean> => {
+        if (!isLoaded || !signIn) return false;
+        try {
+            const result = await signIn.create({ identifier: username, password });
+            if (result.status !== 'complete') return false;
+            await setActive?.({ session: result.createdSessionId });
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
     const submit = async () => {
         const problem = usernameProblem(username)
             ?? (password.length < MIN_PASSWORD_LENGTH ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` : null);
@@ -127,6 +140,15 @@ export default function ActivateScreen() {
         try {
             data = await publicPost<ActivateResponse>('/api/auth/activate', { code, username, password, email: email.trim() || undefined });
         } catch (err) {
+            // A dropped connection can lose the answer to an activation that
+            // went through; the retry then finds the code used. The account
+            // exists with what was just chosen, so sign in with it.
+            if (err instanceof ApiError && /already been used/i.test(err.message) && (await signInWithPassword())) {
+                setDoneMessage('Your account is ready.');
+                setStage('done');
+                setSubmitting(false);
+                return;
+            }
             setError(errorMessage(err, 'Activation failed. Please try again.'));
             setSubmitting(false);
             return;

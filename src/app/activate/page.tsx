@@ -7,7 +7,7 @@ import { useSignUp } from '@clerk/nextjs/legacy';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { ArrowRight, CheckCircle2, KeyRound, Loader2 } from 'lucide-react';
 import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
-import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
+import { extractInviteCode, INVITE_CODE_LENGTH, savePendingActivation } from '@/lib/activation-link';
 import { ROLE_LABELS } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
@@ -147,8 +147,7 @@ export default function ActivatePage() {
         setGoogleLoading(true);
         try {
             // Read back by /activate/callback once Google redirects home.
-            sessionStorage.setItem('activate_invite_code', code);
-            sessionStorage.setItem('activate_username', username || invite?.username || '');
+            savePendingActivation(code, username || invite?.username || '');
             await signUp.authenticateWithRedirect({
                 strategy: 'oauth_google',
                 redirectUrl: '/activate/callback',

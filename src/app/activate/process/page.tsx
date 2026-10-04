@@ -1,5 +1,6 @@
 "use client";
 
+import { clearPendingActivation, readPendingActivation } from '@/lib/activation-link';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
@@ -7,8 +8,6 @@ import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus } from '@/components/auth/AuthShell';
 import { homePathForRole, isUserRole } from '@/lib/roles';
 
-const INVITE_KEY = 'activate_invite_code';
-const USERNAME_KEY = 'activate_username';
 
 interface ActivateResponse { error?: string; role?: string }
 
@@ -42,10 +41,9 @@ export default function ActivateProcessPage() {
     started.current = true;
 
     void (async () => {
-      const inviteCode = sessionStorage.getItem(INVITE_KEY);
-      const username = sessionStorage.getItem(USERNAME_KEY);
+      const { code: inviteCode, username } = readPendingActivation();
       if (!inviteCode) {
-        setView({ kind: 'error', message: 'We couldn’t find your invite code. It is only kept in this browser tab, so start activation again here.' });
+        setView({ kind: 'error', message: 'We couldn’t find your invite code. Start activation again here, in this browser.' });
         return;
       }
 
@@ -87,8 +85,7 @@ export default function ActivateProcessPage() {
           return;
         }
 
-        sessionStorage.removeItem(INVITE_KEY);
-        sessionStorage.removeItem(USERNAME_KEY);
+        clearPendingActivation();
         setView({ kind: 'done' });
         // A full navigation, not router.push: the app may have cached this
         // account as PENDING while it was being linked, which would send the
