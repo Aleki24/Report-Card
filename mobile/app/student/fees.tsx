@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -106,6 +107,7 @@ export default function StudentFeesScreen() {
 }
 
 function FeeHistory({ fee, canPay, onPay }: { fee: FeeRecord; canPay: boolean; onPay: () => void }) {
+    const download = useDownload();
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
@@ -117,7 +119,7 @@ function FeeHistory({ fee, canPay, onPay }: { fee: FeeRecord; canPay: boolean; o
         setBusy(p.id);
         setDownloadError(null);
         try {
-            await api.downloadAndShare(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`);
+            await download(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`);
         } catch (err) {
             setDownloadError(errorMessage(err, 'Download failed'));
         } finally {

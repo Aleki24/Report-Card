@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { dateTime, humanize, personName } from '@shared/ops/format';
@@ -17,6 +18,7 @@ type Detail = ExamPaper & { reviews: PaperReview[] };
 
 /** A paper's details, files, moderation history and the actions open to the viewer — the web's paper drawer. */
 export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: string; onClose: () => void; onChanged: () => void }) {
+    const download = useDownload();
     const styles = useStyles();
     const api = useApi();
     const toast = useToast();
@@ -57,7 +59,7 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
 
     const openFile = (kind: PaperFileKind) => {
         if (!paper) return;
-        api.downloadAndShare(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, `${fileSafe(paper.title)}-${kind}.pdf`)
+        download(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, `${fileSafe(paper.title)}-${kind}.pdf`)
             .catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
     };
 

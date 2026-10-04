@@ -1,10 +1,10 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { apiErrorMessage } from '@shared/api-error-message';
+import { saveToDevice, type SavedFile } from './saveFile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
 
@@ -76,11 +76,11 @@ export interface Api {
     del: <T>(path: string, body?: unknown) => Promise<T>;
     /**
      * Downloads a server-rendered file (report cards, mark sheets) with the
-     * Clerk token attached, then opens the system share sheet so it can be
-     * saved, printed or sent. The web hands these URLs to the browser; a
-     * phone app has to fetch them itself because the URL needs auth.
+     * Clerk token attached, and saves it on the phone (see saveToDevice).
+     * The web hands these URLs to the browser; a phone app has to fetch them
+     * itself because the URL needs auth.
      */
-    downloadAndShare: (path: string, fileName: string, mimeType?: string) => Promise<void>;
+    download: (path: string, fileName: string, mimeType?: string) => Promise<SavedFile>;
     /**
      * Lets the user pick an image and uploads it to `/api/school/upload`
      * (the endpoint the web uses for assignment files, photos and logos).
@@ -170,9 +170,12 @@ export function useApi(): Api {
             patch: (path, body) => send('PATCH', path, body),
             put: (path, body) => send('PUT', path, body),
             del: (path, body) => send('DELETE', path, body),
-            downloadAndShare: async (path, fileName, mimeType = 'application/pdf') => {
+            download: async (path, fileName, mimeType = 'application/pdf') => {
                 const token = await getTokenRef.current();
-                if (Platform.OS === 'web') return downloadInBrowser(`${API_URL}${path}`, token, fileName);
+                if (Platform.OS === 'web') {
+                    await downloadInBrowser(`${API_URL}${path}`, token, fileName);
+                    return { uri: fileName, name: fileName, mimeType, folder: 'Downloads' };
+                }
                 const target = new File(Paths.cache, fileName);
                 if (target.exists) target.delete();
                 let file: File;
@@ -193,10 +196,7 @@ export function useApi(): Api {
                         throw new ApiError(body.error ?? 'Download failed', 0, body.code ?? null);
                     }
                 }
-                if (!(await Sharing.isAvailableAsync())) {
-                    throw new ApiError('Sharing is not available on this device.', 0);
-                }
-                await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: fileName });
+                return saveToDevice(file, fileName, mimeType);
             },
             pickFile,
             sendForm,

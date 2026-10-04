@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Square, SquareCheck } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
@@ -140,6 +141,7 @@ function ReportsContent() {
 // ── Downloads ──────────────────────────────────────────────
 
 function DownloadPanel({ scope }: { scope: Scope }) {
+    const download = useDownload();
     const styles = useStyles();
     const api = useApi();
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
@@ -169,7 +171,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
             setMessage({ tone: 'info', text: 'Compiling grades and preparing the report cards — a full class takes a few seconds.' });
             // Same first step as the web: roll marks up into report cards (non-blocking if it fails).
             await api.post('/api/school/generate-reports', { term_id: scope.termId, grade_stream_id: scope.streamId }).catch(() => undefined);
-            await api.downloadAndShare(
+            await download(
                 withQuery(`/api/reports/class/${scope.streamId}`, { ...baseQuery, format: 'pdf', template: templateParam }),
                 `Report_cards_${fileSafe(scope.streamName)}_${fileSafe(scope.termName)}.pdf`,
             );
@@ -178,7 +180,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
 
     const markSheet = () =>
         run('sheet', async () => {
-            await api.downloadAndShare(
+            await download(
                 withQuery(`/api/reports/marksheet/${scope.streamId}`, { ...baseQuery, format: 'pdf' }),
                 `Mark_sheet_${fileSafe(scope.streamName)}_${fileSafe(scope.termName)}.pdf`,
             );
@@ -187,7 +189,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
 
     const studentCard = (s: StudentListItem) =>
         run(s.id, () =>
-            api.downloadAndShare(
+            download(
                 withQuery(`/api/reports/student/${s.id}`, { year: scope.yearId, term: scope.termId, examType: scope.examType, customTitle: title.trim() || null, template: templateParam }),
                 `Report_card_${fileSafe(fullName(s.users))}.pdf`,
             ),

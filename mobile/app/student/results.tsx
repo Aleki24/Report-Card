@@ -1,6 +1,7 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useApi, withQuery } from '@/lib/api';
+import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, fileSafe, formatPercent, scoreColor } from '@/lib/format';
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam, type ReportTemplateId } from '@/lib/reportTemplates';
@@ -107,19 +108,19 @@ function ExamMarksTab() {
 function ReportCardsTab() {
     const { colors } = useTheme();
     const styles = useStyles();
-    const api = useApi();
     const { data, loading, error, reload } = useApiQuery<ReportCard[]>('/api/school/student/report-cards');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
     const [busy, setBusy] = useState<string | null>(null);
     const [downloadError, setDownloadError] = useState<string | null>(null);
 
+    const saveFile = useDownload();
     const download = async (rc: ReportCard) => {
         if (!rc.student_id) return;
         setBusy(rc.id);
         setDownloadError(null);
         try {
-            await api.downloadAndShare(
+            await saveFile(
                 withQuery(`/api/reports/student/${rc.student_id}`, { term: rc.terms?.id, year: rc.academic_years?.id, template: templateParam(template) }),
                 `Report_card_${fileSafe(`${rc.terms?.name ?? ''}_${rc.academic_years?.name ?? ''}`)}.pdf`,
             );

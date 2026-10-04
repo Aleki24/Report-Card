@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
@@ -68,6 +69,7 @@ function FeesContent() {
 // ── Balances ───────────────────────────────────────────────
 
 function Balances() {
+    const download = useDownload();
     const { colors } = useTheme();
     const api = useApi();
     const { terms, activeTermId } = useTerms();
@@ -99,7 +101,7 @@ function Balances() {
     const exportXlsx = async () => {
         setExporting(true);
         try {
-            await api.downloadAndShare(withQuery('/api/school/fees/export', { term_id: termId }), 'Fee_balances.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            await download(withQuery('/api/school/fees/export', { term_id: termId }), 'Fee_balances.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Export failed') });
         } finally {
@@ -264,6 +266,7 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
 // ── Payments ledger ────────────────────────────────────────
 
 function Payments() {
+    const download = useDownload();
     const { colors } = useTheme();
     const api = useApi();
     const [method, setMethod] = useState('');
@@ -306,7 +309,7 @@ function Payments() {
                     variant="secondary"
                     label="Export ledger"
                     loading={busy === 'export'}
-                    onPress={() => run('export', () => api.downloadAndShare(withQuery('/api/school/fees/payments/export', { method }), 'Fee_payments.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))}
+                    onPress={() => run('export', () => download(withQuery('/api/school/fees/payments/export', { method }), 'Fee_payments.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))}
                 />
             </ButtonRow>
             <View style={{ marginTop: spacing.md }}>
@@ -326,7 +329,7 @@ function Payments() {
                                     <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                         <Badge label={p.status} variant={PAYMENT_STATUS_VARIANT[p.status]} />
                                         {p.status === 'COMPLETED' && p.studentFeeId ? (
-                                            <Button size="sm" variant="ghost" label="Receipt" loading={busy === p.id} onPress={() => run(p.id, () => api.downloadAndShare(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`))} />
+                                            <Button size="sm" variant="ghost" label="Receipt" loading={busy === p.id} onPress={() => run(p.id, () => download(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`))} />
                                         ) : null}
                                     </View>
                                 }

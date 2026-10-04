@@ -1,6 +1,6 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
@@ -12,9 +12,9 @@ import type { ExamMark, ExamSlot } from '@/lib/types';
 
 /** One exam's results, best first, with the summary the web's results tab shows. */
 export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onChanged: (status: ExamSlot['status']) => void; onEdit: () => void }) {
+    const download = useDownload();
     const { colors } = useTheme();
     const styles = useStyles();
-    const api = useApi();
     const { data, loading, error, refresh, reload } = useApiQuery<ExamMark[]>(`/api/school/exam-marks?exam_id=${exam.id}`);
     const [search, setSearch] = useState('');
     const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
@@ -56,7 +56,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         setExportError(null);
         try {
             const safe = fileSafe(`${exam.subject_name}-${exam.grade_stream_name ?? exam.grade_name}-${exam.exam_type}`);
-            await api.downloadAndShare(`/api/school/exam-marks/export?exam_id=${exam.id}&format=${format}`, `${safe}.${format}`, format === 'pdf' ? 'application/pdf' : 'text/csv');
+            await download(`/api/school/exam-marks/export?exam_id=${exam.id}&format=${format}`, `${safe}.${format}`, format === 'pdf' ? 'application/pdf' : 'text/csv');
         } catch (err) {
             setExportError(errorMessage(err, 'Export failed'));
         } finally {

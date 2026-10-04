@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -6,7 +7,7 @@ import {
     Megaphone, Minus, Star, TrendingUp, Wallet,
 } from 'lucide-react-native';
 import { dueLabel, dueState, localToday, type StudentAssignment } from '@shared/assignments';
-import { useApi, withQuery } from '@/lib/api';
+import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useSchoolPassMark } from '@/lib/usePassMark';
@@ -97,10 +98,10 @@ function HomeworkPanel({ assignments, onChanged }: { assignments: readonly Stude
  * progress over time, school news, goals and notes.
  */
 export function StudentHome() {
+    const download = useDownload();
     const { colors, scheme } = useTheme();
     const styles = useStyles();
     const router = useRouter();
-    const api = useApi();
     const toast = useToast();
     const { profile } = useCurrentUser();
     const passMark = useSchoolPassMark();
@@ -133,7 +134,7 @@ export function StudentHome() {
         if (!report || !studentId) return;
         setDownloading(true);
         try {
-            await api.downloadAndShare(
+            await download(
                 withQuery(`/api/reports/student/${studentId}`, { term: report.terms?.id, year: report.academic_years?.id }),
                 `Report_card_${fileSafe(`${report.terms?.name ?? ''}_${report.academic_years?.name ?? ''}`)}.pdf`,
             );

@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -22,6 +23,7 @@ type Panel = 'history' | 'pay' | 'edit';
 
 /** One fee record, expanded: its payments, recording a payment, and editing the bill. */
 export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: () => void }) {
+    const download = useDownload();
     const styles = useStyles();
     const api = useApi();
     const payments = useApiQuery<FeePayment[]>(`/api/school/fees/${fee.id}/payments`);
@@ -116,7 +118,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
         ]);
 
     const receipt = (p: FeePayment) =>
-        void act(`r-${p.id}`, () => api.downloadAndShare(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`));
+        void act(`r-${p.id}`, () => download(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`));
 
     return (
         <View style={styles.wrap}>

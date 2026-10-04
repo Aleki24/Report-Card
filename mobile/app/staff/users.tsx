@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -53,6 +54,7 @@ export default function UsersScreen() {
 }
 
 function UsersContent() {
+    const download = useDownload();
     const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, refresh, refreshing } = useApiQuery<SchoolUser[]>('/api/school/data?type=users');
@@ -92,7 +94,7 @@ function UsersContent() {
     const printCodes = async () => {
         setBusy('print');
         try {
-            await api.downloadAndShare('/api/admin/invite-codes/pdf?category=all&status=active&format=pdf', 'Invite_codes.pdf');
+            await download('/api/admin/invite-codes/pdf?category=all&status=active&format=pdf', 'Invite_codes.pdf');
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Download failed') });
         } finally {

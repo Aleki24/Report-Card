@@ -11,10 +11,14 @@ interface ToastState {
     message: string;
     detail?: string;
     tone: ToastTone;
+    action?: ToastAction;
 }
 
+/** A button on the toast, e.g. "Open" after a download. */
+export interface ToastAction { label: string; onPress: () => void }
+
 interface ToastApi {
-    show: (message: string, tone?: ToastTone, detail?: string) => void;
+    show: (message: string, tone?: ToastTone, detail?: string, action?: ToastAction) => void;
     success: (message: string) => void;
     error: (message: string, detail?: string) => void;
 }
@@ -33,11 +37,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const insets = useSafeAreaInsets();
 
-    const show = useCallback((message: string, tone: ToastTone = 'info', detail?: string) => {
+    const show = useCallback((message: string, tone: ToastTone = 'info', detail?: string, action?: ToastAction) => {
         if (timer.current) clearTimeout(timer.current);
         const id = Date.now();
-        setToast({ id, message, detail, tone });
-        timer.current = setTimeout(() => setToast((t) => (t?.id === id ? null : t)), detail ? 8000 : 3500);
+        setToast({ id, message, detail, tone, action });
+        timer.current = setTimeout(() => setToast((t) => (t?.id === id ? null : t)), detail || action ? 8000 : 3500);
     }, []);
 
     useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -63,6 +67,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     >
                         <Text style={[styles.message, { color: tone.fg }]}>{toast.message}</Text>
                         {toast.detail ? <Text style={[styles.detail, { color: tone.fg }]}>{toast.detail}</Text> : null}
+                        {toast.action ? (
+                            <Pressable
+                                onPress={() => { const run = toast.action?.onPress; setToast(null); run?.(); }}
+                                accessibilityRole="button"
+                                style={[styles.action, { borderColor: tone.fg }]}
+                            >
+                                <Text style={[styles.actionText, { color: tone.fg }]}>{toast.action.label}</Text>
+                            </Pressable>
+                        ) : null}
                     </Pressable>
                 </View>
             ) : null}
@@ -77,6 +90,8 @@ export function useToast(): ToastApi {
 }
 
 const styles = StyleSheet.create({
+    action: { alignSelf: 'flex-start', marginTop: spacing.sm, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 6 },
+    actionText: { fontFamily: fonts.bold, fontSize: 13 },
     wrap: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'center' },
     toast: { maxWidth: 560, width: '100%', borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
     message: { fontSize: 14, fontFamily: fonts.bold },
