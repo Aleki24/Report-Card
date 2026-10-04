@@ -15,7 +15,9 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
 import { Onboarding } from '@/components/Onboarding';
-import { ErrorBanner, LoadingView } from '@/components/ui';
+import { ErrorBanner } from '@/components/ui';
+import { BrandLoader } from '@/components/Loader';
+import { clearCache } from '@/lib/queryCache';
 import { radius, spacing, fonts, makeStyles, useTheme, ThemeProvider } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import { describeError } from '@/lib/fatalErrorAlert';
@@ -81,7 +83,7 @@ function RoleGate() {
         if (!loading) SplashScreen.hideAsync().catch(() => {});
     }, [loading]);
 
-    if (loading) return <LoadingView />;
+    if (loading) return <BrandLoader />;
 
     if (deactivated) {
         return <UnsupportedAccountScreen title="Account deactivated" reason={error ?? 'Your account has been deactivated. Please contact your administrator.'} />;
@@ -112,6 +114,11 @@ function AuthGate() {
     useEffect(() => {
         if (isLoaded) SplashScreen.hideAsync().catch(() => {});
     }, [isLoaded]);
+
+    // Signed out (or never signed in): nothing of an earlier account stays cached on the phone.
+    useEffect(() => {
+        if (isLoaded && !isSignedIn) void clearCache();
+    }, [isLoaded, isSignedIn]);
 
     if (!isLoaded) return null;
 

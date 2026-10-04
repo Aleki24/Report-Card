@@ -18,6 +18,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { pageIdentity } from '@/lib/hues';
 import { CountUp } from './dashboard/kit';
+import { InlineLoader } from './Loader';
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -268,14 +269,9 @@ export function EmptyState({ title, description, action, icon: Icon = Inbox }: {
     );
 }
 
-export function LoadingView() {
-    const { colors } = useTheme();
-    const styles = useStyles();
-    return (
-        <View style={styles.loading}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-    );
+/** Content still loading: the app's bead loader, not a spinner. */
+export function LoadingView({ message }: { message?: string }) {
+    return <InlineLoader message={message} />;
 }
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
