@@ -8,9 +8,10 @@ import { ModuleScreen } from '@/components/ops/ModuleScreen';
 import { ResourceList } from '@/components/ops/ResourceList';
 import { ActionButton, StatusPill } from '@/components/ops/bits';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 
 export default function DisciplineScreen() {
+    const { colors } = useTheme();
     const { can, profile } = useCurrentUser();
     const manage = can('discipline.manage');
     const record = can('discipline.record') || manage;

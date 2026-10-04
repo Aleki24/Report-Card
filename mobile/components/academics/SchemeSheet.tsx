@@ -12,7 +12,7 @@ import { StatusPill } from '@/components/ops/bits';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const ACTION_LABELS: Record<SchemeAction, string> = { SUBMIT: 'Submit for review', APPROVE: 'Approve', RETURN: 'Return' };
 
@@ -20,6 +20,8 @@ interface Props { schemeId: string; canReview: boolean; userId: string; onClose:
 
 /** The weekly plan: edit rows, draft them with AI, submit for review, and tick lessons as taught — the web's scheme editor. */
 export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }: Props) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const [scheme, setScheme] = useState<SchemeDetail | null>(null);
@@ -189,7 +191,7 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
     title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     draft: { marginTop: spacing.md, padding: spacing.md, borderStyle: 'dashed' },
@@ -199,4 +201,4 @@ const styles = StyleSheet.create({
     weekTag: { width: 64, fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
     fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
     body: { fontFamily: fonts.regular, fontSize: 13, color: colors.foreground },
-});
+}));

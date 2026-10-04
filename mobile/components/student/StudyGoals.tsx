@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { daysUntil, errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, TextField } from '@/components/ui';
 import type { Subject } from '@/lib/types';
 
@@ -27,6 +27,7 @@ function deadlineLabel(deadline: string | null): { text: string; overdue: boolea
 
 /** The web's Study Goals card: personal targets a student sets and ticks off. */
 export function StudyGoals() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, error, refresh } = useApiQuery<Goal[]>('/api/school/student/goals');
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');

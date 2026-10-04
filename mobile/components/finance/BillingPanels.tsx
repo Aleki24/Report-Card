@@ -13,10 +13,12 @@ import { useApi, withQuery } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 /** Bill a term from the fee structures, previewing totals first — the web's invoicing panel. */
 export function Invoicing({ canManage }: { canManage: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const [termId, setTermId] = useState('');
@@ -73,7 +75,7 @@ export function Invoicing({ canManage }: { canManage: boolean }) {
                     <StatTile label={preview.dry_run ? 'Would bill' : 'Billed'} value={preview.learners} sub="learners" />
                     <StatTile label="Amount" value={money(preview.billed)} />
                     <StatTile label="Less awards" value={money(preview.awards)} />
-                    <StatTile label="No structure" value={preview.unbilled} sub="learners skipped" tone={toneColor(preview.unbilled > 0 ? 'warn' : 'good')} />
+                    <StatTile label="No structure" value={preview.unbilled} sub="learners skipped" tone={toneColor(colors, preview.unbilled > 0 ? 'warn' : 'good')} />
                 </StatGrid>
             ) : null}
 
@@ -101,6 +103,8 @@ export function Invoicing({ canManage }: { canManage: boolean }) {
 
 /** Day scholar or boarder, class by class: decides fee structures and who sleeps in. */
 export function ResidencePanel({ canEdit }: { canEdit: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const [streamId, setStreamId] = useState('');
@@ -163,6 +167,7 @@ export function ResidencePanel({ canEdit }: { canEdit: boolean }) {
 
 /** Billed, collected, owed and spent per vote head for a term, and balance reminders by SMS. */
 export function VoteHeadStatementPanel({ canRemind }: { canRemind: boolean }) {
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const [termId, setTermId] = useState('');
@@ -232,7 +237,7 @@ export function VoteHeadStatementPanel({ canRemind }: { canRemind: boolean }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     amount: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
     note: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginVertical: spacing.sm },
     learner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
@@ -242,4 +247,4 @@ const styles = StyleSheet.create({
     toggleBtn: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.sm - 2 },
     toggleOn: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
     toggleText: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
-});
+}));

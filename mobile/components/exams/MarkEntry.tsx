@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { compositePercentage, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
 import { errorMessage, formatDate, fullName, pluralize, scoreColor } from '@/lib/format';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, SearchField, TextField,
 } from '@/components/ui';
@@ -41,6 +41,8 @@ function isBlank(v: string | undefined): boolean {
 }
 
 export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: AcademicStructure | null }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const draftKey = `marks-${exam.id}`;
 
@@ -337,7 +339,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                                         />
                                     )}
                                     <View style={styles.gradeBox}>
-                                        <Text style={[styles.grade, { color: scoreColor(pct) }]}>{e.grade || '—'}</Text>
+                                        <Text style={[styles.grade, { color: scoreColor(colors, pct) }]}>{e.grade || '—'}</Text>
                                         <Text style={styles.pct}>{pct === null ? '' : `${Math.round(pct)}%`}</Text>
                                     </View>
                                 </View>
@@ -420,7 +422,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     title: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
     sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     list: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.card },
@@ -440,4 +442,4 @@ const styles = StyleSheet.create({
     error: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
     details: { marginTop: spacing.md },
     saveBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.lg },
-});
+}));

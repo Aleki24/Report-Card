@@ -11,7 +11,7 @@ import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, Lo
 import { SelectField } from '@/components/ops/SelectField';
 import { useApi, withQuery } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, useTheme } from '@/lib/theme';
 import type { AcademicStructure } from '@/lib/types';
 
 type Apply = (body: object, summary: string) => Promise<void>;
@@ -28,6 +28,7 @@ function SeniorStatus({ row, draft }: { row: SeniorLearnerRow; draft: SeniorDraf
 }
 
 function SeniorTable({ data, onApply }: { data: SeniorPlacementResponse; onApply: Apply }) {
+    const { colors } = useTheme();
     const [drafts, setDrafts] = useState<Record<string, SeniorDraft>>({});
     const [saving, setSaving] = useState(false);
     const offeredCodes = useMemo(() => new Set(data.offeredCodes), [data.offeredCodes]);
@@ -109,6 +110,7 @@ function SeniorTable({ data, onApply }: { data: SeniorPlacementResponse; onApply
 }
 
 function ElectiveTable({ data, onApply }: { data: ElectivePlacementResponse; onApply: Apply }) {
+    const { colors } = useTheme();
     const [picked, setPicked] = useState<Record<string, ReadonlySet<string>>>({});
     const [saving, setSaving] = useState(false);
     // Start from what is enrolled; a learner with no enrolments starts from their marks.
@@ -159,6 +161,7 @@ function ElectiveTable({ data, onApply }: { data: ElectivePlacementResponse; onA
 
 /** Place learners into combinations (Senior School) or electives (8-4-4) from their marks — the web's Placement tab. */
 export function PlacementPanel({ structure }: { structure: AcademicStructure | null }) {
+    const { colors } = useTheme();
     const api = useApi();
     const streams = useMemo(
         () => placeableStreams(structure?.grades ?? [], structure?.grade_streams ?? [], structure?.academic_levels ?? []),

@@ -12,7 +12,7 @@ import { PATHWAY_ORDER, pathwayLabel } from '@shared/pathway-definitions';
 import { BulkPathwaySheet, type CombinationOption } from '@/components/people/BulkPathwaySheet';
 import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
@@ -72,6 +72,7 @@ function PeopleContent() {
 }
 
 function StudentsSection() {
+    const { colors } = useTheme();
     const router = useRouter();
     const { role } = useCurrentUser();
     const { data, loading, error, refresh } = useApiQuery<StudentListItem[]>('/api/school/data?type=students');
@@ -236,6 +237,7 @@ function StudentsSection() {
 }
 
 function TeachersSection() {
+    const { colors } = useTheme();
     const router = useRouter();
     const { data, loading, error, refresh } = useApiQuery<TeacherListItem[]>('/api/school/data?type=teachers');
     const [search, setSearch] = useState('');

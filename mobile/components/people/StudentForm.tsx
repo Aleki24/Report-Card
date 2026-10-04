@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField } from '@/components/ui';
 import type { GradeStream } from '@/lib/types';
 
@@ -72,6 +72,7 @@ export function StudentForm({
     onSaved: (result: AddStudentResult) => void;
     onCancel: () => void;
 }) {
+    const { colors } = useTheme();
     const api = useApi();
     const [v, setV] = useState<StudentFormValues>(initial);
     const [saving, setSaving] = useState(false);

@@ -7,11 +7,11 @@ import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
 import { publicPost } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { useGoogleSignIn } from '@/lib/useGoogleSignIn';
 import { setPendingInviteCode } from '@/lib/pendingInvite';
 import {
-    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton, authColors,
+    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton,
 } from '@/components/auth/AuthShell';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -50,6 +50,8 @@ function initials(name: string): string {
  * land signed in. skulbase://activate?code=A7X3K9 skips typing the code.
  */
 export default function ActivateScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const params = useLocalSearchParams<{ code?: string }>();
     const { isLoaded, signIn, setActive } = useSignIn();
@@ -290,7 +292,7 @@ export default function ActivateScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     inviteCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -301,13 +303,13 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(99,102,241,0.05)',
         padding: spacing.md,
     },
-    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: authColors.accent, alignItems: 'center', justifyContent: 'center' },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.auth.accent, alignItems: 'center', justifyContent: 'center' },
     avatarText: { color: colors.white, fontSize: 14, fontFamily: fonts.bold },
     inviteBody: { flex: 1, minWidth: 0 },
-    inviteName: { fontSize: 14, fontFamily: fonts.semibold, color: authColors.heading },
-    inviteMeta: { fontSize: 12, fontFamily: fonts.regular, color: authColors.body, marginTop: 2 },
-    inviteCode: { fontFamily: fonts.semibold, letterSpacing: 1, color: authColors.label },
+    inviteName: { fontSize: 14, fontFamily: fonts.semibold, color: colors.auth.heading },
+    inviteMeta: { fontSize: 12, fontFamily: fonts.regular, color: colors.auth.body, marginTop: 2 },
+    inviteCode: { fontFamily: fonts.semibold, letterSpacing: 1, color: colors.auth.label },
     passwordOk: { color: colors.success },
-    optional: { fontFamily: fonts.regular, color: authColors.faint },
+    optional: { fontFamily: fonts.regular, color: colors.auth.faint },
     doneIcon: { alignSelf: 'center', width: 56, height: 56, borderRadius: 28, backgroundColor: colors.successBg, alignItems: 'center', justifyContent: 'center' },
-});
+}));

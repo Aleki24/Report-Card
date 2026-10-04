@@ -1,3 +1,4 @@
+import { useTheme } from '@/lib/theme';
 import React from 'react';
 import { date, money, personName, today } from '@shared/ops/format';
 import { BOOK_DEFAULTS, BOOK_FIELDS, LOAN_TONES, copiesOut, loanDefaults, loanFields, loanState, type Book, type Loan } from '@shared/ops/forms/operations';
@@ -9,6 +10,7 @@ import { useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
 
 function Loans({ manage }: { manage: boolean }) {
+    const { colors } = useTheme();
     const books = useOpsList<Book>('books');
     return (
         <ResourceList<'loans', Loan>
@@ -26,7 +28,7 @@ function Loans({ manage }: { manage: boolean }) {
                 return (
                     <StatGrid>
                         <StatTile label="Out now" value={out.length} />
-                        <StatTile label="Overdue" value={overdue} tone={toneColor(overdue > 0 ? 'bad' : 'good')} />
+                        <StatTile label="Overdue" value={overdue} tone={toneColor(colors, overdue > 0 ? 'bad' : 'good')} />
                     </StatGrid>
                 );
             }}

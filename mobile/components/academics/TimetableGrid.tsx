@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
 import { cellLines, type GridMode } from '@shared/ops/forms/academics';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 interface Props {
     config: TimetableConfig;
@@ -21,6 +21,8 @@ const WEEK_BREAKPOINT = 768;
  * sideways; from tablet width the whole week, periods down and days across.
  */
 export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }: Props) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { width } = useWindowDimensions();
     const [phoneDay, setPhoneDay] = useState(config.days[0]);
     const at = (day: number, period: number) => lessons.find((l) => l.day === day && l.period === period) ?? null;
@@ -95,7 +97,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     cellWrap: { minHeight: 48, flex: 1 },
     lesson: { flex: 1, justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.infoBg },
     lessonSelected: { backgroundColor: colors.primary },
@@ -115,4 +117,4 @@ const styles = StyleSheet.create({
     weekHead: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, paddingVertical: 6 },
     periodCol: { width: 88, justifyContent: 'center' },
     dayCol: { flex: 1, minWidth: 110 },
-});
+}));

@@ -12,10 +12,11 @@ import { ResourceList } from '@/components/ops/ResourceList';
 import { ActionButton, StatusPill, toneColor, useRefreshSignal } from '@/components/ops/bits';
 import { useOpsData, useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 /** Today at a glance for any staff: who is in sick bay or went home, no clinical detail. */
 function Today() {
+    const { colors } = useTheme();
     const { data: status, loading, error, reload } = useOpsData<HealthStatus>('/api/health/status');
     useRefreshSignal(reload);
     if (loading && !status) return <LoadingView />;
@@ -34,8 +35,8 @@ function Today() {
     return (
         <View>
             <StatGrid>
-                <StatTile label="In sick bay" value={status.sickBay.length} tone={toneColor('violet')} />
-                <StatTile label="Sent home / referred today" value={status.wentHome.length} tone={status.wentHome.length > 0 ? toneColor('warn') : undefined} />
+                <StatTile label="In sick bay" value={status.sickBay.length} tone={toneColor(colors, 'violet')} />
+                <StatTile label="Sent home / referred today" value={status.wentHome.length} tone={status.wentHome.length > 0 ? toneColor(colors, 'warn') : undefined} />
             </StatGrid>
             {outbreak ? <View style={{ marginTop: 12 }}><Notice tone="danger" message={outbreak} /></View> : null}
             <SectionLabel>Sick bay now</SectionLabel>
@@ -72,6 +73,7 @@ function Doses({ manage }: { manage: boolean }) {
 }
 
 export default function HealthScreen() {
+    const { colors } = useTheme();
     const { can } = useCurrentUser();
     const clinical = can('health.clinical');
     const manage = can('health.manage');
@@ -161,8 +163,8 @@ export default function HealthScreen() {
                                 const expiring = rows.filter(stockExpiring).length;
                                 return (
                                     <StatGrid>
-                                        <StatTile label="To reorder" value={low} tone={toneColor(low > 0 ? 'warn' : 'good')} />
-                                        <StatTile label="Expiring in 60 days" value={expiring} tone={toneColor(expiring > 0 ? 'bad' : 'good')} />
+                                        <StatTile label="To reorder" value={low} tone={toneColor(colors, low > 0 ? 'warn' : 'good')} />
+                                        <StatTile label="Expiring in 60 days" value={expiring} tone={toneColor(colors, expiring > 0 ? 'bad' : 'good')} />
                                     </StatGrid>
                                 );
                             }}

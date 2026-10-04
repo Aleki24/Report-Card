@@ -4,7 +4,7 @@ import { ApiError, useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs,
@@ -70,6 +70,7 @@ function SubjectsContent() {
 }
 
 function Offered({ structure, onChanged }: { structure: AcademicStructure | null; onChanged: () => void }) {
+    const { colors } = useTheme();
     const [rosterFor, setRosterFor] = useState<{ id: string; name: string } | null>(null);
     const [rosterNotice, setRosterNotice] = useState<string | null>(null);
     const api = useApi();
@@ -202,6 +203,7 @@ const WHOLE_GRADE = '__grade__';
 
 /** Who teaches each subject in a class this year — the web's Subject Teachers tab. */
 function SubjectTeachers({ structure }: { structure: AcademicStructure | null }) {
+    const { colors } = useTheme();
     const api = useApi();
     const streams = structure?.grade_streams ?? [];
     const grades = useMemo(() => {

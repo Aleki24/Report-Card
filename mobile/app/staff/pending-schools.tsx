@@ -5,7 +5,7 @@ import { CircleCheck, Hourglass, Mail, MapPin, Phone, User } from 'lucide-react-
 import type { PendingSchool } from '@shared/pending-schools';
 import { webUrl } from '@/lib/api';
 import { formatDate } from '@/lib/format';
-import { colors, fonts, spacing } from '@/lib/theme';
+import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { usePendingSchools } from '@/components/platform/PendingSchools';
 import { BackLink, Button, ButtonRow, Card, EmptyState, ErrorBanner, IconTile, LoadingView, Screen, ScreenHeader } from '@/components/ui';
 
@@ -13,6 +13,8 @@ import { BackLink, Button, ButtonRow, Card, EmptyState, ErrorBanner, IconTile, L
 const openDecision = (url: string) => void WebBrowser.openBrowserAsync(url.startsWith('/') ? webUrl(url as `/${string}`) : url);
 
 function Detail({ icon: Icon, children, onPress }: { icon: typeof User; children: React.ReactNode; onPress?: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.detail}>
             <Icon size={14} color={colors.muted} />
@@ -22,6 +24,8 @@ function Detail({ icon: Icon, children, onPress }: { icon: typeof User; children
 }
 
 function SchoolCard({ school }: { school: PendingSchool }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const r = school.requester;
     const phone = school.phone || r?.phone;
     return (
@@ -69,11 +73,11 @@ export default function PendingSchoolsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     name: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
     details: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 },
     detail: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     detailText: { flex: 1, fontSize: 13, fontFamily: fonts.regular, color: colors.muted },
     link: { color: colors.primary },
-});
+}));

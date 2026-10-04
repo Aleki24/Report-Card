@@ -14,7 +14,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage, formatDate } from '@/lib/format';
 import { opsGet, useOpsList } from '@/lib/ops';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import { TimetableGrid } from './TimetableGrid';
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
@@ -62,6 +62,7 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
  * then the slot to move or swap it into), pin lessons, and publish.
  */
 export function TimetableBuilder() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [versions, setVersions] = useState<TimetableVersion[]>([]);
@@ -198,6 +199,7 @@ export function TimetableBuilder() {
 
 /** The school day: which weekdays run, and each period and break with its times. */
 export function DayStructureEditor() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [config, setConfig] = useState<TimetableConfig | null>(null);
@@ -274,6 +276,7 @@ export function DayStructureEditor() {
 
 /** Arrange cover for an absent teacher: free colleagues ranked by subject match and load. */
 export function CoverPanel() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [day, setDay] = useState(today());

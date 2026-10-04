@@ -11,12 +11,13 @@ import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage, fileSafe } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 type Detail = ExamPaper & { reviews: PaperReview[] };
 
 /** A paper's details, files, moderation history and the actions open to the viewer — the web's paper drawer. */
 export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: string; onClose: () => void; onChanged: () => void }) {
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { profile, can } = useCurrentUser();
@@ -145,8 +146,8 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     note: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 4 },
     review: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.md, marginBottom: spacing.sm },
     reviewHead: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
-});
+}));

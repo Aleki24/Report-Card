@@ -10,10 +10,12 @@ import { toneColor } from '@/components/ops/bits';
 import { useApi, withQuery } from '@/lib/api';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { errorMessage } from '@/lib/format';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 /** Morning, evening or night roll for a dorm, pre-filled for learners on exeat or in sick bay — the web's roll call. */
 export function RollCall() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const dorms = useOpsList<{ id: string; name: string; house: string | null }>('dorms');
@@ -108,7 +110,7 @@ export function RollCall() {
                                                 accessibilityRole="radio"
                                                 accessibilityState={{ checked: on }}
                                                 accessibilityLabel={humanize(s)}
-                                                style={[styles.statusBtn, on && { backgroundColor: toneColor(ROLL_TONES[s]) }]}
+                                                style={[styles.statusBtn, on && { backgroundColor: toneColor(colors, ROLL_TONES[s]) }]}
                                             >
                                                 <Text style={[styles.statusText, on && { color: colors.white }]}>{ROLL_SHORT[s]}</Text>
                                             </Pressable>
@@ -130,7 +132,7 @@ export function RollCall() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     counts: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     entry: { marginBottom: spacing.sm, padding: spacing.md },
     name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
@@ -138,4 +140,4 @@ const styles = StyleSheet.create({
     statusRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     statusBtn: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
     statusText: { fontSize: 13, fontFamily: fonts.display, color: colors.muted },
-});
+}));

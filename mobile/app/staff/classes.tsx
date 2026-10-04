@@ -5,7 +5,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile, TextField,
@@ -23,6 +23,7 @@ export default function ClassesScreen() {
 }
 
 function ClassesContent() {
+    const { colors } = useTheme();
     const api = useApi();
     const router = useRouter();
     const structure = useAcademicStructure();

@@ -12,7 +12,7 @@ import { SelectField } from '@/components/ops/SelectField';
 import { useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 
 const SETTINGS = '/api/school/payment-settings';
 const ACCOUNTS = '/api/school/payment-settings/bank-accounts';
@@ -25,6 +25,7 @@ const stored = (has: boolean) => (has ? 'Saved — leave blank to keep' : undefi
  * never shown back; the server only says whether one is stored.
  */
 export function PaymentsSetup() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [settings, setSettings] = useState<PaymentSettings | null>(null);

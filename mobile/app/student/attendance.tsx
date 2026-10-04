@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { formatDate, toISODate } from '@/lib/format';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 import { Badge, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, ScreenHeader, SectionLabel, StatGrid, StatTile } from '@/components/ui';
 import type { AttendanceRecord, AttendanceStatus } from '@/lib/types';
 
@@ -29,6 +29,7 @@ function monthRange(month: string): { from: string | null; to: string | null } {
 }
 
 export default function AttendanceScreen() {
+    const { colors } = useTheme();
     const [month, setMonth] = useState('');
     const { data, loading, error, refresh, refreshing } = useApiQuery<AttendanceRecord[]>(withQuery('/api/school/student/attendance', monthRange(month)));
     const records = data ?? [];

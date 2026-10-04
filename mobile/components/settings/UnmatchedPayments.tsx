@@ -5,7 +5,7 @@ import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useTerms } from '@/lib/useSchoolData';
 import { errorMessage, formatCurrency } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles } from '@/lib/theme';
 import { Button, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, SectionLabel, TextField } from '@/components/ui';
 
 /** The parts of GET /api/school/fees?term_id= used to find a learner's bill. */
@@ -17,6 +17,7 @@ interface TermFee { id: string; admissionNumber: string | null }
  * with an admission number and a term (/api/school/fees/unmatched).
  */
 export function UnmatchedPayments() {
+    const styles = useStyles();
     const api = useApi();
     const query = useApiQuery<FeePayment[]>('/api/school/fees/unmatched');
     const { terms, activeTermId } = useTerms();
@@ -83,10 +84,10 @@ export function UnmatchedPayments() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     intro: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.sm },
     head: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
     amount: { fontSize: 18, fontFamily: fonts.bold, color: colors.foreground },
     date: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },
     meta: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, marginTop: 2, marginBottom: spacing.md, borderRadius: radius.sm },
-});
+}));

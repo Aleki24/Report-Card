@@ -15,7 +15,7 @@ import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { readJson, writeJson } from '@/lib/storage';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const KEEP_AWAKE_TAG = 'driver-trip';
 
@@ -29,6 +29,8 @@ const writeQueue = (tripId: string, fixes: Fix[]) => writeJson(gpsQueueKey(tripI
  * on and off, and end it — the web's driver mode with the phone's own GPS.
  */
 export function DriverMode() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { hasModule } = useCurrentUser();
@@ -204,9 +206,9 @@ export function DriverMode() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     card: { marginBottom: spacing.sm, padding: spacing.md },
     title: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
     muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     alert: { fontSize: 13, fontFamily: fonts.display, color: colors.danger, marginTop: spacing.sm },
-});
+}));

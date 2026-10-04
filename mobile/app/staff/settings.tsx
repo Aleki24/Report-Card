@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure, useAcademicYears, useTerms } from '@/lib/useSchoolData';
 import { findActiveTermId } from '@/lib/academics';
 import { errorMessage, formatDate } from '@/lib/format';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs, TextField, ToggleRow,
@@ -67,6 +67,7 @@ function SettingsContent() {
 // ── School profile ─────────────────────────────────────────
 
 function SchoolTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');
     const [form, setForm] = useState<SchoolProfile | null>(null);
@@ -157,6 +158,7 @@ function SchoolTab() {
 // ── Calendar: years and terms ──────────────────────────────
 
 function CalendarTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const { years, loading: yLoading, reload: reloadYears } = useAcademicYears();
     const { terms, loading: tLoading, reload: reloadTerms } = useTerms();
@@ -284,6 +286,7 @@ function CalendarTab() {
 // ── Grading ────────────────────────────────────────────────
 
 function GradingTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const structure = useAcademicStructure();
     const profile = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');

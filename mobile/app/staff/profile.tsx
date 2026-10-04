@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, fullName, initials } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { AccountActions } from '@/components/account/AccountActions';
 import { Avatar, Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
@@ -15,6 +15,7 @@ interface AvailableRoles {
 }
 
 export default function StaffProfileScreen() {
+    const styles = useStyles();
     const api = useApi();
     const { profile, role, baseRole, schoolName, reload } = useCurrentUser();
     const isTeacher = baseRole === 'CLASS_TEACHER' || baseRole === 'SUBJECT_TEACHER';
@@ -70,8 +71,8 @@ export default function StaffProfileScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
     name: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
     email: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
-});
+}));

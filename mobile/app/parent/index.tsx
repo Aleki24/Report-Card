@@ -10,7 +10,7 @@ import { Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, 
 import { StatusPill, toneColor } from '@/components/ops/bits';
 import { useOpsData } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
@@ -23,6 +23,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /** One child: results, fees, report cards, attendance, events, the bus and notices. */
 function Overview({ childId }: { childId: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { data, loading, error, reload } = useOpsData<ChildOverview>(`/api/parent/children/${childId}`);
     if (loading && !data) return <LoadingView />;
     if (error) return <ErrorBanner message={error} onRetry={() => void reload()} />;
@@ -34,8 +36,8 @@ function Overview({ childId }: { childId: string }) {
         <View>
             <StatGrid>
                 {data.summary ? <StatTile label="Average score" value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} sub={data.summary.currentTerm?.name} /> : null}
-                {data.attendance.length > 0 ? <StatTile label="Absent (30 days)" value={absent} tone={toneColor(absent > 2 ? 'warn' : 'good')} /> : null}
-                {data.fees.length > 0 ? <StatTile label="Fee balance" value={money(balance)} tone={toneColor(balance > 0 ? 'warn' : 'good')} /> : null}
+                {data.attendance.length > 0 ? <StatTile label="Absent (30 days)" value={absent} tone={toneColor(colors, absent > 2 ? 'warn' : 'good')} /> : null}
+                {data.fees.length > 0 ? <StatTile label="Fee balance" value={money(balance)} tone={toneColor(colors, balance > 0 ? 'warn' : 'good')} /> : null}
             </StatGrid>
 
             {data.bus ? (
@@ -131,6 +133,7 @@ function Overview({ childId }: { childId: string }) {
 
 /** A parent's children, one at a time — the web's /parent page. */
 export default function ParentHomeScreen() {
+    const styles = useStyles();
     const { hasModule, role } = useCurrentUser();
     const { data: children, loading, error, reload } = useOpsData<ChildLink[]>('/api/parent/children');
     const [active, setActive] = useState<string | null>(null);
@@ -174,7 +177,7 @@ export default function ParentHomeScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     body: { fontFamily: fonts.regular, fontSize: 14, color: colors.foreground },
     muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
@@ -183,4 +186,4 @@ const styles = StyleSheet.create({
     wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     child: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
     childOn: { borderColor: colors.primary, backgroundColor: colors.infoBg },
-});
+}));

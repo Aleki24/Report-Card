@@ -5,7 +5,7 @@
  * same way).
  */
 
-import { colors } from './theme';
+import type { Palette } from './theme';
 
 /** Same threshold as the backend's PASS_MARK (`src/lib/pass-mark.ts`). */
 export const PASS_MARK = 50;
@@ -126,15 +126,12 @@ export function passRateLabel(rate: number | null | undefined): string {
     return 'No marks yet';
 }
 
-export const TONE_COLORS: Record<Tone, string> = {
-    success: colors.success,
-    warning: colors.warning,
-    danger: colors.danger,
-    muted: colors.muted,
-};
+export function toneColorFor(colors: Palette, tone: Tone): string {
+    return colors[tone];
+}
 
 /** Colour for a single mark: pass or fail against PASS_MARK. */
-export function scoreColor(pct: number | null | undefined): string {
+export function scoreColor(colors: Palette, pct: number | null | undefined): string {
     if (pct == null) return colors.muted;
     return pct >= PASS_MARK ? colors.success : colors.danger;
 }

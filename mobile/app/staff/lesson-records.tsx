@@ -12,11 +12,12 @@ import { ResourceList } from '@/components/ops/ResourceList';
 import { StatusPill, toneColor, useRefreshSignal } from '@/components/ops/bits';
 import { useOpsData } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 
 const classSubject = (r: { stream: { full_name: string } | null; subject: { name: string } | null }) => `${r.stream?.full_name ?? ''} · ${r.subject?.name ?? ''}`;
 
 function CoverageList() {
+    const { colors } = useTheme();
     const { data, loading, error, reload } = useOpsData<Coverage[]>('/api/academics/lesson-records/coverage');
     useRefreshSignal(reload);
     if (loading && !data) return <LoadingView />;
@@ -30,7 +31,7 @@ function CoverageList() {
                     <Card key={r.schemeId} style={{ marginBottom: spacing.sm, padding: spacing.md, gap: 6 }}>
                         <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{r.subject} · {r.className}</Text>
                         <Text style={{ fontSize: 12, color: colors.muted }}>{r.teacher} · last taught {date(r.lastTaught)}</Text>
-                        <ProgressBar value={pct} color={toneColor(coverageTone(pct))} />
+                        <ProgressBar value={pct} color={toneColor(colors, coverageTone(pct))} />
                         <Text style={{ fontSize: 12, color: colors.foreground }}>{r.covered}/{r.planned} · {pct}%</Text>
                     </Card>
                 );
@@ -40,6 +41,7 @@ function CoverageList() {
 }
 
 export default function LessonRecordsScreen() {
+    const { colors } = useTheme();
     const { can, profile } = useCurrentUser();
     const reviewer = can('lesson_records.review');
     const writer = can('lesson_records.write');

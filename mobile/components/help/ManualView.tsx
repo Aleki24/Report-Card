@@ -6,7 +6,7 @@ import { CircleAlert, Lightbulb } from 'lucide-react-native';
 import type { Manual, ManualFigure, ManualSection } from '@shared/manual';
 import { manualPdfHref } from '@shared/manual';
 import { webUrl } from '@/lib/api';
-import { colors, fonts, radius, shadow, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme, shadowFor } from '@/lib/theme';
 import { BackLink, Button } from '@/components/ui';
 
 /** A web path from the manual data (`/manual/x.jpg`) on the web app's origin. */
@@ -15,6 +15,7 @@ function sitePath(path: string): string {
 }
 
 function Figure({ figure }: { figure: ManualFigure }) {
+    const styles = useStyles();
     const { width } = useWindowDimensions();
     const phone = figure.device === 'phone';
     // Phone screenshots are drawn narrower, as on the web.
@@ -35,6 +36,8 @@ function Figure({ figure }: { figure: ManualFigure }) {
 }
 
 function Section({ section, number }: { section: ManualSection; number: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.section}>
             <Text style={styles.sectionTitle}>
@@ -87,6 +90,7 @@ function Section({ section, number }: { section: ManualSection; number: string }
  * chapter, and every section with its screenshot, steps and tips.
  */
 export function ManualView({ manual }: { manual: Manual }) {
+    const styles = useStyles();
     const scroll = useRef<ScrollView>(null);
     const chapterY = useRef<Record<string, number>>({});
 
@@ -141,11 +145,11 @@ export function ManualView({ manual }: { manual: Manual }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
-    cover: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadow },
+    cover: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadowFor(colors) },
     eyebrow: { fontSize: 12, fontFamily: fonts.semibold, color: colors.primary, marginBottom: 4 },
     title: { fontSize: 24, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.3, marginBottom: spacing.sm },
     body: { fontSize: 15, lineHeight: 23, fontFamily: fonts.regular, color: colors.foreground },
@@ -173,7 +177,7 @@ const styles = StyleSheet.create({
     point: { flexDirection: 'row', gap: spacing.sm },
     bullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginTop: 9 },
     callout: { flexDirection: 'row', gap: spacing.sm, borderRadius: radius.xl, borderWidth: 1, padding: spacing.md, marginTop: spacing.xs },
-    tip: { backgroundColor: colors.infoBg, borderColor: '#bedbff' },
-    caution: { backgroundColor: colors.warningBg, borderColor: '#fee685' },
+    tip: { backgroundColor: colors.infoBg, borderColor: colors.infoBorder },
+    caution: { backgroundColor: colors.warningBg, borderColor: colors.warningBorder },
     calloutLabel: { fontFamily: fonts.semibold },
-});
+}));

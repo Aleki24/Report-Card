@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -22,6 +22,7 @@ type Panel = 'history' | 'pay' | 'edit';
 
 /** One fee record, expanded: its payments, recording a payment, and editing the bill. */
 export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: () => void }) {
+    const styles = useStyles();
     const api = useApi();
     const payments = useApiQuery<FeePayment[]>(`/api/school/fees/${fee.id}/payments`);
     const [panel, setPanel] = useState<Panel>(fee.balance > 0 ? 'pay' : 'history');
@@ -189,7 +190,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     wrap: { padding: spacing.md, backgroundColor: colors.mutedBg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     foot: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm },
-});
+}));

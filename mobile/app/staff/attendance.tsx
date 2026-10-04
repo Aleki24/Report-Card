@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, StatGrid, StatTile,
 } from '@/components/ui';
@@ -11,11 +11,13 @@ import { RequireScreen } from '@/components/RequireScreen';
 import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
-const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
-    { value: 'present', label: 'P', color: colors.success },
-    { value: 'absent', label: 'A', color: colors.danger },
-    { value: 'late', label: 'L', color: colors.warning },
-    { value: 'excused', label: 'E', color: colors.info },
+type StatusColor = 'success' | 'danger' | 'warning' | 'info';
+
+const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: StatusColor }[] = [
+    { value: 'present', label: 'P', color: 'success' },
+    { value: 'absent', label: 'A', color: 'danger' },
+    { value: 'late', label: 'L', color: 'warning' },
+    { value: 'excused', label: 'E', color: 'info' },
 ];
 
 export default function AttendanceScreen() {
@@ -27,6 +29,8 @@ export default function AttendanceScreen() {
 }
 
 function AttendanceContent() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { streams, loading: streamsLoading, error: streamsError } = useGradeStreams();
     const [streamId, setStreamId] = useState<string | null>(null);
@@ -182,7 +186,7 @@ function AttendanceContent() {
                                                             accessibilityRole="button"
                                                             accessibilityLabel={`${r.name} ${opt.value}`}
                                                             accessibilityState={{ selected: active }}
-                                                            style={[styles.statusChip, active && { backgroundColor: opt.color, borderColor: opt.color }]}
+                                                            style={[styles.statusChip, active && { backgroundColor: colors[opt.color], borderColor: colors[opt.color] }]}
                                                         >
                                                             <Text style={[styles.statusChipText, active && { color: colors.white }]}>{opt.label}</Text>
                                                         </Pressable>
@@ -201,11 +205,11 @@ function AttendanceContent() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: spacing.sm },
     rowTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
     rowSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: 6 },
     statusChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     statusChipText: { fontSize: 12, fontFamily: fonts.display, color: colors.muted },
-});
+}));

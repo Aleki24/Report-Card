@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { ChevronRight, Hourglass } from 'lucide-react-native';
 import { PENDING_SCHOOLS_URL, type PendingSchool } from '@shared/pending-schools';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 
 /** The platform owner's queue; everyone else gets a 403 and this stays empty. */
 export function usePendingSchools(enabled: boolean) {
@@ -16,6 +16,8 @@ export function usePendingSchools(enabled: boolean) {
  * owner sees a reminder on the dashboard, so a request is never missed.
  */
 export function PendingSchoolsNotice() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const { data } = usePendingSchools(true);
     const schools = data ?? [];
@@ -38,7 +40,7 @@ export function PendingSchoolsNotice() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     notice: {
         flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.xxl, borderWidth: 1,
         borderColor: 'rgba(245,158,11,0.3)', backgroundColor: 'rgba(245,158,11,0.08)', padding: spacing.md, marginBottom: spacing.md,
@@ -47,4 +49,4 @@ const styles = StyleSheet.create({
     title: { fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
     names: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 1 },
     review: { fontSize: 14, fontFamily: fonts.semibold, color: colors.primary },
-});
+}));

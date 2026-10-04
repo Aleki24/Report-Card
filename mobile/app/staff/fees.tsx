@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { errorMessage, formatCurrency, formatDate, fullName, isOverdue, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile, TextField,
@@ -68,6 +68,7 @@ function FeesContent() {
 // ── Balances ───────────────────────────────────────────────
 
 function Balances() {
+    const { colors } = useTheme();
     const api = useApi();
     const { terms, activeTermId } = useTerms();
     const [termId, setTermId] = useState<string>('');
@@ -179,6 +180,7 @@ function Balances() {
 
 /** Bill one learner, or everyone in a class at once (the web's batch mode). */
 function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string | null; onCancel: () => void; onDone: (message: string) => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const { terms } = useTerms();
     const { streams } = useGradeStreams();
@@ -262,6 +264,7 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
 // ── Payments ledger ────────────────────────────────────────
 
 function Payments() {
+    const { colors } = useTheme();
     const api = useApi();
     const [method, setMethod] = useState('');
     const [search, setSearch] = useState('');
@@ -351,6 +354,7 @@ interface UnmatchedPayment {
 
 /** Paybill payments whose account number matched no learner; assign each to the right fee. */
 function Unmatched() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, refresh } = useApiQuery<UnmatchedPayment[]>('/api/school/fees/unmatched');
     const fees = useApiQuery<StaffFeeRecord[]>('/api/school/fees');

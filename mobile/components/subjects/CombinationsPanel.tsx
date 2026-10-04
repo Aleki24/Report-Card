@@ -13,13 +13,14 @@ import { SelectField } from '@/components/ops/SelectField';
 import { ApiError, useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import type { AcademicStructure } from '@/lib/types';
 
 const STRUCTURE = '/api/admin/academic-structure';
 
 /** Pick official Ministry combinations the school can run, and add them in one go. */
 function OfficialPicker({ offered, existing, onAdd, busy }: { offered: ReadonlyMap<string, string>; existing: ReadonlySet<string>; onAdd: (codes: string[]) => void; busy: boolean }) {
+    const { colors } = useTheme();
     const [pathway, setPathway] = useState<CbcPathway | 'ALL'>('ALL');
     const [runnableOnly, setRunnableOnly] = useState(true);
     const [selected, setSelected] = useState<string[]>([]);
@@ -53,6 +54,7 @@ function OfficialPicker({ offered, existing, onAdd, busy }: { offered: ReadonlyM
 
 /** The school's subject combinations — the web's Combinations tab. */
 export function CombinationsPanel({ structure, minGroupSize, onChanged }: { structure: AcademicStructure | null; minGroupSize: number; onChanged: () => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const combinations = structure?.subject_combinations ?? [];

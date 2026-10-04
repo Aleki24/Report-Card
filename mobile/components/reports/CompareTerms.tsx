@@ -4,7 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react-native';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import type { AcademicYear, GradeStream, Term } from '@/lib/types';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice } from '@/components/ui';
 
 /** GET /api/reports/term-comparison (src/app/api/reports/term-comparison/route.ts). */
@@ -17,6 +17,8 @@ function chronological(terms: readonly Term[]): Term[] {
 }
 
 function Change({ value, unit = '%' }: { value: number | null; unit?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     if (value == null) return <Text style={styles.changeNone}>–</Text>;
     const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus;
     const color = value > 0 ? colors.success : value < 0 ? colors.danger : colors.muted;
@@ -29,6 +31,7 @@ function Change({ value, unit = '%' }: { value: number | null; unit?: string }) 
 }
 
 function Figure({ label, children, sub }: { label: string; children: React.ReactNode; sub?: string }) {
+    const styles = useStyles();
     return (
         <View style={styles.figure}>
             <Text style={styles.figureLabel} numberOfLines={2}>{label}</Text>
@@ -46,6 +49,7 @@ export function CompareTerms({ years, terms, streams, initialStreamId, initialTe
     initialStreamId: string | null;
     initialTermId: string | null;
 }) {
+    const styles = useStyles();
     const ordered = useMemo(() => chronological(terms), [terms]);
     const [streamId, setStreamId] = useState<string | null>(initialStreamId ?? (streams.length === 1 ? streams[0].id : null));
     const [compareTermId, setCompareTermId] = useState<string | null>(initialTermId ?? ordered.at(-1)?.id ?? null);
@@ -122,7 +126,7 @@ export function CompareTerms({ years, terms, streams, initialStreamId, initialTe
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     intro: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
     figures: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
     figure: { flexBasis: '47%', flexGrow: 1, alignItems: 'center', backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
@@ -139,4 +143,4 @@ const styles = StyleSheet.create({
     td: { fontSize: 14, fontFamily: fonts.regular, color: colors.foreground },
     num: { width: 48, textAlign: 'right' },
     changeCol: { width: 64, alignItems: 'flex-end' },
-});
+}));

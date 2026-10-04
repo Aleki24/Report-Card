@@ -17,9 +17,10 @@ import { useApi, withQuery } from '@/lib/api';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 
 function Allocations({ dorm, manage }: { dorm: Dorm; manage: boolean }) {
+    const { colors } = useTheme();
     return (
         <ResourceList<'dorm-allocations', Allocation>
             resource="dorm-allocations"
@@ -41,6 +42,7 @@ function Allocations({ dorm, manage }: { dorm: Dorm; manage: boolean }) {
 }
 
 function GateCheck() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [code, setCode] = useState('');

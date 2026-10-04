@@ -12,10 +12,11 @@ import {
 } from '@shared/account-deletion';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, fonts, spacing } from '@/lib/theme';
+import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { BackLink, Button, Card, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
 
 function DataList({ title, items, icon: Icon, tint }: { title: string; items: readonly string[]; icon: LucideIcon; tint: string }) {
+    const styles = useStyles();
     return (
         <Card style={{ marginBottom: spacing.md }}>
             <Text style={styles.cardTitle}>{title}</Text>
@@ -34,6 +35,8 @@ function DataList({ title, items, icon: Icon, tint }: { title: string; items: re
  * server refuses a school's only admin; signing out follows a success.
  */
 export default function DeleteAccountScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { signOut } = useAuth();
     const [confirm, setConfirm] = useState('');
@@ -79,9 +82,9 @@ export default function DeleteAccountScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     cardTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm },
     item: { flexDirection: 'row', gap: spacing.sm, marginBottom: 6 },
     itemText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted },
-    confirmCard: { borderColor: '#ffc9c9' },
-});
+    confirmCard: { borderColor: colors.dangerBorder },
+}));

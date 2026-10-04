@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import { Menu } from 'lucide-react-native';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STAFF_SCREENS, getStaffNav, type StaffScreen } from '@/lib/roles';
-import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
+import { TabIcon, useTabScreenOptions } from '@/components/nav';
 
 /** Routes that exist in the tree but never get a tab of their own. */
 const DETAIL_ROUTES = ['people/[id]', 'pending-schools'] as const;
@@ -12,8 +12,9 @@ export default function StaffTabsLayout() {
     const { primary } = getStaffNav(viewer);
     const tabs = new Set<StaffScreen>(primary);
 
+    const tabScreenOptions = useTabScreenOptions();
     return (
-        <Tabs screenOptions={TAB_SCREEN_OPTIONS}>
+        <Tabs screenOptions={tabScreenOptions}>
             {(Object.keys(STAFF_SCREENS) as StaffScreen[]).map((name) => {
                 const meta = STAFF_SCREENS[name];
                 return (

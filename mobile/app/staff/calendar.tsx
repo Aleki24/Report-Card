@@ -8,12 +8,14 @@ import { ResourceList } from '@/components/ops/ResourceList';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
 import { useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const eventWhen = (e: SchoolEvent) => (e.ends_on && e.ends_on !== e.starts_on ? `${date(e.starts_on)} – ${date(e.ends_on)}` : date(e.starts_on));
 
 /** Upcoming events grouped by month: what everyone in school needs to plan around. */
 function Agenda() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { rows, loading, error, reload } = useOpsList<SchoolEvent>('events');
     useRefreshSignal(reload);
     const months = upcomingByMonth(rows);
@@ -83,11 +85,11 @@ export default function CalendarScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     event: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
     day: { width: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBg, borderRadius: radius.md, paddingVertical: 6 },
     weekday: { fontSize: 10, fontFamily: fonts.bold, color: colors.muted },
     dayNum: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
     title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
-});
+}));

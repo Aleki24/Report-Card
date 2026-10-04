@@ -5,7 +5,7 @@ import type { SubjectRosterEntry } from '@shared/subject-roster-types';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { ChipSelect, ErrorBanner, LoadingView, Notice, SearchField } from '@/components/ui';
 import { FormSheet } from '@/components/ops/FormSheet';
 
@@ -19,6 +19,8 @@ export function SubjectRosterSheet({ subject, onClose, onSaved }: {
     onClose: () => void;
     onSaved: (message: string) => void;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const query = useApiQuery<SubjectRosterEntry[]>(withQuery('/api/admin/student-subjects', { subject_id: subject.id }));
     const roster = useMemo(() => query.data ?? [], [query.data]);
@@ -114,7 +116,7 @@ export function SubjectRosterSheet({ subject, onClose, onSaved }: {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     intro: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
     list: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, overflow: 'hidden' },
     head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.mutedBg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
@@ -125,4 +127,4 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
     name: { fontSize: 14, fontFamily: fonts.medium, color: colors.foreground },
     sub: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted },
-});
+}));

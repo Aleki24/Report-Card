@@ -14,7 +14,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import { Eye, EyeOff, type LucideIcon } from 'lucide-react-native';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 
 /**
  * The web's auth frame (src/components/auth/AuthShell.tsx), shared by sign-in,
@@ -22,22 +22,6 @@ import { colors, fonts, radius, spacing } from '@/lib/theme';
  * for the form and footer links. Its colours are the web auth screens' own
  * (indigo/violet call to action, slate text), not the dashboard theme.
  */
-const AUTH = {
-    backdrop: ['#f8fafc', '#e2e8f0', '#f1f5f9'] as const,
-    accent: '#6366f1',
-    accentEnd: '#8b5cf6',
-    heading: '#0f172b',
-    body: '#64748b',
-    label: '#45556c',
-    faint: '#90a1b9',
-    inputBorder: 'rgba(0,0,0,0.10)',
-    hairline: 'rgba(0,0,0,0.08)',
-    secondaryBg: 'rgba(0,0,0,0.02)',
-    secondaryText: '#1d293d',
-    errorText: '#e7000b',
-    errorBg: 'rgba(251,44,54,0.08)',
-    errorBorder: 'rgba(251,44,54,0.2)',
-};
 const CONTROL_HEIGHT = 46;
 
 interface AuthShellProps {
@@ -50,8 +34,10 @@ interface AuthShellProps {
 
 /** Scrolls the focused field above the keyboard (Android 15 draws edge to edge, so the window no longer resizes). */
 export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
-        <LinearGradient colors={AUTH.backdrop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
+        <LinearGradient colors={colors.auth.backdrop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fill}>
             <SafeAreaView style={styles.fill}>
                 <KeyboardAwareScrollView
                     contentContainerStyle={styles.scroll}
@@ -76,6 +62,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
 
 /** "Skulbase" in the logo's two tones, as the web's Wordmark. */
 export function Wordmark() {
+    const { colors } = useTheme();
     return (
         <Text>
             <Text style={{ color: colors.info }}>Skul</Text>
@@ -94,6 +81,8 @@ interface AuthFieldProps extends Omit<TextInputProps, 'style' | 'secureTextEntry
 }
 
 export function AuthField({ label, hint, password, invalid, onFocus, onBlur, ...input }: AuthFieldProps) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const [focused, setFocused] = useState(false);
     const [revealed, setRevealed] = useState(false);
     const Toggle = revealed ? EyeOff : Eye;
@@ -104,14 +93,14 @@ export function AuthField({ label, hint, password, invalid, onFocus, onBlur, ...
                 style={[
                     styles.inputFrame,
                     focused && styles.inputFocused,
-                    invalid && { borderColor: AUTH.errorText },
+                    invalid && { borderColor: colors.auth.errorText },
                     input.editable === false && { opacity: 0.6 },
                 ]}
             >
                 <TextInput
                     {...input}
                     secureTextEntry={password && !revealed}
-                    placeholderTextColor={AUTH.faint}
+                    placeholderTextColor={colors.auth.faint}
                     onFocus={(e) => { setFocused(true); onFocus?.(e); }}
                     onBlur={(e) => { setFocused(false); onBlur?.(e); }}
                     style={styles.input}
@@ -124,7 +113,7 @@ export function AuthField({ label, hint, password, invalid, onFocus, onBlur, ...
                         accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
                         style={styles.reveal}
                     >
-                        <Toggle size={18} color={AUTH.faint} />
+                        <Toggle size={18} color={colors.auth.faint} />
                     </Pressable>
                 ) : null}
             </View>
@@ -145,6 +134,8 @@ interface AuthButtonProps {
 
 /** The web's gradient call to action. */
 export function AuthPrimaryButton({ label, onPress, loading, disabled, icon: Icon }: AuthButtonProps) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const inactive = disabled || loading;
     return (
         <Pressable
@@ -154,7 +145,7 @@ export function AuthPrimaryButton({ label, onPress, loading, disabled, icon: Ico
             accessibilityState={{ disabled: inactive, busy: loading }}
             style={({ pressed }) => [styles.primaryShadow, inactive ? { opacity: 0.5 } : pressed && { opacity: 0.9 }]}
         >
-            <LinearGradient colors={[AUTH.accent, AUTH.accentEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.button}>
+            <LinearGradient colors={[colors.auth.accent, colors.auth.accentEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.button}>
                 {loading ? <ActivityIndicator color={colors.white} /> : (
                     <>
                         {Icon ? <Icon size={16} color={colors.white} /> : null}
@@ -168,6 +159,8 @@ export function AuthPrimaryButton({ label, onPress, loading, disabled, icon: Ico
 
 /** The quiet outlined alternative (Google, secondary actions). */
 export function AuthSecondaryButton({ label, onPress, loading, disabled, icon: Icon, leading }: AuthButtonProps) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const inactive = disabled || loading;
     return (
         <Pressable
@@ -177,7 +170,7 @@ export function AuthSecondaryButton({ label, onPress, loading, disabled, icon: I
             accessibilityState={{ disabled: inactive, busy: loading }}
             style={({ pressed }) => [styles.button, styles.secondary, (pressed || inactive) && { opacity: inactive ? 0.5 : 0.8 }]}
         >
-            {loading ? <ActivityIndicator color={AUTH.secondaryText} /> : leading ?? (Icon ? <Icon size={16} color={AUTH.secondaryText} /> : null)}
+            {loading ? <ActivityIndicator color={colors.auth.secondaryText} /> : leading ?? (Icon ? <Icon size={16} color={colors.auth.secondaryText} /> : null)}
             <Text style={styles.secondaryText}>{label}</Text>
         </Pressable>
     );
@@ -201,6 +194,7 @@ export function GoogleButton({ label = 'Continue with Google', onPress, loading,
 }
 
 export function AuthDivider({ label = 'or continue with' }: { label?: string }) {
+    const styles = useStyles();
     return (
         <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -211,6 +205,7 @@ export function AuthDivider({ label = 'or continue with' }: { label?: string }) 
 }
 
 export function AuthError({ message }: { message: string | null }) {
+    const styles = useStyles();
     if (!message) return null;
     return (
         <View style={styles.error} accessibilityRole="alert">
@@ -221,22 +216,24 @@ export function AuthError({ message }: { message: string | null }) {
 
 /** An inline link in auth copy or footers. */
 export function AuthLink({ label, onPress }: { label: string; onPress: () => void }) {
+    const styles = useStyles();
     return <Text onPress={onPress} accessibilityRole="link" style={styles.link}>{label}</Text>;
 }
 
 /** A line of footer text under the card; nest an AuthLink for the action. */
 export function AuthFootnote({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <Text style={styles.footnote}>{children}</Text>;
 }
 
 /** Spacing between a card's blocks, the web's `gap-5`. */
 export function AuthStack({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <View style={styles.stack}>{children}</View>;
 }
 
-export const authColors = AUTH;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     fill: { flex: 1 },
     scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xl + spacing.lg },
     column: { width: '100%', maxWidth: 440, alignSelf: 'center' },
@@ -244,10 +241,10 @@ const styles = StyleSheet.create({
     logo: {
         width: 64, height: 64, borderRadius: radius.xxl, marginBottom: spacing.lg + 4,
     },
-    title: { fontSize: 26, fontFamily: fonts.displayHeavy, color: AUTH.heading, letterSpacing: -0.6, textAlign: 'center', marginBottom: spacing.sm },
-    subtitle: { fontSize: 15, lineHeight: 22, fontFamily: fonts.regular, color: AUTH.body, textAlign: 'center' },
+    title: { fontSize: 26, fontFamily: fonts.displayHeavy, color: colors.auth.heading, letterSpacing: -0.6, textAlign: 'center', marginBottom: spacing.sm },
+    subtitle: { fontSize: 15, lineHeight: 22, fontFamily: fonts.regular, color: colors.auth.body, textAlign: 'center' },
     card: {
-        backgroundColor: 'rgba(255,255,255,0.92)',
+        backgroundColor: colors.auth.cardBg,
         borderRadius: radius.xxl,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.06)',
@@ -261,20 +258,20 @@ const styles = StyleSheet.create({
     footer: { marginTop: spacing.xl, alignItems: 'center', gap: spacing.xs },
     stack: { gap: spacing.lg + 4 },
     field: { gap: spacing.sm },
-    label: { fontSize: 12, fontFamily: fonts.semibold, color: AUTH.label },
+    label: { fontSize: 12, fontFamily: fonts.semibold, color: colors.auth.label },
     inputFrame: {
         flexDirection: 'row',
         alignItems: 'center',
         height: CONTROL_HEIGHT,
         borderRadius: radius.xl,
         borderWidth: 1,
-        borderColor: AUTH.inputBorder,
-        backgroundColor: colors.white,
+        borderColor: colors.auth.inputBorder,
+        backgroundColor: colors.auth.inputBg,
     },
-    inputFocused: { borderColor: AUTH.accent, borderWidth: 1.5 },
-    input: { flex: 1, height: '100%', paddingHorizontal: spacing.lg, fontSize: 16, fontFamily: fonts.regular, color: AUTH.heading },
+    inputFocused: { borderColor: colors.auth.accent, borderWidth: 1.5 },
+    input: { flex: 1, height: '100%', paddingHorizontal: spacing.lg, fontSize: 16, fontFamily: fonts.regular, color: colors.auth.heading },
     reveal: { paddingHorizontal: spacing.md, height: '100%', justifyContent: 'center' },
-    hint: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: AUTH.body },
+    hint: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.auth.body },
     button: {
         height: CONTROL_HEIGHT,
         borderRadius: radius.xl,
@@ -285,20 +282,20 @@ const styles = StyleSheet.create({
     },
     primaryShadow: {
         borderRadius: radius.xl,
-        shadowColor: AUTH.accent,
+        shadowColor: colors.auth.accent,
         shadowOpacity: 0.3,
         shadowRadius: 12,
         shadowOffset: { width: 0, height: 4 },
         elevation: 4,
     },
     primaryText: { fontSize: 15, fontFamily: fonts.semibold, color: colors.white },
-    secondary: { borderWidth: 1, borderColor: AUTH.hairline, backgroundColor: AUTH.secondaryBg, gap: spacing.md },
-    secondaryText: { fontSize: 14, fontFamily: fonts.medium, color: AUTH.secondaryText },
+    secondary: { borderWidth: 1, borderColor: colors.auth.hairline, backgroundColor: colors.auth.secondaryBg, gap: spacing.md },
+    secondaryText: { fontSize: 14, fontFamily: fonts.medium, color: colors.auth.secondaryText },
     divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    dividerLine: { flex: 1, height: 1, backgroundColor: AUTH.hairline },
-    dividerText: { fontSize: 12, fontFamily: fonts.medium, color: AUTH.faint },
-    error: { borderRadius: radius.xl, borderWidth: 1, borderColor: AUTH.errorBorder, backgroundColor: AUTH.errorBg, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-    errorText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.regular, color: AUTH.errorText },
-    link: { fontFamily: fonts.semibold, color: AUTH.accent },
-    footnote: { fontSize: 12, lineHeight: 18, fontFamily: fonts.regular, color: AUTH.faint, textAlign: 'center' },
-});
+    dividerLine: { flex: 1, height: 1, backgroundColor: colors.auth.hairline },
+    dividerText: { fontSize: 12, fontFamily: fonts.medium, color: colors.auth.faint },
+    error: { borderRadius: radius.xl, borderWidth: 1, borderColor: colors.auth.errorBorder, backgroundColor: colors.auth.errorBg, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+    errorText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.regular, color: colors.auth.errorText },
+    link: { fontFamily: fonts.semibold, color: colors.auth.accent },
+    footnote: { fontSize: 12, lineHeight: 18, fontFamily: fonts.regular, color: colors.auth.faint, textAlign: 'center' },
+}));

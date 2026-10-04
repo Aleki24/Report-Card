@@ -3,12 +3,11 @@ import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
-import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
-import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
-import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
-import { Syne_700Bold } from '@expo-google-fonts/syne/700Bold';
-import { Syne_800ExtraBold } from '@expo-google-fonts/syne/800ExtraBold';
+import { PlusJakartaSans_400Regular } from '@expo-google-fonts/plus-jakarta-sans/400Regular';
+import { PlusJakartaSans_500Medium } from '@expo-google-fonts/plus-jakarta-sans/500Medium';
+import { PlusJakartaSans_600SemiBold } from '@expo-google-fonts/plus-jakarta-sans/600SemiBold';
+import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/700Bold';
+import { PlusJakartaSans_800ExtraBold } from '@expo-google-fonts/plus-jakarta-sans/800ExtraBold';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -17,7 +16,7 @@ import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
 import { Onboarding } from '@/components/Onboarding';
 import { ErrorBanner, LoadingView } from '@/components/ui';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme, ThemeProvider } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import { describeError } from '@/lib/fatalErrorAlert';
 
@@ -27,12 +26,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 // Clerk cannot read this itself in a release build: pass it explicitly.
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-// The families named in `fonts` (lib/theme.ts); the keys are the family names.
-const FONT_FILES = { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Syne_700Bold, Syne_800ExtraBold };
+// The families named in `fonts` (lib/theme.tsx); the keys are the family names.
+const FONT_FILES = { PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold, PlusJakartaSans_700Bold, PlusJakartaSans_800ExtraBold };
 
 const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
 function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
+    const styles = useStyles();
     const { signOut } = useAuth();
     return (
         <View style={styles.centered}>
@@ -51,6 +51,7 @@ function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { tit
  * from it; redirecting from a layout that renders no navigator loops forever.
  */
 function RootStack({ signedIn }: { signedIn: boolean }) {
+    const { colors } = useTheme();
     return (
         <Stack screenOptions={{ headerShown: false, animation: 'fade', contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Protected guard={signedIn}>
@@ -73,6 +74,7 @@ function RootStack({ signedIn }: { signedIn: boolean }) {
 }
 
 function RoleGate() {
+    const styles = useStyles();
     const { loading, error, deactivated, role, needsOnboarding, reload } = useCurrentUser();
 
     useEffect(() => {
@@ -123,6 +125,7 @@ function AuthGate() {
 }
 
 function MissingConfigScreen() {
+    const styles = useStyles();
     useEffect(() => {
         SplashScreen.hideAsync().catch(() => {});
     }, []);
@@ -137,6 +140,7 @@ function MissingConfigScreen() {
 
 /** Shown instead of closing the app when rendering throws, so the error can be reported. */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+    const styles = useStyles();
     useEffect(() => {
         SplashScreen.hideAsync().catch(() => {});
     }, []);
@@ -152,6 +156,11 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     );
 }
 
+function ThemedStatusBar() {
+    const { scheme } = useTheme();
+    return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} animated />;
+}
+
 export default function RootLayout() {
     // A font that fails to load falls back to the system font rather than blocking the app.
     const [fontsLoaded, fontError] = useFonts(FONT_FILES);
@@ -159,18 +168,20 @@ export default function RootLayout() {
     if (!CLERK_PUBLISHABLE_KEY) return <MissingConfigScreen />;
 
     return (
-        <KeyboardProvider>
-            <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
-                <StatusBar style="dark" />
-                <ToastProvider>
-                    <AuthGate />
-                </ToastProvider>
-            </ClerkProvider>
-        </KeyboardProvider>
+        <ThemeProvider>
+            <KeyboardProvider>
+                <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+                    <ThemedStatusBar />
+                    <ToastProvider>
+                        <AuthGate />
+                    </ToastProvider>
+                </ClerkProvider>
+            </KeyboardProvider>
+        </ThemeProvider>
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
     title: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
     body: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' },
@@ -180,4 +191,4 @@ const styles = StyleSheet.create({
     errorDetail: { fontSize: 12, color: colors.foreground, fontFamily: 'monospace' },
     retryButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl },
     retryText: { color: colors.white, fontFamily: fonts.bold },
-});
+}));

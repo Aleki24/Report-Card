@@ -5,7 +5,7 @@ import { shortCurriculumLabel } from '@shared/curriculum-labels';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, type Palette, useTheme } from '@/lib/theme';
 import { Card, ChipSelect, EmptyState, LoadingView, SectionLabel } from '@/components/ui';
 
 /** GET /api/school/analytics (the parts the web's GradeResultsCard reads). */
@@ -71,7 +71,7 @@ function bySubject(marks: readonly Mark[], subjects: ReadonlyMap<string, Subject
 }
 
 /** Red only for genuinely alarming scores; calm colours otherwise, as on the web. */
-function sevColor(avg: number): string {
+function sevColor(colors: Palette, avg: number): string {
     if (avg <= 20) return colors.danger;
     if (avg >= 80) return colors.success;
     if (avg >= 60) return colors.warning;
@@ -80,6 +80,8 @@ function sevColor(avg: number): string {
 
 /** The web admin dashboard's GradeResultsCard: the latest sitting's results by subject, per class. */
 export function GradeResults() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { streams } = useGradeStreams();
     const [scope, setScope] = useState<string>(ALL);
     const [seriesKey, setSeriesKey] = useState<string | null>(null);
@@ -137,7 +139,7 @@ export function GradeResults() {
                             <View key={s.key} style={styles.row}>
                                 <Text style={styles.subject} numberOfLines={1}>{s.subject}</Text>
                                 <View style={styles.track}>
-                                    <View style={[styles.fill, { width: `${Math.max(2, Math.min(100, s.avg))}%`, backgroundColor: sevColor(s.avg) }]} />
+                                    <View style={[styles.fill, { width: `${Math.max(2, Math.min(100, s.avg))}%`, backgroundColor: sevColor(colors, s.avg) }]} />
                                 </View>
                                 <Text style={styles.avg}>{s.avg}%</Text>
                                 <Text style={[styles.grade, !s.grade && styles.noGrade]}>{s.grade ?? '–'}</Text>
@@ -153,7 +155,7 @@ export function GradeResults() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
     subject: { width: 108, fontSize: 13, fontFamily: fonts.medium, color: colors.foreground },
@@ -163,4 +165,4 @@ const styles = StyleSheet.create({
     grade: { width: 32, textAlign: 'center', fontSize: 12, fontFamily: fonts.bold, color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 2, overflow: 'hidden' },
     noGrade: { color: colors.muted, backgroundColor: colors.mutedBg },
     note: { fontSize: 11, lineHeight: 16, fontFamily: fonts.regular, color: colors.muted, marginTop: spacing.sm },
-});
+}));

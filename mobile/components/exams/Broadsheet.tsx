@@ -4,7 +4,7 @@ import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { formatPercent, pluralize, scoreColor } from '@/lib/format';
 import type { GradeStream } from '@/lib/types';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, SearchField } from '@/components/ui';
 
 /** One row of GET /api/school/exam-marks/stream (the parts used here). */
@@ -62,6 +62,8 @@ const NAME_WIDTH = 150;
 const CELL_WIDTH = 58;
 
 export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const [streamId, setStreamId] = useState<string | null>(streams[0]?.id ?? null);
     const [search, setSearch] = useState('');
     const query = useApiQuery<StreamMark[]>(streamId ? withQuery('/api/school/exam-marks/stream', { stream_id: streamId }) : null);
@@ -107,7 +109,7 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
                                 {shown.map((r) => (
                                     <View key={r.studentId} style={{ flexDirection: 'row' }}>
                                         <View style={[styles.cell, styles.avgCol]}>
-                                            <Text style={[styles.score, { color: scoreColor(r.average), fontFamily: fonts.bold }]}>{formatPercent(r.average)}</Text>
+                                            <Text style={[styles.score, { color: scoreColor(colors, r.average), fontFamily: fonts.bold }]}>{formatPercent(r.average)}</Text>
                                         </View>
                                         {subjects.map((s) => {
                                             const mark = r.subjects[s];
@@ -115,7 +117,7 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
                                                 <View key={s} style={styles.cell}>
                                                     {mark ? (
                                                         <>
-                                                            <Text style={[styles.score, { color: scoreColor(mark.score) }]}>{Math.round(mark.score)}</Text>
+                                                            <Text style={[styles.score, { color: scoreColor(colors, mark.score) }]}>{Math.round(mark.score)}</Text>
                                                             <Text style={styles.grade}>{mark.grade}</Text>
                                                         </>
                                                     ) : <Text style={styles.empty}>–</Text>}
@@ -135,7 +137,7 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
 
 const ROW_HEIGHT = 48;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     summary: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.sm },
     table: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
     cell: { width: CELL_WIDTH, height: ROW_HEIGHT, alignItems: 'center', justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -149,4 +151,4 @@ const styles = StyleSheet.create({
     score: { fontSize: 13, fontFamily: fonts.semibold },
     grade: { fontSize: 10, fontFamily: fonts.medium, color: colors.muted },
     empty: { fontSize: 13, color: colors.placeholder },
-});
+}));

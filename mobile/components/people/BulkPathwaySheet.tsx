@@ -5,7 +5,7 @@ import { pathwayLabel } from '@shared/pathway-definitions';
 import { useApi } from '@/lib/api';
 import { errorMessage, fullName, pluralize } from '@/lib/format';
 import type { GradeStream, StudentListItem } from '@/lib/types';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { ChipSelect, ErrorBanner, SearchField, ToggleRow } from '@/components/ui';
 import { FormSheet } from '@/components/ops/FormSheet';
 import { SelectField } from '@/components/ops/SelectField';
@@ -34,6 +34,8 @@ export function BulkPathwaySheet({ visible, onClose, onSaved, students, seniorSt
     combinations: readonly CombinationOption[];
     defaultStreamId: string;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
     const [streamId, setStreamId] = useState(() => (seniorStreams.some((s) => s.id === defaultStreamId) ? defaultStreamId : ''));
@@ -145,7 +147,7 @@ export function BulkPathwaySheet({ visible, onClose, onSaved, students, seniorSt
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     intro: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
     list: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, overflow: 'hidden', marginBottom: spacing.md },
     listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.mutedBg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
@@ -157,5 +159,5 @@ const styles = StyleSheet.create({
     name: { fontSize: 14, fontFamily: fonts.medium, color: colors.foreground },
     sub: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted },
     badge: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: 999, paddingHorizontal: spacing.sm, paddingVertical: 2, overflow: 'hidden' },
-    badgeOn: { color: '#016630', backgroundColor: colors.successBg },
-});
+    badgeOn: { color: colors.successText, backgroundColor: colors.successBg },
+}));

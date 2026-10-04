@@ -7,7 +7,7 @@ import { useAcademicYears, useGradeStreams, useTerms } from '@/lib/useSchoolData
 import { examTypeLabel } from '@/lib/academics';
 import { CompareTerms } from '@/components/reports/CompareTerms';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
@@ -140,6 +140,7 @@ function ReportsContent() {
 // ── Downloads ──────────────────────────────────────────────
 
 function DownloadPanel({ scope }: { scope: Scope }) {
+    const styles = useStyles();
     const api = useApi();
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
     const [title, setTitle] = useState('');
@@ -244,6 +245,7 @@ interface StudentComment {
 }
 
 function CommentsPanel({ scope }: { scope: Scope }) {
+    const styles = useStyles();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<StudentComment[]>(
         withQuery('/api/reports/comments', { grade_stream_id: scope.streamId, term_id: scope.termId, academic_year_id: scope.yearId }),
@@ -321,6 +323,8 @@ interface SmsResult {
 }
 
 function SmsPanel({ scope }: { scope: Scope }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', grade_stream_id: scope.streamId }));
     const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -392,7 +396,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     cardTitle: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
     muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
-});
+}));

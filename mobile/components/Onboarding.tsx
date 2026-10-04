@@ -15,7 +15,7 @@ import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
 import { takePendingInviteCode } from '@/lib/pendingInvite';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 interface Approval { hasSchool?: boolean; status?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | null; schoolName?: string | null; note?: string | null }
 type Mode = 'choose' | 'school' | 'join';
@@ -26,6 +26,7 @@ type Mode = 'choose' | 'school' | 'join';
  * invite code. An admin whose school setup is unfinished lands here too.
  */
 export function Onboarding() {
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { signOut } = useAuth();
@@ -249,7 +250,7 @@ export function Onboarding() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
     content: { width: '100%', maxWidth: 560, alignSelf: 'center' },
@@ -259,4 +260,4 @@ const styles = StyleSheet.create({
     choice: { marginBottom: spacing.md, gap: spacing.sm },
     choiceTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
     grade: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingBottom: spacing.sm, marginBottom: spacing.sm },
-});
+}));

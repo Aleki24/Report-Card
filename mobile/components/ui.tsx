@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
-import { colors, radius, shadow, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
 import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
 
@@ -36,6 +36,8 @@ export function Screen({
     /** Pinned below the scroll area (e.g. a save bar). */
     footer?: React.ReactNode;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     // Without its own handler, pulling down reloads every query rendered on the screen.
     const registry = useScreenRefreshRegistry();
     const [pulling, setPulling] = useState(false);
@@ -67,6 +69,7 @@ export function Screen({
 }
 
 export function ScreenHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+    const styles = useStyles();
     return (
         <View style={styles.header}>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -79,6 +82,8 @@ export function ScreenHeader({ title, description, action }: { title: string; de
 }
 
 export function BackLink({ label = 'Back' }: { label?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     return (
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={8} style={styles.backLink} accessibilityRole="link">
@@ -89,6 +94,7 @@ export function BackLink({ label = 'Back' }: { label?: string }) {
 }
 
 export function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+    const styles = useStyles();
     return (
         <View style={styles.sectionRow}>
             <Text style={styles.sectionLabel}>{children}</Text>
@@ -98,20 +104,25 @@ export function SectionLabel({ children, action }: { children: React.ReactNode; 
 }
 
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+    const styles = useStyles();
     return <View style={[styles.card, style]}>{children}</View>;
 }
 
 /** The web's tinted icon square (`bg-primary/15 text-primary`) used on stat cards and menus. */
-export function IconTile({ icon: Icon, color = colors.primary, background = colors.primarySoft, size = 40 }: { icon: LucideIcon; color?: string; background?: string; size?: number }) {
+export function IconTile({ icon: Icon, color, background, hue, size = 40 }: { icon: LucideIcon; color?: string; background?: string; hue?: Hue; size?: number }) {
+    const { colors, tones } = useTheme();
+    const styles = useStyles();
+    const tone = hue ? tones[hue] : null;
     return (
-        <View style={[styles.iconTile, { width: size, height: size, backgroundColor: background }]}>
-            <Icon size={size / 2} color={color} strokeWidth={2} />
+        <View style={[styles.iconTile, { width: size, height: size, backgroundColor: background ?? tone?.bg ?? colors.primarySoft }]}>
+            <Icon size={size / 2} color={color ?? tone?.fg ?? colors.primary} strokeWidth={2} />
         </View>
     );
 }
 
 /** A card whose rows run edge to edge, separated by hairlines. */
 export function ListCard({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+    const styles = useStyles();
     return <View style={[styles.card, styles.listCard, style]}>{children}</View>;
 }
 
@@ -132,6 +143,8 @@ export function ListRow({
     onPress?: () => void;
     danger?: boolean;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const body = (
         <>
             {left}
@@ -154,6 +167,7 @@ export function ListRow({
 }
 
 export function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+    const styles = useStyles();
     return (
         <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{label}</Text>
@@ -163,10 +177,12 @@ export function InfoRow({ label, value }: { label: string; value?: string | numb
 }
 
 export function StatGrid({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <View style={styles.statGrid}>{children}</View>;
 }
 
 export function StatTile({ label, value, sub, tone, icon, onPress }: { label: string; value: string | number; sub?: string; tone?: string; icon?: LucideIcon; onPress?: () => void }) {
+    const styles = useStyles();
     const content = (
         <>
             {icon ? <IconTile icon={icon} /> : null}
@@ -186,18 +202,23 @@ export function StatTile({ label, value, sub, tone, icon, onPress }: { label: st
 
 // ── Feedback ───────────────────────────────────────────────
 
-type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
+export type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
 
-const BADGE_COLORS: Record<BadgeVariant, { bg: string; fg: string }> = {
-    success: { bg: colors.successBg, fg: colors.success },
-    danger: { bg: colors.dangerBg, fg: colors.danger },
-    warning: { bg: colors.warningBg, fg: colors.warning },
-    info: { bg: colors.infoBg, fg: colors.info },
-    default: { bg: colors.mutedBg, fg: colors.muted },
-};
+/** Soft fill and strong text for each status, in the current theme. */
+export function badgeColors(colors: Palette, variant: BadgeVariant): { bg: string; fg: string } {
+    switch (variant) {
+        case 'success': return { bg: colors.successBg, fg: colors.success };
+        case 'danger': return { bg: colors.dangerBg, fg: colors.danger };
+        case 'warning': return { bg: colors.warningBg, fg: colors.warning };
+        case 'info': return { bg: colors.infoBg, fg: colors.info };
+        default: return { bg: colors.mutedBg, fg: colors.muted };
+    }
+}
 
 export function Badge({ label, variant = 'default' }: { label: string; variant?: BadgeVariant }) {
-    const c = BADGE_COLORS[variant];
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const c = badgeColors(colors, variant);
     return (
         <View style={[styles.badge, { backgroundColor: c.bg }]}>
             <Text style={[styles.badgeText, { color: c.fg }]}>{label}</Text>
@@ -207,6 +228,8 @@ export function Badge({ label, variant = 'default' }: { label: string; variant?:
 
 /** A friendly "nothing here yet": an icon, what is missing, and what to do next. */
 export function EmptyState({ title, description, action, icon: Icon = Inbox }: { title: string; description?: string; action?: React.ReactNode; icon?: LucideIcon }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.empty}>
             <View style={styles.emptyIcon}><Icon size={22} color={colors.muted} /></View>
@@ -218,6 +241,8 @@ export function EmptyState({ title, description, action, icon: Icon = Inbox }: {
 }
 
 export function LoadingView() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.loading}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -226,6 +251,8 @@ export function LoadingView() {
 }
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={[styles.banner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
             <Text style={[styles.bannerText, { color: colors.danger }]}>{message}</Text>
@@ -239,7 +266,9 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
 }
 
 export function Notice({ message, tone = 'success', onDismiss }: { message: string; tone?: 'success' | 'info' | 'warning' | 'danger'; onDismiss?: () => void }) {
-    const c = BADGE_COLORS[tone];
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const c = badgeColors(colors, tone);
     return (
         <View style={[styles.banner, { backgroundColor: c.bg, borderColor: c.fg }]}>
             <Text style={[styles.bannerText, { color: c.fg }]}>{message}</Text>
@@ -252,7 +281,10 @@ export function Notice({ message, tone = 'success', onDismiss }: { message: stri
     );
 }
 
-export function ProgressBar({ value, color = colors.primary }: { value: number; color?: string }) {
+export function ProgressBar({ value, color: colorProp }: { value: number; color?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const color = colorProp ?? colors.primary;
     const pct = Math.max(0, Math.min(100, value));
     return (
         <View style={[styles.progressTrack, { backgroundColor: `${color}26` }]}>
@@ -282,6 +314,10 @@ export function Button({
     block?: boolean;
     size?: 'sm' | 'md';
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const buttonVariantStyles = useButtonVariantStyles();
+    const buttonTextStyles = useButtonTextStyles();
     const isDisabled = disabled || loading;
     return (
         <Pressable
@@ -304,6 +340,7 @@ export function Button({
 }
 
 export function ButtonRow({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <View style={styles.buttonRow}>{children}</View>;
 }
 
@@ -328,6 +365,8 @@ export function TextField({
     autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
     error?: string | null;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.field}>
             {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
@@ -348,6 +387,8 @@ export function TextField({
 }
 
 export function SearchField({ value, onChangeText, placeholder = 'Search…' }: { value: string; onChangeText: (text: string) => void; placeholder?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <TextInput
             value={value}
@@ -362,6 +403,8 @@ export function SearchField({ value, onChangeText, placeholder = 'Search…' }: 
 }
 
 export function ToggleRow({ label, description, value, onValueChange }: { label: string; description?: string; value: boolean; onValueChange: (v: boolean) => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.toggleRow}>
             <View style={{ flex: 1 }}>
@@ -393,6 +436,7 @@ export function ChipSelect<T extends string>({
     label?: string;
     wrap?: boolean;
 }) {
+    const styles = useStyles();
     const chips = options.map((o) => {
         const active = o.value === value;
         return (
@@ -424,6 +468,7 @@ export function ChipSelect<T extends string>({
 
 /** Tabs within a screen (e.g. Marks / Results / Publish). */
 export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly ChipOption<T>[]; value: T; onChange: (v: T) => void }) {
+    const styles = useStyles();
     return (
         <View style={styles.segmented}>
             {tabs.map((t) => {
@@ -446,6 +491,8 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tab
 
 /** A previous/next date stepper over YYYY-MM-DD strings; no native picker dependency needed. */
 export function DateStepper({ value, onChange, max }: { value: string; onChange: (iso: string) => void; max?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const atMax = !!max && value >= max;
     return (
         <View style={styles.dateRow}>
@@ -463,7 +510,10 @@ export function DateStepper({ value, onChange, max }: { value: string; onChange:
 }
 
 /** Initials on a coloured disc, or the person's photo when they have one. */
-export function Avatar({ label, size = 56, color = colors.primary, uri }: { label: string; size?: number; color?: string; uri?: string | null }) {
+export function Avatar({ label, size = 56, color: colorProp, uri }: { label: string; size?: number; color?: string; uri?: string | null }) {
+    const { colors } = useTheme();
+    const color = colorProp ?? colors.primary;
+    const styles = useStyles();
     const frame = { width: size, height: size, borderRadius: size / 2 };
     if (uri) return <Image source={{ uri }} style={[frame, { backgroundColor: colors.mutedBg }]} accessibilityLabel={label} />;
     return (
@@ -475,6 +525,8 @@ export function Avatar({ label, size = 56, color = colors.primary, uri }: { labe
 
 /** Month/day block used for exams and due dates. */
 export function DateBadge({ date, highlight }: { date: string; highlight?: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const d = new Date(date);
     return (
         <View style={[styles.dateBadge, highlight && { borderColor: colors.warning, backgroundColor: colors.warningBg }]}>
@@ -484,21 +536,21 @@ export function DateBadge({ date, highlight }: { date: string; highlight?: boole
     );
 }
 
-const buttonVariantStyles = StyleSheet.create({
-    primary: { backgroundColor: colors.primary, borderColor: colors.primary },
+const useButtonVariantStyles = makeStyles((colors) => ({
+    primary: { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
     secondary: { backgroundColor: colors.mutedBg, borderColor: colors.border },
-    danger: { backgroundColor: colors.danger, borderColor: colors.danger },
+    danger: { backgroundColor: colors.dangerSolid, borderColor: colors.dangerSolid },
     ghost: { backgroundColor: 'transparent', borderColor: 'transparent' },
-});
+}));
 
-const buttonTextStyles = StyleSheet.create({
+const useButtonTextStyles = makeStyles((colors) => ({
     primary: { color: colors.white },
     secondary: { color: colors.foreground },
     danger: { color: colors.white },
     ghost: { color: colors.primary },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     fill: { flex: 1 },
     scrollContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
@@ -512,7 +564,7 @@ const styles = StyleSheet.create({
     link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 14 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.sm },
     sectionLabel: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
-    card: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadow },
+    card: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadowFor(colors) },
     iconTile: { borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
     listCard: { padding: 0, overflow: 'hidden' },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
@@ -552,7 +604,7 @@ const styles = StyleSheet.create({
     search: { marginBottom: spacing.md },
     toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
     chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, minHeight: 36, justifyContent: 'center' },
-    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipActive: { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
     chipText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
     chipHint: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted, marginTop: 1 },
     chipTextActive: { color: colors.white },
@@ -570,4 +622,4 @@ const styles = StyleSheet.create({
     dateBadge: { width: 44, height: 44, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     dateBadgeMonth: { fontSize: 9, fontFamily: fonts.bold, color: colors.muted },
     dateBadgeDay: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
-});
+}));

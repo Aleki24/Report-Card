@@ -3,7 +3,7 @@ import { Modal, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 /**
  * A full-height sheet for a form: title, scrolling body, and a pinned
@@ -27,6 +27,7 @@ export function FormSheet({
     submitting?: boolean;
     children: React.ReactNode;
 }) {
+    const styles = useStyles();
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
             <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -48,7 +49,7 @@ export function FormSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     flex: { flex: 1 },
     header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card },
@@ -56,4 +57,4 @@ const styles = StyleSheet.create({
     body: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-});
+}));

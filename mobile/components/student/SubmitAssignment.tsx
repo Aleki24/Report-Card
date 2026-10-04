@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ErrorBanner, TextField } from '@/components/ui';
 import type { Assignment } from '@/lib/types';
 
 /** Hand in an assignment: an answer, a photo of the work, or both — as on the web. */
 export function SubmitAssignment({ assignment, onDone, onCancel }: { assignment: Assignment; onDone: () => void; onCancel: () => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const [text, setText] = useState('');
     const [fileUrl, setFileUrl] = useState<string | null>(null);

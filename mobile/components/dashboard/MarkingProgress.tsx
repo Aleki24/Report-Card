@@ -6,7 +6,7 @@ import { markingState, type MarkingProgressItem, type MarkingProgressResponse } 
 import { examTypeLabel } from '@/lib/academics';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { pluralize } from '@/lib/format';
-import { colors, fonts, spacing } from '@/lib/theme';
+import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { Card, EmptyState, ListCard, ListRow, ProgressBar, SectionLabel, StatGrid, StatTile } from '@/components/ui';
 
 const ORDER = { 'in-progress': 0, 'not-started': 1, complete: 2, 'no-learners': 3 } as const;
@@ -17,6 +17,8 @@ const SHOWN = 5;
  * far each of this term's exams has got, and one tap to the next mark sheet.
  */
 export function MarkingProgress() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const query = useApiQuery<MarkingProgressResponse>('/api/school/teacher/marking', { raw: true });
     const items = useMemo(() => query.data?.items ?? [], [query.data]);
@@ -81,7 +83,7 @@ export function MarkingProgress() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     bar: { width: 64, alignItems: 'flex-end', gap: 2 },
     pct: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted },
-});
+}));

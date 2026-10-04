@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate, isOverdue } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile, TextField,
@@ -26,6 +26,8 @@ const POLL_TIMEOUT_MS = 90_000;
 const POLL_INTERVAL_MS = 3_000;
 
 export default function StudentFeesScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { data, loading, error, refresh, refreshing } = useApiQuery<FeeRecord[]>('/api/school/fees');
     const settings = useApiQuery<PaymentSettingsStatus>('/api/school/payment-settings/status');
     const [open, setOpen] = useState<string | null>(null);
@@ -104,6 +106,8 @@ export default function StudentFeesScreen() {
 }
 
 function FeeHistory({ fee, canPay, onPay }: { fee: FeeRecord; canPay: boolean; onPay: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<FeePayment[]>(`/api/school/fees/${fee.id}/payments`);
     const [busy, setBusy] = useState<string | null>(null);
@@ -159,6 +163,8 @@ function FeeHistory({ fee, canPay, onPay }: { fee: FeeRecord; canPay: boolean; o
  * polls the payment until it completes, fails or times out.
  */
 function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider: PaymentSettingsStatus['provider']; onClose: () => void; onPaid: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const [phone, setPhone] = useState('');
     const [amount, setAmount] = useState(String(fee.balance));
@@ -242,7 +248,7 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     title: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
     hint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2, marginBottom: spacing.sm },
-});
+}));

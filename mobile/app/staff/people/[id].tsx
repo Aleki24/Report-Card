@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { roleLabel } from '@/lib/roles';
 import { errorMessage, formatDate, formatPercent, fullName, initials, scoreColor } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Avatar, BackLink, Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow,
     LoadingView, Notice, ProgressBar, Screen, SectionLabel, TextField,
@@ -22,6 +22,8 @@ export default function PersonDetailScreen() {
 }
 
 function StudentView({ id }: { id: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const router = useRouter();
     const { role } = useCurrentUser();
@@ -114,13 +116,13 @@ function StudentView({ id }: { id: string }) {
                     <Card key={t.term_id} style={{ marginBottom: spacing.sm }}>
                         <View style={styles.termHeader}>
                             <Text style={styles.termName}>{t.term_name}</Text>
-                            <Text style={[styles.termAvg, { color: scoreColor(t.average) }]}>{formatPercent(t.average, 1)}</Text>
+                            <Text style={[styles.termAvg, { color: scoreColor(colors, t.average) }]}>{formatPercent(t.average, 1)}</Text>
                         </View>
                         {t.subjects.map((s) => (
                             <View key={s.name} style={styles.subjectRow}>
                                 <Text style={styles.subjectName} numberOfLines={1}>{s.name}</Text>
                                 <View style={{ flex: 1 }}>
-                                    <ProgressBar value={s.percentage} color={scoreColor(s.percentage)} />
+                                    <ProgressBar value={s.percentage} color={scoreColor(colors, s.percentage)} />
                                 </View>
                                 <Text style={styles.subjectPct}>{formatPercent(s.percentage)}</Text>
                             </View>
@@ -160,6 +162,8 @@ function StudentView({ id }: { id: string }) {
 }
 
 function TeacherView({ id }: { id: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { role } = useCurrentUser();
     const { data, loading, error, reload } = useApiQuery<TeacherDetail>(`/api/school/teachers/${id}`, { raw: true });
@@ -260,7 +264,7 @@ function TeacherView({ id }: { id: string }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
     title: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground },
     subtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
@@ -270,4 +274,4 @@ const styles = StyleSheet.create({
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
     subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontFamily: fonts.semibold },
     subjectPct: { width: 44, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
-});
+}));

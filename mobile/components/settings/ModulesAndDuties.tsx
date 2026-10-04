@@ -19,7 +19,7 @@ import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet, useLookup, useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const MODULES_PATH = '/api/platform/modules';
 
@@ -29,6 +29,8 @@ const MODULES_PATH = '/api/platform/modules';
  * reflects the change.
  */
 export function ModulesPanel() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { reload: reloadAccount } = useCurrentUser();
@@ -141,6 +143,7 @@ function useScopeOptions(scope: ReturnType<typeof dutyDefinition>['scope']) {
  * driver… Each duty grants its permissions on top of the login role.
  */
 export function DutiesPanel() {
+    const styles = useStyles();
     const toast = useToast();
     const { hasModule } = useCurrentUser();
     const { rows, loading, create, remove } = useOpsList<DutyRow>('duties');
@@ -227,9 +230,9 @@ export function DutiesPanel() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     needs: { fontSize: 11, color: colors.muted, marginTop: spacing.xs, fontFamily: fonts.semibold },
     module: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm, padding: spacing.md },
-});
+}));

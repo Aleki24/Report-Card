@@ -5,7 +5,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { currentTermNumber } from '@/lib/academics';
 import { daysUntil, formatCurrency, formatLongToday, formatPercent, getDueLabel, getGreeting, getTimeAgo, isSoon, scoreColor } from '@/lib/format';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, Card, DateBadge, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar,
     Screen, SectionLabel, StatGrid, StatTile,
@@ -15,6 +15,8 @@ import { StudyGoals } from '@/components/student/StudyGoals';
 import type { DashboardData, FeeRecord, PerformanceTrend } from '@/lib/types';
 
 export default function StudentDashboardScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const { profile } = useCurrentUser();
     const dash = useApiQuery<DashboardData>('/api/school/student/dashboard');
@@ -60,7 +62,7 @@ export default function StudentDashboardScreen() {
             <SectionLabel>At a glance</SectionLabel>
             <StatGrid>
                 <StatTile label="Attendance" value={formatPercent(stats?.attendanceRate)} onPress={() => router.push('/student/attendance')} />
-                <StatTile label="Average score" value={formatPercent(stats?.averageScore)} tone={scoreColor(stats?.averageScore)} onPress={() => router.push('/student/results')} />
+                <StatTile label="Average score" value={formatPercent(stats?.averageScore)} tone={scoreColor(colors, stats?.averageScore)} onPress={() => router.push('/student/results')} />
                 <StatTile label="Exams taken" value={stats?.examsTaken ?? 0} onPress={() => router.push('/student/results')} />
                 <StatTile label="Subjects" value={stats?.subjectsCount ?? 0} onPress={() => router.push('/student/subjects')} />
                 {(fees.data ?? []).length > 0 ? (
@@ -144,7 +146,7 @@ export default function StudentDashboardScreen() {
                         <View key={t.termId} style={styles.trendRow}>
                             <Text style={styles.trendLabel} numberOfLines={1}>{`${t.termName} ${t.yearName}`.trim()}</Text>
                             <View style={{ flex: 1 }}>
-                                <ProgressBar value={t.overallAverage} color={scoreColor(t.overallAverage)} />
+                                <ProgressBar value={t.overallAverage} color={scoreColor(colors, t.overallAverage)} />
                             </View>
                             <Text style={styles.trendValue}>{formatPercent(t.overallAverage, 1)}</Text>
                         </View>
@@ -169,7 +171,7 @@ export default function StudentDashboardScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     hero: { backgroundColor: colors.primary, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md },
     heroGreeting: { color: colors.white, fontSize: 20, fontFamily: fonts.display },
     heroDate: { color: 'rgba(255,255,255,0.85)', fontFamily: fonts.regular, fontSize: 13, marginTop: 4 },
@@ -181,4 +183,4 @@ const styles = StyleSheet.create({
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
     trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
     trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
-});
+}));

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ErrorBanner } from '@/components/ui';
 import { StatusBadge } from './ExamPicker';
 import type { ExamSlot, PublishReadiness, PublishResponse } from '@/lib/types';
@@ -14,6 +14,8 @@ import { confirmAlert } from '@/lib/confirm';
  * until the teacher confirms having seen that.
  */
 export function ReleaseControl({ exam, onChanged, compact }: { exam: ExamSlot; onChanged: (status: ExamSlot['status']) => void; compact?: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const [readiness, setReadiness] = useState<PublishReadiness | null>(null);
     const [busy, setBusy] = useState(false);
@@ -87,9 +89,9 @@ export function ReleaseControl({ exam, onChanged, compact }: { exam: ExamSlot; o
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     title: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
     sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
     warn: { fontFamily: fonts.regular, fontSize: 12, color: colors.warning, marginTop: spacing.sm },
     bar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-});
+}));

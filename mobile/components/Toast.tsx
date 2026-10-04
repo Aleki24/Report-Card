@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, useTheme } from '@/lib/theme';
+import { badgeColors } from './ui';
 
 export type ToastTone = 'success' | 'danger' | 'info' | 'warning';
 
@@ -20,12 +21,6 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const TONE: Record<ToastTone, { bg: string; fg: string }> = {
-    success: { bg: colors.successBg, fg: colors.success },
-    danger: { bg: colors.dangerBg, fg: colors.danger },
-    info: { bg: colors.infoBg, fg: colors.info },
-    warning: { bg: colors.warningBg, fg: colors.warning },
-};
 
 /**
  * The outcome of an action ("Saved.", "No copies available") shown briefly
@@ -33,6 +28,7 @@ const TONE: Record<ToastTone, { bg: string; fg: string }> = {
  * ported from the web report outcomes the same way.
  */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+    const { colors } = useTheme();
     const [toast, setToast] = useState<ToastState | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const insets = useSafeAreaInsets();
@@ -52,7 +48,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         error: (m, d) => show(m, 'danger', d),
     }), [show]);
 
-    const tone = toast ? TONE[toast.tone] : null;
+    const tone = toast ? badgeColors(colors, toast.tone) : null;
 
     return (
         <ToastContext.Provider value={api}>

@@ -1,7 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { colors, radius } from '@/lib/theme';
+import { radius, makeStyles } from '@/lib/theme';
 import { liveMapHtml, type LiveMapCommand } from './liveMapHtml';
 
 export interface MapFrameHandle {
@@ -10,6 +10,7 @@ export interface MapFrameHandle {
 
 /** The Leaflet map page in a native WebView (the web build uses `MapFrame.web.tsx`). */
 export const MapFrame = forwardRef<MapFrameHandle, { onReady: () => void }>(function MapFrame({ onReady }, ref) {
+    const styles = useStyles();
     const webview = useRef<WebView>(null);
     const html = useMemo(liveMapHtml, []);
     useImperativeHandle(ref, () => ({
@@ -34,6 +35,6 @@ export const MapFrame = forwardRef<MapFrameHandle, { onReady: () => void }>(func
     );
 });
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     frame: { height: 360, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
-});
+}));

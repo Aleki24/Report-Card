@@ -7,7 +7,7 @@ import {
 } from 'lucide-react-native';
 import { DUTY_MANUAL_SLUGS, MANUALS, ROLE_MANUAL_SLUGS, manualsFor, type ManualSlug } from '@shared/manual';
 import { useOptionalCurrentUser } from '@/lib/UserContext';
-import { colors, fonts, spacing } from '@/lib/theme';
+import { fonts, spacing, makeStyles } from '@/lib/theme';
 import { BackLink, IconTile, ListCard, ListRow, Screen, ScreenHeader, SectionLabel } from '@/components/ui';
 
 /** One icon per guide, picked to match what the guide covers. */
@@ -48,6 +48,7 @@ function GuideList({ slugs }: { slugs: readonly ManualSlug[] }) {
  * user guide, with the reader's own first when signed in. Open signed out too.
  */
 export default function HelpScreen() {
+    const styles = useStyles();
     const router = useRouter();
     const user = useOptionalCurrentUser();
     const mine = user?.role ? manualsFor(user.role, user.access.duties) : [];
@@ -86,6 +87,6 @@ export default function HelpScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     note: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.sm },
-});
+}));

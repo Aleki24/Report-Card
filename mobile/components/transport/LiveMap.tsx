@@ -6,7 +6,7 @@ import { Card, EmptyState } from '@/components/ui';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import { MapFrame, type MapFrameHandle } from './MapFrame';
 
 const POLL_MS = 10_000;
@@ -16,6 +16,8 @@ const POLL_MS = 10_000;
  * path, route stops and alerts (speeding, silent tracker) — the web's live map.
  */
 export function LiveMap() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const map = useRef<MapFrameHandle>(null);
     const [ready, setReady] = useState(false);
@@ -66,11 +68,11 @@ export function LiveMap() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     status: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
     card: { marginBottom: spacing.sm, padding: spacing.md, gap: 2 },
     title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     muted: { fontSize: 12, color: colors.muted, fontFamily: fonts.regular },
     link: { fontSize: 12, color: colors.primary, fontFamily: fonts.bold, marginTop: 2 },
     alert: { fontSize: 12, color: colors.danger, fontFamily: fonts.bold },
-});
+}));

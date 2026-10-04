@@ -8,7 +8,7 @@ import { useToast } from '@/components/Toast';
 import { useApi } from '@/lib/api';
 import { TABULAR_TYPES, readPicked } from '@/lib/files';
 import { errorMessage } from '@/lib/format';
-import { colors } from '@/lib/theme';
+import { useTheme } from '@/lib/theme';
 
 /** A mark read from a sheet or file, matched to a learner. */
 export interface FilledMark { studentId: string; score: string; ambiguous: boolean; lowConfidence: boolean }
@@ -33,6 +33,7 @@ export function MarkFillTools({ maxScore, roster, disabledReason, onFill }: {
     disabledReason?: string;
     onFill: (summary: FillSummary) => void;
 }) {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [busy, setBusy] = useState<'scan' | 'file' | null>(null);

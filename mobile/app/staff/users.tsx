@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, StatGrid, StatTile, TextField, ToggleRow,
@@ -53,6 +53,7 @@ export default function UsersScreen() {
 }
 
 function UsersContent() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, refresh, refreshing } = useApiQuery<SchoolUser[]>('/api/school/data?type=users');
     const [search, setSearch] = useState('');
@@ -178,6 +179,7 @@ function UsersContent() {
 }
 
 function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; onCancel: () => void; onDone: (message: string) => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const { streams } = useGradeStreams();
     const [first, setFirst] = useState('');
@@ -243,6 +245,7 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
 }
 
 function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: SchoolUser; onSaved: () => void; onCancel: () => void; onReset: () => void; resetting: boolean }) {
+    const { colors } = useTheme();
     const api = useApi();
     const { streams } = useGradeStreams();
     const isTeacher = user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER';

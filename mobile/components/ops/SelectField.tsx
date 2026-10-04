@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { LookupOption, LookupType } from '@shared/ops/lookups';
 import { Button, SearchField } from '@/components/ui';
 import { useLookup } from '@/lib/ops';
-import { colors, radius, spacing, fonts } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const MAX_SHOWN = 200;
 
@@ -26,6 +26,8 @@ interface SelectFieldProps {
  * a list of 900 names is unusable. Opens a full-screen list with a search box.
  */
 export function SelectField({ label, value, onChange, options, placeholder = 'Select…', loading, clearable, required, hint }: SelectFieldProps) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const selected = options.find((o) => o.id === value);
@@ -103,7 +105,7 @@ export function LookupField({ lookup, params, filter, ...rest }: Omit<SelectFiel
     return <SelectField {...rest} options={shown} loading={loading} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     field: { marginBottom: spacing.md },
     label: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     control: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.md, minHeight: 44, backgroundColor: colors.card, gap: spacing.sm },
@@ -117,4 +119,4 @@ const styles = StyleSheet.create({
     optionLabel: { fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
     optionHint: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     empty: { textAlign: 'center', color: colors.muted, padding: spacing.xl },
-});
+}));

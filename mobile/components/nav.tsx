@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { ColorValue } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { LifeBuoy, type LucideIcon } from 'lucide-react-native';
-import { colors, fonts } from '@/lib/theme';
+import { fonts, useTheme } from '@/lib/theme';
 import { IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
 
 /** A tab bar icon: the web menu's Lucide icon in the tab's tint. */
@@ -15,7 +15,9 @@ export function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorV
  * changes, `freezeOnBlur` stops hidden tabs re-rendering behind the visible
  * one, and a scene background avoids a white flash between screens.
  */
-export const TAB_SCREEN_OPTIONS = {
+export function useTabScreenOptions() {
+    const { colors } = useTheme();
+    return useMemo(() => ({
     animation: 'shift' as const,
     // Each screen draws its own heading (ScreenHeader, the dashboard greeting, a detail's name),
     // so the bar title only repeated it and pushed content down.
@@ -29,7 +31,8 @@ export const TAB_SCREEN_OPTIONS = {
     headerStyle: { backgroundColor: colors.card },
     headerTitleStyle: { color: colors.foreground, fontFamily: fonts.display, fontSize: 20 },
     headerShadowVisible: false,
-};
+    }), [colors]);
+}
 
 export interface MoreItem {
     key: string;

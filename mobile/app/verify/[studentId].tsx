@@ -5,7 +5,7 @@ import { BadgeCheck, SearchX } from 'lucide-react-native';
 import { publicGet, withQuery } from '@/lib/api';
 import { errorMessage, formatDate } from '@/lib/format';
 import { useOptionalCurrentUser } from '@/lib/UserContext';
-import { colors, fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { BackLink, Button, Card, EmptyState, LoadingView, Screen, StatGrid, StatTile } from '@/components/ui';
 import { Wordmark } from '@/components/auth/AuthShell';
 
@@ -47,6 +47,8 @@ type Load = { state: 'loading' } | { state: 'ready'; data: VerifiedResults } | {
  * (Android App Links) or skulbase://verify/….
  */
 export default function VerifyResultsScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const user = useOptionalCurrentUser();
     const { studentId, t, e, term, examType } = useLocalSearchParams<{ studentId: string; t?: string; e?: string; term?: string; examType?: string }>();
@@ -146,14 +148,14 @@ export default function VerifyResultsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     center: { alignItems: 'center', paddingTop: spacing.xl },
     schoolRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.md },
     logo: { width: 48, height: 48, borderRadius: radius.lg },
     schoolName: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
     muted: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted },
     verified: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.successBg, borderRadius: radius.xl, padding: spacing.md, marginBottom: spacing.lg },
-    verifiedText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.medium, color: '#016630' },
+    verifiedText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.medium, color: colors.successText },
     studentName: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground },
     table: { marginTop: spacing.lg, padding: 0, overflow: 'hidden' },
     tableTitle: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -164,7 +166,7 @@ const styles = StyleSheet.create({
     num: { width: 56, textAlign: 'right' },
     grade: { width: 48, textAlign: 'right' },
     rubric: { fontSize: 11, lineHeight: 15, fontFamily: fonts.regular, color: colors.muted },
-    signIn: { marginTop: spacing.lg, alignItems: 'center', borderColor: '#bedbff', backgroundColor: '#f3f7ff' },
+    signIn: { marginTop: spacing.lg, alignItems: 'center', borderColor: colors.infoBorder, backgroundColor: colors.infoBg },
     signInTitle: { fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: 4 },
     footer: { marginTop: spacing.xl, fontSize: 11, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, textAlign: 'center' },
-});
+}));

@@ -15,9 +15,9 @@ import {
     Button, ButtonRow, Card, DateBadge, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView,
     IconTile, ProgressBar, Screen, SectionLabel, StatGrid, StatTile, Badge,
 } from '@/components/ui';
-import { colors, radius, spacing, fonts, shadow } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme, shadowFor } from '@/lib/theme';
 import {
-    TONE_COLORS, formatCurrency, formatLongToday, getGreeting, getTimeAgo, isSoon,
+    toneColorFor, formatCurrency, formatLongToday, getGreeting, getTimeAgo, isSoon,
     passRateLabel, passRateTone, pluralize, shortCurriculumLabel,
 } from '@/lib/format';
 import { currentTermNumber } from '@/lib/academics';
@@ -35,6 +35,7 @@ export default function StaffDashboardScreen() {
 // ── Shared pieces ──────────────────────────────────────────
 
 function Hero({ name, children }: { name: string; children?: React.ReactNode }) {
+    const styles = useStyles();
     return (
         <View style={styles.hero}>
             <Text style={styles.heroDate}>{formatLongToday()}</Text>
@@ -49,6 +50,8 @@ function Hero({ name, children }: { name: string; children?: React.ReactNode }) 
 
 /** The web header's `btn-primary` / `btn-secondary` pair, with the same Lucide icons. */
 function HeroButton({ label, href, icon: Icon, solid }: { label: string; href: Href; icon: LucideIcon; solid?: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const color = solid ? colors.white : colors.foreground;
     return (
@@ -90,6 +93,7 @@ function UpcomingExams({ exams }: { exams: StaffDashboardSummary['upcomingExams'
 }
 
 function RecentActivity({ activities }: { activities: StaffDashboardSummary['recentActivities'] }) {
+    const styles = useStyles();
     return (
         <>
             <SectionLabel>Recent activity</SectionLabel>
@@ -137,6 +141,8 @@ const ADMIN_LINKS: readonly QuickLink[] = [
 ];
 
 function AdminDashboard({ name }: { name: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const { data, loading, error, refresh, refreshing } = useApiQuery<StaffDashboardSummary>('/api/school/dashboard', { raw: true });
 
@@ -225,6 +231,8 @@ function AdminDashboard({ name }: { name: string }) {
 }
 
 function SetupChecklist({ data }: { data: StaffDashboardSummary }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const steps: { label: string; done: boolean; href: Href }[] = [
         { label: 'Upload your school logo', done: data.hasLogo, href: '/staff/settings' },
@@ -246,6 +254,8 @@ function SetupChecklist({ data }: { data: StaffDashboardSummary }) {
 }
 
 function ClassPerformanceList({ classes }: { classes: StaffDashboardSummary['classPerformance'] }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const withMarks = classes.filter((c) => c.markCount > 0);
     if (withMarks.length === 0) {
         return (
@@ -267,9 +277,9 @@ function ClassPerformanceList({ classes }: { classes: StaffDashboardSummary['cla
                                 {c.name}
                                 {curriculum ? <Text style={styles.muted}>  {curriculum}</Text> : null}
                             </Text>
-                            <Text style={[styles.perfRate, { color: TONE_COLORS[tone] }]}>{c.passRate ?? '—'}%</Text>
+                            <Text style={[styles.perfRate, { color: toneColorFor(colors, tone) }]}>{c.passRate ?? '—'}%</Text>
                         </View>
-                        <ProgressBar value={c.passRate ?? 0} color={TONE_COLORS[tone]} />
+                        <ProgressBar value={c.passRate ?? 0} color={toneColorFor(colors, tone)} />
                         <Text style={styles.perfMeta}>
                             {pluralize(c.students, 'learner')} · mean {c.mean ?? '—'}% · {pluralize(c.markCount, 'mark')}
                         </Text>
@@ -281,6 +291,7 @@ function ClassPerformanceList({ classes }: { classes: StaffDashboardSummary['cla
 }
 
 function OutstandingMarks({ total, byClass }: { total: number; byClass: StaffDashboardSummary['unmarkedByClass'] }) {
+    const styles = useStyles();
     if (total === 0) {
         return (
             <Card>
@@ -309,6 +320,8 @@ function OutstandingMarks({ total, byClass }: { total: number; byClass: StaffDas
  * papers were, while pass rate says how many learners reached the pass mark.
  */
 function AcademicSummary({ summary }: { summary: StaffDashboardSummary['academicSummary'] }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     if (summary.markCount === 0 || summary.passRate == null) {
         return (
             <Card>
@@ -316,7 +329,7 @@ function AcademicSummary({ summary }: { summary: StaffDashboardSummary['academic
             </Card>
         );
     }
-    const tone = TONE_COLORS[passRateTone(summary.passRate)];
+    const tone = toneColorFor(colors, passRateTone(summary.passRate));
     return (
         <Card>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, flexWrap: 'wrap' }}>
@@ -336,6 +349,8 @@ function AcademicSummary({ summary }: { summary: StaffDashboardSummary['academic
 
 /** Rows drop out when they have nothing to say, except the two always worth stating. */
 function NeedsAttention({ data }: { data: StaffDashboardSummary }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const soon = data.upcomingExams.filter((e) => isSoon(e.exam_date)).length;
     const items: { label: string; count: number; sub: string | null; href: Href; always: boolean }[] = [
@@ -370,13 +385,15 @@ function NeedsAttention({ data }: { data: StaffDashboardSummary }) {
 
 // Present and absent never sit side by side, so the bar reads under red–green colour blindness.
 const ATTENDANCE_SEGMENTS = [
-    { key: 'present', label: 'Present', color: colors.success },
-    { key: 'late', label: 'Late', color: colors.warning },
-    { key: 'excused', label: 'Excused', color: colors.info },
-    { key: 'absent', label: 'Absent', color: colors.danger },
+    { key: 'present', label: 'Present', color: 'success' },
+    { key: 'late', label: 'Late', color: 'warning' },
+    { key: 'excused', label: 'Excused', color: 'info' },
+    { key: 'absent', label: 'Absent', color: 'danger' },
 ] as const;
 
 function AttendanceBreakdown({ counts }: { counts: StaffDashboardSummary['attendanceToday'] & object }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const total = counts.present + counts.absent + counts.late + counts.excused;
     if (total === 0) {
         return (
@@ -393,13 +410,13 @@ function AttendanceBreakdown({ counts }: { counts: StaffDashboardSummary['attend
             </View>
             <View style={styles.stackedBar}>
                 {ATTENDANCE_SEGMENTS.filter((s) => counts[s.key] > 0).map((s) => (
-                    <View key={s.key} style={{ flex: counts[s.key], backgroundColor: s.color }} />
+                    <View key={s.key} style={{ flex: counts[s.key], backgroundColor: colors[s.color] }} />
                 ))}
             </View>
             <View style={styles.legend}>
                 {ATTENDANCE_SEGMENTS.map((s) => (
                     <View key={s.key} style={styles.legendItem}>
-                        <View style={[styles.dot, { backgroundColor: s.color }]} />
+                        <View style={[styles.dot, { backgroundColor: colors[s.color] }]} />
                         <Text style={styles.legendText}>
                             <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{counts[s.key]}</Text> {s.label.toLowerCase()}
                         </Text>
@@ -411,6 +428,7 @@ function AttendanceBreakdown({ counts }: { counts: StaffDashboardSummary['attend
 }
 
 function FinanceSnapshot({ totalCollected, unpaidBalance, overdueCount }: StaffDashboardSummary['financeSummary']) {
+    const styles = useStyles();
     const billed = totalCollected + unpaidBalance;
     const rate = billed > 0 ? Math.round((totalCollected / billed) * 100) : null;
     return (
@@ -532,6 +550,7 @@ function SubjectTeacherKpis({ stats }: { stats: SubjectTeacherStats }) {
 // ── Non-teaching staff ─────────────────────────────────────
 
 function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | null }) {
+    const styles = useStyles();
     const router = useRouter();
     const { viewer } = useCurrentUser();
     const nav = getStaffNav(viewer);
@@ -571,8 +590,8 @@ function StaffWelcome({ name, jobTitle }: { name: string; jobTitle: string | nul
     );
 }
 
-const styles = StyleSheet.create({
-    hero: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginBottom: spacing.md, ...shadow },
+const useStyles = makeStyles((colors) => ({
+    hero: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, marginBottom: spacing.md, ...shadowFor(colors) },
     heroGreeting: { color: colors.foreground, fontSize: 21, fontFamily: fonts.display, letterSpacing: -0.3, marginTop: 2 },
     heroDate: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12 },
     heroTerm: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, marginTop: 4 },
@@ -599,4 +618,4 @@ const styles = StyleSheet.create({
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendText: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
     dot: { width: 10, height: 10, borderRadius: 5 },
-});
+}));

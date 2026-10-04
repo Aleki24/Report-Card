@@ -4,12 +4,13 @@ import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { errorMessage, formatDate, fullName, initials } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { Avatar, Button, ButtonRow, Card, ErrorBanner, InfoRow, LoadingView, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
 import type { StudentProfile } from '@/lib/types';
 import { AccountActions } from '@/components/account/AccountActions';
 
 export default function ProfileScreen() {
+    const styles = useStyles();
     const api = useApi();
     const { schoolName } = useCurrentUser();
     const { data: profile, loading, error, refresh, refreshing } = useApiQuery<StudentProfile>('/api/school/student/profile');
@@ -90,10 +91,10 @@ export default function ProfileScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
     name: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
     email: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
     cardTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm },
     phoneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-});
+}));

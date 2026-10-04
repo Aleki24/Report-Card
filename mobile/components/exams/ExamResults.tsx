@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar, SearchField, StatGrid, StatTile,
 } from '@/components/ui';
@@ -12,6 +12,8 @@ import type { ExamMark, ExamSlot } from '@/lib/types';
 
 /** One exam's results, best first, with the summary the web's results tab shows. */
 export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onChanged: (status: ExamSlot['status']) => void; onEdit: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { data, loading, error, refresh, reload } = useApiQuery<ExamMark[]>(`/api/school/exam-marks?exam_id=${exam.id}`);
     const [search, setSearch] = useState('');
@@ -94,7 +96,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
             {summary ? (
                 <>
                     <StatGrid>
-                        <StatTile label="Mean" value={formatPercent(summary.mean, 1)} tone={scoreColor(summary.mean)} />
+                        <StatTile label="Mean" value={formatPercent(summary.mean, 1)} tone={scoreColor(colors, summary.mean)} />
                         <StatTile label="Pass rate" value={formatPercent(summary.passRate)} sub={`at or above ${PASS_MARK}%`} />
                         <StatTile label="Highest" value={formatPercent(summary.highest, 1)} />
                         <StatTile label="Lowest" value={formatPercent(summary.lowest, 1)} />
@@ -130,7 +132,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
                                 subtitle={`${m.admission_number || '—'} · ${m.raw_score}/${exam.max_score}${m.remarks ? ` · ${m.remarks}` : ''}`}
                                 right={
                                     <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.pct, { color: scoreColor(Number(m.percentage)) }]}>{formatPercent(Number(m.percentage), 1)}</Text>
+                                        <Text style={[styles.pct, { color: scoreColor(colors, Number(m.percentage)) }]}>{formatPercent(Number(m.percentage), 1)}</Text>
                                         <Text style={styles.grade}>{m.grade_symbol || '—'}</Text>
                                     </View>
                                 }
@@ -143,7 +145,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     title: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
     sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     cardTitle: { fontSize: 13, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm },
@@ -153,4 +155,4 @@ const styles = StyleSheet.create({
     rank: { width: 28, textAlign: 'center', fontSize: 14, fontFamily: fonts.display, color: colors.muted },
     pct: { fontSize: 14, fontFamily: fonts.display },
     grade: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
-});
+}));

@@ -16,7 +16,7 @@ import { useApi } from '@/lib/api';
 import { useOpsList } from '@/lib/ops';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 
 type Decision = { expense: Expense; decision: ExpenseDecision; reload: () => Promise<void> };
 
@@ -30,6 +30,7 @@ const expenseDetails = (e: Expense) => [
 ] as const;
 
 export default function ExpensesScreen() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const { can, profile } = useCurrentUser();
@@ -106,9 +107,9 @@ export default function ExpensesScreen() {
                                 searchText={(e) => `${e.description} ${e.supplier?.name ?? ''} ${e.vote_head?.name ?? ''}`}
                                 header={(rows) => (
                                     <StatGrid>
-                                        <StatTile label="Awaiting approval" value={money(expenseTotal(rows, ['PENDING']))} tone={toneColor('warn')} />
-                                        <StatTile label="Approved, unpaid" value={money(expenseTotal(rows, ['APPROVED']))} tone={toneColor('info')} />
-                                        <StatTile label="Paid" value={money(expenseTotal(rows, ['PAID']))} tone={toneColor('good')} />
+                                        <StatTile label="Awaiting approval" value={money(expenseTotal(rows, ['PENDING']))} tone={toneColor(colors, 'warn')} />
+                                        <StatTile label="Approved, unpaid" value={money(expenseTotal(rows, ['APPROVED']))} tone={toneColor(colors, 'info')} />
+                                        <StatTile label="Paid" value={money(expenseTotal(rows, ['PAID']))} tone={toneColor(colors, 'good')} />
                                         <StatTile label="Rejected" value={rows.filter((r) => r.status === 'REJECTED').length} />
                                     </StatGrid>
                                 )}

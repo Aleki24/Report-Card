@@ -7,12 +7,13 @@ import { FormSheet } from '@/components/ops/FormSheet';
 import { useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing, fonts } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import type { AcademicLevel, GradingSystem, StructureSubject } from '@/lib/types';
 
 const STRUCTURE = '/api/admin/academic-structure';
 
 function SubjectPicker({ subjects, selected, onToggle }: { subjects: readonly StructureSubject[]; selected: readonly string[]; onToggle: (id: string) => void }) {
+    const { colors } = useTheme();
     if (subjects.length === 0) return <Text style={{ fontSize: 12, color: colors.muted }}>No subjects at this level yet.</Text>;
     return (
         <View>
@@ -30,6 +31,7 @@ export function NewGradingSystemSheet({ levels, subjects, onClose, onSaved }: {
     onClose: () => void;
     onSaved: () => void;
 }) {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [kind, setKind] = useState<SystemKind>('SUBJECT');

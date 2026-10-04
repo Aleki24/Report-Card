@@ -5,13 +5,15 @@ import { CONTACT_DETAILS, contactSchema, type ContactField, type ContactInput } 
 import { publicPost } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useOptionalCurrentUser } from '@/lib/UserContext';
-import { colors, fonts, spacing } from '@/lib/theme';
+import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { BackLink, Button, Card, ErrorBanner, IconTile, ListCard, ListRow, Screen, ScreenHeader, TextField } from '@/components/ui';
 
 type Errors = Partial<Record<ContactField, string>>;
 
 /** "Contact us" from the web, checked with the same schema the server uses (/api/contact). */
 export default function ContactScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const user = useOptionalCurrentUser();
     const profile = user?.profile;
     const [values, setValues] = useState<Required<ContactInput>>({
@@ -84,8 +86,8 @@ export default function ContactScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     sent: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
     sentTitle: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground },
     sentBody: { fontSize: 14, lineHeight: 20, fontFamily: fonts.regular, color: colors.muted, textAlign: 'center' },
-});
+}));

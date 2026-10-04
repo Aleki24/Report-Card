@@ -4,11 +4,11 @@ import { useSignIn } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { ChevronRight, KeyRound, UserPlus } from 'lucide-react-native';
 import { publicPost } from '@/lib/api';
-import { fonts, radius, spacing } from '@/lib/theme';
+import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { describeAuthError, useGoogleSignIn } from '@/lib/useGoogleSignIn';
 import { useSignInCodeVerification } from '@/lib/useSignInCodeVerification';
 import {
-    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton, Wordmark, authColors,
+    AuthDivider, AuthError, AuthField, AuthFootnote, AuthLink, AuthPrimaryButton, AuthShell, AuthStack, GoogleButton, Wordmark,
 } from '@/components/auth/AuthShell';
 import { VerificationCodeStep } from '@/components/auth/VerificationCodeStep';
 
@@ -21,6 +21,8 @@ const MIN_PASSWORD = 8;
  * they register a school or join one with a code.
  */
 export default function SignUpScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const { isLoaded, signIn } = useSignIn();
     const verification = useSignInCodeVerification();
@@ -92,12 +94,12 @@ export default function SignUpScreen() {
                         accessibilityRole="link"
                         style={({ pressed }) => [styles.activateCard, pressed && { opacity: 0.8 }]}
                     >
-                        <KeyRound size={20} color={authColors.accent} />
+                        <KeyRound size={20} color={colors.auth.accent} />
                         <Text style={styles.activateText}>
                             <Text style={styles.activateTitle}>Teacher or student?{'\n'}</Text>
                             Got an invite code or link from your school? Activate your account instead.
                         </Text>
-                        <ChevronRight size={16} color={authColors.accent} />
+                        <ChevronRight size={16} color={colors.auth.accent} />
                     </Pressable>
 
                     <AuthError message={error ?? google.error} />
@@ -141,7 +143,7 @@ export default function SignUpScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     activateCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -153,8 +155,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
     },
-    activateText: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: fonts.regular, color: authColors.label },
-    activateTitle: { fontFamily: fonts.semibold, color: authColors.heading },
+    activateText: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: fonts.regular, color: colors.auth.label },
+    activateTitle: { fontFamily: fonts.semibold, color: colors.auth.heading },
     nameRow: { flexDirection: 'row', gap: spacing.md },
     nameField: { flex: 1 },
-});
+}));
