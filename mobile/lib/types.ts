@@ -34,6 +34,8 @@ export interface DashboardStats {
     averageScore: number;
     examsTaken: number;
     subjectsCount: number;
+    /** Attendance days on record; 0 when the school does not take registers. */
+    attendanceRecords?: number;
 }
 
 export interface UpcomingExam {
@@ -51,14 +53,9 @@ export interface Announcement {
     createdAt: string;
 }
 
-export interface Assignment {
-    id: string;
-    title: string;
-    subjectName: string;
-    dueDate: string;
-    fileUrl: string | null;
-    description?: string | null;
-}
+/** An assignment as a learner sees it, with their own hand-in (src/lib/assignments.ts). */
+export type { StudentAssignment as Assignment } from '@shared/assignments';
+import type { StudentAssignment } from '@shared/assignments';
 
 export interface LearningMaterial {
     id: string;
@@ -69,12 +66,26 @@ export interface LearningMaterial {
     fileSizeBytes: number | null;
 }
 
+/** A released mark on the learner's home: the latest per subject. */
+export interface LatestResult {
+    id: string;
+    percentage: number;
+    grade_symbol?: string | null;
+    exams: { name: string; exam_type: string; subjects?: { name: string } | null; terms?: { id: string; name: string } | null };
+}
+
+/** GET /api/school/student/dashboard (src/types StudentDashboardSummary plus the page's extras). */
 export interface DashboardData {
     stats: DashboardStats;
     upcomingExams: UpcomingExam[];
     announcements: Announcement[];
-    assignments: Assignment[];
+    assignments: StudentAssignment[];
     materials: LearningMaterial[];
+    profile?: { id: string; grade_streams?: { full_name?: string | null } | null } | null;
+    latestResults?: LatestResult[];
+    latestReport?: { terms?: { id: string; name: string } | null; academic_years?: { id: string; name: string } | null } | null;
+    trends?: PerformanceTrend[];
+    currentTerm?: { id: string; name: string };
 }
 
 export interface PerformanceTrend {

@@ -63,11 +63,71 @@ function TermLine({ term, canEditTerms }: { term: TermSummary | null; canEditTer
     );
 }
 
-export interface HeroAction { label: string; icon: LucideIcon; href: Href; primary?: boolean }
+export interface HeroAction { label: string; icon: LucideIcon; href: Href; primary?: boolean; onPress?: () => void }
+
+/** White primary and glassy secondary buttons on the hero. */
+export function HeroActions({ actions }: { actions: readonly HeroAction[] }) {
+    const styles = useStyles();
+    const router = useRouter();
+    return (
+        <View style={styles.actions}>
+            {actions.map(({ label, icon: Icon, href, primary, onPress }) => (
+                <PressScale key={label} onPress={onPress ?? (() => router.push(href))} style={[styles.action, primary ? styles.actionPrimary : styles.actionGhost]} accessibilityRole="link" accessibilityLabel={label}>
+                    <Icon size={16} color={primary ? '#1e3a8a' : '#ffffff'} />
+                    <Text style={[styles.actionText, { color: primary ? '#1e3a8a' : '#ffffff' }]} numberOfLines={1}>{label}</Text>
+                </PressScale>
+            ))}
+        </View>
+    );
+}
+
+/** A glassy chip on the hero: the next exam, homework due. */
+export function HeroChip({ icon: Icon, label, warm }: { icon: LucideIcon; label: string; warm?: boolean }) {
+    const styles = useStyles();
+    return (
+        <View style={[styles.chip, warm && styles.chipWarm]}>
+            <Icon size={13} color="#ffffff" />
+            <Text style={styles.chipText}>{label}</Text>
+        </View>
+    );
+}
 
 /**
- * The top of every staff home: the date and a greeting in Kiswahili and
- * English, where the school is in its term, and the next thing to do.
+ * The gradient card every home opens with: soft rings, a greeting in
+ * Kiswahili and English, and beadwork along its foot.
+ */
+export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
+    name: string;
+    eyebrow?: string;
+    gradient?: readonly [string, string, ...string[]];
+    /** Beside the greeting, e.g. the learner's score ring. */
+    aside?: React.ReactNode;
+    children?: React.ReactNode;
+}) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    return (
+        <LinearGradient colors={gradient ?? colors.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+            <Svg style={styles.rings} width={220} height={220} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Circle cx={160} cy={60} r={90} fill="rgba(255,255,255,0.07)" />
+                <Circle cx={190} cy={20} r={50} fill="rgba(255,255,255,0.06)" />
+            </Svg>
+            <View style={styles.top}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.eyebrow}>{eyebrow ?? `${getSwahiliGreeting()} · ${formatLongToday()}`}</Text>
+                    <Text style={styles.greeting} accessibilityRole="header">{getGreeting()}, {name || 'there'}</Text>
+                </View>
+                {aside}
+            </View>
+            {children}
+            <View style={styles.beads}><Beadwork /></View>
+        </LinearGradient>
+    );
+}
+
+/**
+ * The top of every staff home: where the school is in its term, and the
+ * next thing to do.
  */
 export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, actions, search }: {
     name: string;
@@ -84,16 +144,8 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
     const styles = useStyles();
     const router = useRouter();
     const [query, setQuery] = React.useState('');
-    const { colors } = useTheme();
     return (
-        <LinearGradient colors={colors.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-            {/* Soft rings in the corner, as on the web's welcome banner. */}
-            <Svg style={styles.rings} width={220} height={220} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                <Circle cx={160} cy={60} r={90} fill="rgba(255,255,255,0.07)" />
-                <Circle cx={190} cy={20} r={50} fill="rgba(255,255,255,0.06)" />
-            </Svg>
-            <Text style={styles.eyebrow}>{eyebrow ?? `${getSwahiliGreeting()} · ${formatLongToday()}`}</Text>
-            <Text style={styles.greeting} accessibilityRole="header">{getGreeting()}, {name || 'there'}</Text>
+        <HeroFrame name={name} eyebrow={eyebrow}>
             <View style={{ marginTop: spacing.sm }}>
                 <TermLine term={term} canEditTerms={canEditTerms} />
             </View>
@@ -113,24 +165,18 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
                     />
                 </View>
             ) : null}
-            {actions?.length ? (
-                <View style={styles.actions}>
-                    {actions.map(({ label, icon: Icon, href, primary }) => (
-                        <PressScale key={label} onPress={() => router.push(href)} style={[styles.action, primary ? styles.actionPrimary : styles.actionGhost]} accessibilityRole="link" accessibilityLabel={label}>
-                            <Icon size={16} color={primary ? '#1e3a8a' : '#ffffff'} />
-                            <Text style={[styles.actionText, { color: primary ? '#1e3a8a' : '#ffffff' }]} numberOfLines={1}>{label}</Text>
-                        </PressScale>
-                    ))}
-                </View>
-            ) : null}
-            <View style={styles.beads}><Beadwork /></View>
-        </LinearGradient>
+            {actions?.length ? <HeroActions actions={actions} /> : null}
+        </HeroFrame>
     );
 }
 
 const useStyles = makeStyles(() => ({
     hero: { borderRadius: radius.xxxl, padding: spacing.lg, paddingBottom: spacing.lg + 14, overflow: 'hidden', marginBottom: spacing.sm },
     rings: { position: 'absolute', top: -20, right: -40 },
+    top: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+    chipWarm: { backgroundColor: 'rgba(251,191,36,0.28)', borderColor: 'rgba(253,230,138,0.45)' },
+    chipText: { fontSize: 12, fontFamily: fonts.bold, color: '#ffffff' },
     eyebrow: { fontSize: 12, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.8)' },
     greeting: { fontSize: 25, lineHeight: 31, fontFamily: fonts.display, color: '#ffffff', letterSpacing: -0.6, marginTop: 4 },
     termRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
