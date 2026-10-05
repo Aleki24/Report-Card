@@ -82,7 +82,7 @@ export const gradeSchema = z.object({
     code: z.string().min(1, 'Code is required').max(20),
     name_display: z.string().min(1, 'Display name is required').max(100),
     academic_level_id: z.string().uuid('Invalid academic level ID'),
-    numeric_order: z.number().int().min(1).max(20),
+    numeric_order: z.number().int().min(0).max(20),
 });
 
 export const streamSchema = z.object({
