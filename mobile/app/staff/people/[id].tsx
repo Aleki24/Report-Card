@@ -116,9 +116,9 @@ function StudentView({ id }: { id: string }) {
                             <Text style={styles.termName}>{t.term_name}</Text>
                             <Text style={[styles.termAvg, { color: scoreColor(t.average) }]}>{formatPercent(t.average, 1)}</Text>
                         </View>
-                        {t.subjects.map((s) => (
-                            <View key={s.name} style={styles.subjectRow}>
-                                <Text style={styles.subjectName} numberOfLines={1}>{s.name}</Text>
+                        {t.subjects.map((s, i) => (
+                            <View key={`${s.subject_name}-${i}`} style={styles.subjectRow}>
+                                <Text style={styles.subjectName} numberOfLines={1}>{s.subject_name}</Text>
                                 <View style={{ flex: 1 }}>
                                     <ProgressBar value={s.percentage} color={scoreColor(s.percentage)} />
                                 </View>

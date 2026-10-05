@@ -503,9 +503,23 @@ export interface StudentDetail {
         grade_stream: { id: string; full_name: string } | null;
         academic_level: { id: string; name: string; code: string } | null;
     };
-    academicHistory: { term_id: string; term_name: string; average: number; subjects: { name: string; percentage: number }[] }[];
+    academicHistory: AcademicHistoryTerm[];
     reportHistory: { id: string; generated_at: string; term: string; year: string; average: number | null; position: number | null }[];
     attendanceHistory: { id: string; term: string; year: string; present: number; total: number; percentage: number | null }[];
+}
+
+/** One subject result inside a term — mirrors GET /api/school/students/[studentId]. */
+export interface AcademicHistorySubject {
+    subject_name: string;
+    percentage: number;
+    grade_symbol: string | null;
+}
+
+export interface AcademicHistoryTerm {
+    term_id: string;
+    term_name: string;
+    average: number;
+    subjects: AcademicHistorySubject[];
 }
 
 export interface TeacherDetail {
