@@ -15,6 +15,7 @@ import {
 import { StudentForm, type StudentStatus } from '@/components/people/StudentForm';
 import type { StudentDetail, TeacherDetail } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { StudentProfile } from '@/components/people/StudentProfile';
 
 export default function PersonDetailScreen() {
     const { id, type } = useLocalSearchParams<{ id: string; type?: 'student' | 'teacher' }>();
@@ -31,6 +32,7 @@ function StudentView({ id }: { id: string }) {
     const { streams } = useGradeStreams();
     const [editing, setEditing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
     const canManage = role === 'ADMIN' || role === 'CLASS_TEACHER';
 
     if (loading) return <LoadingView />;
@@ -54,21 +56,25 @@ function StudentView({ id }: { id: string }) {
             },
         ]);
 
+    const changePhoto = async () => {
+        setUploading(true);
+        try {
+            const url = await api.pickAndUploadImage('/api/admin/upload-photo');
+            if (url) {
+                await api.patch('/api/admin/update-student', { student_id: id, avatar_url: url });
+                reload();
+            }
+        } catch (err) {
+            setMessage(errorMessage(err, 'Could not change the photo.'));
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <>
             <BackLink />
             {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
-            <View style={styles.headerRow}>
-                <Avatar label={initials(p)} />
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.title}>{fullName(p)}</Text>
-                    <Text style={styles.subtitle}>
-                        {p.admission_number ?? '—'} · {p.grade_stream?.full_name ?? 'Unassigned'}
-                    </Text>
-                </View>
-                {p.status && p.status !== 'ACTIVE' ? <Badge label={p.status} /> : null}
-            </View>
-
             {editing ? (
                 <StudentForm
                     studentId={id}
@@ -92,76 +98,11 @@ function StudentView({ id }: { id: string }) {
                     }}
                 />
             ) : (
-                <Card style={{ marginBottom: spacing.md }}>
-                    <InfoRow label="Curriculum" value={p.academic_level?.name} />
-                    <InfoRow label="Gender" value={p.gender} />
-                    <InfoRow label="Date of birth" value={p.date_of_birth ? formatDate(p.date_of_birth) : null} />
-                    <InfoRow label="Enrolled" value={p.date_enrolled ? formatDate(p.date_enrolled) : null} />
-                    <InfoRow label="Guardian" value={p.guardian_name} />
-                    <InfoRow label="Guardian phone" value={p.guardian_phone} />
-                    <InfoRow label="Guardian email" value={p.guardian_email} />
-                    <ButtonRow>
-                        {p.guardian_phone ? <Button size="sm" variant="ghost" label="Call guardian" onPress={() => void Linking.openURL(`tel:${p.guardian_phone}`)} /> : null}
-                        {canManage ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEditing(true)} /> : null}
-                        {canManage ? <Button size="sm" variant="danger" label="Delete" onPress={remove} /> : null}
-                    </ButtonRow>
-                </Card>
+                <StudentProfile
+                    data={data}
+                    actions={{ canManage, onEdit: () => setEditing(true), onDelete: remove, onChangePhoto: () => void changePhoto(), uploadingPhoto: uploading }}
+                />
             )}
-
-            <SectionLabel>Academic history</SectionLabel>
-            {data.academicHistory.length === 0 ? (
-                <Card><EmptyState title="No marks yet" /></Card>
-            ) : (
-                data.academicHistory.map((t) => (
-                    <Card key={t.term_id} style={{ marginBottom: spacing.sm }}>
-                        <View style={styles.termHeader}>
-                            <Text style={styles.termName}>{t.term_name}</Text>
-                            {/* An empty term averages to 0 on the server: say so rather than show a failing score. */}
-                            {t.subjects.length > 0 ? (
-                                <Text style={[styles.termAvg, { color: scoreColor(colors, t.average) }]}>{formatPercent(t.average, 1)}</Text>
-                            ) : (
-                                <Text style={styles.subjectPct}>No marks yet</Text>
-                            )}
-                        </View>
-                        {t.subjects.map((s, i) => (
-                            <View key={`${s.subject_name}-${i}`} style={styles.subjectRow}>
-                                <Text style={styles.subjectName} numberOfLines={1}>{s.subject_name}</Text>
-                                <View style={{ flex: 1 }}>
-                                    <ProgressBar value={s.percentage} color={scoreColor(colors, s.percentage)} />
-                                </View>
-                                <Text style={styles.subjectPct}>{formatPercent(s.percentage)}{s.grade_symbol ? ` · ${s.grade_symbol}` : ''}</Text>
-                            </View>
-                        ))}
-                    </Card>
-                ))
-            )}
-
-            <SectionLabel>Report cards</SectionLabel>
-            <ListCard>
-                {data.reportHistory.length === 0 ? (
-                    <EmptyState title="No reports yet" />
-                ) : (
-                    data.reportHistory.map((r) => (
-                        <ListRow
-                            key={r.id}
-                            title={`${r.term} — ${r.year}`}
-                            subtitle={r.position ? `Position ${r.position}` : null}
-                            right={<Badge label={formatPercent(r.average, 1)} variant={(r.average ?? 0) >= 50 ? 'success' : 'danger'} />}
-                        />
-                    ))
-                )}
-            </ListCard>
-
-            <SectionLabel>Attendance</SectionLabel>
-            <ListCard>
-                {data.attendanceHistory.length === 0 ? (
-                    <EmptyState title="No attendance recorded" />
-                ) : (
-                    data.attendanceHistory.map((a) => (
-                        <ListRow key={a.id} title={`${a.term} — ${a.year}`} subtitle={`${a.present} of ${a.total} days`} right={<Text style={styles.subjectPct}>{formatPercent(a.percentage)}</Text>} />
-                    ))
-                )}
-            </ListCard>
         </>
     );
 }

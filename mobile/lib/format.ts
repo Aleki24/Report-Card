@@ -137,6 +137,14 @@ export function toneColorFor(colors: Palette, tone: Tone): string {
     return colors[tone];
 }
 
+/** Strong / fine / borderline / needs work: how the web colours a learner's marks (≥70, ≥50, ≥40). */
+export function gradeTone(colors: Palette, pct: number): string {
+    if (pct >= 70) return colors.success;
+    if (pct >= 50) return colors.info;
+    if (pct >= 40) return colors.warning;
+    return colors.danger;
+}
+
 /** Colour for a single mark: pass or fail against PASS_MARK. */
 export function scoreColor(colors: Palette, pct: number | null | undefined): string {
     if (pct == null) return colors.muted;

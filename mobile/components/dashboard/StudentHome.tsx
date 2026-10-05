@@ -11,7 +11,7 @@ import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useSchoolPassMark } from '@/lib/usePassMark';
-import { daysUntil, errorMessage, fileSafe, formatCurrency, getTimeAgo, pluralize } from '@/lib/format';
+import { daysUntil, gradeTone, errorMessage, fileSafe, formatCurrency, getTimeAgo, pluralize } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme, type Palette } from '@/lib/theme';
 import type { DashboardData, FeeRecord } from '@/lib/types';
 import { Notice, Screen } from '@/components/ui';
@@ -25,14 +25,6 @@ import { InsightCard, KpiGrid, KpiTile, Meter, Reveal, SectionTitle } from './ki
 
 const STUDENT_HERO = ['#2563eb', '#4f46e5', '#7c3aed'] as const;
 const STUDENT_HERO_DARK = ['#1e3a8a', '#3730a3', '#5b21b6'] as const;
-
-/** Strong / fine / borderline / needs work, as the web colours a learner's marks. */
-function scoreTone(colors: Palette, pct: number): string {
-    if (pct >= 70) return colors.success;
-    if (pct >= 50) return colors.info;
-    if (pct >= 40) return colors.warning;
-    return colors.danger;
-}
 
 function relativeDay(days: number): string {
     if (days < 0) return 'Overdue';
@@ -210,7 +202,7 @@ export function StudentHome() {
                         <View style={{ gap: spacing.md }}>
                             {latest.map((r) => {
                                 const pct = Math.round(Number(r.percentage) || 0);
-                                const tone = scoreTone(colors, pct);
+                                const tone = gradeTone(colors, pct);
                                 return (
                                     <View key={r.id} style={styles.result}>
                                         <View style={{ flex: 1, minWidth: 0 }}>

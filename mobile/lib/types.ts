@@ -448,42 +448,8 @@ export interface TeacherListItem {
     stats: { subjectCount: number; classCount: number };
 }
 
-export interface StudentDetail {
-    profile: {
-        id: string;
-        first_name: string;
-        last_name: string;
-        email: string | null;
-        phone: string | null;
-        admission_number: string | null;
-        gender: string | null;
-        date_of_birth: string | null;
-        date_enrolled: string | null;
-        status: string | null;
-        guardian_name: string | null;
-        guardian_phone: string | null;
-        guardian_email: string | null;
-        grade_stream: { id: string; full_name: string } | null;
-        academic_level: { id: string; name: string; code: string } | null;
-    };
-    academicHistory: AcademicHistoryTerm[];
-    reportHistory: { id: string; generated_at: string; term: string; year: string; average: number | null; position: number | null }[];
-    attendanceHistory: { id: string; term: string; year: string; present: number; total: number; percentage: number | null }[];
-}
-
-/** One subject result inside a term — mirrors GET /api/school/students/[studentId]. */
-export interface AcademicHistorySubject {
-    subject_name: string;
-    percentage: number;
-    grade_symbol: string | null;
-}
-
-export interface AcademicHistoryTerm {
-    term_id: string;
-    term_name: string;
-    average: number;
-    subjects: AcademicHistorySubject[];
-}
+/** GET /api/school/students/[studentId]: the web's own shape (src/lib/user-profile.ts). */
+export type { StudentProfileResponse as StudentDetail, TermPerformance as AcademicHistoryTerm } from '@shared/user-profile';
 
 export interface TeacherDetail {
     profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: UserRole; is_active: boolean; created_at: string; avatar_url?: string | null };
