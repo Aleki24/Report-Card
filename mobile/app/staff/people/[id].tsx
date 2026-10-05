@@ -116,7 +116,12 @@ function StudentView({ id }: { id: string }) {
                     <Card key={t.term_id} style={{ marginBottom: spacing.sm }}>
                         <View style={styles.termHeader}>
                             <Text style={styles.termName}>{t.term_name}</Text>
-                            <Text style={[styles.termAvg, { color: scoreColor(colors, t.average) }]}>{formatPercent(t.average, 1)}</Text>
+                            {/* An empty term averages to 0 on the server: say so rather than show a failing score. */}
+                            {t.subjects.length > 0 ? (
+                                <Text style={[styles.termAvg, { color: scoreColor(colors, t.average) }]}>{formatPercent(t.average, 1)}</Text>
+                            ) : (
+                                <Text style={styles.subjectPct}>No marks yet</Text>
+                            )}
                         </View>
                         {t.subjects.map((s, i) => (
                             <View key={`${s.subject_name}-${i}`} style={styles.subjectRow}>
@@ -124,7 +129,7 @@ function StudentView({ id }: { id: string }) {
                                 <View style={{ flex: 1 }}>
                                     <ProgressBar value={s.percentage} color={scoreColor(colors, s.percentage)} />
                                 </View>
-                                <Text style={styles.subjectPct}>{formatPercent(s.percentage)}</Text>
+                                <Text style={styles.subjectPct}>{formatPercent(s.percentage)}{s.grade_symbol ? ` · ${s.grade_symbol}` : ''}</Text>
                             </View>
                         ))}
                     </Card>
@@ -273,5 +278,5 @@ const useStyles = makeStyles((colors) => ({
     termAvg: { fontSize: 14, fontFamily: fonts.display },
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
     subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontFamily: fonts.semibold },
-    subjectPct: { width: 44, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+    subjectPct: { minWidth: 44, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
 }));
