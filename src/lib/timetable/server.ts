@@ -3,6 +3,7 @@ import { bandForGrade, type CurriculumBand } from '@/lib/curriculum-bands';
 import { HttpError } from '@/lib/platform/access';
 import { embedOne } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
+import { syncLoadTeachers } from './assignments';
 import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
@@ -70,6 +71,8 @@ export type PlannedLoad = BlockLoad & { row: LoadRow };
  * option blocks. One reading for the generator and the readiness check.
  */
 export async function loadTimetablePlan(schoolId: string) {
+    // Loads follow Subjects → Teachers, so a subject that changed hands there is planned with its new teacher.
+    await syncLoadTeachers(db(), schoolId);
     const [config, bands, { data, error }, choiceRows] = await Promise.all([
         loadConfig(schoolId),
         streamBands(schoolId),
