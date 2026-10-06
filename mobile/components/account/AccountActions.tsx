@@ -8,6 +8,7 @@ import { webUrl } from '@/lib/api';
 import { spacing, useTheme } from '@/lib/theme';
 import { Button, IconTile, ListCard, ListRow } from '@/components/ui';
 import { AppearancePicker } from './AppearancePicker';
+import { AppVersion } from './AppVersion';
 
 /**
  * The foot of every profile: help, the privacy policy, account deletion
@@ -30,6 +31,7 @@ export function AccountActions() {
                     onPress={() => router.push('/account/delete')}
                 />
             </ListCard>
+            <AppVersion />
             <Button variant="danger" block label={signingOut ? 'Signing out…' : 'Sign out'} loading={signingOut} onPress={() => void signOut()} />
         </View>
     );
