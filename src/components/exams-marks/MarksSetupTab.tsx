@@ -195,12 +195,15 @@ export function MarksSetupTab() {
     })();
   }, []);
 
-  // ── A teacher's assigned subjects ──
+  // ── Subjects to offer beyond those with exams: a teacher's assigned ones;
+  // for an admin every subject the school offers, so a class with no exams
+  // yet (e.g. newly added Pre-primary areas) still lists its subjects. ──
   useEffect(() => {
-    if (!profile?.role || profile.role === 'ADMIN') return;
+    if (!profile?.role) return;
+    const type = profile.role === 'ADMIN' ? 'subjects' : 'my_subjects';
     (async () => {
       try {
-        const res = await fetch('/api/school/data?type=my_subjects', { cache: 'no-store' });
+        const res = await fetch(`/api/school/data?type=${type}`, { cache: 'no-store' });
         const json = (await res.json()) as { data?: MySubjectItem[] };
         setMySubjects(json.data ?? []);
       } catch (err) { console.error('Failed to fetch my subjects:', err); }
