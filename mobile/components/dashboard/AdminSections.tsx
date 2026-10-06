@@ -138,7 +138,8 @@ export function ClassPerformanceList({ classes, passMark, onSelect, preview = 6 
                     const color = toneColorFor(colors, passRateTone(c.passRate));
                     const curriculum = shortCurriculumLabel(c.levelCode);
                     return (
-                        <PressScale key={c.id} onPress={() => (onSelect ? onSelect(c.id) : router.push(`/staff/analytics?stream=${c.id}`))} style={styles.classTile} accessibilityRole="link" accessibilityLabel={`${c.name}: ${c.passRate ?? 0}% passing`}>
+                        <View key={c.id} style={styles.classCell}>
+                        <PressScale onPress={() => (onSelect ? onSelect(c.id) : router.push(`/staff/analytics?stream=${c.id}`))} style={styles.classTile} accessibilityRole="link" accessibilityLabel={`${c.name}: ${c.passRate ?? 0}% passing`}>
                             <Ring value={c.passRate ?? 0} size={62} stroke={7} color={color} track={`${color}22`} textColor={colors.foreground} />
                             <View style={{ flex: 1, minWidth: 0 }}>
                                 <Text style={styles.className} numberOfLines={1}>{c.name}</Text>
@@ -146,6 +147,7 @@ export function ClassPerformanceList({ classes, passMark, onSelect, preview = 6 
                                 <Text style={styles.classMeta} numberOfLines={2}>mean {c.mean ?? '—'}% · {pluralize(c.students, 'learner')}</Text>
                             </View>
                         </PressScale>
+                        </View>
                     );
                 })}
             </View>
@@ -306,7 +308,8 @@ const useStyles = makeStyles((colors) => ({
     leagueBadgeText: { fontSize: 12, fontFamily: fonts.bold, flexShrink: 1 },
     leagueMeta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },
     classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    classTile: { flexBasis: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm + 2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.elevated, minWidth: 150 },
+    classCell: { flexBasis: '47%', flexGrow: 1, minWidth: 150 },
+    classTile: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm + 2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.elevated },
     className: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     classTag: { fontSize: 10, fontFamily: fonts.bold, letterSpacing: 0.5, marginTop: 1 },
     classMeta: { fontSize: 11, lineHeight: 15, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },

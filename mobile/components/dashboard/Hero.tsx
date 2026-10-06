@@ -150,9 +150,13 @@ function HeroStats({ stats }: { stats: readonly HeroStat[] }) {
                         <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
                     </>
                 );
-                return href ? (
-                    <PressScale key={label} onPress={() => router.push(href)} style={styles.stat} accessibilityRole="link" accessibilityLabel={`${label}: ${value}`}>{body}</PressScale>
-                ) : <View key={label} style={styles.stat}>{body}</View>;
+                return (
+                    <View key={label} style={styles.statCell}>
+                        {href
+                            ? <PressScale onPress={() => router.push(href)} style={styles.stat} accessibilityRole="link" accessibilityLabel={`${label}: ${value}`}>{body}</PressScale>
+                            : <View style={styles.stat}>{body}</View>}
+                    </View>
+                );
             })}
         </View>
     );
@@ -254,7 +258,8 @@ const useStyles = makeStyles(() => ({
     crest: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ffffff', padding: 4, alignItems: 'center', justifyContent: 'center' },
     crestImg: { width: '100%', height: '100%' },
     stats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-    stat: { flex: 1, minWidth: 0, padding: spacing.sm + 2, borderRadius: radius.xl, backgroundColor: 'rgba(255,255,255,0.13)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    statCell: { flex: 1, minWidth: 0 },
+    stat: { padding: spacing.sm + 2, borderRadius: radius.xl, backgroundColor: 'rgba(255,255,255,0.13)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     statIcon: { width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
     statValue: { fontSize: 20, lineHeight: 24, fontFamily: fonts.display, color: '#ffffff', letterSpacing: -0.4 },
     statLabel: { fontSize: 11, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.8)', marginTop: 1 },

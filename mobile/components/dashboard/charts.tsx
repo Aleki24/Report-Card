@@ -183,7 +183,7 @@ const useStyles = makeStyles((colors) => ({
     guideLabel: { position: 'absolute', right: 2, top: -16, fontSize: 10, fontFamily: fonts.bold },
     columns: { flexDirection: 'row', alignItems: 'flex-end' },
     col: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
-    colValue: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, marginBottom: 3 },
+    colValue: { textAlign: 'center', fontSize: 11, fontFamily: fonts.bold, color: colors.muted, marginBottom: 3 },
     colTrack: { width: '100%', justifyContent: 'flex-end' },
     colLabels: { flexDirection: 'row', marginTop: 6 },
     colLabel: { flex: 1, fontSize: 10, lineHeight: 12, fontFamily: fonts.medium, color: colors.muted, textAlign: 'center', paddingHorizontal: 1 },
