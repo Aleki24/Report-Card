@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSignOut } from '@/lib/useSignOut';
+import { DateField } from './DateField';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@clerk/clerk-expo';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
 import { CURRICULA, ONBOARDING_TERMS } from '@shared/schemas';
 import {
@@ -29,7 +30,7 @@ export function Onboarding() {
     const styles = useStyles();
     const api = useApi();
     const toast = useToast();
-    const { signOut } = useAuth();
+    const { signOut, signingOut } = useSignOut();
     const { baseRole, reload } = useCurrentUser();
     const [approval, setApproval] = useState<Approval | null>(null);
     const [checked, setChecked] = useState(false);
@@ -104,7 +105,7 @@ export function Onboarding() {
             <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
                 <View style={styles.content}>
                     {body}
-                    <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label="Sign out" onPress={() => void signOut()} /></View>
+                    <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label={signingOut ? 'Signing out…' : 'Sign out'} loading={signingOut} onPress={() => void signOut()} /></View>
                 </View>
             </KeyboardAwareScrollView>
         </SafeAreaView>
@@ -187,8 +188,8 @@ export function Onboarding() {
                     <>
                         <TextField label="Academic year *" value={state.academicYear} onChangeText={(v) => set('academicYear', v)} keyboardType="number-pad" />
                         <ChipSelect label="Current term" options={ONBOARDING_TERMS.map((t) => ({ value: t, label: t }))} value={state.term.name} onChange={(name) => set('term', { ...state.term, name })} />
-                        <TextField label="Term starts *" value={state.term.start_date} onChangeText={(v) => set('term', { ...state.term, start_date: v })} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
-                        <TextField label="Term ends *" value={state.term.end_date} onChangeText={(v) => set('term', { ...state.term, end_date: v })} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+                        <DateField label="Term starts *" value={state.term.start_date} onChange={(v) => set('term', { ...state.term, start_date: v })} />
+                        <DateField label="Term ends *" value={state.term.end_date} min={state.term.start_date || undefined} onChange={(v) => set('term', { ...state.term, end_date: v })} />
                     </>
                 ) : null}
                 {step === 3 ? CURRICULA.map((c) => (

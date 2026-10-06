@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
@@ -219,13 +220,13 @@ function CalendarTab() {
     return (
         <View>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
-            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>Dates are YYYY-MM-DD. Reopening dates print on report cards.</Text>
+            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>Reopening dates print on report cards.</Text>
 
             {yearDraft ? (
                 <Card style={{ marginBottom: spacing.md }}>
                     <TextField label="Year name" value={yearDraft.name} onChangeText={(name) => setYearDraft({ ...yearDraft, name })} placeholder="e.g. 2026" />
-                    <TextField label="Starts" value={yearDraft.start} onChangeText={(start) => setYearDraft({ ...yearDraft, start })} placeholder="2026-01-05" />
-                    <TextField label="Ends" value={yearDraft.end} onChangeText={(end) => setYearDraft({ ...yearDraft, end })} placeholder="2026-11-27" />
+                    <DateField label="Starts" value={yearDraft.start} onChange={(start) => setYearDraft({ ...yearDraft, start })} />
+                    <DateField label="Ends" min={yearDraft.start || undefined} value={yearDraft.end} onChange={(end) => setYearDraft({ ...yearDraft, end })} />
                     <ButtonRow>
                         <Button variant="secondary" label="Cancel" onPress={() => setYearDraft(null)} />
                         <Button label="Add year" onPress={() => void saveYear()} loading={busy} />
@@ -237,10 +238,10 @@ function CalendarTab() {
                 <Card style={{ marginBottom: spacing.md }}>
                     {!termDraft.id ? <ChipSelect label="Academic year" options={years.map((y) => ({ value: y.id, label: y.name }))} value={termDraft.yearId} onChange={(yearId) => setTermDraft({ ...termDraft, yearId })} /> : null}
                     <TextField label="Term name" value={termDraft.name} onChangeText={(name) => setTermDraft({ ...termDraft, name })} placeholder="Term 1" />
-                    <TextField label="Starts" value={termDraft.start} onChangeText={(start) => setTermDraft({ ...termDraft, start })} />
-                    <TextField label="Ends" value={termDraft.end} onChangeText={(end) => setTermDraft({ ...termDraft, end })} />
-                    <TextField label="Mid-term reopening (optional)" value={termDraft.midterm} onChangeText={(midterm) => setTermDraft({ ...termDraft, midterm })} />
-                    <TextField label="Next term reopening (optional)" value={termDraft.reopening} onChangeText={(reopening) => setTermDraft({ ...termDraft, reopening })} />
+                    <DateField label="Starts" value={termDraft.start} onChange={(start) => setTermDraft({ ...termDraft, start })} />
+                    <DateField label="Ends" min={termDraft.start || undefined} value={termDraft.end} onChange={(end) => setTermDraft({ ...termDraft, end })} />
+                    <DateField label="Mid-term reopening (optional)" optional value={termDraft.midterm} onChange={(midterm) => setTermDraft({ ...termDraft, midterm })} />
+                    <DateField label="Next term reopening (optional)" optional value={termDraft.reopening} onChange={(reopening) => setTermDraft({ ...termDraft, reopening })} />
                     <ToggleRow label="Current term" value={termDraft.current} onValueChange={(current) => setTermDraft({ ...termDraft, current })} />
                     <ButtonRow>
                         <Button variant="secondary" label="Cancel" onPress={() => setTermDraft(null)} />

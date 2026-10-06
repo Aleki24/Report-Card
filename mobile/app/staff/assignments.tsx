@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -150,7 +151,7 @@ function AssignmentList() {
                         value={draft.streamId}
                         onChange={(streamId) => setDraft({ ...draft, streamId })}
                     />
-                    <TextField label="Due date (YYYY-MM-DD)" value={draft.dueDate} onChangeText={(dueDate) => setDraft({ ...draft, dueDate })} />
+                    <DateField label="Due date" value={draft.dueDate} onChange={(dueDate) => setDraft({ ...draft, dueDate })} />
                     <ButtonRow>
                         {[1, 3, 7, 14].map((d) => (
                             <Button key={d} size="sm" variant="ghost" label={`+${d}d`} onPress={() => setDraft({ ...draft, dueDate: shiftISODate(toISODate(), d) })} />

@@ -1,4 +1,5 @@
 import { useDownload } from '@/lib/useDownload';
+import { DateField } from '@/components/DateField';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -179,7 +180,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
             {panel === 'edit' ? (
                 <>
                     <TextField label="Total fee (KES)" value={total} onChangeText={setTotal} keyboardType="decimal-pad" />
-                    <TextField label="Due date (YYYY-MM-DD)" value={dueDate} onChangeText={setDueDate} />
+                    <DateField label="Due date" value={dueDate} onChange={setDueDate} />
                     <TextField label="Notes" value={billNotes} onChangeText={setBillNotes} />
                     <ButtonRow>
                         <Button variant="danger" label="Delete record" onPress={deleteBill} loading={busy === 'delete'} />

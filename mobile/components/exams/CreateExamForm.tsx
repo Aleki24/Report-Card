@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -117,7 +118,7 @@ function CreateExamForm({ term, structure, onCancel, onCreated }: { term: Term; 
             {gradeId ? <ChipSelect label="Subject" wrap options={subjects.map((s) => ({ value: s.id, label: s.name }))} value={subjectId} onChange={setSubjectId} /> : null}
             <TextField label="Name (optional)" value={name} onChangeText={setName} placeholder="e.g. CAT 1" />
             <TextField label="Out of" value={maxScore} onChangeText={setMaxScore} keyboardType="number-pad" />
-            <TextField label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
+            <DateField label="Date" value={date} onChange={setDate} />
             <ButtonRow>
                 <Button variant="secondary" label="Cancel" onPress={onCancel} />
                 <Button label="Create exam" onPress={submit} loading={saving} />

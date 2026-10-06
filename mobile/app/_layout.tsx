@@ -1,4 +1,5 @@
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
+import { useSignOut } from '@/lib/useSignOut';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -35,13 +36,13 @@ const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
 function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
     const styles = useStyles();
-    const { signOut } = useAuth();
+    const { signOut, signingOut } = useSignOut();
     return (
         <View style={styles.centered}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{reason}</Text>
-            <Pressable onPress={() => signOut()} style={styles.signOutButton}>
-                <Text style={styles.signOutText}>Sign Out</Text>
+            <Pressable onPress={() => void signOut()} disabled={signingOut} style={styles.signOutButton}>
+                <Text style={styles.signOutText}>{signingOut ? "Signing out…" : "Sign out"}</Text>
             </Pressable>
         </View>
     );

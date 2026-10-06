@@ -1,8 +1,9 @@
 import type { InviteDelivery } from '@shared/invite-delivery';
+import { DateField } from '@/components/DateField';
 import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
-import { errorMessage } from '@/lib/format';
+import { errorMessage, toISODate } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField } from '@/components/ui';
 import type { GradeStream } from '@/lib/types';
@@ -136,7 +137,7 @@ export function StudentForm({
                 value={v.gender || null}
                 onChange={(g) => set('gender', g)}
             />
-            <TextField label="Date of birth (YYYY-MM-DD)" value={v.date_of_birth} onChangeText={(t) => set('date_of_birth', t)} />
+            <DateField label="Date of birth" optional max={toISODate()} value={v.date_of_birth} onChange={(t) => set('date_of_birth', t)} />
             <TextField label="Guardian name" value={v.guardian_name} onChangeText={(t) => set('guardian_name', t)} autoCapitalize="words" />
             <TextField label="Guardian phone" value={v.guardian_phone} onChangeText={(t) => set('guardian_phone', t)} keyboardType="phone-pad" placeholder="0712345678" />
             <TextField label="Guardian email" value={v.guardian_email} onChangeText={(t) => set('guardian_email', t)} keyboardType="email-address" autoCapitalize="none" />

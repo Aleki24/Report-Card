@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { humanize, today } from '@shared/ops/format';
 import { ROLL_SHORT, ROLL_TONES, currentRollSession, rollSavedMessage, type Roll } from '@shared/ops/forms/welfare';
@@ -78,7 +79,7 @@ export function RollCall() {
                     onChange={(v) => { setDormId(v); reset(); }}
                 />
                 <ChipSelect label="Session" options={ROLL_SESSIONS.map((s) => ({ value: s, label: humanize(s) }))} value={session} onChange={(v) => { setSession(v); reset(); }} />
-                <TextField label="Date" value={day} onChangeText={(v) => { setDay(v); reset(); }} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+                <DateField label="Date" value={day} onChange={(v) => { setDay(v); reset(); }} />
                 <Button label="Open roll" onPress={() => void open()} loading={opening} block />
             </Card>
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Square, SquareCheck } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -80,7 +81,7 @@ export function StudyGoals() {
                     <TextField label="Goal" value={title} onChangeText={setTitle} placeholder="e.g. Score 70% in Maths" />
                     <ChipSelect label="Subject (optional)" options={(subjects.data ?? []).map((s) => ({ value: s.id, label: s.name }))} value={subjectId} onChange={setSubjectId} />
                     <TextField label="Target % (optional)" value={target} onChangeText={setTarget} keyboardType="number-pad" />
-                    <TextField label="Deadline (YYYY-MM-DD, optional)" value={deadline} onChangeText={setDeadline} />
+                    <DateField label="Deadline (optional)" optional value={deadline} onChange={setDeadline} />
                     <ButtonRow>
                         <Button variant="secondary" label="Cancel" onPress={() => setAdding(false)} />
                         <Button label="Add goal" onPress={add} loading={saving} />

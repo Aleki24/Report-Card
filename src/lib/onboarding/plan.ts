@@ -55,12 +55,20 @@ export const chosenGrades = (state: OnboardingState, grades: readonly StandardGr
     grades.filter(g => state.classPlans[g.id] && state.curricula.includes(g.curriculum));
 
 /** Why a step can't continue yet, or null. */
+/** A real calendar day written YYYY-MM-DD (rejects 2026/19/10 and 2026-02-30). */
+export function isISODate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const d = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 export function onboardingStepProblem(step: number, state: OnboardingState, grades: readonly StandardGrade[]): string | null {
     const { schoolName, academicYear, term, curricula, classPlans } = state;
     if (step === 1 && !schoolName.trim()) return 'School name is required';
     if (step === 2) {
         if (!/^\d{4}$/.test(academicYear)) return 'Enter the academic year, e.g. 2026';
         if (!term.start_date || !term.end_date) return `Enter when ${term.name} starts and ends`;
+        if (!isISODate(term.start_date) || !isISODate(term.end_date)) return 'Pick the term dates from the calendar';
         if (term.end_date <= term.start_date) return 'The term must end after it starts';
         if (!term.start_date.startsWith(academicYear)) return 'The term should start in the academic year you entered';
     }
