@@ -1,6 +1,7 @@
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { useSignOut } from '@/lib/useSignOut';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
+import { resourceCache } from '@clerk/clerk-expo/resource-cache';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -178,7 +179,9 @@ export default function RootLayout() {
     return (
         <ThemeProvider>
             <KeyboardProvider>
-                <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+                {/* The resource cache keeps Clerk's settings, the signed-in client and its last session
+                    token on the phone, so the app opens without a connection on the data it last loaded. */}
+                <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache} __experimental_resourceCache={resourceCache}>
                     <ThemedStatusBar />
                     <ToastProvider>
                         <AuthGate />
