@@ -13,7 +13,8 @@ type Props = {
 };
 
 const LEVEL_LABELS: Record<EducationLevel, string> = {
-    CBC_LOWER_PRIMARY: 'Playgroup, Pre-Primary & Lower Primary',
+    CBC_PRE_PRIMARY: 'Playgroup & Pre-Primary',
+    CBC_LOWER_PRIMARY: 'Lower Primary',
     CBC_UPPER_PRIMARY: 'Upper Primary',
     CBC_JUNIOR_SCHOOL: 'Junior School',
     CBC_SENIOR_SCHOOL: 'Senior School',

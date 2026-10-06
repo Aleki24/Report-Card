@@ -20,6 +20,7 @@ type Props = {
 type WithExams = { code: string; id: string; count: number };
 
 const LEVELS: { value: EducationLevel; label: string }[] = [
+    { value: 'CBC_PRE_PRIMARY', label: 'CBC Pre-primary' },
     { value: 'CBC_LOWER_PRIMARY', label: 'CBC Lower Primary' },
     { value: 'CBC_UPPER_PRIMARY', label: 'CBC Upper Primary' },
     { value: 'CBC_JUNIOR_SCHOOL', label: 'CBC Junior School' },

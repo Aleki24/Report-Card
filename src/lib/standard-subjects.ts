@@ -22,6 +22,7 @@ type Db = SupabaseClient<any, any, any>;
  * whether a subject is Lower Primary or Senior School; this can.
  */
 export const BAND_BY_LEVEL: Record<EducationLevel, string> = {
+    CBC_PRE_PRIMARY: 'PP',
     CBC_LOWER_PRIMARY: 'LP',
     CBC_UPPER_PRIMARY: 'UP',
     CBC_JUNIOR_SCHOOL: 'JS',
@@ -31,7 +32,7 @@ export const BAND_BY_LEVEL: Record<EducationLevel, string> = {
 
 /** Which catalogue level a class's subjects come from. 8-4-4 primary has no catalogue. */
 const LEVEL_BY_BAND: Partial<Record<CurriculumBand, EducationLevel>> = {
-    CBC_PRE_PRIMARY: 'CBC_LOWER_PRIMARY',
+    CBC_PRE_PRIMARY: 'CBC_PRE_PRIMARY',
     CBC_LOWER_PRIMARY: 'CBC_LOWER_PRIMARY',
     CBC_UPPER_PRIMARY: 'CBC_UPPER_PRIMARY',
     CBC_JUNIOR_SCHOOL: 'CBC_JUNIOR_SCHOOL',

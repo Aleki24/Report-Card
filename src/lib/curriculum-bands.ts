@@ -39,8 +39,9 @@ export const BAND_LABELS: Record<CurriculumBand, string> = {
 };
 
 /**
- * Pre-primary (Playgroup, PP1, PP2) runs on the Lower Primary learning areas —
- * no separate seeded set.
+ * Learning areas that run through Pre-primary and Lower Primary alike in the
+ * seeded vocabulary and by name. The catalogue's own levels are kept apart:
+ * Pre-primary has its KICD activity areas (`*_PP`), Grades 1–3 theirs (`*_LP`).
  */
 const CBC_PRIMARY_BANDS: CurriculumBand[] = ['CBC_PRE_PRIMARY', 'CBC_LOWER_PRIMARY'];
 
@@ -56,7 +57,8 @@ const ALL_844_BANDS: CurriculumBand[] = ['844_PRIMARY', '844_SECONDARY'];
 
 /** How the four CBC sub-levels in `subject-definitions` map onto bands. */
 const BANDS_BY_EDUCATION_LEVEL: Record<EducationLevel, CurriculumBand[]> = {
-    CBC_LOWER_PRIMARY: CBC_PRIMARY_BANDS,
+    CBC_PRE_PRIMARY: ['CBC_PRE_PRIMARY'],
+    CBC_LOWER_PRIMARY: ['CBC_LOWER_PRIMARY'],
     CBC_UPPER_PRIMARY: ['CBC_UPPER_PRIMARY'],
     CBC_JUNIOR_SCHOOL: ['CBC_JUNIOR_SCHOOL'],
     CBC_SENIOR_SCHOOL: ['CBC_SENIOR_SCHOOL'],
@@ -287,8 +289,8 @@ const BANDS_BY_SUBJECT_NAME: Record<string, CurriculumBand[]> = {
  * to a subject a caller has told it is 8-4-4.
  */
 const BANDS_BY_CODE_SUFFIX: Record<string, CurriculumBand[]> = {
-    PP: ['CBC_PRE_PRIMARY', 'CBC_LOWER_PRIMARY'],
-    LP: CBC_PRIMARY_BANDS,
+    PP: ['CBC_PRE_PRIMARY'],
+    LP: ['CBC_LOWER_PRIMARY'],
     UP: ['CBC_UPPER_PRIMARY'],
     JS: ['CBC_JUNIOR_SCHOOL'],
     SS: ['CBC_SENIOR_SCHOOL'],

@@ -1,4 +1,5 @@
 export type EducationLevel =
+  | 'CBC_PRE_PRIMARY'
   | 'CBC_LOWER_PRIMARY'
   | 'CBC_UPPER_PRIMARY'
   | 'CBC_JUNIOR_SCHOOL'
@@ -65,6 +66,17 @@ export const PREDEFINED_SUBJECTS: PredefinedSubject[] = [
   { name: 'Kenya Sign Language', code: '504', level: '844_SECONDARY', category: 'LANGUAGE' },
   { name: 'Music', code: '511', level: '844_SECONDARY', category: 'CREATIVE' },
   { name: 'Business Studies', code: '565', level: '844_SECONDARY', category: 'TECHNICAL' },
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // CBC Pre-Primary (Playgroup, PP1, PP2) — KICD activity areas
+  // ═══════════════════════════════════════════════════════════════
+
+  { name: 'Language Activities', code: 'LANG_PP', level: 'CBC_PRE_PRIMARY', category: 'LANGUAGE', isCore: true },
+  { name: 'Mathematical Activities', code: 'MATH_PP', level: 'CBC_PRE_PRIMARY', category: 'MATHEMATICS', isCore: true },
+  { name: 'Environmental Activities', code: 'ENV_PP', level: 'CBC_PRE_PRIMARY', category: 'SCIENCE', isCore: true },
+  { name: 'Psychomotor and Creative Activities', code: 'PCA_PP', level: 'CBC_PRE_PRIMARY', category: 'CREATIVE', isCore: true },
+  { name: 'Religious Education Activities', code: 'RE_PP', level: 'CBC_PRE_PRIMARY', category: 'HUMANITY', isCore: true },
 
 
   // ═══════════════════════════════════════════════════════════════
