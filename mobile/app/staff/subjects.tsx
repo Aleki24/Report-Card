@@ -7,7 +7,7 @@ import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
-    Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs,
 } from '@/components/ui';
 import { CombinationsPanel } from '@/components/subjects/CombinationsPanel';
@@ -241,10 +241,12 @@ function SubjectTeachers({ structure }: { structure: AcademicStructure | null })
     return (
         <View>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
-            <ChipSelect label="Grade" options={grades.map((g) => ({ value: g.id, label: g.name_display }))} value={effectiveGrade} onChange={(g) => { setGradeId(g); setStreamId(WHOLE_GRADE); }} />
-            {gradeStreams.length > 1 ? (
-                <ChipSelect label="Stream" options={[{ value: WHOLE_GRADE, label: 'Whole grade' }, ...gradeStreams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
-            ) : null}
+            <FilterGrid>
+                <ChipSelect label="Grade" options={grades.map((g) => ({ value: g.id, label: g.name_display }))} value={effectiveGrade} onChange={(g) => { setGradeId(g); setStreamId(WHOLE_GRADE); }} />
+                {gradeStreams.length > 1 ? (
+                    <ChipSelect label="Stream" options={[{ value: WHOLE_GRADE, label: 'Whole grade' }, ...gradeStreams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
+                ) : null}
+            </FilterGrid>
             {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
             {loading ? (
                 <LoadingView />

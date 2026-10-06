@@ -8,7 +8,7 @@ import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { errorMessage, formatCurrency, formatDate, fullName, isOverdue, pluralize } from '@/lib/format';
 import { spacing, useTheme } from '@/lib/theme';
 import {
-    Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -114,7 +114,7 @@ function Balances() {
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-            <ChipSelect options={[{ value: '', label: 'All terms' }, ...terms.map((t) => ({ value: t.id, label: t.name }))]} value={termId} onChange={setTermId} />
+            <ChipSelect label="Term" options={[{ value: '', label: 'All terms' }, ...terms.map((t) => ({ value: t.id, label: t.name }))]} value={termId} onChange={setTermId} />
             <StatGrid>
                 <StatTile label="Billed" value={formatCurrency(billed)} />
                 <StatTile label="Collected" value={formatCurrency(paid)} tone={colors.success} sub={billed > 0 ? `${Math.round((paid / billed) * 100)}% of billed` : undefined} />
@@ -190,7 +190,6 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
     const [termId, setTermId] = useState<string | null>(defaultTermId);
     const [streamId, setStreamId] = useState<string | null>(streams.length === 1 ? streams[0].id : null);
     const [studentId, setStudentId] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
     const [amount, setAmount] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [notes, setNotes] = useState('');
@@ -202,8 +201,6 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
     const termFees = useApiQuery<StaffFeeRecord[]>(termId ? withQuery('/api/school/fees', { term_id: termId }) : null);
 
     const roster = (students.data ?? []).filter((s) => s.status === 'ACTIVE');
-    const q = search.trim().toLowerCase();
-    const matches = roster.filter((s) => !q || `${fullName(s.users)} ${s.admission_number ?? ''}`.toLowerCase().includes(q)).slice(0, 8);
 
     const submit = async () => {
         const total = parseFloat(amount);
@@ -243,13 +240,12 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
                 value={mode}
                 onChange={setMode}
             />
-            <ChipSelect label="Term" options={terms.map((t) => ({ value: t.id, label: t.name }))} value={termId} onChange={setTermId} />
-            <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={streamId} onChange={(id) => { setStreamId(id); setStudentId(null); }} />
+            <FilterGrid>
+                <ChipSelect label="Term" options={terms.map((t) => ({ value: t.id, label: t.name }))} value={termId} onChange={setTermId} />
+                <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={streamId} onChange={(id) => { setStreamId(id); setStudentId(null); }} />
+            </FilterGrid>
             {mode === 'one' && streamId ? (
-                <>
-                    <SearchField value={search} onChangeText={setSearch} placeholder="Find the learner" />
-                    <ChipSelect wrap options={matches.map((s) => ({ value: s.id, label: fullName(s.users), hint: s.admission_number ?? undefined }))} value={studentId} onChange={setStudentId} />
-                </>
+                <ChipSelect label="Learner" layout="picker" placeholder="Find the learner" options={roster.map((s) => ({ value: s.id, label: fullName(s.users), hint: s.admission_number ?? undefined }))} value={studentId} onChange={setStudentId} />
             ) : null}
             {mode === 'class' && streamId ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{pluralize(roster.length, 'active learner')} will be billed (anyone already billed this term is skipped).</Text> : null}
             <TextField label="Amount (KES)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />

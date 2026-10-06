@@ -7,7 +7,7 @@ import { errorMessage, fileSafe, formatPercent, scoreColor } from '@/lib/format'
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam, type ReportTemplateId } from '@/lib/reportTemplates';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs,
 } from '@/components/ui';
 import type { ExamResult, ReportCard } from '@/lib/types';
@@ -66,9 +66,11 @@ function ExamMarksTab() {
 
     return (
         <View>
-            <ChipSelect options={all$(uniqueOptions(base, (r) => r.exams?.academic_years), 'All years')} value={year} onChange={setYear} />
-            <ChipSelect options={all$(uniqueOptions(base, (r) => r.exams?.terms), 'All terms')} value={term} onChange={setTerm} />
-            <ChipSelect options={all$(uniqueOptions(base, (r) => r.exams?.subjects), 'All subjects')} value={subject} onChange={setSubject} />
+            <FilterGrid>
+                <ChipSelect label="Year" options={all$(uniqueOptions(base, (r) => r.exams?.academic_years), 'All years')} value={year} onChange={setYear} />
+                <ChipSelect label="Term" options={all$(uniqueOptions(base, (r) => r.exams?.terms), 'All terms')} value={term} onChange={setTerm} />
+                <ChipSelect label="Subject" options={all$(uniqueOptions(base, (r) => r.exams?.subjects), 'All subjects')} value={subject} onChange={setSubject} />
+            </FilterGrid>
             {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
             {loading ? (
                 <LoadingView />

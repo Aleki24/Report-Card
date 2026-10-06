@@ -1,16 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
-import { toneColorFor, formatPercent, passRateTone, pluralize, scoreColor, shortCurriculumLabel } from '@/lib/format';
+import { toneColorFor, formatPercent, passRateTone, pluralize, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    Badge, Button, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
+    Button, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
+import { ClassPerformanceList } from '@/components/dashboard/AdminSections';
 import type { AnalyticsOverview, ClassAnalytics } from '@/lib/types';
 
 const ALL = 'all';
@@ -30,7 +32,9 @@ export default function AnalyticsScreen() {
 
 function AnalyticsContent() {
     const { streams } = useGradeStreams();
-    const [streamId, setStreamId] = useState<string>(ALL);
+    // A class tile on the home screen opens its class here.
+    const params = useLocalSearchParams<{ stream?: string }>();
+    const [streamId, setStreamId] = useState<string>(params.stream || ALL);
     const selected = streams.find((s) => s.id === streamId);
 
     return (
@@ -39,7 +43,7 @@ function AnalyticsContent() {
                 title="Analytics"
                 description={selected ? `${selected.full_name} — subjects, merit list and trend` : 'How each class is doing. Open a class for its subjects and merit list.'}
             />
-            <ChipSelect options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
+            <ChipSelect label="Class" options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
             {streamId === ALL ? <SchoolOverview onSelect={setStreamId} /> : <ClassView key={streamId} streamId={streamId} />}
         </Screen>
     );
@@ -47,7 +51,6 @@ function AnalyticsContent() {
 
 function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
     const { colors } = useTheme();
-    const styles = useStyles();
     const { data, loading, error, reload } = useApiQuery<AnalyticsOverview>('/api/school/analytics/overview', { raw: true });
     if (loading) return <LoadingView />;
     if (error) return <ErrorBanner message={error} onRetry={reload} />;
@@ -65,27 +68,14 @@ function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
                 <StatTile label="Exams awaiting marks" value={s.exams_awaiting_marks} tone={s.exams_awaiting_marks > 0 ? colors.warning : undefined} />
             </StatGrid>
             <SectionLabel>Classes, weakest first</SectionLabel>
-            <ListCard>
-                {data.classes.map((c) => {
-                    const tone = toneColorFor(colors, passRateTone(c.pass_rate));
-                    return (
-                        <View key={c.id} style={styles.classRow}>
-                            <View style={styles.classHeader}>
-                                <Text style={styles.className} numberOfLines={1} onPress={() => onSelect(c.id)}>
-                                    {c.name} ›
-                                </Text>
-                                {shortCurriculumLabel(c.level_code) ? <Badge label={shortCurriculumLabel(c.level_code) ?? ''} /> : null}
-                                <Text style={[styles.rate, { color: tone }]}>{c.pass_rate == null ? '—' : `${c.pass_rate}%`}</Text>
-                            </View>
-                            <ProgressBar value={c.pass_rate ?? 0} color={tone} />
-                            <Text style={styles.meta}>
-                                {pluralize(c.students, 'learner')} · mean {formatPercent(c.mean, 1)} · {pluralize(c.mark_count, 'mark')}
-                                {c.unmarked > 0 ? ` · ${c.unmarked} unmarked` : ''}
-                            </Text>
-                        </View>
-                    );
-                })}
-            </ListCard>
+            <Card>
+                <ClassPerformanceList
+                    classes={data.classes.map((c) => ({ id: c.id, name: c.name, levelCode: c.level_code, students: c.students, markCount: c.mark_count, mean: c.mean, passRate: c.pass_rate }))}
+                    passMark={50}
+                    onSelect={onSelect}
+                    preview={12}
+                />
+            </Card>
         </>
     );
 }
@@ -118,17 +108,17 @@ function ClassView({ streamId }: { streamId: string }) {
 
     return (
         <>
-            {data.terms.length > 1 ? (
-                <ChipSelect label="Term" options={data.terms.map((t) => ({ value: t.id, label: t.name }))} value={data.scope.term_id} onChange={setTermId} />
-            ) : null}
-            {examTypes.length > 0 ? (
-                <ChipSelect
-                    label="Sitting"
-                    options={[{ value: '', label: 'Whole term' }, ...examTypes.map((t) => ({ value: t, label: examTypeLabel(t) }))]}
-                    value={examType ?? ''}
-                    onChange={(v) => setExamType(v || null)}
-                />
-            ) : null}
+            <FilterGrid>
+                {data.terms.length > 1 ? <ChipSelect label="Term" options={data.terms.map((t) => ({ value: t.id, label: t.name }))} value={data.scope.term_id} onChange={setTermId} /> : null}
+                {examTypes.length > 0 ? (
+                    <ChipSelect
+                        label="Sitting"
+                        options={[{ value: '', label: 'Whole term' }, ...examTypes.map((t) => ({ value: t, label: examTypeLabel(t) }))]}
+                        value={examType ?? ''}
+                        onChange={(v) => setExamType(v || null)}
+                    />
+                ) : null}
+            </FilterGrid>
 
             {data.summary.mark_count === 0 ? (
                 <EmptyState title="No marks for this selection" description="Pick another term or sitting." />

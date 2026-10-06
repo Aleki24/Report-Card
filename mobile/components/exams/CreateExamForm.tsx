@@ -5,7 +5,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { examTypeLabel } from '@/lib/academics';
 import { errorMessage, toISODate } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
-import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, Notice, TextField } from '@/components/ui';
+import { Button, ButtonRow, Card, ChipSelect, FilterGrid, ErrorBanner, Notice, TextField } from '@/components/ui';
 import type { AcademicStructure, Term } from '@/lib/types';
 
 const CREATABLE_TYPES = ['CAT', 'TOPICAL', 'OPENER', 'MIDTERM', 'ENDTERM', 'ZONE', 'SUB_COUNTY', 'COUNTY', 'PRE_MOCK', 'MOCK', 'POST_MOCK'] as const;
@@ -103,15 +103,17 @@ function CreateExamForm({ term, structure, onCancel, onCreated }: { term: Term; 
             <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>New exam · {term.name}</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <ChipSelect label="Type" options={CREATABLE_TYPES.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={examType} onChange={setExamType} />
-            <ChipSelect label="Grade" options={grades.map((g) => ({ value: g.id, label: g.name_display }))} value={gradeId} onChange={(g) => { setGradeId(g); setStreamId(WHOLE_GRADE); setSubjectId(null); }} />
-            {gradeStreams.length > 1 ? (
-                <ChipSelect
-                    label="Stream"
-                    options={[{ value: WHOLE_GRADE, label: 'Whole grade' }, ...gradeStreams.map((s) => ({ value: s.id, label: s.full_name }))]}
-                    value={streamId}
-                    onChange={setStreamId}
-                />
-            ) : null}
+            <FilterGrid>
+                <ChipSelect label="Grade" options={grades.map((g) => ({ value: g.id, label: g.name_display }))} value={gradeId} onChange={(g) => { setGradeId(g); setStreamId(WHOLE_GRADE); setSubjectId(null); }} />
+                {gradeStreams.length > 1 ? (
+                    <ChipSelect
+                        label="Stream"
+                        options={[{ value: WHOLE_GRADE, label: 'Whole grade' }, ...gradeStreams.map((s) => ({ value: s.id, label: s.full_name }))]}
+                        value={streamId}
+                        onChange={setStreamId}
+                    />
+                ) : null}
+            </FilterGrid>
             {gradeId ? <ChipSelect label="Subject" wrap options={subjects.map((s) => ({ value: s.id, label: s.name }))} value={subjectId} onChange={setSubjectId} /> : null}
             <TextField label="Name (optional)" value={name} onChangeText={setName} placeholder="e.g. CAT 1" />
             <TextField label="Out of" value={maxScore} onChangeText={setMaxScore} keyboardType="number-pad" />

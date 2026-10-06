@@ -15,7 +15,7 @@ import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
 import { spacing, useTheme } from '@/lib/theme';
 import {
-    Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -190,8 +190,22 @@ function StudentsSection() {
             ) : null}
 
             <SearchField value={search} onChangeText={setSearch} placeholder="Search name, admission no. or guardian phone" />
-            {streams.length > 1 ? (
-                <ChipSelect options={[{ value: '', label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={stream} onChange={setStream} />
+            {streams.length > 1 || (hasPathways && seniorStreams.length > 0) ? (
+                <FilterGrid>
+                    {streams.length > 1 ? <ChipSelect label="Class" options={[{ value: '', label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={stream} onChange={setStream} /> : null}
+                    {hasPathways && seniorStreams.length > 0 ? (
+                        <ChipSelect
+                            label="Pathway"
+                            options={[
+                                { value: '', label: 'Any pathway' },
+                                ...PATHWAY_ORDER.map((p) => ({ value: p, label: pathwayLabel(p) })),
+                                { value: 'UNASSIGNED', label: 'No pathway' },
+                            ]}
+                            value={pathway}
+                            onChange={setPathway}
+                        />
+                    ) : null}
+                </FilterGrid>
             ) : null}
             <ChipSelect
                 options={[
@@ -202,17 +216,6 @@ function StudentsSection() {
                 value={status}
                 onChange={setStatus}
             />
-            {hasPathways && seniorStreams.length > 0 ? (
-                <ChipSelect
-                    options={[
-                        { value: '', label: 'Any pathway' },
-                        ...PATHWAY_ORDER.map((p) => ({ value: p, label: pathwayLabel(p) })),
-                        { value: 'UNASSIGNED', label: 'No pathway' },
-                    ]}
-                    value={pathway}
-                    onChange={setPathway}
-                />
-            ) : null}
 
             {filtered.length === 0 ? (
                 <EmptyState title="No students found" />

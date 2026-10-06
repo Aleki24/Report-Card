@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
-import { Badge, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView } from '@/components/ui';
+import { Badge, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView } from '@/components/ui';
 import { fonts, useTheme } from '@/lib/theme';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
 import { examClasses, examLabel, useExams, useTerms } from '@/lib/useSchoolData';
@@ -60,7 +60,7 @@ export function ExamPicker({
     return (
         <>
             <ChipSelect
-                label="① Term"
+                label="Term"
                 options={terms.map((t) => ({ value: t.id, label: t.id === activeTermId ? `${t.name} • active` : t.name }))}
                 value={effectiveTermId}
                 onChange={setTermId}
@@ -80,13 +80,15 @@ export function ExamPicker({
                 </Card>
             ) : (
                 <>
-                    <ChipSelect label="② Exam" options={types.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={effectiveType} onChange={setExamType} />
-                    {effectiveType ? (
-                        <ChipSelect label="③ Class" options={classes.map((c) => ({ value: c.key, label: c.label }))} value={effectiveGrade} onChange={setGradeId} />
-                    ) : null}
+                    <FilterGrid>
+                        <ChipSelect label="Exam" options={types.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={effectiveType} onChange={setExamType} />
+                        {effectiveType ? (
+                            <ChipSelect label="Class" options={classes.map((c) => ({ value: c.key, label: c.label }))} value={effectiveGrade} onChange={setGradeId} />
+                        ) : null}
+                    </FilterGrid>
                     {effectiveGrade ? (
                         <>
-                            <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 }}>④ Subject</Text>
+                            <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 }}>Subject</Text>
                             <ListCard>
                                 {slots.map((e) => (
                                     <ListRow

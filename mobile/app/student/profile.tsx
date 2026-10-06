@@ -3,9 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
-import { errorMessage, formatDate, fullName, initials } from '@/lib/format';
+import { errorMessage, formatDate } from '@/lib/format';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
-import { Avatar, Button, ButtonRow, Card, ErrorBanner, InfoRow, LoadingView, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
+import { ProfilePhoto } from '@/components/account/ProfilePhoto';
+import { Button, ButtonRow, Card, ErrorBanner, InfoRow, LoadingView, Notice, Screen, ScreenHeader, TextField } from '@/components/ui';
 import type { StudentProfile } from '@/lib/types';
 import { AccountActions } from '@/components/account/AccountActions';
 
@@ -44,13 +45,7 @@ export default function ProfileScreen() {
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-            <View style={styles.avatarRow}>
-                <Avatar label={initials(user)} />
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{fullName(user)}</Text>
-                    <Text style={styles.email}>{user?.email ?? '—'}</Text>
-                </View>
-            </View>
+            <ProfilePhoto subtitle={[profile?.grade_streams?.full_name, profile?.admission_number ? `Adm. ${profile.admission_number}` : null].filter(Boolean).join(' · ') || null} />
 
             <Card style={{ marginBottom: spacing.lg }}>
                 <InfoRow label="Admission no." value={profile?.admission_number} />

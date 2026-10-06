@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { roleLabel, type UserRole } from '@/lib/roles';
-import { errorMessage, fullName, initials } from '@/lib/format';
+import { errorMessage } from '@/lib/format';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { AccountActions } from '@/components/account/AccountActions';
-import { Avatar, Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
+import { ProfilePhoto } from '@/components/account/ProfilePhoto';
+import { Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
 interface AvailableRoles {
     roles: UserRole[];
@@ -43,13 +44,7 @@ export default function StaffProfileScreen() {
     return (
         <Screen>
             <ScreenHeader title="Profile" />
-            <View style={styles.avatarRow}>
-                <Avatar label={initials(profile)} />
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{fullName(profile)}</Text>
-                    <Text style={styles.email}>{profile?.email ?? '—'}</Text>
-                </View>
-            </View>
+            <ProfilePhoto />
 
             {error ? <Notice tone="danger" message={error} onDismiss={() => setError(null)} /> : null}
 
@@ -72,7 +67,5 @@ export default function StaffProfileScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
-    avatarRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    name: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
     email: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
 }));

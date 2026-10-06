@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
-import { ChipSelect, EmptyState, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { EmptyState, Screen, ScreenHeader, ScrollTabs, SegmentedTabs } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffScreen } from '@/lib/roles';
 import { RefreshSignalProvider } from './bits';
@@ -37,7 +37,15 @@ function ModuleBody<Id extends string>({ title, description, tabs, action }: { t
     // `?tab=` opens a given tab, as the web's links do (the dashboard's tiles use it).
     const { tab } = useLocalSearchParams<{ tab?: string }>();
     const [active, setActive] = useState<Id | null>(() => (visible.find((t) => t.id === tab)?.id ?? null));
+    // A link inside the screen (e.g. "Add fee structures") changes `?tab=` to move along.
+    useEffect(() => {
+        const match = visible.find((t) => t.id === tab);
+        if (match) setActive(match.id);
+    }, [tab, visible]);
     const [signal, setSignal] = useState(0);
+    const router = useRouter();
+    // The tab stays in `?tab=`, so a link that sets it always lands, even on the tab already left.
+    const choose = (id: Id) => { setActive(id); router.setParams({ tab: id }); };
     const current = visible.find((t) => t.id === active) ?? visible[0];
     const options = visible.map((t) => ({ value: t.id, label: t.label }));
 
@@ -48,8 +56,8 @@ function ModuleBody<Id extends string>({ title, description, tabs, action }: { t
                 <EmptyState title="Nothing here for your account" description="Ask your administrator to give you the duty that covers this area." />
             ) : (
                 <>
-                    {visible.length > 1 && visible.length <= 3 ? <SegmentedTabs tabs={options} value={current.id} onChange={setActive} /> : null}
-                    {visible.length > 3 ? <ChipSelect options={options} value={current.id} onChange={setActive} /> : null}
+                    {visible.length > 1 && visible.length <= 3 ? <SegmentedTabs tabs={options} value={current.id} onChange={choose} /> : null}
+                    {visible.length > 3 ? <ScrollTabs tabs={options} value={current.id} onChange={choose} /> : null}
                     <RefreshSignalProvider value={signal}>
                         <React.Fragment key={current.id}>{current.render()}</React.Fragment>
                     </RefreshSignalProvider>

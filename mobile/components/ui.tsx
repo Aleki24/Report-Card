@@ -19,6 +19,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { pageIdentity } from '@/lib/hues';
 import { CountUp } from './dashboard/kit';
 import { InlineLoader } from './Loader';
+export { FilterGrid } from './Choice';
+import { OptionTiles, PickerField, SegmentedChoice, layoutFor, useInFilterGrid, type ChoiceLayout, type ChoiceOption } from './Choice';
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -440,52 +442,41 @@ export function ToggleRow({ label, description, value, onValueChange }: { label:
     );
 }
 
-export interface ChipOption<T extends string> {
-    value: T;
-    label: string;
-    hint?: string;
-}
+export type ChipOption<T extends string> = ChoiceOption<T>;
 
-/** Single-select pills. Scrolls sideways by default; `wrap` lays them out in rows. */
+/**
+ * Pick one of a set. The shape follows the choices: two or three short ones
+ * sit side by side on a track, a handful in a form become tick tiles, and
+ * longer lists (classes, subjects, terms) are a field that opens a sheet.
+ */
 export function ChipSelect<T extends string>({
     options,
     value,
     onChange,
     label,
     wrap,
+    layout,
+    placeholder,
 }: {
     options: readonly ChipOption<T>[];
     value: T | null;
     onChange: (value: T) => void;
     label?: string;
+    /** In a form: prefer tiles to a sheet for a handful of choices. */
     wrap?: boolean;
+    layout?: ChoiceLayout;
+    placeholder?: string;
 }) {
     const styles = useStyles();
-    const chips = options.map((o) => {
-        const active = o.value === value;
-        return (
-            <Pressable
-                key={o.value}
-                onPress={() => onChange(o.value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={[styles.chip, active && styles.chipActive]}
-            >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{o.label}</Text>
-                {o.hint ? <Text style={[styles.chipHint, active && styles.chipTextActive]}>{o.hint}</Text> : null}
-            </Pressable>
-        );
-    });
+    const inGrid = useInFilterGrid();
+    const shape = layout ?? (inGrid ? 'picker' : layoutFor(options, wrap));
+    if (shape === 'picker') return <PickerField label={label} options={options} value={value} onChange={onChange} placeholder={placeholder} />;
     return (
         <View style={styles.field}>
             {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-            {wrap ? (
-                <View style={styles.chipWrap}>{chips}</View>
-            ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-                    {chips}
-                </ScrollView>
-            )}
+            {shape === 'segmented'
+                ? <SegmentedChoice options={options} value={value} onChange={onChange} />
+                : <OptionTiles options={options} value={value} onChange={onChange} />}
         </View>
     );
 }
@@ -509,6 +500,26 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tab
                     </Pressable>
                 );
             })}
+        </View>
+    );
+}
+
+/** Many sections: text tabs on a sideways-scrolling bar, the chosen one underlined. */
+export function ScrollTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly ChipOption<T>[]; value: T; onChange: (v: T) => void }) {
+    const styles = useStyles();
+    return (
+        <View style={styles.scrollTabs}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg, paddingRight: spacing.lg }}>
+                {tabs.map((t) => {
+                    const active = t.value === value;
+                    return (
+                        <Pressable key={t.value} onPress={() => onChange(t.value)} accessibilityRole="tab" accessibilityState={{ selected: active }} style={styles.scrollTab}>
+                            <Text style={[styles.scrollTabText, active && styles.scrollTabTextActive]} numberOfLines={1}>{t.label}</Text>
+                            <View style={[styles.scrollTabBar, active && styles.scrollTabBarActive]} />
+                        </Pressable>
+                    );
+                })}
+            </ScrollView>
         </View>
     );
 }
@@ -606,7 +617,7 @@ const useStyles = makeStyles((colors) => ({
     statLabel: { fontSize: 12, color: colors.muted, fontFamily: fonts.semibold },
     statValue: { fontSize: 20, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: -0.3 },
     statSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
-    badge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' },
+    badge: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, alignSelf: 'flex-start' },
     badgeText: { fontSize: 11, fontFamily: fonts.bold },
     empty: { alignItems: 'center', paddingVertical: spacing.xl * 1.5, paddingHorizontal: spacing.lg },
     emptyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
@@ -629,17 +640,17 @@ const useStyles = makeStyles((colors) => ({
     textArea: { minHeight: 96, textAlignVertical: 'top' },
     search: { marginBottom: spacing.md },
     toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-    chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, minHeight: 36, justifyContent: 'center' },
-    chipActive: { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
-    chipText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
-    chipHint: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted, marginTop: 1 },
-    chipTextActive: { color: colors.white },
-    chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    segmented: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: colors.mutedBg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
-    segment: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, alignItems: 'center' },
+    segmented: { flexDirection: 'row', padding: 4, gap: 4, borderRadius: radius.xl, backgroundColor: colors.mutedBg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
+    segment: { flex: 1, minHeight: 38, paddingHorizontal: 4, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
     segmentActive: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
     segmentText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.muted },
-    segmentTextActive: { color: colors.foreground },
+    segmentTextActive: { color: colors.foreground, fontFamily: fonts.bold },
+    scrollTabs: { borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.lg },
+    scrollTab: { paddingTop: spacing.sm },
+    scrollTabText: { fontSize: 14, fontFamily: fonts.semibold, color: colors.muted, paddingBottom: spacing.sm },
+    scrollTabTextActive: { color: colors.primary, fontFamily: fonts.bold },
+    scrollTabBar: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: 'transparent' },
+    scrollTabBarActive: { backgroundColor: colors.primary },
     dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.md },
     dateArrow: { padding: spacing.sm },
     dateText: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, minWidth: 160, textAlign: 'center' },

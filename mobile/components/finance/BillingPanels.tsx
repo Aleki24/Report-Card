@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { admissionNo, money, personName, studentName } from '@shared/ops/format';
 import {
     BILL_TERM_WARNING, statementTotal,
@@ -26,6 +27,12 @@ export function Invoicing({ canManage }: { canManage: boolean }) {
     const [preview, setPreview] = useState<InvoiceSummary | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [busy, setBusy] = useState(false);
+    const router = useRouter();
+    // Billing needs a fee structure per class level; without one, say so and point to it.
+    const [structures, setStructures] = useState<number | null>(null);
+    useEffect(() => {
+        opsGet<{ id: string }[]>(api, '/api/ops/fee-structures').then((r) => setStructures(r.length)).catch(() => setStructures(null));
+    }, [api]);
 
     const loadInvoices = useCallback(async () => {
         if (!termId) return;
@@ -51,6 +58,13 @@ export function Invoicing({ canManage }: { canManage: boolean }) {
 
     return (
         <View>
+            {structures === 0 ? (
+                <Card style={{ marginBottom: spacing.md, borderColor: colors.warningBorder, backgroundColor: colors.warningBg }}>
+                    <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.foreground }}>Set up fee structures first</Text>
+                    <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 }}>Each class level needs a structure (its vote heads and amounts) before a term can be billed.</Text>
+                    <ButtonRow><Button label="Add fee structures" onPress={() => router.setParams({ tab: 'structures' })} /></ButtonRow>
+                </Card>
+            ) : null}
             <Card style={{ marginBottom: spacing.md }}>
                 <LookupField label="Term" required lookup="terms" value={termId} onChange={(v) => { setTermId(v); setPreview(null); }} />
                 <LookupField label="Class (optional)" lookup="streams" value={streamId} onChange={(v) => { setStreamId(v); setPreview(null); }} clearable />

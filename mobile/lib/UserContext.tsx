@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { accessChecks, parseClientAccess, type AccessChecks, type ClientAccess } from '@shared/platform/client-access';
+import { useUser } from '@clerk/clerk-expo';
 import { ApiError, useApi } from './api';
 import { readStored, useCacheKey, writeCache } from './queryCache';
 import { errorMessage } from './format';
@@ -17,6 +18,9 @@ interface UserContextValue extends AccessChecks {
     /** The stored role, before any class-teacher switch. */
     baseRole: UserRole | null;
     schoolName: string | null;
+    schoolLogoUrl: string | null;
+    /** The person's photo, if they have one. */
+    avatarUrl: string | null;
     /** No school yet, or an admin whose school setup is unfinished — show onboarding (the web's /dashboard/onboarding). */
     needsOnboarding: boolean;
     /** Modules the school runs and what this person's role and duties allow (the web's `/api/auth/me` access). */
@@ -30,6 +34,7 @@ const UserContext = createContext<UserContextValue | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const api = useApi();
+    const { user } = useUser();
     const [me, setMe] = useState<MeResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -87,6 +92,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         role,
         baseRole,
         schoolName: me?.schoolName ?? null,
+        schoolLogoUrl: me?.schoolLogoUrl ?? null,
+        // A picture just changed on this phone shows before the server catches up.
+        avatarUrl: (user?.hasImage ? user.imageUrl : null) ?? me?.avatarUrl ?? null,
         needsOnboarding: !!me && (baseRole === 'PENDING' || !me.profile.school_id || (baseRole === 'ADMIN' && !me.schoolOnboardingCompleted)),
         access,
         viewer,

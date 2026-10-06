@@ -1,13 +1,15 @@
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import { useRouter, type Href } from 'expo-router';
 import { CalendarRange, Search, type LucideIcon } from 'lucide-react-native';
+import { useOptionalCurrentUser } from '@/lib/UserContext';
+import { roleLabel } from '@/lib/roles';
 import type { TermSummary } from '@shared/dashboard';
 import { formatLongToday, getGreeting, getSwahiliGreeting } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
-import { PressScale } from './kit';
+import { CountUp, PressScale } from './kit';
 
 /** Red, white, green, amber and blue: a strip of Maasai-style beadwork along the hero's foot. */
 const BEADS = ['#ef4444', '#ffffff', '#22c55e', '#f59e0b', '#38bdf8', '#ffffff'] as const;
@@ -92,9 +94,77 @@ export function HeroChip({ icon: Icon, label, warm }: { icon: LucideIcon; label:
     );
 }
 
+const initialsOf = (first?: string | null, last?: string | null) =>
+    `${(first ?? '').trim().charAt(0)}${(last ?? '').trim().charAt(0)}`.toUpperCase() || '·';
+
+/** Where each role's own account page lives. */
+function profileHref(role: string | null | undefined): Href {
+    if (role === 'STUDENT') return '/student/profile';
+    if (role === 'PARENT') return '/parent/profile';
+    return '/staff/profile';
+}
+
 /**
- * The gradient card every home opens with: soft rings, a greeting in
- * Kiswahili and English, and beadwork along its foot.
+ * Who is signed in, across the top of the hero: their photo (initials until
+ * they add one), their role and the school, with the school's crest.
+ */
+function IdentityBar() {
+    const styles = useStyles();
+    const router = useRouter();
+    const user = useOptionalCurrentUser();
+    if (!user?.profile) return null;
+    const { profile, avatarUrl, schoolName, schoolLogoUrl, role } = user;
+    const title = profile.job_title?.trim() || roleLabel(role);
+    return (
+        <View style={styles.identity}>
+            <PressScale onPress={() => router.push(profileHref(role))} style={styles.avatarRing} accessibilityRole="link" accessibilityLabel="Your profile">
+                {avatarUrl
+                    ? <Image source={{ uri: avatarUrl }} style={styles.avatar} accessibilityIgnoresInvertColors />
+                    : <View style={[styles.avatar, styles.avatarBlank]}><Text style={styles.avatarText}>{initialsOf(profile.first_name, profile.last_name)}</Text></View>}
+                <View style={styles.onlineDot} />
+            </PressScale>
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.identityName} numberOfLines={1}>{[profile.first_name, profile.last_name].filter(Boolean).join(' ')}</Text>
+                <Text style={styles.identityRole} numberOfLines={1}>{[title, schoolName].filter(Boolean).join(' · ')}</Text>
+            </View>
+            {schoolLogoUrl ? (
+                <View style={styles.crest}><Image source={{ uri: schoolLogoUrl }} style={styles.crestImg} resizeMode="contain" accessibilityLabel={schoolName ?? 'School logo'} /></View>
+            ) : null}
+        </View>
+    );
+}
+
+/** A figure on the hero's frosted glass: learners, present today, pass rate. */
+export interface HeroStat { label: string; value: string | number; icon: LucideIcon; href?: Href }
+
+function HeroStats({ stats }: { stats: readonly HeroStat[] }) {
+    const styles = useStyles();
+    const router = useRouter();
+    return (
+        <View style={styles.stats}>
+            {stats.map(({ label, value, icon: Icon, href }) => {
+                const body = (
+                    <>
+                        <View style={styles.statIcon}><Icon size={14} color="#ffffff" /></View>
+                        <CountUp value={value} style={styles.statValue} />
+                        <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
+                    </>
+                );
+                return (
+                    <View key={label} style={styles.statCell}>
+                        {href
+                            ? <PressScale onPress={() => router.push(href)} style={styles.stat} accessibilityRole="link" accessibilityLabel={`${label}: ${value}`}>{body}</PressScale>
+                            : <View style={styles.stat}>{body}</View>}
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
+/**
+ * The gradient card every home opens with: who is signed in, soft rings, a
+ * greeting in Kiswahili and English, and beadwork along its foot.
  */
 export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
     name: string;
@@ -112,6 +182,7 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
                 <Circle cx={160} cy={60} r={90} fill="rgba(255,255,255,0.07)" />
                 <Circle cx={190} cy={20} r={50} fill="rgba(255,255,255,0.06)" />
             </Svg>
+            <IdentityBar />
             <View style={styles.top}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.eyebrow}>{eyebrow ?? `${getSwahiliGreeting()} · ${formatLongToday()}`}</Text>
@@ -129,7 +200,7 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
  * The top of every staff home: where the school is in its term, and the
  * next thing to do.
  */
-export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, actions, search }: {
+export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, actions, search, stats }: {
     name: string;
     term: TermSummary | null;
     canEditTerms: boolean;
@@ -140,6 +211,8 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
     actions?: readonly HeroAction[];
     /** Find a learner from the home screen (admins). */
     search?: boolean;
+    /** Up to three headline figures on frosted tiles. */
+    stats?: readonly HeroStat[];
 }) {
     const styles = useStyles();
     const router = useRouter();
@@ -150,6 +223,7 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
                 <TermLine term={term} canEditTerms={canEditTerms} />
             </View>
             {summary ? <Text style={styles.summary}>{summary}</Text> : null}
+            {stats?.length ? <HeroStats stats={stats} /> : null}
             {search ? (
                 <View style={styles.search}>
                     <Search size={16} color="rgba(255,255,255,0.8)" />
@@ -173,6 +247,22 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
 const useStyles = makeStyles(() => ({
     hero: { borderRadius: radius.xxxl, padding: spacing.lg, paddingBottom: spacing.lg + 14, overflow: 'hidden', marginBottom: spacing.sm },
     rings: { position: 'absolute', top: -20, right: -40 },
+    identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.md, marginBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.16)' },
+    avatarRing: { padding: 2, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.75)' },
+    avatar: { width: 44, height: 44, borderRadius: 22 },
+    avatarBlank: { backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+    avatarText: { fontSize: 16, fontFamily: fonts.display, color: '#ffffff' },
+    onlineDot: { position: 'absolute', right: 0, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#ffffff' },
+    identityName: { fontSize: 15, fontFamily: fonts.bold, color: '#ffffff' },
+    identityRole: { fontSize: 12, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.78)', marginTop: 1 },
+    crest: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ffffff', padding: 4, alignItems: 'center', justifyContent: 'center' },
+    crestImg: { width: '100%', height: '100%' },
+    stats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+    statCell: { flex: 1, minWidth: 0 },
+    stat: { padding: spacing.sm + 2, borderRadius: radius.xl, backgroundColor: 'rgba(255,255,255,0.13)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    statIcon: { width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+    statValue: { fontSize: 20, lineHeight: 24, fontFamily: fonts.display, color: '#ffffff', letterSpacing: -0.4 },
+    statLabel: { fontSize: 11, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
     top: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.lg, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
     chipWarm: { backgroundColor: 'rgba(251,191,36,0.28)', borderColor: 'rgba(253,230,138,0.45)' },

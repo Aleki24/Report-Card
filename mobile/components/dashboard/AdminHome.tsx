@@ -54,7 +54,17 @@ export function AdminHome({ name }: { name: string }) {
             <PendingSchoolsNotice />
             {data ? <SetupChecklist data={data} schoolKey={profile?.school_id ?? 'school'} /> : null}
             <Reveal index={i++}>
-                <DashboardHero name={name} term={data?.term ?? null} canEditTerms search />
+                <DashboardHero
+                    name={name}
+                    term={data?.term ?? null}
+                    canEditTerms
+                    search
+                    stats={data ? [
+                        { label: 'Learners', value: data.totalStudents.toLocaleString(), icon: Users, href: '/staff/people' },
+                        { label: 'Teachers', value: data.totalTeachers, icon: GraduationCap, href: '/staff/people?tab=teachers' },
+                        { label: 'Classes', value: data.totalClasses, icon: BookOpen, href: '/staff/classes' },
+                    ] : undefined}
+                />
             </Reveal>
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
@@ -67,12 +77,10 @@ export function AdminHome({ name }: { name: string }) {
                         <TodoList data={data} />
                     </Reveal>
 
+                    {passRate != null || presentRate != null || collectedRate != null ? (
                     <Reveal index={i++}>
                         <SectionTitle title="Key figures" />
                         <KpiGrid>
-                            <KpiTile title="Learners" value={data.totalStudents.toLocaleString()} icon={Users} hue="blue" href="/staff/people" />
-                            <KpiTile title="Teachers" value={data.totalTeachers} icon={GraduationCap} hue="violet" href="/staff/people?tab=teachers" />
-                            <KpiTile title="Classes" value={data.totalClasses} icon={BookOpen} hue="amber" href="/staff/classes" />
                             {passRate != null ? (
                                 <KpiTile title={`Pass rate (≥${passMark}%)`} value={`${passRate}%`} icon={BarChart3} hue="sky" href="/staff/analytics" tone={passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad'} />
                             ) : null}
@@ -84,6 +92,7 @@ export function AdminHome({ name }: { name: string }) {
                             ) : null}
                         </KpiGrid>
                     </Reveal>
+                    ) : null}
 
                     <Reveal index={i++}>
                         <SectionTitle title="Quick actions" />
@@ -91,7 +100,7 @@ export function AdminHome({ name }: { name: string }) {
                     </Reveal>
 
                     <Reveal index={i++}>
-                        <GradeResults />
+                        <GradeResults passMark={passMark} />
                     </Reveal>
 
                     <Reveal index={i++} style={{ marginTop: 20 }}>
