@@ -13,9 +13,10 @@ import { useToast } from '@/components/Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 
 function Loads() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [perWeek, setPerWeek] = useState('5');
@@ -38,7 +39,7 @@ function Loads() {
     return (
         <View>
             <Card style={{ marginBottom: spacing.md }}>
-                <Text style={{ fontWeight: '700', color: colors.foreground }}>Start from subject assignments</Text>
+                <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Start from subject assignments</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>Creates a load for every subject each teacher is assigned to a class this year.</Text>
                 <TextField label="Lessons a week" value={perWeek} onChangeText={setPerWeek} keyboardType="number-pad" />
                 <Button label={busy ? 'Importing…' : 'Import'} onPress={() => void importLoads()} loading={busy} block />

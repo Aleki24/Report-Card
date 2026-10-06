@@ -1,18 +1,20 @@
 import { Tabs } from 'expo-router/js-tabs';
+import { Menu } from 'lucide-react-native';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STAFF_SCREENS, getStaffNav, type StaffScreen } from '@/lib/roles';
-import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
+import { TabIcon, useTabScreenOptions } from '@/components/nav';
 
 /** Routes that exist in the tree but never get a tab of their own. */
-const DETAIL_ROUTES = ['people/[id]'] as const;
+const DETAIL_ROUTES = ['people/[id]', 'pending-schools'] as const;
 
 export default function StaffTabsLayout() {
     const { viewer } = useCurrentUser();
-    const { primary, overflow } = getStaffNav(viewer);
+    const { primary } = getStaffNav(viewer);
     const tabs = new Set<StaffScreen>(primary);
 
+    const tabScreenOptions = useTabScreenOptions();
     return (
-        <Tabs screenOptions={TAB_SCREEN_OPTIONS}>
+        <Tabs screenOptions={tabScreenOptions}>
             {(Object.keys(STAFF_SCREENS) as StaffScreen[]).map((name) => {
                 const meta = STAFF_SCREENS[name];
                 return (
@@ -24,7 +26,7 @@ export default function StaffTabsLayout() {
                             tabBarLabel: meta.tabLabel,
                             // Everything outside the role's four is reached through More.
                             href: tabs.has(name) ? undefined : null,
-                            tabBarIcon: ({ color }) => <TabIcon emoji={meta.icon} color={color} />,
+                            tabBarIcon: ({ color }) => <TabIcon icon={meta.icon} color={color} />,
                         }}
                     />
                 );
@@ -33,8 +35,7 @@ export default function StaffTabsLayout() {
                 name="more"
                 options={{
                     title: 'More',
-                    href: overflow.length > 0 ? undefined : null,
-                    tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} />,
+                                        tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} />,
                 }}
             />
             {DETAIL_ROUTES.map((name) => (

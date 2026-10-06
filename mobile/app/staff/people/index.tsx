@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Linking, Text } from 'react-native';
+import { UserCheck, Users } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
+import { inviteDeliveryMessage } from '@shared/invite-delivery';
 import type { CreatedCredential } from '@shared/import/student-rows';
 import { ImportStudentsSheet } from '@/components/people/ImportStudentsSheet';
-import { useGradeStreams } from '@/lib/useSchoolData';
+import { useAcademicStructure, useGradeStreams } from '@/lib/useSchoolData';
+import { isSeniorSchoolGrade } from '@shared/curriculum-bands';
+import { PATHWAY_ORDER, pathwayLabel } from '@shared/pathway-definitions';
+import { BulkPathwaySheet, type CombinationOption } from '@/components/people/BulkPathwaySheet';
 import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
@@ -39,14 +44,15 @@ export default function PeopleScreen() {
 
 function PeopleContent() {
     const { role } = useCurrentUser();
-    const params = useLocalSearchParams<{ tab?: string }>();
+    const params = useLocalSearchParams<{ tab?: string; search?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
 
     // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
     useEffect(() => {
         if (isAdmin && (params.tab === 'teachers' || params.tab === 'parents' || params.tab === 'students')) setTab(params.tab);
-    }, [isAdmin, params.tab]);
+        else if (params.search) setTab('students');
+    }, [isAdmin, params.tab, params.search]);
 
     return (
         <Screen>
@@ -68,10 +74,30 @@ function PeopleContent() {
 }
 
 function StudentsSection() {
+    const { colors } = useTheme();
     const router = useRouter();
+    const { role } = useCurrentUser();
     const { data, loading, error, refresh } = useApiQuery<StudentListItem[]>('/api/school/data?type=students');
     const { streams } = useGradeStreams();
-    const [search, setSearch] = useState('');
+    const structure = useAcademicStructure();
+    const combinations = useApiQuery<CombinationOption[]>('/api/school/data?type=subject_combinations');
+    const [pathway, setPathway] = useState<string>('');
+    const [assigning, setAssigning] = useState(false);
+    const [pathwayNotice, setPathwayNotice] = useState<string | null>(null);
+
+    // Pathways and combinations only apply to CBC Senior School (Grades 10–12), as on the web.
+    const seniorStreams = useMemo(() => {
+        const levels = structure.data?.academic_levels ?? [];
+        const grades = structure.data?.grades ?? [];
+        const cbc = new Set(levels.filter((l) => l.code === 'CBC').map((l) => l.id));
+        const seniorGrades = new Set(grades.filter((g) => cbc.has(g.academic_level_id) && isSeniorSchoolGrade(g)).map((g) => g.id));
+        return streams.filter((s) => seniorGrades.has(s.grade_id));
+    }, [structure.data, streams]);
+    const hasPathways = (combinations.data ?? []).length > 0;
+    // The dashboard's "Find a learner" opens here with ?search=.
+    const { search: searchParam } = useLocalSearchParams<{ search?: string }>();
+    const [search, setSearch] = useState(searchParam ?? '');
+    useEffect(() => { if (searchParam) setSearch(searchParam); }, [searchParam]);
     const [stream, setStream] = useState<string>('');
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
     const [limit, setLimit] = useState(PAGE);
@@ -88,9 +114,10 @@ function StudentsSection() {
             if (status === 'ACTIVE' && s.status !== 'ACTIVE') return false;
             // There is no INACTIVE status; "inactive" is anything not ACTIVE.
             if (status === 'INACTIVE' && s.status === 'ACTIVE') return false;
+            if (pathway && (pathway === 'UNASSIGNED' ? !!s.pathway : s.pathway !== pathway)) return false;
             return !q || `${fullName(s.users)} ${s.admission_number ?? ''} ${s.guardian_phone ?? ''}`.toLowerCase().includes(q);
         });
-    }, [students, search, stream, status]);
+    }, [students, search, stream, status, pathway]);
 
     if (loading) return <LoadingView />;
 
@@ -103,15 +130,15 @@ function StudentsSection() {
                     onDismiss={() => setCreated(null)}
                     message={
                         created.invite_code
-                            ? `${created.name} added. Username: ${created.username} · Invite code: ${created.invite_code} — share it so they can activate their account.`
+                            ? `${created.name} added. Username: ${created.username} · Invite code: ${created.invite_code}. ${inviteDeliveryMessage(created.notified)?.text ?? 'Share it so they can activate their account.'}`
                             : `${created.name} added.`
                     }
                 />
             ) : null}
 
             <StatGrid>
-                <StatTile label="Total" value={students.length} />
-                <StatTile label="Active" value={students.filter((s) => s.status === 'ACTIVE').length} />
+                <StatTile label="Total" value={students.length} icon={Users} />
+                <StatTile label="Active" value={students.filter((s) => s.status === 'ACTIVE').length} icon={UserCheck} />
             </StatGrid>
 
             {adding ? (
@@ -127,10 +154,25 @@ function StudentsSection() {
                 />
             ) : (
                 <ButtonRow>
+                    {role === 'ADMIN' && hasPathways && seniorStreams.length > 0 ? (
+                        <Button variant="secondary" label="Pathways" onPress={() => setAssigning(true)} />
+                    ) : null}
                     <Button variant="secondary" label="Import CSV / Excel" onPress={() => setImporting(true)} />
                     <Button label="+ Add student" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
+            {pathwayNotice ? <Notice tone="success" message={pathwayNotice} onDismiss={() => setPathwayNotice(null)} /> : null}
+            {assigning ? (
+                <BulkPathwaySheet
+                    visible
+                    onClose={() => setAssigning(false)}
+                    onSaved={(message) => { setPathwayNotice(message); refresh(); }}
+                    students={students}
+                    seniorStreams={seniorStreams}
+                    combinations={combinations.data ?? []}
+                    defaultStreamId={stream}
+                />
+            ) : null}
             {importing ? (
                 <ImportStudentsSheet
                     streams={streams}
@@ -160,6 +202,17 @@ function StudentsSection() {
                 value={status}
                 onChange={setStatus}
             />
+            {hasPathways && seniorStreams.length > 0 ? (
+                <ChipSelect
+                    options={[
+                        { value: '', label: 'Any pathway' },
+                        ...PATHWAY_ORDER.map((p) => ({ value: p, label: pathwayLabel(p) })),
+                        { value: 'UNASSIGNED', label: 'No pathway' },
+                    ]}
+                    value={pathway}
+                    onChange={setPathway}
+                />
+            ) : null}
 
             {filtered.length === 0 ? (
                 <EmptyState title="No students found" />
@@ -171,7 +224,7 @@ function StudentsSection() {
                             <ListRow
                                 key={s.id}
                                 title={fullName(s.users)}
-                                subtitle={`${s.admission_number ?? '—'} · ${s.grade_streams?.full_name ?? 'Unassigned'}`}
+                                subtitle={`${s.admission_number ?? '—'} · ${s.grade_streams?.full_name ?? 'Unassigned'}${s.pathway ? ` · ${pathwayLabel(s.pathway)}${s.subject_combinations ? ` (${s.subject_combinations.code})` : ''}` : ''}`}
                                 right={s.status !== 'ACTIVE' ? <Badge label={s.status ?? '—'} /> : undefined}
                                 onPress={() => router.push(`/staff/people/${s.id}?type=student`)}
                             />
@@ -189,6 +242,7 @@ function StudentsSection() {
 }
 
 function TeachersSection() {
+    const { colors } = useTheme();
     const router = useRouter();
     const { data, loading, error, refresh } = useApiQuery<TeacherListItem[]>('/api/school/data?type=teachers');
     const [search, setSearch] = useState('');

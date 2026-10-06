@@ -1,8 +1,9 @@
 import React from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 /**
  * A full-height sheet for a form: title, scrolling body, and a pinned
@@ -26,16 +27,18 @@ export function FormSheet({
     submitting?: boolean;
     children: React.ReactNode;
 }) {
+    const styles = useStyles();
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
             <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-                <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                {/* Lifts the save bar above the keyboard on both platforms (Android 15 no longer resizes the window). */}
+                <KeyboardAvoidingView style={styles.flex} behavior="padding">
                     <View style={styles.header}>
                         <Text style={styles.title} numberOfLines={2}>{title}</Text>
                     </View>
-                    <ScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+                    <KeyboardAwareScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bottomOffset={spacing.lg}>
                         <View style={styles.content}>{children}</View>
-                    </ScrollView>
+                    </KeyboardAwareScrollView>
                     <View style={styles.footer}>
                         <Button label={onSubmit ? 'Cancel' : 'Close'} variant="secondary" onPress={onClose} disabled={submitting} />
                         {onSubmit ? <Button label={submitting ? 'Saving…' : submitLabel} onPress={onSubmit} loading={submitting} /> : null}
@@ -46,12 +49,12 @@ export function FormSheet({
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     flex: { flex: 1 },
     header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.card },
-    title: { fontSize: 18, fontWeight: '800', color: colors.foreground, maxWidth: 760, width: '100%', alignSelf: 'center' },
+    title: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, maxWidth: 760, width: '100%', alignSelf: 'center' },
     body: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-});
+}));

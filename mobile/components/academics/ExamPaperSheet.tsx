@@ -1,3 +1,4 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { dateTime, humanize, personName } from '@shared/ops/format';
@@ -11,12 +12,14 @@ import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage, fileSafe } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 type Detail = ExamPaper & { reviews: PaperReview[] };
 
 /** A paper's details, files, moderation history and the actions open to the viewer — the web's paper drawer. */
 export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: string; onClose: () => void; onChanged: () => void }) {
+    const download = useDownload();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { profile, can } = useCurrentUser();
@@ -56,7 +59,7 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
 
     const openFile = (kind: PaperFileKind) => {
         if (!paper) return;
-        api.downloadAndShare(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, `${fileSafe(paper.title)}-${kind}.pdf`)
+        download(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, `${fileSafe(paper.title)}-${kind}.pdf`)
             .catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
     };
 
@@ -145,8 +148,8 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
     );
 }
 
-const styles = StyleSheet.create({
-    note: { fontSize: 12, color: colors.muted, marginTop: 4 },
+const useStyles = makeStyles((colors) => ({
+    note: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 4 },
     review: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: spacing.md, marginBottom: spacing.sm },
-    reviewHead: { fontSize: 13, fontWeight: '700', color: colors.foreground },
-});
+    reviewHead: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
+}));

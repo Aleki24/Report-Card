@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { roleLabel } from '@/lib/roles';
 import { errorMessage, formatDate, formatPercent, fullName, initials, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Avatar, BackLink, Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow,
     LoadingView, Notice, ProgressBar, Screen, SectionLabel, TextField,
@@ -15,6 +15,7 @@ import {
 import { StudentForm, type StudentStatus } from '@/components/people/StudentForm';
 import type { StudentDetail, TeacherDetail } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { StudentProfile } from '@/components/people/StudentProfile';
 
 export default function PersonDetailScreen() {
     const { id, type } = useLocalSearchParams<{ id: string; type?: 'student' | 'teacher' }>();
@@ -22,6 +23,8 @@ export default function PersonDetailScreen() {
 }
 
 function StudentView({ id }: { id: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const router = useRouter();
     const { role } = useCurrentUser();
@@ -29,6 +32,7 @@ function StudentView({ id }: { id: string }) {
     const { streams } = useGradeStreams();
     const [editing, setEditing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
     const canManage = role === 'ADMIN' || role === 'CLASS_TEACHER';
 
     if (loading) return <LoadingView />;
@@ -52,21 +56,25 @@ function StudentView({ id }: { id: string }) {
             },
         ]);
 
+    const changePhoto = async () => {
+        setUploading(true);
+        try {
+            const url = await api.pickAndUploadImage('/api/admin/upload-photo');
+            if (url) {
+                await api.patch('/api/admin/update-student', { student_id: id, avatar_url: url });
+                reload();
+            }
+        } catch (err) {
+            setMessage(errorMessage(err, 'Could not change the photo.'));
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <>
             <BackLink />
             {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
-            <View style={styles.headerRow}>
-                <Avatar label={initials(p)} />
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.title}>{fullName(p)}</Text>
-                    <Text style={styles.subtitle}>
-                        {p.admission_number ?? '—'} · {p.grade_stream?.full_name ?? 'Unassigned'}
-                    </Text>
-                </View>
-                {p.status && p.status !== 'ACTIVE' ? <Badge label={p.status} /> : null}
-            </View>
-
             {editing ? (
                 <StudentForm
                     studentId={id}
@@ -90,80 +98,23 @@ function StudentView({ id }: { id: string }) {
                     }}
                 />
             ) : (
-                <Card style={{ marginBottom: spacing.md }}>
-                    <InfoRow label="Curriculum" value={p.academic_level?.name} />
-                    <InfoRow label="Gender" value={p.gender} />
-                    <InfoRow label="Date of birth" value={p.date_of_birth ? formatDate(p.date_of_birth) : null} />
-                    <InfoRow label="Enrolled" value={p.date_enrolled ? formatDate(p.date_enrolled) : null} />
-                    <InfoRow label="Guardian" value={p.guardian_name} />
-                    <InfoRow label="Guardian phone" value={p.guardian_phone} />
-                    <InfoRow label="Guardian email" value={p.guardian_email} />
-                    <ButtonRow>
-                        {p.guardian_phone ? <Button size="sm" variant="ghost" label="Call guardian" onPress={() => void Linking.openURL(`tel:${p.guardian_phone}`)} /> : null}
-                        {canManage ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEditing(true)} /> : null}
-                        {canManage ? <Button size="sm" variant="danger" label="Delete" onPress={remove} /> : null}
-                    </ButtonRow>
-                </Card>
+                <StudentProfile
+                    data={data}
+                    actions={{ canManage, onEdit: () => setEditing(true), onDelete: remove, onChangePhoto: () => void changePhoto(), uploadingPhoto: uploading }}
+                />
             )}
-
-            <SectionLabel>Academic history</SectionLabel>
-            {data.academicHistory.length === 0 ? (
-                <Card><EmptyState title="No marks yet" /></Card>
-            ) : (
-                data.academicHistory.map((t) => (
-                    <Card key={t.term_id} style={{ marginBottom: spacing.sm }}>
-                        <View style={styles.termHeader}>
-                            <Text style={styles.termName}>{t.term_name}</Text>
-                            <Text style={[styles.termAvg, { color: scoreColor(t.average) }]}>{formatPercent(t.average, 1)}</Text>
-                        </View>
-                        {t.subjects.map((s) => (
-                            <View key={s.name} style={styles.subjectRow}>
-                                <Text style={styles.subjectName} numberOfLines={1}>{s.name}</Text>
-                                <View style={{ flex: 1 }}>
-                                    <ProgressBar value={s.percentage} color={scoreColor(s.percentage)} />
-                                </View>
-                                <Text style={styles.subjectPct}>{formatPercent(s.percentage)}</Text>
-                            </View>
-                        ))}
-                    </Card>
-                ))
-            )}
-
-            <SectionLabel>Report cards</SectionLabel>
-            <ListCard>
-                {data.reportHistory.length === 0 ? (
-                    <EmptyState title="No reports yet" />
-                ) : (
-                    data.reportHistory.map((r) => (
-                        <ListRow
-                            key={r.id}
-                            title={`${r.term} — ${r.year}`}
-                            subtitle={r.position ? `Position ${r.position}` : null}
-                            right={<Badge label={formatPercent(r.average, 1)} variant={(r.average ?? 0) >= 50 ? 'success' : 'danger'} />}
-                        />
-                    ))
-                )}
-            </ListCard>
-
-            <SectionLabel>Attendance</SectionLabel>
-            <ListCard>
-                {data.attendanceHistory.length === 0 ? (
-                    <EmptyState title="No attendance recorded" />
-                ) : (
-                    data.attendanceHistory.map((a) => (
-                        <ListRow key={a.id} title={`${a.term} — ${a.year}`} subtitle={`${a.present} of ${a.total} days`} right={<Text style={styles.subjectPct}>{formatPercent(a.percentage)}</Text>} />
-                    ))
-                )}
-            </ListCard>
         </>
     );
 }
 
 function TeacherView({ id }: { id: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { role } = useCurrentUser();
     const { data, loading, error, reload } = useApiQuery<TeacherDetail>(`/api/school/teachers/${id}`, { raw: true });
-    const [edit, setEdit] = useState<{ first_name: string; last_name: string; phone: string } | null>(null);
+    const [edit, setEdit] = useState<{ first_name: string; last_name: string; phone: string; avatar_url: string } | null>(null);
+    const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
 
@@ -175,7 +126,7 @@ function TeacherView({ id }: { id: string }) {
         if (!edit) return;
         setSaving(true);
         try {
-            await api.patch('/api/admin/update-teacher', { teacher_id: id, first_name: edit.first_name.trim(), last_name: edit.last_name.trim(), phone: edit.phone.trim() || null });
+            await api.patch('/api/admin/update-teacher', { teacher_id: id, first_name: edit.first_name.trim(), last_name: edit.last_name.trim(), phone: edit.phone.trim() || null, avatar_url: edit.avatar_url });
             setEdit(null);
             reload();
         } catch (err) {
@@ -185,12 +136,26 @@ function TeacherView({ id }: { id: string }) {
         }
     };
 
+    // The web's staff photo: uploaded to storage (/api/admin/upload-photo), saved with the edit.
+    const changePhoto = async () => {
+        if (!edit) return;
+        setUploading(true);
+        try {
+            const url = await api.pickAndUploadImage('/api/admin/upload-photo');
+            if (url) setEdit({ ...edit, avatar_url: url });
+        } catch (err) {
+            setMessage(errorMessage(err, 'Could not upload the photo.'));
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <>
             <BackLink />
             {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
             <View style={styles.headerRow}>
-                <Avatar label={initials(p)} color={colors.info} />
+                <Avatar label={initials(p)} color={colors.info} uri={edit ? edit.avatar_url || null : p.avatar_url} />
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>{fullName(p)}</Text>
                     <Text style={styles.subtitle}>{roleLabel(p.role)}</Text>
@@ -200,6 +165,10 @@ function TeacherView({ id }: { id: string }) {
 
             {edit ? (
                 <Card style={{ marginBottom: spacing.md }}>
+                    <ButtonRow>
+                        {edit.avatar_url ? <Button size="sm" variant="ghost" label="Remove photo" onPress={() => setEdit({ ...edit, avatar_url: '' })} /> : null}
+                        <Button size="sm" variant="secondary" label={edit.avatar_url ? 'Change photo' : 'Add photo'} onPress={() => void changePhoto()} loading={uploading} />
+                    </ButtonRow>
                     <TextField label="First name" value={edit.first_name} onChangeText={(first_name) => setEdit({ ...edit, first_name })} />
                     <TextField label="Last name" value={edit.last_name} onChangeText={(last_name) => setEdit({ ...edit, last_name })} />
                     <TextField label="Phone" value={edit.phone} onChangeText={(phone) => setEdit({ ...edit, phone })} keyboardType="phone-pad" />
@@ -215,7 +184,7 @@ function TeacherView({ id }: { id: string }) {
                     <InfoRow label="Joined" value={formatDate(p.created_at)} />
                     <ButtonRow>
                         {p.phone ? <Button size="sm" variant="ghost" label="Call" onPress={() => void Linking.openURL(`tel:${p.phone}`)} /> : null}
-                        {role === 'ADMIN' ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEdit({ first_name: p.first_name, last_name: p.last_name, phone: p.phone ?? '' })} /> : null}
+                        {role === 'ADMIN' ? <Button size="sm" variant="secondary" label="Edit" onPress={() => setEdit({ first_name: p.first_name, last_name: p.last_name, phone: p.phone ?? '', avatar_url: p.avatar_url ?? '' })} /> : null}
                     </ButtonRow>
                 </Card>
             )}
@@ -241,14 +210,14 @@ function TeacherView({ id }: { id: string }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    title: { fontSize: 20, fontWeight: '800', color: colors.foreground },
-    subtitle: { fontSize: 13, color: colors.muted, marginTop: 2 },
+    title: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground },
+    subtitle: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 },
     termHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-    termName: { fontSize: 14, fontWeight: '800', color: colors.foreground },
-    termAvg: { fontSize: 14, fontWeight: '800' },
+    termName: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    termAvg: { fontSize: 14, fontFamily: fonts.display },
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 4 },
-    subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontWeight: '600' },
-    subjectPct: { width: 44, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
-});
+    subjectName: { width: 110, fontSize: 12, color: colors.foreground, fontFamily: fonts.semibold },
+    subjectPct: { minWidth: 44, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+}));

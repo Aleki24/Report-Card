@@ -1,5 +1,5 @@
-import type { UserRole } from '@/types';
-import type { DutyKey } from '@/lib/platform/permissions';
+import type { UserRole } from '../../types';
+import type { DutyKey } from '../platform/permissions';
 import { adminManual } from './admin';
 import { financeManual, healthManual, leadershipManual, operationsManual, transportManual, welfareManual } from './duties';
 import { parentManual } from './parent';

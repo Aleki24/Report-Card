@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { extractInviteCode, INVITE_CODE_LENGTH } from '@shared/activation-link';
@@ -13,7 +14,8 @@ import { useToast } from './Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { takePendingInviteCode } from '@/lib/pendingInvite';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 interface Approval { hasSchool?: boolean; status?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | null; schoolName?: string | null; note?: string | null }
 type Mode = 'choose' | 'school' | 'join';
@@ -24,17 +26,20 @@ type Mode = 'choose' | 'school' | 'join';
  * invite code. An admin whose school setup is unfinished lands here too.
  */
 export function Onboarding() {
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { signOut } = useAuth();
     const { baseRole, reload } = useCurrentUser();
     const [approval, setApproval] = useState<Approval | null>(null);
     const [checked, setChecked] = useState(false);
-    const [mode, setMode] = useState<Mode>(baseRole === 'ADMIN' ? 'school' : 'choose');
+    // A code verified on the activation screen before choosing Google.
+    const [handedOff] = useState(takePendingInviteCode);
+    const [mode, setMode] = useState<Mode>(handedOff ? 'join' : baseRole === 'ADMIN' ? 'school' : 'choose');
     const [step, setStep] = useState(1);
     const [state, setState] = useState<OnboardingState>(initialOnboarding);
     const [grades, setGrades] = useState<StandardGrade[]>([]);
-    const [code, setCode] = useState('');
+    const [code, setCode] = useState(handedOff ?? '');
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -70,11 +75,11 @@ export function Onboarding() {
         }
     };
 
-    const join = async () => {
-        if (code.length !== INVITE_CODE_LENGTH) { toast.error(`Enter the ${INVITE_CODE_LENGTH}-character invite code from your school`); return; }
+    const join = async (inviteCode: string = code) => {
+        if (inviteCode.length !== INVITE_CODE_LENGTH) { toast.error(`Enter the ${INVITE_CODE_LENGTH}-character invite code from your school`); return; }
         setBusy(true);
         try {
-            await api.post('/api/school/join', { inviteCode: code });
+            await api.post('/api/school/join', { inviteCode });
             toast.success('Successfully joined the school!');
             reload();
         } catch (err) {
@@ -84,16 +89,24 @@ export function Onboarding() {
         }
     };
 
+    // Finish a Google activation straight away, as the web's /activate/callback does.
+    const joinedHandOff = useRef(false);
+    useEffect(() => {
+        if (!handedOff || joinedHandOff.current) return;
+        joinedHandOff.current = true;
+        void join(handedOff);
+        // Runs once on arrival with the handed-off code.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [handedOff]);
+
     const frame = (body: React.ReactNode) => (
         <SafeAreaView style={styles.safe}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                    <View style={styles.content}>
-                        {body}
-                        <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label="Sign out" onPress={() => void signOut()} /></View>
-                    </View>
-                </ScrollView>
-            </KeyboardAvoidingView>
+            <KeyboardAwareScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bottomOffset={spacing.xl}>
+                <View style={styles.content}>
+                    {body}
+                    <View style={{ marginTop: spacing.lg }}><Button variant="ghost" label="Sign out" onPress={() => void signOut()} /></View>
+                </View>
+            </KeyboardAwareScrollView>
         </SafeAreaView>
     );
 
@@ -237,14 +250,14 @@ export function Onboarding() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
     scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
     content: { width: '100%', maxWidth: 560, alignSelf: 'center' },
-    title: { fontSize: 22, fontWeight: '800', color: colors.foreground, marginBottom: spacing.xs },
-    body: { fontSize: 14, color: colors.muted, marginBottom: spacing.md },
-    muted: { fontSize: 12, color: colors.muted, marginVertical: spacing.sm },
+    title: { fontSize: 22, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.xs },
+    body: { fontFamily: fonts.regular, fontSize: 14, color: colors.muted, marginBottom: spacing.md },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginVertical: spacing.sm },
     choice: { marginBottom: spacing.md, gap: spacing.sm },
-    choiceTitle: { fontSize: 16, fontWeight: '700', color: colors.foreground },
+    choiceTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
     grade: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingBottom: spacing.sm, marginBottom: spacing.sm },
-});
+}));

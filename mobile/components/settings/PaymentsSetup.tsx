@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { UnmatchedPayments } from './UnmatchedPayments';
 import { Text, View } from 'react-native';
 import type { SchoolBankAccount } from '@shared/fees';
 import {
@@ -11,7 +12,7 @@ import { SelectField } from '@/components/ops/SelectField';
 import { useApi } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 
 const SETTINGS = '/api/school/payment-settings';
 const ACCOUNTS = '/api/school/payment-settings/bank-accounts';
@@ -24,6 +25,7 @@ const stored = (has: boolean) => (has ? 'Saved — leave blank to keep' : undefi
  * never shown back; the server only says whether one is stored.
  */
 export function PaymentsSetup() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [settings, setSettings] = useState<PaymentSettings | null>(null);
@@ -129,7 +131,7 @@ export function PaymentsSetup() {
             ) : <Text style={{ color: colors.muted, fontSize: 13 }}>No bank accounts yet.</Text>}
 
             <Card style={{ marginTop: spacing.md }}>
-                <Text style={{ fontWeight: '700', color: colors.foreground, marginBottom: spacing.sm }}>Add a bank account</Text>
+                <Text style={{ fontFamily: fonts.bold, color: colors.foreground, marginBottom: spacing.sm }}>Add a bank account</Text>
                 <SelectField label="Bank" value={bank.bank} onChange={setBankField('bank')} options={KENYA_BANKS.map((b) => ({ id: b, label: b }))} />
                 {bank.bank === 'Other' ? <TextField label="Bank name" value={bank.otherBank} onChangeText={setBankField('otherBank')} /> : null}
                 <TextField label="Account name" value={bank.accountName} onChangeText={setBankField('accountName')} />
@@ -137,6 +139,8 @@ export function PaymentsSetup() {
                 <TextField label="Branch (optional)" value={bank.branch} onChangeText={setBankField('branch')} />
                 <Button label="Add account" loading={busy === 'add'} onPress={addAccount} block />
             </Card>
+
+            <UnmatchedPayments />
         </View>
     );
 }

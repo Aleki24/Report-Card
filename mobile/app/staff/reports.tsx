@@ -1,11 +1,14 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useEffect, useMemo, useState } from 'react';
+import { Square, SquareCheck } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { useAcademicYears, useExams, useGradeStreams, useTerms } from '@/lib/useSchoolData';
-import { examTypeLabel, sortExamTypes } from '@/lib/academics';
+import { useAcademicYears, useGradeStreams, useTerms } from '@/lib/useSchoolData';
+import { examTypeLabel } from '@/lib/academics';
+import { CompareTerms } from '@/components/reports/CompareTerms';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
@@ -14,7 +17,22 @@ import { RequireScreen } from '@/components/RequireScreen';
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam as toTemplateParam, type ReportTemplateId } from '@/lib/reportTemplates';
 import type { StudentListItem } from '@/lib/types';
 
-type Tab = 'download' | 'comments' | 'sms';
+type Tab = 'download' | 'comments' | 'sms' | 'compare';
+
+/** GET /api/reports/rounds (src/lib/reports/exam-round.ts): the sittings a class had this term. */
+interface ReportRound {
+    exam_type: string;
+    label: string;
+    subjects_total: number;
+    subjects_with_marks: number;
+    marks: number;
+    date: string | null;
+}
+interface ReportRoundsResponse {
+    rounds: ReportRound[];
+    /** The most recent sitting with marks — the one the report routes would pick. */
+    suggested: string | null;
+}
 
 interface Scope {
     yearId: string;
@@ -49,10 +67,16 @@ function ReportsContent() {
     const effectiveStreamId = streamId ?? (streams.length === 1 ? streams[0].id : null);
     const stream = streams.find((s) => s.id === effectiveStreamId) ?? null;
 
-    // Report cards describe one sitting; offer the ones this class actually has.
-    const { exams } = useExams(effectiveTerm && stream ? { term_id: effectiveTerm.id, stream_id: stream.id, grade_id: stream.grade_id } : null);
-    const sittings = useMemo(() => sortExamTypes(exams.map((e) => e.exam_type)), [exams]);
-    useEffect(() => setExamType(''), [effectiveStreamId, effectiveTerm?.id]);
+    // Report cards describe one sitting, as on the web: the class's rounds this term with how much
+    // is marked, the most recent one chosen for the user, and the choice always sent.
+    const rounds = useApiQuery<ReportRoundsResponse>(
+        effectiveTerm && stream ? withQuery('/api/reports/rounds', { grade_stream_id: stream.id, term_id: effectiveTerm.id }) : null,
+        { raw: true },
+    );
+    useEffect(() => {
+        const data = rounds.data;
+        setExamType((prev) => (data?.rounds.some((r) => r.exam_type === prev) ? prev : data?.suggested ?? ''));
+    }, [rounds.data]);
 
     if (yearsLoading || termsLoading || streamsLoading) return <LoadingView />;
 
@@ -72,26 +96,35 @@ function ReportsContent() {
             ) : (
                 <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} />
             )}
-            {sittings.length > 0 ? (
+            {rounds.data && rounds.data.rounds.length > 0 ? (
                 <ChipSelect
                     label="Sitting"
-                    options={[{ value: '', label: 'Whole term' }, ...sittings.map((t) => ({ value: t, label: examTypeLabel(t) }))]}
-                    value={examType}
+                    options={rounds.data.rounds.map((r) => ({
+                        value: r.exam_type,
+                        label: r.label || examTypeLabel(r.exam_type),
+                        hint: `${r.subjects_with_marks}/${r.subjects_total} marked${r.exam_type === rounds.data?.suggested ? ' · latest' : ''}`,
+                    }))}
+                    value={examType || null}
                     onChange={setExamType}
                 />
             ) : null}
 
-            {scope ? (
+            {streams.length > 0 ? (
+                <SegmentedTabs
+                    tabs={[
+                        { value: 'download', label: 'Download' },
+                        { value: 'comments', label: 'Comments' },
+                        { value: 'sms', label: 'SMS' },
+                        { value: 'compare', label: 'Compare' },
+                    ]}
+                    value={tab}
+                    onChange={setTab}
+                />
+            ) : null}
+            {tab === 'compare' ? (
+                <CompareTerms years={years} terms={terms} streams={streams} initialStreamId={effectiveStreamId} initialTermId={effectiveTerm?.id ?? null} />
+            ) : scope ? (
                 <>
-                    <SegmentedTabs
-                        tabs={[
-                            { value: 'download', label: 'Download' },
-                            { value: 'comments', label: 'Comments' },
-                            { value: 'sms', label: 'SMS results' },
-                        ]}
-                        value={tab}
-                        onChange={setTab}
-                    />
                     {tab === 'download' ? <DownloadPanel scope={scope} /> : null}
                     {tab === 'comments' ? <CommentsPanel key={`${scope.streamId}-${scope.termId}`} scope={scope} /> : null}
                     {tab === 'sms' ? <SmsPanel key={scope.streamId} scope={scope} /> : null}
@@ -108,6 +141,8 @@ function ReportsContent() {
 // ── Downloads ──────────────────────────────────────────────
 
 function DownloadPanel({ scope }: { scope: Scope }) {
+    const download = useDownload();
+    const styles = useStyles();
     const api = useApi();
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
     const [title, setTitle] = useState('');
@@ -136,7 +171,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
             setMessage({ tone: 'info', text: 'Compiling grades and preparing the report cards — a full class takes a few seconds.' });
             // Same first step as the web: roll marks up into report cards (non-blocking if it fails).
             await api.post('/api/school/generate-reports', { term_id: scope.termId, grade_stream_id: scope.streamId }).catch(() => undefined);
-            await api.downloadAndShare(
+            await download(
                 withQuery(`/api/reports/class/${scope.streamId}`, { ...baseQuery, format: 'pdf', template: templateParam }),
                 `Report_cards_${fileSafe(scope.streamName)}_${fileSafe(scope.termName)}.pdf`,
             );
@@ -145,7 +180,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
 
     const markSheet = () =>
         run('sheet', async () => {
-            await api.downloadAndShare(
+            await download(
                 withQuery(`/api/reports/marksheet/${scope.streamId}`, { ...baseQuery, format: 'pdf' }),
                 `Mark_sheet_${fileSafe(scope.streamName)}_${fileSafe(scope.termName)}.pdf`,
             );
@@ -154,7 +189,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
 
     const studentCard = (s: StudentListItem) =>
         run(s.id, () =>
-            api.downloadAndShare(
+            download(
                 withQuery(`/api/reports/student/${s.id}`, { year: scope.yearId, term: scope.termId, examType: scope.examType, customTitle: title.trim() || null, template: templateParam }),
                 `Report_card_${fileSafe(fullName(s.users))}.pdf`,
             ),
@@ -212,6 +247,7 @@ interface StudentComment {
 }
 
 function CommentsPanel({ scope }: { scope: Scope }) {
+    const styles = useStyles();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<StudentComment[]>(
         withQuery('/api/reports/comments', { grade_stream_id: scope.streamId, term_id: scope.termId, academic_year_id: scope.yearId }),
@@ -289,6 +325,8 @@ interface SmsResult {
 }
 
 function SmsPanel({ scope }: { scope: Scope }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', grade_stream_id: scope.streamId }));
     const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -349,7 +387,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
                             key={s.id}
                             title={fullName(s.users)}
                             subtitle={s.guardian_phone ?? 'No guardian phone'}
-                            left={<Text style={{ fontSize: 18, color: on ? colors.primary : colors.muted }}>{on ? '☑' : '☐'}</Text>}
+                            left={on ? <SquareCheck size={20} color={colors.primary} /> : <Square size={20} color={colors.muted} />}
                             onPress={s.guardian_phone ? () => toggle(s.id) : undefined}
                             right={<View />}
                         />
@@ -360,7 +398,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
     );
 }
 
-const styles = StyleSheet.create({
-    cardTitle: { fontSize: 14, fontWeight: '800', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
-});
+const useStyles = makeStyles((colors) => ({
+    cardTitle: { fontSize: 14, fontFamily: fonts.display, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+}));

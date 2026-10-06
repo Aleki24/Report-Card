@@ -12,10 +12,11 @@ import { ResourceList } from '@/components/ops/ResourceList';
 import { Invoicing, ResidencePanel, VoteHeadStatementPanel } from '@/components/finance/BillingPanels';
 import { useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 
 /** The vote heads of one structure, with annual amounts and each term's share. */
 function StructureItems({ structure, manage }: { structure: Structure; manage: boolean }) {
+    const { colors } = useTheme();
     const voteHeads = useOpsList<VoteHead>('vote-heads');
     return (
         <ResourceList<'fee-structure-items', StructureItem>
@@ -79,6 +80,7 @@ function Structures({ manage }: { manage: boolean }) {
 }
 
 export default function BillingScreen() {
+    const { colors } = useTheme();
     const { can } = useCurrentUser();
     const manage = can('billing.manage');
     return (

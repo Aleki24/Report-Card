@@ -9,6 +9,7 @@ import type { LookupOption, LookupType } from '@shared/ops/lookups';
 import { useToast } from '@/components/Toast';
 import { useApi, withQuery, type Api } from './api';
 import { errorMessage } from './format';
+import { readMemory, readStored, useCacheKey, writeCache } from './queryCache';
 
 export type QueryParams = Record<string, string | undefined | null>;
 
@@ -31,8 +32,9 @@ export function useOpsList<T extends { id: string }>(resource: ResourceName, par
     const enabled = opts.enabled ?? true;
     const key = JSON.stringify(params);
     const path = useMemo(() => opsPath(resource, JSON.parse(key) as QueryParams), [resource, key]);
-    const [rows, setRows] = useState<T[]>([]);
-    const [loading, setLoading] = useState(enabled);
+    const ck = useCacheKey(enabled ? path : null);
+    const [rows, setRows] = useState<T[]>(() => readMemory<T[]>(ck) ?? []);
+    const [loading, setLoading] = useState(enabled && readMemory(ck) === undefined);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const latest = useRef(path);
@@ -40,16 +42,22 @@ export function useOpsList<T extends { id: string }>(resource: ResourceName, par
 
     const load = useCallback(async (silent: boolean) => {
         if (!enabled) { setLoading(false); return; }
-        if (silent) setRefreshing(true); else setLoading(true);
+        if (silent) setRefreshing(true);
+        else {
+            // Last time's rows at once, then the fresh ones.
+            const saved = readMemory<T[]>(ck) ?? (await readStored<T[]>(ck));
+            if (latest.current !== path) return;
+            if (saved) { setRows(saved); setLoading(false); setRefreshing(true); } else setLoading(true);
+        }
         try {
             const data = await opsGet<T[]>(api, path);
-            if (latest.current === path) { setRows(data); setError(null); }
+            if (latest.current === path) { setRows(data); setError(null); writeCache(ck, data); }
         } catch (err) {
             if (latest.current === path) setError(errorMessage(err, 'Failed to load'));
         } finally {
             if (latest.current === path) { setLoading(false); setRefreshing(false); }
         }
-    }, [api, path, enabled]);
+    }, [api, path, enabled, ck]);
 
     useEffect(() => { void load(false); }, [load]);
 
@@ -83,24 +91,28 @@ export function useOpsList<T extends { id: string }>(resource: ResourceName, par
  */
 export function useOpsData<T>(path: string | null) {
     const api = useApi();
-    const [data, setData] = useState<T | null>(null);
-    const [loading, setLoading] = useState(path !== null);
+    const ck = useCacheKey(path);
+    const [data, setData] = useState<T | null>(() => readMemory<T>(ck) ?? null);
+    const [loading, setLoading] = useState(path !== null && readMemory(ck) === undefined);
     const [error, setError] = useState<string | null>(null);
     const latest = useRef(path);
     latest.current = path;
 
     const reload = useCallback(async () => {
         if (path === null) { setData(null); setLoading(false); return; }
+        const saved = readMemory<T>(ck) ?? (await readStored<T>(ck));
+        if (latest.current !== path) return;
+        if (saved !== undefined) setData(saved);
         setLoading(true);
         try {
             const next = await opsGet<T>(api, path);
-            if (latest.current === path) { setData(next); setError(null); }
+            if (latest.current === path) { setData(next); setError(null); writeCache(ck, next); }
         } catch (err) {
             if (latest.current === path) setError(errorMessage(err, 'Failed to load'));
         } finally {
             if (latest.current === path) setLoading(false);
         }
-    }, [api, path]);
+    }, [api, path, ck]);
 
     useEffect(() => { void reload(); }, [reload]);
     return { data, loading, error, reload };

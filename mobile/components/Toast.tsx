@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '@/lib/theme';
+import { radius, spacing, fonts, useTheme } from '@/lib/theme';
+import { badgeColors } from './ui';
 
 export type ToastTone = 'success' | 'danger' | 'info' | 'warning';
 
@@ -10,22 +11,20 @@ interface ToastState {
     message: string;
     detail?: string;
     tone: ToastTone;
+    action?: ToastAction;
 }
 
+/** A button on the toast, e.g. "Open" after a download. */
+export interface ToastAction { label: string; onPress: () => void }
+
 interface ToastApi {
-    show: (message: string, tone?: ToastTone, detail?: string) => void;
+    show: (message: string, tone?: ToastTone, detail?: string, action?: ToastAction) => void;
     success: (message: string) => void;
     error: (message: string, detail?: string) => void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const TONE: Record<ToastTone, { bg: string; fg: string }> = {
-    success: { bg: colors.successBg, fg: colors.success },
-    danger: { bg: colors.dangerBg, fg: colors.danger },
-    info: { bg: colors.infoBg, fg: colors.info },
-    warning: { bg: colors.warningBg, fg: colors.warning },
-};
 
 /**
  * The outcome of an action ("Saved.", "No copies available") shown briefly
@@ -33,15 +32,16 @@ const TONE: Record<ToastTone, { bg: string; fg: string }> = {
  * ported from the web report outcomes the same way.
  */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+    const { colors } = useTheme();
     const [toast, setToast] = useState<ToastState | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const insets = useSafeAreaInsets();
 
-    const show = useCallback((message: string, tone: ToastTone = 'info', detail?: string) => {
+    const show = useCallback((message: string, tone: ToastTone = 'info', detail?: string, action?: ToastAction) => {
         if (timer.current) clearTimeout(timer.current);
         const id = Date.now();
-        setToast({ id, message, detail, tone });
-        timer.current = setTimeout(() => setToast((t) => (t?.id === id ? null : t)), detail ? 8000 : 3500);
+        setToast({ id, message, detail, tone, action });
+        timer.current = setTimeout(() => setToast((t) => (t?.id === id ? null : t)), detail || action ? 8000 : 3500);
     }, []);
 
     useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -52,7 +52,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         error: (m, d) => show(m, 'danger', d),
     }), [show]);
 
-    const tone = toast ? TONE[toast.tone] : null;
+    const tone = toast ? badgeColors(colors, toast.tone) : null;
 
     return (
         <ToastContext.Provider value={api}>
@@ -67,6 +67,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     >
                         <Text style={[styles.message, { color: tone.fg }]}>{toast.message}</Text>
                         {toast.detail ? <Text style={[styles.detail, { color: tone.fg }]}>{toast.detail}</Text> : null}
+                        {toast.action ? (
+                            <Pressable
+                                onPress={() => { const run = toast.action?.onPress; setToast(null); run?.(); }}
+                                accessibilityRole="button"
+                                style={[styles.action, { borderColor: tone.fg }]}
+                            >
+                                <Text style={[styles.actionText, { color: tone.fg }]}>{toast.action.label}</Text>
+                            </Pressable>
+                        ) : null}
                     </Pressable>
                 </View>
             ) : null}
@@ -81,8 +90,10 @@ export function useToast(): ToastApi {
 }
 
 const styles = StyleSheet.create({
+    action: { alignSelf: 'flex-start', marginTop: spacing.sm, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 6 },
+    actionText: { fontFamily: fonts.bold, fontSize: 13 },
     wrap: { position: 'absolute', left: spacing.lg, right: spacing.lg, alignItems: 'center' },
     toast: { maxWidth: 560, width: '100%', borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
-    message: { fontSize: 14, fontWeight: '700' },
-    detail: { fontSize: 12, marginTop: 4 },
+    message: { fontSize: 14, fontFamily: fonts.bold },
+    detail: { fontFamily: fonts.regular, fontSize: 12, marginTop: 4 },
 });

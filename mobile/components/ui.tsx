@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     ActivityIndicator,
+    Image,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -13,10 +14,18 @@ import {
     type StyleProp,
     type ViewStyle,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import { pageIdentity } from '@/lib/hues';
+import { CountUp } from './dashboard/kit';
+import { InlineLoader } from './Loader';
+import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '@/lib/theme';
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
+import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
+import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
 
 // ── Layout ─────────────────────────────────────────────────
 
@@ -32,25 +41,68 @@ export function Screen({
     /** Pinned below the scroll area (e.g. a save bar). */
     footer?: React.ReactNode;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    // Without its own handler, pulling down reloads every query rendered on the screen.
+    const registry = useScreenRefreshRegistry();
+    const [pulling, setPulling] = useState(false);
+    const refreshAll = () => {
+        setPulling(true);
+        void registry.reloadAll().finally(() => setPulling(false));
+    };
+    const handleRefresh = onRefresh ?? refreshAll;
+    const isRefreshing = onRefresh ? !!refreshing : pulling;
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
-            >
-                <View style={styles.content}>{children}</View>
-            </ScrollView>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
+            {/* Android 15 draws edge to edge, so the window no longer resizes for the keyboard:
+                scroll the focused field into view, and lift a pinned save bar above the keyboard. */}
+            <KeyboardAvoidingView behavior="padding" enabled={!!footer} style={styles.fill}>
+                <KeyboardAwareScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    bottomOffset={spacing.xl}
+                    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+                >
+                    <ScreenRefreshProvider registry={registry}>
+                        <View style={styles.content}>{children}</View>
+                    </ScreenRefreshProvider>
+                </KeyboardAwareScrollView>
+                {footer ? <View style={styles.footer}>{footer}</View> : null}
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
 
-export function ScreenHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+/**
+ * Every screen's title block, as the web's PageHeader: the menu icon on a
+ * gradient tile in the section's colour, the section name above the title.
+ * Taken from the route, so screens need not pass them.
+ */
+export function ScreenHeader({ title, description, action, icon, hue, eyebrow }: {
+    title: string;
+    description?: string;
+    action?: React.ReactNode;
+    icon?: LucideIcon;
+    hue?: Hue;
+    eyebrow?: string;
+}) {
+    const { tones } = useTheme();
+    const styles = useStyles();
+    const pathname = usePathname();
+    const identity = pageIdentity(pathname);
+    const Icon = icon ?? screenIconFor(pathname);
+    const tone = tones[hue ?? identity?.hue ?? 'blue'];
+    const label = eyebrow ?? identity?.eyebrow;
     return (
         <View style={styles.header}>
+            {Icon ? (
+                <LinearGradient colors={tone.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerIcon}>
+                    <Icon size={22} color="#ffffff" strokeWidth={2.2} />
+                </LinearGradient>
+            ) : null}
             <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.headerTitle}>{title}</Text>
+                {label ? <Text style={[styles.headerEyebrow, { color: tone.fg }]}>{label.toUpperCase()}</Text> : null}
+                <Text style={styles.headerTitle} accessibilityRole="header">{title}</Text>
                 {description ? <Text style={styles.headerDesc}>{description}</Text> : null}
             </View>
             {action}
@@ -59,15 +111,19 @@ export function ScreenHeader({ title, description, action }: { title: string; de
 }
 
 export function BackLink({ label = 'Back' }: { label?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     return (
-        <Pressable onPress={() => router.back()} hitSlop={8} style={{ marginBottom: spacing.md, alignSelf: 'flex-start' }}>
-            <Text style={styles.link}>← {label}</Text>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={8} style={styles.backLink} accessibilityRole="link">
+            <ArrowLeft size={16} color={colors.primary} />
+            <Text style={styles.link}>{label}</Text>
         </Pressable>
     );
 }
 
 export function SectionLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+    const styles = useStyles();
     return (
         <View style={styles.sectionRow}>
             <Text style={styles.sectionLabel}>{children}</Text>
@@ -77,11 +133,25 @@ export function SectionLabel({ children, action }: { children: React.ReactNode; 
 }
 
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+    const styles = useStyles();
     return <View style={[styles.card, style]}>{children}</View>;
+}
+
+/** The web's tinted icon square (`bg-primary/15 text-primary`) used on stat cards and menus. */
+export function IconTile({ icon: Icon, color, background, hue, size = 40 }: { icon: LucideIcon; color?: string; background?: string; hue?: Hue; size?: number }) {
+    const { colors, tones } = useTheme();
+    const styles = useStyles();
+    const tone = hue ? tones[hue] : null;
+    return (
+        <View style={[styles.iconTile, { width: size, height: size, backgroundColor: background ?? tone?.bg ?? colors.primarySoft }]}>
+            <Icon size={size / 2} color={color ?? tone?.fg ?? colors.primary} strokeWidth={2} />
+        </View>
+    );
 }
 
 /** A card whose rows run edge to edge, separated by hairlines. */
 export function ListCard({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+    const styles = useStyles();
     return <View style={[styles.card, styles.listCard, style]}>{children}</View>;
 }
 
@@ -102,6 +172,8 @@ export function ListRow({
     onPress?: () => void;
     danger?: boolean;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const body = (
         <>
             {left}
@@ -111,7 +183,7 @@ export function ListRow({
                 {meta ? <Text style={styles.rowMeta}>{meta}</Text> : null}
             </View>
             {right}
-            {onPress && !right ? <Text style={styles.chevron}>›</Text> : null}
+            {onPress && !right ? <ChevronRight size={18} color={colors.muted} /> : null}
         </>
     );
     return onPress ? (
@@ -124,6 +196,7 @@ export function ListRow({
 }
 
 export function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
+    const styles = useStyles();
     return (
         <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{label}</Text>
@@ -133,15 +206,20 @@ export function InfoRow({ label, value }: { label: string; value?: string | numb
 }
 
 export function StatGrid({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <View style={styles.statGrid}>{children}</View>;
 }
 
-export function StatTile({ label, value, sub, tone, onPress }: { label: string; value: string | number; sub?: string; tone?: string; onPress?: () => void }) {
+export function StatTile({ label, value, sub, tone, icon, onPress }: { label: string; value: string | number; sub?: string; tone?: string; icon?: LucideIcon; onPress?: () => void }) {
+    const styles = useStyles();
     const content = (
         <>
-            <Text style={styles.statLabel}>{label}</Text>
-            <Text style={[styles.statValue, tone ? { color: tone } : null]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-            {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+            {icon ? <IconTile icon={icon} /> : null}
+            <View style={styles.statBody}>
+                <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
+                <CountUp value={value} style={[styles.statValue, tone ? { color: tone } : null]} />
+                {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+            </View>
         </>
     );
     return onPress ? (
@@ -153,18 +231,23 @@ export function StatTile({ label, value, sub, tone, onPress }: { label: string; 
 
 // ── Feedback ───────────────────────────────────────────────
 
-type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
+export type BadgeVariant = 'success' | 'danger' | 'warning' | 'info' | 'default';
 
-const BADGE_COLORS: Record<BadgeVariant, { bg: string; fg: string }> = {
-    success: { bg: colors.successBg, fg: colors.success },
-    danger: { bg: colors.dangerBg, fg: colors.danger },
-    warning: { bg: colors.warningBg, fg: colors.warning },
-    info: { bg: colors.infoBg, fg: colors.info },
-    default: { bg: colors.mutedBg, fg: colors.muted },
-};
+/** Soft fill and strong text for each status, in the current theme. */
+export function badgeColors(colors: Palette, variant: BadgeVariant): { bg: string; fg: string } {
+    switch (variant) {
+        case 'success': return { bg: colors.successBg, fg: colors.success };
+        case 'danger': return { bg: colors.dangerBg, fg: colors.danger };
+        case 'warning': return { bg: colors.warningBg, fg: colors.warning };
+        case 'info': return { bg: colors.infoBg, fg: colors.info };
+        default: return { bg: colors.mutedBg, fg: colors.muted };
+    }
+}
 
 export function Badge({ label, variant = 'default' }: { label: string; variant?: BadgeVariant }) {
-    const c = BADGE_COLORS[variant];
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const c = badgeColors(colors, variant);
     return (
         <View style={[styles.badge, { backgroundColor: c.bg }]}>
             <Text style={[styles.badgeText, { color: c.fg }]}>{label}</Text>
@@ -172,9 +255,13 @@ export function Badge({ label, variant = 'default' }: { label: string; variant?:
     );
 }
 
-export function EmptyState({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {
+/** A friendly "nothing here yet": an icon, what is missing, and what to do next. */
+export function EmptyState({ title, description, action, icon: Icon = Inbox }: { title: string; description?: string; action?: React.ReactNode; icon?: LucideIcon }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.empty}>
+            <View style={styles.emptyIcon}><Icon size={22} color={colors.muted} /></View>
             <Text style={styles.emptyTitle}>{title}</Text>
             {description ? <Text style={styles.emptyDesc}>{description}</Text> : null}
             {action ? <View style={{ marginTop: spacing.md }}>{action}</View> : null}
@@ -182,15 +269,14 @@ export function EmptyState({ title, description, action }: { title: string; desc
     );
 }
 
-export function LoadingView() {
-    return (
-        <View style={styles.loading}>
-            <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-    );
+/** Content still loading: the app's bead loader, not a spinner. */
+export function LoadingView({ message }: { message?: string }) {
+    return <InlineLoader message={message} />;
 }
 
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={[styles.banner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
             <Text style={[styles.bannerText, { color: colors.danger }]}>{message}</Text>
@@ -204,20 +290,25 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
 }
 
 export function Notice({ message, tone = 'success', onDismiss }: { message: string; tone?: 'success' | 'info' | 'warning' | 'danger'; onDismiss?: () => void }) {
-    const c = BADGE_COLORS[tone];
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const c = badgeColors(colors, tone);
     return (
         <View style={[styles.banner, { backgroundColor: c.bg, borderColor: c.fg }]}>
             <Text style={[styles.bannerText, { color: c.fg }]}>{message}</Text>
             {onDismiss ? (
-                <Text onPress={onDismiss} style={[styles.bannerAction, { color: c.fg }]}>
-                    ✕
-                </Text>
+                <Pressable onPress={onDismiss} hitSlop={8} accessibilityRole="button" accessibilityLabel="Dismiss">
+                    <X size={16} color={c.fg} />
+                </Pressable>
             ) : null}
         </View>
     );
 }
 
-export function ProgressBar({ value, color = colors.primary }: { value: number; color?: string }) {
+export function ProgressBar({ value, color: colorProp }: { value: number; color?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const color = colorProp ?? colors.primary;
     const pct = Math.max(0, Math.min(100, value));
     return (
         <View style={[styles.progressTrack, { backgroundColor: `${color}26` }]}>
@@ -247,6 +338,10 @@ export function Button({
     block?: boolean;
     size?: 'sm' | 'md';
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const buttonVariantStyles = useButtonVariantStyles();
+    const buttonTextStyles = useButtonTextStyles();
     const isDisabled = disabled || loading;
     return (
         <Pressable
@@ -269,6 +364,7 @@ export function Button({
 }
 
 export function ButtonRow({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
     return <View style={styles.buttonRow}>{children}</View>;
 }
 
@@ -293,6 +389,8 @@ export function TextField({
     autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
     error?: string | null;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.field}>
             {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
@@ -300,7 +398,7 @@ export function TextField({
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.placeholder}
                 multiline={multiline}
                 keyboardType={keyboardType}
                 secureTextEntry={secureTextEntry}
@@ -313,12 +411,14 @@ export function TextField({
 }
 
 export function SearchField({ value, onChangeText, placeholder = 'Search…' }: { value: string; onChangeText: (text: string) => void; placeholder?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <TextInput
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.placeholder}
             autoCorrect={false}
             clearButtonMode="while-editing"
             style={[styles.input, styles.search]}
@@ -327,6 +427,8 @@ export function SearchField({ value, onChangeText, placeholder = 'Search…' }: 
 }
 
 export function ToggleRow({ label, description, value, onValueChange }: { label: string; description?: string; value: boolean; onValueChange: (v: boolean) => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     return (
         <View style={styles.toggleRow}>
             <View style={{ flex: 1 }}>
@@ -358,6 +460,7 @@ export function ChipSelect<T extends string>({
     label?: string;
     wrap?: boolean;
 }) {
+    const styles = useStyles();
     const chips = options.map((o) => {
         const active = o.value === value;
         return (
@@ -389,6 +492,7 @@ export function ChipSelect<T extends string>({
 
 /** Tabs within a screen (e.g. Marks / Results / Publish). */
 export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly ChipOption<T>[]; value: T; onChange: (v: T) => void }) {
+    const styles = useStyles();
     return (
         <View style={styles.segmented}>
             {tabs.map((t) => {
@@ -409,27 +513,35 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tab
     );
 }
 
-/** ‹ date › stepper over YYYY-MM-DD strings; no native picker dependency needed. */
+/** A previous/next date stepper over YYYY-MM-DD strings; no native picker dependency needed. */
 export function DateStepper({ value, onChange, max }: { value: string; onChange: (iso: string) => void; max?: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const atMax = !!max && value >= max;
     return (
         <View style={styles.dateRow}>
             <Pressable onPress={() => onChange(shiftISODate(value, -1))} hitSlop={8} style={styles.dateArrow} accessibilityLabel="Previous day">
-                <Text style={styles.dateArrowText}>‹</Text>
+                <ChevronLeft size={22} color={colors.primary} />
             </Pressable>
             <Pressable onPress={() => onChange(toISODate())} accessibilityHint="Jump to today">
                 <Text style={styles.dateText}>{formatDate(parseISODate(value), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</Text>
             </Pressable>
             <Pressable onPress={() => !atMax && onChange(shiftISODate(value, 1))} disabled={atMax} hitSlop={8} style={[styles.dateArrow, atMax && { opacity: 0.3 }]} accessibilityLabel="Next day">
-                <Text style={styles.dateArrowText}>›</Text>
+                <ChevronRight size={22} color={colors.primary} />
             </Pressable>
         </View>
     );
 }
 
-export function Avatar({ label, size = 56, color = colors.primary }: { label: string; size?: number; color?: string }) {
+/** Initials on a coloured disc, or the person's photo when they have one. */
+export function Avatar({ label, size = 56, color: colorProp, uri }: { label: string; size?: number; color?: string; uri?: string | null }) {
+    const { colors } = useTheme();
+    const color = colorProp ?? colors.primary;
+    const styles = useStyles();
+    const frame = { width: size, height: size, borderRadius: size / 2 };
+    if (uri) return <Image source={{ uri }} style={[frame, { backgroundColor: colors.mutedBg }]} accessibilityLabel={label} />;
     return (
-        <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
+        <View style={[styles.avatar, frame, { backgroundColor: color }]}>
             <Text style={[styles.avatarText, { fontSize: size * 0.36 }]}>{label}</Text>
         </View>
     );
@@ -437,6 +549,8 @@ export function Avatar({ label, size = 56, color = colors.primary }: { label: st
 
 /** Month/day block used for exams and due dates. */
 export function DateBadge({ date, highlight }: { date: string; highlight?: boolean }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const d = new Date(date);
     return (
         <View style={[styles.dateBadge, highlight && { borderColor: colors.warning, backgroundColor: colors.warningBg }]}>
@@ -446,87 +560,92 @@ export function DateBadge({ date, highlight }: { date: string; highlight?: boole
     );
 }
 
-const buttonVariantStyles = StyleSheet.create({
-    primary: { backgroundColor: colors.primary, borderColor: colors.primary },
-    secondary: { backgroundColor: colors.card, borderColor: colors.border },
-    danger: { backgroundColor: colors.danger, borderColor: colors.danger },
+const useButtonVariantStyles = makeStyles((colors) => ({
+    primary: { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+    secondary: { backgroundColor: colors.mutedBg, borderColor: colors.border },
+    danger: { backgroundColor: colors.dangerSolid, borderColor: colors.dangerSolid },
     ghost: { backgroundColor: 'transparent', borderColor: 'transparent' },
-});
+}));
 
-const buttonTextStyles = StyleSheet.create({
+const useButtonTextStyles = makeStyles((colors) => ({
     primary: { color: colors.white },
     secondary: { color: colors.foreground },
     danger: { color: colors.white },
     ghost: { color: colors.primary },
-});
+}));
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     safe: { flex: 1, backgroundColor: colors.background },
+    fill: { flex: 1 },
     scrollContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     // Cap line length on tablets so screens stay readable at every width.
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-    header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.lg },
-    headerTitle: { fontSize: 24, fontWeight: '800', color: colors.foreground },
-    headerDesc: { fontSize: 13, color: colors.muted, marginTop: 4 },
-    link: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+    headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
+    headerEyebrow: { fontSize: 11, fontFamily: fonts.bold, letterSpacing: 1.2, marginBottom: 1 },
+    headerTitle: { fontSize: 24, lineHeight: 30, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.5 },
+    headerDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4 },
+    backLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md, alignSelf: 'flex-start' },
+    link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 14 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.sm },
-    sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
-    card: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+    sectionLabel: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
+    card: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadowFor(colors) },
+    iconTile: { borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
     listCard: { padding: 0, overflow: 'hidden' },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    rowTitle: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    rowSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    rowMeta: { fontSize: 11, color: colors.muted, marginTop: 4 },
-    chevron: { fontSize: 22, color: colors.muted },
+    rowTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    rowSub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    rowMeta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 4 },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    infoLabel: { fontSize: 13, color: colors.muted, fontWeight: '600' },
-    infoValue: { fontSize: 13, color: colors.foreground, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+    infoLabel: { fontSize: 13, color: colors.muted, fontFamily: fonts.semibold },
+    infoValue: { fontSize: 13, color: colors.foreground, fontFamily: fonts.bold, flexShrink: 1, textAlign: 'right' },
     statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    statTile: { flexBasis: '47%', flexGrow: 1, gap: 2, padding: spacing.md },
-    statLabel: { fontSize: 12, color: colors.muted, fontWeight: '600' },
-    statValue: { fontSize: 20, fontWeight: '800', color: colors.foreground },
-    statSub: { fontSize: 11, color: colors.muted },
+    statTile: { flexBasis: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+    statBody: { flex: 1, minWidth: 0, gap: 2 },
+    statLabel: { fontSize: 12, color: colors.muted, fontFamily: fonts.semibold },
+    statValue: { fontSize: 20, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: -0.3 },
+    statSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
     badge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 999, alignSelf: 'flex-start' },
-    badgeText: { fontSize: 11, fontWeight: '700' },
+    badgeText: { fontSize: 11, fontFamily: fonts.bold },
     empty: { alignItems: 'center', paddingVertical: spacing.xl * 1.5, paddingHorizontal: spacing.lg },
-    emptyTitle: { fontSize: 15, fontWeight: '700', color: colors.foreground, textAlign: 'center' },
-    emptyDesc: { fontSize: 13, color: colors.muted, marginTop: 4, textAlign: 'center' },
+    emptyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
+    emptyTitle: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground, textAlign: 'center' },
+    emptyDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4, textAlign: 'center' },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl * 2 },
     banner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: radius.md, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md },
-    bannerText: { fontSize: 13, flex: 1, marginRight: spacing.sm },
-    bannerAction: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
+    bannerText: { fontFamily: fonts.regular, fontSize: 13, flex: 1, marginRight: spacing.sm },
+    bannerAction: { fontSize: 13, fontFamily: fonts.bold, textDecorationLine: 'underline' },
     progressTrack: { height: 10, borderRadius: 999, overflow: 'hidden', width: '100%' },
     progressFill: { height: '100%', borderRadius: 999 },
-    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.lg, minHeight: 44 },
+    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 10, paddingHorizontal: spacing.lg, minHeight: 40 },
     buttonSm: { paddingVertical: 6, paddingHorizontal: spacing.md, minHeight: 32 },
-    buttonText: { fontWeight: '700', fontSize: 14 },
+    buttonText: { fontFamily: fonts.medium, fontSize: 14 },
     buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
     field: { marginBottom: spacing.md },
-    fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 6 },
-    fieldError: { fontSize: 12, color: colors.danger, marginTop: 4 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: 10, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, minHeight: 44 },
+    fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
+    fieldError: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
+    input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: 9, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, minHeight: 40 },
     textArea: { minHeight: 96, textAlignVertical: 'top' },
     search: { marginBottom: spacing.md },
     toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
     chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, minHeight: 36, justifyContent: 'center' },
-    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    chipText: { fontSize: 13, fontWeight: '600', color: colors.foreground },
-    chipHint: { fontSize: 10, color: colors.muted, marginTop: 1 },
+    chipActive: { backgroundColor: colors.primarySolid, borderColor: colors.primarySolid },
+    chipText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
+    chipHint: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted, marginTop: 1 },
     chipTextActive: { color: colors.white },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
     segmented: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: colors.mutedBg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
     segment: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, alignItems: 'center' },
     segmentActive: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-    segmentText: { fontSize: 13, fontWeight: '600', color: colors.muted },
+    segmentText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.muted },
     segmentTextActive: { color: colors.foreground },
     dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.md },
     dateArrow: { padding: spacing.sm },
-    dateArrowText: { fontSize: 24, color: colors.primary, fontWeight: '700' },
-    dateText: { fontSize: 14, fontWeight: '700', color: colors.foreground, minWidth: 160, textAlign: 'center' },
+    dateText: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, minWidth: 160, textAlign: 'center' },
     avatar: { alignItems: 'center', justifyContent: 'center' },
-    avatarText: { color: colors.white, fontWeight: '800' },
+    avatarText: { color: colors.white, fontFamily: fonts.bold },
     dateBadge: { width: 44, height: 44, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-    dateBadgeMonth: { fontSize: 9, fontWeight: '700', color: colors.muted },
-    dateBadgeDay: { fontSize: 15, fontWeight: '800', color: colors.foreground },
-});
+    dateBadgeMonth: { fontSize: 9, fontFamily: fonts.bold, color: colors.muted },
+    dateBadgeDay: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
+}));

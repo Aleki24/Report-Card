@@ -1,8 +1,9 @@
+import type { InviteDelivery } from '@shared/invite-delivery';
 import React, { useState } from 'react';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField } from '@/components/ui';
 import type { GradeStream } from '@/lib/types';
 
@@ -39,6 +40,8 @@ export interface AddStudentResult {
     name: string;
     username?: string;
     invite_code?: string;
+    /** Whether the code reached the guardian by SMS. */
+    notified?: InviteDelivery;
 }
 
 /** Same checks the web runs before saving, so bad data can't silently break SMS later. */
@@ -72,6 +75,7 @@ export function StudentForm({
     onSaved: (result: AddStudentResult) => void;
     onCancel: () => void;
 }) {
+    const { colors } = useTheme();
     const api = useApi();
     const [v, setV] = useState<StudentFormValues>(initial);
     const [saving, setSaving] = useState(false);
@@ -117,7 +121,7 @@ export function StudentForm({
 
     return (
         <Card style={{ marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.foreground, marginBottom: spacing.md }}>{studentId ? 'Edit student' : 'Add student'}</Text>
+            <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>{studentId ? 'Edit student' : 'Add student'}</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <TextField label="First name" value={v.first_name} onChangeText={(t) => set('first_name', t)} autoCapitalize="words" />
             <TextField label="Last name" value={v.last_name} onChangeText={(t) => set('last_name', t)} autoCapitalize="words" />

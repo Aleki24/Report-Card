@@ -11,7 +11,7 @@ import ClassesStep, { type ClassPlan, type StandardGrade } from '@/components/on
 import { chosenGrades as chosenGradesOf, onboardingPayload, onboardingStepProblem, type OnboardingState } from '@/lib/onboarding/plan';
 import SubjectsStep from '@/components/onboarding/SubjectsStep';
 import { CURRICULA, ONBOARDING_TERMS, type Curriculum, type OnboardingInput } from '@/lib/schemas';
-import { extractInviteCode, INVITE_CODE_LENGTH } from '@/lib/activation-link';
+import { extractInviteCode, INVITE_CODE_LENGTH, readPendingActivation } from '@/lib/activation-link';
 import { homePathForRole } from '@/lib/roles';
 
 type OnboardingRole = 'ADMIN' | 'TEACHER' | 'STUDENT' | null;
@@ -134,7 +134,9 @@ export default function OnboardingWizard() {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('code');
     const roleParam = params.get('role')?.toUpperCase();
-    if (codeParam) setInviteCode(extractInviteCode(codeParam));
+    // Or the code given on /activate before Google, if the person landed here.
+    const pending = codeParam ?? readPendingActivation().code;
+    if (pending) setInviteCode(extractInviteCode(pending));
     if (roleParam === 'ADMIN' || roleParam === 'TEACHER' || roleParam === 'STUDENT') {
       setSelectedRole(roleParam);
     }

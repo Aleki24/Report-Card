@@ -1,25 +1,57 @@
 {
   "expo": {
-    "name": "Report Card",
+    "name": "Skulbase",
     "slug": "report-card-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "reportcard",
-    "userInterfaceStyle": "light",
+    "scheme": "skulbase",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.reportcard.mobile"
+      "bundleIdentifier": "com.skulbase.app"
     },
     "android": {
-      "package": "com.reportcard.mobile",
+      "package": "com.skulbase.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "skulbase.com",
+              "pathPrefix": "/verify"
+            },
+            {
+              "scheme": "https",
+              "host": "skulbase.com",
+              "pathPrefix": "/activate"
+            },
+            {
+              "scheme": "https",
+              "host": "www.skulbase.com",
+              "pathPrefix": "/verify"
+            },
+            {
+              "scheme": "https",
+              "host": "www.skulbase.com",
+              "pathPrefix": "/activate"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -31,9 +63,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon.png",
+          "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#4f46e5"
+          "backgroundColor": "#FFFFFF",
+          "imageWidth": 200
         }
       ],
       [
@@ -49,12 +82,29 @@
           "photosPermission": "Choose a photo of a mark sheet so its marks can be read in.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-web-browser",
+      "./plugins/withCrashReporter",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": false,
       "onDemandFilesystem": false
+    },
+    "owner": "alexotis-team",
+    "extra": {
+      "eas": {
+        "projectId": "2de9e93f-553d-4b0a-9988-100e744aad0a"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2de9e93f-553d-4b0a-9988-100e744aad0a"
     }
   }
 }

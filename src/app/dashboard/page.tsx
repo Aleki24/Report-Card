@@ -11,44 +11,8 @@ import {
   BookOpen, Search, CheckCircle2, Send, Bell, Award, CalendarCheck, UserPlus, Megaphone, Briefcase,
   type LucideIcon,
 } from 'lucide-react';
-import type { Hue } from '@/components/ui/tones';
-import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
+import { buildTodos, totalAttendanceCount, type DashboardData, type TodoKey } from '@/lib/dashboard';
 
-interface DashboardData {
-  totalStudents: number;
-  totalTeachers: number;
-  totalUsers: number;
-  totalClasses: number;
-  totalReports: number;
-  attendanceToday: { present: number; absent: number; late: number; excused: number } | null;
-  upcomingExams: { id: string; name: string; exam_type: string; exam_date: string; subject_name: string; grade_name: string }[];
-  recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
-  overdueFeesCount: number;
-  announcementsLast7Days: number;
-  recentEnrollmentsLast7: number;
-  financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
-  academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
-  examsAwaitingMarks?: number;
-  unmarkedByClass?: { label: string; levelCode: string | null; count: number }[];
-  classPerformance?: ClassPerformance[];
-  subjectsWithoutGradingSystem?: number;
-  /**
-   * Whether the school has ever recorded a fee or an attendance register.
-   * Both features are unused on this instance — every school has zero fee
-   * rows — so their cards are hidden until there is something to show rather
-   * than rendering a permanent row of zeros.
-   */
-  hasFeeData?: boolean;
-  hasAttendanceData?: boolean;
-  hasLogo: boolean;
-  setup: SetupStatus | null;
-  /** Where the school is in its own calendar. */
-  term?: TermSummary;
-  /** Upcoming exams grouped into each class's sitting. */
-  upcomingRounds?: UpcomingRound[];
-  /** Exams this term with marks entered but not yet released. */
-  unreleasedResults?: number;
-}
 
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
@@ -58,8 +22,7 @@ import InsightCard from '@/components/dashboard/InsightCard';
 import SectionTitle from '@/components/dashboard/SectionTitle';
 import Link from 'next/link';
 import { SetupChecklist } from '@/components/dashboard/SetupChecklist';
-import type { SetupStatus } from '@/lib/setup-status';
-import ClassPerformanceList, { type ClassPerformance } from '@/components/dashboard/ClassPerformanceList';
+import ClassPerformanceList from '@/components/dashboard/ClassPerformanceList';
 import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
@@ -206,39 +169,8 @@ function AdminDashboard({ userName }: { userName: string }) {
   );
 }
 
-function totalAttendanceCount(a: NonNullable<DashboardData['attendanceToday']>): number {
-  return a.present + a.absent + a.late + a.excused;
-}
 
-interface Todo { key: string; icon: LucideIcon; hue: Hue; title: string; detail: string; cta: string; href: string }
-
-/** What only the school can move forward, most urgent first; empty means all caught up. */
-function buildTodos(data: DashboardData | null): Todo[] {
-  if (!data) return [];
-  const todos: Todo[] = [];
-  const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-  if ((data.unreleasedResults ?? 0) > 0) {
-    todos.push({ key: 'release', icon: Send, hue: 'violet', title: `${plural(data.unreleasedResults ?? 0, 'exam')} ready to release`, detail: 'Marks are in, but report cards and parents can’t see them until released.', cta: 'Release results', href: '/dashboard/exams-marks?tab=publish' });
-  }
-  if ((data.examsAwaitingMarks ?? 0) > 0) {
-    const worst = (data.unmarkedByClass ?? []).slice(0, 3).map(c => `${c.label} (${c.count})`).join(', ');
-    todos.push({ key: 'marks', icon: ClipboardList, hue: 'amber', title: `${plural(data.examsAwaitingMarks ?? 0, 'paper')} still need marks`, detail: worst ? `Most behind: ${worst}.` : 'Exams sat but not yet marked.', cta: 'Enter marks', href: '/dashboard/exams-marks' });
-  }
-  if ((data.subjectsWithoutGradingSystem ?? 0) > 0) {
-    todos.push({ key: 'grading', icon: Award, hue: 'rose', title: `${plural(data.subjectsWithoutGradingSystem ?? 0, 'subject')} without a grading scale`, detail: 'No grade can be printed on report cards for these.', cta: 'Set grading', href: '/dashboard/settings?tab=grading' });
-  }
-  const inTerm = data.term?.kind === 'in-term';
-  const weekday = ![0, 6].includes(new Date().getDay());
-  const marked = data.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;
-  const unmarked = Math.max(0, data.totalStudents - marked);
-  if (data.hasAttendanceData && inTerm && weekday && unmarked > 0) {
-    todos.push({ key: 'attendance', icon: CalendarCheck, hue: 'emerald', title: `${plural(unmarked, 'learner')} not on today’s register`, detail: marked === 0 ? 'No register has been taken yet today.' : `${marked.toLocaleString()} marked so far.`, cta: 'Take attendance', href: '/dashboard/attendance' });
-  }
-  if (data.hasFeeData && data.overdueFeesCount > 0) {
-    todos.push({ key: 'fees', icon: Wallet, hue: 'orange', title: `${plural(data.overdueFeesCount, 'fee record')} overdue`, detail: 'Past the due date with a balance still owing.', cta: 'Review fees', href: '/dashboard/fees' });
-  }
-  return todos;
-}
+const TODO_ICONS: Record<TodoKey, LucideIcon> = { release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
 
 function TodoList({ data }: { data: DashboardData | null }) {
   const todos = buildTodos(data);
@@ -255,7 +187,9 @@ function TodoList({ data }: { data: DashboardData | null }) {
   }
   return (
     <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {todos.map(({ key, icon: Icon, hue, title, detail, cta, href }) => (
+      {todos.map(({ key, hue, title, detail, cta, href }) => {
+        const Icon = TODO_ICONS[key];
+        return (
         <li key={key} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl', TONES[hue].tile)} aria-hidden><Icon className="size-5" /></span>
@@ -268,7 +202,8 @@ function TodoList({ data }: { data: DashboardData | null }) {
             {cta}<ArrowRight className="size-4" aria-hidden />
           </Link>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }

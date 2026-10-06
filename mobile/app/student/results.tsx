@@ -1,10 +1,11 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useApi, withQuery } from '@/lib/api';
+import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, fileSafe, formatPercent, scoreColor } from '@/lib/format';
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam, type ReportTemplateId } from '@/lib/reportTemplates';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs,
@@ -39,6 +40,8 @@ function uniqueOptions(results: readonly ExamResult[], pick: (r: ExamResult) => 
 }
 
 function ExamMarksTab() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const [year, setYear] = useState('');
     const [term, setTerm] = useState('');
     const [subject, setSubject] = useState('');
@@ -76,7 +79,7 @@ function ExamMarksTab() {
                     const avg = g.items.reduce((s, r) => s + Number(r.percentage), 0) / g.items.length;
                     return (
                         <View key={g.title}>
-                            <SectionLabel action={<Text style={[styles.avg, { color: scoreColor(avg) }]}>avg {formatPercent(avg, 1)}</Text>}>
+                            <SectionLabel action={<Text style={[styles.avg, { color: scoreColor(colors, avg) }]}>avg {formatPercent(avg, 1)}</Text>}>
                                 {g.title} · {g.items.length} recorded
                             </SectionLabel>
                             <ListCard>
@@ -87,7 +90,7 @@ function ExamMarksTab() {
                                         subtitle={`${r.raw_score}/${r.exams?.max_score ?? '—'}${r.remarks ? ` · ${r.remarks}` : ''}`}
                                         right={
                                             <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                                                <Text style={[styles.pct, { color: scoreColor(Number(r.percentage)) }]}>{formatPercent(Number(r.percentage), 1)}</Text>
+                                                <Text style={[styles.pct, { color: scoreColor(colors, Number(r.percentage)) }]}>{formatPercent(Number(r.percentage), 1)}</Text>
                                                 <Badge label={r.grade_symbol ?? '—'} variant={Number(r.percentage) >= 50 ? 'success' : 'danger'} />
                                             </View>
                                         }
@@ -103,19 +106,21 @@ function ExamMarksTab() {
 }
 
 function ReportCardsTab() {
-    const api = useApi();
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { data, loading, error, reload } = useApiQuery<ReportCard[]>('/api/school/student/report-cards');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
     const [busy, setBusy] = useState<string | null>(null);
     const [downloadError, setDownloadError] = useState<string | null>(null);
 
+    const saveFile = useDownload();
     const download = async (rc: ReportCard) => {
         if (!rc.student_id) return;
         setBusy(rc.id);
         setDownloadError(null);
         try {
-            await api.downloadAndShare(
+            await saveFile(
                 withQuery(`/api/reports/student/${rc.student_id}`, { term: rc.terms?.id, year: rc.academic_years?.id, template: templateParam(template) }),
                 `Report_card_${fileSafe(`${rc.terms?.name ?? ''}_${rc.academic_years?.name ?? ''}`)}.pdf`,
             );
@@ -146,7 +151,7 @@ function ReportCardsTab() {
                         </Text>
                         <Text style={styles.sub}>{rc.grade_streams?.full_name ?? rc.grade_streams?.name ?? ''}</Text>
                         <View style={styles.stats}>
-                            <Stat label="Average" value={formatPercent(rc.overall_average, 1)} color={scoreColor(rc.overall_average)} />
+                            <Stat label="Average" value={formatPercent(rc.overall_average, 1)} color={scoreColor(colors, rc.overall_average)} />
                             <Stat label="Position" value={rc.overall_position != null ? String(rc.overall_position) : '—'} />
                             {attend != null ? <Stat label="Attendance" value={`${attend}%`} /> : null}
                         </View>
@@ -176,6 +181,7 @@ function ReportCardsTab() {
 }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+    const styles = useStyles();
     return (
         <View>
             <Text style={styles.statLabel}>{label}</Text>
@@ -185,24 +191,25 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 }
 
 function Comment({ label, text }: { label: string; text: string }) {
+    const styles = useStyles();
     return (
         <Text style={styles.comment}>
-            <Text style={{ fontWeight: '700' }}>{label}: </Text>
+            <Text style={{ fontFamily: fonts.bold }}>{label}: </Text>
             {text}
         </Text>
     );
 }
 
-const styles = StyleSheet.create({
-    avg: { fontSize: 12, fontWeight: '800' },
-    pct: { fontSize: 14, fontWeight: '800' },
-    title: { fontSize: 16, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+const useStyles = makeStyles((colors) => ({
+    avg: { fontSize: 12, fontFamily: fonts.display },
+    pct: { fontSize: 14, fontFamily: fonts.display },
+    title: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     stats: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-    statLabel: { fontSize: 11, fontWeight: '600', color: colors.muted, marginBottom: 2 },
-    statValue: { fontSize: 16, fontWeight: '800', color: colors.foreground },
-    comment: { fontSize: 12, color: colors.foreground, lineHeight: 18, marginBottom: spacing.sm },
+    statLabel: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, marginBottom: 2 },
+    statValue: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground },
+    comment: { fontFamily: fonts.regular, fontSize: 12, color: colors.foreground, lineHeight: 18, marginBottom: spacing.sm },
     subjectRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
-    subjectName: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.foreground },
-    subjectScore: { fontSize: 12, color: colors.muted },
-});
+    subjectName: { flex: 1, fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
+    subjectScore: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+}));

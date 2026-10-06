@@ -3,7 +3,7 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { formatPercent, getDueLabel, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     BackLink, Badge, Button, Card, EmptyState, ListCard, ListRow, LoadingView, Notice, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
@@ -12,6 +12,8 @@ import { SubmitAssignment } from '@/components/student/SubmitAssignment';
 import type { DashboardData, PerformanceTrend, Subject } from '@/lib/types';
 
 export default function SubjectDetailScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { subjectId } = useLocalSearchParams<{ subjectId: string }>();
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');
     const perf = useApiQuery<PerformanceTrend[]>('/api/school/student/performance');
@@ -60,7 +62,7 @@ export default function SubjectDetailScreen() {
             {submitted ? <Notice message={`Submitted “${submitted}”.`} onDismiss={() => setSubmitted(null)} /> : null}
 
             <StatGrid>
-                <StatTile label="Latest average" value={formatPercent(latest?.average, 1)} tone={scoreColor(latest?.average)} />
+                <StatTile label="Latest average" value={formatPercent(latest?.average, 1)} tone={scoreColor(colors, latest?.average)} />
                 <StatTile
                     label="Change"
                     value={change == null ? '—' : `${change >= 0 ? '▲' : '▼'} ${Math.abs(change).toFixed(1)}`}
@@ -79,7 +81,7 @@ export default function SubjectDetailScreen() {
                         <View key={t.label} style={styles.trendRow}>
                             <Text style={styles.trendLabel} numberOfLines={1}>{t.label}</Text>
                             <View style={{ flex: 1 }}>
-                                <ProgressBar value={t.average} color={scoreColor(t.average)} />
+                                <ProgressBar value={t.average} color={scoreColor(colors, t.average)} />
                             </View>
                             <Text style={styles.trendValue}>{formatPercent(t.average, 1)}</Text>
                         </View>
@@ -125,10 +127,10 @@ export default function SubjectDetailScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    title: { fontSize: 22, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm },
+const useStyles = makeStyles((colors) => ({
+    title: { fontSize: 22, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm },
     badgeRow: { flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.lg },
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    trendLabel: { width: 110, fontSize: 12, fontWeight: '600', color: colors.foreground },
-    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
-});
+    trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
+    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+}));

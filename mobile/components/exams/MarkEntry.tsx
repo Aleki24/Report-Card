@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { compositePercentage, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
 import { errorMessage, formatDate, fullName, pluralize, scoreColor } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, SearchField, TextField,
 } from '@/components/ui';
@@ -41,6 +41,8 @@ function isBlank(v: string | undefined): boolean {
 }
 
 export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: AcademicStructure | null }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const draftKey = `marks-${exam.id}`;
 
@@ -331,13 +333,13 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                                             blurOnSubmit={false}
                                             onSubmitEditing={() => focusNext(s.id)}
                                             placeholder={`/${exam.max_score}`}
-                                            placeholderTextColor={colors.muted}
+                                            placeholderTextColor={colors.placeholder}
                                             style={[styles.scoreInput, err ? { borderColor: colors.danger } : null]}
                                             accessibilityLabel={`Score for ${s.users?.first_name}`}
                                         />
                                     )}
                                     <View style={styles.gradeBox}>
-                                        <Text style={[styles.grade, { color: scoreColor(pct) }]}>{e.grade || '—'}</Text>
+                                        <Text style={[styles.grade, { color: scoreColor(colors, pct) }]}>{e.grade || '—'}</Text>
                                         <Text style={styles.pct}>{pct === null ? '' : `${Math.round(pct)}%`}</Text>
                                     </View>
                                 </View>
@@ -420,24 +422,24 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     );
 }
 
-const styles = StyleSheet.create({
-    title: { fontSize: 17, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+const useStyles = makeStyles((colors) => ({
+    title: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     list: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.card },
     row: { padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     rowDirty: { backgroundColor: colors.infoBg },
     rowMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-    adm: { fontSize: 11, color: colors.muted, marginTop: 2 },
-    scoreInput: { width: 72, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, textAlign: 'center', fontSize: 16, fontWeight: '700', color: colors.foreground, backgroundColor: colors.card },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    adm: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 2 },
+    scoreInput: { width: 72, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, textAlign: 'center', fontSize: 16, fontFamily: fonts.bold, color: colors.foreground, backgroundColor: colors.card },
     gradeBox: { width: 48, alignItems: 'center' },
-    grade: { fontSize: 15, fontWeight: '800' },
-    pct: { fontSize: 10, color: colors.muted },
+    grade: { fontSize: 15, fontFamily: fonts.display },
+    pct: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted },
     papers: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
     paper: { alignItems: 'center', gap: 2 },
-    paperLabel: { fontSize: 10, fontWeight: '700', color: colors.muted },
-    paperInput: { width: 64, minHeight: 40, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, textAlign: 'center', fontSize: 15, fontWeight: '700', color: colors.foreground, backgroundColor: colors.card },
-    error: { fontSize: 12, color: colors.danger, marginTop: 4 },
+    paperLabel: { fontSize: 10, fontFamily: fonts.bold, color: colors.muted },
+    paperInput: { width: 64, minHeight: 40, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, textAlign: 'center', fontSize: 15, fontFamily: fonts.bold, color: colors.foreground, backgroundColor: colors.card },
+    error: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
     details: { marginTop: spacing.md },
     saveBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, marginTop: spacing.lg },
-});
+}));

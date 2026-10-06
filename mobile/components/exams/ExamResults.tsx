@@ -1,9 +1,9 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar, SearchField, StatGrid, StatTile,
 } from '@/components/ui';
@@ -12,7 +12,9 @@ import type { ExamMark, ExamSlot } from '@/lib/types';
 
 /** One exam's results, best first, with the summary the web's results tab shows. */
 export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onChanged: (status: ExamSlot['status']) => void; onEdit: () => void }) {
-    const api = useApi();
+    const download = useDownload();
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { data, loading, error, refresh, reload } = useApiQuery<ExamMark[]>(`/api/school/exam-marks?exam_id=${exam.id}`);
     const [search, setSearch] = useState('');
     const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
@@ -31,8 +33,13 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         const passed = pcts.filter((p) => p >= PASS_MARK).length;
         const grades = new Map<string, number>();
         for (const m of ranked) grades.set(m.grade_symbol || '—', (grades.get(m.grade_symbol || '—') ?? 0) + 1);
+        const sorted = [...pcts].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
         return {
             mean,
+            median,
+            count: pcts.length,
             passRate: (passed / pcts.length) * 100,
             highest: Math.max(...pcts),
             lowest: Math.min(...pcts),
@@ -49,7 +56,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         setExportError(null);
         try {
             const safe = fileSafe(`${exam.subject_name}-${exam.grade_stream_name ?? exam.grade_name}-${exam.exam_type}`);
-            await api.downloadAndShare(`/api/school/exam-marks/export?exam_id=${exam.id}&format=${format}`, `${safe}.${format}`, format === 'pdf' ? 'application/pdf' : 'text/csv');
+            await download(`/api/school/exam-marks/export?exam_id=${exam.id}&format=${format}`, `${safe}.${format}`, format === 'pdf' ? 'application/pdf' : 'text/csv');
         } catch (err) {
             setExportError(errorMessage(err, 'Export failed'));
         } finally {
@@ -89,10 +96,12 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
             {summary ? (
                 <>
                     <StatGrid>
-                        <StatTile label="Mean" value={formatPercent(summary.mean, 1)} tone={scoreColor(summary.mean)} />
+                        <StatTile label="Mean" value={formatPercent(summary.mean, 1)} tone={scoreColor(colors, summary.mean)} />
                         <StatTile label="Pass rate" value={formatPercent(summary.passRate)} sub={`at or above ${PASS_MARK}%`} />
                         <StatTile label="Highest" value={formatPercent(summary.highest, 1)} />
                         <StatTile label="Lowest" value={formatPercent(summary.lowest, 1)} />
+                        <StatTile label="Median" value={formatPercent(summary.median, 1)} />
+                        <StatTile label="Learners" value={summary.count} />
                     </StatGrid>
                     <Card style={{ marginTop: spacing.md }}>
                         <Text style={styles.cardTitle}>Grade spread · {pluralize(ranked.length, 'learner')}</Text>
@@ -123,7 +132,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
                                 subtitle={`${m.admission_number || '—'} · ${m.raw_score}/${exam.max_score}${m.remarks ? ` · ${m.remarks}` : ''}`}
                                 right={
                                     <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.pct, { color: scoreColor(Number(m.percentage)) }]}>{formatPercent(Number(m.percentage), 1)}</Text>
+                                        <Text style={[styles.pct, { color: scoreColor(colors, Number(m.percentage)) }]}>{formatPercent(Number(m.percentage), 1)}</Text>
                                         <Text style={styles.grade}>{m.grade_symbol || '—'}</Text>
                                     </View>
                                 }
@@ -136,14 +145,14 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
     );
 }
 
-const styles = StyleSheet.create({
-    title: { fontSize: 17, fontWeight: '800', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    cardTitle: { fontSize: 13, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm },
+const useStyles = makeStyles((colors) => ({
+    title: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    cardTitle: { fontSize: 13, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm },
     spreadRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 6 },
-    spreadGrade: { width: 36, fontSize: 13, fontWeight: '800', color: colors.foreground },
-    spreadCount: { width: 32, textAlign: 'right', fontSize: 12, color: colors.muted },
-    rank: { width: 28, textAlign: 'center', fontSize: 14, fontWeight: '800', color: colors.muted },
-    pct: { fontSize: 14, fontWeight: '800' },
-    grade: { fontSize: 12, fontWeight: '700', color: colors.muted },
-});
+    spreadGrade: { width: 36, fontSize: 13, fontFamily: fonts.display, color: colors.foreground },
+    spreadCount: { width: 32, textAlign: 'right', fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
+    rank: { width: 28, textAlign: 'center', fontSize: 14, fontFamily: fonts.display, color: colors.muted },
+    pct: { fontSize: 14, fontFamily: fonts.display },
+    grade: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
+}));

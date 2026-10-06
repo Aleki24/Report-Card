@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, SectionLabel } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { examTypeLabel } from '@/lib/academics';
 import { examLabel, useExams, useTerms } from '@/lib/useSchoolData';
 import { ReleaseControl } from './ReleaseControl';
@@ -11,6 +11,7 @@ type StatusFilter = 'all' | 'DRAFT' | 'APPROVED';
 
 /** Every exam the caller can release in a term, grouped by class — the web's Publish tab. */
 export function PublishList() {
+    const styles = useStyles();
     const { terms, activeTermId, loading: termsLoading } = useTerms();
     const [termId, setTermId] = useState<string | null>(null);
     const [filter, setFilter] = useState<StatusFilter>('DRAFT');
@@ -65,7 +66,7 @@ export function PublishList() {
     );
 }
 
-const styles = StyleSheet.create({
-    help: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
-    name: { fontSize: 14, fontWeight: '700', color: colors.foreground },
-});
+const useStyles = makeStyles((colors) => ({
+    help: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+    name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+}));

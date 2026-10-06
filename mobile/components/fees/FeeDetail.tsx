@@ -1,9 +1,10 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -22,6 +23,8 @@ type Panel = 'history' | 'pay' | 'edit';
 
 /** One fee record, expanded: its payments, recording a payment, and editing the bill. */
 export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: () => void }) {
+    const download = useDownload();
+    const styles = useStyles();
     const api = useApi();
     const payments = useApiQuery<FeePayment[]>(`/api/school/fees/${fee.id}/payments`);
     const [panel, setPanel] = useState<Panel>(fee.balance > 0 ? 'pay' : 'history');
@@ -115,7 +118,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
         ]);
 
     const receipt = (p: FeePayment) =>
-        void act(`r-${p.id}`, () => api.downloadAndShare(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`));
+        void act(`r-${p.id}`, () => download(`/api/school/fees/payments/${p.id}/receipt`, `Receipt_${p.receiptNumber}.pdf`));
 
     return (
         <View style={styles.wrap}>
@@ -189,7 +192,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     wrap: { padding: spacing.md, backgroundColor: colors.mutedBg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-    foot: { fontSize: 11, color: colors.muted, marginTop: spacing.sm },
-});
+    foot: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm },
+}));

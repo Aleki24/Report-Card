@@ -1,12 +1,17 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { apiErrorMessage } from '@shared/api-error-message';
+import { saveToDevice, type SavedFile } from './saveFile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
+
+/** A page on the web app (same origin as the API), for flows the app hands to the browser. */
+export function webUrl(path: `/${string}`): string {
+    return `${API_URL}${path}`;
+}
 
 export class ApiError extends Error {
     readonly status: number;
@@ -35,8 +40,31 @@ interface ErrorBody {
     code?: string;
 }
 
+/** Shown when the phone can't reach the server at all (no data, dropped connection). */
+export const NETWORK_ERROR_MESSAGE = 'Couldn’t reach Skulbase. Check your internet connection and try again.';
+export const NETWORK_ERROR_CODE = 'NETWORK';
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * fetch, retried when the request never got an answer. Mobile networks drop
+ * connections, and a pooled connection the server already closed fails with
+ * "Connection reset" on first use, so a quick retry usually succeeds. The
+ * raw Java/OkHttp error never reaches the screen.
+ */
+export async function fetchWithRetry(url: string, init?: RequestInit, attempts = 3): Promise<Response> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await fetch(url, init);
+        } catch {
+            if (attempt >= attempts) throw new ApiError(NETWORK_ERROR_MESSAGE, 0, NETWORK_ERROR_CODE);
+            await wait(500 * attempt);
+        }
+    }
+}
+
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetchWithRetry(`${API_URL}${path}`, {
         ...init,
         headers: {
             'Content-Type': 'application/json',
@@ -53,6 +81,11 @@ async function request<T>(path: string, token: string | null, init?: RequestInit
     return json as T;
 }
 
+/** GET a public (signed-out) endpoint, e.g. result verification. Throws ApiError. */
+export function publicGet<T>(path: string): Promise<T> {
+    return request<T>(path, null);
+}
+
 /** POST to a public (signed-out) endpoint, e.g. during sign-in. Throws ApiError. */
 export function publicPost<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, null, { method: 'POST', body: JSON.stringify(body) });
@@ -63,14 +96,14 @@ export interface Api {
     post: <T>(path: string, body?: unknown) => Promise<T>;
     patch: <T>(path: string, body?: unknown) => Promise<T>;
     put: <T>(path: string, body?: unknown) => Promise<T>;
-    del: <T>(path: string) => Promise<T>;
+    del: <T>(path: string, body?: unknown) => Promise<T>;
     /**
      * Downloads a server-rendered file (report cards, mark sheets) with the
-     * Clerk token attached, then opens the system share sheet so it can be
-     * saved, printed or sent. The web hands these URLs to the browser; a
-     * phone app has to fetch them itself because the URL needs auth.
+     * Clerk token attached, and saves it on the phone (see saveToDevice).
+     * The web hands these URLs to the browser; a phone app has to fetch them
+     * itself because the URL needs auth.
      */
-    downloadAndShare: (path: string, fileName: string, mimeType?: string) => Promise<void>;
+    download: (path: string, fileName: string, mimeType?: string) => Promise<SavedFile>;
     /**
      * Lets the user pick an image and uploads it to `/api/school/upload`
      * (the endpoint the web uses for assignment files, photos and logos).
@@ -122,10 +155,15 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 // `@clerk/nextjs/server` reads either.
 export function useApi(): Api {
     const { getToken } = useAuth();
+    // @clerk/clerk-expo's useAuth returns a new getToken on every render. Reading
+    // it through a ref keeps this client stable; otherwise every screen's query
+    // effect re-runs after each render and refetches forever.
+    const getTokenRef = useRef(getToken);
+    getTokenRef.current = getToken;
 
     return useMemo<Api>(() => {
         const send = async <T,>(method: string, path: string, body?: unknown): Promise<T> => {
-            const token = await getToken();
+            const token = await getTokenRef.current();
             return request<T>(path, token, { method, body: body === undefined ? undefined : JSON.stringify(body) });
         };
         const pickFile = async (types: readonly string[]): Promise<PickedFile | null> => {
@@ -143,8 +181,8 @@ export function useApi(): Api {
                 if (Platform.OS === 'web' && f.blob) form.append(k, f.blob, f.name);
                 else form.append(k, { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
             });
-            const token = await getToken();
-            const res = await fetch(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            const token = await getTokenRef.current();
+            const res = await fetchWithRetry(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
             const json: unknown = await res.json().catch(() => ({}));
             if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
             return json as T;
@@ -154,10 +192,13 @@ export function useApi(): Api {
             post: (path, body) => send('POST', path, body),
             patch: (path, body) => send('PATCH', path, body),
             put: (path, body) => send('PUT', path, body),
-            del: (path) => send('DELETE', path),
-            downloadAndShare: async (path, fileName, mimeType = 'application/pdf') => {
-                const token = await getToken();
-                if (Platform.OS === 'web') return downloadInBrowser(`${API_URL}${path}`, token, fileName);
+            del: (path, body) => send('DELETE', path, body),
+            download: async (path, fileName, mimeType = 'application/pdf') => {
+                const token = await getTokenRef.current();
+                if (Platform.OS === 'web') {
+                    await downloadInBrowser(`${API_URL}${path}`, token, fileName);
+                    return { uri: fileName, name: fileName, mimeType, folder: 'Downloads' };
+                }
                 const target = new File(Paths.cache, fileName);
                 if (target.exists) target.delete();
                 let file: File;
@@ -178,10 +219,7 @@ export function useApi(): Api {
                         throw new ApiError(body.error ?? 'Download failed', 0, body.code ?? null);
                     }
                 }
-                if (!(await Sharing.isAvailableAsync())) {
-                    throw new ApiError('Sharing is not available on this device.', 0);
-                }
-                await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: fileName });
+                return saveToDevice(file, fileName, mimeType);
             },
             pickFile,
             sendForm,
@@ -195,5 +233,5 @@ export function useApi(): Api {
                 return json.url;
             },
         };
-    }, [getToken]);
+    }, []);
 }

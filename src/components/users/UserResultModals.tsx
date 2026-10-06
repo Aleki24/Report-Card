@@ -5,23 +5,15 @@ import { Check, Copy, MessageCircle, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { activationUrl } from '@/lib/activation-link';
+import { inviteDeliveryMessage, type InviteDelivery } from '@/lib/invite-delivery';
 
-interface NotifyStatus { sms: boolean; email: boolean }
-
-function NotifyBanner({ notified }: { notified?: NotifyStatus | null }) {
-  if (!notified) return null;
-  if (notified.sms || notified.email) {
-    const channels = [notified.sms && 'SMS', notified.email && 'email'].filter(Boolean).join(' and ');
-    return (
-      <p className="text-xs text-emerald-600 mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-md p-2">
-        ✓ Invite code sent via {channels}.
-      </p>
-    );
-  }
-  return (
-    <p className="text-xs text-amber-600 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">
-      Could not send the code automatically — please share it manually.
-    </p>
+function NotifyBanner({ notified }: { notified?: InviteDelivery | null }) {
+  const message = inviteDeliveryMessage(notified);
+  if (!message) return null;
+  return message.sent ? (
+    <p className="text-xs text-emerald-600 mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-md p-2">✓ {message.text}</p>
+  ) : (
+    <p className="text-xs text-amber-600 mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-2">{message.text}</p>
   );
 }
 
@@ -72,7 +64,7 @@ interface InviteResultModalProps {
   invitedName: string;
   invitedUsername: string;
   invitedCode: string; // Renamed from invitedPassword
-  notified?: NotifyStatus | null;
+  notified?: InviteDelivery | null;
   onClose: () => void;
 }
 
@@ -108,7 +100,7 @@ export function InviteResultModal({ invitedName, invitedUsername, invitedCode, n
 
 interface ResetPasswordResultModalProps {
   inviteCode: string; // Renamed from password
-  notified?: NotifyStatus | null;
+  notified?: InviteDelivery | null;
   onClose: () => void;
 }
 

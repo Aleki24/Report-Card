@@ -4,7 +4,7 @@ import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
 import { examTypeLabel } from '@/lib/academics';
 import { errorMessage, toISODate } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, Notice, TextField } from '@/components/ui';
 import type { AcademicStructure, Term } from '@/lib/types';
 
@@ -42,6 +42,7 @@ export function CreateExamToggle({ term, structure, onCreated }: { term: Term; s
 }
 
 function CreateExamForm({ term, structure, onCancel, onCreated }: { term: Term; structure: AcademicStructure | null; onCancel: () => void; onCreated: (name: string) => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const [examType, setExamType] = useState<string>('CAT');
     const [gradeId, setGradeId] = useState<string | null>(null);
@@ -99,7 +100,7 @@ function CreateExamForm({ term, structure, onCancel, onCreated }: { term: Term; 
 
     return (
         <Card style={{ marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.foreground, marginBottom: spacing.md }}>New exam · {term.name}</Text>
+            <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>New exam · {term.name}</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <ChipSelect label="Type" options={CREATABLE_TYPES.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={examType} onChange={setExamType} />
             <ChipSelect label="Grade" options={grades.map((g) => ({ value: g.id, label: g.name_display }))} value={gradeId} onChange={(g) => { setGradeId(g); setStreamId(WHOLE_GRADE); setSubjectId(null); }} />

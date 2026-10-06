@@ -6,7 +6,7 @@ import { Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, LoadingView,
 import { useToast } from '@/components/Toast';
 import { confirmAlert } from '@/lib/confirm';
 import { useOpsList, type QueryParams } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { FormSheet } from './FormSheet';
 import { RecordForm } from './RecordForm';
 import { useRefreshSignal } from './bits';
@@ -56,6 +56,7 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
     resource, title, subtitle, badge, details, fields, params, canCreate, canEdit, canDelete, defaults,
     searchText, rowActions, header, addLabel, emptyText, onRowPress,
 }: ResourceListProps<R, T>) {
+    const styles = useStyles();
     const def = RESOURCES[resource];
     const toast = useToast();
     const { rows, loading, error, reload, create, update, remove } = useOpsList<T>(resource, params);
@@ -166,9 +167,9 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     card: { marginBottom: spacing.sm, padding: spacing.md },
     head: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
-    title: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.foreground },
-    sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
-});
+    title: { flex: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
+    sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+}));

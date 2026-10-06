@@ -15,7 +15,7 @@ import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { readJson, writeJson } from '@/lib/storage';
 import { useCurrentUser } from '@/lib/UserContext';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 const KEEP_AWAKE_TAG = 'driver-trip';
 
@@ -29,6 +29,8 @@ const writeQueue = (tripId: string, fixes: Fix[]) => writeJson(gpsQueueKey(tripI
  * on and off, and end it — the web's driver mode with the phone's own GPS.
  */
 export function DriverMode() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const { hasModule } = useCurrentUser();
@@ -173,7 +175,7 @@ export function DriverMode() {
                 <Text style={[styles.title, { fontSize: 18 }]}>{active.vehicle?.registration} · {active.route?.name ?? 'No route'}</Text>
                 {tracking ? (
                     <Text style={styles.muted}>
-                        {online ? '📶 Sharing location' : '📵 Offline — saving locations to send later'} · {lastFix ? `${Math.round(lastFix.speed_kmh ?? 0)} km/h` : 'Waiting for GPS…'}
+                        {online ? 'Sharing location' : 'Offline — saving locations to send later'} · {lastFix ? `${Math.round(lastFix.speed_kmh ?? 0)} km/h` : 'Waiting for GPS…'}
                         {queued > 0 ? ` · ${queued} waiting to upload` : ''}
                     </Text>
                 ) : <Text style={styles.muted}>Live tracking is switched off for your school.</Text>}
@@ -204,9 +206,9 @@ export function DriverMode() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     card: { marginBottom: spacing.sm, padding: spacing.md },
-    title: { fontSize: 15, fontWeight: '700', color: colors.foreground },
-    muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
-    alert: { fontSize: 13, fontWeight: '800', color: colors.danger, marginTop: spacing.sm },
-});
+    title: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
+    alert: { fontSize: 13, fontFamily: fonts.display, color: colors.danger, marginTop: spacing.sm },
+}));

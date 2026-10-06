@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { ApiError, useApi, withQuery } from '@/lib/api';
+import { useTabParam } from '@/lib/useTabParam';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs,
@@ -12,6 +13,7 @@ import {
 import { CombinationsPanel } from '@/components/subjects/CombinationsPanel';
 import { PlacementPanel } from '@/components/subjects/PlacementPanel';
 import { RequireScreen } from '@/components/RequireScreen';
+import { SubjectRosterSheet } from '@/components/subjects/SubjectRosterSheet';
 import type { AcademicStructure, StructureSubject } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
@@ -34,8 +36,10 @@ export default function SubjectsScreen() {
     );
 }
 
+const SUBJECT_TABS = ['offered', 'teachers', 'combinations', 'placement'] as const;
+
 function SubjectsContent() {
-    const [tab, setTab] = useState<'offered' | 'teachers' | 'combinations' | 'placement'>('offered');
+    const [tab, setTab] = useTabParam(SUBJECT_TABS, 'offered');
     const structure = useAcademicStructure();
     const profile = useApiQuery<{ min_combination_group_size: number | null }>('/api/school/data?type=school_profile');
     return (
@@ -69,6 +73,9 @@ function SubjectsContent() {
 }
 
 function Offered({ structure, onChanged }: { structure: AcademicStructure | null; onChanged: () => void }) {
+    const { colors } = useTheme();
+    const [rosterFor, setRosterFor] = useState<{ id: string; name: string } | null>(null);
+    const [rosterNotice, setRosterNotice] = useState<string | null>(null);
     const api = useApi();
     const [open, setOpen] = useState<string | null>(null);
     const [search, setSearch] = useState('');
@@ -129,10 +136,12 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
     return (
         <View>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
+            {rosterNotice ? <Notice tone="success" message={rosterNotice} onDismiss={() => setRosterNotice(null)} /> : null}
+            {rosterFor ? <SubjectRosterSheet subject={rosterFor} onClose={() => setRosterFor(null)} onSaved={setRosterNotice} /> : null}
             {ungraded > 0 ? <Notice tone="warning" message={`${pluralize(ungraded, 'subject')} ${ungraded === 1 ? 'has' : 'have'} no grading system, so no grade can be awarded. Tap a subject to set one.`} /> : null}
 
             <Card style={{ marginBottom: spacing.md }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.foreground }}>Add a curriculum's standard subjects</Text>
+                <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground }}>Add a curriculum's standard subjects</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>Subjects come from the official catalogue with their real codes; ones you already offer are skipped.</Text>
                 <ButtonRow>
                     {BANDS.map((b) => (
@@ -171,6 +180,7 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
                                                     onChange={(id) => void setGrading(s, id)}
                                                 />
                                                 <ButtonRow>
+                                                    <Button size="sm" variant="secondary" label="Who takes it" onPress={() => setRosterFor({ id: s.id, name: s.name })} />
                                                     {s.grading_system_id ? <Button size="sm" variant="ghost" label="Clear grading" onPress={() => void setGrading(s, null)} /> : null}
                                                     <Button size="sm" variant="danger" label="Remove subject" onPress={() => remove(s)} loading={busy === s.id} />
                                                 </ButtonRow>
@@ -196,6 +206,7 @@ const WHOLE_GRADE = '__grade__';
 
 /** Who teaches each subject in a class this year — the web's Subject Teachers tab. */
 function SubjectTeachers({ structure }: { structure: AcademicStructure | null }) {
+    const { colors } = useTheme();
     const api = useApi();
     const streams = structure?.grade_streams ?? [];
     const grades = useMemo(() => {

@@ -4,12 +4,13 @@ import { useRouter } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { Badge, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Screen, ScreenHeader } from '@/components/ui';
 import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import type { Subject } from '@/lib/types';
 
 type Filter = 'ALL' | 'CORE' | 'ELECTIVE';
 
 export default function SubjectsScreen() {
+    const styles = useStyles();
     const router = useRouter();
     const { data, loading, error, refresh, refreshing } = useApiQuery<Subject[]>('/api/school/student/subjects');
     const [filter, setFilter] = useState<Filter>('ALL');
@@ -59,7 +60,7 @@ export default function SubjectsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    count: { fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
+const useStyles = makeStyles((colors) => ({
+    count: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginBottom: spacing.sm },
     badges: { alignItems: 'flex-end', gap: 4 },
-});
+}));

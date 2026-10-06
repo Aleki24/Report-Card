@@ -4,8 +4,8 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
-import { TONE_COLORS, formatPercent, passRateTone, pluralize, scoreColor, shortCurriculumLabel } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { toneColorFor, formatPercent, passRateTone, pluralize, scoreColor, shortCurriculumLabel } from '@/lib/format';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Badge, Button, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile,
@@ -46,6 +46,8 @@ function AnalyticsContent() {
 }
 
 function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const { data, loading, error, reload } = useApiQuery<AnalyticsOverview>('/api/school/analytics/overview', { raw: true });
     if (loading) return <LoadingView />;
     if (error) return <ErrorBanner message={error} onRetry={reload} />;
@@ -65,7 +67,7 @@ function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
             <SectionLabel>Classes, weakest first</SectionLabel>
             <ListCard>
                 {data.classes.map((c) => {
-                    const tone = TONE_COLORS[passRateTone(c.pass_rate)];
+                    const tone = toneColorFor(colors, passRateTone(c.pass_rate));
                     return (
                         <View key={c.id} style={styles.classRow}>
                             <View style={styles.classHeader}>
@@ -91,6 +93,8 @@ function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
 const MERIT_PREVIEW = 15;
 
 function ClassView({ streamId }: { streamId: string }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const [termId, setTermId] = useState<string | null>(null);
     const [examType, setExamType] = useState<string | null>(null);
     const [showAll, setShowAll] = useState(false);
@@ -131,8 +135,8 @@ function ClassView({ streamId }: { streamId: string }) {
             ) : (
                 <>
                     <StatGrid>
-                        <StatTile label="Mean" value={formatPercent(data.summary.mean_percentage, 1)} tone={scoreColor(data.summary.mean_percentage)} />
-                        <StatTile label="Pass rate" value={`${data.summary.pass_rate}%`} tone={TONE_COLORS[passRateTone(data.summary.pass_rate)]} />
+                        <StatTile label="Mean" value={formatPercent(data.summary.mean_percentage, 1)} tone={scoreColor(colors, data.summary.mean_percentage)} />
+                        <StatTile label="Pass rate" value={`${data.summary.pass_rate}%`} tone={toneColorFor(colors, passRateTone(data.summary.pass_rate))} />
                         <StatTile label="Learners" value={data.summary.student_count} />
                         <StatTile label="Subjects" value={data.summary.subject_count} />
                     </StatGrid>
@@ -147,7 +151,7 @@ function ClassView({ streamId }: { streamId: string }) {
                                 subtitle={`Pass ${s.pass_rate}% · high ${formatPercent(s.highest)} · low ${formatPercent(s.lowest)} · ${pluralize(s.student_count, 'learner')}`}
                                 right={
                                     <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.rate, { color: scoreColor(s.mean_percentage) }]}>{formatPercent(s.mean_percentage, 1)}</Text>
+                                        <Text style={[styles.rate, { color: scoreColor(colors, s.mean_percentage) }]}>{formatPercent(s.mean_percentage, 1)}</Text>
                                         {s.grade_symbol ? <Text style={styles.meta}>{s.grade_symbol}</Text> : null}
                                     </View>
                                 }
@@ -163,7 +167,7 @@ function ClassView({ streamId }: { streamId: string }) {
                                 left={<Text style={styles.rank}>{m.rank ?? '—'}</Text>}
                                 title={m.student_name}
                                 subtitle={`${m.admission_number ?? '—'} · ${pluralize(m.subjects_sat, 'subject')}${m.incomplete ? ' · incomplete, ranked separately' : ''}`}
-                                right={<Text style={[styles.rate, { color: scoreColor(m.mean_percentage) }]}>{formatPercent(m.mean_percentage, 1)}</Text>}
+                                right={<Text style={[styles.rate, { color: scoreColor(colors, m.mean_percentage) }]}>{formatPercent(m.mean_percentage, 1)}</Text>}
                             />
                         ))}
                     </ListCard>
@@ -181,7 +185,7 @@ function ClassView({ streamId }: { streamId: string }) {
                                     <View key={`${p.term_id}-${p.exam_type}`} style={styles.trendRow}>
                                         <Text style={styles.trendLabel} numberOfLines={1}>{p.label}</Text>
                                         <View style={{ flex: 1 }}>
-                                            <ProgressBar value={p.mean_percentage} color={scoreColor(p.mean_percentage)} />
+                                            <ProgressBar value={p.mean_percentage} color={scoreColor(colors, p.mean_percentage)} />
                                         </View>
                                         <Text style={styles.trendValue}>{formatPercent(p.mean_percentage, 1)}</Text>
                                     </View>
@@ -195,14 +199,14 @@ function ClassView({ streamId }: { streamId: string }) {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     classRow: { padding: spacing.md, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     classHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    className: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.primary },
-    rate: { fontSize: 14, fontWeight: '800' },
-    meta: { fontSize: 11, color: colors.muted },
-    rank: { width: 28, textAlign: 'center', fontSize: 14, fontWeight: '800', color: colors.muted },
+    className: { flex: 1, fontSize: 14, fontFamily: fonts.bold, color: colors.primary },
+    rate: { fontSize: 14, fontFamily: fonts.display },
+    meta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
+    rank: { width: 28, textAlign: 'center', fontSize: 14, fontFamily: fonts.display, color: colors.muted },
     trendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    trendLabel: { width: 110, fontSize: 12, fontWeight: '600', color: colors.foreground },
-    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontWeight: '700', color: colors.foreground },
-});
+    trendLabel: { width: 110, fontSize: 12, fontFamily: fonts.semibold, color: colors.foreground },
+    trendValue: { width: 52, textAlign: 'right', fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+}));

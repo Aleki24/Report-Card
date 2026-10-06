@@ -1,3 +1,4 @@
+import { useTheme } from '@/lib/theme';
 import React from 'react';
 import { dateTime, humanize, money, personName } from '@shared/ops/format';
 import {
@@ -50,6 +51,7 @@ function Requisitions({ manage }: { manage: boolean }) {
 }
 
 export default function InventoryScreen() {
+    const { colors } = useTheme();
     const { can } = useCurrentUser();
     const manage = can('inventory.manage');
     return (
@@ -74,7 +76,7 @@ export default function InventoryScreen() {
                                 const low = rows.filter(needsReorder).length;
                                 return (
                                     <StatGrid>
-                                        <StatTile label="To reorder" value={low} tone={toneColor(low > 0 ? 'warn' : 'good')} />
+                                        <StatTile label="To reorder" value={low} tone={toneColor(colors, low > 0 ? 'warn' : 'good')} />
                                         <StatTile label="Value on record" value={money(stockValue(rows))} />
                                     </StatGrid>
                                 );

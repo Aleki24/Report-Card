@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useAcademicStructure, useAcademicYears, useTerms } from '@/lib/useSchoolData';
 import { findActiveTermId } from '@/lib/academics';
 import { errorMessage, formatDate } from '@/lib/format';
-import { colors, radius, spacing } from '@/lib/theme';
+import { radius, spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SectionLabel, SegmentedTabs, TextField, ToggleRow,
@@ -30,7 +31,8 @@ interface SchoolProfile {
     overall_grading_system_id: string | null;
 }
 
-type Tab = 'school' | 'calendar' | 'grading' | 'payments' | 'modules' | 'duties';
+const SETTINGS_TABS = ['school', 'calendar', 'grading', 'payments', 'modules', 'duties'] as const;
+type Tab = (typeof SETTINGS_TABS)[number];
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
 
 export default function SettingsScreen() {
@@ -42,7 +44,7 @@ export default function SettingsScreen() {
 }
 
 function SettingsContent() {
-    const [tab, setTab] = useState<Tab>('school');
+    const [tab, setTab] = useTabParam<Tab>(SETTINGS_TABS, 'school');
     return (
         <Screen>
             <ScreenHeader title="Settings" description="School profile, calendar, grading, payments, modules and duties." />
@@ -67,6 +69,7 @@ function SettingsContent() {
 // ── School profile ─────────────────────────────────────────
 
 function SchoolTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');
     const [form, setForm] = useState<SchoolProfile | null>(null);
@@ -145,7 +148,7 @@ function SchoolTab() {
             </Card>
             {form.teacher_invite_code || form.student_invite_code ? (
                 <Card>
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>
+                    <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>
                     <InfoRow label="Teachers" value={form.teacher_invite_code} />
                     <InfoRow label="Students" value={form.student_invite_code} />
                 </Card>
@@ -157,6 +160,7 @@ function SchoolTab() {
 // ── Calendar: years and terms ──────────────────────────────
 
 function CalendarTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const { years, loading: yLoading, reload: reloadYears } = useAcademicYears();
     const { terms, loading: tLoading, reload: reloadTerms } = useTerms();
@@ -284,6 +288,7 @@ function CalendarTab() {
 // ── Grading ────────────────────────────────────────────────
 
 function GradingTab() {
+    const { colors } = useTheme();
     const api = useApi();
     const structure = useAcademicStructure();
     const profile = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');

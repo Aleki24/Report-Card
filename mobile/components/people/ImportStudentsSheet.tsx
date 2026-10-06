@@ -9,7 +9,7 @@ import { SelectField } from '@/components/ops/SelectField';
 import { useApi } from '@/lib/api';
 import { TABULAR_TYPES, readPicked } from '@/lib/files';
 import { errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 interface Stream { id: string; full_name: string }
 
@@ -26,6 +26,8 @@ export function ImportStudentsSheet({ streams, defaultClassId, onClose, onImport
     onClose: () => void;
     onImported: (created: CreatedCredential[]) => void;
 }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const toast = useToast();
     const [classId, setClassId] = useState(streams.length === 1 ? streams[0].id : defaultClassId);
@@ -117,10 +119,10 @@ export function ImportStudentsSheet({ streams, defaultClassId, onClose, onImport
     );
 }
 
-const styles = StyleSheet.create({
-    title: { fontSize: 14, fontWeight: '700', color: colors.foreground, textAlign: 'center' },
-    muted: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 2 },
+const useStyles = makeStyles((colors) => ({
+    title: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, textAlign: 'center' },
+    muted: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 2 },
     row: { marginBottom: spacing.sm, padding: spacing.md },
     pair: { flexDirection: 'row', gap: spacing.sm },
-    reason: { fontSize: 12, color: colors.danger, fontWeight: '600' },
-});
+    reason: { fontSize: 12, color: colors.danger, fontFamily: fonts.semibold },
+}));

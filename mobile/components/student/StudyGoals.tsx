@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { Square, SquareCheck } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { daysUntil, errorMessage } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, TextField } from '@/components/ui';
 import type { Subject } from '@/lib/types';
 
@@ -26,6 +27,7 @@ function deadlineLabel(deadline: string | null): { text: string; overdue: boolea
 
 /** The web's Study Goals card: personal targets a student sets and ticks off. */
 export function StudyGoals() {
+    const { colors } = useTheme();
     const api = useApi();
     const { data, error, refresh } = useApiQuery<Goal[]>('/api/school/student/goals');
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');
@@ -96,7 +98,7 @@ export function StudyGoals() {
                                 key={g.id}
                                 left={
                                     <Pressable onPress={() => void toggle(g)} hitSlop={8} accessibilityRole="checkbox" accessibilityState={{ checked: g.completed }}>
-                                        <Text style={{ fontSize: 20, color: g.completed ? colors.success : colors.muted }}>{g.completed ? '☑' : '☐'}</Text>
+                                        {g.completed ? <SquareCheck size={22} color={colors.success} /> : <Square size={22} color={colors.muted} />}
                                     </Pressable>
                                 }
                                 title={g.title}

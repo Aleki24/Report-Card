@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router/js-tabs';
+import { Menu } from 'lucide-react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STUDENT_SCREENS, getStudentNav, type StudentScreen } from '@/lib/roles';
-import { TAB_SCREEN_OPTIONS, TabIcon } from '@/components/nav';
+import { TabIcon, useTabScreenOptions } from '@/components/nav';
 
 export default function StudentTabsLayout() {
     // Same unread count the web sidebar badges on the student dashboard.
@@ -12,8 +13,9 @@ export default function StudentTabsLayout() {
     const nav = getStudentNav(viewer);
     const primary = new Set<StudentScreen>(nav.primary);
 
+    const tabScreenOptions = useTabScreenOptions();
     return (
-        <Tabs screenOptions={TAB_SCREEN_OPTIONS}>
+        <Tabs screenOptions={tabScreenOptions}>
             {(Object.keys(STUDENT_SCREENS) as StudentScreen[]).map((name) => {
                 const meta = STUDENT_SCREENS[name];
                 return (
@@ -25,12 +27,12 @@ export default function StudentTabsLayout() {
                             tabBarLabel: meta.tabLabel,
                             href: primary.has(name) ? undefined : null,
                             tabBarBadge: name === 'index' && unread > 0 ? unread : undefined,
-                            tabBarIcon: ({ color }) => <TabIcon emoji={meta.icon} color={color} />,
+                            tabBarIcon: ({ color }) => <TabIcon icon={meta.icon} color={color} />,
                         }}
                     />
                 );
             })}
-            <Tabs.Screen name="more" options={{ title: 'More', href: nav.overflow.length > 0 ? undefined : null, tabBarIcon: ({ color }) => <TabIcon emoji="☰" color={color} /> }} />
+            <Tabs.Screen name="more" options={{ title: 'More', tabBarIcon: ({ color }) => <TabIcon icon={Menu} color={color} /> }} />
             <Tabs.Screen name="subjects/[subjectId]" options={{ href: null, title: 'Subject' }} />
         </Tabs>
     );

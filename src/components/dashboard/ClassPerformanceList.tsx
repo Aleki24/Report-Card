@@ -2,15 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { shortCurriculumLabel } from '@/lib/curriculum-labels';
 
-export interface ClassPerformance {
-    id: string;
-    name: string;
-    levelCode: string | null;
-    students: number;
-    markCount: number;
-    mean: number | null;
-    passRate: number | null;
-}
+export type { ClassPerformance } from '@/lib/dashboard';
+import type { ClassPerformance } from '@/lib/dashboard';
 
 interface ClassPerformanceListProps {
     /** Expected weakest-first; the API sorts it. */

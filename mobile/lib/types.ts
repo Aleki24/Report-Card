@@ -34,6 +34,8 @@ export interface DashboardStats {
     averageScore: number;
     examsTaken: number;
     subjectsCount: number;
+    /** Attendance days on record; 0 when the school does not take registers. */
+    attendanceRecords?: number;
 }
 
 export interface UpcomingExam {
@@ -51,14 +53,9 @@ export interface Announcement {
     createdAt: string;
 }
 
-export interface Assignment {
-    id: string;
-    title: string;
-    subjectName: string;
-    dueDate: string;
-    fileUrl: string | null;
-    description?: string | null;
-}
+/** An assignment as a learner sees it, with their own hand-in (src/lib/assignments.ts). */
+export type { StudentAssignment as Assignment } from '@shared/assignments';
+import type { StudentAssignment } from '@shared/assignments';
 
 export interface LearningMaterial {
     id: string;
@@ -69,12 +66,26 @@ export interface LearningMaterial {
     fileSizeBytes: number | null;
 }
 
+/** A released mark on the learner's home: the latest per subject. */
+export interface LatestResult {
+    id: string;
+    percentage: number;
+    grade_symbol?: string | null;
+    exams: { name: string; exam_type: string; subjects?: { name: string } | null; terms?: { id: string; name: string } | null };
+}
+
+/** GET /api/school/student/dashboard (src/types StudentDashboardSummary plus the page's extras). */
 export interface DashboardData {
     stats: DashboardStats;
     upcomingExams: UpcomingExam[];
     announcements: Announcement[];
-    assignments: Assignment[];
+    assignments: StudentAssignment[];
     materials: LearningMaterial[];
+    profile?: { id: string; grade_streams?: { full_name?: string | null } | null } | null;
+    latestResults?: LatestResult[];
+    latestReport?: { terms?: { id: string; name: string } | null; academic_years?: { id: string; name: string } | null } | null;
+    trends?: PerformanceTrend[];
+    currentTerm?: { id: string; name: string };
 }
 
 export interface PerformanceTrend {
@@ -220,61 +231,8 @@ export interface StudentProfile {
 
 // ── Staff: dashboard ───────────────────────────────────────
 
-export interface ClassPerformance {
-    id: string;
-    name: string;
-    levelCode: string | null;
-    students: number;
-    markCount: number;
-    mean: number | null;
-    passRate: number | null;
-}
-
-export interface UnmarkedClass {
-    label: string;
-    levelCode: string | null;
-    count: number;
-}
-
-export interface StaffUpcomingExam {
-    id: string;
-    name: string;
-    exam_type: string;
-    exam_date: string;
-    subject_name: string;
-    grade_name: string;
-}
-
-export interface AttendanceCounts {
-    present: number;
-    absent: number;
-    late: number;
-    excused: number;
-}
-
-/** GET /api/school/dashboard */
-export interface StaffDashboardSummary {
-    totalStudents: number;
-    totalTeachers: number;
-    totalUsers: number;
-    totalClasses: number;
-    totalReports: number;
-    attendanceToday: AttendanceCounts | null;
-    upcomingExams: StaffUpcomingExam[];
-    recentActivities: { type: string; message: string; timestamp: string; href?: string }[];
-    overdueFeesCount: number;
-    announcementsLast7Days: number;
-    recentEnrollmentsLast7: number;
-    financeSummary: { totalCollected: number; unpaidBalance: number; overdueCount: number };
-    academicSummary: { recentAvg: number | null; passRate: number | null; passMark: number; markCount: number };
-    examsAwaitingMarks: number;
-    unmarkedByClass: UnmarkedClass[];
-    classPerformance: ClassPerformance[];
-    subjectsWithoutGradingSystem: number;
-    hasFeeData: boolean;
-    hasAttendanceData: boolean;
-    hasLogo: boolean;
-}
+/** GET /api/school/dashboard: one shape for the web and the app. */
+export type { DashboardData as StaffDashboardSummary, ClassPerformance, AttendanceToday as AttendanceCounts } from '@shared/dashboard';
 
 /** GET /api/school/stats?role=class_teacher */
 export interface ClassTeacherStats {
@@ -474,6 +432,11 @@ export interface StudentListItem {
     guardian_phone: string | null;
     users: { first_name: string; last_name: string; email: string | null } | null;
     grade_streams: { id: string; full_name: string; grade_id: string } | null;
+    /** CBC Senior School (Grades 10–12) only. */
+    pathway?: string | null;
+    track?: string | null;
+    subject_combination_id?: string | null;
+    subject_combinations?: { name: string; code: string } | null;
 }
 
 export interface TeacherListItem {
@@ -485,31 +448,11 @@ export interface TeacherListItem {
     stats: { subjectCount: number; classCount: number };
 }
 
-export interface StudentDetail {
-    profile: {
-        id: string;
-        first_name: string;
-        last_name: string;
-        email: string | null;
-        phone: string | null;
-        admission_number: string | null;
-        gender: string | null;
-        date_of_birth: string | null;
-        date_enrolled: string | null;
-        status: string | null;
-        guardian_name: string | null;
-        guardian_phone: string | null;
-        guardian_email: string | null;
-        grade_stream: { id: string; full_name: string } | null;
-        academic_level: { id: string; name: string; code: string } | null;
-    };
-    academicHistory: { term_id: string; term_name: string; average: number; subjects: { name: string; percentage: number }[] }[];
-    reportHistory: { id: string; generated_at: string; term: string; year: string; average: number | null; position: number | null }[];
-    attendanceHistory: { id: string; term: string; year: string; present: number; total: number; percentage: number | null }[];
-}
+/** GET /api/school/students/[studentId]: the web's own shape (src/lib/user-profile.ts). */
+export type { StudentProfileResponse as StudentDetail, TermPerformance as AcademicHistoryTerm } from '@shared/user-profile';
 
 export interface TeacherDetail {
-    profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: UserRole; is_active: boolean; created_at: string };
+    profile: { id: string; first_name: string; last_name: string; email: string | null; phone: string; role: UserRole; is_active: boolean; created_at: string; avatar_url?: string | null };
     classAssignments: { id: string; stream: string; year: string }[];
     subjectAssignments: { subject: string; subject_code: string; category: string; grade: string }[];
 }

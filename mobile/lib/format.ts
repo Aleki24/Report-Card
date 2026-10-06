@@ -5,7 +5,7 @@
  * same way).
  */
 
-import { colors } from './theme';
+import type { Palette } from './theme';
 
 /** Same threshold as the backend's PASS_MARK (`src/lib/pass-mark.ts`). */
 export const PASS_MARK = 50;
@@ -25,6 +25,13 @@ export function getGreeting(hour: number = new Date().getHours()): string {
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
+}
+
+/** The same greeting in Kiswahili, as a Kenyan school says it. */
+export function getSwahiliGreeting(hour: number = new Date().getHours()): string {
+    if (hour < 12) return 'Habari za asubuhi';
+    if (hour < 17) return 'Habari za mchana';
+    return 'Habari za jioni';
 }
 
 export function formatDate(value: string | Date, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }): string {
@@ -126,15 +133,20 @@ export function passRateLabel(rate: number | null | undefined): string {
     return 'No marks yet';
 }
 
-export const TONE_COLORS: Record<Tone, string> = {
-    success: colors.success,
-    warning: colors.warning,
-    danger: colors.danger,
-    muted: colors.muted,
-};
+export function toneColorFor(colors: Palette, tone: Tone): string {
+    return colors[tone];
+}
+
+/** Strong / fine / borderline / needs work: how the web colours a learner's marks (≥70, ≥50, ≥40). */
+export function gradeTone(colors: Palette, pct: number): string {
+    if (pct >= 70) return colors.success;
+    if (pct >= 50) return colors.info;
+    if (pct >= 40) return colors.warning;
+    return colors.danger;
+}
 
 /** Colour for a single mark: pass or fail against PASS_MARK. */
-export function scoreColor(pct: number | null | undefined): string {
+export function scoreColor(colors: Palette, pct: number | null | undefined): string {
     if (pct == null) return colors.muted;
     return pct >= PASS_MARK ? colors.success : colors.danger;
 }

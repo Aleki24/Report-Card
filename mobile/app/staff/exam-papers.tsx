@@ -17,7 +17,7 @@ import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useOpsData } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 
 type Extra = 'setBy' | 'print';
 
@@ -162,12 +162,13 @@ function PaperFrame({ stats, figures, query, setQuery, error, loading, reload, c
     reload: () => Promise<void>;
     children: React.ReactNode;
 }) {
+    const { colors } = useTheme();
     useRefreshSignal(reload);
     return (
         <View>
             {figures ? (
                 <StatGrid>
-                    <StatTile label="Awaiting moderation" value={stats.waiting} tone={toneColor(stats.waiting > 0 ? 'warn' : 'good')} />
+                    <StatTile label="Awaiting moderation" value={stats.waiting} tone={toneColor(colors, stats.waiting > 0 ? 'warn' : 'good')} />
                     <StatTile label="To print" value={stats.toPrint} />
                     <StatTile label="Locked" value={stats.locked} />
                     <StatTile label="Released" value={stats.released} />

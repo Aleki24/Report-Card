@@ -5,20 +5,23 @@ import type { PillTone } from '@shared/ops/tones';
 import { Button } from '@/components/ui';
 import { useApi } from '@/lib/api';
 import { useAction } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme, type Palette } from '@/lib/theme';
 
-const TONE: Record<PillTone, { bg: string; fg: string }> = {
-    neutral: { bg: colors.mutedBg, fg: colors.muted },
-    info: { bg: colors.infoBg, fg: colors.info },
-    good: { bg: colors.successBg, fg: colors.success },
-    warn: { bg: colors.warningBg, fg: colors.warning },
-    bad: { bg: colors.dangerBg, fg: colors.danger },
-    violet: { bg: '#ede9fe', fg: '#6d28d9' },
-};
+function pillColors(colors: Palette, tone: PillTone): { bg: string; fg: string } {
+    switch (tone) {
+        case 'info': return { bg: colors.infoBg, fg: colors.info };
+        case 'good': return { bg: colors.successBg, fg: colors.success };
+        case 'warn': return { bg: colors.warningBg, fg: colors.warning };
+        case 'bad': return { bg: colors.dangerBg, fg: colors.danger };
+        case 'violet': return colors.scheme === 'dark' ? { bg: '#2a1f4d', fg: '#c4b5fd' } : { bg: '#ede9fe', fg: '#6d28d9' };
+        default: return { bg: colors.mutedBg, fg: colors.muted };
+    }
+}
 
 /** A status label coloured by what it means, from the same tone maps as the web. */
 export function StatusPill<S extends string>({ status, tones, label }: { status: S; tones: Readonly<Record<S, PillTone>>; label?: string }) {
-    const t = TONE[tones[status] ?? 'neutral'];
+    const { colors } = useTheme();
+    const t = pillColors(colors, tones[status] ?? 'neutral');
     return (
         <View style={[styles.pill, { backgroundColor: t.bg }]}>
             <Text style={[styles.pillText, { color: t.fg }]} numberOfLines={1}>{label ?? humanize(status)}</Text>
@@ -28,7 +31,8 @@ export function StatusPill<S extends string>({ status, tones, label }: { status:
 
 /** A small coloured count or label (a tile's tone without the tile). */
 export function TonePill({ tone, label }: { tone: PillTone; label: string }) {
-    const t = TONE[tone];
+    const { colors } = useTheme();
+    const t = pillColors(colors, tone);
     return (
         <View style={[styles.pill, { backgroundColor: t.bg }]}>
             <Text style={[styles.pillText, { color: t.fg }]}>{label}</Text>
@@ -36,7 +40,7 @@ export function TonePill({ tone, label }: { tone: PillTone; label: string }) {
     );
 }
 
-export const toneColor = (tone: PillTone) => TONE[tone].fg;
+export const toneColor = (colors: Palette, tone: PillTone) => pillColors(colors, tone).fg;
 
 /** A row button that calls an API action, reports the outcome and refreshes. */
 export function ActionButton({
@@ -89,5 +93,5 @@ export function useRefreshSignal(reload: () => unknown) {
 
 const styles = StyleSheet.create({
     pill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
-    pillText: { fontSize: 11, fontWeight: '700' },
+    pillText: { fontSize: 11, fontFamily: fonts.bold },
 });

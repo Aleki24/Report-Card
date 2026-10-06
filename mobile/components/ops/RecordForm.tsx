@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, type KeyboardTypeOptions } from 'rea
 import { enumLabel, type FieldDef, type FormValues } from '@shared/ops/form';
 import { nowLocalInput, today } from '@shared/ops/format';
 import { ChipSelect, TextField, ToggleRow } from '@/components/ui';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { LookupField, SelectField } from './SelectField';
 
 const KEYBOARD: Partial<Record<FieldDef['kind'], KeyboardTypeOptions>> = {
@@ -33,6 +33,7 @@ interface RecordFormProps {
  * controls: the same fields, labels, hints and choices as the web form.
  */
 export function RecordForm({ fields, values, onChange }: RecordFormProps) {
+    const styles = useStyles();
     return (
         <View>
             {fields.filter((f) => f.kind !== 'hidden').map((field) => {
@@ -111,8 +112,8 @@ export function RecordForm({ fields, values, onChange }: RecordFormProps) {
     );
 }
 
-const styles = StyleSheet.create({
-    hint: { fontSize: 11, color: colors.muted, marginBottom: spacing.sm },
+const useStyles = makeStyles((colors) => ({
+    hint: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginBottom: spacing.sm },
     quickRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: -spacing.sm, marginBottom: spacing.md, gap: spacing.sm },
-    quick: { fontSize: 12, fontWeight: '700', color: colors.primary },
-});
+    quick: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
+}));

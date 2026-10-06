@@ -1,11 +1,13 @@
+import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
+import { inviteDeliveryMessage, type InviteDelivery } from '@shared/invite-delivery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, StatGrid, StatTile, TextField, ToggleRow,
@@ -53,6 +55,8 @@ export default function UsersScreen() {
 }
 
 function UsersContent() {
+    const download = useDownload();
+    const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, refresh, refreshing } = useApiQuery<SchoolUser[]>('/api/school/data?type=users');
     const [search, setSearch] = useState('');
@@ -60,7 +64,7 @@ function UsersContent() {
     const [inviting, setInviting] = useState(false);
     const [editing, setEditing] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
-    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+    const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'warning'; text: string } | null>(null);
 
     const users = data ?? [];
     const filtered = useMemo(() => {
@@ -76,8 +80,9 @@ function UsersContent() {
                 onPress: async () => {
                     setBusy(u.id);
                     try {
-                        const res = await api.post<{ password: string; notified?: boolean }>('/api/admin/reset-user-password', { user_id: u.id });
-                        setMessage({ tone: 'success', text: `New invite code for ${fullName(u)}: ${res.password}${res.notified ? ' (sent by SMS)' : ''}` });
+                        const res = await api.post<{ password: string; notified?: InviteDelivery }>('/api/admin/reset-user-password', { user_id: u.id });
+                        const delivery = inviteDeliveryMessage(res.notified);
+                        setMessage({ tone: delivery && !delivery.sent ? 'warning' : 'success', text: `New invite code for ${fullName(u)}: ${res.password}. ${delivery?.text ?? ''}`.trim() });
                         refresh();
                     } catch (err) {
                         setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to reset') });
@@ -91,7 +96,7 @@ function UsersContent() {
     const printCodes = async () => {
         setBusy('print');
         try {
-            await api.downloadAndShare('/api/admin/invite-codes/pdf?category=all&status=active&format=pdf', 'Invite_codes.pdf');
+            await download('/api/admin/invite-codes/pdf?category=all&status=active&format=pdf', 'Invite_codes.pdf');
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Download failed') });
         } finally {
@@ -178,6 +183,7 @@ function UsersContent() {
 }
 
 function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; onCancel: () => void; onDone: (message: string) => void }) {
+    const { colors } = useTheme();
     const api = useApi();
     const { streams } = useGradeStreams();
     const [first, setFirst] = useState('');
@@ -206,8 +212,8 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
         setSaving(true);
         setError(null);
         try {
-            const res = await api.post<{ credentials: { username: string; invite_code: string }; notified?: boolean }>('/api/admin/create-user', payload);
-            onDone(`Invited ${first.trim()} ${last.trim()}. Username ${res.credentials.username} · invite code ${res.credentials.invite_code}${res.notified ? ' (sent by SMS)' : ''}. Assign subjects under Subjects → Teachers.`);
+            const res = await api.post<{ credentials: { username: string; invite_code: string }; notified?: InviteDelivery }>('/api/admin/create-user', payload);
+            onDone(`Invited ${first.trim()} ${last.trim()}. Username ${res.credentials.username} · invite code ${res.credentials.invite_code}. ${inviteDeliveryMessage(res.notified)?.text ?? ''} Assign subjects under Subjects → Teachers.`);
         } catch (err) {
             setError(errorMessage(err, 'Failed to invite'));
         } finally {
@@ -217,7 +223,7 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
 
     return (
         <Card style={{ marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: colors.foreground, marginBottom: spacing.md }}>Invite a user</Text>
+            <Text style={{ fontSize: 15, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.md }}>Invite a user</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <ChipSelect label="Role" options={INVITE_ROLES} value={role} onChange={setRole} />
             <TextField label="First name" value={first} onChangeText={setFirst} autoCapitalize="words" />
@@ -243,6 +249,7 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
 }
 
 function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: SchoolUser; onSaved: () => void; onCancel: () => void; onReset: () => void; resetting: boolean }) {
+    const { colors } = useTheme();
     const api = useApi();
     const { streams } = useGradeStreams();
     const isTeacher = user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER';

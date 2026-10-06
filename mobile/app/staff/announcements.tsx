@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { errorMessage, getTimeAgo } from '@/lib/format';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import { Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, LoadingView, Notice, Screen, ScreenHeader, TextField, ToggleRow } from '@/components/ui';
 import type { StaffAnnouncement } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
@@ -21,6 +21,8 @@ interface Draft {
 const EMPTY: Draft = { id: null, title: '', content: '', isImportant: false, sendSms: false };
 
 export default function AnnouncementsScreen() {
+    const { colors } = useTheme();
+    const styles = useStyles();
     const api = useApi();
     const { role, profile } = useCurrentUser();
     const canPost = isRoleIn(role, STAFF_TEACHING_ROLES);
@@ -122,9 +124,9 @@ export default function AnnouncementsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, justifyContent: 'space-between' },
-    title: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.foreground },
-    content: { fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
-    meta: { fontSize: 11, color: colors.muted, marginTop: spacing.sm },
-});
+    title: { flex: 1, fontSize: 15, fontFamily: fonts.display, color: colors.foreground },
+    content: { fontFamily: fonts.regular, fontSize: 13, color: colors.foreground, marginTop: spacing.sm, lineHeight: 19 },
+    meta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm },
+}));

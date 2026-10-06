@@ -14,10 +14,11 @@ import { useApi, withQuery } from '@/lib/api';
 import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { colors, spacing } from '@/lib/theme';
+import { spacing, useTheme } from '@/lib/theme';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [studentId, setStudentId] = useState('');
