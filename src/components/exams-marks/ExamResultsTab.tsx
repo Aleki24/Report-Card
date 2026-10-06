@@ -440,7 +440,7 @@ export function ExamResultsTab() {
                     ) : (
                         <>
                             {activeTab === 'allsubjects' && (
-                                <AllSubjectsView gradeStreamId={selectedStreamId} />
+                                <AllSubjectsView gradeStreamId={selectedStreamId} terms={allTerms} />
                             )}
 
                             {activeTab === 'results' && selectedExamId && (

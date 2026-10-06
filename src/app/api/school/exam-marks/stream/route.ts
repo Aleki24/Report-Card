@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         .from('exam_marks')
         .select(`
             id, raw_score, percentage, grade_symbol, student_id, exam_id, remarks,
-            exams!inner ( id, name, subject_id, term_id, academic_year_id, subjects(name) ),
+            exams!inner ( id, name, exam_type, subject_id, term_id, academic_year_id, subjects(name, code) ),
             students!inner ( current_grade_stream_id, admission_number, users!inner(first_name, last_name, school_id) )
         `)
         .eq('students.current_grade_stream_id', streamId)

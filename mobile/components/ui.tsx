@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -31,6 +31,11 @@ import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRef
 
 // ── Layout ─────────────────────────────────────────────────
 
+/** Scrolls the screen so a view inside it sits near the top (e.g. a section a "Fix" button opens). */
+type ScrollToView = (view: View | null) => void;
+const ScreenScrollContext = createContext<ScrollToView>(() => undefined);
+export const useScrollToView = () => useContext(ScreenScrollContext);
+
 export function Screen({
     children,
     onRefresh,
@@ -56,6 +61,13 @@ export function Screen({
         void registry.reloadAll().finally(() => setPulling(false));
     };
     const handleRefresh = onRefresh ?? refreshAll;
+    const scrollRef = useRef<React.ElementRef<typeof KeyboardAwareScrollView>>(null);
+    const contentRef = useRef<View>(null);
+    const scrollToView = useCallback<ScrollToView>((view) => {
+        const content = contentRef.current;
+        if (!view || !content) return;
+        view.measureLayout(content, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true }), () => undefined);
+    }, []);
     const isRefreshing = onRefresh ? !!refreshing : pulling;
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -64,13 +76,16 @@ export function Screen({
                 scroll the focused field into view, and lift a pinned save bar above the keyboard. */}
             <KeyboardAvoidingView behavior="padding" enabled={!!footer} style={styles.fill}>
                 <KeyboardAwareScrollView
+                    ref={scrollRef}
                     contentContainerStyle={styles.scrollContent}
                     keyboardShouldPersistTaps="handled"
                     bottomOffset={spacing.xl}
                     refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
                 >
                     <ScreenRefreshProvider registry={registry}>
-                        <View style={styles.content}>{children}</View>
+                        <ScreenScrollContext.Provider value={scrollToView}>
+                            <View ref={contentRef} style={styles.content}>{children}</View>
+                        </ScreenScrollContext.Provider>
                     </ScreenRefreshProvider>
                 </KeyboardAwareScrollView>
                 {footer ? <View style={styles.footer}>{footer}</View> : null}
