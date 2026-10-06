@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { startingTermIndex, termsNewestFirst } from '@/lib/term-fallback';
 import Link from 'next/link';
 import { gradeSymbolFromScales } from '@/lib/analytics';
 import { shortCurriculumLabel } from '@/lib/curriculum-labels';
@@ -146,6 +147,8 @@ function subjectCategory(subject: string): string {
  * list — and the average across it — that mixes them describes nothing: the
  * same 50% is a B- in one and a different band entirely in the other.
  */
+interface TermRow { id: string; name: string; is_current: boolean; start_date: string | null }
+
 export default function GradeResultsCard() {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [streamsLoaded, setStreamsLoaded] = useState(false);
@@ -166,6 +169,20 @@ export default function GradeResultsCard() {
    */
   const [byScope, setByScope] = useState<Record<string, AnalyticsResponse>>({});
 
+  // The term: the current one, stepping back past terms with no marks yet
+  // (the first weeks of a term) unless someone picks a term themselves.
+  const [terms, setTerms] = useState<TermRow[]>([]);
+  const [termIdx, setTermIdx] = useState<number | null>(null);
+  const [termChosen, setTermChosen] = useState(false);
+  useEffect(() => {
+    fetch('/api/school/data?type=terms')
+      .then(res => (res.ok ? res.json() : { data: [] }))
+      .then(json => setTerms(termsNewestFirst((json.data ?? []) as TermRow[])))
+      .catch(() => {});
+  }, []);
+  const startTerm = startingTermIndex(terms);
+  const term = terms[termIdx ?? startTerm] ?? null;
+
   useEffect(() => {
     fetch('/api/school/data?type=grade_streams')
       .then(res => (res.ok ? res.json() : { data: [] }))
@@ -176,25 +193,37 @@ export default function GradeResultsCard() {
 
   const scopeStream = scopeIdx >= 0 ? streams[scopeIdx] ?? null : null;
   const scopeKey = scopeStream?.id ?? 'all';
+  const cacheKey = `${scopeKey}|${term?.id ?? ''}`;
 
-  const scopeData = byScope[scopeKey];
+  const scopeData = byScope[cacheKey];
   const loading = !streamsLoaded || scopeData === undefined;
   const marks = scopeData?.marks ?? EMPTY_MARKS;
 
   useEffect(() => {
-    if (!streamsLoaded || byScope[scopeKey] !== undefined) return;
+    if (!streamsLoaded || byScope[cacheKey] !== undefined) return;
     let cancelled = false;
-    const params = scopeKey === 'all' ? '' : `?stream_id=${scopeKey}`;
-    fetch(`/api/school/analytics${params}`)
+    const params = new URLSearchParams();
+    if (scopeKey !== 'all') params.set('stream_id', scopeKey);
+    if (term) params.set('term_id', term.id);
+    const qs = params.toString();
+    fetch(`/api/school/analytics${qs ? `?${qs}` : ''}`)
       .then(res => (res.ok ? res.json() : {}))
       .then((json: AnalyticsResponse) => {
-        if (!cancelled) setByScope(prev => ({ ...prev, [scopeKey]: json }));
+        if (!cancelled) setByScope(prev => ({ ...prev, [cacheKey]: json }));
       })
       .catch(() => {
-        if (!cancelled) setByScope(prev => ({ ...prev, [scopeKey]: {} }));
+        if (!cancelled) setByScope(prev => ({ ...prev, [cacheKey]: {} }));
       });
     return () => { cancelled = true; };
-  }, [scopeKey, streamsLoaded, byScope]);
+  }, [cacheKey, scopeKey, term, streamsLoaded, byScope]);
+
+  // The whole school has nothing in this term yet: show the term before it.
+  const termEmpty = scopeIdx === -1 && !seeking && !loading && marks.length === 0;
+  const canStepBack = !termChosen && (termIdx ?? startTerm) < terms.length - 1;
+  useEffect(() => {
+    if (termEmpty && canStepBack) setTermIdx((termIdx ?? startTerm) + 1);
+  }, [termEmpty, canStepBack, termIdx, startTerm]);
+  const steppedBackFrom = !termChosen && termIdx !== null && termIdx !== startTerm && marks.length > 0 ? terms[startTerm] : null;
 
   useEffect(() => {
     if (!seeking || !streamsLoaded) return;
@@ -303,7 +332,7 @@ export default function GradeResultsCard() {
     [subjects, activeCat]
   );
 
-  const ready = !loading && !seeking;
+  const ready = !loading && !seeking && !(termEmpty && canStepBack);
   const showFilters = ready && (levelOptions.length > 1 || catOptions.length > 1);
 
   return (
@@ -322,6 +351,19 @@ export default function GradeResultsCard() {
             ].filter(Boolean).join(' · ') || 'Latest exam performance by subject'}
           </p>
         </div>
+        {terms.length > 1 && (
+          <select
+            value={term?.id ?? ''}
+            onChange={e => {
+              setTermChosen(true);
+              setTermIdx(terms.findIndex(t => t.id === e.target.value));
+            }}
+            aria-label="Term"
+            className="input-field input-field-sm w-auto max-w-[130px] shrink-0 truncate font-medium text-foreground outline-none transition-colors focus:border-primary/50"
+          >
+            {terms.map(t => <option key={t.id} value={t.id}>{t.name}{t.is_current ? ' (current)' : ''}</option>)}
+          </select>
+        )}
         {streams.length > 0 && (
           <select
             value={scopeKey}
@@ -338,6 +380,12 @@ export default function GradeResultsCard() {
           </select>
         )}
       </div>
+
+      {ready && steppedBackFrom && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+          No marks in {steppedBackFrom.name} yet, so this shows {term?.name}.
+        </p>
+      )}
 
       {showFilters && (
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
