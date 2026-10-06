@@ -94,15 +94,13 @@ const quoteList = (xs: readonly string[]) => {
     return q.length <= 1 ? q.join('') : `${q.slice(0, -1).join(', ')} and ${q[q.length - 1]}`;
 };
 
-/** Why a class does not fit its week, and the ways out. */
+/** Why a class does not fit its week, and the ways out, in plain words. */
 export function overloadMessage(c: PlanClass): string {
     const over = c.needed - c.capacity;
-    const whole = c.core.reduce((n, l) => n + l.lessons, 0);
-    const electives = c.needed - whole;
     if (c.basis === 'choices' && c.blocks.length > 0) {
-        return `${c.name}: learners’ subject choices need ${plural(c.blocks.length, 'option block')} (${electives} periods) on top of ${whole} whole-class lessons — ${c.needed} in all, but the week has ${c.capacity}. Add ${plural(over, 'period')} to this class’s week (a section with a longer day), lower some lessons a week, or fix the option blocks learners choose from.`;
+        return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}. Its learners’ subject choices mix so much that their electives need ${plural(c.blocks.length, 'separate group')}, and no two of these groups can be taught at the same time. Give ${c.name} a longer day, or lower some lessons a week (${plural(over, 'lesson')} to find).`;
     }
-    return `${c.name} needs ${c.needed} lessons a week but has ${c.capacity} periods: ${plural(over, 'lesson')} too many. Lower some lessons a week, move electives into option blocks, or add periods to this class’s day.`;
+    return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}: ${plural(over, 'lesson')} too many. Give ${c.name} a longer day, or lower some lessons a week.`;
 }
 
 /** "Blocks follow 19 learners’ choices" — what a class's blocks rest on. */
