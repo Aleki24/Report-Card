@@ -1,17 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { GraduationCap, Pencil, School, UserRound, Users } from 'lucide-react-native';
+import { CLASSES_OVERVIEW_URL, classDeleteBlocker, type ClassSummary, type ClassesOverview } from '@shared/classes-overview';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { useAcademicStructure } from '@/lib/useSchoolData';
 import { errorMessage, pluralize } from '@/lib/format';
-import { spacing, useTheme } from '@/lib/theme';
+import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import {
-    Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
-    Screen, ScreenHeader, SectionLabel, StatGrid, StatTile, TextField,
+    Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice,
+    Screen, ScreenHeader, SearchField, SectionLabel, StatGrid, StatTile, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
-import type { GradeStream, StudentListItem } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
 export default function ClassesScreen() {
@@ -22,12 +22,44 @@ export default function ClassesScreen() {
     );
 }
 
+/** One class: who teaches it and what it holds, counted on the server. */
+function ClassCard({ c, onEdit, onRoster }: { c: ClassSummary; onEdit: () => void; onRoster: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const learners = c.usage.activeStudents;
+    return (
+        <View style={styles.card}>
+            <View style={styles.cardHead}>
+                <View style={[styles.badge, { backgroundColor: learners > 0 ? colors.primarySoft : colors.mutedBg }]}>
+                    <Text style={[styles.badgeNum, { color: learners > 0 ? colors.primary : colors.muted }]}>{learners}</Text>
+                    <Text style={styles.badgeLabel}>learners</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.name} numberOfLines={1}>{c.full_name}</Text>
+                    <View style={styles.metaRow}>
+                        <UserRound size={13} color={colors.muted} />
+                        <Text style={styles.meta} numberOfLines={1}>{c.class_teachers.length > 0 ? c.class_teachers.join(', ') : 'No class teacher yet'}</Text>
+                    </View>
+                    <Text style={styles.meta}>{pluralize(c.usage.exams, 'exam')} · {pluralize(c.usage.reportCards, 'report card')}</Text>
+                </View>
+                <Pressable onPress={onEdit} accessibilityRole="button" accessibilityLabel={`Edit ${c.full_name}`} hitSlop={8} style={styles.iconBtn}>
+                    <Pencil size={16} color={colors.muted} />
+                </Pressable>
+            </View>
+            <Pressable onPress={onRoster} accessibilityRole="button" style={({ pressed }) => [styles.roster, pressed && { opacity: 0.7 }]}>
+                <Users size={14} color={colors.primary} />
+                <Text style={styles.rosterText}>See learners</Text>
+            </Pressable>
+        </View>
+    );
+}
+
 function ClassesContent() {
     const { colors } = useTheme();
     const api = useApi();
     const router = useRouter();
-    const structure = useAcademicStructure();
-    const students = useApiQuery<StudentListItem[]>('/api/school/data?type=students');
+    const overview = useApiQuery<ClassesOverview>(CLASSES_OVERVIEW_URL, { raw: true });
+    const [search, setSearch] = useState('');
     const [adding, setAdding] = useState(false);
     const [gradeId, setGradeId] = useState<string | null>(null);
     const [name, setName] = useState('');
@@ -36,14 +68,15 @@ function ClassesContent() {
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-    const grades = structure.data?.grades ?? [];
-    const levels = structure.data?.academic_levels ?? [];
-    const streams = structure.data?.grade_streams ?? [];
-    const counts = useMemo(() => {
-        const map = new Map<string, number>();
-        for (const s of students.data ?? []) if (s.current_grade_stream_id && s.status === 'ACTIVE') map.set(s.current_grade_stream_id, (map.get(s.current_grade_stream_id) ?? 0) + 1);
-        return map;
-    }, [students.data]);
+    const grades = overview.data?.grades ?? [];
+    const curricula = overview.data?.curricula ?? [];
+    const classes = useMemo(() => overview.data?.classes ?? [], [overview.data]);
+    const totals = useMemo(() => ({
+        learners: classes.reduce((n, c) => n + c.usage.activeStudents, 0),
+        teachers: classes.filter((c) => c.class_teachers.length > 0).length,
+    }), [classes]);
+    const needle = search.trim().toLowerCase();
+    const shown = needle ? classes.filter((c) => c.full_name.toLowerCase().includes(needle) || c.class_teachers.some((t) => t.toLowerCase().includes(needle))) : classes;
 
     const run = async (work: () => Promise<unknown>, done: string) => {
         setBusy(true);
@@ -51,7 +84,7 @@ function ClassesContent() {
         try {
             await work();
             setMessage({ tone: 'success', text: done });
-            structure.refresh();
+            overview.refresh();
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Something went wrong') });
         } finally {
@@ -81,23 +114,27 @@ function ClassesContent() {
         }, 'Class renamed.');
     };
 
-    const remove = (s: GradeStream) =>
-        confirmAlert(`Delete ${s.full_name}?`, 'Only empty classes can be deleted safely. Move learners out first.', [
+    const remove = (c: ClassSummary) => {
+        const blocker = classDeleteBlocker(c.usage);
+        if (blocker) return setMessage({ tone: 'danger', text: blocker });
+        confirmAlert(`Delete ${c.full_name}?`, 'The class has nothing in it, so nothing else is lost.', [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => void run(() => api.del(withQuery('/api/admin/academic-structure', { type: 'stream', id: s.id })), `${s.full_name} deleted.`) },
+            { text: 'Delete', style: 'destructive', onPress: () => void run(async () => { await api.del(withQuery('/api/admin/academic-structure', { type: 'stream', id: c.id })); setEditing(null); }, `${c.full_name} deleted.`) },
         ]);
+    };
 
-    if (structure.loading) return <LoadingView />;
+    if (overview.loading && !overview.data) return <LoadingView />;
 
     return (
-        <Screen onRefresh={structure.refresh} refreshing={structure.refreshing}>
-            <ScreenHeader title="Classes" description="Every class (grade and stream) your school runs." />
-            {structure.error ? <ErrorBanner message={structure.error} onRetry={structure.reload} /> : null}
+        <Screen onRefresh={overview.refresh} refreshing={overview.refreshing}>
+            <ScreenHeader title="Classes" description="Every class your school runs, with its learners and class teacher." />
+            {overview.error ? <ErrorBanner message={overview.error} onRetry={overview.reload} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
             <StatGrid>
-                <StatTile label="Classes" value={streams.length} />
-                <StatTile label="Active learners" value={[...counts.values()].reduce((a, b) => a + b, 0)} />
+                <StatTile label="Classes" value={classes.length} icon={School} />
+                <StatTile label="Learners" value={totals.learners} icon={GraduationCap} />
+                <StatTile label="With a class teacher" value={`${totals.teachers}/${classes.length}`} icon={UserRound} />
             </StatGrid>
 
             {adding ? (
@@ -116,45 +153,36 @@ function ClassesContent() {
                 </ButtonRow>
             )}
 
-            {streams.length === 0 ? <EmptyState title="No classes yet" description="Add your first class above." /> : null}
-            {levels.map((level) => {
-                const levelGrades = grades.filter((g) => g.academic_level_id === level.id);
-                const levelStreams = streams.filter((s) => levelGrades.some((g) => g.id === s.grade_id));
-                if (levelStreams.length === 0) return null;
+            {classes.length > 6 ? <SearchField value={search} onChangeText={setSearch} placeholder="Find a class or class teacher" /> : null}
+            {classes.length === 0 ? <EmptyState title="No classes yet" description="Add your first class above." /> : null}
+
+            {curricula.map((level) => {
+                const levelGrades = grades.filter((g) => g.academic_level_id === level.id).sort((a, b) => a.numeric_order - b.numeric_order);
+                const levelClasses = levelGrades.flatMap((g) => shown.filter((c) => c.grade_id === g.id));
+                if (levelClasses.length === 0) return null;
                 return (
-                    <View key={level.id}>
+                    <View key={level.id} style={{ marginTop: spacing.md }}>
                         <SectionLabel>{level.name}</SectionLabel>
-                        <ListCard>
-                            {levelGrades.flatMap((g) =>
-                                levelStreams
-                                    .filter((s) => s.grade_id === g.id)
-                                    .map((s) =>
-                                        editing?.id === s.id ? (
-                                            <View key={s.id} style={{ padding: spacing.md, backgroundColor: colors.mutedBg }}>
-                                                <TextField label="Stream name" value={editing.name} onChangeText={(v) => setEditing({ ...editing, name: v })} />
-                                                <TextField label="Display name" value={editing.full_name} onChangeText={(v) => setEditing({ ...editing, full_name: v })} />
-                                                <ButtonRow>
-                                                    <Button size="sm" variant="danger" label="Delete" onPress={() => remove(s)} />
-                                                    <Button size="sm" variant="secondary" label="Cancel" onPress={() => setEditing(null)} />
-                                                    <Button size="sm" label="Save" onPress={rename} loading={busy} />
-                                                </ButtonRow>
-                                            </View>
-                                        ) : (
-                                            <ListRow
-                                                key={s.id}
-                                                title={s.full_name}
-                                                subtitle={`${g.name_display} · ${pluralize(counts.get(s.id) ?? 0, 'learner')}`}
-                                                right={
-                                                    <View style={{ flexDirection: 'row', gap: 4 }}>
-                                                        <Button size="sm" variant="ghost" label="Roster" onPress={() => router.push('/staff/people')} />
-                                                        <Button size="sm" variant="ghost" label="Edit" onPress={() => setEditing({ id: s.id, name: s.name, full_name: s.full_name })} />
-                                                    </View>
-                                                }
-                                            />
-                                        ),
-                                    ),
-                            )}
-                        </ListCard>
+                        {levelClasses.map((c) =>
+                            editing?.id === c.id ? (
+                                <Card key={c.id} style={{ marginBottom: spacing.sm, backgroundColor: colors.mutedBg }}>
+                                    <TextField label="Stream name" value={editing.name} onChangeText={(v) => setEditing({ ...editing, name: v })} />
+                                    <TextField label="Display name" value={editing.full_name} onChangeText={(v) => setEditing({ ...editing, full_name: v })} />
+                                    <ButtonRow>
+                                        <Button size="sm" variant="danger" label="Delete" onPress={() => remove(c)} />
+                                        <Button size="sm" variant="secondary" label="Cancel" onPress={() => setEditing(null)} />
+                                        <Button size="sm" label="Save" onPress={rename} loading={busy} />
+                                    </ButtonRow>
+                                </Card>
+                            ) : (
+                                <ClassCard
+                                    key={c.id}
+                                    c={c}
+                                    onEdit={() => setEditing({ id: c.id, name: c.name, full_name: c.full_name })}
+                                    onRoster={() => router.push({ pathname: '/staff/people', params: { tab: 'students', class: c.id } })}
+                                />
+                            ),
+                        )}
                     </View>
                 );
             })}
@@ -162,3 +190,17 @@ function ClassesContent() {
         </Screen>
     );
 }
+
+const useStyles = makeStyles((colors) => ({
+    card: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, backgroundColor: colors.card, marginBottom: spacing.sm, overflow: 'hidden' },
+    cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+    badge: { width: 58, height: 58, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+    badgeNum: { fontSize: 20, fontFamily: fonts.bold },
+    badgeLabel: { fontSize: 10, fontFamily: fonts.semibold, color: colors.muted, marginTop: -2 },
+    name: { fontSize: 16, fontFamily: fonts.bold, color: colors.foreground },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 1 },
+    iconBtn: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBg },
+    roster: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: 10 },
+    rosterText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
+}));

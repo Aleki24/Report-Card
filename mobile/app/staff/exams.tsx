@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -59,6 +59,18 @@ function ExamsContent() {
         }
     }, [params.exam, params.tab, linked.exams]);
 
+    const { role } = useCurrentUser();
+    const api = useApi();
+    // Admins see every class (grades the school has a class in), not just those with exams already.
+    const allClasses = useMemo(() => {
+        const grades = structure.data?.grades ?? [];
+        const withClass = new Set((structure.data?.grade_streams ?? []).map((s) => s.grade_id));
+        return grades.filter((g) => withClass.has(g.id)).map((g) => ({ key: g.id, label: g.name_display }));
+    }, [structure.data]);
+    const fillGaps = useCallback(async (term: Term, examTypes: string[]) => {
+        await api.post('/api/school/exams', { action: 'seed', termId: term.id, academicYearId: term.academic_year_id, examTypes });
+    }, [api]);
+
     const selectTab = (t: Tab) => {
         setTab(t);
         if (t === 'publish' || t === 'all') setExam(null);
@@ -97,6 +109,8 @@ function ExamsContent() {
             ) : (
                 <ExamPicker
                     key={pickerKey}
+                    allClasses={role === 'ADMIN' ? allClasses : undefined}
+                    fillGaps={role === 'ADMIN' ? fillGaps : undefined}
                     onSelect={(e) => setExam(e)}
                     emptyAction={(term, reload) => <SeedExamsButton term={term} onDone={reload} />}
                     headerAction={(term, reload) => <CreateExamToggle term={term} structure={structure.data} onCreated={reload} />}
