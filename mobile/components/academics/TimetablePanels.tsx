@@ -198,7 +198,7 @@ export function TimetableBuilder() {
 }
 
 /** The school day: which weekdays run, and each period and break with its times. */
-export function DayStructureEditor() {
+export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
@@ -219,6 +219,7 @@ export function DayStructureEditor() {
         try {
             setConfig((await api.put<{ data: TimetableConfig }>('/api/academics/timetable/config', config)).data);
             toast.success('Day structure saved.');
+            onSaved?.();
         } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
         finally { setSaving(false); }
     };
@@ -268,7 +269,7 @@ export function DayStructureEditor() {
                     keyboardType="number-pad"
                 />
             </View>
-            <Button label={saving ? 'Saving…' : 'Save day structure'} onPress={() => void save()} loading={saving} block />
+            <Button label={saving ? 'Saving…' : onSaved ? 'Save and continue' : 'Save day structure'} onPress={() => void save()} loading={saving} block />
             <Text style={{ fontSize: 11, color: colors.muted, marginTop: spacing.sm }}>Changing periods after publishing? Generate the timetable again so lessons line up with the new day.</Text>
         </Card>
     );

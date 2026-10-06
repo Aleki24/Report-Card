@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { ChipSelect, EmptyState, Screen, ScreenHeader, SegmentedTabs } from '@/components/ui';
+import { EmptyState, Screen, ScreenHeader, ScrollTabs, SegmentedTabs } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffScreen } from '@/lib/roles';
 import { RefreshSignalProvider } from './bits';
@@ -49,7 +49,7 @@ function ModuleBody<Id extends string>({ title, description, tabs, action }: { t
             ) : (
                 <>
                     {visible.length > 1 && visible.length <= 3 ? <SegmentedTabs tabs={options} value={current.id} onChange={setActive} /> : null}
-                    {visible.length > 3 ? <ChipSelect options={options} value={current.id} onChange={setActive} /> : null}
+                    {visible.length > 3 ? <ScrollTabs tabs={options} value={current.id} onChange={setActive} /> : null}
                     <RefreshSignalProvider value={signal}>
                         <React.Fragment key={current.id}>{current.render()}</React.Fragment>
                     </RefreshSignalProvider>

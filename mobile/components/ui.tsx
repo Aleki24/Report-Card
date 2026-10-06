@@ -4,6 +4,7 @@ import {
     Image,
     Pressable,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Switch,
     Text,
@@ -503,6 +504,26 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tab
     );
 }
 
+/** Many sections: text tabs on a sideways-scrolling bar, the chosen one underlined. */
+export function ScrollTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly ChipOption<T>[]; value: T; onChange: (v: T) => void }) {
+    const styles = useStyles();
+    return (
+        <View style={styles.scrollTabs}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg, paddingRight: spacing.lg }}>
+                {tabs.map((t) => {
+                    const active = t.value === value;
+                    return (
+                        <Pressable key={t.value} onPress={() => onChange(t.value)} accessibilityRole="tab" accessibilityState={{ selected: active }} style={styles.scrollTab}>
+                            <Text style={[styles.scrollTabText, active && styles.scrollTabTextActive]} numberOfLines={1}>{t.label}</Text>
+                            <View style={[styles.scrollTabBar, active && styles.scrollTabBarActive]} />
+                        </Pressable>
+                    );
+                })}
+            </ScrollView>
+        </View>
+    );
+}
+
 /** A previous/next date stepper over YYYY-MM-DD strings; no native picker dependency needed. */
 export function DateStepper({ value, onChange, max }: { value: string; onChange: (iso: string) => void; max?: string }) {
     const { colors } = useTheme();
@@ -624,6 +645,12 @@ const useStyles = makeStyles((colors) => ({
     segmentActive: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
     segmentText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.muted },
     segmentTextActive: { color: colors.foreground, fontFamily: fonts.bold },
+    scrollTabs: { borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.lg },
+    scrollTab: { paddingTop: spacing.sm },
+    scrollTabText: { fontSize: 14, fontFamily: fonts.semibold, color: colors.muted, paddingBottom: spacing.sm },
+    scrollTabTextActive: { color: colors.primary, fontFamily: fonts.bold },
+    scrollTabBar: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: 'transparent' },
+    scrollTabBarActive: { backgroundColor: colors.primary },
     dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.md },
     dateArrow: { padding: spacing.sm },
     dateText: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, minWidth: 160, textAlign: 'center' },

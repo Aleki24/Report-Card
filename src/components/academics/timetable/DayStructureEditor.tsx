@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 const URL = '/api/academics/timetable/config';
 
 /** The school day: which weekdays run, and each period and break with its times. */
-export function DayStructureEditor() {
+export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     const [config, setConfig] = useState<TimetableConfig | null>(null);
     const [saving, setSaving] = useState(false);
 
@@ -28,7 +28,7 @@ export function DayStructureEditor() {
 
     const save = async () => {
         setSaving(true);
-        try { setConfig(await opsFetch<TimetableConfig>(URL, { method: 'PUT', json: config })); toast.success('Day structure saved.'); }
+        try { setConfig(await opsFetch<TimetableConfig>(URL, { method: 'PUT', json: config })); toast.success('Day structure saved.'); onSaved?.(); }
         catch (err) { toast.error(errorText(err)); }
         finally { setSaving(false); }
     };
@@ -80,7 +80,7 @@ export function DayStructureEditor() {
             </FormField>
 
             <div className="flex justify-end border-t border-border/60 pt-4">
-                <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save day structure'}</Button>
+                <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : onSaved ? 'Save and continue' : 'Save day structure'}</Button>
             </div>
             <p className="text-xs text-muted-foreground">Changing periods after publishing? Generate the timetable again so lessons line up with the new day.</p>
         </section>
