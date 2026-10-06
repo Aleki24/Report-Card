@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { Award, CalendarCheck, Check, CircleCheckBig, ClipboardList, Send, Wallet, X, type LucideIcon } from 'lucide-react-native';
+import { Award, CalendarCheck, Check, CircleCheckBig, ClipboardList, Send, Trophy, Wallet, X, type LucideIcon } from 'lucide-react-native';
 import {
     buildSetupSteps, buildTodos, totalAttendanceCount,
     type AttendanceToday, type ClassPerformance, type DashboardData, type TodoKey, type UpcomingRound,
@@ -11,6 +11,7 @@ import { shortCurriculumLabel } from '@shared/curriculum-labels';
 import { formatCurrency, getTimeAgo, passRateLabel, passRateTone, pluralize, toneColorFor } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme, shadowFor } from '@/lib/theme';
 import { CountUp, LegendItem, Meter, PressScale, appHref } from './kit';
+import { Ring } from './charts';
 
 const TODO_ICONS: Record<TodoKey, LucideIcon> = { release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
 
@@ -99,29 +100,61 @@ export function SetupChecklist({ data, schoolKey }: { data: DashboardData; schoo
     );
 }
 
-/** Pass rate per class, weakest first (the API's order), each labelled with its curriculum. */
-export function ClassPerformanceList({ classes, passMark }: { classes: readonly ClassPerformance[]; passMark: number }) {
+/**
+ * Every class as a tile with its pass rate on a gauge, weakest first (the
+ * API's order) so the classes that need help lead. A tile opens the class in
+ * Analytics.
+ */
+export function ClassPerformanceList({ classes, passMark, onSelect, preview = 6 }: {
+    classes: readonly ClassPerformance[];
+    passMark: number;
+    /** Opens a class; defaults to Analytics. */
+    onSelect?: (id: string) => void;
+    /** Tiles before "Show all". */
+    preview?: number;
+}) {
     const { colors } = useTheme();
     const styles = useStyles();
+    const router = useRouter();
+    const [showAll, setShowAll] = useState(false);
     const withMarks = classes.filter((c) => c.markCount > 0);
     if (withMarks.length === 0) return <Text style={styles.emptyLine}>No marks recorded yet. Each class appears here once its exams are marked.</Text>;
+    const ranked = [...withMarks].sort((a, b) => (b.passRate ?? 0) - (a.passRate ?? 0));
+    const top = ranked[0];
+    const shown = showAll ? withMarks : withMarks.slice(0, preview);
+    const rated = withMarks.filter((c) => c.passRate != null);
+    const passing = rated.filter((c) => (c.passRate ?? 0) >= 50).length;
     return (
-        <View style={{ gap: spacing.md }}>
-            {withMarks.slice(0, 6).map((c) => {
-                const color = toneColorFor(colors, passRateTone(c.passRate));
-                const curriculum = shortCurriculumLabel(c.levelCode);
-                return (
-                    <View key={c.id}>
-                        <View style={styles.perfHead}>
-                            <Text style={styles.perfName} numberOfLines={1}>{c.name}{curriculum ? <Text style={styles.perfLevel}>  {curriculum}</Text> : null}</Text>
-                            <Text style={[styles.perfRate, { color }]}>{c.passRate ?? '—'}%</Text>
-                        </View>
-                        <Meter value={c.passRate ?? 0} color={color} />
-                        <Text style={styles.perfMeta}>{pluralize(c.students, 'learner')} · mean {c.mean ?? '—'}% · passing ≥{passMark}%</Text>
-                    </View>
-                );
-            })}
-            {withMarks.length > 6 ? <Text style={styles.perfMeta}>{withMarks.length - 6} more in Analytics</Text> : null}
+        <View>
+            <View style={styles.leagueHead}>
+                <View style={[styles.leagueBadge, { backgroundColor: colors.successBg }]}>
+                    <Trophy size={14} color={colors.success} />
+                    <Text style={[styles.leagueBadgeText, { color: colors.successText }]} numberOfLines={1}>Top: {top.name} · {top.passRate ?? '—'}%</Text>
+                </View>
+                <Text style={styles.leagueMeta}>{passing} of {rated.length} classes have half or more passing</Text>
+            </View>
+            <View style={styles.classGrid}>
+                {shown.map((c) => {
+                    const color = toneColorFor(colors, passRateTone(c.passRate));
+                    const curriculum = shortCurriculumLabel(c.levelCode);
+                    return (
+                        <PressScale key={c.id} onPress={() => (onSelect ? onSelect(c.id) : router.push(`/staff/analytics?stream=${c.id}`))} style={styles.classTile} accessibilityRole="link" accessibilityLabel={`${c.name}: ${c.passRate ?? 0}% passing`}>
+                            <Ring value={c.passRate ?? 0} size={62} stroke={7} color={color} track={`${color}22`} textColor={colors.foreground} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={styles.className} numberOfLines={1}>{c.name}</Text>
+                                {curriculum ? <Text style={[styles.classTag, { color }]}>{curriculum}</Text> : null}
+                                <Text style={styles.classMeta} numberOfLines={2}>mean {c.mean ?? '—'}% · {pluralize(c.students, 'learner')}</Text>
+                            </View>
+                        </PressScale>
+                    );
+                })}
+            </View>
+            <Text style={styles.leagueFoot}>Gauges show the share of marks at or above {passMark}%.</Text>
+            {withMarks.length > preview ? (
+                <Pressable onPress={() => setShowAll((v) => !v)} style={styles.moreBtn} accessibilityRole="button">
+                    <Text style={styles.moreText}>{showAll ? 'Show fewer' : `Show all ${withMarks.length} classes`}</Text>
+                </Pressable>
+            ) : null}
         </View>
     );
 }
@@ -268,11 +301,18 @@ const useStyles = makeStyles((colors) => ({
     stepDone: { color: colors.muted, textDecorationLine: 'line-through' },
     stepCta: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
     emptyLine: { fontSize: 13, fontFamily: fonts.regular, color: colors.muted, textAlign: 'center', paddingVertical: spacing.md },
-    perfHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm, marginBottom: 6 },
-    perfName: { flex: 1, fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
-    perfLevel: { fontSize: 11, fontFamily: fonts.medium, color: colors.muted },
-    perfRate: { fontSize: 15, fontFamily: fonts.display },
-    perfMeta: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted, marginTop: 5 },
+    leagueHead: { gap: 6, marginBottom: spacing.md },
+    leagueBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.md, maxWidth: '100%' },
+    leagueBadgeText: { fontSize: 12, fontFamily: fonts.bold, flexShrink: 1 },
+    leagueMeta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },
+    classGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    classTile: { flexBasis: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm + 2, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.elevated, minWidth: 150 },
+    className: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    classTag: { fontSize: 10, fontFamily: fonts.bold, letterSpacing: 0.5, marginTop: 1 },
+    classMeta: { fontSize: 11, lineHeight: 15, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },
+    leagueFoot: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted, marginTop: spacing.md },
+    moreBtn: { alignSelf: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
+    moreText: { fontSize: 13, fontFamily: fonts.bold, color: colors.primary },
     round: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     calendar: { width: 46, borderRadius: 12, backgroundColor: colors.elevated, alignItems: 'center', paddingVertical: 5, borderWidth: 1, borderColor: colors.border },
     calMonth: { fontSize: 10, fontFamily: fonts.bold, color: colors.danger, letterSpacing: 0.5 },

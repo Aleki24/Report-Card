@@ -18,7 +18,7 @@ export async function GET() {
 
     let { data: dbUser } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, role, school_id, is_active, job_title')
+      .select('id, first_name, last_name, email, role, school_id, is_active, job_title, avatar_url')
       .eq('id', clerkAuth.userId)
       .maybeSingle();
 
@@ -54,7 +54,7 @@ export async function GET() {
           is_active: true,
           school_id: schoolId,
         })
-        .select('id, first_name, last_name, email, role, school_id, is_active, job_title')
+        .select('id, first_name, last_name, email, role, school_id, is_active, job_title, avatar_url')
         .single();
 
       if (insertErr) {
@@ -91,15 +91,17 @@ export async function GET() {
 
     // Fetch school name and onboarding status
     let schoolName: string | null = null;
+    let schoolLogoUrl: string | null = null;
     let schoolOnboardingCompleted: boolean = false;
     let schoolApprovalStatus: string | null = null;
     if (dbUser.school_id) {
       const { data: school } = await supabase
         .from('schools')
-        .select('name, onboarding_completed, approval_status')
+        .select('name, logo_url, onboarding_completed, approval_status')
         .eq('id', dbUser.school_id)
         .maybeSingle();
       schoolName = school?.name || null;
+      schoolLogoUrl = school?.logo_url || null;
       schoolOnboardingCompleted = school?.onboarding_completed || false;
       schoolApprovalStatus = school?.approval_status ?? null;
     }
@@ -125,6 +127,9 @@ export async function GET() {
       access,
       user: dbUser, // backwards compatibility
       schoolName,
+      schoolLogoUrl,
+      // The photo a person chose in their account wins over one an admin uploaded.
+      avatarUrl: (user?.hasImage ? user.imageUrl : null) || dbUser.avatar_url || null,
       schoolOnboardingCompleted,
       // PENDING_APPROVAL lets the app show a waiting requester the demo preview.
       schoolApprovalStatus,

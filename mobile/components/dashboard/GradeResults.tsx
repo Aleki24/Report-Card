@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { LifeBuoy, Trophy, type LucideIcon } from 'lucide-react-native';
 import { gradeSymbolFromScales } from '@shared/analytics';
 import { shortCurriculumLabel } from '@shared/curriculum-labels';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { fonts, radius, spacing, makeStyles, type Palette, useTheme } from '@/lib/theme';
-import { Card, ChipSelect, EmptyState, LoadingView } from '@/components/ui';
-import { Meter, SectionTitle } from './kit';
+import { Card, ChipSelect, EmptyState, FilterGrid, LoadingView } from '@/components/ui';
+import { SectionTitle } from './kit';
+import { ColumnChart, Ring, type Column } from './charts';
 
 /** GET /api/school/analytics (the parts the web's GradeResultsCard reads). */
 interface Mark { subject_id: string | null; subject_name: string; percentage: number | null; exam_id: string; exam_name: string; exam_date: string | null }
@@ -79,8 +81,35 @@ function sevColor(colors: Palette, avg: number): string {
     return colors.info;
 }
 
-/** The web admin dashboard's GradeResultsCard: the latest sitting's results by subject, per class. */
-export function GradeResults() {
+/** The four colour bands of sevColor, for the legend under the summary. */
+const BANDS = [
+    { label: '80+', min: 80, max: 100, color: (c: Palette) => c.success },
+    { label: '60–79', min: 60, max: 79, color: (c: Palette) => c.warning },
+    { label: '21–59', min: 21, max: 59, color: (c: Palette) => c.info },
+    { label: '≤20', min: 0, max: 20, color: (c: Palette) => c.danger },
+] as const;
+
+/** One highlighted subject: the strongest, or the one that needs help. */
+function Spotlight({ title, subject, color, icon: Icon }: { title: string; subject: SubjectAgg; color: string; icon: LucideIcon }) {
+    const styles = useStyles();
+    return (
+        <View style={[styles.spot, { borderColor: `${color}55`, backgroundColor: `${color}14` }]}>
+            <View style={styles.spotHead}>
+                <Icon size={14} color={color} />
+                <Text style={[styles.spotTitle, { color }]}>{title.toUpperCase()}</Text>
+            </View>
+            <Text style={styles.spotSubject} numberOfLines={2}>{subject.subject}</Text>
+            <Text style={styles.spotFigure}>{subject.avg}%{subject.grade ? <Text style={styles.spotGrade}>  {subject.grade}</Text> : null}</Text>
+        </View>
+    );
+}
+
+/**
+ * The web admin dashboard's GradeResultsCard, drawn for a phone: the sitting's
+ * average as a ring, how subjects spread across the bands, the strongest and
+ * weakest subject, then every subject as a column you can tap.
+ */
+export function GradeResults({ passMark }: { passMark?: number }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const { streams } = useGradeStreams();
@@ -112,40 +141,80 @@ export function GradeResults() {
     const totalCount = subjects.reduce((n, s) => n + s.count, 0);
     const average = totalCount ? Math.round(subjects.reduce((sum, s) => sum + s.avg * s.count, 0) / totalCount) : null;
     const date = active?.date ? new Date(active.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+    // A subject offered in two classes appears twice: say which is which.
+    const nameCount = new Map<string, number>();
+    for (const s of subjects) nameCount.set(s.subject, (nameCount.get(s.subject) ?? 0) + 1);
+    const columns: Column[] = subjects.map((s) => ({
+        key: s.key,
+        label: s.subject,
+        value: s.avg,
+        color: sevColor(colors, s.avg),
+        detail: [`${s.avg}%`, s.grade ? `grade ${s.grade}` : 'no grading system', `${s.count} mark${s.count === 1 ? '' : 's'}`, (nameCount.get(s.subject) ?? 0) > 1 ? s.levelLabel : null].filter(Boolean).join(' · '),
+    }));
+    const best = subjects[0];
+    const weakest = subjects.length > 1 ? subjects[subjects.length - 1] : null;
 
     return (
         <>
             <SectionTitle title="Class results" />
             <Card>
-                <ChipSelect
-                    label="Class"
-                    options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]}
-                    value={scope}
-                    onChange={(v) => { setScope(v); setSeriesKey(null); }}
-                />
+                <FilterGrid>
+                    <ChipSelect
+                        label="Class"
+                        options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]}
+                        value={scope}
+                        onChange={(v) => { setScope(v); setSeriesKey(null); }}
+                    />
+                    {series.length > 1 ? (
+                        <ChipSelect label="Sitting" options={series.slice(0, 8).map((s) => ({ value: s.key, label: s.name }))} value={active?.key ?? null} onChange={setSeriesKey} />
+                    ) : null}
+                </FilterGrid>
                 {query.loading ? <LoadingView /> : series.length === 0 ? (
                     <EmptyState title="No marks yet" description="Once exams are marked, each subject’s average appears here." />
                 ) : (
                     <>
-                        {series.length > 1 ? (
-                            <ChipSelect label="Sitting" options={series.slice(0, 8).map((s) => ({ value: s.key, label: s.name }))} value={active?.key ?? null} onChange={setSeriesKey} />
-                        ) : null}
                         {levels.length > 1 ? (
-                            <ChipSelect label="Curriculum" options={levels.map((l) => ({ value: l.id, label: l.label }))} value={activeLevel} onChange={setLevelId} />
+                            <ChipSelect layout="segmented" options={levels.map((l) => ({ value: l.id, label: l.label }))} value={activeLevel} onChange={setLevelId} />
                         ) : null}
-                        <Text style={styles.meta}>
-                            {[active?.name, date, `${subjects.length} subjects`, average != null ? `average ${average}%` : null].filter(Boolean).join(' · ')}
-                        </Text>
-                        {subjects.map((s) => (
-                            <View key={s.key} style={styles.row}>
-                                <Text style={styles.subject} numberOfLines={1}>{s.subject}</Text>
-                                <View style={styles.track}><Meter value={Math.max(2, s.avg)} color={sevColor(colors, s.avg)} track={colors.mutedBg} /></View>
-                                <Text style={styles.avg}>{s.avg}%</Text>
-                                <Text style={[styles.grade, !s.grade && styles.noGrade]}>{s.grade ?? '–'}</Text>
+
+                        <View style={styles.summary}>
+                            {average != null ? (
+                                <Ring value={average} size={92} color={sevColor(colors, average)} track={colors.mutedBg} textColor={colors.foreground} caption="Average" />
+                            ) : null}
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={styles.sitting} numberOfLines={2}>{active?.name}</Text>
+                                <Text style={styles.meta}>{[date, `${subjects.length} subjects`].filter(Boolean).join(' · ')}</Text>
+                                <View style={styles.bands}>
+                                    {BANDS.map((b) => {
+                                        const n = subjects.filter((s) => s.avg >= b.min && s.avg <= b.max).length;
+                                        return n > 0 ? <View key={b.label} style={{ flex: n, backgroundColor: b.color(colors) }} /> : null;
+                                    })}
+                                </View>
+                                <View style={styles.legend}>
+                                    {BANDS.map((b) => {
+                                        const n = subjects.filter((s) => s.avg >= b.min && s.avg <= b.max).length;
+                                        return (
+                                            <View key={b.label} style={styles.legendItem}>
+                                                <View style={[styles.legendDot, { backgroundColor: b.color(colors) }]} />
+                                                <Text style={styles.legendText}><Text style={styles.legendCount}>{n}</Text> {b.label}</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
                             </View>
-                        ))}
+                        </View>
+
+                        {best ? (
+                            <View style={styles.spots}>
+                                <Spotlight title="Strongest" subject={best} color={colors.success} icon={Trophy} />
+                                {weakest ? <Spotlight title="Needs support" subject={weakest} color={sevColor(colors, weakest.avg) === colors.success ? colors.warning : colors.danger} icon={LifeBuoy} /> : null}
+                            </View>
+                        ) : null}
+
+                        <Text style={styles.chartTitle}>Every subject, highest first</Text>
+                        <ColumnChart columns={columns} guide={passMark} guideLabel={passMark != null ? `Pass ${passMark}%` : undefined} />
                         {subjects.some((s) => !s.grade) ? (
-                            <Text style={styles.note}>“–” means the subject has no grading system yet; set one in Settings → Grading.</Text>
+                            <Text style={styles.note}>Some subjects have no grading system yet; set one in Settings → Grading.</Text>
                         ) : null}
                     </>
                 )}
@@ -155,12 +224,22 @@ export function GradeResults() {
 }
 
 const useStyles = makeStyles((colors) => ({
-    meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.md },
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
-    subject: { width: 108, fontSize: 13, fontFamily: fonts.medium, color: colors.foreground },
-    track: { flex: 1 },
-    avg: { width: 40, textAlign: 'right', fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
-    grade: { width: 32, textAlign: 'center', fontSize: 12, fontFamily: fonts.bold, color: colors.primary, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 2, overflow: 'hidden' },
-    noGrade: { color: colors.muted, backgroundColor: colors.mutedBg },
-    note: { fontSize: 11, lineHeight: 16, fontFamily: fonts.regular, color: colors.muted, marginTop: spacing.sm },
+    summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.md },
+    sitting: { fontSize: 16, lineHeight: 21, fontFamily: fonts.display, color: colors.foreground },
+    meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },
+    bands: { flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, marginTop: spacing.sm, backgroundColor: colors.mutedBg },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: 4, marginTop: 6 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    legendDot: { width: 8, height: 8, borderRadius: 2 },
+    legendText: { fontSize: 11, fontFamily: fonts.medium, color: colors.muted },
+    legendCount: { fontFamily: fonts.bold, color: colors.foreground },
+    spots: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+    spot: { flex: 1, minWidth: 0, borderWidth: 1, borderRadius: radius.xl, padding: spacing.md },
+    spotHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    spotTitle: { fontSize: 10, fontFamily: fonts.bold, letterSpacing: 0.8 },
+    spotSubject: { fontSize: 14, lineHeight: 18, fontFamily: fonts.bold, color: colors.foreground, marginTop: 6 },
+    spotFigure: { fontSize: 22, fontFamily: fonts.display, color: colors.foreground, marginTop: 2, letterSpacing: -0.5 },
+    spotGrade: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted },
+    chartTitle: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: spacing.sm },
+    note: { fontSize: 11, lineHeight: 16, fontFamily: fonts.regular, color: colors.muted, marginTop: spacing.md },
 }));

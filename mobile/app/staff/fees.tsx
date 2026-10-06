@@ -190,7 +190,6 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
     const [termId, setTermId] = useState<string | null>(defaultTermId);
     const [streamId, setStreamId] = useState<string | null>(streams.length === 1 ? streams[0].id : null);
     const [studentId, setStudentId] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
     const [amount, setAmount] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [notes, setNotes] = useState('');

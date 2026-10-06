@@ -16,6 +16,7 @@ export interface CurrentUserProfile {
     school_id: string | null;
     is_active: boolean;
     job_title: string | null;
+    avatar_url?: string | null;
 }
 
 export interface MeResponse {
@@ -23,6 +24,9 @@ export interface MeResponse {
     /** Modules the school runs and this person's grants and duties (parsed by `parseClientAccess`). */
     access?: unknown;
     schoolName: string | null;
+    schoolLogoUrl?: string | null;
+    /** The person's photo: their own account picture, else one the school uploaded. */
+    avatarUrl?: string | null;
     schoolOnboardingCompleted: boolean;
     activeRole: UserRole | null;
 }
