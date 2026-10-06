@@ -24,7 +24,7 @@ import { OptionTiles, PickerField, SegmentedChoice, layoutFor, useInFilterGrid, 
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, Search, X, type LucideIcon } from 'lucide-react-native';
 import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
 import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
@@ -416,15 +416,23 @@ export function SearchField({ value, onChangeText, placeholder = 'Search…' }: 
     const { colors } = useTheme();
     const styles = useStyles();
     return (
-        <TextInput
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.placeholder}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            style={[styles.input, styles.search]}
-        />
+        <View style={styles.searchBox}>
+            <Search size={17} color={colors.muted} />
+            <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={colors.placeholder}
+                autoCorrect={false}
+                style={styles.searchInput}
+                accessibilityLabel={placeholder}
+            />
+            {value ? (
+                <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
+                    <X size={16} color={colors.muted} />
+                </Pressable>
+            ) : null}
+        </View>
     );
 }
 
@@ -638,7 +646,8 @@ const useStyles = makeStyles((colors) => ({
     fieldError: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: 9, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, minHeight: 40 },
     textArea: { minHeight: 96, textAlignVertical: 'top' },
-    search: { marginBottom: spacing.md },
+    searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 46, paddingHorizontal: spacing.md, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, marginBottom: spacing.md },
+    searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, paddingVertical: 8 },
     toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
     segmented: { flexDirection: 'row', padding: 4, gap: 4, borderRadius: radius.xl, backgroundColor: colors.mutedBg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
     segment: { flex: 1, minHeight: 38, paddingHorizontal: 4, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },

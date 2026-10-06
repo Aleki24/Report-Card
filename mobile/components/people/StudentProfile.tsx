@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { whatsappNumber } from './PersonRow';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
@@ -42,11 +43,6 @@ function latestTermWithMarks(history: readonly TermPerformance[]): TermPerforman
     return null;
 }
 
-/** Kenyan numbers as WhatsApp wants them: 0712… → 254712…. */
-function whatsappNumber(phone: string): string {
-    const digits = phone.replace(/\D/g, '');
-    return digits.startsWith('0') ? `254${digits.slice(1)}` : digits;
-}
 
 /** One detail line: icon, label, value; tappable to call/mail, long-press to copy. */
 function InfoItem({ icon: Icon, label, value, href, copy }: { icon: LucideIcon; label: string; value: string | null | undefined; href?: string; copy?: boolean }) {
