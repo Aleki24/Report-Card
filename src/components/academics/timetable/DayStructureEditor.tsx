@@ -9,7 +9,7 @@ import { errorText, opsFetch } from '@/lib/ops/client';
 import { BAND_LABELS } from '@/lib/curriculum-bands';
 import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, type TimetableConfig, type TimetablePeriod } from '@/lib/timetable/config';
 import {
-    SECTIONS_NOTE, openSectionPresets, withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
+    PERIOD_KINDS, SECTIONS_NOTE, openSectionPresets, periodKind, periodKindMismatch, withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
 } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
 
@@ -23,14 +23,26 @@ function PeriodsEditor({ id, periods, onChange }: { id: string; periods: readonl
         <>
             <ol className="flex flex-col gap-2">
                 {periods.map((p, i) => (
-                    <li key={i} className={cn('grid grid-cols-2 gap-2 rounded-xl border p-2 sm:grid-cols-[1fr_7rem_7rem_auto_auto] sm:items-end', p.is_break ? 'border-dashed border-border bg-muted/30' : 'border-border/70')}>
+                    <li key={i} className={cn('grid grid-cols-2 gap-2 rounded-xl border p-2 sm:grid-cols-[1fr_7rem_7rem_auto_auto] sm:items-end', p.is_break ? 'border-amber-500/40 bg-amber-500/8' : 'border-border/70')}>
                         <FormField label="Name" htmlFor={`${id}-${i}-label`} span="full" className="col-span-2 sm:col-span-1">
                             <InputField id={`${id}-${i}-label`} value={p.label} onChange={e => onChange(withPeriodPatched(periods, i, { label: e.target.value }))} />
                         </FormField>
                         <FormField label="Starts" htmlFor={`${id}-${i}-start`}><InputField id={`${id}-${i}-start`} type="time" value={p.start} onChange={e => onChange(withPeriodPatched(periods, i, { start: e.target.value }))} /></FormField>
                         <FormField label="Ends" htmlFor={`${id}-${i}-end`}><InputField id={`${id}-${i}-end`} type="time" value={p.end} onChange={e => onChange(withPeriodPatched(periods, i, { end: e.target.value }))} /></FormField>
-                        <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={p.is_break} onChange={e => onChange(withPeriodPatched(periods, i, { is_break: e.target.checked }))} />Break</label>
+                        <div role="radiogroup" aria-label={`${p.label}: lesson or break`} className="flex h-10 overflow-hidden rounded-lg border border-border text-sm">
+                            {PERIOD_KINDS.map(k => {
+                                const on = periodKind(p) === k.value;
+                                return (
+                                    <button key={k.value} type="button" role="radio" aria-checked={on}
+                                        onClick={() => onChange(withPeriodPatched(periods, i, { is_break: k.value === 'break' }))}
+                                        className={cn('px-3 font-medium transition-colors', on ? (k.value === 'break' ? 'bg-amber-500 text-white' : 'bg-primary text-primary-foreground') : 'text-muted-foreground hover:bg-muted')}>
+                                        {k.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                         <Button variant="ghost" size="icon-sm" aria-label={`Remove ${p.label}`} onClick={() => onChange(periods.filter((_, j) => j !== i))}><Trash2 className="text-destructive" /></Button>
+                        {periodKindMismatch(p) && <p className="col-span-full text-xs font-medium text-amber-700 dark:text-amber-300">{periodKindMismatch(p)}</p>}
                     </li>
                 ))}
             </ol>

@@ -250,6 +250,18 @@ export function withAddedPeriod(config: TimetableConfig, isBreak: boolean): Time
     return { ...config, periods: withAddedPeriodTo(config.periods, isBreak) };
 }
 
+/** A row is a lesson or a break: shown as a two-way choice, never a bare tick box. */
+export const PERIOD_KINDS = [{ value: 'lesson', label: 'Lesson' }, { value: 'break', label: 'Break' }] as const;
+export type PeriodKind = (typeof PERIOD_KINDS)[number]['value'];
+export const periodKind = (p: { is_break: boolean }): PeriodKind => (p.is_break ? 'break' : 'lesson');
+
+/** Named like a break (Short break, Tea break, Lunch, Games…) but set as a lesson, or the reverse. */
+const BREAK_NAME = /\b(break|lunch|tea|recess|snack|games|assembly|prep)\b/i;
+export function periodKindMismatch(p: { label: string; is_break: boolean }): string | null {
+    if (!p.is_break && BREAK_NAME.test(p.label)) return `“${p.label}” is set as a lesson, so lessons will be timetabled in it. Set it to Break.`;
+    return null;
+}
+
 /** One period of a bell changed. */
 export const withPeriodPatched = (periods: readonly TimetablePeriod[], index: number, patch: Partial<TimetablePeriod>): TimetablePeriod[] =>
     periods.map((p, i) => (i === index ? { ...p, ...patch } : p));

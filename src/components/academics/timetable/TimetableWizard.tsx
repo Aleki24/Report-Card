@@ -15,7 +15,7 @@ import {
     type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import {
-    basisLine, daySummary, firstCard, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
+    basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
 } from '@/lib/timetable/readiness';
 import { cn } from '@/lib/utils';
 
@@ -165,6 +165,32 @@ function ClassFit({ plan, focus }: { plan: TimetablePlan; focus: string | null }
     );
 }
 
+/** Every teacher's week across all their classes and levels, light and over-full loads marked. */
+function TeacherLoads({ plan }: { plan: TimetablePlan }) {
+    if (plan.teachers.length === 0) return null;
+    return (
+        <div>
+            <h3 className="mb-2 text-sm font-semibold">Teacher loads <span className="font-normal text-muted-foreground">· lessons a week across every class</span></h3>
+            <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {plan.teachers.map(t => {
+                    const over = t.lessons > t.capacity;
+                    const light = isLightLoad(t);
+                    return (
+                        <li key={t.name} className={cn('rounded-xl border px-3 py-2', over ? 'border-rose-500/50' : light ? 'border-amber-500/50' : 'border-border/70')}>
+                            <div className="flex items-baseline justify-between gap-2 text-sm">
+                                <span className="truncate font-medium">{t.name}</span>
+                                <span className={cn('shrink-0 tabular-nums', over ? 'font-semibold text-rose-600' : light ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground')}>{t.lessons} / {t.capacity}</span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn('h-full rounded-full', over ? 'bg-rose-500' : light ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: `${Math.min(100, (t.lessons / Math.max(1, t.capacity)) * 100)}%` }} /></div>
+                            <p className="mt-1 truncate text-xs text-muted-foreground">{t.classes.join(' · ')}</p>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
+
 /** The top of the studio: ready or not, what is in the way, and the button to generate. */
 function Readiness({ plan, generating, onGenerate, onOpen }: { plan: TimetablePlan; generating: boolean; onGenerate: () => void; onOpen: (b: Blocker) => void }) {
     const ready = plan.blockers.length === 0;
@@ -274,6 +300,7 @@ export function TimetableWizard() {
                         <p className="text-muted-foreground">Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s <em>Option block</em> to choose them yourself.</p>
                     </div>
                     <ClassFit plan={plan} focus={focus} />
+                    <TeacherLoads plan={plan} />
                     <Loads onChange={() => void refresh()} />
                 </div>
             </StudioCard>
