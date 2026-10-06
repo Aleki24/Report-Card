@@ -44,15 +44,15 @@ export default function PeopleScreen() {
 
 function PeopleContent() {
     const { role } = useCurrentUser();
-    const params = useLocalSearchParams<{ tab?: string; search?: string }>();
+    const params = useLocalSearchParams<{ tab?: string; search?: string; class?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
 
     // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
     useEffect(() => {
         if (isAdmin && (params.tab === 'teachers' || params.tab === 'parents' || params.tab === 'students')) setTab(params.tab);
-        else if (params.search) setTab('students');
-    }, [isAdmin, params.tab, params.search]);
+        else if (params.search || params.class) setTab('students');
+    }, [isAdmin, params.tab, params.search, params.class]);
 
     return (
         <Screen>
@@ -95,10 +95,12 @@ function StudentsSection() {
     }, [structure.data, streams]);
     const hasPathways = (combinations.data ?? []).length > 0;
     // The dashboard's "Find a learner" opens here with ?search=.
-    const { search: searchParam } = useLocalSearchParams<{ search?: string }>();
+    // The Classes page opens a class's learners here with ?class=.
+    const { search: searchParam, class: classParam } = useLocalSearchParams<{ search?: string; class?: string }>();
     const [search, setSearch] = useState(searchParam ?? '');
     useEffect(() => { if (searchParam) setSearch(searchParam); }, [searchParam]);
-    const [stream, setStream] = useState<string>('');
+    const [stream, setStream] = useState<string>(classParam ?? '');
+    useEffect(() => { if (classParam) setStream(classParam); }, [classParam]);
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
     const [limit, setLimit] = useState(PAGE);
     const [adding, setAdding] = useState(false);

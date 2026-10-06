@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Text } from 'react-native';
 import { Badge, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView } from '@/components/ui';
 import { fonts, useTheme } from '@/lib/theme';
@@ -16,6 +16,8 @@ export function ExamPicker({
     emptyAction,
     renderBadge,
     headerAction,
+    allClasses,
+    fillGaps,
 }: {
     onSelect: (exam: ExamSlot, term: Term | null) => void;
     /** Shown when the term has no exams (the admin's "set up exams" button). */
@@ -23,8 +25,17 @@ export function ExamPicker({
     /** Rendered under the term picker (the admin's "new exam" button). */
     headerAction?: (term: Term, reload: () => void) => React.ReactNode;
     renderBadge?: (exam: ExamSlot) => React.ReactNode;
+    /**
+     * Admins: every class the school runs, so one without this exam yet (a
+     * newly added level, say) is listed too instead of missing.
+     */
+    allClasses?: readonly { key: string; label: string }[];
+    /** Admins: give classes the term's exams they lack (seeding fills gaps only). */
+    fillGaps?: (term: Term, examTypes: string[]) => Promise<void>;
 }) {
     const { colors } = useTheme();
+    const filled = useRef(new Set<string>());
+    const [filling, setFilling] = useState(false);
     const { terms, activeTermId, loading: termsLoading, error: termsError, reload: reloadTerms } = useTerms();
     const [termId, setTermId] = useState<string | null>(null);
     const effectiveTermId = termId ?? activeTermId;
@@ -36,12 +47,28 @@ export function ExamPicker({
     const types = useMemo(() => sortExamTypes(exams.map((e) => e.exam_type)), [exams]);
     const effectiveType = examType && types.includes(examType) ? examType : types.length === 1 ? types[0] : null;
     const ofType = useMemo(() => exams.filter((e) => e.exam_type === effectiveType), [exams, effectiveType]);
-    const classes = useMemo(() => examClasses(ofType), [ofType]);
+    const classes = useMemo(() => {
+        const withExams = examClasses(ofType);
+        if (!allClasses) return withExams;
+        const seen = new Set(withExams.map((c) => c.key));
+        return [...withExams, ...allClasses.filter((c) => !seen.has(c.key))].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    }, [ofType, allClasses]);
     const effectiveGrade = gradeId && classes.some((c) => c.key === gradeId) ? gradeId : classes.length === 1 ? classes[0].key : null;
     const slots = useMemo(
         () => ofType.filter((e) => e.grade_id === effectiveGrade).sort((a, b) => examLabel(a).localeCompare(examLabel(b))),
         [ofType, effectiveGrade],
     );
+
+    // A class an admin picks with no exam of this type yet gets the term's exams, then the list reloads.
+    const termForFill = terms.find((t) => t.id === effectiveTermId) ?? null;
+    useEffect(() => {
+        if (!fillGaps || !termForFill || !effectiveType || !effectiveGrade || loading || slots.length > 0) return;
+        const key = `${termForFill.id}|${effectiveType}|${effectiveGrade}`;
+        if (filled.current.has(key)) return;
+        filled.current.add(key);
+        setFilling(true);
+        fillGaps(termForFill, types).then(reload).catch(() => undefined).finally(() => setFilling(false));
+    }, [fillGaps, termForFill, effectiveType, effectiveGrade, loading, slots.length, types, reload]);
 
     // Picking a new term starts the later steps over.
     useEffect(() => {
@@ -89,6 +116,9 @@ export function ExamPicker({
                     {effectiveGrade ? (
                         <>
                             <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 }}>Subject</Text>
+                            {slots.length === 0 ? (
+                                filling ? <LoadingView /> : <EmptyState title="No subjects for this class yet" description="Offer subjects for this class's level under Subjects, then they appear here." />
+                            ) : null}
                             <ListCard>
                                 {slots.map((e) => (
                                     <ListRow
