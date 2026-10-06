@@ -38,7 +38,10 @@ export const BAND_LABELS: Record<CurriculumBand, string> = {
     '844_SECONDARY': '8-4-4 Secondary',
 };
 
-/** Pre-primary runs on the Lower Primary learning areas — no separate seeded set. */
+/**
+ * Pre-primary (Playgroup, PP1, PP2) runs on the Lower Primary learning areas —
+ * no separate seeded set.
+ */
 const CBC_PRIMARY_BANDS: CurriculumBand[] = ['CBC_PRE_PRIMARY', 'CBC_LOWER_PRIMARY'];
 
 const CBC_ALL_BANDS: CurriculumBand[] = [
@@ -88,7 +91,7 @@ export interface GradeLike {
 }
 
 /**
- * The band a class belongs to, read from its seeded code (`PP1`, `G7`,
+ * The band a class belongs to, read from its seeded code (`PG`, `PP1`, `G7`,
  * `S4`, `F2`) and falling back to its display name. Returns null for a
  * grade we can't place — a school's own naming — which callers treat as
  * "don't filter".
@@ -97,7 +100,7 @@ export function bandForGrade(grade: GradeLike | null | undefined): CurriculumBan
     if (!grade) return null;
 
     const code = (grade.code || '').trim().toUpperCase();
-    if (/^PP\d*$/.test(code)) return 'CBC_PRE_PRIMARY';
+    if (/^(PP\d*|PG)$/.test(code)) return 'CBC_PRE_PRIMARY';
     const byCode = code.match(/^([GSF])(\d{1,2})$/);
     if (byCode) {
         const n = parseInt(byCode[2], 10);
@@ -107,7 +110,7 @@ export function bandForGrade(grade: GradeLike | null | undefined): CurriculumBan
     }
 
     const name = (grade.name_display || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    if (/^pre[\s-]?primary/.test(name) || /^pp\s*\d*$/.test(name)) return 'CBC_PRE_PRIMARY';
+    if (/^pre[\s-]?primary/.test(name) || /^pp\s*\d*$/.test(name) || /^play[\s-]?group\b/.test(name)) return 'CBC_PRE_PRIMARY';
     const byGrade = name.match(/^grade\s*(\d{1,2})\b/);
     if (byGrade) return cbcBandForGradeNumber(parseInt(byGrade[1], 10));
     if (/^(standard|std|class)\s*\d{1,2}\b/.test(name)) return '844_PRIMARY';

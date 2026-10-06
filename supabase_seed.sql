@@ -9,7 +9,7 @@
 -- ── 1. ACADEMIC LEVELS ──────────────────────────────────────
 
 INSERT INTO academic_levels (code, name, description) VALUES
-  ('CBC', 'Competency Based Curriculum', 'Pre-primary through Grade 12 (2-6-3-3 structure)'),
+  ('CBC', 'Competency Based Curriculum', 'Playgroup and Pre-primary through Grade 12 (2-6-3-3 structure)'),
   ('844', '8-4-4 System',               '8 years primary, 4 years secondary, 4 years university')
 ON CONFLICT (code) DO NOTHING;
 
@@ -24,8 +24,9 @@ BEGIN
   SELECT id INTO v_cbc FROM academic_levels WHERE code = 'CBC';
   SELECT id INTO v_844 FROM academic_levels WHERE code = '844';
 
-  -- CBC grades: PP1–PP2, Grade 1–12
+  -- CBC grades: Playgroup, PP1–PP2, Grade 1–12
   INSERT INTO grades (academic_level_id, code, name_display, numeric_order, is_exam_class) VALUES
+    (v_cbc, 'PG',  'Playgroup',     0,  false),
     (v_cbc, 'PP1', 'Pre-Primary 1', 1,  false),
     (v_cbc, 'PP2', 'Pre-Primary 2', 2,  false),
     (v_cbc, 'G1',  'Grade 1',       3,  false),
