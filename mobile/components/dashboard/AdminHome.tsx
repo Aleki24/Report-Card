@@ -1,4 +1,5 @@
 import React from 'react';
+import { HomeScreen } from './Hero';
 import {
     BarChart3, BookOpen, Briefcase, CalendarCheck, CircleCheck, ClipboardList, FileText, GraduationCap, Megaphone,
     UserPlus, Users, Wallet,
@@ -8,7 +9,7 @@ import { totalAttendanceCount } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { hueForHref } from '@/lib/hues';
-import { ErrorBanner, Screen } from '@/components/ui';
+import { ErrorBanner } from '@/components/ui';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { PendingSchoolsNotice } from '@/components/platform/PendingSchools';
 import { GradeResults } from './GradeResults';
@@ -50,7 +51,7 @@ export function AdminHome({ name }: { name: string }) {
     let i = 0;
 
     return (
-        <Screen onRefresh={refresh} refreshing={refreshing}>
+        <HomeScreen onRefresh={refresh} refreshing={refreshing}>
             <PendingSchoolsNotice />
             {data ? <SetupChecklist data={data} schoolKey={profile?.school_id ?? 'school'} /> : null}
             <Reveal index={i++}>
@@ -126,6 +127,6 @@ export function AdminHome({ name }: { name: string }) {
                     </Reveal>
                 </>
             ) : null}
-        </Screen>
+        </HomeScreen>
     );
 }

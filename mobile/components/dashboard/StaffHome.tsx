@@ -1,8 +1,8 @@
 import React from 'react';
+import { HomeScreen } from './Hero';
 import { Bell } from 'lucide-react-native';
 import type { DashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { Screen } from '@/components/ui';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { DashboardHero } from './Hero';
 import { InsightCard, LinkRow, Reveal } from './kit';
@@ -14,7 +14,7 @@ import { InsightCard, LinkRow, Reveal } from './kit';
 export function StaffHome({ name, jobTitle }: { name: string; jobTitle: string | null }) {
     const summary = useApiQuery<DashboardData>('/api/school/dashboard', { raw: true });
     return (
-        <Screen onRefresh={summary.refresh} refreshing={summary.refreshing}>
+        <HomeScreen onRefresh={summary.refresh} refreshing={summary.refreshing}>
             <Reveal index={0}>
                 <DashboardHero
                     name={name}
@@ -30,6 +30,6 @@ export function StaffHome({ name, jobTitle }: { name: string; jobTitle: string |
                     <LinkRow label="Announcements" desc="Read the latest notices from the school" icon={Bell} hue="rose" href="/staff/announcements" last />
                 </InsightCard>
             </Reveal>
-        </Screen>
+        </HomeScreen>
     );
 }

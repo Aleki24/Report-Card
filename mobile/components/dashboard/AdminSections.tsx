@@ -201,7 +201,7 @@ export function AcademicSummary({ summary }: { summary: DashboardData['academicS
             <View style={{ marginTop: spacing.md }}><Meter value={summary.passRate} color={color} height={10} /></View>
             <View style={styles.legendRow}>
                 <LegendItem color={color} count="" label={passRateLabel(summary.passRate)} />
-                {summary.recentAvg != null ? <Text style={styles.todoDetail}>{summary.recentAvg}% average across {pluralize(summary.markCount, 'mark')}</Text> : null}
+                {summary.recentAvg != null ? <Text style={styles.todoDetail}>{summary.recentAvg}% average this year</Text> : null}
             </View>
         </View>
     );

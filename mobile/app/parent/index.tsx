@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { HomeScreen } from '@/components/dashboard/Hero';
 import { ScrollView, Text, View } from 'react-native';
 import { MODULES } from '@shared/platform/modules';
 import { date, dateTime, humanize, money, personName } from '@shared/ops/format';
@@ -180,7 +181,7 @@ export default function ParentHomeScreen() {
     }
 
     return (
-        <Screen onRefresh={() => { void reload(); setSignal((n) => n + 1); }} refreshing={false}>
+        <HomeScreen onRefresh={() => { void reload(); setSignal((n) => n + 1); }} refreshing={false}>
             <Reveal index={0}>
                 <HeroFrame name={profile?.first_name ?? ''} gradient={scheme === 'dark' ? PARENT_HERO_DARK : PARENT_HERO}>
                     <Text style={styles.heroLine}>Results, fees, attendance, the bus and school news for {linked.length === 1 ? personName(linked[0].student.user) : 'each of your children'}.</Text>
@@ -214,7 +215,7 @@ export default function ParentHomeScreen() {
                 </View>
             ) : null}
             <View style={{ height: 1, backgroundColor: colors.background }} />
-        </Screen>
+        </HomeScreen>
     );
 }
 

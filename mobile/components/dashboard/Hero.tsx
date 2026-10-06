@@ -1,4 +1,5 @@
 import React from 'react';
+import { Screen } from '@/components/ui';
 import { Image, Pressable, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Rect } from 'react-native-svg';
@@ -134,6 +135,14 @@ export function ProfileBar() {
     );
 }
 
+/**
+ * Every home's screen: the signed-in person's bar stays pinned at the top
+ * while the hero and sections scroll beneath it.
+ */
+export function HomeScreen(props: Omit<React.ComponentProps<typeof Screen>, 'header'>) {
+    return <Screen {...props} header={<ProfileBar />} />;
+}
+
 /** A figure on the hero's frosted glass: learners, present today, pass rate. */
 export interface HeroStat { label: string; value: string | number; icon: LucideIcon; href?: Href }
 
@@ -177,8 +186,6 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
     const { colors } = useTheme();
     const styles = useStyles();
     return (
-        <>
-        <ProfileBar />
         <LinearGradient colors={gradient ?? colors.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
             <Svg style={styles.rings} width={220} height={220} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <Circle cx={160} cy={60} r={90} fill="rgba(255,255,255,0.07)" />
@@ -194,7 +201,6 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
             {children}
             <View style={styles.beads}><Beadwork /></View>
         </LinearGradient>
-        </>
     );
 }
 
