@@ -58,6 +58,8 @@ export const timetableRequirements = defineResource({
         lessons_per_week: count(20).pipe(z.number().min(1, 'At least one lesson')),
         double_lessons: count(10).default(0),
         room_type: z.preprocess(v => (v === '' ? null : v), z.enum(ROOM_TYPES).nullable()).optional(),
+        /** Electives taught in parallel; empty lets the generator decide. */
+        option_block: z.preprocess(v => (v === '' || v === undefined ? null : Number(v)), z.number().int().min(1).max(12).nullable()).optional(),
     }),
     validate: v => (Number(v.double_lessons ?? 0) * 2 > Number(v.lessons_per_week) ? 'Each double uses two of the weekly lessons.' : null),
     select: '*, stream:grade_streams(full_name), subject:subjects(name, code), teacher:users!timetable_requirements_teacher_id_fkey(first_name, last_name)',

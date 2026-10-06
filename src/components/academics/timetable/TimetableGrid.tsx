@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
-import { cellLines, type GridMode } from '@/lib/ops/forms/academics';
-import { gridRows, lessonAt, type GridRow } from '@/lib/timetable/layout';
+import { slotLines, type GridMode } from '@/lib/ops/forms/academics';
+import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';
 
 export type { GridMode };
 
@@ -18,12 +18,13 @@ interface Props {
     onCellClick?: (day: number, row: GridRow, lesson: TimetableLesson | null) => void;
 }
 
-function LessonCell({ lesson, mode, selected }: { lesson: TimetableLesson; mode: GridMode; selected: boolean }) {
-    const [top, bottom] = cellLines(lesson, mode);
+function LessonCell({ lessons, mode, selected }: { lessons: readonly TimetableLesson[]; mode: GridMode; selected: boolean }) {
+    const [top, bottom] = slotLines(lessons, mode);
+    const block = lessons.length > 1;
     return (
-        <div className={cn('flex h-full flex-col justify-center rounded-lg px-2 py-1.5 text-left', selected ? 'bg-primary text-primary-foreground' : 'bg-primary/10')}>
+        <div className={cn('flex h-full flex-col justify-center rounded-lg px-2 py-1.5 text-left', selected ? 'bg-primary text-primary-foreground' : block ? 'bg-violet-500/12 ring-1 ring-violet-500/25' : 'bg-primary/10')}>
             <span className="flex items-center gap-1 truncate text-xs font-semibold">
-                {lesson.locked && <Lock className="size-3 shrink-0" aria-label="Pinned" />}
+                {lessons.some(l => l.locked) && <Lock className="size-3 shrink-0" aria-label="Pinned" />}
                 {top}
             </span>
             {bottom && <span className={cn('truncate text-[10px]', selected ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{bottom}</span>}
@@ -42,10 +43,11 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
     const interactive = !!onCellClick;
 
     const cell = (day: number, row: GridRow) => {
-        const lesson = lessonAt(config, lessons, day, row);
-        const content = lesson ? <LessonCell lesson={lesson} mode={mode} selected={lesson.id === selectedId} /> : <span className="block h-full rounded-lg border border-dashed border-border/60" />;
+        const here = lessonsAt(config, lessons, day, row);
+        const lesson = here[0] ?? null;
+        const content = lesson ? <LessonCell lessons={here} mode={mode} selected={here.some(l => l.id === selectedId)} /> : <span className="block h-full rounded-lg border border-dashed border-border/60" />;
         return interactive ? (
-            <button type="button" onClick={() => onCellClick(day, row, lesson)} className="block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${lesson.subject?.name ?? ''}` : ': free'}`}>
+            <button type="button" onClick={() => onCellClick(day, row, lesson)} className="block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${here.map(l => l.subject?.name ?? '').join(', ')}` : ': free'}`}>
                 {content}
             </button>
         ) : <div className="h-full min-h-12">{content}</div>;

@@ -1,7 +1,9 @@
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { bandForGrade, type CurriculumBand } from '@/lib/curriculum-bands';
 import { HttpError } from '@/lib/platform/access';
-import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, timetableConfigSchema, type TimetableConfig, type TimetableLesson } from './config';
+import { embedOne } from '@/lib/postgrest';
+import { planClasses, type BlockLoad } from './blocks';
+import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
 
@@ -44,4 +46,64 @@ export async function streamBands(schoolId: string): Promise<Map<string, Curricu
         const grade = Array.isArray(row.grade) ? row.grade[0] : row.grade;
         return [row.id as string, bandForGrade(grade as { code: string | null; name_display: string | null } | null)];
     }));
+}
+
+export interface LoadRow {
+    id: string;
+    grade_stream_id: string;
+    subject_id: string;
+    teacher_id: string | null;
+    lessons_per_week: number;
+    double_lessons: number;
+    room_type: string | null;
+    option_block: number | null;
+    subject: { name: string; code: string | null; category: string | null; subject_type: string | null } | null;
+    stream: { full_name: string; grade: { code: string | null; name_display: string | null } | null } | null;
+    teacher: { first_name: string; last_name: string } | null;
+}
+
+export type PlannedLoad = BlockLoad & { row: LoadRow };
+
+/**
+ * The school's teaching loads, each class's teaching periods (its section's
+ * bell) and the plan the generator will follow: whole-class subjects and
+ * option blocks. One reading for the generator and the readiness check.
+ */
+export async function loadTimetablePlan(schoolId: string) {
+    const [config, bands, { data, error }, choiceRows] = await Promise.all([
+        loadConfig(schoolId),
+        streamBands(schoolId),
+        db().from('timetable_requirements')
+            .select('id, grade_stream_id, subject_id, teacher_id, lessons_per_week, double_lessons, room_type, option_block, subject:subjects(name, code, category, subject_type), stream:grade_streams(full_name, grade:grades(code, name_display)), teacher:users!timetable_requirements_teacher_id_fkey(first_name, last_name)')
+            .eq('school_id', schoolId)
+            .limit(5000),
+        // Learners' elective choices, read through their class, so blocks follow what is actually taken together.
+        db().from('student_subjects')
+            .select('student_id, subject_id, student:students!inner(current_grade_stream_id)')
+            .eq('school_id', schoolId)
+            .eq('role', 'ELECTIVE')
+            .limit(20000),
+    ]);
+    if (error) throw error;
+    if (choiceRows.error) throw choiceRows.error;
+    const choices = new Map<string, Map<string, Set<string>>>();
+    for (const c of choiceRows.data ?? []) {
+        const streamId = embedOne<{ current_grade_stream_id: string | null }>(c.student)?.current_grade_stream_id;
+        if (!streamId) continue;
+        const bySubject = choices.get(streamId) ?? new Map<string, Set<string>>();
+        bySubject.set(c.subject_id as string, (bySubject.get(c.subject_id as string) ?? new Set()).add(c.student_id as string));
+        choices.set(streamId, bySubject);
+    }
+    const rows = ((data ?? []) as unknown as LoadRow[]).map(r => {
+        const stream = embedOne(r.stream);
+        return { ...r, subject: embedOne(r.subject), stream: stream ? { ...stream, grade: embedOne(stream.grade) } : null, teacher: embedOne(r.teacher) };
+    });
+    const sectionOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null);
+    const capacityOf = (streamId: string) => config.days.length * sectionOf(streamId).periods.filter(p => !p.is_break).length;
+    const loads: PlannedLoad[] = rows.map(r => ({
+        id: r.id, streamId: r.grade_stream_id, subjectId: r.subject_id, subjectName: r.subject?.name ?? '', subjectType: r.subject?.subject_type ?? null,
+        category: r.subject?.category ?? null, teacherId: r.teacher_id, lessons: r.lessons_per_week, doubles: r.double_lessons,
+        optionBlock: r.option_block, row: r,
+    }));
+    return { config, rows, sectionOf, capacityOf, plans: planClasses(loads, capacityOf, id => choices.get(id)) };
 }
