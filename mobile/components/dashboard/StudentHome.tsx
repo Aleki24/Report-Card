@@ -1,4 +1,5 @@
 import { useDownload } from '@/lib/useDownload';
+import { HomeScreen } from './Hero';
 import React, { useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -14,7 +15,7 @@ import { useSchoolPassMark } from '@/lib/usePassMark';
 import { daysUntil, gradeTone, errorMessage, fileSafe, formatCurrency, getTimeAgo, pluralize } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme, type Palette } from '@/lib/theme';
 import type { DashboardData, FeeRecord } from '@/lib/types';
-import { Notice, Screen } from '@/components/ui';
+import { Notice } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { SubmitAssignment } from '@/components/student/SubmitAssignment';
 import { StudyGoals } from '@/components/student/StudyGoals';
@@ -148,7 +149,7 @@ export function StudentHome() {
     let i = 0;
 
     return (
-        <Screen onRefresh={refresh} refreshing={dash.refreshing}>
+        <HomeScreen onRefresh={refresh} refreshing={dash.refreshing}>
             <Reveal index={i++}>
                 <HeroFrame
                     name={profile?.first_name ?? ''}
@@ -287,7 +288,7 @@ export function StudentHome() {
                     </InsightCard>
                 ) : null}
             </Reveal>
-        </Screen>
+        </HomeScreen>
     );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { HomeScreen } from './Hero';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -10,7 +11,6 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { hueForHref } from '@/lib/hues';
 import type { ClassTeacherStats, SubjectTeacherStats } from '@/lib/types';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
-import { Screen } from '@/components/ui';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { DashboardHero, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
@@ -100,7 +100,7 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
     let i = 0;
 
     return (
-        <Screen onRefresh={() => { summary.refresh(); stats.refresh(); }} refreshing={summary.refreshing || stats.refreshing}>
+        <HomeScreen onRefresh={() => { summary.refresh(); stats.refresh(); }} refreshing={summary.refreshing || stats.refreshing}>
             <Reveal index={i++}>
                 <DashboardHero name={name} term={summary.data?.term ?? null} canEditTerms={false} summary={markingLine} actions={actions} />
             </Reveal>
@@ -156,7 +156,7 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
                 </InsightCard>
                 <HowTo variant={variant} />
             </Reveal>
-        </Screen>
+        </HomeScreen>
     );
 }
 

@@ -36,12 +36,15 @@ export function Screen({
     onRefresh,
     refreshing,
     footer,
+    header,
 }: {
     children: React.ReactNode;
     onRefresh?: () => void;
     refreshing?: boolean;
     /** Pinned below the scroll area (e.g. a save bar). */
     footer?: React.ReactNode;
+    /** Pinned above the scroll area; content scrolls under it (e.g. the home's profile bar). */
+    header?: React.ReactNode;
 }) {
     const { colors } = useTheme();
     const styles = useStyles();
@@ -56,6 +59,7 @@ export function Screen({
     const isRefreshing = onRefresh ? !!refreshing : pulling;
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
+            {header ? <View style={styles.pinned}><View style={styles.pinnedInner}>{header}</View></View> : null}
             {/* Android 15 draws edge to edge, so the window no longer resizes for the keyboard:
                 scroll the focused field into view, and lift a pinned save bar above the keyboard. */}
             <KeyboardAvoidingView behavior="padding" enabled={!!footer} style={styles.fill}>
@@ -599,6 +603,8 @@ const useStyles = makeStyles((colors) => ({
     scrollContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     // Cap line length on tablets so screens stay readable at every width.
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
+    pinned: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, zIndex: 2 },
+    pinnedInner: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
     header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
     headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
