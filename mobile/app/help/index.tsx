@@ -52,6 +52,12 @@ export default function HelpScreen() {
     const router = useRouter();
     const user = useOptionalCurrentUser();
     const mine = user?.role ? manualsFor(user.role, user.access.duties) : [];
+    // Signed out, or an admin who hands guides out: every guide. Anyone else: their own,
+    // and staff also get the learner and parent guides to help families (as on the web).
+    const showAll = !user?.role || user.role === 'ADMIN';
+    const forFamilies = !showAll && user?.role !== 'STUDENT' && user?.role !== 'PARENT'
+        ? (['student', 'parent'] as const).filter((s) => !mine.includes(s))
+        : [];
 
     return (
         <Screen>
@@ -65,13 +71,22 @@ export default function HelpScreen() {
                 </>
             ) : null}
 
-            <SectionLabel>Guides by account</SectionLabel>
-            <Text style={styles.note}>Start with the guide for the kind of account you have.</Text>
-            <GuideList slugs={ROLE_MANUAL_SLUGS} />
+            {showAll ? (
+                <>
+                    <SectionLabel>Guides by account</SectionLabel>
+                    <Text style={styles.note}>Start with the guide for the kind of account you have.</Text>
+                    <GuideList slugs={ROLE_MANUAL_SLUGS} />
 
-            <SectionLabel>Guides for duties</SectionLabel>
-            <Text style={styles.note}>If your school has given you a duty, such as bursar, matron or DOS, read its guide as well.</Text>
-            <GuideList slugs={DUTY_MANUAL_SLUGS} />
+                    <SectionLabel>Guides for duties</SectionLabel>
+                    <Text style={styles.note}>If your school has given you a duty, such as bursar, matron or DOS, read its guide as well.</Text>
+                    <GuideList slugs={DUTY_MANUAL_SLUGS} />
+                </>
+            ) : forFamilies.length > 0 ? (
+                <>
+                    <SectionLabel>To help learners and parents</SectionLabel>
+                    <GuideList slugs={forFamilies} />
+                </>
+            ) : null}
 
             <SectionLabel>Still stuck?</SectionLabel>
             <ListCard>
