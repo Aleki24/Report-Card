@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { AlertTriangle, CalendarClock, ChevronDown, FlaskConical, Layers, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
-import { daySummary, firstCard, loadsSummary, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
+import { basisLine, daySummary, firstCard, loadsSummary, overloadMessage, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
 import {
     LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName,
     type ImportLoadsResult, type Room, type TeachingLoad,
@@ -131,6 +131,8 @@ function ClassFit({ plan }: { plan: TimetablePlan }) {
                     </View>
                     <ProgressBar value={(c.needed / Math.max(1, c.capacity)) * 100} color={c.fits ? colors.success : colors.danger} />
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
+                    {basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
+                    {!c.fits ? <Text style={[styles.fitLine, { color: colors.danger }]}>{overloadMessage(c)}</Text> : null}
                     {c.blocks.map((b) => (
                         <View key={b.number} style={[styles.block, b.teacherClash && { backgroundColor: colors.warningBg }]}>
                             <Text style={styles.blockTitle}>{b.label}{b.manual ? '' : ' (auto)'} · {b.lessons}/wk</Text>
@@ -206,6 +208,12 @@ export function TimetableWizard() {
                         <Text style={styles.fix}>Fix</Text>
                     </Pressable>
                 ))}
+                {plan.notes.length > 0 ? (
+                    <View style={[styles.blocker, { flexDirection: 'column', gap: 4 }]}>
+                        <Text style={[styles.blockerText, { fontFamily: fonts.bold }]}>Worth checking — these don’t stop generating</Text>
+                        {plan.notes.map((n, i) => <Text key={i} style={styles.fitLine} onPress={() => setOpen(n.card)}>• {n.message}</Text>)}
+                    </View>
+                ) : null}
                 <View style={{ marginTop: spacing.md }}>
                     <Button label={generating ? 'Generating…' : plan.drafts > 0 ? 'Generate a new draft' : 'Generate timetable'} onPress={() => void generate()} loading={generating} disabled={!ready} block />
                 </View>

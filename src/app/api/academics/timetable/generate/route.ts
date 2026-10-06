@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib/timetable/solver';
 import { AFTERNOON_CATEGORIES, MAIN_SECTION_ID, MORNING_CATEGORIES, minutesOf, type TimetablePeriod } from '@/lib/timetable/config';
 import { loadTimetablePlan, loadVersion, type LoadRow, type PlannedLoad } from '@/lib/timetable/server';
-import { blockLabel, planProblem } from '@/lib/timetable/blocks';
+import { blockLabel, planProblem, teacherWeeks } from '@/lib/timetable/blocks';
 import { insertChunked } from '@/lib/db-batch';
 
 export const maxDuration = 60;
@@ -25,7 +25,7 @@ const blockLabelOf = (id: string) => blockLabel(Number(id.split(':')[2]));
 export const POST = route('timetable generate', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const body = await parseBody(request, bodySchema);
     const db = createSupabaseAdmin();
-    const [{ config, rows, sectionOf, plans }, { data: rooms, error: roomsError }] = await Promise.all([
+    const [{ config, rows, sectionOf, capacityOf, plans }, { data: rooms, error: roomsError }] = await Promise.all([
         loadTimetablePlan(access.schoolId),
         db.from('rooms').select('id, room_type').eq('school_id', access.schoolId),
     ]);
@@ -34,6 +34,16 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
 
     // Option blocks already fit electives into the week; what still overflows needs the school.
     const problems = [...plans.values()].map(p => planProblem(p, rows.find(r => r.grade_stream_id === p.streamId)?.stream?.full_name ?? 'A class')).filter((m): m is string => !!m);
+    // A teacher's week across every class, Junior and Senior Secondary alike, must fit the periods.
+    const capacityByTeacher = new Map<string, number>();
+    rows.forEach(r => { if (r.teacher_id) capacityByTeacher.set(r.teacher_id, Math.max(capacityByTeacher.get(r.teacher_id) ?? 0, capacityOf(r.grade_stream_id))); });
+    for (const [teacherId, lessons] of teacherWeeks(plans.values())) {
+        const capacity = capacityByTeacher.get(teacherId) ?? 0;
+        if (lessons > capacity) {
+            const t = rows.find(r => r.teacher_id === teacherId)?.teacher;
+            problems.push(`${t ? `${t.first_name} ${t.last_name}` : 'A teacher'} has ${lessons} lessons a week but the week has ${capacity} periods.`);
+        }
+    }
     if (problems.length > 0) throw new HttpError(400, problems.join(' '));
 
     // Whole-class loads as they are; each option block as one requirement booking all its teachers.

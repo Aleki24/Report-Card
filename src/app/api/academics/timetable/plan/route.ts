@@ -1,7 +1,9 @@
 import { route } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { loadTimetablePlan, type PlannedLoad } from '@/lib/timetable/server';
-import { assess, type PlanLoad, type TimetablePlan } from '@/lib/timetable/readiness';
+import { assess, type PlanLoad, type TeacherWeek, type TimetablePlan } from '@/lib/timetable/readiness';
+import { teacherWeeks } from '@/lib/timetable/blocks';
+import { ministryAllocation } from '@/lib/timetable/allocations';
 
 const toLoad = (l: PlannedLoad): PlanLoad => ({
     id: l.id,
@@ -13,7 +15,7 @@ const toLoad = (l: PlannedLoad): PlanLoad => ({
 /** GET — the studio's picture: the day, each class's fit and option blocks, drafts, and what blocks generating. */
 export const GET = route('timetable plan', { module: 'timetable', permission: 'timetable.manage' }, async ({ access }) => {
     const db = createSupabaseAdmin();
-    const [{ config, rows, plans }, rooms, versions] = await Promise.all([
+    const [{ config, rows, plans, capacityOf }, rooms, versions] = await Promise.all([
         loadTimetablePlan(access.schoolId),
         db.from('rooms').select('id', { count: 'exact', head: true }).eq('school_id', access.schoolId),
         db.from('timetable_versions').select('name, status').eq('school_id', access.schoolId),
@@ -30,8 +32,31 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
             core: p.core.map(toLoad),
             blocks: p.blocks.map(b => ({ number: b.number, label: b.label, lessons: b.lessons, manual: b.manual, teacherClash: b.teacherClash, loads: b.loads.map(toLoad) })),
             unassigned: [...p.core, ...p.blocks.flatMap(b => b.loads)].filter(l => !l.teacherId).length,
+            basis: p.basis,
+            learnersWithChoices: p.learnersWithChoices,
+            offMinistry: rows.filter(r => r.grade_stream_id === p.streamId).flatMap(r => {
+                const ministry = r.subject ? ministryAllocation(r.stream?.grade ?? null, r.subject) : null;
+                return ministry && ministry.lessons !== r.lessons_per_week ? [{ subject: r.subject?.name ?? '', lessons: r.lessons_per_week, ministry: ministry.lessons }] : [];
+            }),
         }))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    // Every teacher's whole week, Junior and Senior Secondary together, so no one is booked past the week.
+    const weeks = teacherWeeks(plans.values());
+    const teacherInfo = new Map<string, { name: string; capacity: number; classes: Set<string> }>();
+    for (const r of rows) {
+        if (!r.teacher_id) continue;
+        const t = teacherInfo.get(r.teacher_id) ?? { name: r.teacher ? `${r.teacher.first_name} ${r.teacher.last_name}`.trim() : 'A teacher', capacity: 0, classes: new Set<string>() };
+        t.capacity = Math.max(t.capacity, capacityOf(r.grade_stream_id));
+        t.classes.add(r.stream?.full_name ?? '');
+        teacherInfo.set(r.teacher_id, t);
+    }
+    const teachers: TeacherWeek[] = [...weeks.entries()]
+        .map(([id, lessons]) => {
+            const t = teacherInfo.get(id);
+            return { name: t?.name ?? 'A teacher', lessons, capacity: t?.capacity ?? 0, classes: [...(t?.classes ?? [])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) };
+        })
+        .sort((a, b) => b.lessons - a.lessons);
+
     const base = {
         day: {
             days: config.days.length,
@@ -43,6 +68,7 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
         rooms: rooms.count ?? 0,
         loads: rows.length,
         classes,
+        teachers,
         drafts: (versions.data ?? []).length,
         published: (versions.data ?? []).find(v => v.status === 'PUBLISHED')?.name ?? null,
     };

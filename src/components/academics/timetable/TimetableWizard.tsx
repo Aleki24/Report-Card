@@ -15,7 +15,7 @@ import {
     type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import {
-    daySummary, firstCard, loadsSummary, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
+    basisLine, daySummary, firstCard, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
 } from '@/lib/timetable/readiness';
 import { cn } from '@/lib/utils';
 
@@ -144,6 +144,8 @@ function ClassFit({ plan, focus }: { plan: TimetablePlan; focus: string | null }
                             <div className={cn('h-full rounded-full', c.fits ? 'bg-emerald-500' : 'bg-rose-500')} style={{ width: `${pct}%` }} />
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">Whole class: {c.core.map(l => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</p>
+                        {basisLine(c) && <p className="mt-1 text-xs text-muted-foreground">{basisLine(c)}</p>}
+                        {!c.fits && <p className="mt-1 text-xs font-medium text-rose-700 dark:text-rose-300">{overloadMessage(c)}</p>}
                         {c.blocks.length > 0 && (
                             <ul className="mt-2 flex flex-col gap-1.5">
                                 {c.blocks.map(b => (
@@ -192,6 +194,16 @@ function Readiness({ plan, generating, onGenerate, onOpen }: { plan: TimetablePl
                         </li>
                     ))}
                 </ul>
+            )}
+            {plan.notes.length > 0 && (
+                <details className="mt-3 rounded-lg bg-card px-3 py-2 text-sm">
+                    <summary className="cursor-pointer font-medium">Worth checking ({plan.notes.length}) — these don’t stop generating</summary>
+                    <ul className="mt-2 flex flex-col gap-1 text-muted-foreground">
+                        {plan.notes.map((n, i) => (
+                            <li key={i}><button type="button" onClick={() => onOpen(n)} className="text-left hover:text-foreground">{n.message}</button></li>
+                        ))}
+                    </ul>
+                </details>
             )}
         </section>
     );
