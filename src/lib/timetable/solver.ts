@@ -46,6 +46,11 @@ export interface SolverRequirement {
     streamId: string;
     subjectId: string;
     teacherId: string | null;
+    /**
+     * Teachers booked at the same times as `teacherId`: an option block runs
+     * its electives in parallel, one teacher each, in a single class slot.
+     */
+    coTeacherIds?: readonly string[];
     lessons: number;
     doubles: number;
     roomType: string | null;
@@ -58,6 +63,10 @@ export interface SolverRequirement {
 }
 
 export interface SolverRoom { id: string; type: string }
+
+/** Every teacher a requirement books: its own and, for an option block, the others in parallel. */
+export const teachersOf = (r: Pick<SolverRequirement, 'teacherId' | 'coTeacherIds'>): string[] =>
+    [...new Set([...(r.teacherId ? [r.teacherId] : []), ...(r.coTeacherIds ?? [])])];
 
 export interface PinnedLesson { requirementId: string; day: number; period: number; roomId: string | null }
 
@@ -210,7 +219,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const byKey = sessions;
 
     const timelineOwners = (s: Session, roomId: string | null) => [
-        ...(s.req.teacherId ? [teacherKey(s.req.teacherId)] : []),
+        ...teachersOf(s.req).map(teacherKey),
         ...(roomId ? [roomKey(roomId)] : []),
     ];
     const mark = (s: Session, value: number) => {
@@ -253,7 +262,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         const g = streamGrids.get(s.req.streamId);
         const n = s.bell.teaching.length;
         if (g) for (let k = 0; k < s.length; k++) { const hit = g[day * n + slot + k]; if (hit >= 0 && hit !== s.key) blockers.add(hit); }
-        if (s.req.teacherId) busyIn(teacherKey(s.req.teacherId), s, day, slot, blockers);
+        for (const t of teachersOf(s.req)) busyIn(teacherKey(t), s, day, slot, blockers);
         let roomId: string | null = null;
         let roomBlocked = false;
         const typed = s.req.roomType ? roomsByType.get(s.req.roomType) : undefined;
@@ -322,7 +331,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
 
     // Each teacher's lessons, so their day is read from a handful of sessions, not 600 minutes.
     const teacherSessions = new Map<string, Session[]>();
-    sessions.forEach(s => { if (s.req.teacherId) teacherSessions.set(s.req.teacherId, [...(teacherSessions.get(s.req.teacherId) ?? []), s]); });
+    sessions.forEach(s => teachersOf(s.req).forEach(t => teacherSessions.set(t, [...(teacherSessions.get(t) ?? []), s])));
     /** A teacher's lessons on a day in clock order, with how many run on past `maxConsecutive`. */
     const teacherDay = (teacherId: string, day: number): { load: number; over: number; longRuns: number } => {
         const today = (teacherSessions.get(teacherId) ?? []).filter(s => s.day === day).sort((a, b) => a.bell.start[a.slot] - b.bell.start[b.slot]);
@@ -343,7 +352,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         return over * COST.consecutiveOver + load * load * COST.imbalance / 8;
     };
 
-    const localCost = (s: Session, day: number) => streamDayCost(s.req.streamId, day) + teacherDayCost(s.req.teacherId, day);
+    const localCost = (s: Session, day: number) => teachersOf(s.req).reduce((c, t) => c + teacherDayCost(t, day), streamDayCost(s.req.streamId, day));
 
     const candidateOrder = (s: Session) => {
         const all: [number, number][] = [];
@@ -370,8 +379,9 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
 
     // ── Greedy construction with ejection ────────────────────────────────
     const teacherLoad = new Map<string, number>();
-    input.requirements.forEach(r => { if (r.teacherId) teacherLoad.set(r.teacherId, (teacherLoad.get(r.teacherId) ?? 0) + r.lessons); });
-    const difficulty = (s: Session) => (s.length === 2 ? 1000 : 0) + (s.req.roomType ? 500 : 0) + (s.req.teacherId ? teacherLoad.get(s.req.teacherId) ?? 0 : 0) + random();
+    input.requirements.forEach(r => teachersOf(r).forEach(t => teacherLoad.set(t, (teacherLoad.get(t) ?? 0) + r.lessons)));
+    // A block books several teachers at once, so it is harder to place than any one of them.
+    const difficulty = (s: Session) => (s.length === 2 ? 1000 : 0) + (s.req.roomType ? 500 : 0) + teachersOf(s.req).reduce((n, t) => n + (teacherLoad.get(t) ?? 0), 0) + random();
     const queue = sessions.filter(s => s.day < 0).sort((a, b) => difficulty(b) - difficulty(a));
     const ejections = new Map<number, number>();
     const maxEjections = sessions.length * 6;
@@ -419,7 +429,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const affectedCost = (touched: readonly Session[], days: readonly number[]) => {
         let total = 0;
         const streams = new Set(touched.map(x => x.req.streamId));
-        const teachers = new Set(touched.map(x => x.req.teacherId).filter((t): t is string => !!t));
+        const teachers = new Set(touched.flatMap(x => teachersOf(x.req)));
         for (const d of new Set(days)) {
             streams.forEach(id => { total += streamDayCost(id, d); });
             teachers.forEach(id => { total += teacherDayCost(id, d); });
@@ -482,7 +492,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     }
     let cost = 0;
     const streamIds = new Set(input.requirements.map(r => r.streamId));
-    const teacherIds = new Set(input.requirements.map(r => r.teacherId).filter((t): t is string => !!t));
+    const teacherIds = new Set(input.requirements.flatMap(teachersOf));
     streamIds.forEach(id => { cost += streamWeekCost(id); });
     for (let d = 0; d < dayCount; d++) {
         streamIds.forEach(id => { cost += streamDayCost(id, d); });

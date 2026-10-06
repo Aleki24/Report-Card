@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
-import { cellLines, type GridMode } from '@shared/ops/forms/academics';
-import { gridRows, lessonAt, type GridRow } from '@shared/timetable/layout';
+import { slotLines, type GridMode } from '@shared/ops/forms/academics';
+import { gridRows, lessonsAt, type GridRow } from '@shared/timetable/layout';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 interface Props {
@@ -31,12 +31,13 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
     const rows = useMemo(() => gridRows(config, lessons), [config, lessons]);
 
     const cell = (day: number, row: GridRow) => {
-        const lesson = lessonAt(config, lessons, day, row);
-        const selected = !!lesson && lesson.id === selectedId;
-        const [top, bottom] = lesson ? cellLines(lesson, mode) : ['', ''];
+        const here = lessonsAt(config, lessons, day, row);
+        const lesson = here[0] ?? null;
+        const selected = here.some((l) => l.id === selectedId);
+        const [top, bottom] = slotLines(here, mode);
         const content = lesson ? (
-            <View style={[styles.lesson, selected && styles.lessonSelected]}>
-                <Text style={[styles.lessonTop, selected && { color: colors.white }]} numberOfLines={1}>{lesson.locked ? '🔒 ' : ''}{top}</Text>
+            <View style={[styles.lesson, here.length > 1 && styles.lessonBlock, selected && styles.lessonSelected]}>
+                <Text style={[styles.lessonTop, selected && { color: colors.white }]} numberOfLines={1}>{here.some((l) => l.locked) ? '🔒 ' : ''}{top}</Text>
                 {bottom ? <Text style={[styles.lessonBottom, selected && { color: colors.white }]} numberOfLines={1}>{bottom}</Text> : null}
             </View>
         ) : <View style={styles.free} />;
@@ -104,6 +105,7 @@ const useStyles = makeStyles((colors) => ({
     cellWrap: { minHeight: 48, flex: 1 },
     lesson: { flex: 1, justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.infoBg },
     lessonSelected: { backgroundColor: colors.primary },
+    lessonBlock: { backgroundColor: `${colors.primary}14`, borderWidth: 1, borderColor: `${colors.primary}40` },
     lessonTop: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
     lessonBottom: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted },
     free: { flex: 1, minHeight: 48, borderRadius: radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },

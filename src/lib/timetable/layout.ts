@@ -53,14 +53,21 @@ export function gridRows(config: TimetableConfig, lessons: readonly TimetableLes
     return [...seen.values()].sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
-/** The lesson in a row on a day: matched by clock time, so it works across bells. */
-export function lessonAt(config: TimetableConfig, lessons: readonly TimetableLesson[], day: number, row: GridRow): TimetableLesson | null {
-    return lessons.find(l => {
+/**
+ * The lessons in a row on a day, matched by clock time so it works across
+ * bells. A class's option block holds several, one per elective.
+ */
+export function lessonsAt(config: TimetableConfig, lessons: readonly TimetableLesson[], day: number, row: GridRow): TimetableLesson[] {
+    return lessons.filter(l => {
         if (l.day !== day) return false;
         const t = lessonTime(config, l);
         return !!t && t.start === row.start && t.end === row.end;
-    }) ?? null;
+    });
 }
+
+/** The first lesson in a row on a day (the one a click picks up). */
+export const lessonAt = (config: TimetableConfig, lessons: readonly TimetableLesson[], day: number, row: GridRow): TimetableLesson | null =>
+    lessonsAt(config, lessons, day, row)[0] ?? null;
 
 /** The period index of a row for a class's bell, for moving a lesson into it. */
 export function periodIndexOf(config: TimetableConfig, lesson: Pick<TimetableLesson, 'stream'>, row: GridRow): number {

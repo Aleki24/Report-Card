@@ -208,6 +208,13 @@ export function cellLines(l: TimetableLesson, mode: GridMode): [string, string] 
     return [subject, [l.stream?.full_name ?? '', teacherName(l.teacher)].filter(Boolean).join(' · ')];
 }
 
+/** A grid cell's two lines for one lesson or an option block's parallel electives. */
+export function slotLines(lessons: readonly TimetableLesson[], mode: GridMode): [string, string] {
+    if (lessons.length <= 1) return lessons[0] ? cellLines(lessons[0], mode) : ['', ''];
+    const subjects = lessons.map(l => l.subject?.code || l.subject?.name || 'Lesson').join(' / ');
+    return [subjects, `${lessons.length} electives in parallel`];
+}
+
 /** The classes a draft covers, by name. */
 export function lessonClasses(lessons: readonly TimetableLesson[]): LookupOption[] {
     const seen = new Map<string, string>();

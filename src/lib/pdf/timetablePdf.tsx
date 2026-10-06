@@ -2,8 +2,8 @@ import React from 'react';
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
 import { bandForGrade } from '@/lib/curriculum-bands';
 import { WEEKDAY_LABELS, sectionFor, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
-import { gridRows, lessonAt, type GridRow } from '@/lib/timetable/layout';
-import { cellLines, teacherName, type GridMode } from '@/lib/ops/forms/academics';
+import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';
+import { slotLines, teacherName, type GridMode } from '@/lib/ops/forms/academics';
 
 /**
  * Printable timetables: one landscape page per class, teacher or room. The
@@ -87,12 +87,12 @@ function Grid({ config, sheet }: { config: TimetableConfig; sheet: TimetableShee
     const rowH = Math.min(52, Math.max(22, avail / Math.max(1, lessonRows)));
 
     const cell = (day: number, row: GridRow) => {
-        const lesson = lessonAt(config, sheet.lessons, day, row);
-        if (!lesson) return <View key={day} style={st.cell} />;
-        const [top, bottom] = cellLines(lesson, sheet.mode);
+        const here = lessonsAt(config, sheet.lessons, day, row);
+        if (here.length === 0) return <View key={day} style={st.cell} />;
+        const [top, bottom] = slotLines(here, sheet.mode);
         return (
             <View key={day} style={st.cell}>
-                <View style={[st.lesson, { backgroundColor: fillFor(lesson.subject_id) }]}>
+                <View style={[st.lesson, { backgroundColor: here.length > 1 ? '#EDE9FE' : fillFor(here[0].subject_id) }]}>
                     <Text style={st.top}>{top}</Text>
                     {bottom ? <Text style={st.bottom}>{bottom}</Text> : null}
                 </View>
