@@ -63,10 +63,13 @@ export function Screen({
     const handleRefresh = onRefresh ?? refreshAll;
     const scrollRef = useRef<React.ElementRef<typeof KeyboardAwareScrollView>>(null);
     const contentRef = useRef<View>(null);
+    // Where the content view sits in the scroll view (below the scroll padding).
+    const contentTop = useRef(0);
     const scrollToView = useCallback<ScrollToView>((view) => {
         const content = contentRef.current;
-        if (!view || !content) return;
-        view.measureLayout(content, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true }), () => undefined);
+        const scroller = scrollRef.current;
+        if (!view || !content || typeof scroller?.scrollTo !== 'function') return;
+        view.measureLayout(content, (_x, y) => scroller.scrollTo({ y: Math.max(0, contentTop.current + y - spacing.md), animated: true }), () => undefined);
     }, []);
     const isRefreshing = onRefresh ? !!refreshing : pulling;
     return (
@@ -84,7 +87,8 @@ export function Screen({
                 >
                     <ScreenRefreshProvider registry={registry}>
                         <ScreenScrollContext.Provider value={scrollToView}>
-                            <View ref={contentRef} style={styles.content}>{children}</View>
+                            {/* Not collapsable: Fabric flattens layout-only views, and a flattened view cannot be measured against. */}
+                            <View ref={contentRef} collapsable={false} onLayout={(e) => { contentTop.current = e.nativeEvent.layout.y; }} style={styles.content}>{children}</View>
                         </ScreenScrollContext.Provider>
                     </ScreenRefreshProvider>
                 </KeyboardAwareScrollView>

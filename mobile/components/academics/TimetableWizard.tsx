@@ -102,7 +102,7 @@ function StudioCard({ icon: Icon, title, summary, state, open, onToggle, childre
     const styles = useStyles();
     const tone = state === 'done' ? { bg: colors.successBg, fg: colors.successText } : state === 'attention' ? { bg: colors.warningBg, fg: colors.warningText } : { bg: colors.mutedBg, fg: colors.muted };
     return (
-        <View ref={viewRef} style={[styles.card, open && { borderColor: colors.primary }]}>
+        <View ref={viewRef} collapsable={false} style={[styles.card, open && { borderColor: colors.primary }]}>
             <Pressable onPress={onToggle} style={styles.cardHead} accessibilityRole="button" accessibilityState={{ expanded: open }}>
                 <View style={[styles.cardIcon, { backgroundColor: state === 'attention' ? colors.warningBg : colors.primarySoft }]}>
                     <Icon size={20} color={state === 'attention' ? colors.warning : colors.primary} />
