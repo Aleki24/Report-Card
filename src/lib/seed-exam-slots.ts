@@ -6,6 +6,7 @@
  * CATs: teachers add manually as needed
  */
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { isBuiltInExamType } from './exam-types';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 
@@ -133,7 +134,8 @@ export async function seedExamSlots(options: SeedOptions) {
         }
 
         slots.push({
-          name: `${termName} ${examType.charAt(0) + examType.slice(1).toLowerCase().replace('_', '-')} - ${subject.name}`,
+          // Built-in codes read as words ("Sub-county"); a school's own type keeps its spelling ("KNEC SBA").
+          name: `${termName} ${isBuiltInExamType(examType) ? examType.charAt(0) + examType.slice(1).toLowerCase().replace('_', '-') : examType} - ${subject.name}`,
           exam_type: examType,
           subject_id: subject.id,
           grade_id: gradeId,

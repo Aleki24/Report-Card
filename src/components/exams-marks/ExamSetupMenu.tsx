@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { CalendarPlus, ChevronDown, Globe2, Loader2, PenLine, Plus, RefreshCw, type LucideIcon } from 'lucide-react';
-import { EXTERNAL_EXAM_TYPES, INTERNAL_EXAM_TYPES, type ExamTypeDefinition } from '@/lib/exam-types';
+import { CalendarPlus, ChevronDown, Globe2, Loader2, PenLine, Plus, RefreshCw, Sparkles, type LucideIcon } from 'lucide-react';
+import { EXTERNAL_EXAM_TYPES, INTERNAL_EXAM_TYPES, customExamTypeCode, isValidExamType, type ExamTypeDefinition } from '@/lib/exam-types';
 import { TONES, type Tone } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +59,10 @@ function Section({ label, children }: { label: string; children: React.ReactNode
  */
 export function ExamSetupMenu({ existingTypes, seeding, onAddRound, onAddMissingSubjects, onCreateManually }: ExamSetupMenuProps) {
   const [open, setOpen] = useState(false);
+  // A school's own exam (KNEC SBA, a joint exam): named here, added like any other round.
+  const [customName, setCustomName] = useState('');
+  const customCode = customExamTypeCode(customName);
+  const customValid = isValidExamType(customCode) && !existingTypes.has(customCode);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -147,6 +151,23 @@ export function ExamSetupMenu({ existingTypes, seeding, onAddRound, onAddMissing
                 ))}
               </Section>
             )}
+            <Section label="Your own exam">
+              <form
+                className="flex items-center gap-2 px-2.5 py-1.5"
+                onSubmit={e => { e.preventDefault(); if (customValid) { setOpen(false); setCustomName(''); onAddRound(customCode); } }}
+              >
+                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', TONES.rose.tile)} aria-hidden><Sparkles className="size-4" /></span>
+                <input
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  placeholder="e.g. KNEC SBA"
+                  maxLength={30}
+                  aria-label="Name of your own exam type"
+                  className="input-field input-field-sm min-w-0 flex-1"
+                />
+                <button type="submit" disabled={!customValid || seeding} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50">Add</button>
+              </form>
+            </Section>
             <Section label="Tools">
               <MenuItem
                 icon={RefreshCw}

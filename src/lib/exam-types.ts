@@ -236,3 +236,25 @@ export const CBC_JUNIOR_SCHOOL_SUBJECTS = [
   { code: 'AGRI', name: 'Agriculture', isCore: true },
   { code: 'CAS', name: 'Creative Arts and Sports', isCore: true },
 ];
+
+// ── School-defined exam types ────────────────────────────
+/**
+ * Schools sit papers the list above does not name (KNEC SBA, a joint exam
+ * with a neighbouring school). Those are stored as their own name in
+ * capitals, e.g. "KNEC SBA", and shown as typed wherever a label is needed.
+ */
+const CUSTOM_EXAM_TYPE = /^[A-Z0-9][A-Z0-9 &/()._-]{1,29}$/;
+
+/** "  knec   sba " → "KNEC SBA". */
+export function customExamTypeCode(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+export function isBuiltInExamType(code: string): boolean {
+  return ALL_EXAM_TYPES.some(t => t.code === code);
+}
+
+/** A built-in code, or a school's own exam name of 2–30 letters, digits and simple punctuation. */
+export function isValidExamType(code: string): boolean {
+  return isBuiltInExamType(code) || CUSTOM_EXAM_TYPE.test(code);
+}
