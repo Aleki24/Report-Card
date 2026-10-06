@@ -110,25 +110,37 @@ export function buildDay(opts: { start: string; lessonMinutes: number; lessons: 
     return periods;
 }
 
-/** Typical Kenyan bells: lesson lengths follow KICD guidance for each level. */
+/**
+ * Typical Kenyan bells, following KICD timetabling guidelines: Pre-primary
+ * 5 lessons of 30 min (9:00–12:00, breaks of 10 and 20 min), Grades 1–3
+ * 30 min, Grades 4–6 35 min, Grade 7 up 40 min with an hour's lunch.
+ */
+const DAY_BREAKS = [{ after: 2, minutes: 10, label: 'Short break' }, { after: 4, minutes: 30, label: 'Tea break' }, { after: 6, minutes: 60, label: 'Lunch' }] as const;
+
 export const SECTION_PRESETS: readonly { key: string; name: string; bands: CurriculumBand[]; periods: TimetablePeriod[] }[] = [
     {
-        key: 'early-years',
-        name: 'Pre-primary & Lower Primary',
-        bands: ['CBC_PRE_PRIMARY', 'CBC_LOWER_PRIMARY'],
-        periods: buildDay({ start: '08:00', lessonMinutes: 30, lessons: 7, breaks: [{ after: 2, minutes: 10, label: 'Short break' }, { after: 4, minutes: 30, label: 'Tea break' }, { after: 6, minutes: 60, label: 'Lunch' }] }),
+        key: 'pre-primary',
+        name: 'Pre-primary',
+        bands: ['CBC_PRE_PRIMARY'],
+        periods: buildDay({ start: '09:00', lessonMinutes: 30, lessons: 5, breaks: [{ after: 2, minutes: 10, label: 'Health break' }, { after: 4, minutes: 20, label: 'Health break' }] }),
+    },
+    {
+        key: 'lower-primary',
+        name: 'Lower Primary',
+        bands: ['CBC_LOWER_PRIMARY'],
+        periods: buildDay({ start: '08:20', lessonMinutes: 30, lessons: 7, breaks: DAY_BREAKS }),
     },
     {
         key: 'upper-primary',
         name: 'Upper Primary',
         bands: ['CBC_UPPER_PRIMARY', '844_PRIMARY'],
-        periods: buildDay({ start: '08:00', lessonMinutes: 35, lessons: 8, breaks: [{ after: 2, minutes: 10, label: 'Short break' }, { after: 4, minutes: 30, label: 'Tea break' }, { after: 6, minutes: 60, label: 'Lunch' }] }),
+        periods: buildDay({ start: '08:20', lessonMinutes: 35, lessons: 7, breaks: DAY_BREAKS }),
     },
     {
         key: 'secondary',
         name: 'Junior & Senior School',
         bands: ['CBC_JUNIOR_SCHOOL', 'CBC_SENIOR_SCHOOL', '844_SECONDARY'],
-        periods: buildDay({ start: '08:00', lessonMinutes: 40, lessons: 8, breaks: [{ after: 2, minutes: 10, label: 'Short break' }, { after: 4, minutes: 30, label: 'Tea break' }, { after: 6, minutes: 80, label: 'Lunch' }] }),
+        periods: buildDay({ start: '08:20', lessonMinutes: 40, lessons: 8, breaks: DAY_BREAKS }),
     },
 ];
 

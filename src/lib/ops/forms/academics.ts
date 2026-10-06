@@ -187,8 +187,15 @@ export function weeklyLessonsPerClass(rows: readonly TeachingLoad[]): string {
     return [...perClass.entries()].sort().map(([c, n]) => `${c} ${n}`).join(' · ');
 }
 
-export const importLoadsMessage = (created: number) =>
-    created === 0 ? 'Every assignment already has a load.' : `${created} teaching loads added. Adjust lessons per week below.`;
+export interface ImportLoadsResult { created: number; updated: number }
+
+export const importLoadsMessage = ({ created, updated }: ImportLoadsResult) => {
+    const parts = [created > 0 ? `${created} teaching loads added` : '', updated > 0 ? `${updated} reset to Ministry figures` : ''].filter(Boolean);
+    return parts.length === 0 ? 'Every assignment already has a load.' : `${parts.join(', ')}. Adjust any of them below.`;
+};
+
+/** How weekly lessons are set when loads are imported. */
+export const MINISTRY_LOADS_NOTE = 'Lessons a week follow the KICD / Ministry allocation for each level (e.g. Grade 7 Mathematics 5, Integrated Science 5 with a double). Subjects it does not cover get the number you set.';
 
 export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
