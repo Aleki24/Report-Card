@@ -15,7 +15,7 @@ import { OperationsOverview } from '@/components/OperationsOverview';
 import { DashboardHero, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
 import { MarkingPanel, markEntryRoute, useMarking } from './MarkingProgress';
-import { InsightCard, KpiGrid, KpiTile, LinkRow, Reveal, SectionTitle } from './kit';
+import { InsightCard, KpiTile, LinkRow, Reveal } from './kit';
 import { UpcomingRounds } from './AdminSections';
 
 type Variant = 'class' | 'subject';
@@ -104,11 +104,8 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
             <Reveal index={i++}>
                 <DashboardHero name={name} term={summary.data?.term ?? null} canEditTerms={false} summary={markingLine} actions={actions} />
             </Reveal>
-            <Reveal index={i++}><OperationsOverview /></Reveal>
-
             <Reveal index={i++}>
-                <SectionTitle title="At a glance" />
-                <KpiGrid>
+                <OperationsOverview>
                     <KpiTile
                         title="Marks to enter" value={marking.loading ? '…' : marking.left.toLocaleString()} icon={ClipboardList} hue="amber"
                         href={marking.next ? markEntryRoute(marking.next) : '/staff/exams'}
@@ -129,7 +126,7 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
                             <KpiTile title="Marks entered" value={(stats.data?.markCount ?? 0).toLocaleString()} icon={Hash} hue="sky" href="/staff/exams" />
                         </>
                     )}
-                </KpiGrid>
+                </OperationsOverview>
             </Reveal>
 
             {reportsPending > 0 ? (

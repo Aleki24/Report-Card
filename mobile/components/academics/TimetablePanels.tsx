@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
 import { WEEKDAYS, WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
@@ -303,7 +304,7 @@ export function CoverPanel() {
     return (
         <View>
             <Card style={{ marginBottom: spacing.md }}>
-                <TextField label="Date" value={day} onChangeText={(v) => { setDay(v); setNeeds(null); }} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+                <DateField label="Date" value={day} onChange={(v) => { setDay(v); setNeeds(null); }} />
                 <LookupField label="Absent teacher" lookup="staff" value={teacher} onChange={(v) => { setTeacher(v); setNeeds(null); }} />
                 <Button label={loading ? 'Checking…' : 'Find cover'} onPress={() => void find()} loading={loading} block />
             </Card>

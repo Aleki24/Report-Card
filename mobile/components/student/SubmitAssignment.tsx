@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { Text } from 'react-native';
-import { useApi } from '@/lib/api';
+import { useApi, type UploadedFile } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ErrorBanner, TextField } from '@/components/ui';
 import type { Assignment } from '@/lib/types';
 
-/** Hand in an assignment: an answer, a photo of the work, or both — as on the web. */
+/** Hand in an assignment: an answer, a photo or document of the work, or both — as on the web. */
 export function SubmitAssignment({ assignment, onDone, onCancel }: { assignment: Assignment; onDone: () => void; onCancel: () => void }) {
     const { colors } = useTheme();
     const api = useApi();
     const [text, setText] = useState('');
-    const [fileUrl, setFileUrl] = useState<string | null>(null);
+    const [file, setFile] = useState<UploadedFile | null>(null);
+    const fileUrl = file?.url ?? null;
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -20,8 +21,8 @@ export function SubmitAssignment({ assignment, onDone, onCancel }: { assignment:
         setUploading(true);
         setError(null);
         try {
-            const url = await api.pickAndUploadImage();
-            if (url) setFileUrl(url);
+            const picked = await api.pickAndUploadAttachment();
+            if (picked) setFile(picked);
         } catch (err) {
             setError(errorMessage(err, 'Upload failed'));
         } finally {
@@ -30,7 +31,7 @@ export function SubmitAssignment({ assignment, onDone, onCancel }: { assignment:
     };
 
     const submit = async () => {
-        if (!text.trim() && !fileUrl) return setError('Write an answer or attach a photo of your work.');
+        if (!text.trim() && !fileUrl) return setError('Write an answer or attach your work (a photo or a document).');
         setSaving(true);
         setError(null);
         try {
@@ -50,7 +51,7 @@ export function SubmitAssignment({ assignment, onDone, onCancel }: { assignment:
             {error ? <ErrorBanner message={error} /> : null}
             <TextField label="Your answer (optional)" value={text} onChangeText={setText} multiline />
             <ButtonRow>
-                <Button size="sm" variant="secondary" label={fileUrl ? 'Photo attached ✓ — replace' : 'Attach a photo'} onPress={attach} loading={uploading} />
+                <Button size="sm" variant="secondary" label={file ? `✓ ${file.name} — replace` : 'Attach your work'} onPress={attach} loading={uploading} />
             </ButtonRow>
             <ButtonRow>
                 <Button variant="secondary" label="Cancel" onPress={onCancel} />

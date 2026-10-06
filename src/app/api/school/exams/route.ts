@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { customExamTypeCode, isBuiltInExamType, isValidExamType } from '@/lib/exam-types';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -148,9 +149,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Only admins can seed exam slots' }, { status: 403 });
       }
 
-      const { termId, academicYearId, examTypes } = body;
+      const { termId, academicYearId } = body;
       if (!termId || !academicYearId) {
         return NextResponse.json({ error: 'termId and academicYearId are required' }, { status: 400 });
+      }
+      const examTypes: string[] | undefined = Array.isArray(body.examTypes)
+        ? (body.examTypes as unknown[]).filter((t): t is string => typeof t === 'string').map(customExamTypeCode)
+        : undefined;
+      if (examTypes?.some(t => !isValidExamType(t))) {
+        return NextResponse.json({ error: 'Name the exam type with 2–30 letters or numbers, e.g. KNEC SBA.' }, { status: 400 });
       }
 
       const { seedExamSlots } = await import('@/lib/seed-exam-slots');
@@ -180,6 +187,10 @@ export async function POST(request: NextRequest) {
     if (!academic_year_id) return NextResponse.json({ error: 'Academic year is required' }, { status: 400 });
     if (!term_id) return NextResponse.json({ error: 'Term is required' }, { status: 400 });
     if (!grade_id) return NextResponse.json({ error: 'Grade is required' }, { status: 400 });
+    const examTypeCode = typeof exam_type === 'string' && exam_type.trim() ? customExamTypeCode(exam_type) : 'CAT';
+    if (!isValidExamType(examTypeCode)) {
+      return NextResponse.json({ error: 'Name the exam type with 2–30 letters or numbers, e.g. KNEC SBA.' }, { status: 400 });
+    }
 
     // Guard max_score coercion against NaN/Infinity when provided
     let resolvedMaxScore = 100;
@@ -272,7 +283,7 @@ export async function POST(request: NextRequest) {
       .from('exams')
       .insert({
         name: name.trim(),
-        exam_type: exam_type || 'CAT',
+        exam_type: examTypeCode,
         subject_id,
         academic_year_id,
         term_id,
@@ -287,6 +298,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      // 22P02: the database still stores exam types as a fixed list (migration 20261006100000 not applied).
+      if (error.code === '22P02' && !isBuiltInExamType(examTypeCode)) {
+        return NextResponse.json({ error: 'Your own exam types are not switched on yet. Choose one from the list, or ask Skulbase support to enable them.' }, { status: 400 });
+      }
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 

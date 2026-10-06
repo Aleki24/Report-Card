@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { LifeBuoy, Trophy, type LucideIcon } from 'lucide-react-native';
 import { gradeSymbolFromScales } from '@shared/analytics';
 import { shortCurriculumLabel } from '@shared/curriculum-labels';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { useGradeStreams } from '@/lib/useSchoolData';
+import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
+import { startingTermIndex, termsNewestFirst } from '@shared/term-fallback';
 import { fonts, radius, spacing, makeStyles, type Palette, useTheme } from '@/lib/theme';
 import { Card, ChipSelect, EmptyState, FilterGrid, LoadingView } from '@/components/ui';
 import { SectionTitle } from './kit';
@@ -116,7 +117,25 @@ export function GradeResults({ passMark }: { passMark?: number }) {
     const [scope, setScope] = useState<string>(ALL);
     const [seriesKey, setSeriesKey] = useState<string | null>(null);
     const [levelId, setLevelId] = useState<string | null>(null);
-    const query = useApiQuery<AnalyticsResponse>(withQuery('/api/school/analytics', { stream_id: scope === ALL ? null : scope }), { raw: true });
+    const { data: termRows } = useTerms();
+    const terms = useMemo(() => termsNewestFirst(termRows ?? []), [termRows]);
+    // An explicit choice wins; otherwise start at the current term and step back past empty ones.
+    const [termId, setTermId] = useState<string | null>(null);
+    const [autoIndex, setAutoIndex] = useState<number | null>(null);
+    const startIndex = startingTermIndex(terms);
+    const autoTerm = terms[autoIndex ?? startIndex] ?? null;
+    const activeTermId = termId ?? autoTerm?.id ?? null;
+    const query = useApiQuery<AnalyticsResponse>(
+        terms.length === 0 && !termRows ? null : withQuery('/api/school/analytics', { stream_id: scope === ALL ? null : scope, term_id: activeTermId }),
+        { raw: true },
+    );
+    const empty = !!query.data && (query.data.marks ?? []).length === 0;
+    useEffect(() => {
+        if (termId || !empty || query.loading) return;
+        const i = autoIndex ?? startIndex;
+        if (i < terms.length - 1) setAutoIndex(i + 1);
+    }, [empty, termId, query.loading, autoIndex, startIndex, terms.length]);
+    const steppedBack = !termId && autoIndex !== null && autoIndex !== startIndex && !empty ? terms[startIndex] : null;
 
     const marks = useMemo(() => query.data?.marks ?? [], [query.data]);
     const series = useMemo(() => seriesOf(marks), [marks]);
@@ -163,14 +182,20 @@ export function GradeResults({ passMark }: { passMark?: number }) {
                         label="Class"
                         options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]}
                         value={scope}
-                        onChange={(v) => { setScope(v); setSeriesKey(null); }}
+                        onChange={(v) => { setScope(v); setSeriesKey(null); setAutoIndex(null); }}
                     />
+                    {terms.length > 1 ? (
+                        <ChipSelect label="Term" options={terms.map((t) => ({ value: t.id, label: t.name, hint: t.is_current ? 'Current term' : undefined }))} value={activeTermId} onChange={(v) => { setTermId(v); setSeriesKey(null); }} />
+                    ) : null}
                     {series.length > 1 ? (
                         <ChipSelect label="Sitting" options={series.slice(0, 8).map((s) => ({ value: s.key, label: s.name }))} value={active?.key ?? null} onChange={setSeriesKey} />
                     ) : null}
                 </FilterGrid>
-                {query.loading ? <LoadingView /> : series.length === 0 ? (
-                    <EmptyState title="No marks yet" description="Once exams are marked, each subject’s average appears here." />
+                {steppedBack ? (
+                    <Text style={styles.stepNote}>No marks in {steppedBack.name} yet, so this shows {autoTerm?.name}.</Text>
+                ) : null}
+                {query.loading || (!termId && empty && (autoIndex ?? startIndex) < terms.length - 1) ? <LoadingView /> : series.length === 0 ? (
+                    <EmptyState title="No marks yet" description={termId ? 'No marks in this term. Pick another term.' : 'Once exams are marked, each subject’s average appears here.'} />
                 ) : (
                     <>
                         {levels.length > 1 ? (
@@ -224,6 +249,7 @@ export function GradeResults({ passMark }: { passMark?: number }) {
 }
 
 const useStyles = makeStyles((colors) => ({
+    stepNote: { fontSize: 12, fontFamily: fonts.medium, color: colors.warningText, backgroundColor: colors.warningBg, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 8, marginBottom: spacing.md, overflow: 'hidden' },
     summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.xs, marginBottom: spacing.md },
     sitting: { fontSize: 16, lineHeight: 21, fontFamily: fonts.display, color: colors.foreground },
     meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },

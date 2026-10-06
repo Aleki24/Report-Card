@@ -24,7 +24,7 @@ import { OptionTiles, PickerField, SegmentedChoice, layoutFor, useInFilterGrid, 
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, Search, X, type LucideIcon } from 'lucide-react-native';
 import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
 import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
@@ -355,7 +355,7 @@ export function Button({
                 styles.button,
                 size === 'sm' && styles.buttonSm,
                 buttonVariantStyles[variant],
-                block && { alignSelf: 'stretch' },
+                block && { alignSelf: 'stretch', marginTop: spacing.sm },
                 (pressed || isDisabled) && { opacity: isDisabled ? 0.5 : 0.85 },
             ]}
         >
@@ -416,15 +416,23 @@ export function SearchField({ value, onChangeText, placeholder = 'Search…' }: 
     const { colors } = useTheme();
     const styles = useStyles();
     return (
-        <TextInput
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={colors.placeholder}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-            style={[styles.input, styles.search]}
-        />
+        <View style={styles.searchBox}>
+            <Search size={17} color={colors.muted} />
+            <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={colors.placeholder}
+                autoCorrect={false}
+                style={styles.searchInput}
+                accessibilityLabel={placeholder}
+            />
+            {value ? (
+                <Pressable onPress={() => onChangeText('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
+                    <X size={16} color={colors.muted} />
+                </Pressable>
+            ) : null}
+        </View>
     );
 }
 
@@ -629,16 +637,17 @@ const useStyles = makeStyles((colors) => ({
     bannerAction: { fontSize: 13, fontFamily: fonts.bold, textDecorationLine: 'underline' },
     progressTrack: { height: 10, borderRadius: 999, overflow: 'hidden', width: '100%' },
     progressFill: { height: '100%', borderRadius: 999 },
-    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 10, paddingHorizontal: spacing.lg, minHeight: 40 },
-    buttonSm: { paddingVertical: 6, paddingHorizontal: spacing.md, minHeight: 32 },
+    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 11, paddingHorizontal: spacing.lg, minHeight: 44 },
+    buttonSm: { paddingVertical: 7, paddingHorizontal: spacing.md, minHeight: 36 },
     buttonText: { fontFamily: fonts.medium, fontSize: 14 },
-    buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
+    buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
     field: { marginBottom: spacing.md },
     fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     fieldError: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: 9, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, minHeight: 40 },
     textArea: { minHeight: 96, textAlignVertical: 'top' },
-    search: { marginBottom: spacing.md },
+    searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 46, paddingHorizontal: spacing.md, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, marginBottom: spacing.md },
+    searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.foreground, paddingVertical: 8 },
     toggleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
     segmented: { flexDirection: 'row', padding: 4, gap: 4, borderRadius: radius.xl, backgroundColor: colors.mutedBg, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
     segment: { flex: 1, minHeight: 38, paddingHorizontal: 4, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },

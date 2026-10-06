@@ -1,4 +1,5 @@
 import { useDownload } from '@/lib/useDownload';
+import { DateField } from '@/components/DateField';
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
@@ -249,7 +250,7 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
             ) : null}
             {mode === 'class' && streamId ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{pluralize(roster.length, 'active learner')} will be billed (anyone already billed this term is skipped).</Text> : null}
             <TextField label="Amount (KES)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-            <TextField label="Due date (YYYY-MM-DD, optional)" value={dueDate} onChangeText={setDueDate} />
+            <DateField label="Due date (optional)" optional value={dueDate} onChange={setDueDate} />
             <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} />
             <ButtonRow>
                 <Button variant="secondary" label="Cancel" onPress={onCancel} />

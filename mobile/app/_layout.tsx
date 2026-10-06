@@ -1,5 +1,7 @@
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
+import { useSignOut } from '@/lib/useSignOut';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
+import { resourceCache } from '@clerk/clerk-expo/resource-cache';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -35,13 +37,13 @@ const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
 function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
     const styles = useStyles();
-    const { signOut } = useAuth();
+    const { signOut, signingOut } = useSignOut();
     return (
         <View style={styles.centered}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{reason}</Text>
-            <Pressable onPress={() => signOut()} style={styles.signOutButton}>
-                <Text style={styles.signOutText}>Sign Out</Text>
+            <Pressable onPress={() => void signOut()} disabled={signingOut} style={styles.signOutButton}>
+                <Text style={styles.signOutText}>{signingOut ? "Signing out…" : "Sign out"}</Text>
             </Pressable>
         </View>
     );
@@ -177,7 +179,9 @@ export default function RootLayout() {
     return (
         <ThemeProvider>
             <KeyboardProvider>
-                <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+                {/* The resource cache keeps Clerk's settings, the signed-in client and its last session
+                    token on the phone, so the app opens without a connection on the data it last loaded. */}
+                <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache} __experimental_resourceCache={resourceCache}>
                     <ThemedStatusBar />
                     <ToastProvider>
                         <AuthGate />

@@ -14,7 +14,7 @@ import { PendingSchoolsNotice } from '@/components/platform/PendingSchools';
 import { GradeResults } from './GradeResults';
 import { DashboardHero } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
-import { InsightCard, KpiGrid, KpiTile, QuickActionGrid, Reveal, SectionTitle, type QuickAction } from './kit';
+import { InsightCard, KpiTile, QuickActionGrid, Reveal, SectionTitle, type QuickAction } from './kit';
 import {
     AcademicSummary, AttendanceBreakdown, ClassPerformanceList, FinanceSnapshot, RecentActivity, SetupChecklist, TodoList, UpcomingRounds,
 } from './AdminSections';
@@ -59,16 +59,9 @@ export function AdminHome({ name }: { name: string }) {
                     term={data?.term ?? null}
                     canEditTerms
                     search
-                    stats={data ? [
-                        { label: 'Learners', value: data.totalStudents.toLocaleString(), icon: Users, href: '/staff/people' },
-                        { label: 'Teachers', value: data.totalTeachers, icon: GraduationCap, href: '/staff/people?tab=teachers' },
-                        { label: 'Classes', value: data.totalClasses, icon: BookOpen, href: '/staff/classes' },
-                    ] : undefined}
                 />
             </Reveal>
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-
-            <Reveal index={i++}><OperationsOverview /></Reveal>
 
             {data ? (
                 <>
@@ -77,10 +70,11 @@ export function AdminHome({ name }: { name: string }) {
                         <TodoList data={data} />
                     </Reveal>
 
-                    {passRate != null || presentRate != null || collectedRate != null ? (
                     <Reveal index={i++}>
-                        <SectionTitle title="Key figures" />
-                        <KpiGrid>
+                        <OperationsOverview>
+                            <KpiTile title="Learners" value={data.totalStudents.toLocaleString()} icon={Users} hue="blue" href="/staff/people" />
+                            <KpiTile title="Teachers" value={data.totalTeachers} icon={GraduationCap} hue="violet" href="/staff/people?tab=teachers" />
+                            <KpiTile title="Classes" value={data.totalClasses} icon={BookOpen} hue="amber" href="/staff/classes" />
                             {passRate != null ? (
                                 <KpiTile title={`Pass rate (≥${passMark}%)`} value={`${passRate}%`} icon={BarChart3} hue="sky" href="/staff/analytics" tone={passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad'} />
                             ) : null}
@@ -90,9 +84,8 @@ export function AdminHome({ name }: { name: string }) {
                             {data.hasFeeData && collectedRate != null ? (
                                 <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={Wallet} hue="emerald" href="/staff/fees" tone={collectedRate >= 80 ? 'good' : 'warn'} />
                             ) : null}
-                        </KpiGrid>
+                        </OperationsOverview>
                     </Reveal>
-                    ) : null}
 
                     <Reveal index={i++}>
                         <SectionTitle title="Quick actions" />

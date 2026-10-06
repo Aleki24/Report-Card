@@ -340,7 +340,7 @@ export default function AssignmentsPage() {
                             onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} />
                     </FormField>
                     <FormField label="Attachment" htmlFor={`${id}-file`} hint="A worksheet or notes: PDF, image or document, up to 10 MB.">
-                        <input ref={fileInput} id={`${id}-file`} type="file" className="sr-only" onChange={pickFile} />
+                        <input ref={fileInput} id={`${id}-file`} type="file" className="sr-only" onChange={pickFile} accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
                         {file || draft.fileUrl ? (
                             <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm">
                                 {file ? (

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DateField } from '@/components/DateField';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import {
     MODULES, MODULE_CATEGORIES, MODULE_CATEGORY_LABELS, MODULE_LIST, MODULE_PRESETS,
@@ -223,8 +224,8 @@ export function DutiesPanel() {
                         clearable
                     />
                 ) : null}
-                <TextField label="From (optional)" value={form.starts_on} onChangeText={(v) => setForm((f) => ({ ...f, starts_on: v }))} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
-                <TextField label="Until (optional)" value={form.ends_on} onChangeText={(v) => setForm((f) => ({ ...f, ends_on: v }))} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+                <DateField label="From (optional)" optional value={form.starts_on} onChange={(v) => setForm((f) => ({ ...f, starts_on: v }))} />
+                <DateField label="Until (optional)" optional min={form.starts_on || undefined} value={form.ends_on} onChange={(v) => setForm((f) => ({ ...f, ends_on: v }))} />
             </FormSheet>
         </View>
     );

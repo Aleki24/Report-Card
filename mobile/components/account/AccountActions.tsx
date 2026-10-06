@@ -1,7 +1,7 @@
 import React from 'react';
+import { useSignOut } from '@/lib/useSignOut';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@clerk/clerk-expo';
 import * as WebBrowser from 'expo-web-browser';
 import { LifeBuoy, ShieldCheck, UserX } from 'lucide-react-native';
 import { webUrl } from '@/lib/api';
@@ -16,7 +16,7 @@ import { AppearancePicker } from './AppearancePicker';
 export function AccountActions() {
     const { colors } = useTheme();
     const router = useRouter();
-    const { signOut } = useAuth();
+    const { signOut, signingOut } = useSignOut();
     return (
         <View>
             <AppearancePicker />
@@ -30,7 +30,7 @@ export function AccountActions() {
                     onPress={() => router.push('/account/delete')}
                 />
             </ListCard>
-            <Button variant="danger" block label="Sign out" onPress={() => void signOut()} />
+            <Button variant="danger" block label={signingOut ? 'Signing out…' : 'Sign out'} loading={signingOut} onPress={() => void signOut()} />
         </View>
     );
 }

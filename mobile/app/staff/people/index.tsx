@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Linking, Text } from 'react-native';
-import { UserCheck, Users } from 'lucide-react-native';
+import { Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -13,10 +12,11 @@ import { PATHWAY_ORDER, pathwayLabel } from '@shared/pathway-definitions';
 import { BulkPathwaySheet, type CombinationOption } from '@/components/people/BulkPathwaySheet';
 import { fullName, pluralize } from '@/lib/format';
 import { roleLabel } from '@/lib/roles';
-import { spacing, useTheme } from '@/lib/theme';
+import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
+import { GroupHeading, PersonRow } from '@/components/people/PersonRow';
 import {
-    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
-    Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
+    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, LoadingView, Notice,
+    Screen, ScreenHeader, SearchField, SegmentedTabs,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import { EMPTY_STUDENT, StudentForm, type AddStudentResult } from '@/components/people/StudentForm';
@@ -119,6 +119,17 @@ function StudentsSection() {
         });
     }, [students, search, stream, status, pathway]);
 
+    // Learners under their class, classes in order, those without one last.
+    const groups = useMemo(() => {
+        const by = new Map<string, StudentListItem[]>();
+        for (const s of filtered.slice(0, limit)) {
+            const key = s.grade_streams?.full_name ?? 'No class';
+            by.set(key, [...(by.get(key) ?? []), s]);
+        }
+        return [...by.entries()].sort(([a], [b]) => (a === 'No class' ? 1 : b === 'No class' ? -1 : a.localeCompare(b, undefined, { numeric: true })));
+    }, [filtered, limit]);
+    const activeCount = students.filter((s) => s.status === 'ACTIVE').length;
+
     if (loading) return <LoadingView />;
 
     return (
@@ -135,11 +146,6 @@ function StudentsSection() {
                     }
                 />
             ) : null}
-
-            <StatGrid>
-                <StatTile label="Total" value={students.length} icon={Users} />
-                <StatTile label="Active" value={students.filter((s) => s.status === 'ACTIVE').length} icon={UserCheck} />
-            </StatGrid>
 
             {adding ? (
                 <StudentForm
@@ -208,10 +214,11 @@ function StudentsSection() {
                 </FilterGrid>
             ) : null}
             <ChipSelect
+                layout="segmented"
                 options={[
-                    { value: 'ACTIVE', label: 'Active' },
-                    { value: 'INACTIVE', label: 'Inactive' },
-                    { value: 'ALL', label: 'All' },
+                    { value: 'ACTIVE', label: `Active ${activeCount}` },
+                    { value: 'INACTIVE', label: `Inactive ${students.length - activeCount}` },
+                    { value: 'ALL', label: `All ${students.length}` },
                 ]}
                 value={status}
                 onChange={setStatus}
@@ -223,14 +230,22 @@ function StudentsSection() {
                 <>
                     <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{pluralize(filtered.length, 'student')}</Text>
                     <ListCard>
-                        {filtered.slice(0, limit).map((s) => (
-                            <ListRow
-                                key={s.id}
-                                title={fullName(s.users)}
-                                subtitle={`${s.admission_number ?? '—'} · ${s.grade_streams?.full_name ?? 'Unassigned'}${s.pathway ? ` · ${pathwayLabel(s.pathway)}${s.subject_combinations ? ` (${s.subject_combinations.code})` : ''}` : ''}`}
-                                right={s.status !== 'ACTIVE' ? <Badge label={s.status ?? '—'} /> : undefined}
-                                onPress={() => router.push(`/staff/people/${s.id}?type=student`)}
-                            />
+                        {groups.map(([className, list]) => (
+                            <React.Fragment key={className}>
+                                {!stream ? <GroupHeading title={className} count={list.length} /> : null}
+                                {list.map((s, i) => (
+                                    <PersonRow
+                                        key={s.id}
+                                        name={fullName(s.users)}
+                                        uri={s.avatar_url}
+                                        detail={s.guardian_name ? `Guardian: ${s.guardian_name}${s.guardian_phone ? ` · ${s.guardian_phone}` : ''}` : s.guardian_phone ?? null}
+                                        tags={[s.admission_number ? `Adm ${s.admission_number}` : null, s.pathway ? `${pathwayLabel(s.pathway)}${s.subject_combinations ? ` · ${s.subject_combinations.code}` : ''}` : null]}
+                                        badge={s.status !== 'ACTIVE' ? <Badge label={s.status ?? '—'} /> : undefined}
+                                        last={i === list.length - 1}
+                                        onPress={() => router.push(`/staff/people/${s.id}?type=student`)}
+                                    />
+                                ))}
+                            </React.Fragment>
                         ))}
                     </ListCard>
                     {filtered.length > limit ? (
@@ -268,12 +283,15 @@ function TeachersSection() {
                 <EmptyState title="No staff found" />
             ) : (
                 <ListCard>
-                    {teachers.map((t) => (
-                        <ListRow
+                    {teachers.map((t, i) => (
+                        <PersonRow
                             key={t.id}
-                            title={fullName(t.profile)}
-                            subtitle={[t.profile.job_title ?? roleLabel(t.profile.role), t.subjects, t.classes].filter(Boolean).join(' · ')}
-                            right={t.profile.is_active ? undefined : <Badge label="Inactive" variant="danger" />}
+                            name={fullName(t.profile)}
+                            uri={t.profile.avatar_url}
+                            detail={t.profile.job_title ?? roleLabel(t.profile.role)}
+                            tags={[t.subjects, t.classes]}
+                            badge={t.profile.is_active ? undefined : <Badge label="Inactive" variant="danger" />}
+                            last={i === teachers.length - 1}
                             onPress={() => router.push(`/staff/people/${t.id}?type=teacher`)}
                         />
                     ))}
@@ -284,6 +302,7 @@ function TeachersSection() {
 }
 
 function ParentsSection() {
+    const styles = useStyles();
     const { data, loading, error, refresh } = useApiQuery<Parent[]>('/api/school/data?type=parents');
     const [search, setSearch] = useState('');
 
@@ -297,24 +316,22 @@ function ParentsSection() {
     return (
         <>
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-            <StatGrid>
-                <StatTile label="Parents" value={parents.length} />
-                <StatTile label="Linked students" value={parents.reduce((a, p) => a + p.students.length, 0)} />
-                <StatTile label="With phone" value={parents.filter((p) => p.phone).length} />
-                <StatTile label="With email" value={parents.filter((p) => p.email).length} />
-            </StatGrid>
+            <Text style={styles.summary}>
+                {pluralize(parents.length, 'parent')} · {pluralize(parents.reduce((a, p) => a + p.students.length, 0), 'child', 'children')} linked · {parents.filter((p) => p.phone).length} with a phone
+            </Text>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search parents or their children" />
             {filtered.length === 0 ? (
                 <EmptyState title="No parents found" description="Parents come from each student's guardian details." />
             ) : (
                 <ListCard>
-                    {filtered.map((p) => (
-                        <ListRow
+                    {filtered.map((p, i) => (
+                        <PersonRow
                             key={p.id}
-                            title={p.name}
-                            subtitle={[p.phone, p.email].filter(Boolean).join(' · ')}
-                            meta={p.students.map((s) => `${s.first_name} ${s.last_name}${s.grade_stream ? ` (${s.grade_stream.full_name})` : ''}`).join(', ')}
-                            onPress={p.phone ? () => void Linking.openURL(`tel:${p.phone}`) : undefined}
+                            name={p.name}
+                            detail={p.email || null}
+                            tags={p.students.map((c) => `${c.first_name} ${c.last_name}${c.grade_stream ? ` · ${c.grade_stream.full_name}` : ''}`)}
+                            phone={p.phone || null}
+                            last={i === filtered.length - 1}
                         />
                     ))}
                 </ListCard>
@@ -322,3 +339,7 @@ function ParentsSection() {
         </>
     );
 }
+
+const useStyles = makeStyles((colors) => ({
+    summary: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginBottom: spacing.md },
+}));
