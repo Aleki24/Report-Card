@@ -500,7 +500,9 @@ export interface StaffAssignment {
     stream: string | null;
     streamId: string | null;
     createdBy: string;
+    createdById: string | null;
     createdAt: string;
+    submissionCount: number;
 }
 
 // ── Staff: analytics ───────────────────────────────────────

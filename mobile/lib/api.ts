@@ -110,6 +110,8 @@ export interface Api {
      * Resolves to the public URL, or null if the user cancelled.
      */
     pickAndUploadImage: (path?: string) => Promise<string | null>;
+    /** Lets the user pick an image or document (PDF, Word, PowerPoint, Excel) and uploads it; null if they cancelled. */
+    pickAndUploadAttachment: () => Promise<UploadedFile | null>;
     /** Lets the user pick one file of the given MIME types; null if they cancelled. */
     pickFile: (types: readonly string[]) => Promise<PickedFile | null>;
     /** A multipart request (text fields plus picked files), answered with JSON like every other call. */
@@ -148,7 +150,22 @@ async function downloadInBrowser(url: string, token: string | null, fileName: st
 }
 
 const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+/** What `/api/school/upload` takes for homework: images plus PDF and Office documents. */
+const ATTACHMENT_TYPES = [
+    ...UPLOAD_TYPES,
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+];
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/** An uploaded attachment: where it lives and what it was called on the phone. */
+export interface UploadedFile { url: string; name: string }
 
 // Same backend the web app talks to — every route accepts a Clerk Bearer
 // token the same way it accepts the web session cookie, since `auth()` from
@@ -187,6 +204,15 @@ export function useApi(): Api {
             if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
             return json as T;
         };
+        const pickAndUpload = async (types: readonly string[], path: string, wrongType: string): Promise<UploadedFile | null> => {
+            const picked = await pickFile(types);
+            if (!picked) return null;
+            if (!types.includes(picked.type)) throw new ApiError(wrongType, 400);
+            if ((picked.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Files must be 10 MB or smaller.', 400);
+            const json = await sendForm<{ url?: string }>('POST', path, {}, { file: picked });
+            if (!json.url) throw new ApiError('Upload failed', 0);
+            return { url: json.url, name: picked.name };
+        };
         return {
             get: (path) => send('GET', path),
             post: (path, body) => send('POST', path, body),
@@ -224,14 +250,10 @@ export function useApi(): Api {
             pickFile,
             sendForm,
             pickAndUploadImage: async (path = '/api/school/upload') => {
-                const picked = await pickFile(UPLOAD_TYPES);
-                if (!picked) return null;
-                if (!UPLOAD_TYPES.includes(picked.type)) throw new ApiError('Choose a JPEG, PNG, GIF or WebP image.', 400);
-                if ((picked.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Images must be 10 MB or smaller.', 400);
-                const json = await sendForm<{ url?: string }>('POST', path, {}, { file: picked });
-                if (!json.url) throw new ApiError('Upload failed', 0);
-                return json.url;
+                const uploaded = await pickAndUpload(UPLOAD_TYPES, path, 'Choose a JPEG, PNG, GIF or WebP image.');
+                return uploaded?.url ?? null;
             },
+            pickAndUploadAttachment: () => pickAndUpload(ATTACHMENT_TYPES, '/api/school/upload', 'Choose an image, PDF, Word, PowerPoint, Excel or text file.'),
         };
     }, []);
 }
