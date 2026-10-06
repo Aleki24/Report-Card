@@ -182,3 +182,19 @@ export interface TimetableQuality {
 }
 
 export const LESSON_SELECT = 'id, day, period, grade_stream_id, subject_id, teacher_id, room_id, locked, stream:grade_streams(full_name, grade:grades(code, name_display)), subject:subjects(name, code), teacher:users!timetable_lessons_teacher_id_fkey(first_name, last_name), room:rooms(name)';
+
+const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; text: (n: number) => string }[] = [
+    { key: 'repeatsInDay', text: n => `${n} subject${n === 1 ? '' : 's'} taught twice in a day` },
+    { key: 'lateCoreLessons', text: n => `${n} core lesson${n === 1 ? '' : 's'} after lunch` },
+    { key: 'earlyCreativeLessons', text: n => `${n} creative lesson${n === 1 ? '' : 's'} first thing` },
+    { key: 'samePeriodHabits', text: n => `${n} subject${n === 1 ? '' : 's'} stuck in the same period` },
+    { key: 'bunchedWeeks', text: n => `${n} subject${n === 1 ? '' : 's'} bunched on neighbouring days` },
+    { key: 'longTeacherRuns', text: n => `${n} long teaching run${n === 1 ? '' : 's'} without a break` },
+];
+
+/** A draft's quality in words, for the builder on web and in the app. */
+export function describeQuality(q: TimetableQuality): { score: number; verdict: string; tone: 'good' | 'fair' | 'poor'; notes: string[] } {
+    const tone = q.score >= 85 ? 'good' : q.score >= 65 ? 'fair' : 'poor';
+    const verdict = tone === 'good' ? 'Well balanced' : tone === 'fair' ? 'Workable — reshuffle to improve' : 'Needs work — check loads, then reshuffle';
+    return { score: q.score, verdict, tone, notes: QUALITY_NOTES.filter(n => q[n.key] > 0).map(n => n.text(q[n.key])) };
+}

@@ -2,16 +2,19 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2, Lock, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { AlertTriangle, CheckCircle2, Download, Lock, Shuffle, Sparkles, Trash2, Unlock, Upload } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Modal';
 import { FormField, InputField, SelectField } from '@/components/ui/FormField';
 import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime } from '@/lib/ops/format';
-import type { TimetableConfig, TimetableLesson, TimetableVersion } from '@/lib/timetable/config';
+import { describeQuality, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@/lib/timetable/config';
+import { timetablePdfUrl } from '@/lib/timetable/pdf-url';
+import { QualityPanel } from './QualityPanel';
 import { PUBLISH_TIMETABLE_WARNING, VERSION_TONES as STATUS_TONES, lessonClasses, newDraftName } from '@/lib/ops/forms/academics';
 import { TimetableGrid } from './TimetableGrid';
+import { periodIndexOf, type GridRow } from '@/lib/timetable/layout';
 
 /**
  * Generate drafts, inspect and adjust them class by class (click a lesson,
@@ -87,8 +90,9 @@ export function TimetableBuilder() {
         } catch (err) { toast.error(errorText(err)); }
     };
 
-    const onCell = (day: number, period: number, lesson: TimetableLesson | null) => {
-        if (selected && (selected.day !== day || selected.period !== period)) void moveTo(day, period);
+    const onCell = (day: number, row: GridRow, lesson: TimetableLesson | null) => {
+        const period = selected && config ? periodIndexOf(config, selected, row) : -1;
+        if (selected && period >= 0 && (selected.day !== day || selected.period !== period)) void moveTo(day, period);
         else setSelected(lesson && lesson.id !== selected?.id ? lesson : null);
     };
 
@@ -137,6 +141,7 @@ export function TimetableBuilder() {
                     )}
                     {active && (
                         <div className="flex flex-wrap gap-2 sm:ml-auto">
+                            <a href={timetablePdfUrl({ view: 'master', version: active.id })} download className={buttonVariants({ variant: 'outline' })}><Download />Master PDF</a>
                             {active.status !== 'PUBLISHED' && <Button onClick={() => setConfirm('publish')}><Upload />Publish</Button>}
                             {active.status !== 'PUBLISHED' && <Button variant="destructive" onClick={() => setConfirm('delete')}><Trash2 />Delete</Button>}
                         </div>
@@ -161,6 +166,12 @@ export function TimetableBuilder() {
                         </span>
                     )}
                 </div>
+            )}
+
+            {active?.stats.quality && (
+                <QualityPanel quality={describeQuality(active.stats.quality)} action={
+                    <Button variant="outline" size="sm" onClick={generate} disabled={generating}><Shuffle />{generating ? 'Reshuffling…' : 'Reshuffle'}</Button>
+                } />
             )}
 
             {unplaced.length > 0 && (

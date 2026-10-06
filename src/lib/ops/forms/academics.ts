@@ -147,7 +147,13 @@ export interface CoverRow {
 /** Whose timetable to show: your own, or a class's, teacher's or room's. */
 export type GridMode = 'class' | 'teacher' | 'room';
 export type TimetableView = 'mine' | GridMode;
-export interface TimetableViewResult { config: TimetableConfig; lessons: TimetableLesson[]; published: boolean }
+export interface TimetableViewResult {
+    config: TimetableConfig;
+    lessons: TimetableLesson[];
+    published: boolean;
+    /** How to label cells: a learner's own timetable is a class view, a teacher's a teacher view. */
+    mode: GridMode;
+}
 
 export const TIMETABLE_VIEWS: readonly { id: TimetableView; label: string }[] = [
     { id: 'mine', label: 'My timetable' }, { id: 'class', label: 'A class' }, { id: 'teacher', label: 'A teacher' }, { id: 'room', label: 'A room' },
@@ -184,7 +190,7 @@ export function weeklyLessonsPerClass(rows: readonly TeachingLoad[]): string {
 export const importLoadsMessage = (created: number) =>
     created === 0 ? 'Every assignment already has a load.' : `${created} teaching loads added. Adjust lessons per week below.`;
 
-const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
+export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
 /** What a cell shows depends on whose timetable it is. */
 export function cellLines(l: TimetableLesson, mode: GridMode): [string, string] {

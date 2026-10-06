@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
 import { cellLines, type GridMode } from '@shared/ops/forms/academics';
+import { gridRows, lessonAt, type GridRow } from '@shared/timetable/layout';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
     mode: GridMode;
     /** Editing: the lesson picked to move, and what a tap on a cell does. */
     selectedId?: string | null;
-    onCellPress?: (day: number, period: number, lesson: TimetableLesson | null) => void;
+    onCellPress?: (day: number, row: GridRow, lesson: TimetableLesson | null) => void;
 }
 
 /** Wide enough for the whole week at once (tablets, landscape); phones show a day at a time. */
@@ -19,16 +20,18 @@ const WEEK_BREAKPOINT = 768;
 /**
  * The web's timetable grid: on phones one day at a time, so nothing scrolls
  * sideways; from tablet width the whole week, periods down and days across.
+ * A class shows its section's bell; a teacher or room across sections shows
+ * each lesson time.
  */
 export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }: Props) {
     const { colors } = useTheme();
     const styles = useStyles();
     const { width } = useWindowDimensions();
     const [phoneDay, setPhoneDay] = useState(config.days[0]);
-    const at = (day: number, period: number) => lessons.find((l) => l.day === day && l.period === period) ?? null;
+    const rows = useMemo(() => gridRows(config, lessons), [config, lessons]);
 
-    const cell = (day: number, period: number) => {
-        const lesson = at(day, period);
+    const cell = (day: number, row: GridRow) => {
+        const lesson = lessonAt(config, lessons, day, row);
         const selected = !!lesson && lesson.id === selectedId;
         const [top, bottom] = lesson ? cellLines(lesson, mode) : ['', ''];
         const content = lesson ? (
@@ -39,9 +42,9 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
         ) : <View style={styles.free} />;
         return onCellPress ? (
             <Pressable
-                onPress={() => onCellPress(day, period, lesson)}
+                onPress={() => onCellPress(day, row, lesson)}
                 accessibilityRole="button"
-                accessibilityLabel={`${WEEKDAY_LABELS[day]} ${config.periods[period]?.label ?? ''}${lesson ? `: ${lesson.subject?.name ?? ''}` : ': free'}`}
+                accessibilityLabel={`${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${lesson.subject?.name ?? ''}` : ': free'}`}
                 style={styles.cellWrap}
             >
                 {content}
@@ -57,15 +60,15 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
                         <Text style={[styles.weekHead, styles.periodCol]}>PERIOD</Text>
                         {config.days.map((d) => <Text key={d} style={[styles.weekHead, styles.dayCol]}>{WEEKDAY_LABELS[d].toUpperCase()}</Text>)}
                     </View>
-                    {config.periods.map((p, i) => p.is_break ? (
-                        <Text key={i} style={styles.breakRow}>{p.label} · {p.start}–{p.end}</Text>
+                    {rows.map((r) => r.isBreak ? (
+                        <Text key={r.key} style={styles.breakRow}>{r.label} · {r.time}</Text>
                     ) : (
-                        <View key={i} style={styles.weekRow}>
+                        <View key={r.key} style={styles.weekRow}>
                             <View style={styles.periodCol}>
-                                <Text style={styles.periodLabel}>{p.label}</Text>
-                                <Text style={styles.periodTime}>{p.start}–{p.end}</Text>
+                                <Text style={styles.periodLabel}>{r.label}</Text>
+                                <Text style={styles.periodTime}>{r.time}</Text>
                             </View>
-                            {config.days.map((d) => <View key={d} style={styles.dayCol}>{cell(d, i)}</View>)}
+                            {config.days.map((d) => <View key={d} style={styles.dayCol}>{cell(d, r)}</View>)}
                         </View>
                     ))}
                 </View>
@@ -82,15 +85,15 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
                     </Pressable>
                 ))}
             </ScrollView>
-            {config.periods.map((p, i) => p.is_break ? (
-                <Text key={i} style={styles.breakRow}>{p.label} · {p.start}–{p.end}</Text>
+            {rows.map((r) => r.isBreak ? (
+                <Text key={r.key} style={styles.breakRow}>{r.label} · {r.time}</Text>
             ) : (
-                <View key={i} style={styles.phoneRow}>
+                <View key={r.key} style={styles.phoneRow}>
                     <View style={{ width: 72 }}>
-                        <Text style={styles.periodLabel}>{p.label}</Text>
-                        <Text style={styles.periodTime}>{p.start}</Text>
+                        <Text style={styles.periodLabel}>{r.label}</Text>
+                        <Text style={styles.periodTime}>{r.time}</Text>
                     </View>
-                    <View style={{ flex: 1 }}>{cell(phoneDay, i)}</View>
+                    <View style={{ flex: 1 }}>{cell(phoneDay, r)}</View>
                 </View>
             ))}
         </View>
