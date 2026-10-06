@@ -276,7 +276,7 @@ function streamMarksFor(url: URL) {
     .filter(m => learners.has(m.student_id))
     .map(m => {
       const st = learners.get(m.student_id);
-      return { exam_id: e.id, student_id: m.student_id, percentage: m.percentage, grade_symbol: m.grade_symbol, students: { admission_number: st?.admission_number ?? null, users: st?.users ?? null } };
+      return { exam_id: e.id, student_id: m.student_id, percentage: m.percentage, grade_symbol: m.grade_symbol, exams: { exam_type: e.exam_type, term_id: e.term_id, subjects: { name: e.subject_name, code: e.subject_code } }, students: { admission_number: st?.admission_number ?? null, users: st?.users ?? null } };
     }));
 }
 

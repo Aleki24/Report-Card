@@ -4,59 +4,12 @@ import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { formatPercent, pluralize, scoreColor } from '@/lib/format';
 import type { GradeStream } from '@/lib/types';
+import { useTerms } from '@/lib/useSchoolData';
+import {
+    ALL_EXAMS, broadsheetExamName, broadsheetExamTypes, broadsheetTermIds, buildBroadsheet, defaultBroadsheetFilter, type BroadsheetMark,
+} from '@shared/broadsheet';
 import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
 import { Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, SearchField } from '@/components/ui';
-
-/** One row of GET /api/school/exam-marks/stream (the parts used here). */
-interface StreamMark {
-    student_id: string;
-    percentage: number | string | null;
-    grade_symbol: string | null;
-    students: { admission_number: string | null; users: { first_name: string | null; last_name: string | null } | null } | null;
-    exams: { subjects: { code: string | null; name: string | null } | null } | null;
-}
-
-interface Row {
-    studentId: string;
-    name: string;
-    admNo: string;
-    subjects: Record<string, { score: number; grade: string }>;
-    average: number;
-    rank: number;
-}
-
-/**
- * The web's AllSubjectsView: every learner in a class against every subject,
- * best mark per subject, average over the subjects entered, and position.
- */
-function aggregate(marks: readonly StreamMark[]): { rows: Row[]; subjects: string[] } {
-    const byStudent = new Map<string, { name: string; admNo: string; subjects: Record<string, { score: number; grade: string }> }>();
-    const subjectSet = new Set<string>();
-    for (const m of marks) {
-        const subject = m.exams?.subjects?.code || m.exams?.subjects?.name;
-        if (!m.students || !subject) continue;
-        const pct = Number(m.percentage);
-        if (!Number.isFinite(pct)) continue;
-        subjectSet.add(subject);
-        const entry = byStudent.get(m.student_id) ?? {
-            name: `${m.students.users?.first_name ?? ''} ${m.students.users?.last_name ?? ''}`.trim() || 'Unknown',
-            admNo: m.students.admission_number ?? '',
-            subjects: {},
-        };
-        const existing = entry.subjects[subject];
-        if (!existing || pct > existing.score) entry.subjects[subject] = { score: pct, grade: m.grade_symbol || '–' };
-        byStudent.set(m.student_id, entry);
-    }
-    const subjects = [...subjectSet].sort();
-    const rows: Row[] = [...byStudent.entries()].map(([studentId, s]) => {
-        const scores = Object.values(s.subjects).map((x) => x.score);
-        const average = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-        return { studentId, name: s.name, admNo: s.admNo, subjects: s.subjects, average, rank: 0 };
-    });
-    rows.sort((a, b) => b.average - a.average);
-    rows.forEach((row, i) => { row.rank = i > 0 && rows[i - 1].average === row.average ? rows[i - 1].rank : i + 1; });
-    return { rows, subjects };
-}
 
 const NAME_WIDTH = 150;
 const CELL_WIDTH = 58;
@@ -66,8 +19,24 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
     const styles = useStyles();
     const [streamId, setStreamId] = useState<string | null>(streams[0]?.id ?? null);
     const [search, setSearch] = useState('');
-    const query = useApiQuery<StreamMark[]>(streamId ? withQuery('/api/school/exam-marks/stream', { stream_id: streamId }) : null);
-    const { rows, subjects } = useMemo(() => aggregate(query.data ?? []), [query.data]);
+    const query = useApiQuery<BroadsheetMark[]>(streamId ? withQuery('/api/school/exam-marks/stream', { stream_id: streamId }) : null);
+    const marks = useMemo(() => query.data ?? [], [query.data]);
+    const { terms, activeTermId } = useTerms();
+    // Picks are per class: null until chosen, then the class's latest term and exam stand in.
+    const [picked, setPicked] = useState<{ streamId: string | null; termId: string | null; examType: string | null }>({ streamId: null, termId: null, examType: null });
+    const fallback = useMemo(() => defaultBroadsheetFilter(marks, terms.map((t) => t.id), activeTermId), [marks, terms, activeTermId]);
+    const own = picked.streamId === streamId ? picked : { termId: null, examType: null };
+    const termIds = useMemo(() => broadsheetTermIds(marks), [marks]);
+    const termId = own.termId && termIds.has(own.termId) ? own.termId : fallback.termId;
+    const examTypes = useMemo(() => broadsheetExamTypes(marks, termId), [marks, termId]);
+    // The term's latest exam unless another (or all of them) was picked.
+    const examType = own.examType === ALL_EXAMS ? null
+        : own.examType && examTypes.includes(own.examType) ? own.examType
+        : examTypes[examTypes.length - 1] ?? null;
+    const { rows, subjects } = useMemo(() => buildBroadsheet(marks, { termId, examType }), [marks, termId, examType]);
+    const termName = terms.find((t) => t.id === termId)?.name ?? 'This term';
+    const termOptions = terms.filter((t) => termIds.has(t.id)).map((t) => ({ value: t.id, label: t.name }));
+    const examOptions = [...examTypes.map((t) => ({ value: t, label: broadsheetExamName(t) })), ...(examTypes.length > 1 ? [{ value: ALL_EXAMS, label: broadsheetExamName(null) }] : [])];
     const shown = useMemo(() => {
         const q = search.trim().toLowerCase();
         return q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.admNo.toLowerCase().includes(q)) : rows;
@@ -76,13 +45,23 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
     return (
         <>
             <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={streamId} onChange={setStreamId} />
+            {termOptions.length > 0 ? (
+                <View style={styles.filters}>
+                    <View style={{ flex: 1 }}>
+                        <ChipSelect label="Term" options={termOptions} value={termId} onChange={(t) => setPicked({ streamId, termId: t, examType: null })} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <ChipSelect label="Exam" options={examOptions} value={examType ?? ALL_EXAMS} onChange={(e) => setPicked({ streamId, termId, examType: e })} />
+                    </View>
+                </View>
+            ) : null}
             {query.loading ? <LoadingView /> : query.error ? (
                 <ErrorBanner message={query.error} onRetry={query.reload} />
             ) : rows.length === 0 ? (
-                <Card><EmptyState title="No marks yet for this class" description="Enter marks in individual exams first; every subject appears here side by side." /></Card>
+                <Card><EmptyState title="No marks yet for this class" description="Enter marks for an exam first; every subject then appears here side by side." /></Card>
             ) : (
                 <>
-                    <Text style={styles.summary}>{pluralize(rows.length, 'learner')} · {pluralize(subjects.length, 'subject')} · best mark per subject this year</Text>
+                    <Text style={styles.summary}>{termName} · {broadsheetExamName(examType)} · {pluralize(rows.length, 'learner')} · {pluralize(subjects.length, 'subject')}</Text>
                     <SearchField value={search} onChangeText={setSearch} placeholder="Search by name or admission no." />
                     <View style={styles.table}>
                         {/* Names stay put while the subject columns scroll sideways. */}
@@ -138,6 +117,7 @@ export function Broadsheet({ streams }: { streams: readonly GradeStream[] }) {
 const ROW_HEIGHT = 48;
 
 const useStyles = makeStyles((colors) => ({
+    filters: { flexDirection: 'row', gap: spacing.sm },
     summary: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.sm },
     table: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
     cell: { width: CELL_WIDTH, height: ROW_HEIGHT, alignItems: 'center', justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },

@@ -1,235 +1,133 @@
 "use client";
 
-import { RankBadge } from '@/components/ui/RankBadge';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LayoutGrid } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { RankBadge } from '@/components/ui/RankBadge';
+import { findActiveTermId } from '@/lib/term-calendar';
+import {
+    ALL_EXAMS, broadsheetExamName, broadsheetExamTypes, broadsheetTermIds, buildBroadsheet, defaultBroadsheetFilter, type BroadsheetMark,
+} from '@/lib/broadsheet';
+import { cn } from '@/lib/utils';
 
 interface Props {
     gradeStreamId: string;
+    /** The school's terms, in the order they run. */
+    terms: readonly { id: string; name: string; start_date?: string; end_date?: string; is_current?: boolean }[];
 }
 
-interface StudentRow {
-    studentId: string;
-    studentName: string;
-    admissionNumber: string;
-    subjects: Record<string, { score: number; grade: string; name: string }>;
-    total: number;
-    average: number;
-    rank: number;
-}
+const scoreTone = (n: number) => (n >= 70 ? 'text-emerald-600 dark:text-emerald-400' : n >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400');
 
-export function AllSubjectsView({ gradeStreamId }: Props) {
-    const [loading, setLoading] = useState(true);
-    const [rows, setRows] = useState<StudentRow[]>([]);
-    const [subjectCodes, setSubjectCodes] = useState<string[]>([]);
+/** Every learner in a class against every subject, for one exam or a term's best marks. */
+export function AllSubjectsView({ gradeStreamId, terms }: Props) {
+    // Results and picks are kept per class, so switching class starts clean without resetting state in an effect.
+    const [loaded, setLoaded] = useState<{ streamId: string; marks: BroadsheetMark[] } | null>(null);
+    const [pick, setPick] = useState<{ streamId: string; termId: string | null; examType: string | null } | null>(null);
+    const loading = loaded?.streamId !== gradeStreamId;
+    const marks = useMemo(() => (loaded?.streamId === gradeStreamId ? loaded.marks : []), [loaded, gradeStreamId]);
+    const picked = pick?.streamId === gradeStreamId ? pick : { termId: null, examType: null };
+    const setPicked = (next: { termId: string | null; examType: string | null }) => setPick({ streamId: gradeStreamId, ...next });
 
     useEffect(() => {
         if (!gradeStreamId) return;
-        const fetchAll = async () => {
-            setLoading(true);
-
-            try {
-                // Fetch all marks for students in this stream, with exam + subject info
-                const res = await fetch(`/api/school/exam-marks/stream?stream_id=${gradeStreamId}`);
-                if (!res.ok) throw new Error('Failed to fetch marks');
-                const { data: marks } = await res.json();
-
-                if (!marks || marks.length === 0) {
-                    setRows([]);
-                    setSubjectCodes([]);
-                    setLoading(false);
-                    return;
-                }
-
-                const validMarks = marks.filter((m: any) => m.students && m.exams && m.exams.subjects);
-
-                // Aggregate: for each student × subject, keep the latest (or best) score
-                // Using a map: studentId → { name, admNo, subjects: { subjectCode → { score, grade, name } } }
-                const studentMap: Record<string, {
-                    name: string;
-                    admNo: string;
-                    subjects: Record<string, { score: number; grade: string; name: string }>;
-                }> = {};
-                const allSubjects = new Set<string>();
-
-                validMarks.forEach((m: any) => {
-                    const exam = m.exams;
-                    const stu = m.students;
-                    const subjCode = exam.subjects?.code || exam.subjects?.name || 'Unknown';
-                    const subjName = exam.subjects?.name || subjCode;
-                    const firstName = stu?.users?.first_name || '';
-                    const lastName = stu?.users?.last_name || '';
-                    const pct = Number(m.percentage);
-                    const grade = m.grade_symbol || '-';
-
-                    allSubjects.add(subjCode);
-
-                    if (!studentMap[m.student_id]) {
-                        studentMap[m.student_id] = {
-                            name: `${firstName} ${lastName}`.trim() || 'Unknown',
-                            admNo: stu?.admission_number || '',
-                            subjects: {},
-                        };
-                    }
-
-                    // If student already has a score for this subject, keep the latest (higher percentage wins)
-                    const existing = studentMap[m.student_id].subjects[subjCode];
-                    if (!existing || pct > existing.score) {
-                        studentMap[m.student_id].subjects[subjCode] = { score: pct, grade, name: subjName };
-                    }
-                });
-
-                const subjects = Array.from(allSubjects).sort();
-                setSubjectCodes(subjects);
-
-                // Build rows with total, average, and rank
-                const rawRows = Object.entries(studentMap).map(([studentId, ObjectData]) => {
-                    const data = ObjectData as any;
-                    const subjectScores = subjects.map(s => data.subjects[s]?.score || 0);
-                    const enteredCount = subjects.filter(s => data.subjects[s]).length;
-                    const total = subjectScores.reduce((s, v) => s + v, 0);
-                    const average = enteredCount > 0 ? total / enteredCount : 0;
-
-                    return {
-                        studentId,
-                        studentName: data.name,
-                        admissionNumber: data.admNo,
-                        subjects: data.subjects,
-                        total: Math.round(total),
-                        average: Math.round(average),
-                        rank: 0,
-                    };
-                });
-
-                // Sort by average descending and assign ranks
-                rawRows.sort((a, b) => b.average - a.average);
-                let rank = 0;
-                let lastAvg = -1;
-                rawRows.forEach((row, i) => {
-                    if (row.average !== lastAvg) {
-                        rank = i + 1;
-                        lastAvg = row.average;
-                    }
-                    row.rank = rank;
-                });
-
-                setRows(rawRows);
-            } catch (err) {
-                console.error(err);
-                setRows([]);
-                setSubjectCodes([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchAll();
+        let live = true;
+        fetch(`/api/school/exam-marks/stream?stream_id=${encodeURIComponent(gradeStreamId)}`)
+            .then(res => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch marks'))))
+            .then((json: { data?: BroadsheetMark[] }) => { if (live) setLoaded({ streamId: gradeStreamId, marks: json.data ?? [] }); })
+            .catch(err => { console.error(err); if (live) setLoaded({ streamId: gradeStreamId, marks: [] }); });
+        return () => { live = false; };
     }, [gradeStreamId]);
 
-    if (loading) {
-        return (
-            <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Loading all subjects…</p>
-            </div>
-        );
-    }
+    const activeTermId = useMemo(() => findActiveTermId([...terms]), [terms]);
+    const termIds = useMemo(() => broadsheetTermIds(marks), [marks]);
+    const fallback = useMemo(() => defaultBroadsheetFilter(marks, terms.map(t => t.id), activeTermId), [marks, terms, activeTermId]);
+    const termId = picked.termId && termIds.has(picked.termId) ? picked.termId : fallback.termId;
+    const examTypes = useMemo(() => broadsheetExamTypes(marks, termId), [marks, termId]);
+    // The term's latest exam unless another (or all of them) was picked.
+    const examType = picked.examType === ALL_EXAMS ? null
+        : picked.examType && examTypes.includes(picked.examType) ? picked.examType
+        : examTypes[examTypes.length - 1] ?? null;
+    const { rows, subjects, subjectNames } = useMemo(() => buildBroadsheet(marks, { termId, examType }), [marks, termId, examType]);
+    const termName = terms.find(t => t.id === termId)?.name ?? 'This term';
 
-    if (rows.length === 0) {
-        return (
-            <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
-                <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>
-                    No marks found for this class. Enter marks in individual exams first.
-                </p>
-            </div>
-        );
+    if (loading) {
+        return <div className="card p-12 text-center text-sm text-muted-foreground">Loading all subjects…</div>;
+    }
+    if (marks.length === 0) {
+        return <div className="card p-12 text-center text-sm text-muted-foreground">No marks found for this class. Enter marks for an exam first.</div>;
     }
 
     return (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: 'var(--space-4)' }}>
-                <h3 className="flex items-center gap-2.5 text-base font-semibold">
-                    <span className="flex size-8 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 dark:text-blue-400" aria-hidden><LayoutGrid className="size-4" /></span>
-                    All subjects — class results
-                </h3>
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
-                    Showing best score per subject for each student. {rows.length} students · {subjectCodes.length} subjects
-                </p>
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-                <div className="w-full overflow-x-auto">
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                          <tr style={{ borderBottom: '2px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
-                              <th style={thStyle}>Rank</th>
-                              <th style={thStyle}>Student</th>
-                              <th style={thStyle}>Adm No</th>
-                              {subjectCodes.map(s => (
-                                  <th key={s} style={{ ...thStyle, textAlign: 'center', minWidth: 80 }} title={rows[0]?.subjects[s]?.name || s}>{s}</th>
-                              ))}
-                              <th style={{ ...thStyle, textAlign: 'center' }}>Total</th>
-                              <th style={{ ...thStyle, textAlign: 'center' }}>Avg</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {rows.map((row, i) => (
-                              <tr
-                                  key={row.studentId}
-                                  style={{
-                                      borderBottom: '1px solid var(--color-border)',
-                                      background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-raised)',
-                                  }}
-                              >
-                                  <td style={tdStyle}>
-                                      <RankBadge rank={row.rank} />
-                                  </td>
-                                  <td style={{ ...tdStyle, fontWeight: 500 }}>{row.studentName}</td>
-                                  <td style={{ ...tdStyle, color: 'var(--color-text-muted)' }}>{row.admissionNumber || '—'}</td>
-                                  {subjectCodes.map(s => {
-                                      const val = row.subjects[s];
-                                      return (
-                                          <td key={s} style={{ ...tdStyle, textAlign: 'center' }}>
-                                              {val ? (
-                                                  <span title={`${val.name} - Grade: ${val.grade}`}>
-                                                      <span style={{ fontWeight: 600 }}>{val.score.toFixed(0)}</span>
-                                                      <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 2 }}>{val.grade}</span>
-                                                  </span>
-                                              ) : (
-                                                  <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-                                              )}
-                                          </td>
-                                      );
-                                  })}
-                                  <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 700 }}>{row.total.toFixed(0)}</td>
-                                  <td style={{
-                                      ...tdStyle,
-                                      textAlign: 'center',
-                                      fontWeight: 700,
-                                      color: row.average >= 70 ? '#10B981' : row.average >= 50 ? '#F59E0B' : '#EF4444',
-                                  }}>
-                                      {Math.round(row.average)}%
-                                  </td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+        <div className="card overflow-hidden p-0">
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                    <h3 className="flex items-center gap-2.5 text-base font-semibold">
+                        <span className="flex size-8 items-center justify-center rounded-lg bg-blue-500/12 text-blue-600 dark:text-blue-400" aria-hidden><LayoutGrid className="size-4" /></span>
+                        All subjects — class results
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {termName} · {broadsheetExamName(examType)} · {rows.length} learners · {subjects.length} subjects
+                    </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:w-auto sm:min-w-[22rem]">
+                    <label className="text-xs font-semibold text-muted-foreground">
+                        Term
+                        <select className="input-field mt-1 w-full" value={termId ?? ''} onChange={e => setPicked({ termId: e.target.value, examType: null })}>
+                            {terms.filter(t => termIds.has(t.id)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </label>
+                    <label className="text-xs font-semibold text-muted-foreground">
+                        Exam
+                        <select className="input-field mt-1 w-full" value={examType ?? ALL_EXAMS} onChange={e => setPicked({ termId, examType: e.target.value })}>
+                            {examTypes.map(t => <option key={t} value={t}>{broadsheetExamName(t)}</option>)}
+                            {examTypes.length > 1 && <option value={ALL_EXAMS}>{broadsheetExamName(null)}</option>}
+                        </select>
+                    </label>
                 </div>
             </div>
+            {rows.length === 0 ? (
+                <p className="border-t border-border p-8 text-center text-sm text-muted-foreground">No marks for this exam yet.</p>
+            ) : (
+                <div className="w-full overflow-x-auto border-t border-border">
+                    <table className="w-full border-collapse text-[13px]">
+                        <thead>
+                            <tr className="border-b-2 border-border bg-muted/50 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                <th className="whitespace-nowrap px-3 py-2.5 text-left">Rank</th>
+                                <th className="sticky left-0 z-10 whitespace-nowrap bg-muted px-3 py-2.5 text-left">Student</th>
+                                <th className="whitespace-nowrap px-3 py-2.5 text-left">Adm No</th>
+                                {subjects.map(s => (
+                                    <th key={s} className="min-w-20 whitespace-nowrap px-3 py-2.5 text-center" title={subjectNames[s]}>{s}</th>
+                                ))}
+                                <th className="whitespace-nowrap px-3 py-2.5 text-center">Total</th>
+                                <th className="whitespace-nowrap px-3 py-2.5 text-center">Avg</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, i) => (
+                                <tr key={row.studentId} className={cn('border-b border-border', i % 2 === 1 && 'bg-muted/30')}>
+                                    <td className="whitespace-nowrap px-3 py-2.5"><RankBadge rank={row.rank} /></td>
+                                    <td className="sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-2.5 font-medium">{row.name}</td>
+                                    <td className="whitespace-nowrap px-3 py-2.5 text-muted-foreground">{row.admNo || '—'}</td>
+                                    {subjects.map(s => {
+                                        const val = row.subjects[s];
+                                        return (
+                                            <td key={s} className="whitespace-nowrap px-3 py-2.5 text-center">
+                                                {val ? (
+                                                    <span title={`${val.name} - Grade: ${val.grade}`}>
+                                                        <span className="font-semibold">{val.score.toFixed(0)}</span>
+                                                        <span className="ml-0.5 text-[10px] text-muted-foreground">{val.grade}</span>
+                                                    </span>
+                                                ) : <span className="text-muted-foreground">—</span>}
+                                            </td>
+                                        );
+                                    })}
+                                    <td className="whitespace-nowrap px-3 py-2.5 text-center font-bold">{row.total}</td>
+                                    <td className={cn('whitespace-nowrap px-3 py-2.5 text-center font-bold', scoreTone(row.average))}>{row.average}%</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }
-
-const thStyle: React.CSSProperties = {
-    padding: '10px 12px',
-    textAlign: 'left',
-    fontWeight: 600,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    color: 'var(--color-text-muted)',
-    whiteSpace: 'nowrap',
-};
-
-const tdStyle: React.CSSProperties = {
-    padding: '10px 12px',
-    whiteSpace: 'nowrap',
-};
