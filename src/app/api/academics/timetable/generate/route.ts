@@ -4,8 +4,8 @@ import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne } from '@/lib/postgrest';
 import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib/timetable/solver';
-import { MORNING_CATEGORIES } from '@/lib/timetable/config';
-import { loadConfig, loadVersion } from '@/lib/timetable/server';
+import { AFTERNOON_CATEGORIES, MAIN_SECTION_ID, MORNING_CATEGORIES, minutesOf, sectionFor, type TimetablePeriod } from '@/lib/timetable/config';
+import { loadConfig, loadVersion, streamBands } from '@/lib/timetable/server';
 import { insertChunked } from '@/lib/db-batch';
 
 export const maxDuration = 60;
@@ -33,8 +33,9 @@ interface RequirementRow {
 export const POST = route('timetable generate', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const body = await parseBody(request, bodySchema);
     const db = createSupabaseAdmin();
-    const [config, { data: reqRows, error }, { data: rooms, error: roomsError }] = await Promise.all([
+    const [config, bands, { data: reqRows, error }, { data: rooms, error: roomsError }] = await Promise.all([
         loadConfig(access.schoolId),
+        streamBands(access.schoolId),
         db.from('timetable_requirements')
             .select('id, grade_stream_id, subject_id, teacher_id, lessons_per_week, double_lessons, room_type, subject:subjects(name, category), stream:grade_streams(full_name)')
             .eq('school_id', access.schoolId),
@@ -44,13 +45,17 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
     const requirements = (reqRows ?? []) as RequirementRow[];
     if (requirements.length === 0) throw new HttpError(400, 'Add teaching loads first (or import them from subject assignments).');
 
-    const slotsPerWeek = config.days.length * config.periods.filter(p => !p.is_break).length;
-    const overloaded = new Map<string, number>();
-    requirements.forEach(r => overloaded.set(r.grade_stream_id, (overloaded.get(r.grade_stream_id) ?? 0) + r.lessons_per_week));
-    const tooMany = requirements.filter(r => (overloaded.get(r.grade_stream_id) ?? 0) > slotsPerWeek);
+    // Each class keeps its section's bell: its capacity is that section's teaching periods.
+    const sectionOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null);
+    const weekly = new Map<string, number>();
+    requirements.forEach(r => weekly.set(r.grade_stream_id, (weekly.get(r.grade_stream_id) ?? 0) + r.lessons_per_week));
+    const tooMany = requirements.filter(r => {
+        const slots = config.days.length * sectionOf(r.grade_stream_id).periods.filter(p => !p.is_break).length;
+        return (weekly.get(r.grade_stream_id) ?? 0) > slots;
+    });
     if (tooMany.length > 0) {
         const names = [...new Set(tooMany.map(r => embedOne(r.stream)?.full_name ?? 'A class'))];
-        throw new HttpError(400, `${names.join(', ')} ${names.length === 1 ? 'has' : 'have'} more weekly lessons than the ${slotsPerWeek} periods in the week.`);
+        throw new HttpError(400, `${names.join(', ')} ${names.length === 1 ? 'has' : 'have'} more weekly lessons than periods in the week. Lighten the loads or add periods to the day.`);
     }
 
     let pinned: PinnedLesson[] = [];
@@ -74,15 +79,19 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         doubles: r.double_lessons,
         roomType: r.room_type,
         preferMorning: MORNING_CATEGORIES.has(embedOne(r.subject)?.category ?? ''),
+        preferAfternoon: AFTERNOON_CATEGORIES.has(embedOne(r.subject)?.category ?? ''),
+        sectionId: sectionOf(r.grade_stream_id).id,
     }));
+    const toSolver = (periods: readonly TimetablePeriod[]) => periods.map((p, index) => ({ index, isBreak: p.is_break, start: minutesOf(p.start), end: minutesOf(p.end) }));
+    // Several shuffles, the best kept (see solveTimetable).
     const result = solveTimetable({
         days: config.days,
-        periods: config.periods.map((p, index) => ({ index, isBreak: p.is_break })),
+        sections: [{ id: MAIN_SECTION_ID, periods: toSolver(config.periods) }, ...config.sections.map(s => ({ id: s.id, periods: toSolver(s.periods) }))],
         requirements: solverReqs,
         rooms: (rooms ?? []).map(r => ({ id: r.id as string, type: r.room_type as string })),
         pinned,
-        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 4000, seed: body.seed ?? Date.now() % 2 ** 31 },
-    });
+        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 12_000, seed: body.seed ?? Date.now() % 2 ** 31 },
+    }, 4);
 
     const byId = new Map(requirements.map(r => [r.id, r]));
     const unplaced = result.unplaced.map(u => {
