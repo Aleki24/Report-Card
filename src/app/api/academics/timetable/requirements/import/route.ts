@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { route, parseBody } from '@/lib/platform/access';
-import { getCurrentAcademicYearId } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne } from '@/lib/postgrest';
 import { ministryAllocation } from '@/lib/timetable/allocations';
+import { assignmentKey, classAssignments, syncLoadTeachers } from '@/lib/timetable/assignments';
 
 const bodySchema = z.object({
     /** For subjects the Ministry sets no allocation for (or all, when not following it). */
@@ -18,27 +18,23 @@ type GradeRef = { code: string | null; name_display: string | null };
 
 /**
  * Creates a teaching load for every subject a teacher is assigned to a class
- * this year (Subjects → teachers), skipping loads that already exist. An
- * assignment to a whole grade expands to each of the grade's classes. Weekly
- * lessons follow the Ministry's allocation for the class's level.
+ * this year (Subjects → teachers), and brings existing loads' teachers up to
+ * date: a load whose teacher is no longer assigned to that class and subject
+ * takes the assigned one. An assignment to a whole grade expands to each of
+ * the grade's classes. Weekly lessons follow the Ministry's allocation for
+ * the class's level.
  */
 export const POST = route('timetable import loads', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const { lessons_per_week, follow_ministry, update_existing } = await parseBody(request, bodySchema);
     const db = createSupabaseAdmin();
-    const yearId = await getCurrentAcademicYearId(db, access.schoolId);
-
-    let q = db.from('subject_teacher_assignments')
-        .select('subject_id, grade_id, grade_stream_id, teacher:subject_teachers!inner(user_id, user:users!inner(school_id))')
-        .eq('teacher.user.school_id', access.schoolId);
-    if (yearId) q = q.eq('academic_year_id', yearId);
-    const [{ data: assignments, error }, { data: streams, error: streamsError }, { data: existing, error: existingError }] = await Promise.all([
-        q,
+    const [assigned, { data: streams, error: streamsError }, { data: existing, error: existingError }] = await Promise.all([
+        classAssignments(db, access.schoolId),
         db.from('grade_streams').select('id, grade_id, grade:grades(code, name_display)').eq('school_id', access.schoolId),
         db.from('timetable_requirements').select('id, grade_stream_id, subject_id').eq('school_id', access.schoolId),
     ]);
-    if (error || streamsError || existingError) throw error ?? streamsError ?? existingError;
+    if (streamsError || existingError) throw streamsError ?? existingError;
 
-    const subjectIds = [...new Set([...(assignments ?? []).map(a => a.subject_id as string), ...(existing ?? []).map(r => r.subject_id as string)])];
+    const subjectIds = [...new Set([...[...assigned.values()].map(a => a.subjectId), ...(existing ?? []).map(r => r.subject_id as string)])];
     const { data: subjects, error: subjectsError } = subjectIds.length
         ? await db.from('subjects').select('id, name, code').in('id', subjectIds)
         : { data: [], error: null };
@@ -51,26 +47,19 @@ export const POST = route('timetable import loads', { module: 'timetable', permi
         return ministry ?? { lessons: lessons_per_week, doubles: 0 };
     };
 
-    const have = new Set((existing ?? []).map(r => `${r.grade_stream_id}|${r.subject_id}`));
-    const rows = new Map<string, Record<string, unknown>>();
-    for (const a of assignments ?? []) {
-        const teacherId = embedOne<{ user_id: string }>(a.teacher)?.user_id ?? null;
-        const targets = a.grade_stream_id
-            ? [a.grade_stream_id as string]
-            : (streams ?? []).filter(s => s.grade_id === a.grade_id).map(s => s.id as string);
-        for (const streamId of targets) {
-            const key = `${streamId}|${a.subject_id}`;
-            if (have.has(key) || rows.has(key)) continue;
-            rows.set(key, {
-                school_id: access.schoolId, grade_stream_id: streamId, subject_id: a.subject_id,
-                teacher_id: teacherId, ...(({ lessons, doubles }) => ({ lessons_per_week: lessons, double_lessons: doubles }))(allocationFor(streamId, a.subject_id as string)),
-            });
-        }
-    }
-    if (rows.size > 0) {
-        const { error: insertError } = await db.from('timetable_requirements').insert([...rows.values()]);
+    const have = new Set((existing ?? []).map(r => assignmentKey(r.grade_stream_id as string, r.subject_id as string)));
+    const rows = [...assigned.entries()]
+        .filter(([key]) => !have.has(key))
+        .map(([, a]) => {
+            const { lessons, doubles } = allocationFor(a.streamId, a.subjectId);
+            return { school_id: access.schoolId, grade_stream_id: a.streamId, subject_id: a.subjectId, teacher_id: a.teacherId, lessons_per_week: lessons, double_lessons: doubles };
+        });
+    if (rows.length > 0) {
+        const { error: insertError } = await db.from('timetable_requirements').insert(rows);
         if (insertError) throw insertError;
     }
+    // Loads that already existed follow Subjects → Teachers when a subject changed hands.
+    const reassigned = await syncLoadTeachers(db, access.schoolId, assigned);
 
     let updated = 0;
     if (follow_ministry && update_existing) {
@@ -86,5 +75,5 @@ export const POST = route('timetable import loads', { module: 'timetable', permi
         if (failed?.error) throw failed.error;
         updated = changes.length;
     }
-    return { created: rows.size, updated };
+    return { created: rows.length, updated, reassigned };
 });

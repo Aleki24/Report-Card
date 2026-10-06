@@ -12,7 +12,7 @@ import type { TimetableConfig } from '@/lib/timetable/config';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
+    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import {
@@ -43,7 +43,7 @@ function Loads({ onChange }: { onChange: () => void }) {
             <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-end sm:p-5">
                 <div className="sm:flex-1">
                     <h2 className="text-base font-semibold">Start from subject assignments</h2>
-                    <p className="text-sm text-muted-foreground">Creates a load for every subject each teacher is assigned to a class this year.</p>
+                    <p className="text-sm text-muted-foreground">{IMPORT_LOADS_NOTE}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{MINISTRY_LOADS_NOTE}</p>
                 </div>
                 <FormField label="Other subjects" htmlFor="import-per-week" className="sm:w-36">

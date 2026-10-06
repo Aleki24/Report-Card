@@ -5,7 +5,7 @@ import { humanize, personName } from '@shared/ops/format';
 import { basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
 import type { TimetableConfig } from '@shared/timetable/config';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
+    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad,
 } from '@shared/ops/forms/academics';
 import { Button, ButtonRow, Card, LoadingView, ProgressBar, TextField, useScrollToView } from '@/components/ui';
@@ -45,7 +45,7 @@ function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
         <View>
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Start from subject assignments</Text>
-                <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>Creates a load for every subject each teacher is assigned to a class this year. Adjust any of them below.</Text>
+                <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{IMPORT_LOADS_NOTE}</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{MINISTRY_LOADS_NOTE}</Text>
                 <TextField label="Other subjects: lessons a week" value={perWeek} onChangeText={setPerWeek} keyboardType="number-pad" />
                 <ButtonRow>

@@ -200,12 +200,24 @@ export function weeklyLessonsPerClass(rows: readonly TeachingLoad[]): string {
     return [...perClass.entries()].sort().map(([c, n]) => `${c} ${n}`).join(' · ');
 }
 
-export interface ImportLoadsResult { created: number; updated: number }
+export interface ImportLoadsResult {
+    created: number;
+    updated: number;
+    /** Loads whose teacher was changed to match Subjects → Teachers. */
+    reassigned?: number;
+}
 
-export const importLoadsMessage = ({ created, updated }: ImportLoadsResult) => {
-    const parts = [created > 0 ? `${created} teaching loads added` : '', updated > 0 ? `${updated} reset to Ministry figures` : ''].filter(Boolean);
-    return parts.length === 0 ? 'Every assignment already has a load.' : `${parts.join(', ')}. Adjust any of them below.`;
+export const importLoadsMessage = ({ created, updated, reassigned = 0 }: ImportLoadsResult) => {
+    const parts = [
+        created > 0 ? `${created} teaching loads added` : '',
+        reassigned > 0 ? `${reassigned} given their new teacher` : '',
+        updated > 0 ? `${updated} reset to Ministry figures` : '',
+    ].filter(Boolean);
+    return parts.length === 0 ? 'Every load already matches Subjects → Teachers.' : `${parts.join(', ')}. Adjust any of them below.`;
 };
+
+/** What importing loads does, shown on the web and in the app. */
+export const IMPORT_LOADS_NOTE = 'Creates a load for every subject each teacher is assigned to a class this year. When you change who teaches a subject in Subjects → Teachers, its loads follow automatically.';
 
 /** How weekly lessons are set when loads are imported. */
 export const MINISTRY_LOADS_NOTE = 'Lessons a week follow the KICD / Ministry allocation for each level (e.g. Grade 7 Mathematics 5, Integrated Science 5 with a double). Subjects it does not cover get the number you set.';
