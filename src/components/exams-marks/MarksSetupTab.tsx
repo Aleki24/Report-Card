@@ -337,6 +337,25 @@ export function MarksSetupTab() {
     subjectMap.set(ms.id, { subject_id: ms.id, subject_name: ms.name, subject_code: ms.code, subject_category: ms.category ?? '', hasExam: false });
   }
   const subjects = [...subjectMap.values()].sort((a, b) => a.subject_name.localeCompare(b.subject_name));
+
+  // A subject added after this term's exams were set up has none yet. For an
+  // admin, give it the term's exam types (seeding only fills gaps) instead of
+  // making them create each one by hand; once per term, type and class.
+  const autoFilledRef = useRef(new Set<string>());
+  const missingExamSubjects = isAdmin && selectedExamType && effectiveGradeId ? subjects.filter(s => !s.hasExam).length : 0;
+  useEffect(() => {
+    if (!missingExamSubjects || !selectedTermId) return;
+    const key = `${selectedTermId}|${selectedExamType}|${effectiveGradeId}`;
+    if (autoFilledRef.current.has(key)) return;
+    autoFilledRef.current.add(key);
+    const term = terms.find(t => t.id === selectedTermId);
+    void fetch('/api/school/exams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'seed', termId: selectedTermId, academicYearId: term?.academic_year_id, examTypes: [...existingTypes] }),
+    }).then(res => (res.ok ? fetchTermExams(selectedTermId).then(setExams) : undefined)).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the gap appears, keyed by the ref
+  }, [missingExamSubjects, selectedTermId, selectedExamType, effectiveGradeId]);
   const subjectNeedle = subjectQuery.trim().toLowerCase();
   const shownSubjects = subjectNeedle
     ? subjects.filter(s => s.subject_name.toLowerCase().includes(subjectNeedle) || s.subject_code.toLowerCase().includes(subjectNeedle))

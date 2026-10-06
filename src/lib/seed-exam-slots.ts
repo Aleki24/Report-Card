@@ -168,3 +168,38 @@ export async function seedExamSlots(options: SeedOptions) {
 
   return { created, skipped, error: null };
 }
+
+/**
+ * Gives newly offered subjects the exams their classes already have.
+ *
+ * Exam slots are seeded once per term, so a subject added afterwards (a new
+ * level's learning areas, say) had no Opener, Midterm or Endterm and its
+ * classes showed "No exam set up yet" while every other class was ready.
+ * For each term that has not ended, this seeds the exam types the term
+ * already uses — only the missing slots, since seeding skips existing ones.
+ */
+export async function fillExamSlotsForOfferedSubjects(schoolId: string): Promise<{ created: number }> {
+  const supabase = createSupabaseAdmin();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: rows, error } = await supabase
+    .from('exams')
+    .select('term_id, academic_year_id, exam_type, term:terms!inner(end_date)')
+    .eq('school_id', schoolId)
+    .or(`end_date.gte.${today},end_date.is.null`, { referencedTable: 'term' });
+  if (error) throw error;
+
+  const terms = new Map<string, { academicYearId: string; types: Set<string> }>();
+  for (const r of rows ?? []) {
+    if (!r.term_id || !r.academic_year_id) continue;
+    const t = terms.get(r.term_id as string) ?? { academicYearId: r.academic_year_id as string, types: new Set<string>() };
+    t.types.add(r.exam_type as string);
+    terms.set(r.term_id as string, t);
+  }
+
+  let created = 0;
+  for (const [termId, t] of terms) {
+    const result = await seedExamSlots({ termId, schoolId, academicYearId: t.academicYearId, examTypes: [...t.types] });
+    created += result.created ?? 0;
+  }
+  return { created };
+}

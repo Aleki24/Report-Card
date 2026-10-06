@@ -32,6 +32,8 @@ import {
     subjectCombinationUpdateSchema,
 } from '@/lib/schemas';
 import { syncCombinationStudents } from '@/lib/pathway/sync-student-subjects';
+import { fillExamSlotsForOfferedSubjects } from '@/lib/seed-exam-slots';
+
 import {
     SCHOOL_SUBJECT_VIEW,
     allOffered,
@@ -378,6 +380,7 @@ export async function POST(request: NextRequest) {
                 if (data.grading_system_id !== undefined) {
                     await setGradingSystem(supabaseAdmin, schoolId, [subjectId], data.grading_system_id ?? null);
                 }
+                await giveNewSubjectsTheTermsExams(schoolId);
                 return NextResponse.json({ success: true, data: result });
             },
 
@@ -402,6 +405,7 @@ export async function POST(request: NextRequest) {
                 const data = subjectsBulkSchema.parse(payload);
                 try {
                     const result = await offerStandardSubjects(supabaseAdmin, schoolId, data.level, data.codes);
+                    if (result.created > 0) await giveNewSubjectsTheTermsExams(schoolId);
                     return NextResponse.json({ success: true, ...result });
                 } catch (err) {
                     if (err instanceof StandardSubjectsError) return NextResponse.json({ error: err.message }, { status: 400 });
@@ -1009,4 +1013,10 @@ export async function DELETE(request: NextRequest) {
         const message = err instanceof Error ? err.message : 'An unknown error occurred';
         return NextResponse.json({ error: message }, { status: 500 });
     }
+}
+
+/** New subjects get this term's exams; a failure here must not undo the offering. */
+async function giveNewSubjectsTheTermsExams(schoolId: string): Promise<void> {
+    try { await fillExamSlotsForOfferedSubjects(schoolId); }
+    catch (err) { console.error('Could not add exams for new subjects:', err); }
 }
