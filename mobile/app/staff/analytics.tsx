@@ -7,7 +7,7 @@ import { examTypeLabel } from '@/lib/academics';
 import { toneColorFor, formatPercent, passRateTone, pluralize, scoreColor, shortCurriculumLabel } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    Badge, Button, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
+    Badge, Button, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -39,7 +39,7 @@ function AnalyticsContent() {
                 title="Analytics"
                 description={selected ? `${selected.full_name} — subjects, merit list and trend` : 'How each class is doing. Open a class for its subjects and merit list.'}
             />
-            <ChipSelect options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
+            <ChipSelect label="Class" options={[{ value: ALL, label: 'All classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={streamId} onChange={setStreamId} />
             {streamId === ALL ? <SchoolOverview onSelect={setStreamId} /> : <ClassView key={streamId} streamId={streamId} />}
         </Screen>
     );
@@ -118,17 +118,17 @@ function ClassView({ streamId }: { streamId: string }) {
 
     return (
         <>
-            {data.terms.length > 1 ? (
-                <ChipSelect label="Term" options={data.terms.map((t) => ({ value: t.id, label: t.name }))} value={data.scope.term_id} onChange={setTermId} />
-            ) : null}
-            {examTypes.length > 0 ? (
-                <ChipSelect
-                    label="Sitting"
-                    options={[{ value: '', label: 'Whole term' }, ...examTypes.map((t) => ({ value: t, label: examTypeLabel(t) }))]}
-                    value={examType ?? ''}
-                    onChange={(v) => setExamType(v || null)}
-                />
-            ) : null}
+            <FilterGrid>
+                {data.terms.length > 1 ? <ChipSelect label="Term" options={data.terms.map((t) => ({ value: t.id, label: t.name }))} value={data.scope.term_id} onChange={setTermId} /> : null}
+                {examTypes.length > 0 ? (
+                    <ChipSelect
+                        label="Sitting"
+                        options={[{ value: '', label: 'Whole term' }, ...examTypes.map((t) => ({ value: t, label: examTypeLabel(t) }))]}
+                        value={examType ?? ''}
+                        onChange={(v) => setExamType(v || null)}
+                    />
+                ) : null}
+            </FilterGrid>
 
             {data.summary.mark_count === 0 ? (
                 <EmptyState title="No marks for this selection" description="Pick another term or sitting." />

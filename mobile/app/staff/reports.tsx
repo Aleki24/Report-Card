@@ -10,7 +10,7 @@ import { CompareTerms } from '@/components/reports/CompareTerms';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
+    Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -89,25 +89,24 @@ function ReportsContent() {
         <Screen>
             <ScreenHeader title="Report Cards" description="Generate report cards and mark sheets, add comments and send results." />
 
-            <ChipSelect label="Academic year" options={years.map((y) => ({ value: y.id, label: y.name }))} value={effectiveYearId} onChange={(v) => { setYearId(v); setTermId(null); }} />
-            <ChipSelect label="Term" options={termsInYear.map((t) => ({ value: t.id, label: t.name }))} value={effectiveTerm?.id ?? null} onChange={setTermId} />
-            {streams.length === 0 ? (
-                <EmptyState title="No classes assigned" description="You need a class to generate its reports." />
-            ) : (
-                <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} />
-            )}
-            {rounds.data && rounds.data.rounds.length > 0 ? (
-                <ChipSelect
-                    label="Sitting"
-                    options={rounds.data.rounds.map((r) => ({
-                        value: r.exam_type,
-                        label: r.label || examTypeLabel(r.exam_type),
-                        hint: `${r.subjects_with_marks}/${r.subjects_total} marked${r.exam_type === rounds.data?.suggested ? ' · latest' : ''}`,
-                    }))}
-                    value={examType || null}
-                    onChange={setExamType}
-                />
-            ) : null}
+            {streams.length === 0 ? <EmptyState title="No classes assigned" description="You need a class to generate its reports." /> : null}
+            <FilterGrid>
+                {years.length > 1 ? <ChipSelect label="Academic year" options={years.map((y) => ({ value: y.id, label: y.name }))} value={effectiveYearId} onChange={(v) => { setYearId(v); setTermId(null); }} /> : null}
+                <ChipSelect label="Term" options={termsInYear.map((t) => ({ value: t.id, label: t.name }))} value={effectiveTerm?.id ?? null} onChange={setTermId} />
+                {streams.length > 0 ? <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} /> : null}
+                {rounds.data && rounds.data.rounds.length > 0 ? (
+                    <ChipSelect
+                        label="Sitting"
+                        options={rounds.data.rounds.map((r) => ({
+                            value: r.exam_type,
+                            label: r.label || examTypeLabel(r.exam_type),
+                            hint: `${r.subjects_with_marks}/${r.subjects_total} marked${r.exam_type === rounds.data?.suggested ? ' · latest' : ''}`,
+                        }))}
+                        value={examType || null}
+                        onChange={setExamType}
+                    />
+                ) : null}
+            </FilterGrid>
 
             {streams.length > 0 ? (
                 <SegmentedTabs
