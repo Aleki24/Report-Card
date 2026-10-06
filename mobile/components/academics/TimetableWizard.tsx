@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { AlertTriangle, CalendarClock, ChevronDown, FlaskConical, Layers, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
-import { basisLine, daySummary, firstCard, loadsSummary, overloadMessage, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
+import { basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
 import {
     LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName,
     type ImportLoadsResult, type Room, type TeachingLoad,
@@ -147,6 +147,33 @@ function ClassFit({ plan }: { plan: TimetablePlan }) {
     );
 }
 
+/** Every teacher's week across all their classes and levels, light and over-full loads marked. */
+function TeacherLoads({ plan }: { plan: TimetablePlan }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    if (plan.teachers.length === 0) return null;
+    return (
+        <View style={{ marginTop: spacing.md }}>
+            <Text style={styles.blockTitle}>Teacher loads · lessons a week across every class</Text>
+            {plan.teachers.map((t) => {
+                const over = t.lessons > t.capacity;
+                const light = isLightLoad(t);
+                const tone = over ? colors.danger : light ? colors.warning : colors.success;
+                return (
+                    <View key={t.name} style={[styles.fit, { borderColor: over || light ? tone : colors.border }]}>
+                        <View style={styles.fitHead}>
+                            <Text style={styles.fitName} numberOfLines={1}>{t.name}</Text>
+                            <Text style={[styles.fitCount, (over || light) && { color: tone }]}>{t.lessons} / {t.capacity}</Text>
+                        </View>
+                        <ProgressBar value={(t.lessons / Math.max(1, t.capacity)) * 100} color={tone} />
+                        <Text style={styles.fitLine} numberOfLines={1}>{t.classes.join(' · ')}</Text>
+                    </View>
+                );
+            })}
+        </View>
+    );
+}
+
 /**
  * The timetable studio: the whole setup on one screen, in the order it has
  * to happen, with what blocks generating said up front instead of at the
@@ -228,6 +255,7 @@ export function TimetableWizard() {
                     <Text style={styles.fitLine}>Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s Option block to choose them yourself.</Text>
                 </View>
                 <ClassFit plan={plan} />
+                <TeacherLoads plan={plan} />
                 <Loads onChange={() => void refresh()} />
             </StudioCard>
             <StudioCard icon={FlaskConical} title="Labs & special rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>

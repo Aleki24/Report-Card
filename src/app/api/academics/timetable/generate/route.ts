@@ -6,6 +6,7 @@ import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib
 import { AFTERNOON_CATEGORIES, MAIN_SECTION_ID, MORNING_CATEGORIES, minutesOf, type TimetablePeriod } from '@/lib/timetable/config';
 import { loadTimetablePlan, loadVersion, type LoadRow, type PlannedLoad } from '@/lib/timetable/server';
 import { blockLabel, planProblem, teacherWeeks } from '@/lib/timetable/blocks';
+import { periodKindMismatch } from '@/lib/ops/forms/academics';
 import { insertChunked } from '@/lib/db-batch';
 
 export const maxDuration = 60;
@@ -31,6 +32,10 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
     ]);
     if (roomsError) throw roomsError;
     if (rows.length === 0) throw new HttpError(400, 'Add teaching loads first (or import them from subject assignments).');
+
+    // A break set as a lesson would get lessons timetabled in it.
+    const misnamed = [...config.periods, ...config.sections.flatMap(s => s.periods)].map(periodKindMismatch).filter((m): m is string => !!m);
+    if (misnamed.length > 0) throw new HttpError(400, misnamed.join(' '));
 
     // Option blocks already fit electives into the week; what still overflows needs the school.
     const problems = [...plans.values()].map(p => planProblem(p, rows.find(r => r.grade_stream_id === p.streamId)?.stream?.full_name ?? 'A class')).filter((m): m is string => !!m);

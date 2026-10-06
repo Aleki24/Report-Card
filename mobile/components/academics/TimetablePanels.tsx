@@ -8,11 +8,11 @@ import { periodIndexOf, type GridRow } from '@shared/timetable/layout';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PUBLISH_TIMETABLE_WARNING, SECTIONS_NOTE, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
     withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
-import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ListCard, ListRow, LoadingView, Notice, SectionLabel, TextField, ToggleRow } from '@/components/ui';
+import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { LookupField, SelectField } from '@/components/ops/SelectField';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
@@ -39,6 +39,7 @@ function useTimetablePdf() {
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [view, setView] = useState<TimetableView>('mine');
@@ -73,9 +74,17 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
                 <EmptyState title="No lessons on this timetable." />
             ) : (
                 <>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm }}>
+                        {weekSummary(data.lessons).map(([label, value]) => (
+                            <View key={label} style={{ backgroundColor: colors.mutedBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                                <Text style={{ fontSize: 11, color: colors.muted, fontFamily: fonts.regular }}>{label}</Text>
+                                <Text style={{ fontSize: 15, color: colors.foreground, fontFamily: fonts.bold }}>{value}</Text>
+                            </View>
+                        ))}
+                    </View>
                     <ButtonRow>
                         <Button size="sm" variant="secondary" label="Download PDF" loading={pdf.busy === view} onPress={() => void pdf.save({ view, id: targetId || undefined }, 'timetable.pdf')} />
-                        {canBrowse ? <Button size="sm" variant="secondary" label="Whole school" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master' }, 'master-timetable.pdf')} /> : null}
+                        {canBrowse ? <Button size="sm" variant="secondary" label="Whole-school PDF" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master' }, 'master-timetable.pdf')} /> : null}
                     </ButtonRow>
                     <TimetableGrid config={data.config} lessons={data.lessons} mode={data.mode} />
                 </>
@@ -252,16 +261,18 @@ function QualityCard({ quality, reshuffling, onReshuffle }: { quality: ReturnTyp
 
 /** One bell: its periods and breaks with their times. */
 function PeriodsEditor({ periods, onChange }: { periods: readonly TimetablePeriod[]; onChange: (next: TimetablePeriod[]) => void }) {
+    const { colors } = useTheme();
     return (
         <View>
             {periods.map((p, i) => (
-                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderStyle: p.is_break ? 'dashed' : 'solid' }}>
+                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderColor: p.is_break ? colors.warning : colors.border, backgroundColor: p.is_break ? colors.warningBg : colors.card }}>
                     <TextField label="Name" value={p.label} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { label: v }))} />
                     <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                         <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { start: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
                         <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { end: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
                     </View>
-                    <ToggleRow label="Break" value={p.is_break} onValueChange={(v) => onChange(withPeriodPatched(periods, i, { is_break: v }))} />
+                    <SegmentedTabs tabs={PERIOD_KINDS} value={periodKind(p)} onChange={(k) => onChange(withPeriodPatched(periods, i, { is_break: k === 'break' }))} />
+                    {periodKindMismatch(p) ? <Text style={{ fontSize: 12, color: colors.warningText, marginTop: 4 }}>{periodKindMismatch(p)}</Text> : null}
                     <ButtonRow>
                         <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
                     </ButtonRow>

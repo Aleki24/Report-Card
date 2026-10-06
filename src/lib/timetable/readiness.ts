@@ -56,7 +56,7 @@ export interface Blocker {
 }
 
 export interface TimetablePlan {
-    day: { days: number; lessonsPerDay: number; starts: string | null; ends: string | null; sections: number };
+    day: { days: number; lessonsPerDay: number; starts: string | null; ends: string | null; sections: number; breakMismatches: string[] };
     rooms: number;
     loads: number;
     classes: PlanClass[];
@@ -70,6 +70,9 @@ export interface TimetablePlan {
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** A teacher with under half the week taught is worth a look: their time is likely going unused. */
+export const isLightLoad = (t: Pick<TeacherWeek, 'lessons' | 'capacity'>) => t.capacity > 0 && t.lessons < t.capacity / 2;
 
 /** Why a class does not fit its week, and the ways out. */
 export function overloadMessage(c: PlanClass): string {
@@ -94,6 +97,7 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
     const blockers: Blocker[] = [];
     const notes: Blocker[] = [];
     if (plan.day.days === 0 || plan.day.lessonsPerDay === 0) blockers.push({ card: 'day', message: 'Set the school days and at least one lesson period.' });
+    plan.day.breakMismatches.forEach(message => blockers.push({ card: 'day', message }));
     if (plan.loads === 0) blockers.push({ card: 'loads', message: 'Add teaching loads: who teaches which subject to which class, and how often.' });
     for (const c of plan.classes) {
         if (!c.fits) blockers.push({ card: 'loads', streamId: c.streamId, message: overloadMessage(c) });
@@ -108,6 +112,8 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
     for (const t of plan.teachers) {
         if (t.lessons > t.capacity) {
             blockers.push({ card: 'loads', message: `${t.name} teaches ${t.lessons} lessons a week (${t.classes.join(', ')}) but the week has ${t.capacity} periods. Give some of these classes to another teacher.` });
+        } else if (isLightLoad(t)) {
+            notes.push({ card: 'loads', message: `${t.name} has only ${plural(t.lessons, 'lesson')} a week (${t.classes.join(', ') || 'no classes'}). Assign more subjects or classes in Subjects → Teachers, then import loads again.` });
         }
     }
     if (plan.rooms === 0) notes.push({ card: 'rooms', message: 'No labs or special rooms: every lesson runs in the class’s own room.' });
