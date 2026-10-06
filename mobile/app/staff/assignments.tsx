@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { DateField } from '@/components/DateField';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { ClipboardList, FileText, Paperclip, Upload, X } from 'lucide-react-native';
@@ -71,7 +72,9 @@ export default function AssignmentsScreen() {
 }
 
 function AssignmentsContent() {
-    const [tab, setTab] = useState<'list' | 'submissions'>('list');
+    // The teacher home's "Work to grade" tile opens straight on submissions.
+    const params = useLocalSearchParams<{ tab?: string }>();
+    const [tab, setTab] = useState<'list' | 'submissions'>(params.tab === 'submissions' ? 'submissions' : 'list');
     const [draft, setDraft] = useState<Draft | null>(null);
     return (
         <Screen>

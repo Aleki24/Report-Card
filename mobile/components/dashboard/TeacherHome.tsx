@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
     ArrowRight, BarChart3, BookOpenCheck, CalendarCheck, ChevronDown, CircleCheck, ClipboardList, FileText, GraduationCap,
-    Hash, Megaphone, NotebookPen, PenLine, Send, Users,
+    Inbox, Megaphone, NotebookPen, PenLine, Send, Users,
 } from 'lucide-react-native';
 import type { DashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -76,6 +76,9 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
     const router = useRouter();
     const summary = useApiQuery<DashboardData>('/api/school/dashboard', { raw: true });
     const stats = useApiQuery<ClassTeacherStats & SubjectTeacherStats>(`/api/school/stats?role=${variant === 'class' ? 'class_teacher' : 'subject_teacher'}`, { raw: true });
+    // Work learners have handed in that still needs a grade: something to act on today.
+    const submissions = useApiQuery<{ grade: number | null }[]>('/api/school/submissions');
+    const toGrade = submissions.data ? submissions.data.filter((s) => s.grade === null).length : null;
     const marking = useMarking();
 
     if ((summary.loading && !summary.data) || (stats.loading && !stats.data)) return <DashboardSkeleton />;
@@ -123,7 +126,7 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
                     ) : (
                         <>
                             <KpiTile title="Subject average" value={avgText} icon={BarChart3} hue="violet" href="/staff/exams?tab=results" />
-                            <KpiTile title="Marks entered" value={(stats.data?.markCount ?? 0).toLocaleString()} icon={Hash} hue="sky" href="/staff/exams" />
+                            <KpiTile title="Work to grade" value={toGrade == null ? '…' : toGrade.toLocaleString()} icon={Inbox} hue="sky" href="/staff/assignments?tab=submissions" tone={toGrade ? 'warn' : undefined} />
                         </>
                     )}
                 </OperationsOverview>
