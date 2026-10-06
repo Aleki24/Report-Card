@@ -33,7 +33,8 @@ function LessonCell({ lessons, mode, selected }: { lessons: readonly TimetableLe
 }
 
 /**
- * A week grid from `md` up (periods down, days across); on phones one day at
+ * A week grid from `md` up (days down, periods across, breaks as shaded
+ * columns); on phones one day at
  * a time, so nothing scrolls sideways. A class shows its section's bell; a
  * teacher or room teaching across sections shows each lesson time.
  */
@@ -67,7 +68,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
                 </div>
                 <ol className="flex flex-col gap-2">
                     {rows.map(r => r.isBreak ? (
-                        <li key={r.key} className="rounded-lg bg-muted/60 px-3 py-1.5 text-center text-[11px] font-medium text-muted-foreground">{r.label} · {r.time}</li>
+                        <li key={r.key} className="rounded-lg bg-amber-500/12 px-3 py-1.5 text-center text-[11px] font-semibold text-amber-800 dark:text-amber-200">{r.label} · {r.time}</li>
                     ) : (
                         <li key={r.key} className="grid grid-cols-[4.5rem_1fr] items-stretch gap-2">
                             <span className="flex flex-col justify-center text-xs"><span className="font-semibold">{r.label}</span><span className="text-muted-foreground tabular-nums">{r.time}</span></span>
@@ -77,33 +78,31 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
                 </ol>
             </div>
 
-            {/* Tablets and up: the whole week */}
-            <div className="hidden overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm md:block">
-                <table className="w-full table-fixed border-collapse">
-                    <thead>
-                        <tr>
-                            <th className="w-24 border-b border-border/60 px-2 py-2 text-left text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Period</th>
-                            {config.days.map(d => (
-                                <th key={d} className="border-b border-border/60 px-2 py-2 text-left text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">{WEEKDAY_LABELS[d]}</th>
+            {/* Tablets and up: the whole week, days down the side and periods across, as schools pin it up */}
+            <div className="hidden overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm md:block">
+                <div className="grid min-w-[44rem]" style={{ gridTemplateColumns: `5.5rem ${rows.map(r => (r.isBreak ? '1.75rem' : 'minmax(6.5rem, 1fr)')).join(' ')}` }}>
+                    <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Day</div>
+                    {rows.map(r => r.isBreak ? (
+                        <div key={r.key} className="border-b border-l border-border/60 bg-amber-500/15" aria-hidden />
+                    ) : (
+                        <div key={r.key} className="border-b border-l border-border/60 bg-muted/40 px-2 py-2 text-center">
+                            <span className="block text-xs font-semibold">{r.label}</span>
+                            <span className="block text-[10px] text-muted-foreground tabular-nums">{r.time}</span>
+                        </div>
+                    ))}
+                    {config.days.map((d, di) => (
+                        <React.Fragment key={d}>
+                            <div className={cn('flex items-center px-3 text-sm font-semibold', di > 0 && 'border-t border-border/40')}>{WEEKDAY_LABELS[d]}</div>
+                            {rows.map(r => r.isBreak ? (
+                                <div key={r.key} className={cn('relative border-l border-border/40 bg-amber-500/10', di > 0 && 'border-t border-amber-500/10')}>
+                                    {di === 0 && <span className="absolute inset-x-0 top-2 mx-auto block w-fit text-[9px] font-semibold tracking-wider text-amber-700 uppercase [writing-mode:vertical-rl] dark:text-amber-300">{r.label}</span>}
+                                </div>
+                            ) : (
+                                <div key={r.key} className={cn('h-16 border-l border-border/40 p-1', di > 0 && 'border-t')}>{cell(d, r)}</div>
                             ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map(r => r.isBreak ? (
-                            <tr key={r.key}>
-                                <td colSpan={config.days.length + 1} className="bg-muted/40 px-2 py-1 text-center text-[11px] font-medium text-muted-foreground">{r.label} · {r.time}</td>
-                            </tr>
-                        ) : (
-                            <tr key={r.key}>
-                                <td className="border-t border-border/40 px-2 py-1.5 align-middle text-xs">
-                                    <span className="block font-semibold">{r.label}</span>
-                                    <span className="text-muted-foreground tabular-nums">{r.time}</span>
-                                </td>
-                                {config.days.map(d => <td key={d} className="h-14 border-t border-l border-border/40 p-1 align-stretch">{cell(d, r)}</td>)}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </React.Fragment>
+                    ))}
+                </div>
             </div>
         </>
     );

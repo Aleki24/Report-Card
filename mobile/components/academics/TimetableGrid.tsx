@@ -109,7 +109,7 @@ const useStyles = makeStyles((colors) => ({
     lessonTop: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
     lessonBottom: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted },
     free: { flex: 1, minHeight: 48, borderRadius: radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
-    breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
+    breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.warningText, backgroundColor: colors.warningBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginBottom: spacing.sm },
     periodLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
     periodTime: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },

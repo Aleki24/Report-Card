@@ -8,7 +8,7 @@ import { periodIndexOf, type GridRow } from '@shared/timetable/layout';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, SECTIONS_NOTE, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
     withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
@@ -39,6 +39,7 @@ function useTimetablePdf() {
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
+    const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
     const [view, setView] = useState<TimetableView>('mine');
@@ -73,9 +74,17 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
                 <EmptyState title="No lessons on this timetable." />
             ) : (
                 <>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm }}>
+                        {weekSummary(data.lessons).map(([label, value]) => (
+                            <View key={label} style={{ backgroundColor: colors.mutedBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                                <Text style={{ fontSize: 11, color: colors.muted, fontFamily: fonts.regular }}>{label}</Text>
+                                <Text style={{ fontSize: 15, color: colors.foreground, fontFamily: fonts.bold }}>{value}</Text>
+                            </View>
+                        ))}
+                    </View>
                     <ButtonRow>
                         <Button size="sm" variant="secondary" label="Download PDF" loading={pdf.busy === view} onPress={() => void pdf.save({ view, id: targetId || undefined }, 'timetable.pdf')} />
-                        {canBrowse ? <Button size="sm" variant="secondary" label="Whole school" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master' }, 'master-timetable.pdf')} /> : null}
+                        {canBrowse ? <Button size="sm" variant="secondary" label="Whole-school PDF" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master' }, 'master-timetable.pdf')} /> : null}
                     </ButtonRow>
                     <TimetableGrid config={data.config} lessons={data.lessons} mode={data.mode} />
                 </>

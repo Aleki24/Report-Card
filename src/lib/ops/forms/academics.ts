@@ -213,8 +213,29 @@ export const MINISTRY_LOADS_NOTE = 'Lessons a week follow the KICD / Ministry al
 export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
 /** What a cell shows depends on whose timetable it is. */
+const SUBJECT_SHORT: readonly [RegExp, string][] = [
+    [/^christian religious education$/i, 'CRE'],
+    [/^islamic religious education$/i, 'IRE'],
+    [/^hindu religious education$/i, 'HRE'],
+    [/^history and government$/i, 'History & Govt'],
+    [/^information communication technology$/i, 'ICT'],
+    [/^pastoral programme of instruction$/i, 'PPI'],
+    [/^community service learning$/i, 'CSL'],
+];
+
+/**
+ * A subject's name as a timetable cell shows it: the name, never a code like
+ * "101" or "MATH_JS", with the long religious and compound names shortened.
+ */
+export function shortSubject(name: string | null | undefined): string {
+    const n = (name ?? '').trim().replace(/\s+/g, ' ');
+    if (!n) return 'Lesson';
+    const known = SUBJECT_SHORT.find(([re]) => re.test(n));
+    return known ? known[1] : n.replace(/ and /gi, ' & ');
+}
+
 export function cellLines(l: TimetableLesson, mode: GridMode): [string, string] {
-    const subject = l.subject?.code || l.subject?.name || 'Lesson';
+    const subject = shortSubject(l.subject?.name);
     if (mode === 'class') return [subject, [teacherName(l.teacher), l.room?.name ?? ''].filter(Boolean).join(' · ')];
     if (mode === 'teacher') return [subject, [l.stream?.full_name ?? '', l.room?.name ?? ''].filter(Boolean).join(' · ')];
     return [subject, [l.stream?.full_name ?? '', teacherName(l.teacher)].filter(Boolean).join(' · ')];
@@ -223,8 +244,16 @@ export function cellLines(l: TimetableLesson, mode: GridMode): [string, string] 
 /** A grid cell's two lines for one lesson or an option block's parallel electives. */
 export function slotLines(lessons: readonly TimetableLesson[], mode: GridMode): [string, string] {
     if (lessons.length <= 1) return lessons[0] ? cellLines(lessons[0], mode) : ['', ''];
-    const subjects = lessons.map(l => l.subject?.code || l.subject?.name || 'Lesson').join(' / ');
+    const subjects = lessons.map(l => shortSubject(l.subject?.name)).join(' / ');
     return [subjects, `${lessons.length} electives in parallel`];
+}
+
+/** A timetable's week at a glance: lessons (an option block counts once), subjects and school days. */
+export function weekSummary(lessons: readonly TimetableLesson[]): [string, string][] {
+    const slots = new Set(lessons.map(l => `${l.day}|${l.period}|${l.grade_stream_id}`)).size;
+    const subjects = new Set(lessons.map(l => l.subject_id)).size;
+    const days = new Set(lessons.map(l => l.day)).size;
+    return [['Lessons a week', String(slots)], ['Subjects', String(subjects)], ['Days', String(days)]];
 }
 
 /** The classes a draft covers, by name. */

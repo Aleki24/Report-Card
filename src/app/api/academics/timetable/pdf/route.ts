@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { HttpError, route } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { resolveTimetable } from '@/lib/timetable/resolve';
-import { masterSheets, renderTimetablePdf, type TimetableSheet } from '@/lib/pdf/timetablePdf';
+import { masterSheets, renderTimetablePdf, type TimetablePdfData } from '@/lib/pdf/timetablePdf';
 import { teacherName } from '@/lib/ops/forms/academics';
 
 export const runtime = 'nodejs';
@@ -28,16 +28,18 @@ export const GET = route('timetable pdf', { module: 'timetable', permission: 'ti
         versionQuery.maybeSingle(),
     ]);
 
-    let sheets: TimetableSheet[];
-    let cover;
+    let parts: Pick<TimetablePdfData, 'sheets' | 'cover' | 'days' | 'loads'>;
     if (mode === 'master') {
-        ({ sheets, cover } = masterSheets(config, lessons));
+        parts = masterSheets(config, lessons);
     } else {
         const first = lessons[0];
         const title = mode === 'class' ? first.stream?.full_name : mode === 'teacher' ? teacherName(first.teacher) : first.room?.name;
         const kind = { class: 'Class', teacher: 'Teacher', room: 'Room' }[mode];
-        sheets = [{ title: title || `${kind} timetable`, subtitle: `${kind} timetable · ${lessons.length} lessons a week`, mode, lessons }];
+        // An option block is one slot however many electives it holds.
+        const slots = new Set(lessons.map(l => `${l.day}|${l.period}|${l.grade_stream_id}`)).size;
+        parts = { sheets: [{ title: title || `${kind} timetable`, subtitle: `${kind} timetable · ${slots} lessons a week`, mode, lessons }] };
     }
+    const { sheets } = parts;
 
     const schoolName = school?.name ?? 'School';
     const pdf = await renderTimetablePdf({
@@ -46,8 +48,7 @@ export const GET = route('timetable pdf', { module: 'timetable', permission: 'ti
         versionName: version?.name ?? 'Timetable',
         generatedAt: new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }),
         config,
-        sheets,
-        cover,
+        ...parts,
     });
     const name = mode === 'master' ? `${schoolName} master timetable` : `${sheets[0].title} timetable`;
     return new NextResponse(new Uint8Array(pdf), {
