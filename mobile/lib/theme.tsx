@@ -50,7 +50,7 @@ const light = {
     /** Dims the screen behind sheets and dialogs. */
     scrim: 'rgba(15, 23, 43, 0.45)',
     /** The dashboard hero's gradient, top-left to bottom-right. */
-    hero: ['#1e3a8a', '#155dfc', '#0ea5e9'] as readonly [string, string, string],
+    hero: ['#172554', '#1e40af', '#2563eb'] as readonly [string, string, string],
     shadow: '#0f172b',
     /** The sign-in screens' own frame (the web's auth pages). */
     auth: {
@@ -108,7 +108,7 @@ const dark: Palette = {
     white: '#ffffff',
     black: '#000000',
     scrim: 'rgba(0, 0, 0, 0.6)',
-    hero: ['#0b1d4d', '#1d4ed8', '#0369a1'],
+    hero: ['#0b1530', '#132a63', '#1e3a8a'],
     shadow: '#000000',
     auth: {
         backdrop: ['#060a14', '#0d1530', '#0a1122'],

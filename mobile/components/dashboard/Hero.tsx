@@ -105,10 +105,10 @@ function profileHref(role: string | null | undefined): Href {
 }
 
 /**
- * Who is signed in, across the top of the hero: their photo (initials until
- * they add one), their role and the school, with the school's crest.
+ * Who is signed in, above the hero on the page itself: their photo
+ * (initials until they add one), their role and the school's crest.
  */
-function IdentityBar() {
+function ProfileBar() {
     const styles = useStyles();
     const router = useRouter();
     const user = useOptionalCurrentUser();
@@ -177,12 +177,13 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
     const { colors } = useTheme();
     const styles = useStyles();
     return (
+        <>
+        <ProfileBar />
         <LinearGradient colors={gradient ?? colors.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
             <Svg style={styles.rings} width={220} height={220} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                 <Circle cx={160} cy={60} r={90} fill="rgba(255,255,255,0.07)" />
                 <Circle cx={190} cy={20} r={50} fill="rgba(255,255,255,0.06)" />
             </Svg>
-            <IdentityBar />
             <View style={styles.top}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.eyebrow}>{eyebrow ?? `${getSwahiliGreeting()} · ${formatLongToday()}`}</Text>
@@ -193,6 +194,7 @@ export function HeroFrame({ name, eyebrow, gradient, aside, children }: {
             {children}
             <View style={styles.beads}><Beadwork /></View>
         </LinearGradient>
+        </>
     );
 }
 
@@ -244,18 +246,18 @@ export function DashboardHero({ name, term, canEditTerms, eyebrow, summary, acti
     );
 }
 
-const useStyles = makeStyles(() => ({
-    hero: { borderRadius: radius.xxxl, padding: spacing.lg, paddingBottom: spacing.lg + 14, overflow: 'hidden', marginBottom: spacing.sm },
+const useStyles = makeStyles((colors) => ({
+    hero: { borderRadius: radius.xxxl, padding: spacing.lg, paddingBottom: spacing.lg + 10, overflow: 'hidden', marginBottom: spacing.sm },
     rings: { position: 'absolute', top: -20, right: -40 },
-    identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.md, marginBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.16)' },
-    avatarRing: { padding: 2, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.75)' },
+    identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+    avatarRing: { padding: 2, borderRadius: 26, borderWidth: 2, borderColor: colors.primary },
     avatar: { width: 44, height: 44, borderRadius: 22 },
-    avatarBlank: { backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+    avatarBlank: { backgroundColor: colors.primarySolid, alignItems: 'center', justifyContent: 'center' },
     avatarText: { fontSize: 16, fontFamily: fonts.display, color: '#ffffff' },
-    onlineDot: { position: 'absolute', right: 0, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#ffffff' },
-    identityName: { fontSize: 15, fontFamily: fonts.bold, color: '#ffffff' },
-    identityRole: { fontSize: 12, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.78)', marginTop: 1 },
-    crest: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ffffff', padding: 4, alignItems: 'center', justifyContent: 'center' },
+    onlineDot: { position: 'absolute', right: 0, bottom: 0, width: 13, height: 13, borderRadius: 7, backgroundColor: colors.success, borderWidth: 2, borderColor: colors.background },
+    identityName: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.2 },
+    identityRole: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginTop: 1 },
+    crest: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, padding: 4, alignItems: 'center', justifyContent: 'center' },
     crestImg: { width: '100%', height: '100%' },
     stats: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
     statCell: { flex: 1, minWidth: 0 },
@@ -268,7 +270,7 @@ const useStyles = makeStyles(() => ({
     chipWarm: { backgroundColor: 'rgba(251,191,36,0.28)', borderColor: 'rgba(253,230,138,0.45)' },
     chipText: { fontSize: 12, fontFamily: fonts.bold, color: '#ffffff' },
     eyebrow: { fontSize: 12, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.8)' },
-    greeting: { fontSize: 25, lineHeight: 31, fontFamily: fonts.display, color: '#ffffff', letterSpacing: -0.6, marginTop: 4 },
+    greeting: { fontSize: 21, lineHeight: 27, fontFamily: fonts.display, color: '#ffffff', letterSpacing: -0.4, marginTop: 2 },
     termRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
     pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.18)' },
     pillText: { fontSize: 12, fontFamily: fonts.bold, color: '#ffffff' },

@@ -1,49 +1,44 @@
 import React from 'react';
-import { Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import type { OverviewTile, TileTone } from '@shared/ops/overview';
+import { View } from 'react-native';
+import { LayoutGrid } from 'lucide-react-native';
+import type { OverviewTile } from '@shared/ops/overview';
 import { useOpsData } from '@/lib/ops';
-import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
-import { CountUp, PressScale, SectionTitle, appHref } from './dashboard/kit';
-
-const VALUE_COLOR: Record<TileTone, 'foreground' | 'success' | 'warning' | 'danger'> = { default: 'foreground', good: 'success', warn: 'warning', bad: 'danger' };
-
+import { hueForHref } from '@/lib/hues';
+import { screenIconFor } from '@/lib/roles';
+import { KpiGrid, KpiTile, SectionTitle, appHref } from './dashboard/kit';
 
 /**
- * Live figures from every module the school runs that the viewer may see —
- * the web dashboard's "Across the school" row. Renders nothing when empty.
+ * One "At a glance" grid: the home's own figures (learners, pass rate, marks
+ * to enter…) followed by the live figures of every module the school runs
+ * that the viewer may see — the web's "Key figures" and "Across the school"
+ * in one place, every tile in the same style. Renders nothing when empty.
  */
-export function OperationsOverview() {
-    const { colors } = useTheme();
-    const styles = useStyles();
-    const router = useRouter();
+export function OperationsOverview({ title = 'At a glance', children }: { title?: string; children?: React.ReactNode }) {
     const { data } = useOpsData<OverviewTile[]>('/api/ops/overview');
-    if (!data || data.length === 0) return null;
+    const tiles = data ?? [];
+    const own = React.Children.toArray(children).filter(Boolean);
+    if (tiles.length === 0 && own.length === 0) return null;
     return (
-        <View accessibilityLabel="School operations">
-            <SectionTitle title="Across the school" />
-            <View style={styles.grid}>
-                {data.map((t) => (
-                    <View key={t.key} style={styles.cell}>
-                        <PressScale onPress={() => router.push(appHref(t.href))} accessibilityRole="link" accessibilityLabel={`${t.label}: ${t.value}`} style={styles.tile}>
-                            <View style={[styles.accent, { backgroundColor: colors[VALUE_COLOR[t.tone]] }]} />
-                            <Text style={styles.label} numberOfLines={2}>{t.label}</Text>
-                            <CountUp value={t.value} style={[styles.value, { color: colors[VALUE_COLOR[t.tone]] }]} />
-                            {t.hint ? <Text style={styles.hint} numberOfLines={1}>{t.hint}</Text> : null}
-                        </PressScale>
-                    </View>
-                ))}
-            </View>
+        <View accessibilityLabel={title}>
+            <SectionTitle title={title} />
+            <KpiGrid>
+                {own}
+                {tiles.map((t) => {
+                    const href = appHref(t.href);
+                    const path = String(href).split('?')[0];
+                    return (
+                        <KpiTile
+                            key={t.key}
+                            title={t.hint ? `${t.label} · ${t.hint}` : t.label}
+                            value={t.value}
+                            icon={screenIconFor(path) ?? LayoutGrid}
+                            hue={hueForHref(t.href)}
+                            tone={t.tone === 'default' ? undefined : t.tone}
+                            href={href}
+                        />
+                    );
+                })}
+            </KpiGrid>
         </View>
     );
 }
-
-const useStyles = makeStyles((colors) => ({
-    grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-    cell: { width: '50%', padding: 5 },
-    tile: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.xxl, padding: spacing.md, paddingLeft: spacing.md + 4, gap: 2, overflow: 'hidden', minHeight: 92 },
-    accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-    label: { fontSize: 12, fontFamily: fonts.semibold, color: colors.muted },
-    value: { fontSize: 22, fontFamily: fonts.display, letterSpacing: -0.4 },
-    hint: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
-}));
