@@ -36,6 +36,8 @@ export interface ResourceListProps<R extends ResourceName, T extends { id: strin
     defaults?: Partial<Record<FieldName<R>, string | boolean>>;
     /** Text a row is found by; enables the search box. */
     searchText?: (row: T) => string;
+    /** What the search box starts with (e.g. one class's name). */
+    initialQuery?: string;
     /** Extra buttons per row (approve, return, discharge…); `reload` refreshes the list. */
     rowActions?: (row: T, reload: () => Promise<void>) => React.ReactNode;
     /** Shown above the list (filters, figures) and given the loaded rows. */
@@ -54,14 +56,14 @@ export interface ResourceListProps<R extends ResourceName, T extends { id: strin
  */
 export function ResourceList<R extends ResourceName, T extends { id: string }>({
     resource, title, subtitle, badge, details, fields, params, canCreate, canEdit, canDelete, defaults,
-    searchText, rowActions, header, addLabel, emptyText, onRowPress,
+    searchText, initialQuery = '', rowActions, header, addLabel, emptyText, onRowPress,
 }: ResourceListProps<R, T>) {
     const styles = useStyles();
     const def = RESOURCES[resource];
     const toast = useToast();
     const { rows, loading, error, reload, create, update, remove } = useOpsList<T>(resource, params);
     useRefreshSignal(reload);
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(initialQuery);
     const [editing, setEditing] = useState<T | 'new' | null>(null);
     const [values, setValues] = useState<FormValues>({});
     const [saving, setSaving] = useState(false);

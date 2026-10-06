@@ -19,7 +19,7 @@ import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import { DayStructureEditor, TimetableBuilder } from './TimetablePanels';
 
 /** Teaching loads: which teacher takes which subject with which class, and how often. */
-function Loads({ onChange }: { onChange: () => void }) {
+function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
     const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
@@ -54,7 +54,8 @@ function Loads({ onChange }: { onChange: () => void }) {
                 </ButtonRow>
             </Card>
             <ResourceList<'timetable-requirements', TeachingLoad>
-                key={version}
+                key={`${version}-${filter}`}
+                initialQuery={filter}
                 resource="timetable-requirements"
                 fields={LOAD_FIELDS}
                 canCreate
@@ -120,13 +121,13 @@ function StudioCard({ icon: Icon, title, summary, state, open, onToggle, childre
 }
 
 /** Each class's week against its periods, with the option blocks its electives run in. */
-function ClassFit({ plan }: { plan: TimetablePlan }) {
+function ClassFit({ plan, onLongerDay, onEditLoads }: { plan: TimetablePlan; onLongerDay: () => void; onEditLoads: (className: string) => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
     return (
         <View>
             {plan.classes.map((c) => (
-                <View key={c.streamId} style={[styles.fit, !c.fits && { borderColor: colors.danger, backgroundColor: colors.dangerBg }]}>
+                <View key={c.streamId} style={[styles.fit, !c.fits && { borderColor: colors.danger }]}>
                     <View style={styles.fitHead}>
                         <Text style={styles.fitName}>{c.name}</Text>
                         <Text style={[styles.fitCount, !c.fits && { color: colors.danger, fontFamily: fonts.bold }]}>{c.needed} / {c.capacity} periods</Text>
@@ -134,7 +135,15 @@ function ClassFit({ plan }: { plan: TimetablePlan }) {
                     <ProgressBar value={(c.needed / Math.max(1, c.capacity)) * 100} color={c.fits ? colors.success : colors.danger} />
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
                     {basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
-                    {!c.fits ? <Text style={[styles.fitLine, { color: colors.danger }]}>{overloadMessage(c)}</Text> : null}
+                    {!c.fits ? (
+                        <>
+                            <Text style={[styles.fitLine, { color: colors.foreground }]}>{overloadMessage(c)}</Text>
+                            <ButtonRow>
+                                <Button size="sm" variant="secondary" label="Longer day" onPress={onLongerDay} />
+                                <Button size="sm" label={`Edit ${c.name} lessons`} onPress={() => onEditLoads(c.name)} />
+                            </ButtonRow>
+                        </>
+                    ) : null}
                     {c.blocks.map((b) => (
                         <View key={b.number} style={[styles.block, b.teacherClash && { backgroundColor: colors.warningBg }]}>
                             <Text style={styles.blockTitle}>{b.label}{b.manual ? '' : ' (auto)'} · {b.lessons}/wk</Text>
@@ -234,6 +243,8 @@ export function TimetableWizard() {
     const [builderKey, setBuilderKey] = useState(0);
     const [dayKey, setDayKey] = useState(0);
     const [fixing, setFixing] = useState(false);
+    const [loadsFilter, setLoadsFilter] = useState('');
+    const loadsListRef = useRef<View | null>(null);
     const scrollToView = useScrollToView();
     const cardViews = useRef<Partial<Record<StudioCardId, View | null>>>({});
     const cardRef = (card: StudioCardId) => (view: View | null) => { cardViews.current[card] = view; };
@@ -320,9 +331,15 @@ export function TimetableWizard() {
                     <Text style={styles.blockTitle}>How electives fit: option blocks</Text>
                     <Text style={styles.fitLine}>Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s Option block to choose them yourself.</Text>
                 </View>
-                <ClassFit plan={plan} />
+                <ClassFit
+                    plan={plan}
+                    onLongerDay={() => show('day')}
+                    onEditLoads={(name) => { setLoadsFilter(name); setTimeout(() => scrollToView(loadsListRef.current), 120); }}
+                />
                 <TeacherLoads plan={plan} />
-                <Loads onChange={() => void refresh()} />
+                <View ref={loadsListRef} collapsable={false}>
+                    <Loads filter={loadsFilter} onChange={() => void refresh()} />
+                </View>
             </StudioCard>
             <StudioCard viewRef={cardRef('rooms')} icon={FlaskConical} title="Labs & special rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
                 <Rooms />
