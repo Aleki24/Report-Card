@@ -32,6 +32,13 @@ export const humanize = (value: string | null | undefined) =>
 
 export const today = () => new Date().toISOString().slice(0, 10);
 
+/** A YYYY-MM-DD date moved by whole days. */
+export const addDays = (isoDay: string, days: number) => {
+    const d = new Date(`${isoDay}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+};
+
 /** Whole days from today to `value` (negative once past). */
 export const daysUntil = (value: string | null | undefined): number | null => {
     if (!value) return null;

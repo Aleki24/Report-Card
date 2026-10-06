@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { BookMarked, ClipboardCheck, Gauge, NotebookPen } from 'lucide-react';
+import { BookMarked, CalendarClock, ClipboardCheck, Gauge, NotebookPen } from 'lucide-react';
+import { TeachingDayPanel } from '@/components/academics/TeachingDayPanel';
 import DataTable from '@/components/ui/DataTable';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
@@ -73,6 +74,10 @@ export default function LessonRecordsPage() {
                 icon={NotebookPen}
                 hue="violet"
                 tabs={[
+                    ...(writer ? [{
+                        id: 'day', label: 'My teaching day', shortLabel: 'Today', icon: CalendarClock, hue: 'sky' as const,
+                        render: () => <TeachingDayPanel onChanged={() => setVersion(v => v + 1)} />,
+                    }] : []),
                     {
                         id: 'schemes', label: 'Schemes of work', shortLabel: 'Schemes', icon: BookMarked, hue: 'violet',
                         render: () => (
