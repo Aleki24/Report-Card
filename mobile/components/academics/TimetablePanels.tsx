@@ -2,9 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
-import { WEEKDAYS, WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
+import { BAND_LABELS } from '@shared/curriculum-bands';
+import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
+import { periodIndexOf, type GridRow } from '@shared/timetable/layout';
+import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
+import { useDownload } from '@/lib/useDownload';
 import {
-    PUBLISH_TIMETABLE_WARNING, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, withAddedPeriod,
+    PUBLISH_TIMETABLE_WARNING, SECTIONS_NOTE, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
 import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ListCard, ListRow, LoadingView, Notice, SectionLabel, TextField, ToggleRow } from '@/components/ui';
@@ -17,6 +22,20 @@ import { errorMessage, formatDate } from '@/lib/format';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { TimetableGrid } from './TimetableGrid';
+
+/** Saves a timetable PDF to the phone; reports failure as a toast. */
+function useTimetablePdf() {
+    const download = useDownload();
+    const toast = useToast();
+    const [busy, setBusy] = useState<TimetablePdfView | null>(null);
+    const save = useCallback(async (opts: Parameters<typeof timetablePdfUrl>[0], fileName: string) => {
+        setBusy(opts.view);
+        try { await download(timetablePdfUrl(opts), fileName); }
+        catch (err) { toast.error(errorMessage(err, 'Could not download the timetable')); }
+        finally { setBusy(null); }
+    }, [download, toast]);
+    return { busy, save };
+}
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
@@ -34,6 +53,7 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
     }, [api, view, targetId, toast]);
     useEffect(() => { void load(); }, [load]);
     useRefreshSignal(load);
+    const pdf = useTimetablePdf();
 
     return (
         <View>
@@ -52,7 +72,13 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
             ) : data.lessons.length === 0 ? (
                 <EmptyState title="No lessons on this timetable." />
             ) : (
-                <TimetableGrid config={data.config} lessons={data.lessons} mode={view === 'mine' ? 'teacher' : view} />
+                <>
+                    <ButtonRow>
+                        <Button size="sm" variant="secondary" label="Download PDF" loading={pdf.busy === view} onPress={() => void pdf.save({ view, id: targetId || undefined }, 'timetable.pdf')} />
+                        {canBrowse ? <Button size="sm" variant="secondary" label="Whole school" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master' }, 'master-timetable.pdf')} /> : null}
+                    </ButtonRow>
+                    <TimetableGrid config={data.config} lessons={data.lessons} mode={data.mode} />
+                </>
             )}
         </View>
     );
@@ -74,6 +100,7 @@ export function TimetableBuilder() {
     const [selected, setSelected] = useState<TimetableLesson | null>(null);
     const [name, setName] = useState('');
     const [generating, setGenerating] = useState(false);
+    const pdf = useTimetablePdf();
 
     const fail = useCallback((err: unknown) => toast.error(errorMessage(err, 'Something went wrong')), [toast]);
 
@@ -124,8 +151,9 @@ export function TimetableBuilder() {
         } catch (err) { fail(err); }
     };
 
-    const onCell = (day: number, period: number, lesson: TimetableLesson | null) => {
-        if (selected && (selected.day !== day || selected.period !== period)) void patchLesson(selected, { day, period });
+    const onCell = (day: number, row: GridRow, lesson: TimetableLesson | null) => {
+        const period = selected && config ? periodIndexOf(config, selected, row) : -1;
+        if (selected && period >= 0 && (selected.day !== day || selected.period !== period)) void patchLesson(selected, { day, period });
         else setSelected(lesson && lesson.id !== selected?.id ? lesson : null);
     };
 
@@ -171,6 +199,7 @@ export function TimetableBuilder() {
                         <ButtonRow>
                             <StatusPill status={active.status} tones={VERSION_TONES} />
                             {active.stats.required !== undefined ? <Badge variant={unplaced.length === 0 ? 'success' : 'warning'} label={`${active.stats.placed} of ${active.stats.required} lessons placed`} /> : null}
+                            <Button size="sm" variant="secondary" label="Master PDF" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master', version: active.id }, 'master-timetable.pdf')} />
                             {active.status !== 'PUBLISHED' ? <Button size="sm" label="Publish" onPress={publish} /> : null}
                             {active.status !== 'PUBLISHED' ? <Button size="sm" variant="danger" label="Delete" onPress={remove} /> : null}
                         </ButtonRow>
@@ -184,6 +213,7 @@ export function TimetableBuilder() {
                             </ButtonRow>
                         </Card>
                     ) : null}
+                    {active?.stats.quality ? <QualityCard quality={describeQuality(active.stats.quality)} reshuffling={generating} onReshuffle={() => void generate()} /> : null}
                     {unplaced.length > 0 ? (
                         <Notice tone="warning" message={`Not placed — lighten these loads, free the teacher, or add rooms, then generate again: ${unplaced.slice(0, 12).map((u) => `${u.label}: ${u.lessons}`).join('; ')}`} />
                     ) : null}
@@ -194,6 +224,53 @@ export function TimetableBuilder() {
                     ) : null}
                 </>
             )}
+        </View>
+    );
+}
+
+/** How well a draft spreads subjects, with what still breaks a preference. */
+function QualityCard({ quality, reshuffling, onReshuffle }: { quality: ReturnType<typeof describeQuality>; reshuffling: boolean; onReshuffle: () => void }) {
+    const { colors } = useTheme();
+    const tone = { good: { bg: colors.successBg, fg: colors.success }, fair: { bg: colors.warningBg, fg: colors.warning }, poor: { bg: colors.dangerBg, fg: colors.danger } }[quality.tone];
+    return (
+        <Card style={{ marginVertical: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: tone.bg, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 20, fontFamily: fonts.bold, color: tone.fg }}>{quality.score}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>{quality.verdict}</Text>
+                <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted }}>
+                    {quality.notes.length > 0 ? quality.notes.join(' · ') : 'Subjects are spread across the week with core lessons in the morning.'}
+                </Text>
+                <View style={{ alignSelf: 'flex-start', marginTop: spacing.sm }}>
+                    <Button size="sm" variant="secondary" label={reshuffling ? 'Reshuffling…' : 'Reshuffle'} loading={reshuffling} onPress={onReshuffle} />
+                </View>
+            </View>
+        </Card>
+    );
+}
+
+/** One bell: its periods and breaks with their times. */
+function PeriodsEditor({ periods, onChange }: { periods: readonly TimetablePeriod[]; onChange: (next: TimetablePeriod[]) => void }) {
+    return (
+        <View>
+            {periods.map((p, i) => (
+                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderStyle: p.is_break ? 'dashed' : 'solid' }}>
+                    <TextField label="Name" value={p.label} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { label: v }))} />
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                        <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { start: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                        <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { end: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                    </View>
+                    <ToggleRow label="Break" value={p.is_break} onValueChange={(v) => onChange(withPeriodPatched(periods, i, { is_break: v }))} />
+                    <ButtonRow>
+                        <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
+                    </ButtonRow>
+                </Card>
+            ))}
+            <ButtonRow>
+                <Button size="sm" variant="secondary" label="+ Lesson period" onPress={() => onChange(withAddedPeriodTo(periods, false))} />
+                <Button size="sm" variant="secondary" label="+ Break" onPress={() => onChange(withAddedPeriodTo(periods, true))} />
+            </ButtonRow>
         </View>
     );
 }
@@ -212,8 +289,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
 
     if (!config) return <LoadingView />;
 
-    const setPeriod = (i: number, patch: Partial<TimetableConfig['periods'][number]>) =>
-        setConfig((c) => c && ({ ...c, periods: c.periods.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+    const update = (fn: (c: TimetableConfig) => TimetableConfig) => setConfig((c) => c && fn(c));
 
     const save = async () => {
         setSaving(true);
@@ -243,23 +319,30 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                 })}
             </ButtonRow>
 
-            <SectionLabel>Periods and breaks</SectionLabel>
-            {config.periods.map((p, i) => (
-                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderStyle: p.is_break ? 'dashed' : 'solid' }}>
-                    <TextField label="Name" value={p.label} onChangeText={(v) => setPeriod(i, { label: v })} />
-                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                        <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => setPeriod(i, { start: v })} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                        <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => setPeriod(i, { end: v })} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                    </View>
-                    <ToggleRow label="Break" value={p.is_break} onValueChange={(v) => setPeriod(i, { is_break: v })} />
+            <SectionLabel>{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</SectionLabel>
+            {config.sections.length > 0 ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>For classes in no section below.</Text> : null}
+            <PeriodsEditor periods={config.periods} onChange={(periods) => update((c) => ({ ...c, periods }))} />
+
+            <SectionLabel>Sections with their own bell</SectionLabel>
+            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{SECTIONS_NOTE}</Text>
+            {config.sections.map((sec) => (
+                <Card key={sec.id} style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.mutedBg }}>
+                    <TextField label="Section name" value={sec.name} onChangeText={(v) => update((c) => withSectionPatched(c, sec.id, { name: v }))} />
+                    <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted, marginBottom: spacing.xs }}>Levels on this bell</Text>
                     <ButtonRow>
-                        <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => setConfig((c) => c && ({ ...c, periods: c.periods.filter((_, j) => j !== i) }))} />
+                        {CURRICULUM_BANDS.map((b) => (
+                            <Button key={b} size="sm" variant={sec.bands.includes(b) ? 'primary' : 'secondary'} label={BAND_LABELS[b]} onPress={() => update((c) => withSectionBandToggled(c, sec.id, b))} />
+                        ))}
+                    </ButtonRow>
+                    <PeriodsEditor periods={sec.periods} onChange={(periods) => update((c) => withSectionPatched(c, sec.id, { periods }))} />
+                    <ButtonRow>
+                        <Button size="sm" variant="danger" label={`Remove ${sec.name}`} onPress={() => update((c) => withSectionRemoved(c, sec.id))} />
                     </ButtonRow>
                 </Card>
             ))}
             <ButtonRow>
-                <Button size="sm" variant="secondary" label="+ Lesson period" onPress={() => setConfig((c) => c && withAddedPeriod(c, false))} />
-                <Button size="sm" variant="secondary" label="+ Break" onPress={() => setConfig((c) => c && withAddedPeriod(c, true))} />
+                {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" label={`+ ${p.name}`} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
+                <Button size="sm" variant="ghost" label="+ Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
             </ButtonRow>
 
             <View style={{ marginTop: spacing.md }}>

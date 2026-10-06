@@ -8,10 +8,10 @@ import {
     type TimetableProgress as Progress,
 } from '@shared/timetable/wizard';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, weeklyLessonsPerClass,
-    type Room, type TeachingLoad,
+    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, weeklyLessonsPerClass,
+    type ImportLoadsResult, type Room, type TeachingLoad,
 } from '@shared/ops/forms/academics';
-import { Button, Card, TextField } from '@/components/ui';
+import { Button, ButtonRow, Card, TextField } from '@/components/ui';
 import { ResourceList } from '@/components/ops/ResourceList';
 import { useToast } from '@/components/Toast';
 import { useApi } from '@/lib/api';
@@ -27,19 +27,19 @@ function Loads({ onChange }: { onChange: () => void }) {
     const toast = useToast();
     const [perWeek, setPerWeek] = useState('5');
     const [version, setVersion] = useState(0);
-    const [busy, setBusy] = useState(false);
+    const [busy, setBusy] = useState<'import' | 'reset' | null>(null);
 
-    const importLoads = async () => {
-        setBusy(true);
+    const importLoads = async (mode: 'import' | 'reset') => {
+        setBusy(mode);
         try {
-            const r = await api.post<{ data: { created: number } }>('/api/academics/timetable/requirements/import', { lessons_per_week: Number(perWeek) || 5 });
-            toast.success(importLoadsMessage(r.data.created));
+            const r = await api.post<{ data: ImportLoadsResult }>('/api/academics/timetable/requirements/import', { lessons_per_week: Number(perWeek) || 5, update_existing: mode === 'reset' });
+            toast.success(importLoadsMessage(r.data));
             setVersion((v) => v + 1);
             onChange();
         } catch (err) {
             toast.error(errorMessage(err, 'Import failed'));
         } finally {
-            setBusy(false);
+            setBusy(null);
         }
     };
 
@@ -48,8 +48,12 @@ function Loads({ onChange }: { onChange: () => void }) {
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Start from subject assignments</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>Creates a load for every subject each teacher is assigned to a class this year. Adjust any of them below.</Text>
-                <TextField label="Lessons a week" value={perWeek} onChangeText={setPerWeek} keyboardType="number-pad" />
-                <Button label={busy ? 'Importing…' : 'Import loads'} onPress={() => void importLoads()} loading={busy} block />
+                <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{MINISTRY_LOADS_NOTE}</Text>
+                <TextField label="Other subjects: lessons a week" value={perWeek} onChangeText={setPerWeek} keyboardType="number-pad" />
+                <ButtonRow>
+                    <Button label={busy === 'import' ? 'Importing…' : 'Import loads'} onPress={() => void importLoads('import')} loading={busy === 'import'} disabled={busy !== null} />
+                    <Button variant="secondary" label={busy === 'reset' ? 'Resetting…' : 'Reset to Ministry'} onPress={() => void importLoads('reset')} loading={busy === 'reset'} disabled={busy !== null} />
+                </ButtonRow>
             </Card>
             <ResourceList<'timetable-requirements', TeachingLoad>
                 key={version}

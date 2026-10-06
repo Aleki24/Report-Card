@@ -7,6 +7,7 @@ import {
 } from '@shared/ops/forms/academics';
 import { Card, EmptyState, ErrorBanner, LoadingView, ProgressBar } from '@/components/ui';
 import { SchemeSheet } from '@/components/academics/SchemeSheet';
+import { TeachingDayList } from '@/components/academics/TeachingDay';
 import { ModuleScreen } from '@/components/ops/ModuleScreen';
 import { ResourceList } from '@/components/ops/ResourceList';
 import { StatusPill, toneColor, useRefreshSignal } from '@/components/ops/bits';
@@ -58,6 +59,7 @@ export default function LessonRecordsScreen() {
                 title="Professional records"
                 description="Schemes of work, lesson plans and records of work in one chain, with syllabus coverage for HODs and the DOS."
                 tabs={[
+                    ...(writer ? [{ id: 'day', label: 'Today', render: () => <TeachingDayList onChanged={() => setVersion((v) => v + 1)} /> }] : []),
                     {
                         id: 'schemes',
                         label: 'Schemes',

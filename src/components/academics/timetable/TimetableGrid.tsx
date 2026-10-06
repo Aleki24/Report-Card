@@ -5,6 +5,7 @@ import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { cellLines, type GridMode } from '@/lib/ops/forms/academics';
+import { gridRows, lessonAt, type GridRow } from '@/lib/timetable/layout';
 
 export type { GridMode };
 
@@ -14,7 +15,7 @@ interface Props {
     mode: GridMode;
     /** Editing: the lesson picked to move, and what a click on a cell does. */
     selectedId?: string | null;
-    onCellClick?: (day: number, period: number, lesson: TimetableLesson | null) => void;
+    onCellClick?: (day: number, row: GridRow, lesson: TimetableLesson | null) => void;
 }
 
 function LessonCell({ lesson, mode, selected }: { lesson: TimetableLesson; mode: GridMode; selected: boolean }) {
@@ -32,18 +33,19 @@ function LessonCell({ lesson, mode, selected }: { lesson: TimetableLesson; mode:
 
 /**
  * A week grid from `md` up (periods down, days across); on phones one day at
- * a time, so nothing scrolls sideways.
+ * a time, so nothing scrolls sideways. A class shows its section's bell; a
+ * teacher or room teaching across sections shows each lesson time.
  */
 export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }: Props) {
     const [phoneDay, setPhoneDay] = useState(config.days[0]);
-    const at = (day: number, period: number) => lessons.find(l => l.day === day && l.period === period) ?? null;
+    const rows = React.useMemo(() => gridRows(config, lessons), [config, lessons]);
     const interactive = !!onCellClick;
 
-    const cell = (day: number, period: number) => {
-        const lesson = at(day, period);
+    const cell = (day: number, row: GridRow) => {
+        const lesson = lessonAt(config, lessons, day, row);
         const content = lesson ? <LessonCell lesson={lesson} mode={mode} selected={lesson.id === selectedId} /> : <span className="block h-full rounded-lg border border-dashed border-border/60" />;
         return interactive ? (
-            <button type="button" onClick={() => onCellClick(day, period, lesson)} className="block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${WEEKDAY_LABELS[day]} ${config.periods[period]?.label ?? ''}${lesson ? `: ${lesson.subject?.name ?? ''}` : ': free'}`}>
+            <button type="button" onClick={() => onCellClick(day, row, lesson)} className="block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${lesson.subject?.name ?? ''}` : ': free'}`}>
                 {content}
             </button>
         ) : <div className="h-full min-h-12">{content}</div>;
@@ -62,12 +64,12 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
                     ))}
                 </div>
                 <ol className="flex flex-col gap-2">
-                    {config.periods.map((p, i) => p.is_break ? (
-                        <li key={i} className="rounded-lg bg-muted/60 px-3 py-1.5 text-center text-[11px] font-medium text-muted-foreground">{p.label} · {p.start}–{p.end}</li>
+                    {rows.map(r => r.isBreak ? (
+                        <li key={r.key} className="rounded-lg bg-muted/60 px-3 py-1.5 text-center text-[11px] font-medium text-muted-foreground">{r.label} · {r.time}</li>
                     ) : (
-                        <li key={i} className="grid grid-cols-[4.5rem_1fr] items-stretch gap-2">
-                            <span className="flex flex-col justify-center text-xs"><span className="font-semibold">{p.label}</span><span className="text-muted-foreground tabular-nums">{p.start}</span></span>
-                            {cell(phoneDay, i)}
+                        <li key={r.key} className="grid grid-cols-[4.5rem_1fr] items-stretch gap-2">
+                            <span className="flex flex-col justify-center text-xs"><span className="font-semibold">{r.label}</span><span className="text-muted-foreground tabular-nums">{r.time}</span></span>
+                            {cell(phoneDay, r)}
                         </li>
                     ))}
                 </ol>
@@ -85,17 +87,17 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
                         </tr>
                     </thead>
                     <tbody>
-                        {config.periods.map((p, i) => p.is_break ? (
-                            <tr key={i}>
-                                <td colSpan={config.days.length + 1} className="bg-muted/40 px-2 py-1 text-center text-[11px] font-medium text-muted-foreground">{p.label} · {p.start}–{p.end}</td>
+                        {rows.map(r => r.isBreak ? (
+                            <tr key={r.key}>
+                                <td colSpan={config.days.length + 1} className="bg-muted/40 px-2 py-1 text-center text-[11px] font-medium text-muted-foreground">{r.label} · {r.time}</td>
                             </tr>
                         ) : (
-                            <tr key={i}>
+                            <tr key={r.key}>
                                 <td className="border-t border-border/40 px-2 py-1.5 align-middle text-xs">
-                                    <span className="block font-semibold">{p.label}</span>
-                                    <span className="text-muted-foreground tabular-nums">{p.start}–{p.end}</span>
+                                    <span className="block font-semibold">{r.label}</span>
+                                    <span className="text-muted-foreground tabular-nums">{r.time}</span>
                                 </td>
-                                {config.days.map(d => <td key={d} className="h-14 border-t border-l border-border/40 p-1 align-stretch">{cell(d, i)}</td>)}
+                                {config.days.map(d => <td key={d} className="h-14 border-t border-l border-border/40 p-1 align-stretch">{cell(d, r)}</td>)}
                             </tr>
                         ))}
                     </tbody>

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { route, parseBody, HttpError, assertInSchool } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { minutesOf, sectionFor } from '@/lib/timetable/config';
+import { loadConfig, streamBands } from '@/lib/timetable/server';
 
 type Params = { id: string };
 
@@ -36,25 +38,39 @@ export const PATCH = route<Params>('timetable lesson update', { module: 'timetab
     const roomId = body.room_id === undefined ? a.room_id : body.room_id;
     const moving = day !== a.day || period !== a.period;
 
-    const { data: atTarget, error: targetError } = await db.from('timetable_lessons')
+    // Sections can keep different bells, so "at the same time" means overlapping clock times.
+    const [config, bands] = await Promise.all([loadConfig(access.schoolId), streamBands(access.schoolId)]);
+    const periodsOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null).periods;
+    const target = periodsOf(a.grade_stream_id)[period];
+    if (!target || target.is_break) throw new HttpError(400, 'That is not a lesson period for this class.');
+    const clockOf = (l: { grade_stream_id: string; period: number }): [number, number] | null => {
+        const p = periodsOf(l.grade_stream_id)[l.period];
+        return p ? [minutesOf(p.start), minutesOf(p.end)] : null;
+    };
+
+    const { data: sameDay, error: targetError } = await db.from('timetable_lessons')
         .select(LESSON_COLUMNS)
-        .eq('version_id', a.version_id).eq('day', day).eq('period', period).neq('id', a.id);
+        .eq('version_id', a.version_id).in('day', [...new Set([day, a.day])]).neq('id', a.id);
     if (targetError) throw targetError;
-    const others = (atTarget ?? []) as LessonRow[];
-    const swapWith = moving ? others.find(o => o.grade_stream_id === a.grade_stream_id) ?? null : null;
+    const pool = (sameDay ?? []) as LessonRow[];
+    const swapWith = moving ? pool.find(o => o.grade_stream_id === a.grade_stream_id && o.day === day && o.period === period) ?? null : null;
 
-    const clash = (who: LessonRow, d: number, p: number, room: string | null, ignore: string[], pool: LessonRow[]) =>
-        pool.find(o => !ignore.includes(o.id) && o.day === d && o.period === p
-            && ((who.teacher_id && o.teacher_id === who.teacher_id) || (room && o.room_id === room)));
+    const clash = (who: LessonRow, d: number, p: number, room: string | null, ignore: string[]) => {
+        const at = clockOf({ grade_stream_id: who.grade_stream_id, period: p });
+        if (!at) return null;
+        return pool.find(o => {
+            if (ignore.includes(o.id) || o.day !== d) return false;
+            if (!((who.teacher_id && o.teacher_id === who.teacher_id) || (room && o.room_id === room))) return false;
+            const theirs = clockOf(o);
+            return !!theirs && at[0] < theirs[1] && theirs[0] < at[1];
+        });
+    };
 
-    if (clash(a, day, period, roomId, [a.id, swapWith?.id ?? ''], others)) {
-        throw new HttpError(409, 'The teacher or room is already busy in that slot.');
+    if (clash(a, day, period, roomId, [a.id, swapWith?.id ?? ''])) {
+        throw new HttpError(409, 'The teacher or room is already busy at that time.');
     }
     if (swapWith) {
-        const { data: atSource, error: sourceError } = await db.from('timetable_lessons')
-            .select(LESSON_COLUMNS).eq('version_id', a.version_id).eq('day', a.day).eq('period', a.period);
-        if (sourceError) throw sourceError;
-        if (clash(swapWith, a.day, a.period, swapWith.room_id, [a.id, swapWith.id], (atSource ?? []) as LessonRow[])) {
+        if (clash(swapWith, a.day, a.period, swapWith.room_id, [a.id, swapWith.id])) {
             throw new HttpError(409, 'Swapping would double-book the other lesson’s teacher or room.');
         }
         // Park one lesson outside the grid so the unique (class, slot) index never sees both in one place.

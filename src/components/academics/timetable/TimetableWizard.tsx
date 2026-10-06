@@ -11,8 +11,8 @@ import { DayStructureEditor } from '@/components/academics/timetable/DayStructur
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, weeklyLessonsPerClass,
-    type Room, type TeachingLoad as Load,
+    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, weeklyLessonsPerClass,
+    type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import type { TimetableConfig, TimetableVersion } from '@/lib/timetable/config';
 import {
@@ -22,18 +22,20 @@ import { cn } from '@/lib/utils';
 
 function Loads({ onChange }: { onChange: () => void }) {
     const [perWeek, setPerWeek] = useState('5');
-    const [importing, setImporting] = useState(false);
+    const [importing, setImporting] = useState<'import' | 'reset' | null>(null);
     const [key, setKey] = useState(0);
 
-    const importLoads = async () => {
-        setImporting(true);
+    const importLoads = async (mode: 'import' | 'reset') => {
+        setImporting(mode);
         try {
-            const r = await opsFetch<{ created: number }>('/api/academics/timetable/requirements/import', { method: 'POST', json: { lessons_per_week: Number(perWeek) || 5 } });
-            toast.success(importLoadsMessage(r.created));
+            const r = await opsFetch<ImportLoadsResult>('/api/academics/timetable/requirements/import', {
+                method: 'POST', json: { lessons_per_week: Number(perWeek) || 5, update_existing: mode === 'reset' },
+            });
+            toast.success(importLoadsMessage(r));
             setKey(k => k + 1);
             onChange();
         } catch (err) { toast.error(errorText(err)); }
-        finally { setImporting(false); }
+        finally { setImporting(null); }
     };
 
     return (
@@ -42,11 +44,15 @@ function Loads({ onChange }: { onChange: () => void }) {
                 <div className="sm:flex-1">
                     <h2 className="text-base font-semibold">Start from subject assignments</h2>
                     <p className="text-sm text-muted-foreground">Creates a load for every subject each teacher is assigned to a class this year.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{MINISTRY_LOADS_NOTE}</p>
                 </div>
-                <FormField label="Lessons a week" htmlFor="import-per-week" className="sm:w-36">
+                <FormField label="Other subjects" htmlFor="import-per-week" className="sm:w-36">
                     <InputField id="import-per-week" type="number" min={1} max={20} value={perWeek} onChange={e => setPerWeek(e.target.value)} />
                 </FormField>
-                <Button onClick={importLoads} disabled={importing}><Download />{importing ? 'Importing…' : 'Import'}</Button>
+                <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => void importLoads('import')} disabled={importing !== null}><Download />{importing === 'import' ? 'Importing…' : 'Import'}</Button>
+                    <Button variant="outline" onClick={() => void importLoads('reset')} disabled={importing !== null}>{importing === 'reset' ? 'Resetting…' : 'Reset to Ministry'}</Button>
+                </div>
             </section>
             <ResourceManager<'timetable-requirements', Load>
                 key={key}

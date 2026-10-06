@@ -11,7 +11,7 @@ export const PUT = route('timetable config save', { module: 'timetable', permiss
         school_id: access.schoolId,
         days: [...config.days].sort(),
         periods: config.periods,
-        rules: config.rules,
+        rules: { ...config.rules, sections: config.sections },
         updated_at: new Date().toISOString(),
     });
     if (error) throw error;

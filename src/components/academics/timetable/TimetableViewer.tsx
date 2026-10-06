@@ -8,6 +8,9 @@ import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { TIMETABLE_VIEWS, type TimetableView as View, type TimetableViewResult as ViewResult } from '@/lib/ops/forms/academics';
 import { TimetableGrid } from './TimetableGrid';
+import { Download } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/Button';
+import { timetablePdfUrl } from '@/lib/timetable/pdf-url';
 
 /** The published timetable: your own, or any class, teacher or room (for staff). */
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
@@ -48,7 +51,13 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
             ) : data.lessons.length === 0 ? (
                 <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">No lessons on this timetable.</p>
             ) : (
-                <TimetableGrid config={data.config} lessons={data.lessons} mode={view === 'mine' ? 'teacher' : view} />
+                <>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                        <a href={timetablePdfUrl({ view, id: targetId || undefined })} download className={buttonVariants({ variant: 'outline' })}><Download />Download PDF</a>
+                        {canBrowse && <a href={timetablePdfUrl({ view: 'master' })} download className={buttonVariants({ variant: 'outline' })}><Download />Whole school</a>}
+                    </div>
+                    <TimetableGrid config={data.config} lessons={data.lessons} mode={data.mode} />
+                </>
             )}
         </div>
     );
