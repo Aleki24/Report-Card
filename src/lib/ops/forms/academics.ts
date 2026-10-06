@@ -12,6 +12,7 @@ import { CBC_LEVELS, EVENT_AUDIENCES, EVENT_TYPES, ROOM_TYPES } from '../resourc
 import type { PaperAction, PaperStatus, PrintStatus } from '../../academics/exam-papers';
 import { CURRICULUM_BANDS, SECTION_PRESETS, type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion } from '../../timetable/config';
 import type { CurriculumBand } from '../../curriculum-bands';
+import { blockLabel } from '../../timetable/blocks';
 
 // ── Calendar ─────────────────────────────────────────────────
 
@@ -126,8 +127,15 @@ export const papersToPrint = (papers: readonly ExamPaper[]) => papers.filter(p =
 // ── Timetable ────────────────────────────────────────────────
 
 export interface Room { id: string; name: string; room_type: string; capacity: number | null }
+/** "Automatic", then Option A–L, as the load form offers them. */
+export const OPTION_BLOCK_CHOICES: readonly LookupOption[] = [
+    { id: '', label: 'Automatic' },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), label: blockLabel(i + 1) })),
+];
+
 export interface TeachingLoad {
     id: string;
+    option_block: number | null;
     lessons_per_week: number;
     double_lessons: number;
     room_type: string | null;
@@ -176,10 +184,14 @@ export const LOAD_FIELDS: readonly FieldDef<FieldName<'timetable-requirements'>>
     { name: 'lessons_per_week', label: 'Lessons a week', kind: 'number', required: true },
     { name: 'double_lessons', label: 'Of which doubles', kind: 'number', hint: 'Each double uses two lessons (sciences often have one).' },
     { name: 'room_type', label: 'Needs a room type', kind: 'enum', values: ROOM_TYPES, hint: 'e.g. LAB for practicals.' },
+    {
+        name: 'option_block', label: 'Option block', kind: 'options', options: OPTION_BLOCK_CHOICES,
+        hint: 'Electives in the same block run at the same time, each learner in the one they chose. Leave on Automatic and blocks are worked out when a class has more subjects than periods.',
+    },
 ];
 export const LOAD_DEFAULTS = { lessons_per_week: '5', double_lessons: '0' } as const;
 
-export const loadLessonsLabel = (l: TeachingLoad) => `${l.lessons_per_week}${l.double_lessons ? ` (${l.double_lessons}×2)` : ''}`;
+export const loadLessonsLabel = (l: TeachingLoad) => `${l.lessons_per_week}${l.double_lessons ? ` (${l.double_lessons}×2)` : ''}${l.option_block ? ` · ${blockLabel(l.option_block)}` : ''}`;
 
 /** "Form 1 East 40 · Form 1 West 38": each class's weekly lessons across its loads. */
 export function weeklyLessonsPerClass(rows: readonly TeachingLoad[]): string {

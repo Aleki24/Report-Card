@@ -13,8 +13,9 @@ export default function TimetableScreen() {
             title="Timetable"
             description="Generate a clash-free timetable from teaching loads, publish it to everyone, and arrange cover when teachers are away."
             tabs={[
+                // In working order for whoever builds it: set up, then the timetable, then cover.
+                { id: 'build', label: 'Set up', visible: manager, render: () => <TimetableWizard /> },
                 { id: 'view', label: 'Timetable', render: () => <TimetableViewer canBrowse={role !== 'STUDENT'} /> },
-                { id: 'build', label: 'Create', visible: manager, render: () => <TimetableWizard /> },
                 { id: 'cover', label: 'Cover', visible: manager, render: () => <CoverPanel /> },
             ]}
         />

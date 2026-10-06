@@ -20,8 +20,9 @@ export default function TimetablePage() {
             icon={Clock}
             hue="teal"
             tabs={[
+                // In working order for whoever builds it: set up, then the timetable, then cover.
+                { id: 'build', label: 'Set up & generate', shortLabel: 'Set up', icon: Layers, hue: 'violet', visible: manager, render: () => <TimetableWizard /> },
                 { id: 'view', label: 'Timetable', icon: CalendarClock, hue: 'teal', render: () => <TimetableViewer canBrowse={role !== 'STUDENT'} /> },
-                { id: 'build', label: 'Create timetable', shortLabel: 'Create', icon: Layers, hue: 'violet', visible: manager, render: () => <TimetableWizard /> },
                 { id: 'cover', label: 'Lesson cover', shortLabel: 'Cover', icon: UserCheck, hue: 'rose', visible: manager, render: () => <CoverPanel /> },
             ]}
         />
