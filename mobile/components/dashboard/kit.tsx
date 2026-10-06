@@ -57,7 +57,7 @@ export function PressScale({
 }
 
 /** Counts up to a figure when it first appears; text such as "64%" keeps its suffix. */
-export function CountUp({ value, style }: { value: number | string; style?: StyleProp<import('react-native').TextStyle> }) {
+export function CountUp({ value, style, fit }: { value: number | string; style?: StyleProp<import('react-native').TextStyle>; /** Shrink to one line in a narrow tile. */ fit?: boolean }) {
     const text = String(value);
     const match = /^(-?[\d,]+(?:\.\d+)?)(.*)$/.exec(text);
     const target = match ? Number(match[1].replace(/,/g, '')) : NaN;
@@ -78,10 +78,11 @@ export function CountUp({ value, style }: { value: number | string; style?: Styl
         frame = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frame);
     }, [target]);
-    if (!match || !Number.isFinite(target)) return <Text style={style}>{text}</Text>;
+    const fitProps = fit ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 } : {};
+    if (!match || !Number.isFinite(target)) return <Text style={style} {...fitProps}>{text}</Text>;
     const decimals = match[1].includes('.') ? match[1].split('.')[1].length : 0;
     const body = shown.toLocaleString('en-KE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    return <Text style={style}>{body}{match[2]}</Text>;
+    return <Text style={style} {...fitProps}>{body}{match[2]}</Text>;
 }
 
 /** A bar that fills to its value when shown. */
@@ -129,8 +130,8 @@ export function KpiTile({ title, value, icon: Icon, hue, tone, href }: {
     const figure = tone === 'good' ? colors.success : tone === 'warn' ? colors.warning : tone === 'bad' ? colors.danger : colors.foreground;
     const body = (
         <>
-            <View style={[styles.kpiIcon, { backgroundColor: t.bg }]}><Icon size={17} color={t.fg} strokeWidth={2.2} /></View>
-            <CountUp value={value} style={[styles.kpiValue, { color: figure }]} />
+            <View style={[styles.kpiIcon, { backgroundColor: t.bg }]}><Icon size={15} color={t.fg} strokeWidth={2.2} /></View>
+            <CountUp fit value={value} style={[styles.kpiValue, { color: figure }]} />
             <Text style={styles.kpiTitle} numberOfLines={2}>{title}</Text>
         </>
     );
@@ -229,12 +230,12 @@ const useStyles = makeStyles((colors) => ({
     sectionTitle: { fontSize: 17, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.3 },
     sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     sectionActionText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
-    kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-    kpiCell: { width: '50%', padding: 5 },
-    kpi: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.md, minHeight: 112, ...shadowFor(colors) },
-    kpiIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-    kpiValue: { fontSize: 24, fontFamily: fonts.display, letterSpacing: -0.6 },
-    kpiTitle: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginTop: 1 },
+    kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
+    kpiCell: { width: '33.333%', padding: 4 },
+    kpi: { backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.sm + 2, minHeight: 96, ...shadowFor(colors) },
+    kpiIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+    kpiValue: { fontSize: 20, fontFamily: fonts.display, letterSpacing: -0.5 },
+    kpiTitle: { fontSize: 11, lineHeight: 14, fontFamily: fonts.medium, color: colors.muted, marginTop: 1 },
     qaGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
     qaCell: { width: '25%', padding: 4 },
     qa: { alignItems: 'center', gap: 7, paddingVertical: spacing.md, paddingHorizontal: 2, borderRadius: radius.xxl, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minHeight: 96 },
