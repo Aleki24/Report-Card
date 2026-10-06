@@ -65,7 +65,12 @@ function ExamsContent() {
     const allClasses = useMemo(() => {
         const grades = structure.data?.grades ?? [];
         const withClass = new Set((structure.data?.grade_streams ?? []).map((s) => s.grade_id));
-        return grades.filter((g) => withClass.has(g.id)).map((g) => ({ key: g.id, label: g.name_display }));
+        // School order, youngest first: CBC (Playgroup, PP1, PP2, Grade 1…) then 8-4-4 Forms.
+        const levelRank = new Map((structure.data?.academic_levels ?? []).map((l) => [l.id, l.code === 'CBC' ? 0 : 1]));
+        return grades
+            .filter((g) => withClass.has(g.id))
+            .sort((a, b) => (levelRank.get(a.academic_level_id) ?? 1) - (levelRank.get(b.academic_level_id) ?? 1) || a.numeric_order - b.numeric_order)
+            .map((g) => ({ key: g.id, label: g.name_display }));
     }, [structure.data]);
     const fillGaps = useCallback(async (term: Term, examTypes: string[]) => {
         await api.post('/api/school/exams', { action: 'seed', termId: term.id, academicYearId: term.academic_year_id, examTypes });

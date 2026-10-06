@@ -29,6 +29,7 @@ export function ExamPicker({
      * Admins: every class the school runs, so one without this exam yet (a
      * newly added level, say) is listed too instead of missing.
      */
+    /** In school order (youngest first); the picker keeps that order. */
     allClasses?: readonly { key: string; label: string }[];
     /** Admins: give classes the term's exams they lack (seeding fills gaps only). */
     fillGaps?: (term: Term, examTypes: string[]) => Promise<void>;
@@ -50,8 +51,9 @@ export function ExamPicker({
     const classes = useMemo(() => {
         const withExams = examClasses(ofType);
         if (!allClasses) return withExams;
-        const seen = new Set(withExams.map((c) => c.key));
-        return [...withExams, ...allClasses.filter((c) => !seen.has(c.key))].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+        // allClasses comes in school order (Playgroup first); classes only known from exams follow.
+        const listed = new Set(allClasses.map((c) => c.key));
+        return [...allClasses, ...withExams.filter((c) => !listed.has(c.key))];
     }, [ofType, allClasses]);
     const effectiveGrade = gradeId && classes.some((c) => c.key === gradeId) ? gradeId : classes.length === 1 ? classes[0].key : null;
     const slots = useMemo(
