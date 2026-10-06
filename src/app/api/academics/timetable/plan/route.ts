@@ -4,7 +4,7 @@ import { loadTimetablePlan, type PlannedLoad } from '@/lib/timetable/server';
 import { assess, type PlanLoad, type TeacherWeek, type TimetablePlan } from '@/lib/timetable/readiness';
 import { teacherWeeks } from '@/lib/timetable/blocks';
 import { ministryAllocation } from '@/lib/timetable/allocations';
-import { periodKindMismatch } from '@/lib/ops/forms/academics';
+import { isMisnamedBreak } from '@/lib/ops/forms/academics';
 
 const toLoad = (l: PlannedLoad): PlanLoad => ({
     id: l.id,
@@ -65,7 +65,7 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
             starts: config.periods[0]?.start ?? null,
             ends: config.periods[config.periods.length - 1]?.end ?? null,
             sections: config.sections.length,
-            breakMismatches: [...config.periods, ...config.sections.flatMap(s => s.periods)].map(periodKindMismatch).filter((m): m is string => !!m),
+            breakMismatches: [...config.periods, ...config.sections.flatMap(s => s.periods)].filter(isMisnamedBreak).map(p => p.label),
         },
         rooms: rooms.count ?? 0,
         loads: rows.length,

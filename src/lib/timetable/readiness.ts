@@ -48,15 +48,25 @@ export interface TeacherWeek {
 
 export type StudioCard = 'day' | 'loads' | 'rooms' | 'drafts';
 
+/** A fix the studio can apply in one tap instead of sending the school to an editor. */
+export type QuickFix = 'set-breaks';
+
 export interface Blocker {
     card: StudioCard;
     /** The class the problem is in, so the studio can open it. */
     streamId?: string;
     message: string;
+    /** One line per item when the message stands for several (teachers, periods). */
+    details?: string[];
+    fix?: QuickFix;
 }
 
 export interface TimetablePlan {
-    day: { days: number; lessonsPerDay: number; starts: string | null; ends: string | null; sections: number; breakMismatches: string[] };
+    day: {
+        days: number; lessonsPerDay: number; starts: string | null; ends: string | null; sections: number;
+        /** Periods named like breaks (Tea break, Lunch) but set as lessons. */
+        breakMismatches: string[];
+    };
     rooms: number;
     loads: number;
     classes: PlanClass[];
@@ -71,8 +81,18 @@ export interface TimetablePlan {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** A teacher with under half the week taught is worth a look: their time is likely going unused. */
-export const isLightLoad = (t: Pick<TeacherWeek, 'lessons' | 'capacity'>) => t.capacity > 0 && t.lessons < t.capacity / 2;
+/**
+ * A teacher well under a normal load is worth a look. TSC expects about 27
+ * lessons a week of a classroom teacher, so under 20 (or under half a short
+ * week) is light; 24 or 27 is a full load, not a problem.
+ */
+export const LIGHT_LOAD = 20;
+export const isLightLoad = (t: Pick<TeacherWeek, 'lessons' | 'capacity'>) => t.capacity > 0 && t.lessons < Math.min(LIGHT_LOAD, t.capacity / 2);
+
+const quoteList = (xs: readonly string[]) => {
+    const q = xs.map(x => `“${x}”`);
+    return q.length <= 1 ? q.join('') : `${q.slice(0, -1).join(', ')} and ${q[q.length - 1]}`;
+};
 
 /** Why a class does not fit its week, and the ways out. */
 export function overloadMessage(c: PlanClass): string {
@@ -97,7 +117,15 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
     const blockers: Blocker[] = [];
     const notes: Blocker[] = [];
     if (plan.day.days === 0 || plan.day.lessonsPerDay === 0) blockers.push({ card: 'day', message: 'Set the school days and at least one lesson period.' });
-    plan.day.breakMismatches.forEach(message => blockers.push({ card: 'day', message }));
+    const misnamed = [...new Set(plan.day.breakMismatches)];
+    if (misnamed.length > 0) {
+        const one = misnamed.length === 1;
+        blockers.push({
+            card: 'day',
+            fix: 'set-breaks',
+            message: `${quoteList(misnamed)} ${one ? 'is' : 'are'} set as ${one ? 'a lesson' : 'lessons'}, so lessons would be put in ${one ? 'it' : 'them'}. Set ${one ? 'it' : 'them'} as ${one ? 'a break' : 'breaks'}.`,
+        });
+    }
     if (plan.loads === 0) blockers.push({ card: 'loads', message: 'Add teaching loads: who teaches which subject to which class, and how often.' });
     for (const c of plan.classes) {
         if (!c.fits) blockers.push({ card: 'loads', streamId: c.streamId, message: overloadMessage(c) });
@@ -109,12 +137,16 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
             notes.push({ card: 'loads', streamId: c.streamId, message: `${c.name}: ${c.offMinistry.map(o => `${o.subject} ${o.lessons} (Ministry ${o.ministry})`).join(', ')}.` });
         }
     }
+    const light: string[] = [];
     for (const t of plan.teachers) {
         if (t.lessons > t.capacity) {
             blockers.push({ card: 'loads', message: `${t.name} teaches ${t.lessons} lessons a week (${t.classes.join(', ')}) but the week has ${t.capacity} periods. Give some of these classes to another teacher.` });
         } else if (isLightLoad(t)) {
-            notes.push({ card: 'loads', message: `${t.name} has only ${plural(t.lessons, 'lesson')} a week (${t.classes.join(', ') || 'no classes'}). Assign more subjects or classes in Subjects → Teachers, then import loads again.` });
+            light.push(`${t.name}: ${plural(t.lessons, 'lesson')} (${t.classes.join(', ') || 'no classes'})`);
         }
+    }
+    if (light.length > 0) {
+        notes.push({ card: 'loads', message: `${plural(light.length, 'teacher')} with a light week (under ${LIGHT_LOAD} lessons). Give them more classes in Subjects → Teachers, then import loads again.`, details: light });
     }
     if (plan.rooms === 0) notes.push({ card: 'rooms', message: 'No labs or special rooms: every lesson runs in the class’s own room.' });
     return { blockers, notes };

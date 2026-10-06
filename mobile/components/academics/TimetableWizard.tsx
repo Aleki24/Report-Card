@@ -1,13 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { AlertTriangle, CalendarClock, ChevronDown, FlaskConical, Layers, Users, type LucideIcon } from 'lucide-react-native';
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
-import { basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
+import { basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
+import type { TimetableConfig } from '@shared/timetable/config';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName,
+    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad,
 } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, Card, LoadingView, ProgressBar, TextField } from '@/components/ui';
+import { Button, ButtonRow, Card, LoadingView, ProgressBar, TextField, useScrollToView } from '@/components/ui';
 import { useRefreshSignal } from '@/components/ops/bits';
 import { ResourceList } from '@/components/ops/ResourceList';
 import { useToast } from '@/components/Toast';
@@ -93,14 +94,15 @@ type CardState = 'done' | 'attention' | 'optional' | 'todo';
 const STATE_LABEL: Record<CardState, string> = { done: 'Done', attention: 'Needs attention', optional: 'Optional', todo: 'To do' };
 
 /** One part of the studio: a summary line that opens into its editor. */
-function StudioCard({ icon: Icon, title, summary, state, open, onToggle, children }: {
+function StudioCard({ icon: Icon, title, summary, state, open, onToggle, children, viewRef }: {
     icon: LucideIcon; title: string; summary: string; state: CardState; open: boolean; onToggle: () => void; children: React.ReactNode;
+    viewRef?: (view: View | null) => void;
 }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const tone = state === 'done' ? { bg: colors.successBg, fg: colors.successText } : state === 'attention' ? { bg: colors.warningBg, fg: colors.warningText } : { bg: colors.mutedBg, fg: colors.muted };
     return (
-        <View style={[styles.card, open && { borderColor: colors.primary }]}>
+        <View ref={viewRef} style={[styles.card, open && { borderColor: colors.primary }]}>
             <Pressable onPress={onToggle} style={styles.cardHead} accessibilityRole="button" accessibilityState={{ expanded: open }}>
                 <View style={[styles.cardIcon, { backgroundColor: state === 'attention' ? colors.warningBg : colors.primarySoft }]}>
                     <Icon size={20} color={state === 'attention' ? colors.warning : colors.primary} />
@@ -174,6 +176,48 @@ function TeacherLoads({ plan }: { plan: TimetablePlan }) {
     );
 }
 
+/** One thing in the way, with the button that fixes it or opens where it is fixed. */
+function BlockerRow({ blocker, busy, onFix, onOpen }: { blocker: Blocker; busy: boolean; onFix: () => void; onOpen: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    return (
+        <View style={styles.blocker}>
+            <View style={styles.blockerHead}>
+                <AlertTriangle size={16} color={colors.warning} style={{ marginTop: 2 }} />
+                <Text style={styles.blockerText}>{blocker.message}</Text>
+            </View>
+            <View style={styles.blockerActions}>
+                {blocker.fix === 'set-breaks'
+                    ? <Button size="sm" label="Set as breaks" onPress={onFix} loading={busy} />
+                    : <Button size="sm" variant="secondary" label="Open" onPress={onOpen} />}
+            </View>
+        </View>
+    );
+}
+
+/** Notes that do not stop generating: one line until opened. */
+function Notes({ notes, onOpen }: { notes: readonly Blocker[]; onOpen: (n: Blocker) => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const [shown, setShown] = useState(false);
+    if (notes.length === 0) return null;
+    return (
+        <View style={styles.notes}>
+            <Pressable onPress={() => setShown((v) => !v)} style={styles.notesHead} accessibilityRole="button" accessibilityState={{ expanded: shown }}>
+                <Info size={16} color={colors.muted} />
+                <Text style={styles.notesTitle}>{notes.length} {notes.length === 1 ? 'tip' : 'tips'} worth a look</Text>
+                <ChevronDown size={18} color={colors.muted} style={shown ? { transform: [{ rotate: '180deg' }] } : undefined} />
+            </Pressable>
+            {shown ? notes.map((n, i) => (
+                <Pressable key={i} onPress={() => onOpen(n)} style={styles.note} accessibilityRole="button">
+                    <Text style={styles.noteText}>{n.message}</Text>
+                    {n.details?.map((d) => <Text key={d} style={styles.noteDetail}>• {d}</Text>)}
+                </Pressable>
+            )) : null}
+        </View>
+    );
+}
+
 /**
  * The timetable studio: the whole setup on one screen, in the order it has
  * to happen, with what blocks generating said up front instead of at the
@@ -188,6 +232,11 @@ export function TimetableWizard() {
     const [open, setOpen] = useState<StudioCardId | null>(null);
     const [generating, setGenerating] = useState(false);
     const [builderKey, setBuilderKey] = useState(0);
+    const [dayKey, setDayKey] = useState(0);
+    const [fixing, setFixing] = useState(false);
+    const scrollToView = useScrollToView();
+    const cardViews = useRef<Partial<Record<StudioCardId, View | null>>>({});
+    const cardRef = (card: StudioCardId) => (view: View | null) => { cardViews.current[card] = view; };
 
     const refresh = useCallback(async () => {
         try {
@@ -211,6 +260,24 @@ export function TimetableWizard() {
         finally { setGenerating(false); }
     };
 
+    /** Open a part of the setup and bring it into view. */
+    const show = (card: StudioCardId) => {
+        setOpen(card);
+        setTimeout(() => scrollToView(cardViews.current[card] ?? null), 80);
+    };
+
+    const setBreaks = async () => {
+        setFixing(true);
+        try {
+            const config = await opsGet<TimetableConfig>(api, '/api/academics/timetable/config');
+            await api.put('/api/academics/timetable/config', withBreaksFixed(config));
+            toast.success('Breaks set. No lessons will be put in them.');
+            setDayKey((k) => k + 1);
+            await refresh();
+        } catch (err) { toast.error(errorMessage(err, 'Could not update the school day')); }
+        finally { setFixing(false); }
+    };
+
     if (!plan) return <LoadingView />;
     const ready = plan.blockers.length === 0;
     const stateOf = (card: StudioCardId): CardState => {
@@ -224,32 +291,31 @@ export function TimetableWizard() {
 
     return (
         <View>
-            <View style={[styles.hero, { borderColor: ready ? colors.success : colors.warning, backgroundColor: ready ? colors.successBg : colors.warningBg }]}>
-                <Text style={styles.heroEyebrow}>{plan.published ? `PUBLISHED: ${plan.published.toUpperCase()}` : 'NOT PUBLISHED YET'}</Text>
-                <Text style={styles.heroTitle}>{ready ? 'Ready to generate' : `${plan.blockers.length} thing${plan.blockers.length === 1 ? '' : 's'} to sort first`}</Text>
-                <Text style={styles.heroText}>{ready ? 'Every class fits its week. Generate a draft, check it, then publish.' : 'Tap one to open the part of the setup it is about.'}</Text>
-                {plan.blockers.map((b, i) => (
-                    <Pressable key={i} onPress={() => setOpen(b.card)} style={styles.blocker} accessibilityRole="button">
-                        <AlertTriangle size={16} color={colors.warning} />
-                        <Text style={styles.blockerText}>{b.message}</Text>
-                        <Text style={styles.fix}>Fix</Text>
-                    </Pressable>
-                ))}
-                {plan.notes.length > 0 ? (
-                    <View style={[styles.blocker, { flexDirection: 'column', gap: 4 }]}>
-                        <Text style={[styles.blockerText, { fontFamily: fonts.bold }]}>Worth checking — these don’t stop generating</Text>
-                        {plan.notes.map((n, i) => <Text key={i} style={styles.fitLine} onPress={() => setOpen(n.card)}>• {n.message}</Text>)}
+            <View style={styles.hero}>
+                <View style={styles.heroHead}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.heroEyebrow}>{plan.published ? `Published · ${plan.published}` : 'Not published yet'}</Text>
+                        <Text style={styles.heroTitle}>{ready ? 'Ready to generate' : plan.blockers.length === 1 ? 'One thing to fix first' : `${plan.blockers.length} things to fix first`}</Text>
                     </View>
-                ) : null}
+                    <View style={[styles.pill, { backgroundColor: ready ? colors.successBg : colors.warningBg }]}>
+                        {ready ? <CheckCircle2 size={14} color={colors.successText} /> : <AlertTriangle size={14} color={colors.warningText} />}
+                        <Text style={[styles.pillText, { color: ready ? colors.successText : colors.warningText }]}>{ready ? 'Ready' : 'Not ready'}</Text>
+                    </View>
+                </View>
+                <Text style={styles.heroText}>{ready ? 'Every class fits its week. Generate a draft, check it, then publish.' : 'Fix these, then generate.'}</Text>
+                {plan.blockers.map((b, i) => (
+                    <BlockerRow key={i} blocker={b} busy={fixing} onFix={() => void setBreaks()} onOpen={() => show(b.card)} />
+                ))}
+                <Notes notes={plan.notes} onOpen={(n) => show(n.card)} />
                 <View style={{ marginTop: spacing.md }}>
                     <Button label={generating ? 'Generating…' : plan.drafts > 0 ? 'Generate a new draft' : 'Generate timetable'} onPress={() => void generate()} loading={generating} disabled={!ready} block />
                 </View>
             </View>
 
-            <StudioCard icon={CalendarClock} title="School day" summary={daySummary(plan.day)} state={stateOf('day')} open={open === 'day'} onToggle={() => toggle('day')}>
-                <DayStructureEditor onSaved={() => { void refresh(); setOpen('loads'); }} />
+            <StudioCard viewRef={cardRef('day')} icon={CalendarClock} title="School day" summary={daySummary(plan.day)} state={stateOf('day')} open={open === 'day'} onToggle={() => toggle('day')}>
+                <DayStructureEditor key={dayKey} onSaved={() => { void refresh(); setOpen('loads'); }} />
             </StudioCard>
-            <StudioCard icon={Users} title="Classes & teaching loads" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>
+            <StudioCard viewRef={cardRef('loads')} icon={Users} title="Classes & teaching loads" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>
                 <View style={styles.explain}>
                     <Text style={styles.blockTitle}>How electives fit: option blocks</Text>
                     <Text style={styles.fitLine}>Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s Option block to choose them yourself.</Text>
@@ -258,10 +324,10 @@ export function TimetableWizard() {
                 <TeacherLoads plan={plan} />
                 <Loads onChange={() => void refresh()} />
             </StudioCard>
-            <StudioCard icon={FlaskConical} title="Labs & special rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
+            <StudioCard viewRef={cardRef('rooms')} icon={FlaskConical} title="Labs & special rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
                 <Rooms />
             </StudioCard>
-            <StudioCard icon={Layers} title="Drafts & publish" summary={plan.published ? `Published: ${plan.published}` : plan.drafts > 0 ? `${plan.drafts} draft${plan.drafts === 1 ? '' : 's'} — check one and publish` : 'Generate your first draft above'} state={stateOf('drafts')} open={open === 'drafts'} onToggle={() => toggle('drafts')}>
+            <StudioCard viewRef={cardRef('drafts')} icon={Layers} title="Drafts & publish" summary={plan.published ? `Published: ${plan.published}` : plan.drafts > 0 ? `${plan.drafts} draft${plan.drafts === 1 ? '' : 's'} — check one and publish` : 'Generate your first draft above'} state={stateOf('drafts')} open={open === 'drafts'} onToggle={() => toggle('drafts')}>
                 <TimetableBuilder key={builderKey} />
             </StudioCard>
         </View>
@@ -269,13 +335,23 @@ export function TimetableWizard() {
 }
 
 const useStyles = makeStyles((colors) => ({
-    hero: { borderWidth: 1, borderRadius: radius.xl, padding: spacing.lg, marginBottom: spacing.md },
-    heroEyebrow: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, letterSpacing: 1 },
-    heroTitle: { fontSize: 20, fontFamily: fonts.display, color: colors.foreground, marginTop: 2, letterSpacing: -0.3 },
+    hero: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, backgroundColor: colors.card, padding: spacing.md, marginBottom: spacing.md },
+    heroHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    heroEyebrow: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted },
+    heroTitle: { fontSize: 18, fontFamily: fonts.bold, color: colors.foreground, marginTop: 2 },
     heroText: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },
-    blocker: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm },
-    blockerText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: fonts.regular, color: colors.foreground },
-    fix: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
+    pill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+    pillText: { fontSize: 12, fontFamily: fonts.semibold },
+    blocker: { borderWidth: 1, borderColor: colors.border, borderLeftWidth: 3, borderLeftColor: colors.warning, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm, gap: spacing.sm },
+    blockerHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    blockerText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.foreground },
+    blockerActions: { flexDirection: 'row', justifyContent: 'flex-end' },
+    notes: { backgroundColor: colors.mutedBg, borderRadius: radius.md, marginTop: spacing.sm, overflow: 'hidden' },
+    notesHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm },
+    notesTitle: { flex: 1, fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
+    note: { paddingHorizontal: spacing.sm, paddingBottom: spacing.sm, gap: 2 },
+    noteText: { fontSize: 12, lineHeight: 17, fontFamily: fonts.medium, color: colors.foreground },
+    noteDetail: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, paddingLeft: spacing.sm },
     card: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.xl, backgroundColor: colors.card, marginBottom: spacing.md, overflow: 'hidden' },
     cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
     cardIcon: { width: 40, height: 40, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },

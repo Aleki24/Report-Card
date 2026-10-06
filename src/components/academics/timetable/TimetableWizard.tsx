@@ -8,10 +8,11 @@ import { FormField, InputField } from '@/components/ui/FormField';
 import { ResourceManager } from '@/components/ops/ResourceManager';
 import { TimetableBuilder } from '@/components/academics/timetable/TimetableBuilder';
 import { DayStructureEditor } from '@/components/academics/timetable/DayStructureEditor';
+import type { TimetableConfig } from '@/lib/timetable/config';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
 import {
-    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName,
+    LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import {
@@ -191,42 +192,57 @@ function TeacherLoads({ plan }: { plan: TimetablePlan }) {
     );
 }
 
-/** The top of the studio: ready or not, what is in the way, and the button to generate. */
-function Readiness({ plan, generating, onGenerate, onOpen }: { plan: TimetablePlan; generating: boolean; onGenerate: () => void; onOpen: (b: Blocker) => void }) {
+/** The top of the studio: ready or not, what is in the way (with its fix), and the button to generate. */
+function Readiness({ plan, generating, fixing, onGenerate, onOpen, onSetBreaks }: {
+    plan: TimetablePlan; generating: boolean; fixing: boolean; onGenerate: () => void; onOpen: (b: Blocker) => void; onSetBreaks: () => void;
+}) {
     const ready = plan.blockers.length === 0;
     return (
-        <section className={cn('rounded-2xl border p-4 shadow-sm sm:p-5', ready ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-amber-500/40 bg-amber-500/5')}>
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{plan.published ? `Published: ${plan.published}` : 'Not published yet'}</p>
-                    <h2 className="mt-0.5 text-xl font-bold tracking-tight">
-                        {ready ? 'Ready to generate' : `${plan.blockers.length} thing${plan.blockers.length === 1 ? '' : 's'} to sort first`}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-medium text-muted-foreground">{plan.published ? `Published · ${plan.published}` : 'Not published yet'}</p>
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold', ready ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/12 text-amber-700 dark:text-amber-400')}>
+                            {ready ? <Check className="size-3.5" aria-hidden /> : <AlertTriangle className="size-3.5" aria-hidden />}
+                            {ready ? 'Ready' : 'Not ready'}
+                        </span>
+                    </div>
+                    <h2 className="mt-1 text-lg font-bold tracking-tight">
+                        {ready ? 'Ready to generate' : plan.blockers.length === 1 ? 'One thing to fix first' : `${plan.blockers.length} things to fix first`}
                     </h2>
-                    <p className="text-sm text-muted-foreground">
-                        {ready ? 'Every class fits its week. Generate a draft, check it, then publish.' : 'Fix these here — each opens the part of the setup it is about.'}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{ready ? 'Every class fits its week. Generate a draft, check it, then publish.' : 'Fix these, then generate.'}</p>
                 </div>
                 <Button onClick={onGenerate} disabled={!ready || generating} className="h-11 sm:min-w-48"><Sparkles />{generating ? 'Generating…' : plan.drafts > 0 ? 'Generate a new draft' : 'Generate timetable'}</Button>
             </div>
             {plan.blockers.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1.5">
+                <ul className="mt-3 flex flex-col gap-2">
                     {plan.blockers.map((b, i) => (
-                        <li key={i}>
-                            <button type="button" onClick={() => onOpen(b)} className="flex w-full items-start gap-2 rounded-lg bg-card px-3 py-2 text-left text-sm hover:bg-muted">
+                        <li key={i} className="flex flex-col gap-2 rounded-xl border border-border border-l-4 border-l-amber-500 p-3 text-sm sm:flex-row sm:items-center">
+                            <span className="flex flex-1 items-start gap-2">
                                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
-                                <span className="flex-1">{b.message}</span>
-                                <span className="shrink-0 text-xs font-semibold text-primary">Fix</span>
-                            </button>
+                                {b.message}
+                            </span>
+                            {b.fix === 'set-breaks'
+                                ? <Button size="sm" onClick={onSetBreaks} disabled={fixing} className="self-end sm:self-auto">{fixing ? 'Saving…' : 'Set as breaks'}</Button>
+                                : <Button size="sm" variant="outline" onClick={() => onOpen(b)} className="self-end sm:self-auto">Open</Button>}
                         </li>
                     ))}
                 </ul>
             )}
             {plan.notes.length > 0 && (
-                <details className="mt-3 rounded-lg bg-card px-3 py-2 text-sm">
-                    <summary className="cursor-pointer font-medium">Worth checking ({plan.notes.length}) — these don’t stop generating</summary>
-                    <ul className="mt-2 flex flex-col gap-1 text-muted-foreground">
+                <details className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-sm">
+                    <summary className="cursor-pointer font-medium">{plan.notes.length} {plan.notes.length === 1 ? 'tip' : 'tips'} worth a look</summary>
+                    <ul className="mt-2 flex flex-col gap-2">
                         {plan.notes.map((n, i) => (
-                            <li key={i}><button type="button" onClick={() => onOpen(n)} className="text-left hover:text-foreground">{n.message}</button></li>
+                            <li key={i}>
+                                <button type="button" onClick={() => onOpen(n)} className="text-left font-medium hover:text-primary">{n.message}</button>
+                                {n.details && (
+                                    <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                                        {n.details.map(d => <li key={d}>{d}</li>)}
+                                    </ul>
+                                )}
+                            </li>
                         ))}
                     </ul>
                 </details>
@@ -264,6 +280,20 @@ export function TimetableWizard() {
     };
     const toggle = (card: StudioCardId) => (open === card ? setOpen(null) : show(card));
 
+    const [fixing, setFixing] = useState(false);
+    const [dayKey, setDayKey] = useState(0);
+    const setBreaks = async () => {
+        setFixing(true);
+        try {
+            const config = await opsFetch<TimetableConfig>('/api/academics/timetable/config');
+            await opsFetch('/api/academics/timetable/config', { method: 'PUT', json: withBreaksFixed(config) });
+            toast.success('Breaks set. No lessons will be put in them.');
+            setDayKey(k => k + 1);
+            await refresh();
+        } catch (err) { toast.error(errorText(err)); }
+        finally { setFixing(false); }
+    };
+
     const generate = async () => {
         setGenerating(true);
         try {
@@ -287,10 +317,10 @@ export function TimetableWizard() {
 
     return (
         <div className="flex flex-col gap-4">
-            <Readiness plan={plan} generating={generating} onGenerate={() => void generate()} onOpen={b => show(b.card, b.streamId)} />
+            <Readiness plan={plan} generating={generating} fixing={fixing} onGenerate={() => void generate()} onOpen={b => show(b.card, b.streamId)} onSetBreaks={() => void setBreaks()} />
 
             <StudioCard id="day" icon={CalendarClock} title="School day" summary={daySummary(plan.day)} state={stateOf('day')} open={open === 'day'} onToggle={() => toggle('day')}>
-                <DayStructureEditor onSaved={() => { void refresh(); show('loads'); }} />
+                <DayStructureEditor key={dayKey} onSaved={() => { void refresh(); show('loads'); }} />
             </StudioCard>
 
             <StudioCard id="loads" icon={Users} title="Classes & teaching loads" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>

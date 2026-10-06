@@ -286,9 +286,15 @@ export const periodKind = (p: { is_break: boolean }): PeriodKind => (p.is_break 
 
 /** Named like a break (Short break, Tea break, Lunch, Games…) but set as a lesson, or the reverse. */
 const BREAK_NAME = /\b(break|lunch|tea|recess|snack|games|assembly|prep)\b/i;
+export const isMisnamedBreak = (p: { label: string; is_break: boolean }) => !p.is_break && BREAK_NAME.test(p.label);
 export function periodKindMismatch(p: { label: string; is_break: boolean }): string | null {
-    if (!p.is_break && BREAK_NAME.test(p.label)) return `“${p.label}” is set as a lesson, so lessons will be timetabled in it. Set it to Break.`;
-    return null;
+    return isMisnamedBreak(p) ? `“${p.label}” is set as a lesson, so lessons will be timetabled in it. Set it to Break.` : null;
+}
+
+/** Every period named like a break, in the main bell and each section's, set as a break. */
+export function withBreaksFixed(config: TimetableConfig): TimetableConfig {
+    const fix = (periods: readonly TimetablePeriod[]) => periods.map(p => (isMisnamedBreak(p) ? { ...p, is_break: true } : p));
+    return { ...config, periods: fix(config.periods), sections: config.sections.map(s => ({ ...s, periods: fix(s.periods) })) };
 }
 
 /** One period of a bell changed. */
