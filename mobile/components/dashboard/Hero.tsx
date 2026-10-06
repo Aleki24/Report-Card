@@ -108,7 +108,7 @@ function profileHref(role: string | null | undefined): Href {
  * Who is signed in, above the hero on the page itself: their photo
  * (initials until they add one), their role and the school's crest.
  */
-function ProfileBar() {
+export function ProfileBar() {
     const styles = useStyles();
     const router = useRouter();
     const user = useOptionalCurrentUser();

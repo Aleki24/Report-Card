@@ -355,7 +355,7 @@ export function Button({
                 styles.button,
                 size === 'sm' && styles.buttonSm,
                 buttonVariantStyles[variant],
-                block && { alignSelf: 'stretch' },
+                block && { alignSelf: 'stretch', marginTop: spacing.sm },
                 (pressed || isDisabled) && { opacity: isDisabled ? 0.5 : 0.85 },
             ]}
         >
@@ -629,10 +629,10 @@ const useStyles = makeStyles((colors) => ({
     bannerAction: { fontSize: 13, fontFamily: fonts.bold, textDecorationLine: 'underline' },
     progressTrack: { height: 10, borderRadius: 999, overflow: 'hidden', width: '100%' },
     progressFill: { height: '100%', borderRadius: 999 },
-    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 10, paddingHorizontal: spacing.lg, minHeight: 40 },
-    buttonSm: { paddingVertical: 6, paddingHorizontal: spacing.md, minHeight: 32 },
+    button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 11, paddingHorizontal: spacing.lg, minHeight: 44 },
+    buttonSm: { paddingVertical: 7, paddingHorizontal: spacing.md, minHeight: 36 },
     buttonText: { fontFamily: fonts.medium, fontSize: 14 },
-    buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
+    buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
     field: { marginBottom: spacing.md },
     fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     fieldError: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },
