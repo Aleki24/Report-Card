@@ -10,7 +10,8 @@ import type { PillTone } from '../tones';
 import { today } from '../format';
 import { CBC_LEVELS, EVENT_AUDIENCES, EVENT_TYPES, ROOM_TYPES } from '../resources/academics';
 import type { PaperAction, PaperStatus, PrintStatus } from '../../academics/exam-papers';
-import type { TimetableConfig, TimetableLesson, TimetableVersion } from '../../timetable/config';
+import { CURRICULUM_BANDS, SECTION_PRESETS, type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion } from '../../timetable/config';
+import type { CurriculumBand } from '../../curriculum-bands';
 
 // ── Calendar ─────────────────────────────────────────────────
 
@@ -215,15 +216,67 @@ export function lessonClasses(lessons: readonly TimetableLesson[]): LookupOption
 }
 
 /** A new lesson period (40 minutes) or break (20) after the last one. */
-export function withAddedPeriod(config: TimetableConfig, isBreak: boolean): TimetableConfig {
-    const last = config.periods[config.periods.length - 1];
+/** A new lesson period (40 minutes) or break (20) after the last one in a bell. */
+export function withAddedPeriodTo(periods: readonly TimetablePeriod[], isBreak: boolean): TimetablePeriod[] {
+    const last = periods[periods.length - 1];
     const start = last?.end ?? '08:00';
     const [h, m] = start.split(':').map(Number);
     const endMin = h * 60 + m + (isBreak ? 20 : 40);
     const end = `${String(Math.floor(endMin / 60) % 24).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
-    const teaching = config.periods.filter(p => !p.is_break).length;
-    return { ...config, periods: [...config.periods, { label: isBreak ? 'Break' : `P${teaching + 1}`, start, end, is_break: isBreak }] };
+    const teaching = periods.filter(p => !p.is_break).length;
+    return [...periods, { label: isBreak ? 'Break' : `P${teaching + 1}`, start, end, is_break: isBreak }];
 }
+
+export function withAddedPeriod(config: TimetableConfig, isBreak: boolean): TimetableConfig {
+    return { ...config, periods: withAddedPeriodTo(config.periods, isBreak) };
+}
+
+/** One period of a bell changed. */
+export const withPeriodPatched = (periods: readonly TimetablePeriod[], index: number, patch: Partial<TimetablePeriod>): TimetablePeriod[] =>
+    periods.map((p, i) => (i === index ? { ...p, ...patch } : p));
+
+export type TimetableSection = TimetableConfig['sections'][number];
+
+/** A level belongs to one section at most, so giving it to one takes it from the others. */
+function claimBands(sections: readonly TimetableSection[], ownerId: string, bands: readonly CurriculumBand[]): TimetableSection[] {
+    return sections
+        .map(s => (s.id === ownerId ? s : { ...s, bands: s.bands.filter(b => !bands.includes(b)) }))
+        .filter(s => s.id === ownerId || s.bands.length > 0);
+}
+
+/** Adds a section from a preset (or a blank one), taking its levels from other sections. */
+export function withSectionAdded(config: TimetableConfig, presetKey: string | null): TimetableConfig {
+    const preset = SECTION_PRESETS.find(p => p.key === presetKey);
+    const id = `${preset?.key ?? 'section'}-${Date.now().toString(36)}`;
+    const free = CURRICULUM_BANDS.filter(b => !config.sections.some(s => s.bands.includes(b)));
+    const section: TimetableSection = preset
+        ? { id, name: preset.name, bands: [...preset.bands], periods: [...preset.periods] }
+        : { id, name: 'New section', bands: free.slice(0, 1), periods: [...config.periods] };
+    return { ...config, sections: claimBands([...config.sections, section], id, section.bands) };
+}
+
+/** Turns a level on or off for a section. */
+export function withSectionBandToggled(config: TimetableConfig, sectionId: string, band: CurriculumBand): TimetableConfig {
+    const section = config.sections.find(s => s.id === sectionId);
+    if (!section) return config;
+    if (section.bands.includes(band)) {
+        return { ...config, sections: config.sections.map(s => (s.id === sectionId ? { ...s, bands: s.bands.filter(b => b !== band) } : s)) };
+    }
+    const next = config.sections.map(s => (s.id === sectionId ? { ...s, bands: [...s.bands, band] } : s));
+    return { ...config, sections: claimBands(next, sectionId, [band]) };
+}
+
+export const withSectionPatched = (config: TimetableConfig, sectionId: string, patch: Partial<TimetableSection>): TimetableConfig =>
+    ({ ...config, sections: config.sections.map(s => (s.id === sectionId ? { ...s, ...patch } : s)) });
+
+export const withSectionRemoved = (config: TimetableConfig, sectionId: string): TimetableConfig =>
+    ({ ...config, sections: config.sections.filter(s => s.id !== sectionId) });
+
+/** Presets whose levels are not all covered yet. */
+export const openSectionPresets = (config: TimetableConfig) =>
+    SECTION_PRESETS.filter(p => p.bands.some(b => !config.sections.some(s => s.bands.includes(b))));
+
+export const SECTIONS_NOTE = 'Give levels with a different bell their own section, e.g. 30-minute lessons for Grades 1–3 and 40 for Junior School. Classes in no section follow the main day; a teacher is never booked in two sections at once.';
 
 export const PUBLISH_TIMETABLE_WARNING = 'It replaces the timetable teachers and learners see now; the current one is archived.';
 export const newDraftName = (name: string) => name.trim() || `Draft ${new Date().toLocaleDateString('en-KE')}`;

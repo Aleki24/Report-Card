@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
-import { WEEKDAYS, WEEKDAY_LABELS, describeQuality, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
+import { BAND_LABELS } from '@shared/curriculum-bands';
+import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
 import { periodIndexOf, type GridRow } from '@shared/timetable/layout';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PUBLISH_TIMETABLE_WARNING, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, withAddedPeriod,
+    PUBLISH_TIMETABLE_WARNING, SECTIONS_NOTE, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
 import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ListCard, ListRow, LoadingView, Notice, SectionLabel, TextField, ToggleRow } from '@/components/ui';
@@ -248,6 +250,31 @@ function QualityCard({ quality, reshuffling, onReshuffle }: { quality: ReturnTyp
     );
 }
 
+/** One bell: its periods and breaks with their times. */
+function PeriodsEditor({ periods, onChange }: { periods: readonly TimetablePeriod[]; onChange: (next: TimetablePeriod[]) => void }) {
+    return (
+        <View>
+            {periods.map((p, i) => (
+                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderStyle: p.is_break ? 'dashed' : 'solid' }}>
+                    <TextField label="Name" value={p.label} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { label: v }))} />
+                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                        <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { start: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                        <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { end: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                    </View>
+                    <ToggleRow label="Break" value={p.is_break} onValueChange={(v) => onChange(withPeriodPatched(periods, i, { is_break: v }))} />
+                    <ButtonRow>
+                        <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
+                    </ButtonRow>
+                </Card>
+            ))}
+            <ButtonRow>
+                <Button size="sm" variant="secondary" label="+ Lesson period" onPress={() => onChange(withAddedPeriodTo(periods, false))} />
+                <Button size="sm" variant="secondary" label="+ Break" onPress={() => onChange(withAddedPeriodTo(periods, true))} />
+            </ButtonRow>
+        </View>
+    );
+}
+
 /** The school day: which weekdays run, and each period and break with its times. */
 export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     const { colors } = useTheme();
@@ -262,8 +289,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
 
     if (!config) return <LoadingView />;
 
-    const setPeriod = (i: number, patch: Partial<TimetableConfig['periods'][number]>) =>
-        setConfig((c) => c && ({ ...c, periods: c.periods.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
+    const update = (fn: (c: TimetableConfig) => TimetableConfig) => setConfig((c) => c && fn(c));
 
     const save = async () => {
         setSaving(true);
@@ -293,23 +319,30 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                 })}
             </ButtonRow>
 
-            <SectionLabel>Periods and breaks</SectionLabel>
-            {config.periods.map((p, i) => (
-                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderStyle: p.is_break ? 'dashed' : 'solid' }}>
-                    <TextField label="Name" value={p.label} onChangeText={(v) => setPeriod(i, { label: v })} />
-                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                        <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => setPeriod(i, { start: v })} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                        <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => setPeriod(i, { end: v })} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                    </View>
-                    <ToggleRow label="Break" value={p.is_break} onValueChange={(v) => setPeriod(i, { is_break: v })} />
+            <SectionLabel>{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</SectionLabel>
+            {config.sections.length > 0 ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>For classes in no section below.</Text> : null}
+            <PeriodsEditor periods={config.periods} onChange={(periods) => update((c) => ({ ...c, periods }))} />
+
+            <SectionLabel>Sections with their own bell</SectionLabel>
+            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{SECTIONS_NOTE}</Text>
+            {config.sections.map((sec) => (
+                <Card key={sec.id} style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.mutedBg }}>
+                    <TextField label="Section name" value={sec.name} onChangeText={(v) => update((c) => withSectionPatched(c, sec.id, { name: v }))} />
+                    <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted, marginBottom: spacing.xs }}>Levels on this bell</Text>
                     <ButtonRow>
-                        <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => setConfig((c) => c && ({ ...c, periods: c.periods.filter((_, j) => j !== i) }))} />
+                        {CURRICULUM_BANDS.map((b) => (
+                            <Button key={b} size="sm" variant={sec.bands.includes(b) ? 'primary' : 'secondary'} label={BAND_LABELS[b]} onPress={() => update((c) => withSectionBandToggled(c, sec.id, b))} />
+                        ))}
+                    </ButtonRow>
+                    <PeriodsEditor periods={sec.periods} onChange={(periods) => update((c) => withSectionPatched(c, sec.id, { periods }))} />
+                    <ButtonRow>
+                        <Button size="sm" variant="danger" label={`Remove ${sec.name}`} onPress={() => update((c) => withSectionRemoved(c, sec.id))} />
                     </ButtonRow>
                 </Card>
             ))}
             <ButtonRow>
-                <Button size="sm" variant="secondary" label="+ Lesson period" onPress={() => setConfig((c) => c && withAddedPeriod(c, false))} />
-                <Button size="sm" variant="secondary" label="+ Break" onPress={() => setConfig((c) => c && withAddedPeriod(c, true))} />
+                {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" label={`+ ${p.name}`} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
+                <Button size="sm" variant="ghost" label="+ Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
             </ButtonRow>
 
             <View style={{ marginTop: spacing.md }}>
