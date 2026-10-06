@@ -117,6 +117,7 @@ export const subjectSchema = z.object({
  */
 export const subjectsBulkSchema = z.object({
     level: z.enum([
+        'CBC_PRE_PRIMARY',
         'CBC_LOWER_PRIMARY',
         'CBC_UPPER_PRIMARY',
         'CBC_JUNIOR_SCHOOL',

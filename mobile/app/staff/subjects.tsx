@@ -19,6 +19,7 @@ import { confirmAlert } from '@/lib/confirm';
 
 /** The standard bands the backend can add in one go (`subjects_bulk`). */
 const BANDS = [
+    { value: 'CBC_PRE_PRIMARY', label: 'CBC Pre-primary' },
     { value: 'CBC_LOWER_PRIMARY', label: 'CBC Lower Primary' },
     { value: 'CBC_UPPER_PRIMARY', label: 'CBC Upper Primary' },
     { value: 'CBC_JUNIOR_SCHOOL', label: 'CBC Junior School' },
