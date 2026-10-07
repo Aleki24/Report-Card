@@ -78,7 +78,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Take a photo of homework to hand in, or of a mark sheet so its marks can be read in.",
+          "cameraPermission": "Take a photo of a mark sheet so its marks can be read in.",
           "photosPermission": "Choose a photo of a mark sheet so its marks can be read in.",
           "microphonePermission": false
         }
