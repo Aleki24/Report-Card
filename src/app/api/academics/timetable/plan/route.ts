@@ -5,6 +5,7 @@ import { assess, type PlanLoad, type TeacherWeek, type TimetablePlan } from '@/l
 import { teacherWeeks } from '@/lib/timetable/blocks';
 import { ministryAllocation } from '@/lib/timetable/allocations';
 import { isMisnamedBreak } from '@/lib/ops/forms/academics';
+import { classFixes, fitClassOf } from '@/lib/timetable/fit';
 
 const toLoad = (l: PlannedLoad): PlanLoad => ({
     id: l.id,
@@ -16,7 +17,7 @@ const toLoad = (l: PlannedLoad): PlanLoad => ({
 /** GET — the studio's picture: the day, each class's fit and option blocks, drafts, and what blocks generating. */
 export const GET = route('timetable plan', { module: 'timetable', permission: 'timetable.manage' }, async ({ access }) => {
     const db = createSupabaseAdmin();
-    const [{ config, rows, plans, capacityOf }, rooms, versions] = await Promise.all([
+    const [{ config, rows, plans, capacityOf, bandOf }, rooms, versions] = await Promise.all([
         loadTimetablePlan(access.schoolId),
         db.from('rooms').select('id', { count: 'exact', head: true }).eq('school_id', access.schoolId),
         db.from('timetable_versions').select('name, status').eq('school_id', access.schoolId),
@@ -25,6 +26,7 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
     const nameOf = new Map(rows.map(r => [r.grade_stream_id, r.stream?.full_name ?? '']));
     const classes = [...plans.values()]
         .map(p => ({
+            ...(p.fits ? {} : { fixes: classFixes(config, bandOf(p.streamId), fitClassOf(p)) }),
             streamId: p.streamId,
             name: nameOf.get(p.streamId) ?? '',
             capacity: p.capacity,
@@ -41,6 +43,14 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
             }),
         }))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    // A longer day is for a whole level: name its classes ("Form 3 and Form 4"), not the level.
+    for (const c of classes) {
+        const day = c.fixes?.longerDay;
+        if (!day) continue;
+        const band = bandOf(c.streamId);
+        const names = classes.filter(o => bandOf(o.streamId) === band).map(o => o.name);
+        day.level = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    }
     // Every teacher's whole week, Junior and Senior Secondary together, so no one is booked past the week.
     const weeks = teacherWeeks(plans.values());
     const teacherInfo = new Map<string, { name: string; capacity: number; classes: Set<string> }>();

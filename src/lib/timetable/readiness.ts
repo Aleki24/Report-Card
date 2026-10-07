@@ -4,6 +4,8 @@
  * instead of failing at the last step.
  */
 
+import type { ClassFixes } from './fit';
+
 export interface PlanLoad {
     id: string;
     subject: string;
@@ -35,6 +37,8 @@ export interface PlanClass {
     learnersWithChoices: number;
     /** Loads whose lessons a week differ from the Ministry's figure for the level. */
     offMinistry: { subject: string; lessons: number; ministry: number }[];
+    /** For a class that does not fit: the two ready-made ways to make it fit. */
+    fixes?: ClassFixes;
 }
 
 /** A teacher's whole week across every class and level they teach. */
@@ -126,7 +130,7 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
     }
     if (plan.loads === 0) blockers.push({ card: 'loads', message: 'Add teaching loads: who teaches which subject to which class, and how often.' });
     for (const c of plan.classes) {
-        if (!c.fits) blockers.push({ card: 'loads', streamId: c.streamId, message: overloadMessage(c) });
+        if (!c.fits) blockers.push({ card: 'loads', streamId: c.streamId, message: `${c.name} has ${plural(c.needed - c.capacity, 'more lesson')} than its week. Open it to pick a fix.` });
         for (const b of c.blocks) {
             if (b.teacherClash) blockers.push({ card: 'loads', streamId: c.streamId, message: `${c.name} ${b.label}: one teacher has two subjects running at the same time.` });
         }

@@ -79,7 +79,7 @@ export const minutesOf = (hhmm: string): number => {
     const [h, m] = hhmm.split(':').map(Number);
     return h * 60 + m;
 };
-const hhmmOf = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+export const hhmmOf = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
 /** The school's main day, for classes outside every section. */
 export const MAIN_SECTION_ID = 'main';
