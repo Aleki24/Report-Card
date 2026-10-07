@@ -35,6 +35,8 @@ export interface PlanClass {
     /** What the option blocks rest on: learners' choices, or the subjects' types. */
     basis: 'choices' | 'groups' | 'subjects' | 'none';
     learnersWithChoices: number;
+    /** Whose choices the groups follow: learners' own, or the school's offered Grade 10 combinations. */
+    choiceSource: 'learners' | 'combinations';
     /** With subject groups: learners who chose two subjects in one group, and which. */
     unfit: { name: string; subjects: [string, string] }[];
     /** Loads whose lessons a week differ from the Ministry's figure for the level. */
@@ -100,6 +102,10 @@ const quoteList = (xs: readonly string[]) => {
     return q.length <= 1 ? q.join('') : `${q.slice(0, -1).join(', ')} and ${q[q.length - 1]}`;
 };
 
+/** "2 learners must change a subject" / "1 combination cannot be offered" — a class's unfit choices in a line. */
+export const unfitTitle = (c: Pick<PlanClass, 'unfit' | 'choiceSource'>) =>
+    c.choiceSource === 'combinations' ? `${plural(c.unfit.length, 'combination')} cannot be offered with these groups` : `${plural(c.unfit.length, 'learner')} must change a subject`;
+
 /** Why a class does not fit its week, and the ways out, in plain words. */
 export function overloadMessage(c: PlanClass): string {
     const over = c.needed - c.capacity;
@@ -112,11 +118,13 @@ export function overloadMessage(c: PlanClass): string {
 /** What a class's elective groups rest on, in a line. */
 export function basisLine(c: PlanClass): string | null {
     if (c.blocks.length === 0) return null;
+    const whose = c.choiceSource === 'combinations' ? plural(c.learnersWithChoices, 'offered combination') : `${plural(c.learnersWithChoices, 'learner')}’ recorded choices`;
     if (c.basis === 'groups') {
-        return `Electives run in ${plural(c.blocks.length, 'subject group')}: each learner takes one subject from each group, as KCSE subject groups are taught.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, 'learner')} chose two subjects in one group and must change one.` : ' Every learner’s choices fit.'}`;
+        const who = c.choiceSource === 'combinations' ? 'combination' : 'learner';
+        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} has two subjects in one group.` : ' Every one fits.'}`;
     }
-    if (c.basis === 'choices') return `Option blocks follow ${plural(c.learnersWithChoices, 'learner')}’ recorded subject choices: no learner has two subjects at the same time.`;
-    return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives for groups that match them.';
+    if (c.basis === 'choices') return `Option blocks follow ${whose}: subjects taken together never share a slot.`;
+    return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives (or the school’s combinations) for groups that match them.';
 }
 
 /** Blockers and notes from the plan's facts. */
@@ -142,7 +150,9 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
         if (c.unfit.length > 0) {
             notes.push({
                 card: 'loads', streamId: c.streamId,
-                message: `${c.name}: ${plural(c.unfit.length, 'learner')} chose two subjects that run in the same group. Change one of them in the learner’s subjects.`,
+                message: c.choiceSource === 'combinations'
+                    ? `${c.name}: ${plural(c.unfit.length, 'offered combination')} put two subjects in the same group, so learners on ${c.unfit.length === 1 ? 'it' : 'them'} cannot take both. Stop offering ${c.unfit.length === 1 ? 'it' : 'them'}, or add a group rule.`
+                    : `${c.name}: ${plural(c.unfit.length, 'learner')} chose two subjects that run in the same group. Change one of them in the learner’s subjects.`,
                 details: c.unfit.map(u => `${u.name}: ${u.subjects.join(' and ')}`),
             });
         }
