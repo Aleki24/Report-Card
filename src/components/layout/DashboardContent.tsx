@@ -9,6 +9,7 @@ import { canAccessPath } from '@/components/layout/sidebar/navItems';
 import { homePathForRole } from '@/lib/roles';
 import { PreviewBanner } from '@/components/preview/PreviewMode';
 import { OwnerPendingNotice } from '@/components/platform/OwnerPendingNotice';
+import { StudentRecordMissing } from '@/components/student/StudentRecordMissing';
 
 const COLLAPSE_KEY = 'sidebar-collapsed';
 
@@ -16,7 +17,7 @@ export default function DashboardContent({ children }: { children: React.ReactNo
     const router = useRouter();
     const pathname = usePathname();
     const [collapsed, setCollapsedState] = useState(true);
-    const { profile, role, schoolOnboardingCompleted, loading, can, hasModule } = useAuth();
+    const { profile, role, schoolOnboardingCompleted, loading, can, hasModule, studentRecordMissing } = useAuth();
 
     useEffect(() => {
         // localStorage is client-only, so the persisted value can't seed
@@ -62,7 +63,9 @@ export default function DashboardContent({ children }: { children: React.ReactNo
                 display: 'flex', flexDirection: 'column',
             } as React.CSSProperties}>
                 <div className="mx-auto w-full max-w-7xl empty:hidden"><PreviewBanner /><OwnerPendingNotice /></div>
-                {isForbiddenPath ? <ContentSkeleton /> : children}
+                {isForbiddenPath
+                    ? <ContentSkeleton />
+                    : role === 'STUDENT' && studentRecordMissing ? <StudentRecordMissing /> : children}
             </main>
         </div>
     );

@@ -23,6 +23,8 @@ interface UserContextValue extends AccessChecks {
     avatarUrl: string | null;
     /** No school yet, or an admin whose school setup is unfinished — show onboarding (the web's /dashboard/onboarding). */
     needsOnboarding: boolean;
+    /** A student account with no class record yet — the school has to enrol it before any student screen works. */
+    studentRecordMissing: boolean;
     /** Modules the school runs and what this person's role and duties allow (the web's `/api/auth/me` access). */
     access: ClientAccess;
     /** Role plus access checks, for `canAccessStaffScreen` and friends. */
@@ -96,6 +98,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         // A picture just changed on this phone shows before the server catches up.
         avatarUrl: (user?.hasImage ? user.imageUrl : null) ?? me?.avatarUrl ?? null,
         needsOnboarding: !!me && (baseRole === 'PENDING' || !me.profile.school_id || (baseRole === 'ADMIN' && !me.schoolOnboardingCompleted)),
+        studentRecordMissing: baseRole === 'STUDENT' && me?.studentRecordMissing === true,
         access,
         viewer,
         ...checks,

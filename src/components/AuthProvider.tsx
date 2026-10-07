@@ -52,6 +52,8 @@ interface AuthContextType extends AccessChecks {
     preview: boolean;
     /** In preview, the name of the school awaiting approval. */
     pendingSchoolName: string | null;
+    /** A STUDENT account the school never enrolled in a class: no student page has data for it. */
+    studentRecordMissing: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
     const [preview, setPreview] = useState(false);
     const [pendingSchoolName, setPendingSchoolName] = useState<string | null>(null);
+    const [studentRecordMissing, setStudentRecordMissing] = useState(false);
     const [access, setAccess] = useState<ClientAccess>(DEFAULT_ACCESS);
 
     const { userId } = clerkAuth;
@@ -193,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setBaseRole(dbBaseRole);
                 }
                 setAccess(parseClientAccess(data.access));
+                setStudentRecordMissing(data.studentRecordMissing === true);
                 if (data.schoolName) setSchoolName(data.schoolName);
                 if (data.schoolOnboardingCompleted !== undefined) setSchoolOnboardingCompleted(data.schoolOnboardingCompleted);
             })
@@ -238,7 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setDevRoleOverride,
         preview,
         pendingSchoolName,
-    }), [access, checks, preview, pendingSchoolName, userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
+        studentRecordMissing,
+    }), [access, checks, preview, pendingSchoolName, studentRecordMissing, userId, clerkUser, profile, baseRole, devRoleOverride, isUserLoaded, clerkAuth.sessionId, isProfileLoading, schoolName, schoolOnboardingCompleted, availableRoles]);
 
     return (
         <AuthContext.Provider value={value}>

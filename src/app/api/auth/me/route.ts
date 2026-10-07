@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { resolveActiveRole } from '@/lib/roles';
 import { getClassTeacherStreamIds } from '@/lib/auth-server';
 import { getAccess } from '@/lib/platform/access';
+import { provisionUserFromClerk } from '@/lib/provision-user';
 import type { ClientAccess } from '@/lib/platform/client-access';
 
 export async function GET() {
@@ -16,64 +17,31 @@ export async function GET() {
     const user = await currentUser();
     const supabase = createSupabaseAdmin();
 
-    let { data: dbUser } = await supabase
+    const loadProfile = () => supabase
       .from('users')
       .select('id, first_name, last_name, email, role, school_id, is_active, job_title, avatar_url')
       .eq('id', clerkAuth.userId)
       .maybeSingle();
 
-    // Auto-create user if they exist in Clerk but not in Supabase
-    // (e.g. webhook didn't fire or wasn't configured)
+    let { data: dbUser } = await loadProfile();
+
+    // Auto-create the profile if the account exists in Clerk but not in
+    // Supabase (the webhook didn't fire, or the row went with a deleted school).
     if (!dbUser && user) {
-      const email = user.emailAddresses?.[0]?.emailAddress || '';
-      const firstName = user.firstName || '';
-      const lastName = user.lastName || '';
-      const metadata = (user.publicMetadata || {}) as Record<string, any>;
-      const role = metadata.role || 'PENDING';
-      let schoolId = metadata.school_id || metadata.schoolId || null;
+      const { error: provisionErr } = await provisionUserFromClerk(supabase, {
+        id: clerkAuth.userId,
+        email: user.emailAddresses?.[0]?.emailAddress || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        publicMetadata: user.publicMetadata ?? {},
+      });
 
-      // Only auto-create a school if the user explicitly has ADMIN role in Clerk metadata
-      if (metadata.role === 'ADMIN' && !schoolId) {
-        const schoolIdNew = crypto.randomUUID();
-        const { error: schoolErr } = await supabase.from('schools').insert({
-          id: schoolIdNew,
-          name: `${firstName || 'My'}'s School`,
-        });
-        if (!schoolErr) schoolId = schoolIdNew;
-      }
-
-      const { data: newUser, error: insertErr } = await supabase
-        .from('users')
-        .insert({
-          id: clerkAuth.userId,
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          username: email.split('@')[0] || clerkAuth.userId,
-          role,
-          is_active: true,
-          school_id: schoolId,
-        })
-        .select('id, first_name, last_name, email, role, school_id, is_active, job_title, avatar_url')
-        .single();
-
-      if (insertErr) {
-        console.error('[/api/auth/me] Auto-create user error:', insertErr);
+      if (provisionErr) {
+        console.error('[/api/auth/me] Auto-create user error:', provisionErr);
         return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 });
       }
 
-      // Sync role and school_id back to Clerk publicMetadata
-      try {
-        const { createClerkClient } = await import('@clerk/nextjs/server');
-        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-        await clerk.users.updateUser(clerkAuth.userId, {
-          publicMetadata: { role, school_id: schoolId },
-        });
-      } catch (metaErr) {
-        console.error('[/api/auth/me] Failed to sync metadata:', metaErr);
-      }
-
-      dbUser = newUser;
+      ({ data: dbUser } = await loadProfile());
     }
 
     if (!dbUser) {
@@ -106,6 +74,19 @@ export async function GET() {
       schoolApprovalStatus = school?.approval_status ?? null;
     }
 
+    // A STUDENT account with no students row (e.g. a staff account switched to
+    // Student, or a learner removed from their class) has nothing to show on
+    // any student page; the apps say so once instead of erroring on each.
+    let studentRecordMissing = false;
+    if (dbUser.role === 'STUDENT') {
+      const { data: studentRow } = await supabase
+        .from('students')
+        .select('id')
+        .eq('id', dbUser.id)
+        .maybeSingle();
+      studentRecordMissing = !studentRow;
+    }
+
     // active_role (Clerk metadata, set by role switching) only ever upgrades a
     // subject teacher to class teacher; anything else is stale and ignored.
     // The switch also lapses once the class assignment it relied on is removed.
@@ -135,6 +116,7 @@ export async function GET() {
       schoolApprovalStatus,
       email: user?.emailAddresses[0]?.emailAddress || dbUser.email,
       activeRole,
+      studentRecordMissing,
     });
   } catch (err: any) {
     console.error('[/api/auth/me] Error:', err);

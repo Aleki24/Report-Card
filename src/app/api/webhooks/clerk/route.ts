@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { existingSchoolId, provisionUserFromClerk } from '@/lib/provision-user';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET || '';
 
@@ -49,11 +50,6 @@ export async function POST(req: Request) {
     switch (type) {
       case 'user.created': {
         const clerkId = data.id;
-        const email = data.email_addresses?.[0]?.email_address || '';
-        const firstName = data.first_name || '';
-        const lastName = data.last_name || '';
-        const metadata = data.public_metadata || {};
-
         const { data: existing } = await supabase
           .from('users')
           .select('id')
@@ -62,40 +58,14 @@ export async function POST(req: Request) {
 
         if (existing) break;
 
-        const role = metadata.role || 'PENDING';
-        let schoolId = metadata.school_id || null;
-
-        // Only auto-create school if user explicitly has ADMIN role in metadata
-        if (metadata.role === 'ADMIN' && !schoolId) {
-          const schoolIdNew = crypto.randomUUID();
-          const { error: schoolErr } = await supabase.from('schools').insert({
-            id: schoolIdNew,
-            name: `${firstName}'s School`,
-          });
-          if (!schoolErr) schoolId = schoolIdNew;
-        }
-
-        await supabase.from('users').insert({
+        const { error: provisionErr } = await provisionUserFromClerk(supabase, {
           id: clerkId,
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          username: email.split('@')[0] || clerkId,
-          role,
-          is_active: true,
-          school_id: schoolId,
+          email: data.email_addresses?.[0]?.email_address || '',
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          publicMetadata: data.public_metadata || {},
         });
-
-        // Sync role and school_id back to Clerk publicMetadata for session claims
-        try {
-          const { createClerkClient } = await import('@clerk/nextjs/server');
-          const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-          await clerk.users.updateUser(clerkId, {
-            publicMetadata: { role, school_id: schoolId },
-          });
-        } catch (metaErr) {
-          console.error('[Clerk Webhook] Failed to sync metadata:', metaErr);
-        }
+        if (provisionErr) console.error('[Clerk Webhook] Failed to create user:', provisionErr);
         break;
       }
 
@@ -113,7 +83,10 @@ export async function POST(req: Request) {
         };
 
         if (metadata.role) updateData.role = metadata.role;
-        if (metadata.school_id) updateData.school_id = metadata.school_id;
+        // A school id for a school that no longer exists would fail the FK
+        // check and drop the whole update (name and email included).
+        const schoolId = await existingSchoolId(supabase, metadata.school_id);
+        if (schoolId) updateData.school_id = schoolId;
 
         await supabase
           .from('users')
