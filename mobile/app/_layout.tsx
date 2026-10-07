@@ -35,16 +35,24 @@ const FONT_FILES = { PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, Plus
 
 const SUPPORTED_ROLES = [...STAFF_ROLES, 'STUDENT', 'PARENT'] as const;
 
-function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
+/** Every dead end before the app opens offers a way out, so an account is never stuck on one screen. */
+function SignOutButton() {
     const styles = useStyles();
     const { signOut, signingOut } = useSignOut();
+    return (
+        <Pressable onPress={() => void signOut()} disabled={signingOut} accessibilityRole="button" style={styles.signOutButton}>
+            <Text style={styles.signOutText}>{signingOut ? "Signing out…" : "Sign out"}</Text>
+        </Pressable>
+    );
+}
+
+function UnsupportedAccountScreen({ title = 'Account not ready', reason }: { title?: string; reason: string }) {
+    const styles = useStyles();
     return (
         <View style={styles.centered}>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{reason}</Text>
-            <Pressable onPress={() => void signOut()} disabled={signingOut} style={styles.signOutButton}>
-                <Text style={styles.signOutText}>{signingOut ? "Signing out…" : "Sign out"}</Text>
-            </Pressable>
+            <SignOutButton />
         </View>
     );
 }
@@ -79,7 +87,7 @@ function RootStack({ signedIn }: { signedIn: boolean }) {
 
 function RoleGate() {
     const styles = useStyles();
-    const { loading, error, deactivated, role, needsOnboarding, reload } = useCurrentUser();
+    const { loading, error, deactivated, role, needsOnboarding, studentRecordMissing, reload } = useCurrentUser();
 
     useEffect(() => {
         if (!loading) SplashScreen.hideAsync().catch(() => {});
@@ -95,11 +103,21 @@ function RoleGate() {
         return (
             <View style={styles.centered}>
                 <ErrorBanner message={error} onRetry={reload} />
+                <SignOutButton />
             </View>
         );
     }
 
     if (needsOnboarding) return <Onboarding />;
+
+    if (studentRecordMissing) {
+        return (
+            <UnsupportedAccountScreen
+                title="Student record not set up"
+                reason="Your account is not linked to a class yet. Ask your school admin to enrol you, then sign in again."
+            />
+        );
+    }
 
     if (!isRoleIn(role, SUPPORTED_ROLES)) {
         return (

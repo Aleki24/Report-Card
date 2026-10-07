@@ -67,6 +67,23 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'You cannot remove your own admin access. Ask another admin to do it.' }, { status: 400 });
         }
 
+        // A student needs a students row (class and level), which only Add
+        // Student creates. Switching an account to STUDENT without one left it
+        // signed in to a student app where every screen failed.
+        if (role === 'STUDENT' && targetUser.role !== 'STUDENT') {
+            const { data: studentRow } = await supabase
+                .from('students')
+                .select('id')
+                .eq('id', user_id)
+                .maybeSingle();
+            if (!studentRow) {
+                return NextResponse.json(
+                    { error: 'This account has no student record. Use Add Student to enrol a learner in a class.' },
+                    { status: 400 }
+                );
+            }
+        }
+
         // Build update payload (only include fields that were provided)
         const updates: Record<string, any> = {};
         if (first_name !== undefined) updates.first_name = first_name.trim();

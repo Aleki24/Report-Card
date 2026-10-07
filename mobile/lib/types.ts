@@ -29,6 +29,8 @@ export interface MeResponse {
     avatarUrl?: string | null;
     schoolOnboardingCompleted: boolean;
     activeRole: UserRole | null;
+    /** A STUDENT account the school never enrolled in a class: no student screen has data for it. */
+    studentRecordMissing?: boolean;
 }
 
 // ── Student ────────────────────────────────────────────────
