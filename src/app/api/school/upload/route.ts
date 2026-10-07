@@ -1,33 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { ASSIGNMENT_UPLOAD_MAX_BYTES } from '@/lib/assignments';
-import { extensionFor, isImageType, resolveAttachmentType, storageSafeName } from '@/lib/attachments';
+import { resolveAttachmentType } from '@/lib/attachments';
+import { attachmentTarget, uploaderSchool } from '@/lib/upload-server';
 
-const MAX_SIZE = ASSIGNMENT_UPLOAD_MAX_BYTES;
-/** Documents live apart from photos; the bucket is made on first use. */
-const DOCUMENT_BUCKET = 'assignment-files';
-
+/**
+ * Uploads a small file through the server (school logos, and attachments when
+ * a direct upload is not possible). Vercel caps request bodies at 4.5 MB, so
+ * homework attachments go straight to storage via /api/school/upload/sign.
+ */
 export async function POST(request: NextRequest) {
     try {
-        const { userId } = await auth();
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const supabase = createSupabaseAdmin();
-        const { data: profile } = await supabase
-            .from('users')
-            .select('school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-
-        if (!profile || profile.is_active === false) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-        if (!profile.school_id) {
-            return NextResponse.json({ error: 'No school associated' }, { status: 403 });
-        }
+        const uploader = await uploaderSchool(supabase);
+        if ('error' in uploader) return NextResponse.json({ error: uploader.error }, { status: uploader.status });
 
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
@@ -40,19 +26,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Choose an image, PDF, Word, PowerPoint, Excel or text file.' }, { status: 400 });
         }
 
-        if (file.size > MAX_SIZE) {
+        if (file.size > ASSIGNMENT_UPLOAD_MAX_BYTES) {
             return NextResponse.json({ error: 'Files must be 10 MB or smaller.' }, { status: 400 });
         }
 
-        const bucket = isImageType(type) ? 'photos' : DOCUMENT_BUCKET;
-        if (bucket === DOCUMENT_BUCKET) {
-            // Already there after the first upload; any other failure shows on the upload below.
-            await supabase.storage.createBucket(DOCUMENT_BUCKET, { public: true, fileSizeLimit: MAX_SIZE }).catch(() => undefined);
-        }
-        // A random folder keeps the link unguessable; the original name inside it
-        // is what teachers and learners see ("Fractions-worksheet.pdf").
-        const folder = `${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-        const fileName = `${profile.school_id}/attachments/${folder}/${storageSafeName(file.name)}.${extensionFor(type)}`;
+        const { bucket, path: fileName } = attachmentTarget(uploader.schoolId, file.name, type);
         const buffer = Buffer.from(await file.arrayBuffer());
 
         const { error: uploadError } = await supabase.storage

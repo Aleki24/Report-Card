@@ -10,6 +10,9 @@ import { ExamPicker } from '@/components/exams/ExamPicker';
 import { MarkEntry } from '@/components/exams/MarkEntry';
 import { ExamResults } from '@/components/exams/ExamResults';
 import { PublishList } from '@/components/exams/PublishList';
+import { ReadyToRelease } from '@/components/exams/ReadyToRelease';
+import { useApiQuery } from '@/lib/useApiQuery';
+import type { ReadyPaper } from '@shared/release-ready';
 import { Broadsheet } from '@/components/exams/Broadsheet';
 import { CreateExamToggle } from '@/components/exams/CreateExamForm';
 import type { ExamSlot, Term } from '@/lib/types';
@@ -41,6 +44,9 @@ function ExamsContent() {
     const [tab, setTab] = useState<Tab>(parseTab(params.tab));
     const [exam, setExam] = useState<ExamSlot | null>(null);
     const [pickerKey, setPickerKey] = useState(0);
+    const [publishKey, setPublishKey] = useState(0);
+    // What the dashboard's "ready to release" card counted, shown first on Publish.
+    const ready = useApiQuery<ReadyPaper[]>(tab === 'publish' ? '/api/school/exams?ready=1' : null);
     const structure = useAcademicStructure();
 
     // Tab screens stay mounted, so a later deep link (?tab=results) must switch tabs too.
@@ -87,7 +93,10 @@ function ExamsContent() {
             <SegmentedTabs tabs={TABS} value={tab} onChange={selectTab} />
 
             {tab === 'publish' ? (
-                <PublishList />
+                <>
+                    <ReadyToRelease papers={ready.data} error={ready.error} onRetry={ready.reload} onReleased={() => { ready.reload(); setPublishKey((k) => k + 1); }} />
+                    <PublishList key={publishKey} onChanged={ready.reload} />
+                </>
             ) : tab === 'all' ? (
                 structure.loading ? <LoadingView />
                     : structure.data?.grade_streams?.length ? <Broadsheet streams={structure.data.grade_streams} />

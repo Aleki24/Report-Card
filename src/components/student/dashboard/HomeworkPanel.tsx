@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/ui';
 import { FormField, TextareaField } from '@/components/ui/FormField';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { uploadAttachment } from '@/lib/upload-client';
 import {
     ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_UPLOAD_MAX_BYTES, dueLabel, dueState, localToday,
     type StudentAssignment,
@@ -71,12 +72,7 @@ function HandInDialog({ assignment, onClose, onHandedIn }: HandInDialogProps) {
             let fileUrl: string | null = null;
             if (file) {
                 setBusy('uploading');
-                const fd = new FormData();
-                fd.append('file', file);
-                const res = await fetch('/api/school/upload', { method: 'POST', body: fd });
-                const json: unknown = await res.json().catch(() => null);
-                if (!res.ok) throw new Error(apiErrorMessage(json, 'Your file did not upload.'));
-                fileUrl = (json as { url: string }).url;
+                fileUrl = await uploadAttachment(file);
             }
             setBusy('sending');
             const res = await fetch('/api/school/submissions', {

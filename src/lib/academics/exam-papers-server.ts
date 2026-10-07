@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { HttpError, assertInSchool, type Access } from '@/lib/platform/access';
 import { optionalCount, optionalDateTime, optionalText, optionalUuid, text, uuid } from '@/lib/ops/zod-fields';
-import { MAX_PAPER_BYTES, PAPER_MIME_TYPES, type PaperFileKind, type PaperStatus } from './exam-papers';
+import { resolveAttachmentType } from '@/lib/attachments';
+import { MAX_PAPER_BYTES, PAPER_FILE_KINDS, PAPER_MIME_TYPES, type PaperFileKind, type PaperStatus } from './exam-papers';
 
 export const BUCKET = 'exam-papers';
 
@@ -63,25 +64,76 @@ export async function loadPaper(id: string, access: Access): Promise<PaperRow> {
     return data as PaperRow;
 }
 
-/** Validates and stores an uploaded file; returns its storage path. */
+/**
+ * A paper file's real type, or null when it is not a PDF or Word document.
+ * Phones report many Word and PDF files as "application/octet-stream", and
+ * those were refused; the file name decides when the reported type does not.
+ */
+export function paperFileType(name: string, reportedType: string | null | undefined): string | null {
+    const type = resolveAttachmentType(name, reportedType);
+    return type && PAPER_MIME_TYPES[type] ? type : null;
+}
+
+/** Where a file uploaded straight to storage waits until its paper is saved. */
+export function stagedPaperPath(schoolId: string, kind: PaperFileKind, type: string): string {
+    return `${schoolId}/staged/${crypto.randomUUID()}/${kind}.${PAPER_MIME_TYPES[type]}`;
+}
+
+/** Validates and stores a file sent with the form; returns its storage path. */
 export async function storePaperFile(file: File, schoolId: string, paperId: string, kind: PaperFileKind): Promise<string> {
-    const ext = PAPER_MIME_TYPES[file.type];
-    if (!ext) throw new HttpError(400, 'Upload a PDF or Word document.');
+    const type = paperFileType(file.name, file.type);
+    if (!type) throw new HttpError(400, 'Upload a PDF or Word document.');
     if (file.size > MAX_PAPER_BYTES) throw new HttpError(400, 'Files must be 15 MB or smaller.');
-    const path = `${schoolId}/${paperId}/${kind}-${Date.now()}.${ext}`;
+    const path = `${schoolId}/${paperId}/${kind}-${Date.now()}.${PAPER_MIME_TYPES[type]}`;
     const { error } = await createSupabaseAdmin().storage
         .from(BUCKET)
-        .upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type, upsert: false });
+        .upload(path, Buffer.from(await file.arrayBuffer()), { contentType: type, upsert: false });
     if (error) throw new Error(`storage upload failed: ${error.message}`);
     return path;
 }
 
-/** Stores any `paper` / `scheme` files in the form and returns the columns to update. */
+/** The form field naming a file already uploaded to storage (see the upload-url route). */
+export const stagedField = (kind: PaperFileKind) => `${kind}_upload`;
+
+/**
+ * Checks a file uploaded straight to storage: it must be this school's, in
+ * the staging folder, for this kind of file, and really there.
+ */
+async function claimStagedFile(path: string, schoolId: string, kind: PaperFileKind): Promise<string> {
+    const match = new RegExp(`^${schoolId}/staged/([0-9a-f-]{36})/${kind}\\.(pdf|docx?)$`).exec(path);
+    if (!match) throw new HttpError(400, 'That upload is not valid. Attach the file again.');
+    const { data, error } = await createSupabaseAdmin().storage.from(BUCKET).list(`${schoolId}/staged/${match[1]}`);
+    if (error) throw new Error(`storage list failed: ${error.message}`);
+    if (!data?.some(f => f.name === path.split('/').pop())) throw new HttpError(400, 'The file did not finish uploading. Attach it again.');
+    return path;
+}
+
+/**
+ * Stores the form's `paper` / `scheme` files, or claims ones already uploaded
+ * straight to storage (`paper_upload` / `scheme_upload`), and returns the
+ * columns to update.
+ */
 export async function storeFormFiles(form: FormData, schoolId: string, paperId: string): Promise<Record<string, string>> {
     const updates: Record<string, string> = {};
-    for (const kind of ['paper', 'scheme'] as const) {
+    for (const kind of PAPER_FILE_KINDS) {
         const file = form.get(kind);
+        const staged = form.get(stagedField(kind));
         if (file instanceof File && file.size > 0) updates[`${kind}_path`] = await storePaperFile(file, schoolId, paperId, kind);
+        else if (typeof staged === 'string' && staged) updates[`${kind}_path`] = await claimStagedFile(staged, schoolId, kind);
     }
     return updates;
+}
+
+/** Whether the form carries a paper or scheme, sent or already uploaded. */
+export function formHasFile(form: FormData, kind: PaperFileKind): boolean {
+    const file = form.get(kind);
+    const staged = form.get(stagedField(kind));
+    return (file instanceof File && file.size > 0) || (typeof staged === 'string' && staged.length > 0);
+}
+
+/** Form fields minus the staged-upload ones, which are files rather than details. */
+export function detailFields(form: FormData): Record<string, string> {
+    const raw = formFields(form);
+    for (const kind of PAPER_FILE_KINDS) delete raw[stagedField(kind)];
+    return raw;
 }

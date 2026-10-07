@@ -4,12 +4,13 @@ import { CheckCircle2, ClipboardList, EyeOff } from 'lucide-react-native';
 import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, ProgressBar, StatGrid, StatTile } from '@/components/ui';
 import { spacing, fonts, makeStyles, radius, useTheme } from '@/lib/theme';
 import { examTypeName, sortExamTypes } from '@/lib/academics';
-import { useApi, withQuery } from '@/lib/api';
+import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { errorMessage, pluralize } from '@/lib/format';
+import { pluralize } from '@/lib/format';
 import { confirmAlert } from '@/lib/confirm';
 import { useExams, useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { ReleaseControl } from './ReleaseControl';
+import { useReleasePapers } from './useReleasePapers';
 import type { ExamSlot } from '@/lib/types';
 
 /** The part of GET /api/school/exam-marks/stream used to count marks per exam. */
@@ -22,16 +23,15 @@ const isReleased = (e: ExamSlot) => e.status !== 'DRAFT';
  * subjects have marks and which learners can already see, then release them
  * one at a time or all the marked ones at once.
  */
-export function PublishList() {
+export function PublishList({ onChanged }: { onChanged?: () => void }) {
     const styles = useStyles();
     const { colors } = useTheme();
-    const api = useApi();
     const { streams, loading: streamsLoading } = useGradeStreams();
     const { terms, activeTermId, loading: termsLoading } = useTerms();
     const [streamPick, setStreamPick] = useState<string | null>(null);
     const [termPick, setTermPick] = useState<string | null>(null);
     const [typePick, setTypePick] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
+    const { release, busy } = useReleasePapers();
     const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'danger'; text: string } | null>(null);
 
     const stream = streams.find((s) => s.id === streamPick) ?? (streams.length === 1 ? streams[0] : null);
@@ -60,7 +60,7 @@ export function PublishList() {
     const releasable = exams.filter((e) => !isReleased(e) && (markedByExam.get(e.id) ?? 0) > 0);
     const unmarkedHidden = exams.filter((e) => !isReleased(e)).length - releasable.length;
 
-    const reload = () => { examsQuery.reload(); marksQuery.reload(); };
+    const reload = () => { examsQuery.reload(); marksQuery.reload(); onChanged?.(); };
 
     const releaseAll = () => {
         if (releasable.length === 0) return;
@@ -69,21 +69,8 @@ export function PublishList() {
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Release', onPress: () => void (async () => {
-                    setBusy(true);
                     setMessage(null);
-                    const failures: string[] = [];
-                    for (const e of releasable) {
-                        try {
-                            await api.post(`/api/school/exams/${e.id}/status`, { action: 'publish', confirm: true });
-                        } catch (err) {
-                            failures.push(`${e.subject_name}: ${errorMessage(err, 'failed')}`);
-                        }
-                    }
-                    const ok = releasable.length - failures.length;
-                    setMessage(failures.length === 0
-                        ? { tone: 'success', text: `Released ${pluralize(ok, 'subject')}.` }
-                        : { tone: 'warning', text: `Released ${ok}; ${failures.length} failed — ${failures.join('; ')}` });
-                    setBusy(false);
+                    setMessage(await release(releasable));
                     reload();
                 })(),
             },

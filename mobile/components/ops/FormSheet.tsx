@@ -3,6 +3,7 @@ import { Modal, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
+import { ToastViewport } from '@/components/Toast';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
 
 /**
@@ -45,6 +46,8 @@ export function FormSheet({
                     </View>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+            {/* The screen's toasts sit behind this sheet; show them here too. */}
+            <ToastViewport />
         </Modal>
     );
 }

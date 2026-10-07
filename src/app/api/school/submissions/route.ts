@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
         const { data, error } = await query.order('submitted_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) return internalError('submissions list', error);
 
         const mapped = (data ?? []).map((s: any) => ({
             id: s.id,
@@ -79,8 +79,9 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ data: mapped });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        // A database error is a plain object, not an Error: it used to reach
+        // the app as "Unknown error" and was never logged.
+        return internalError('submissions list', err);
     }
 }
 
