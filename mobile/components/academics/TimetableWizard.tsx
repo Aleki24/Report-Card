@@ -197,7 +197,6 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
             {why ? (
                 <View style={{ gap: 4 }}>
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ')}.</Text>
-                    {c.blocks.length > 0 ? <Text style={styles.fitLine}>Electives run in {c.blocks.length} separate group{c.blocks.length === 1 ? '' : 's'}, because learners’ subject choices overlap, so no two groups can share a lesson.</Text> : null}
                     {basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
                     <Pressable onPress={onEditLoads} accessibilityRole="button"><Text style={styles.link}>Edit {c.name}’s lessons yourself</Text></Pressable>
                 </View>
@@ -222,10 +221,16 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
                     {c.fits && basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
                     {!c.fits ? <FitChooser c={c} onApplied={onApplied} onEditLoads={() => onEditLoads(c.name)} /> : null}
+                    {c.unfit.length > 0 ? (
+                        <View style={[styles.block, { backgroundColor: colors.warningBg }]}>
+                            <Text style={[styles.blockTitle, { color: colors.warningText }]}>{c.unfit.length} learner{c.unfit.length === 1 ? '' : 's'} must change a subject</Text>
+                            {c.unfit.map((u) => <Text key={u.name + u.subjects.join()} style={styles.fitLine}>{u.name}: {u.subjects.join(' and ')} are in the same group</Text>)}
+                        </View>
+                    ) : null}
                     {c.blocks.map((b) => (
                         <View key={b.number} style={[styles.block, b.teacherClash && { backgroundColor: colors.warningBg }]}>
-                            <Text style={styles.blockTitle}>{b.label}{b.manual ? '' : ' (auto)'} · {b.lessons}/wk</Text>
-                            <Text style={styles.fitLine}>{b.loads.map((l) => l.subject).join(' · ')}</Text>
+                            <Text style={styles.blockTitle}>{b.label} · {b.lessons}/wk</Text>
+                            <Text style={styles.fitLine}>{b.loads.map((l) => l.subject).join(' / ')}</Text>
                             {b.teacherClash ? <Text style={[styles.fitLine, { color: colors.warningText }]}>One teacher has two of these at once: move one to another block.</Text> : null}
                         </View>
                     ))}
