@@ -223,6 +223,7 @@ const DASHBOARD = {
   subjectsWithoutGradingSystem: 0,
   hasFeeData: true,
   hasAttendanceData: true,
+  takesRegisters: true,
   hasLogo: false,
   setup: { hasCurrentTerm: true, classes: STREAMS.length, subjectsOffered: SUBJECTS.length, classesWithoutClassTeacher: 1, subjectTeacherAssignments: 12, learnersWithoutClass: 0 },
   term: demoTerm(),

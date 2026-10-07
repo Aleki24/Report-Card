@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             .from('assignment_submissions')
             .select(`
                 id, assignment_id, file_url, submission_text, submitted_at, grade, feedback, graded_at,
-                assignments ( id, title, due_date, subjects ( name ) ),
+                assignments!inner ( id, title, due_date, created_by, subjects ( name ) ),
                 students!inner (
                     id,
                     admission_number,
@@ -46,6 +46,9 @@ export async function GET(request: NextRequest) {
             query = query.eq('student_id', userId);
         } else if (schoolId && isRoleIn(role, STAFF_TEACHING_ROLES)) {
             query = query.eq('students.users.school_id', schoolId);
+            // A teacher grades the work set by them (as PATCH allows), so other
+            // teachers' hand-ins only cluttered the list and failed to save.
+            if (role !== 'ADMIN') query = query.eq('assignments.created_by', userId);
         } else {
             return NextResponse.json({ data: [] });
         }

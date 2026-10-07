@@ -1,9 +1,12 @@
 import { useAuth } from '@clerk/clerk-expo';
 import { File, Paths } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { apiErrorMessage } from '@shared/api-error-message';
+import { ASSIGNMENT_UPLOAD_MAX_BYTES } from '@shared/assignments';
+import { ATTACHMENT_TYPES, IMAGE_TYPES, resolveAttachmentType } from '@shared/attachments';
 import { saveToDevice, type SavedFile } from './saveFile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -112,6 +115,8 @@ export interface Api {
     pickAndUploadImage: (path?: string) => Promise<string | null>;
     /** Lets the user pick an image or document (PDF, Word, PowerPoint, Excel) and uploads it; null if they cancelled. */
     pickAndUploadAttachment: () => Promise<UploadedFile | null>;
+    /** Opens the camera for a photo of the work and uploads it; null if they cancelled. */
+    captureAndUploadPhoto: () => Promise<UploadedFile | null>;
     /** Lets the user pick one file of the given MIME types; null if they cancelled. */
     pickFile: (types: readonly string[]) => Promise<PickedFile | null>;
     /** A multipart request (text fields plus picked files), answered with JSON like every other call. */
@@ -149,20 +154,8 @@ async function downloadInBrowser(url: string, token: string | null, fileName: st
     setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }
 
-const UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-/** What `/api/school/upload` takes for homework: images plus PDF and Office documents. */
-const ATTACHMENT_TYPES = [
-    ...UPLOAD_TYPES,
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-];
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = ASSIGNMENT_UPLOAD_MAX_BYTES;
+const WRONG_ATTACHMENT = 'Choose an image, PDF, Word, PowerPoint, Excel or text file.';
 
 /** An uploaded attachment: where it lives and what it was called on the phone. */
 export interface UploadedFile { url: string; name: string }
@@ -204,14 +197,19 @@ export function useApi(): Api {
             if (!res.ok) throw new ApiError(apiErrorMessage(json, `Upload failed (${res.status})`), res.status, (json as ErrorBody).code ?? null);
             return json as T;
         };
-        const pickAndUpload = async (types: readonly string[], path: string, wrongType: string): Promise<UploadedFile | null> => {
-            const picked = await pickFile(types);
-            if (!picked) return null;
-            if (!types.includes(picked.type)) throw new ApiError(wrongType, 400);
+        // The type is checked by name as well as by what the phone reports,
+        // which on Android is often "application/octet-stream" for documents.
+        const uploadPicked = async (picked: PickedFile, types: readonly string[], path: string, wrongType: string): Promise<UploadedFile> => {
+            const type = resolveAttachmentType(picked.name, picked.type);
+            if (!type || !types.includes(type)) throw new ApiError(wrongType, 400);
             if ((picked.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Files must be 10 MB or smaller.', 400);
-            const json = await sendForm<{ url?: string }>('POST', path, {}, { file: picked });
+            const json = await sendForm<{ url?: string }>('POST', path, {}, { file: { ...picked, type } });
             if (!json.url) throw new ApiError('Upload failed', 0);
             return { url: json.url, name: picked.name };
+        };
+        const pickAndUpload = async (types: readonly string[], path: string, wrongType: string, pickerTypes: readonly string[] = types): Promise<UploadedFile | null> => {
+            const picked = await pickFile(pickerTypes);
+            return picked ? uploadPicked(picked, types, path, wrongType) : null;
         };
         return {
             get: (path) => send('GET', path),
@@ -250,10 +248,24 @@ export function useApi(): Api {
             pickFile,
             sendForm,
             pickAndUploadImage: async (path = '/api/school/upload') => {
-                const uploaded = await pickAndUpload(UPLOAD_TYPES, path, 'Choose a JPEG, PNG, GIF or WebP image.');
+                const uploaded = await pickAndUpload(IMAGE_TYPES, path, 'Choose a JPEG, PNG, GIF or WebP image.');
                 return uploaded?.url ?? null;
             },
-            pickAndUploadAttachment: () => pickAndUpload(ATTACHMENT_TYPES, '/api/school/upload', 'Choose an image, PDF, Word, PowerPoint, Excel or text file.'),
+            // Any file can be picked: a type filter hides documents the phone
+            // mislabels, so the check happens after picking instead.
+            pickAndUploadAttachment: () => pickAndUpload(ATTACHMENT_TYPES, '/api/school/upload', WRONG_ATTACHMENT, ['*/*']),
+            captureAndUploadPhoto: async () => {
+                const permission = await ImagePicker.requestCameraPermissionsAsync();
+                if (!permission.granted) throw new ApiError('Allow camera access in your phone’s settings to take a photo of your work.', 0);
+                // quality below 1 also saves iPhone photos as JPEG rather than HEIC.
+                const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
+                if (shot.canceled || shot.assets.length === 0) return null;
+                const asset = shot.assets[0];
+                return uploadPicked(
+                    { uri: asset.uri, name: asset.fileName ?? `Photo-${Date.now()}.jpg`, type: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? null, blob: asset.file },
+                    IMAGE_TYPES, '/api/school/upload', WRONG_ATTACHMENT,
+                );
+            },
         };
     }, []);
 }

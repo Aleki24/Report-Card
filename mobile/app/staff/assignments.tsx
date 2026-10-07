@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { DateField } from '@/components/DateField';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { ClipboardList, FileText, Paperclip, Upload, X } from 'lucide-react-native';
 import { FormSheet } from '@/components/ops/FormSheet';
 import { useToast } from '@/components/Toast';
@@ -18,6 +18,8 @@ import {
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffAssignment, TeacherSubject } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { openAttachment } from '@/lib/openAttachment';
+import { attachmentName } from '@shared/attachments';
 
 interface Draft {
     id: string | null;
@@ -44,7 +46,6 @@ interface Submission {
     admissionNumber: string | null;
 }
 
-const ALL_CLASSES = '__all__';
 type View_ = 'upcoming' | 'past' | 'mine';
 
 const QUICK_DUE = [
@@ -54,14 +55,11 @@ const QUICK_DUE = [
     { value: '14', label: '2 weeks' },
 ] as const;
 
-const newDraft = (): Draft => ({ id: null, title: '', description: '', subjectId: null, streamId: ALL_CLASSES, dueDate: shiftISODate(toISODate(), 7), fileUrl: null, fileName: null });
+/** A class is required (the API sets work for one class); a teacher with one class gets it chosen. */
+const newDraft = (onlyStreamId: string | null): Draft => ({ id: null, title: '', description: '', subjectId: null, streamId: onlyStreamId ?? '', dueDate: shiftISODate(toISODate(), 7), fileUrl: null, fileName: null });
 
-/** "…/submissions/1712_ab12cd.pdf" → "Attachment (PDF)". */
-function attachmentLabel(url: string, name: string | null): string {
-    if (name) return name;
-    const ext = url.split('?')[0].split('.').pop()?.toUpperCase();
-    return ext && ext.length <= 4 ? `Attachment (${ext})` : 'Attachment';
-}
+/** The picked file's name until saved, then the name the upload kept. */
+const attachmentLabel = (url: string, name: string | null): string => name ?? attachmentName(url);
 
 export default function AssignmentsScreen() {
     return (
@@ -76,12 +74,14 @@ function AssignmentsContent() {
     const params = useLocalSearchParams<{ tab?: string }>();
     const [tab, setTab] = useState<'list' | 'submissions'>(params.tab === 'submissions' ? 'submissions' : 'list');
     const [draft, setDraft] = useState<Draft | null>(null);
+    const { streams } = useGradeStreams();
+    const startDraft = () => setDraft(newDraft(streams.length === 1 ? streams[0].id : null));
     return (
         <Screen>
             <ScreenHeader
                 title="Assignments"
                 description="Set homework for a class, attach worksheets, and grade what learners hand in."
-                action={tab === 'list' ? <Button size="sm" label="+ New" onPress={() => setDraft(newDraft())} /> : undefined}
+                action={tab === 'list' ? <Button size="sm" label="+ New" onPress={startDraft} /> : undefined}
             />
             <SegmentedTabs
                 tabs={[
@@ -91,12 +91,12 @@ function AssignmentsContent() {
                 value={tab}
                 onChange={setTab}
             />
-            {tab === 'list' ? <AssignmentList draft={draft} setDraft={setDraft} /> : <Submissions />}
+            {tab === 'list' ? <AssignmentList draft={draft} setDraft={setDraft} startDraft={startDraft} /> : <Submissions />}
         </Screen>
     );
 }
 
-function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d: Draft | null) => void }) {
+function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; setDraft: (d: Draft | null) => void; startDraft: () => void }) {
     const { colors, tones } = useTheme();
     const styles = useStyles();
     const api = useApi();
@@ -112,19 +112,20 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
     const today = toISODate();
     const canManage = (a: StaffAssignment) => role === 'ADMIN' || (!!profile && a.createdById === profile.id);
     // A class's subjects only: CBC and 8-4-4 classes take different ones.
-    const level = draft && draft.streamId !== ALL_CLASSES ? streams.find((s) => s.id === draft.streamId)?.grades?.academic_level_id ?? null : null;
+    const level = draft?.streamId ? streams.find((s) => s.id === draft.streamId)?.grades?.academic_level_id ?? null : null;
     const subjectOptions = (subjects.data ?? []).filter((s) => !level || !s.academic_level_id || s.academic_level_id === level);
 
     const save = async () => {
         if (!draft) return;
         if (!draft.title.trim()) { toast.error('Give the assignment a title.'); return; }
+        if (!draft.streamId) { toast.error('Choose the class it is for.'); return; }
         if (!draft.subjectId) { toast.error('Choose the subject.'); return; }
         setSaving(true);
         const body = {
             title: draft.title.trim(),
             description: draft.description.trim() || null,
             subject_id: draft.subjectId,
-            grade_stream_id: draft.streamId === ALL_CLASSES ? null : draft.streamId,
+            grade_stream_id: draft.streamId,
             due_date: draft.dueDate,
             file_url: draft.fileUrl,
         };
@@ -153,6 +154,8 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
             setUploading(false);
         }
     };
+
+    const open = (url: string) => void openAttachment(url).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
 
     const remove = (a: StaffAssignment) =>
         confirmAlert('Delete this assignment?', `${a.title}${a.submissionCount > 0 ? ` and its ${pluralize(a.submissionCount, 'submission')}` : ''} will be removed.`, [
@@ -203,7 +206,7 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
                     icon={ClipboardList}
                     title={view === 'past' ? 'Nothing past due' : view === 'mine' ? 'You have not set any assignments' : 'No upcoming assignments'}
                     description="Set homework for a class; learners see it on their home screen and can hand work in."
-                    action={<Button label="+ New assignment" onPress={() => setDraft(newDraft())} />}
+                    action={<Button label="+ New assignment" onPress={startDraft} />}
                 />
             ) : shown.map((a) => {
                 const due = getDueLabel(a.dueDate);
@@ -227,14 +230,14 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
                         </View>
                         {a.description ? <Text style={styles.body} numberOfLines={4}>{a.description}</Text> : null}
                         {a.fileUrl ? (
-                            <Pressable onPress={() => void Linking.openURL(a.fileUrl as string)} style={styles.file} accessibilityRole="link">
+                            <Pressable onPress={() => open(a.fileUrl as string)} style={styles.file} accessibilityRole="link">
                                 <Paperclip size={15} color={colors.primary} />
                                 <Text style={styles.fileText} numberOfLines={1}>{attachmentLabel(a.fileUrl, null)}</Text>
                             </Pressable>
                         ) : null}
                         {canManage(a) ? (
                             <View style={styles.actions}>
-                                <Button size="sm" variant="secondary" label="Edit" onPress={() => setDraft({ id: a.id, title: a.title, description: a.description ?? '', subjectId: a.subjectId, streamId: a.streamId ?? ALL_CLASSES, dueDate: a.dueDate.slice(0, 10), fileUrl: a.fileUrl, fileName: null })} />
+                                <Button size="sm" variant="secondary" label="Edit" onPress={() => setDraft({ id: a.id, title: a.title, description: a.description ?? '', subjectId: a.subjectId, streamId: a.streamId ?? '', dueDate: a.dueDate.slice(0, 10), fileUrl: a.fileUrl, fileName: null })} />
                                 <Button size="sm" variant="ghost" label="Delete" onPress={() => remove(a)} />
                             </View>
                         ) : null}
@@ -254,9 +257,11 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
                     <>
                         <TextField label="Title *" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} placeholder="e.g. Fractions worksheet" />
                         <ChipSelect
-                            label="Class"
-                            options={[{ value: ALL_CLASSES, label: 'All my classes' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]}
-                            value={draft.streamId}
+                            label="Class *"
+                            layout="picker"
+                            placeholder="Choose the class"
+                            options={streams.map((s) => ({ value: s.id, label: s.full_name }))}
+                            value={draft.streamId || null}
                             onChange={(streamId) => setDraft({ ...draft, streamId, subjectId: null })}
                         />
                         <ChipSelect
@@ -301,6 +306,7 @@ function AssignmentList({ draft, setDraft }: { draft: Draft | null; setDraft: (d
 function Submissions() {
     const styles = useStyles();
     const api = useApi();
+    const toast = useToast();
     const { data, loading, error, refresh } = useApiQuery<Submission[]>('/api/school/submissions');
     const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
     const [saving, setSaving] = useState(false);
@@ -346,7 +352,7 @@ function Submissions() {
                                     <TextField label="Grade" value={grading.grade} onChangeText={(grade) => setGrading({ ...grading, grade })} keyboardType="decimal-pad" />
                                     <TextField label="Feedback" value={grading.feedback} onChangeText={(feedback) => setGrading({ ...grading, feedback })} multiline />
                                     <ButtonRow>
-                                        {s.fileUrl ? <Button size="sm" variant="ghost" label="Open file" onPress={() => void Linking.openURL(s.fileUrl as string)} /> : null}
+                                        {s.fileUrl ? <Button size="sm" variant="ghost" label="Open file" onPress={() => void openAttachment(s.fileUrl as string).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')))} /> : null}
                                         <Button size="sm" variant="secondary" label="Cancel" onPress={() => setGrading(null)} />
                                         <Button size="sm" label="Save grade" onPress={save} loading={saving} />
                                     </ButtonRow>

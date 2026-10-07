@@ -1,14 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { formatPercent, getDueLabel, scoreColor } from '@/lib/format';
+import { errorMessage, formatPercent, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    BackLink, Badge, Button, Card, EmptyState, ListCard, ListRow, LoadingView, Notice, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
+    BackLink, Badge, Card, EmptyState, ListCard, ListRow, LoadingView, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
 import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
-import { SubmitAssignment } from '@/components/student/SubmitAssignment';
+import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
+import { useToast } from '@/components/Toast';
+import { openAttachment } from '@/lib/openAttachment';
 import type { DashboardData, PerformanceTrend, Subject } from '@/lib/types';
 
 export default function SubjectDetailScreen() {
@@ -18,8 +20,7 @@ export default function SubjectDetailScreen() {
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');
     const perf = useApiQuery<PerformanceTrend[]>('/api/school/student/performance');
     const dash = useApiQuery<DashboardData>('/api/school/student/dashboard');
-    const [submitting, setSubmitting] = useState<string | null>(null);
-    const [submitted, setSubmitted] = useState<string | null>(null);
+    const toast = useToast();
 
     const subject = (subjects.data ?? []).find((s) => s.id === subjectId) ?? null;
     const trend = useMemo(
@@ -44,7 +45,7 @@ export default function SubjectDetailScreen() {
         );
     }
 
-    const assignments = (dash.data?.assignments ?? []).filter((a) => a.subjectName === subject.name);
+    const assignments = sortHomework((dash.data?.assignments ?? []).filter((a) => (a.subjectId ? a.subjectId === subject.id : a.subjectName === subject.name)));
     const materials = (dash.data?.materials ?? []).filter((m) => m.subjectName === subject.name);
     const latest = trend[trend.length - 1];
     const previous = trend[trend.length - 2];
@@ -59,7 +60,6 @@ export default function SubjectDetailScreen() {
                 {subject.code ? <Badge label={subject.code} /> : null}
                 {subject.enrollment_role === 'ELECTIVE' ? <Badge label="My elective" variant="info" /> : null}
             </View>
-            {submitted ? <Notice message={`Submitted “${submitted}”.`} onDismiss={() => setSubmitted(null)} /> : null}
 
             <StatGrid>
                 <StatTile label="Latest average" value={formatPercent(latest?.average, 1)} tone={scoreColor(colors, latest?.average)} />
@@ -90,37 +90,20 @@ export default function SubjectDetailScreen() {
             </Card>
 
             <SectionLabel>Assignments</SectionLabel>
-            {assignments.length === 0 ? (
-                <Card>
+            <Card>
+                {assignments.length === 0 ? (
                     <EmptyState title="No assignments for this subject" />
-                </Card>
-            ) : (
-                assignments.map((a) =>
-                    submitting === a.id ? (
-                        <SubmitAssignment key={a.id} assignment={a} onCancel={() => setSubmitting(null)} onDone={() => { setSubmitting(null); setSubmitted(a.title); }} />
-                    ) : (
-                        <ListCard key={a.id} style={{ marginBottom: spacing.sm }}>
-                            <ListRow
-                                title={a.title}
-                                subtitle={getDueLabel(a.dueDate)}
-                                right={
-                                    <View style={{ flexDirection: 'row', gap: 4 }}>
-                                        {a.fileUrl ? <Button size="sm" variant="ghost" label="File" onPress={() => void Linking.openURL(a.fileUrl as string)} /> : null}
-                                        <Button size="sm" label="Submit" onPress={() => setSubmitting(a.id)} />
-                                    </View>
-                                }
-                            />
-                        </ListCard>
-                    ),
-                )
-            )}
+                ) : (
+                    assignments.map((a, i) => <AssignmentItem key={a.id} assignment={a} divider={i > 0} showSubject={false} onChanged={dash.refresh} />)
+                )}
+            </Card>
 
             <SectionLabel>Materials</SectionLabel>
             <ListCard>
                 {materials.length === 0 ? (
                     <EmptyState title="No materials for this subject" />
                 ) : (
-                    materials.map((m) => <ListRow key={m.id} title={m.title} subtitle={m.fileType} onPress={m.fileUrl ? () => void Linking.openURL(m.fileUrl as string) : undefined} />)
+                    materials.map((m) => <ListRow key={m.id} title={m.title} subtitle={m.fileType} onPress={m.fileUrl ? () => void openAttachment(m.fileUrl as string).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file'))) : undefined} />)
                 )}
             </ListCard>
         </Screen>

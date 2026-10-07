@@ -459,7 +459,7 @@ export async function getStudentAssignments(student: CurrentStudent): Promise<St
         .select(`
             id, title, description, due_date, file_url,
             subjects!subject_id ( id, name ),
-            assignment_submissions ( student_id, submitted_at, grade, feedback, graded_at )
+            assignment_submissions ( student_id, submitted_at, submission_text, file_url, grade, feedback, graded_at )
         `)
         .eq('school_id', student.schoolId)
         .eq('assignment_submissions.student_id', student.userId)
@@ -474,7 +474,7 @@ export async function getStudentAssignments(student: CurrentStudent): Promise<St
     type Row = {
         id: string; title: string; description: string | null; due_date: string; file_url: string | null;
         subjects: { id: string; name: string } | { id: string; name: string }[] | null;
-        assignment_submissions: { submitted_at: string; grade: number | null; feedback: string | null; graded_at: string | null }[] | null;
+        assignment_submissions: { submitted_at: string; submission_text: string | null; file_url: string | null; grade: number | null; feedback: string | null; graded_at: string | null }[] | null;
     };
     return ((data ?? []) as unknown as Row[]).map(a => {
         const mine = a.assignment_submissions?.[0];
@@ -487,7 +487,7 @@ export async function getStudentAssignments(student: CurrentStudent): Promise<St
             subjectId: embedOne(a.subjects)?.id ?? null,
             subjectName: embedOne(a.subjects)?.name ?? 'Unknown subject',
             submission: mine
-                ? { submittedAt: mine.submitted_at, grade: mine.grade == null ? null : Number(mine.grade), feedback: mine.feedback, gradedAt: mine.graded_at }
+                ? { submittedAt: mine.submitted_at, text: mine.submission_text, fileUrl: mine.file_url, grade: mine.grade == null ? null : Number(mine.grade), feedback: mine.feedback, gradedAt: mine.graded_at }
                 : null,
         };
     });

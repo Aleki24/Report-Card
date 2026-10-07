@@ -1,13 +1,13 @@
 import { useDownload } from '@/lib/useDownload';
 import { HomeScreen } from './Hero';
 import React, { useMemo, useState } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-    ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, CircleCheck, Clock3, DownloadCloud, FileText, GraduationCap,
-    Megaphone, Minus, Star, TrendingUp, Wallet,
+    ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, Clock3, DownloadCloud, FileText, GraduationCap,
+    Megaphone, Minus, TrendingUp, Wallet,
 } from 'lucide-react-native';
-import { dueLabel, dueState, localToday, type StudentAssignment } from '@shared/assignments';
+import { localToday, type StudentAssignment } from '@shared/assignments';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -17,7 +17,8 @@ import { fonts, makeStyles, radius, spacing, useTheme, type Palette } from '@/li
 import type { DashboardData, FeeRecord } from '@/lib/types';
 import { Notice } from '@/components/ui';
 import { useToast } from '@/components/Toast';
-import { SubmitAssignment } from '@/components/student/SubmitAssignment';
+import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
+import { openAttachment } from '@/lib/openAttachment';
 import { StudyGoals } from '@/components/student/StudyGoals';
 import { HeroActions, HeroChip, HeroFrame, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
@@ -34,53 +35,24 @@ function relativeDay(days: number): string {
     return `In ${days} days`;
 }
 
-type HomeworkStatus = 'graded' | 'handed-in' | 'overdue' | 'due';
-function statusOf(a: StudentAssignment, today: string): HomeworkStatus {
-    if (a.submission?.gradedAt || a.submission?.grade != null) return 'graded';
-    if (a.submission) return 'handed-in';
-    return dueState(a.dueDate, today) === 'overdue' ? 'overdue' : 'due';
-}
-const STATUS_ORDER: Record<HomeworkStatus, number> = { due: 0, overdue: 1, 'handed-in': 2, graded: 3 };
+/** Up to this many pieces show at first; the rest are a tap away. */
+const HOMEWORK_PREVIEW = 6;
 
 function HomeworkPanel({ assignments, onChanged }: { assignments: readonly StudentAssignment[]; onChanged: () => void }) {
-    const { colors } = useTheme();
     const styles = useStyles();
-    const toast = useToast();
-    const [open, setOpen] = useState<string | null>(null);
-    const today = localToday();
-    const sorted = useMemo(
-        () => [...assignments].sort((a, b) => STATUS_ORDER[statusOf(a, today)] - STATUS_ORDER[statusOf(b, today)] || a.dueDate.localeCompare(b.dueDate)),
-        [assignments, today],
-    );
+    const [showAll, setShowAll] = useState(false);
+    const sorted = useMemo(() => sortHomework(assignments), [assignments]);
+    const shown = showAll ? sorted : sorted.slice(0, HOMEWORK_PREVIEW);
     return (
-        <InsightCard title="Homework" meta={sorted.length ? `${pluralize(sorted.filter((a) => !a.submission).length, 'piece')} to hand in` : undefined}>
-            {sorted.length === 0 ? <Text style={styles.quiet}>No homework set for you right now.</Text> : sorted.slice(0, 6).map((a, i) => {
-                const status = statusOf(a, today);
-                const chip = status === 'graded'
-                    ? { bg: colors.scheme === 'dark' ? '#2a1f4d' : '#ede9fe', fg: colors.scheme === 'dark' ? '#c4b5fd' : '#6d28d9', label: a.submission?.grade != null ? `Marked · ${a.submission.grade}%` : 'Marked', icon: Star }
-                    : status === 'handed-in' ? { bg: colors.successBg, fg: colors.success, label: 'Handed in', icon: CircleCheck }
-                        : status === 'overdue' ? { bg: colors.dangerBg, fg: colors.danger, label: dueLabel(a.dueDate, today), icon: null }
-                            : { bg: dueState(a.dueDate, today) !== 'later' ? colors.warningBg : colors.mutedBg, fg: dueState(a.dueDate, today) !== 'later' ? colors.warning : colors.muted, label: dueLabel(a.dueDate, today), icon: null };
-                const ChipIcon = chip.icon;
-                return open === a.id ? (
-                    <SubmitAssignment key={a.id} assignment={a} onCancel={() => setOpen(null)} onDone={() => { setOpen(null); toast.success(status === 'handed-in' ? 'Your hand-in was updated.' : 'Handed in. Well done!'); onChanged(); }} />
-                ) : (
-                    <Pressable key={a.id} onPress={() => (status === 'graded' ? undefined : setOpen(a.id))} style={[styles.hw, i > 0 && styles.hwBorder]} accessibilityRole="button" accessibilityLabel={`${a.title}, ${chip.label}`}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={styles.hwTitle} numberOfLines={1}>{a.title}</Text>
-                            <Text style={styles.hwMeta} numberOfLines={1}>{a.subjectName}</Text>
-                            {status === 'graded' && a.submission?.feedback ? <Text style={styles.feedback} numberOfLines={2}>“{a.submission.feedback}”</Text> : null}
-                        </View>
-                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                            <View style={[styles.chip, { backgroundColor: chip.bg }]}>
-                                {ChipIcon ? <ChipIcon size={11} color={chip.fg} /> : null}
-                                <Text style={[styles.chipText, { color: chip.fg }]}>{chip.label}</Text>
-                            </View>
-                            {status !== 'graded' ? <Text style={styles.handIn}>{status === 'handed-in' ? 'Replace' : 'Hand in'} →</Text> : null}
-                        </View>
-                    </Pressable>
-                );
-            })}
+        <InsightCard title="Homework" meta={sorted.length ? `${pluralize(sorted.filter((a) => !a.submission).length, 'piece')} to hand in · tap one to read it` : undefined}>
+            {sorted.length === 0 ? <Text style={styles.quiet}>No homework set for you right now.</Text> : shown.map((a, i) => (
+                <AssignmentItem key={a.id} assignment={a} divider={i > 0} onChanged={onChanged} />
+            ))}
+            {sorted.length > HOMEWORK_PREVIEW ? (
+                <Pressable onPress={() => setShowAll(!showAll)} style={styles.showAll} accessibilityRole="button">
+                    <Text style={styles.handIn}>{showAll ? 'Show less' : `Show all ${sorted.length}`}</Text>
+                </Pressable>
+            ) : null}
         </InsightCard>
     );
 }
@@ -276,7 +248,7 @@ export function StudentHome() {
                 {(data?.materials ?? []).length > 0 ? (
                     <InsightCard title="Notes & learning materials" meta="Shared by your teachers">
                         {(data?.materials ?? []).map((m, n) => (
-                            <Pressable key={m.id} disabled={!m.fileUrl} onPress={() => m.fileUrl && void Linking.openURL(m.fileUrl)} style={[styles.news, n > 0 && styles.hwBorder]} accessibilityRole="link">
+                            <Pressable key={m.id} disabled={!m.fileUrl} onPress={() => m.fileUrl && void openAttachment(m.fileUrl).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')))} style={[styles.news, n > 0 && styles.hwBorder]} accessibilityRole="link">
                                 <View style={[styles.newsIcon, { backgroundColor: colors.successBg }]}><FileText size={16} color={colors.success} /></View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={styles.resultName} numberOfLines={1}>{m.title}</Text>
@@ -317,6 +289,7 @@ const useStyles = makeStyles((colors) => ({
     chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
     chipText: { fontSize: 11, fontFamily: fonts.bold },
     handIn: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
+    showAll: { alignItems: 'center', paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
     news: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingVertical: spacing.md },
     newsIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
     important: { fontSize: 10, fontFamily: fonts.bold },
