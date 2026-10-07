@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField, InputField, SelectField, TextareaField } from '@/components/ui/FormField';
 import { StatusPill } from '@/components/ops/StatusPill';
 import { useAuth } from '@/components/AuthProvider';
+import { paperFileField } from '@/lib/upload-client';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime, humanize, personName } from '@/lib/ops/format';
 import {
@@ -64,11 +65,20 @@ export function ExamPaperDrawer({ paperId, onClose, onChanged }: Props) {
         finally { setBusy(false); }
     };
 
-    const uploadReplacements = () => {
+    const uploadReplacements = async () => {
         const form = new FormData();
-        if (replace.paper) form.append('paper', replace.paper);
-        if (replace.scheme) form.append('scheme', replace.scheme);
-        void patch(form, 'Files replaced.').then(() => setReplace({ paper: null, scheme: null }));
+        setBusy(true);
+        try {
+            // Straight to storage: through the server, files over 4.5 MB were refused.
+            if (replace.paper) form.append(...await paperFileField('paper', replace.paper));
+            if (replace.scheme) form.append(...await paperFileField('scheme', replace.scheme));
+        } catch (err) {
+            toast.error(errorText(err));
+            setBusy(false);
+            return;
+        }
+        await patch(form, 'Files replaced.');
+        setReplace({ paper: null, scheme: null });
     };
 
     const openFile = (kind: PaperFileKind) => window.open(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, '_blank', 'noopener');
@@ -113,7 +123,7 @@ export function ExamPaperDrawer({ paperId, onClose, onChanged }: Props) {
                                     <InputField id="replace-scheme" type="file" accept=".pdf,.doc,.docx" onChange={e => setReplace(r => ({ ...r, scheme: e.target.files?.[0] ?? null }))} />
                                 </FormField>
                             </div>
-                            <Button className="mt-3" size="sm" onClick={uploadReplacements} disabled={busy || (!replace.paper && !replace.scheme)}>Upload</Button>
+                            <Button className="mt-3" size="sm" onClick={() => void uploadReplacements()} disabled={busy || (!replace.paper && !replace.scheme)}>Upload</Button>
                         </section>
                     )}
 

@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { isUuid } from '@/lib/postgrest';
+import { findActiveTermId } from '@/lib/term-calendar';
 
 async function getSession() {
   const { userId } = await auth();
@@ -37,18 +38,31 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const streamId = searchParams.get('stream_id');
     const gradeId = searchParams.get('grade_id');
-    const termId = searchParams.get('term_id');
+    let termId = searchParams.get('term_id');
+    // ?ready=1: this term's papers with marks entered but not yet released —
+    // what the dashboard's "ready to release" card counts, so it can open
+    // straight on them instead of on a class picker.
+    const ready = searchParams.get('ready') === '1';
     const examType = searchParams.get('exam_type');
     const subjectId = searchParams.get('subject_id');
     const status = searchParams.get('status');
 
     const supabase = createSupabaseAdmin();
 
+    if (ready && !termId) {
+      const { data: terms } = await supabase
+        .from('terms')
+        .select('id, name, start_date, end_date, is_current')
+        .eq('school_id', schoolId);
+      termId = findActiveTermId(terms ?? []);
+      if (!termId) return NextResponse.json({ data: [] });
+    }
+
     let query = supabase
       .from('exams')
       .select(`
         id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
-        status, published_by, published_at, approved_by,
+        status, published_by, published_at, approved_by,${ready ? '\n        exam_marks ( count ),' : ''}
         subjects:subject_id ( name, code, category ),
         grades:grade_id ( name_display ),
         grade_streams:grade_stream_id ( full_name ),
@@ -66,7 +80,9 @@ export async function GET(request: NextRequest) {
     if (subjectId) query = query.eq('subject_id', subjectId);
     // New: filter by workflow status — lets the Publish screen pull every exam
     // awaiting approval across the school in one call, with no class picked.
-    if (status && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(status)) {
+    if (ready) {
+      query = query.eq('status', 'DRAFT');
+    } else if (status && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(status)) {
       query = query.eq('status', status);
     }
 
@@ -88,7 +104,9 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    let filteredExams = data || [];
+    /** Marks entered for an exam; only selected (as an aggregate) with ?ready=1. */
+    const markCount = (e: object): number => (e as { exam_marks?: { count: number }[] | null }).exam_marks?.[0]?.count ?? 0;
+    let filteredExams = ready ? (data || []).filter(e => markCount(e) > 0) : data || [];
     if (auth.role !== 'ADMIN') {
       const { getTeacherPermissions, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
       const perms = await getTeacherPermissions(auth.userId);
@@ -116,6 +134,7 @@ export async function GET(request: NextRequest) {
       published_at: e.published_at,
       approved_by: e.approved_by,
       created_by_teacher_id: e.created_by_teacher_id,
+      ...(ready ? { mark_count: markCount(e) } : {}),
     }));
 
     return NextResponse.json({ data: mapped });

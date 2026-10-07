@@ -2,7 +2,7 @@ import { route, HttpError } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
-    PAPER_SELECT, assertPaperRefs, formFields, parsePaperFields, storeFormFiles,
+    PAPER_SELECT, assertPaperRefs, detailFields, formHasFile, parsePaperFields, storeFormFiles,
 } from '@/lib/academics/exam-papers-server';
 
 const READERS = ['exam_papers.upload', 'exam_papers.moderate', 'exam_papers.manage'] as const;
@@ -29,9 +29,9 @@ export const GET = route('exam papers list', { module: 'exam_papers', permission
 /** A new paper: details plus the paper (and optionally its marking scheme). */
 export const POST = route('exam papers create', { module: 'exam_papers', permission: 'exam_papers.upload' }, async ({ access, request }) => {
     const form = await request.formData().catch(() => { throw new HttpError(400, 'Send the paper as a form upload.'); });
-    const values = parsePaperFields(formFields(form), false);
+    const values = parsePaperFields(detailFields(form), false);
     await assertPaperRefs(values, access.schoolId);
-    if (!(form.get('paper') instanceof File)) throw new HttpError(400, 'Attach the exam paper.');
+    if (!formHasFile(form, 'paper')) throw new HttpError(400, 'Attach the exam paper.');
 
     const db = createSupabaseAdmin();
     const { data: created, error } = await db

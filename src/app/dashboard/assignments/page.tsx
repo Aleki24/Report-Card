@@ -12,6 +12,7 @@ import { SearchBox } from '@/components/ui/SearchBox';
 import { StatFilterTile } from '@/components/ui/StatFilterTile';
 import { useAuth } from '@/components/AuthProvider';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { uploadAttachment } from '@/lib/upload-client';
 import { cn } from '@/lib/utils';
 import {
     ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_UPLOAD_MAX_BYTES, ASSIGNMENT_FEEDBACK_MAX, ASSIGNMENT_TITLE_MAX, dueLabel, dueState, localToday,
@@ -148,12 +149,7 @@ export default function AssignmentsPage() {
             let fileUrl = draft.fileUrl;
             if (file) {
                 setSaving('uploading');
-                const fd = new FormData();
-                fd.append('file', file);
-                const uploaded = await fetch('/api/school/upload', { method: 'POST', body: fd });
-                const uploadJson: unknown = await uploaded.json().catch(() => null);
-                if (!uploaded.ok) throw new Error(apiErrorMessage(uploadJson, 'The attachment did not upload.'));
-                fileUrl = (uploadJson as { url: string }).url;
+                fileUrl = await uploadAttachment(file);
             }
             setSaving('saving');
             const res = await fetch(editing ? `/api/school/assignments/${editing.id}` : '/api/school/assignments', {

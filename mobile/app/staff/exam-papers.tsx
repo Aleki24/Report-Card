@@ -3,13 +3,14 @@ import { View } from 'react-native';
 import { dateTime, personName } from '@shared/ops/format';
 import type { PaperStatus } from '@shared/academics/exam-papers';
 import {
-    EMPTY_PAPER_FORM, PAPER_FILE_TYPES, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint,
+    EMPTY_PAPER_FORM, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint,
     type ExamPaper, type PaperForm,
 } from '@shared/ops/forms/academics';
 import { Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, LoadingView, SearchField, StatGrid, StatTile, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { ExamPaperSheet } from '@/components/academics/ExamPaperSheet';
 import { FormSheet } from '@/components/ops/FormSheet';
+import { paperUploadForm, pickPaperFile } from '@/lib/examPaperFiles';
 import { ModuleScreen } from '@/components/ops/ModuleScreen';
 import { LookupField } from '@/components/ops/SelectField';
 import { StatusPill, toneColor, useRefreshSignal } from '@/components/ops/bits';
@@ -56,15 +57,20 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
     const [saving, setSaving] = useState(false);
     const set = (k: keyof PaperForm) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
     const pick = async (kind: 'paper' | 'scheme') => {
-        const file = await api.pickFile(PAPER_FILE_TYPES).catch(() => null);
-        if (file) setFiles((f) => ({ ...f, [kind]: file }));
+        try {
+            const file = await pickPaperFile(api);
+            if (file) setFiles((f) => ({ ...f, [kind]: file }));
+        } catch (err) {
+            toast.error(errorMessage(err, 'Could not use that file'));
+        }
     };
 
     const submit = async () => {
         if (!form.title.trim() || !form.subject_id || !files.paper) { toast.error('Add a title, subject and the paper file.'); return; }
         setSaving(true);
         try {
-            await api.sendForm('POST', '/api/academics/exam-papers', paperFormFields({ ...form, release_at: form.release_at.replace(' ', 'T') }), files);
+            const upload = await paperUploadForm(api, files);
+            await api.sendForm('POST', '/api/academics/exam-papers', { ...paperFormFields({ ...form, release_at: form.release_at.replace(' ', 'T') }), ...upload.fields }, upload.files);
             toast.success('Paper uploaded as a draft. Submit it when ready.');
             onDone();
         } catch (err) {

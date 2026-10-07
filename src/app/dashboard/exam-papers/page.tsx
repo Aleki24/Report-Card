@@ -15,6 +15,7 @@ import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { StatusPill } from '@/components/ops/StatusPill';
 import { ExamPaperDrawer } from '@/components/academics/ExamPaperDrawer';
 import { errorText, opsFetch } from '@/lib/ops/client';
+import { paperFileField } from '@/lib/upload-client';
 import { dateTime, personName } from '@/lib/ops/format';
 import type { PaperStatus } from '@/lib/academics/exam-papers';
 import {
@@ -68,10 +69,11 @@ export default function ExamPapersPage() {
         if (!form.title.trim() || !form.subject_id || !files.paper) { toast.error('Add a title, subject and the paper file.'); return; }
         const body = new FormData();
         Object.entries(paperFormFields(form)).forEach(([k, v]) => body.append(k, v));
-        body.append('paper', files.paper);
-        if (files.scheme) body.append('scheme', files.scheme);
         setSaving(true);
         try {
+            // Straight to storage: through the server, files over 4.5 MB were refused.
+            body.append(...await paperFileField('paper', files.paper));
+            if (files.scheme) body.append(...await paperFileField('scheme', files.scheme));
             await opsFetch('/api/academics/exam-papers', { method: 'POST', body });
             toast.success('Paper uploaded as a draft. Submit it when ready.');
             setUploading(false);

@@ -10,6 +10,8 @@ import { markEntryHref } from '@/lib/marking-progress';
 import { cn } from '@/lib/utils';
 import { RankBadge } from '@/components/ui/RankBadge';
 import { SUBJECT_CATEGORY_THEME, subjectCategory } from './examTheme';
+import { ReadyToReleasePanel } from './ReadyToReleasePanel';
+import { releasePapers } from './releasePapers';
 
 type Embedded<T> = T | T[] | null | undefined;
 interface GradeStreamOption {
@@ -199,6 +201,10 @@ export function PublishResultsView() {
         return counts;
     }, [marks]);
 
+    // Releasing here also changes what the "Ready to release" panel lists.
+    const [readyVersion, setReadyVersion] = useState(0);
+    const refreshAll = async () => { setReadyVersion(v => v + 1); await loadExams(); };
+
     // ── Release / withdraw ──
     // Releasing is a two-step confirm: the first POST returns a readiness
     // report (who is unmarked or missing papers); the confirmed POST commits.
@@ -216,7 +222,7 @@ export function PublishResultsView() {
                 return;
             }
             toast.success(`${exam.subject_name} released to learners.`);
-            await loadExams();
+            await refreshAll();
         } catch { toast.error('Network error'); }
         finally { setBusyExamId(null); }
     };
@@ -232,7 +238,7 @@ export function PublishResultsView() {
             const data = (await res.json()) as { error?: string };
             if (!res.ok) { toast.error(data.error || 'Could not withdraw'); return; }
             toast.success(`${exam.subject_name} hidden from learners.`);
-            await loadExams();
+            await refreshAll();
         } catch { toast.error('Network error'); }
         finally { setBusyExamId(null); }
     };
@@ -249,7 +255,7 @@ export function PublishResultsView() {
             if (!res.ok) { toast.error(data.error || 'Could not release'); return; }
             toast.success(`${confirmExam.subject} released to learners.`);
             setConfirmExam(null);
-            await loadExams();
+            await refreshAll();
         } catch { toast.error('Network error'); }
         finally { setConfirmBusy(false); }
     };
@@ -268,24 +274,12 @@ export function PublishResultsView() {
         const skipNote = unmarkedCount > 0 ? ` ${unmarkedCount} with no marks yet will stay hidden.` : '';
         if (!window.confirm(`Release ${releasable.length} subject${releasable.length !== 1 ? 's' : ''} to learners? Learners with no mark in a subject simply won't see it, and a missing paper counts as 0.${skipNote}`)) return;
         setBulkBusy(true);
-        let ok = 0;
-        const failures: string[] = [];
-        for (const ex of releasable) {
-            try {
-                const res = await fetch(`/api/school/exams/${ex.id}/status`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'publish', confirm: true }),
-                });
-                if (res.ok) { ok++; continue; }
-                const data = (await res.json().catch(() => ({}))) as { error?: string };
-                failures.push(`${ex.subject_name}: ${data.error ?? `error ${res.status}`}`);
-            } catch { failures.push(`${ex.subject_name}: network error`); }
-        }
+        const { ok, failures } = await releasePapers(releasable);
         setBulkBusy(false);
         const summary = `Released ${ok} subject${ok !== 1 ? 's' : ''}${unmarkedCount ? `; ${unmarkedCount} left hidden (no marks)` : ''}.`;
         if (failures.length === 0) toast.success(summary);
         else toast.warning(`${summary} ${failures.length} failed`, { description: failures.join('\n'), duration: 10_000 });
-        await loadExams();
+        await refreshAll();
     };
 
     // ── Ranking preview ──
@@ -330,6 +324,8 @@ export function PublishResultsView() {
                     Staff always see every mark. You can still <strong className="text-foreground">correct marks</strong> after releasing, and you can withdraw a subject at any time.
                 </p>
             </div>
+
+            <ReadyToReleasePanel version={readyVersion} onReleased={() => void loadExams()} />
 
             {/* Scope */}
             <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">

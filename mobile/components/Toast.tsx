@@ -24,6 +24,8 @@ interface ToastApi {
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
+/** The toast on show, read by every viewport (the screen's, and an open sheet's). */
+const ToastStateContext = createContext<{ toast: ToastState | null; dismiss: () => void }>({ toast: null, dismiss: () => undefined });
 
 
 /**
@@ -32,10 +34,8 @@ const ToastContext = createContext<ToastApi | null>(null);
  * ported from the web report outcomes the same way.
  */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-    const { colors } = useTheme();
     const [toast, setToast] = useState<ToastState | null>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const insets = useSafeAreaInsets();
 
     const show = useCallback((message: string, tone: ToastTone = 'info', detail?: string, action?: ToastAction) => {
         if (timer.current) clearTimeout(timer.current);
@@ -52,34 +52,52 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         error: (m, d) => show(m, 'danger', d),
     }), [show]);
 
-    const tone = toast ? badgeColors(colors, toast.tone) : null;
+    const dismiss = useCallback(() => setToast(null), []);
+    const state = useMemo(() => ({ toast, dismiss }), [toast, dismiss]);
 
     return (
         <ToastContext.Provider value={api}>
-            {children}
-            {toast && tone ? (
-                <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 72 }]}>
-                    <Pressable
-                        onPress={() => setToast(null)}
-                        accessibilityRole="alert"
-                        accessibilityLiveRegion="polite"
-                        style={[styles.toast, { backgroundColor: tone.bg, borderColor: tone.fg }]}
-                    >
-                        <Text style={[styles.message, { color: tone.fg }]}>{toast.message}</Text>
-                        {toast.detail ? <Text style={[styles.detail, { color: tone.fg }]}>{toast.detail}</Text> : null}
-                        {toast.action ? (
-                            <Pressable
-                                onPress={() => { const run = toast.action?.onPress; setToast(null); run?.(); }}
-                                accessibilityRole="button"
-                                style={[styles.action, { borderColor: tone.fg }]}
-                            >
-                                <Text style={[styles.actionText, { color: tone.fg }]}>{toast.action.label}</Text>
-                            </Pressable>
-                        ) : null}
-                    </Pressable>
-                </View>
-            ) : null}
+            <ToastStateContext.Provider value={state}>
+                {children}
+                <ToastViewport />
+            </ToastStateContext.Provider>
         </ToastContext.Provider>
+    );
+}
+
+/**
+ * Where the toast shows. The screen has one; a sheet (a React Native Modal)
+ * draws over it, so FormSheet renders its own as well — otherwise every
+ * error raised while a form is open ("Upload failed", "Choose the subject")
+ * was hidden behind the form and the person saw nothing happen.
+ */
+export function ToastViewport() {
+    const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { toast, dismiss } = useContext(ToastStateContext);
+    if (!toast) return null;
+    const tone = badgeColors(colors, toast.tone);
+    return (
+        <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 72 }]}>
+            <Pressable
+                onPress={dismiss}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={[styles.toast, { backgroundColor: tone.bg, borderColor: tone.fg }]}
+            >
+                <Text style={[styles.message, { color: tone.fg }]}>{toast.message}</Text>
+                {toast.detail ? <Text style={[styles.detail, { color: tone.fg }]}>{toast.detail}</Text> : null}
+                {toast.action ? (
+                    <Pressable
+                        onPress={() => { const run = toast.action?.onPress; dismiss(); run?.(); }}
+                        accessibilityRole="button"
+                        style={[styles.action, { borderColor: tone.fg }]}
+                    >
+                        <Text style={[styles.actionText, { color: tone.fg }]}>{toast.action.label}</Text>
+                    </Pressable>
+                ) : null}
+            </Pressable>
+        </View>
     );
 }
 

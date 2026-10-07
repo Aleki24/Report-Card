@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { dateTime, humanize, personName } from '@shared/ops/format';
 import { EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles, type PaperAction, type PaperFileKind } from '@shared/academics/exam-papers';
-import { PAPER_ACTION_ORDER, PAPER_FILE_TYPES, PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from '@shared/ops/forms/academics';
+import { PAPER_ACTION_ORDER, PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from '@shared/ops/forms/academics';
 import { Button, ButtonRow, ChipSelect, InfoRow, LoadingView, SectionLabel, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { FormSheet } from '@/components/ops/FormSheet';
@@ -11,6 +11,7 @@ import { StatusPill } from '@/components/ops/bits';
 import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage, fileSafe } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
+import { paperUploadForm, pickPaperFile } from '@/lib/examPaperFiles';
 import { useCurrentUser } from '@/lib/UserContext';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
 
@@ -64,8 +65,12 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
     };
 
     const pick = async (kind: 'paper' | 'scheme') => {
-        const file = await api.pickFile(PAPER_FILE_TYPES).catch(() => null);
-        if (file) setReplace((r) => ({ ...r, [kind]: file }));
+        try {
+            const file = await pickPaperFile(api);
+            if (file) setReplace((r) => ({ ...r, [kind]: file }));
+        } catch (err) {
+            toast.error(errorMessage(err, 'Could not use that file'));
+        }
     };
 
     const actions = paper ? PAPER_ACTION_ORDER.filter((a) => canAct(a, paper, actor)) : [];
@@ -105,7 +110,10 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
                                     size="sm"
                                     label="Upload"
                                     disabled={busy || (!replace.paper && !replace.scheme)}
-                                    onPress={() => void act(() => api.sendForm('PATCH', `/api/academics/exam-papers/${paperId}`, {}, replace), 'Files replaced.')
+                                    onPress={() => void act(async () => {
+                                        const upload = await paperUploadForm(api, replace);
+                                        return api.sendForm('PATCH', `/api/academics/exam-papers/${paperId}`, upload.fields, upload.files);
+                                    }, 'Files replaced.')
                                         .then((ok) => { if (ok) setReplace({ paper: null, scheme: null }); })}
                                 />
                             </ButtonRow>

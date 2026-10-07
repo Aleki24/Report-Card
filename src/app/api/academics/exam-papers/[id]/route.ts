@@ -3,7 +3,7 @@ import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { EDITABLE_BY_OWNER, PRINT_STATUSES, type PrintStatus } from '@/lib/academics/exam-papers';
 import {
-    BUCKET, PAPER_SELECT, assertPaperRefs, formFields, loadPaper, parsePaperFields, storeFormFiles,
+    BUCKET, PAPER_SELECT, assertPaperRefs, detailFields, formHasFile, loadPaper, parsePaperFields, storeFormFiles,
 } from '@/lib/academics/exam-papers-server';
 
 type Params = { id: string };
@@ -35,7 +35,7 @@ export const PATCH = route<Params>('exam paper update', { module: 'exam_papers',
     const manager = access.can('exam_papers.manage');
     const isForm = request.headers.get('content-type')?.includes('multipart/form-data');
     const form = isForm ? await request.formData() : null;
-    const raw = form ? formFields(form) : ((await request.json().catch(() => ({}))) as Record<string, string>);
+    const raw = form ? detailFields(form) : ((await request.json().catch(() => ({}))) as Record<string, string>);
 
     const updates: Record<string, unknown> = {};
     if ('print_status' in raw) {
@@ -46,7 +46,7 @@ export const PATCH = route<Params>('exam paper update', { module: 'exam_papers',
     }
 
     const detailKeys = Object.keys(raw);
-    const hasFiles = !!form && (['paper', 'scheme'] as const).some(k => { const f = form.get(k); return f instanceof File && f.size > 0; });
+    const hasFiles = !!form && (['paper', 'scheme'] as const).some(k => formHasFile(form, k));
     if (detailKeys.length > 0 || hasFiles) {
         const ownerMayEdit = paper.uploaded_by === access.userId && EDITABLE_BY_OWNER.includes(paper.status);
         if (!manager && !ownerMayEdit) throw new HttpError(409, 'This paper is with the moderators; it can no longer be edited.');

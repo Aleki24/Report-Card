@@ -90,3 +90,15 @@ export function attachmentName(url: string): string {
 
 /** The type an attachment URL was stored as, from its extension. */
 export const attachmentTypeOf = (url: string): AttachmentMimeType | null => TYPE_BY_EXTENSION[fileExtension(url)] ?? null;
+
+/** What /api/school/upload/sign answers: where to send the file, and where it will then be. */
+export interface SignedUpload {
+    uploadUrl: string;
+    headers: Record<string, string>;
+    /** The file's type as the server resolved it (phones mislabel some files). */
+    type: string;
+    url: string;
+}
+
+/** Files at most this big may still go through the server when a direct upload fails (Vercel caps bodies at 4.5 MB). */
+export const SERVER_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;

@@ -6,7 +6,7 @@ import { useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
 import { apiErrorMessage } from '@shared/api-error-message';
 import { ASSIGNMENT_UPLOAD_MAX_BYTES } from '@shared/assignments';
-import { ATTACHMENT_TYPES, IMAGE_TYPES, resolveAttachmentType } from '@shared/attachments';
+import { ATTACHMENT_TYPES, IMAGE_TYPES, SERVER_UPLOAD_MAX_BYTES, resolveAttachmentType, type SignedUpload } from '@shared/attachments';
 import { saveToDevice, type SavedFile } from './saveFile';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? '';
@@ -117,6 +117,8 @@ export interface Api {
     pickAndUploadAttachment: () => Promise<UploadedFile | null>;
     /** Opens the camera for a photo of the work and uploads it; null if they cancelled. */
     captureAndUploadPhoto: () => Promise<UploadedFile | null>;
+    /** Sends a picked file straight to storage through a signed upload link; false if it did not arrive. */
+    putSigned: (signed: SignedTarget, file: PickedFile) => Promise<boolean>;
     /** Lets the user pick one file of the given MIME types; null if they cancelled. */
     pickFile: (types: readonly string[]) => Promise<PickedFile | null>;
     /** A multipart request (text fields plus picked files), answered with JSON like every other call. */
@@ -155,6 +157,8 @@ async function downloadInBrowser(url: string, token: string | null, fileName: st
 }
 
 const MAX_UPLOAD_BYTES = ASSIGNMENT_UPLOAD_MAX_BYTES;
+/** Where and how to send a file to a signed upload link. */
+export type SignedTarget = Pick<SignedUpload, 'uploadUrl' | 'headers' | 'type'>;
 const WRONG_ATTACHMENT = 'Choose an image, PDF, Word, PowerPoint, Excel or text file.';
 
 /** An uploaded attachment: where it lives and what it was called on the phone. */
@@ -199,18 +203,37 @@ export function useApi(): Api {
         };
         // The type is checked by name as well as by what the phone reports,
         // which on Android is often "application/octet-stream" for documents.
-        const uploadPicked = async (picked: PickedFile, types: readonly string[], path: string, wrongType: string): Promise<UploadedFile> => {
+        const checkPicked = (picked: PickedFile, types: readonly string[], wrongType: string): PickedFile => {
             const type = resolveAttachmentType(picked.name, picked.type);
             if (!type || !types.includes(type)) throw new ApiError(wrongType, 400);
             if ((picked.size ?? 0) > MAX_UPLOAD_BYTES) throw new ApiError('Files must be 10 MB or smaller.', 400);
-            const json = await sendForm<{ url?: string }>('POST', path, {}, { file: { ...picked, type } });
+            return { ...picked, type };
+        };
+        // The body supabase-js sends to a signed upload link; false if the file did not arrive.
+        const putSigned = async (signed: SignedTarget, file: PickedFile): Promise<boolean> => {
+            const body = new FormData();
+            body.append('cacheControl', '3600');
+            if (Platform.OS === 'web' && file.blob) body.append('', file.blob, file.name);
+            else body.append('', { uri: file.uri, name: file.name, type: signed.type } as unknown as Blob);
+            const res = await fetch(signed.uploadUrl, { method: 'PUT', headers: { ...signed.headers, 'x-upsert': 'false' }, body }).catch(() => null);
+            return !!res?.ok;
+        };
+        // Through the server: fine for logos and photos, but Vercel refuses bodies over 4.5 MB.
+        const uploadPicked = async (picked: PickedFile, types: readonly string[], path: string, wrongType: string): Promise<UploadedFile> => {
+            const json = await sendForm<{ url?: string }>('POST', path, {}, { file: checkPicked(picked, types, wrongType) });
             if (!json.url) throw new ApiError('Upload failed', 0);
             return { url: json.url, name: picked.name };
         };
-        const pickAndUpload = async (types: readonly string[], path: string, wrongType: string, pickerTypes: readonly string[] = types): Promise<UploadedFile | null> => {
-            const picked = await pickFile(pickerTypes);
-            return picked ? uploadPicked(picked, types, path, wrongType) : null;
+        // Homework attachments go straight to storage with a one-time link, so
+        // the full 10 MB works; small files fall back to the server if that fails.
+        const uploadAttachment = async (picked: PickedFile, types: readonly string[]): Promise<UploadedFile> => {
+            const file = checkPicked(picked, types, WRONG_ATTACHMENT);
+            const signed = await send<SignedUpload>('POST', '/api/school/upload/sign', { name: file.name, type: file.type, size: file.size ?? 0 });
+            if (await putSigned(signed, file)) return { url: signed.url, name: file.name };
+            if ((file.size ?? 0) > SERVER_UPLOAD_MAX_BYTES) throw new ApiError('Upload failed. Check your connection and try again.', 0);
+            return uploadPicked(file, types, '/api/school/upload', WRONG_ATTACHMENT);
         };
+
         return {
             get: (path) => send('GET', path),
             post: (path, body) => send('POST', path, body),
@@ -247,13 +270,17 @@ export function useApi(): Api {
             },
             pickFile,
             sendForm,
+            putSigned,
             pickAndUploadImage: async (path = '/api/school/upload') => {
-                const uploaded = await pickAndUpload(IMAGE_TYPES, path, 'Choose a JPEG, PNG, GIF or WebP image.');
-                return uploaded?.url ?? null;
+                const picked = await pickFile(IMAGE_TYPES);
+                return picked ? (await uploadPicked(picked, IMAGE_TYPES, path, 'Choose a JPEG, PNG, GIF or WebP image.')).url : null;
             },
             // Any file can be picked: a type filter hides documents the phone
             // mislabels, so the check happens after picking instead.
-            pickAndUploadAttachment: () => pickAndUpload(ATTACHMENT_TYPES, '/api/school/upload', WRONG_ATTACHMENT, ['*/*']),
+            pickAndUploadAttachment: async () => {
+                const picked = await pickFile(['*/*']);
+                return picked ? uploadAttachment(picked, ATTACHMENT_TYPES) : null;
+            },
             captureAndUploadPhoto: async () => {
                 const permission = await ImagePicker.requestCameraPermissionsAsync();
                 if (!permission.granted) throw new ApiError('Allow camera access in your phone’s settings to take a photo of your work.', 0);
@@ -261,9 +288,9 @@ export function useApi(): Api {
                 const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
                 if (shot.canceled || shot.assets.length === 0) return null;
                 const asset = shot.assets[0];
-                return uploadPicked(
+                return uploadAttachment(
                     { uri: asset.uri, name: asset.fileName ?? `Photo-${Date.now()}.jpg`, type: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? null, blob: asset.file },
-                    IMAGE_TYPES, '/api/school/upload', WRONG_ATTACHMENT,
+                    IMAGE_TYPES,
                 );
             },
         };
