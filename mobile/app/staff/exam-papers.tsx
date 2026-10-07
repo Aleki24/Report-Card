@@ -55,18 +55,24 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
     const [form, setForm] = useState<PaperForm>(EMPTY_PAPER_FORM);
     const [files, setFiles] = useState<{ paper: PickedFile | null; scheme: PickedFile | null }>({ paper: null, scheme: null });
     const [saving, setSaving] = useState(false);
-    const set = (k: keyof PaperForm) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+    // Shown in the form itself: tapping Upload with a field missing used to
+    // look like nothing happened.
+    const [problem, setProblem] = useState<string | null>(null);
+    const set = (k: keyof PaperForm) => (v: string) => { setProblem(null); setForm((f) => ({ ...f, [k]: v })); };
     const pick = async (kind: 'paper' | 'scheme') => {
+        setProblem(null);
         try {
             const file = await pickPaperFile(api);
             if (file) setFiles((f) => ({ ...f, [kind]: file }));
         } catch (err) {
-            toast.error(errorMessage(err, 'Could not use that file'));
+            setProblem(errorMessage(err, 'Could not use that file'));
         }
     };
 
     const submit = async () => {
-        if (!form.title.trim() || !form.subject_id || !files.paper) { toast.error('Add a title, subject and the paper file.'); return; }
+        const missing = [!form.title.trim() && 'a title', !form.subject_id && 'the subject', !files.paper && 'the paper file'].filter(Boolean);
+        if (missing.length > 0) { setProblem(`Add ${missing.join(', ').replace(/, ([^,]*)$/, ' and $1')} to upload.`); return; }
+        setProblem(null);
         setSaving(true);
         try {
             const upload = await paperUploadForm(api, files);
@@ -74,14 +80,14 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
             toast.success('Paper uploaded as a draft. Submit it when ready.');
             onDone();
         } catch (err) {
-            toast.error(errorMessage(err, 'Upload failed'));
+            setProblem(errorMessage(err, 'Upload failed'));
         } finally {
             setSaving(false);
         }
     };
 
     return (
-        <FormSheet visible title="Upload an exam paper" onClose={onClose} onSubmit={() => void submit()} submitLabel="Upload" submitting={saving}>
+        <FormSheet visible title="Upload an exam paper" onClose={onClose} onSubmit={() => void submit()} submitLabel="Upload" submitting={saving} error={problem}>
             <TextField label="Title *" value={form.title} onChangeText={set('title')} placeholder="e.g. End of Term 2 Mathematics" />
             <LookupField label="Subject" required lookup="subjects" value={form.subject_id} onChange={set('subject_id')} />
             <LookupField label="Class level" lookup="grades" value={form.grade_id} onChange={set('grade_id')} clearable />
@@ -90,8 +96,8 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
             <TextField label="Copies needed" value={form.copies_needed} onChangeText={set('copies_needed')} keyboardType="number-pad" />
             <TextField label="Release after (when the exam is over)" value={form.release_at} onChangeText={set('release_at')} placeholder="YYYY-MM-DD HH:MM" keyboardType="numbers-and-punctuation" />
             <ButtonRow>
-                <Button variant="secondary" label={files.paper ? `Paper: ${files.paper.name}` : 'Choose paper (PDF or Word) *'} onPress={() => void pick('paper')} />
-                <Button variant="secondary" label={files.scheme ? `Scheme: ${files.scheme.name}` : 'Choose marking scheme'} onPress={() => void pick('scheme')} />
+                <Button variant="secondary" label={files.paper ? `Paper chosen: ${files.paper.name}` : 'Choose paper (PDF or Word) *'} onPress={() => void pick('paper')} />
+                <Button variant="secondary" label={files.scheme ? `Scheme chosen: ${files.scheme.name}` : 'Choose marking scheme'} onPress={() => void pick('scheme')} />
             </ButtonRow>
         </FormSheet>
     );

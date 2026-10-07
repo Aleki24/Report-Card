@@ -107,7 +107,10 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
     const { streams } = useGradeStreams();
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    // Shown in the form itself, so a missing field or failed upload is never silent.
+    const [problem, setProblem] = useState<string | null>(null);
     const [view, setView] = useState<View_>('upcoming');
+    const edit = (d: Draft | null) => { setProblem(null); setDraft(d); };
 
     const today = toISODate();
     const canManage = (a: StaffAssignment) => role === 'ADMIN' || (!!profile && a.createdById === profile.id);
@@ -117,9 +120,9 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
 
     const save = async () => {
         if (!draft) return;
-        if (!draft.title.trim()) { toast.error('Give the assignment a title.'); return; }
-        if (!draft.streamId) { toast.error('Choose the class it is for.'); return; }
-        if (!draft.subjectId) { toast.error('Choose the subject.'); return; }
+        const missing = [!draft.title.trim() && 'a title', !draft.streamId && 'the class', !draft.subjectId && 'the subject'].filter(Boolean);
+        if (missing.length > 0) { setProblem(`Add ${missing.join(', ').replace(/, ([^,]*)$/, ' and $1')} to set the assignment.`); return; }
+        setProblem(null);
         setSaving(true);
         const body = {
             title: draft.title.trim(),
@@ -136,7 +139,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
             setDraft(null);
             refresh();
         } catch (err) {
-            toast.error(errorMessage(err, 'Failed to save assignment'));
+            setProblem(errorMessage(err, 'Failed to save assignment'));
         } finally {
             setSaving(false);
         }
@@ -145,11 +148,12 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
     const attach = async () => {
         if (!draft) return;
         setUploading(true);
+        setProblem(null);
         try {
             const file = await api.pickAndUploadAttachment();
             if (file) setDraft({ ...draft, fileUrl: file.url, fileName: file.name });
         } catch (err) {
-            toast.error(errorMessage(err, 'Upload failed'));
+            setProblem(errorMessage(err, 'Upload failed'));
         } finally {
             setUploading(false);
         }
@@ -237,7 +241,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
                         ) : null}
                         {canManage(a) ? (
                             <View style={styles.actions}>
-                                <Button size="sm" variant="secondary" label="Edit" onPress={() => setDraft({ id: a.id, title: a.title, description: a.description ?? '', subjectId: a.subjectId, streamId: a.streamId ?? '', dueDate: a.dueDate.slice(0, 10), fileUrl: a.fileUrl, fileName: null })} />
+                                <Button size="sm" variant="secondary" label="Edit" onPress={() => edit({ id: a.id, title: a.title, description: a.description ?? '', subjectId: a.subjectId, streamId: a.streamId ?? '', dueDate: a.dueDate.slice(0, 10), fileUrl: a.fileUrl, fileName: null })} />
                                 <Button size="sm" variant="ghost" label="Delete" onPress={() => remove(a)} />
                             </View>
                         ) : null}
@@ -248,10 +252,11 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
             <FormSheet
                 visible={!!draft}
                 title={draft?.id ? 'Edit assignment' : 'New assignment'}
-                onClose={() => setDraft(null)}
+                onClose={() => edit(null)}
                 onSubmit={() => void save()}
                 submitLabel={draft?.id ? 'Save changes' : 'Set assignment'}
                 submitting={saving || uploading}
+                error={problem}
             >
                 {draft ? (
                     <>
