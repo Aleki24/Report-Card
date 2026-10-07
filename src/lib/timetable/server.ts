@@ -8,6 +8,18 @@ import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSch
 
 const db = () => createSupabaseAdmin();
 
+export async function saveConfig(schoolId: string, config: TimetableConfig): Promise<TimetableConfig> {
+    const { error } = await db().from('timetable_configs').upsert({
+        school_id: schoolId,
+        days: [...config.days].sort(),
+        periods: config.periods,
+        rules: { ...config.rules, sections: config.sections },
+        updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    return loadConfig(schoolId);
+}
+
 export async function loadConfig(schoolId: string): Promise<TimetableConfig> {
     const { data, error } = await db().from('timetable_configs').select('days, periods, rules').eq('school_id', schoolId).maybeSingle();
     if (error) throw error;
@@ -108,5 +120,6 @@ export async function loadTimetablePlan(schoolId: string) {
         category: r.subject?.category ?? null, teacherId: r.teacher_id, lessons: r.lessons_per_week, doubles: r.double_lessons,
         optionBlock: r.option_block, row: r,
     }));
-    return { config, rows, sectionOf, capacityOf, plans: planClasses(loads, capacityOf, id => choices.get(id)) };
+    const bandOf = (streamId: string) => bands.get(streamId) ?? null;
+    return { config, rows, bandOf, sectionOf, capacityOf, plans: planClasses(loads, capacityOf, id => choices.get(id)) };
 }

@@ -15,6 +15,7 @@ import { useToast } from '@/components/Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
+import { confirmAlert } from '@/lib/confirm';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import { DayStructureEditor, TimetableBuilder } from './TimetablePanels';
 
@@ -91,6 +92,8 @@ export function Rooms() {
     );
 }
 
+type FitFix = 'longer-day' | 'fewer-lessons';
+
 type CardState = 'done' | 'attention' | 'optional' | 'todo';
 const STATE_LABEL: Record<CardState, string> = { done: 'Done', attention: 'Needs attention', optional: 'Optional', todo: 'To do' };
 
@@ -120,8 +123,91 @@ function StudioCard({ icon: Icon, title, summary, state, open, onToggle, childre
     );
 }
 
+/** One ready-made way to make a class fit, with what it changes and a button. */
+function FitOption({ title, recommended, lines, busy, onUse }: { title: string; recommended?: boolean; lines: string[]; busy: boolean; onUse: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    return (
+        <View style={[styles.fitOption, recommended && { borderColor: colors.primary }]}>
+            <View style={styles.fitOptionHead}>
+                <Text style={styles.fitOptionTitle}>{title}</Text>
+                {recommended ? <View style={[styles.pill, { backgroundColor: colors.primarySoft }]}><Text style={[styles.pillText, { color: colors.primary }]}>Recommended</Text></View> : null}
+            </View>
+            {lines.map((l) => <Text key={l} style={styles.fitLine}>{l}</Text>)}
+            <ButtonRow>
+                <Button size="sm" variant={recommended ? 'primary' : 'secondary'} label="Use this" onPress={onUse} loading={busy} />
+            </ButtonRow>
+        </View>
+    );
+}
+
+/**
+ * A class with more lessons than its week, put as a simple choice: two
+ * ready-made fixes worked out from the school's own day and loads, applied
+ * with one tap. Why it does not fit is there for whoever wants it.
+ */
+function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes'][number]; onApplied: () => void; onEditLoads: () => void }) {
+    const styles = useStyles();
+    const api = useApi();
+    const toast = useToast();
+    const [busy, setBusy] = useState<FitFix | null>(null);
+    const [why, setWhy] = useState(false);
+    const over = c.needed - c.capacity;
+    const day = c.fixes?.longerDay ?? null;
+    const cuts = c.fixes?.fewerLessons ?? null;
+
+    const apply = (fix: FitFix, title: string, detail: string) => confirmAlert(title, detail, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+            text: 'Apply', onPress: () => void (async () => {
+                setBusy(fix);
+                try {
+                    const r = await api.post<{ data: { message: string } }>('/api/academics/timetable/fit', { stream_id: c.streamId, fix });
+                    toast.success(`${r.data.message} Generate a new draft to see it.`);
+                    onApplied();
+                } catch (err) { toast.error(errorMessage(err, 'Could not apply that')); }
+                finally { setBusy(null); }
+            })(),
+        },
+    ]);
+
+    return (
+        <View style={{ gap: spacing.sm }}>
+            <Text style={styles.fitProblem}>{c.name} has {over} more lesson{over === 1 ? '' : 's'} than its week ({c.needed} needed, {c.capacity} periods). Pick one way to fix it:</Text>
+            {day ? (
+                <FitOption
+                    title="Make the day longer"
+                    recommended
+                    lines={[`${day.level} get ${day.perDay} more lesson${day.perDay === 1 ? '' : 's'} at the end of each day: ${day.times.join(', ')}.`, 'Every other class keeps its day. No lessons are cut.']}
+                    busy={busy === 'longer-day'}
+                    onUse={() => apply('longer-day', 'Make the day longer?', `${day.level} will end at ${day.times[day.times.length - 1]?.split('–')[1] ?? 'a later time'}.`)}
+                />
+            ) : null}
+            {cuts ? (
+                <FitOption
+                    title="Teach fewer lessons a week"
+                    lines={[cuts.map((x) => `${x.subject} ${x.from} → ${x.to}`).join(' · '), 'The day stays as it is. Some subjects go below the Ministry’s figure.']}
+                    busy={busy === 'fewer-lessons'}
+                    onUse={() => apply('fewer-lessons', 'Teach fewer lessons?', `${cuts.length} subjects in ${c.name} get fewer lessons a week.`)}
+                />
+            ) : null}
+            <Pressable onPress={() => setWhy((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: why }}>
+                <Text style={styles.link}>{why ? 'Hide why' : 'Why doesn’t it fit?'}</Text>
+            </Pressable>
+            {why ? (
+                <View style={{ gap: 4 }}>
+                    <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ')}.</Text>
+                    {c.blocks.length > 0 ? <Text style={styles.fitLine}>Electives run in {c.blocks.length} separate group{c.blocks.length === 1 ? '' : 's'}, because learners’ subject choices overlap, so no two groups can share a lesson.</Text> : null}
+                    {basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
+                    <Pressable onPress={onEditLoads} accessibilityRole="button"><Text style={styles.link}>Edit {c.name}’s lessons yourself</Text></Pressable>
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
 /** Each class's week against its periods, with the option blocks its electives run in. */
-function ClassFit({ plan, onLongerDay, onEditLoads }: { plan: TimetablePlan; onLongerDay: () => void; onEditLoads: (className: string) => void }) {
+function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApplied: () => void; onEditLoads: (className: string) => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
     return (
@@ -134,16 +220,8 @@ function ClassFit({ plan, onLongerDay, onEditLoads }: { plan: TimetablePlan; onL
                     </View>
                     <ProgressBar value={(c.needed / Math.max(1, c.capacity)) * 100} color={c.fits ? colors.success : colors.danger} />
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
-                    {basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
-                    {!c.fits ? (
-                        <>
-                            <Text style={[styles.fitLine, { color: colors.foreground }]}>{overloadMessage(c)}</Text>
-                            <ButtonRow>
-                                <Button size="sm" variant="secondary" label="Longer day" onPress={onLongerDay} />
-                                <Button size="sm" label={`Edit ${c.name} lessons`} onPress={() => onEditLoads(c.name)} />
-                            </ButtonRow>
-                        </>
-                    ) : null}
+                    {c.fits && basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
+                    {!c.fits ? <FitChooser c={c} onApplied={onApplied} onEditLoads={() => onEditLoads(c.name)} /> : null}
                     {c.blocks.map((b) => (
                         <View key={b.number} style={[styles.block, b.teacherClash && { backgroundColor: colors.warningBg }]}>
                             <Text style={styles.blockTitle}>{b.label}{b.manual ? '' : ' (auto)'} · {b.lessons}/wk</Text>
@@ -333,7 +411,7 @@ export function TimetableWizard() {
                 </View>
                 <ClassFit
                     plan={plan}
-                    onLongerDay={() => show('day')}
+                    onApplied={() => { setDayKey((k) => k + 1); void refresh(); }}
                     onEditLoads={(name) => { setLoadsFilter(name); setTimeout(() => scrollToView(loadsListRef.current), 120); }}
                 />
                 <TeacherLoads plan={plan} />
@@ -384,5 +462,10 @@ const useStyles = makeStyles((colors) => ({
     fitCount: { fontSize: 12, fontFamily: fonts.semibold, color: colors.muted },
     fitLine: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted },
     block: { backgroundColor: colors.mutedBg, borderRadius: radius.md, padding: spacing.sm },
+    fitProblem: { fontSize: 13, lineHeight: 19, fontFamily: fonts.semibold, color: colors.foreground },
+    fitOption: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: 4, backgroundColor: colors.card },
+    fitOptionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    fitOptionTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
+    link: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
     blockTitle: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
 }));

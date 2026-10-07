@@ -128,15 +128,78 @@ function StudioCard({ id, icon: Icon, title, summary, state, open, onToggle, chi
     );
 }
 
+type FitFix = 'longer-day' | 'fewer-lessons';
+
+/** One ready-made way to make a class fit, with what it changes and a button. */
+function FitOption({ title, recommended, lines, busy, onUse }: { title: string; recommended?: boolean; lines: string[]; busy: boolean; onUse: () => void }) {
+    return (
+        <div className={cn('flex flex-col gap-1 rounded-xl border bg-card p-3', recommended ? 'border-primary/60' : 'border-border')}>
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold">{title}</span>
+                {recommended && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Recommended</span>}
+            </div>
+            {lines.map(l => <p key={l} className="text-xs text-muted-foreground">{l}</p>)}
+            <Button size="sm" variant={recommended ? 'default' : 'outline'} onClick={onUse} disabled={busy} className="mt-1 self-end">{busy ? 'Applying…' : 'Use this'}</Button>
+        </div>
+    );
+}
+
+/** A class with more lessons than its week, as a simple choice between two ready-made fixes. */
+function FitChooser({ c, onApplied }: { c: TimetablePlan['classes'][number]; onApplied: () => void }) {
+    const [busy, setBusy] = useState<FitFix | null>(null);
+    const over = c.needed - c.capacity;
+    const day = c.fixes?.longerDay ?? null;
+    const cuts = c.fixes?.fewerLessons ?? null;
+    const apply = async (fix: FitFix, question: string) => {
+        if (!window.confirm(question)) return;
+        setBusy(fix);
+        try {
+            const r = await opsFetch<{ message: string }>('/api/academics/timetable/fit', { method: 'POST', json: { stream_id: c.streamId, fix } });
+            toast.success(`${r.message} Generate a new draft to see it.`);
+            onApplied();
+        } catch (err) { toast.error(errorText(err)); }
+        finally { setBusy(null); }
+    };
+    return (
+        <div className="mt-2 flex flex-col gap-2">
+            <p className="text-sm font-medium">{c.name} has {over} more lesson{over === 1 ? '' : 's'} than its week ({c.needed} needed, {c.capacity} periods). Pick one way to fix it:</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+                {day && (
+                    <FitOption
+                        title="Make the day longer"
+                        recommended
+                        lines={[`${day.level} get ${day.perDay} more lesson${day.perDay === 1 ? '' : 's'} at the end of each day: ${day.times.join(', ')}.`, 'Every other class keeps its day. No lessons are cut.']}
+                        busy={busy === 'longer-day'}
+                        onUse={() => void apply('longer-day', `Make the day longer for ${day.level}?`)}
+                    />
+                )}
+                {cuts && (
+                    <FitOption
+                        title="Teach fewer lessons a week"
+                        lines={[cuts.map(x => `${x.subject} ${x.from} → ${x.to}`).join(' · '), 'The day stays as it is. Some subjects go below the Ministry’s figure.']}
+                        busy={busy === 'fewer-lessons'}
+                        onUse={() => void apply('fewer-lessons', `Give ${cuts.length} subjects in ${c.name} fewer lessons a week?`)}
+                    />
+                )}
+            </div>
+            <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer font-medium text-primary">Why doesn’t it fit?</summary>
+                <p className="mt-1">{overloadMessage(c)}</p>
+                {basisLine(c) && <p className="mt-1">{basisLine(c)}</p>}
+            </details>
+        </div>
+    );
+}
+
 /** Each class's week against its periods, with the option blocks its electives run in. */
-function ClassFit({ plan, focus }: { plan: TimetablePlan; focus: string | null }) {
+function ClassFit({ plan, focus, onApplied }: { plan: TimetablePlan; focus: string | null; onApplied: () => void }) {
     if (plan.classes.length === 0) return null;
     return (
         <ul className="grid gap-3 lg:grid-cols-2">
             {plan.classes.map(c => {
                 const pct = Math.min(100, Math.round((c.needed / Math.max(1, c.capacity)) * 100));
                 return (
-                    <li key={c.streamId} className={cn('rounded-xl border p-3', !c.fits ? 'border-rose-500/50 bg-rose-500/5' : focus === c.streamId ? 'border-primary/50' : 'border-border/70')}>
+                    <li key={c.streamId} className={cn('rounded-xl border p-3', !c.fits ? 'border-rose-500/50' : focus === c.streamId ? 'border-primary/50' : 'border-border/70')}>
                         <div className="flex items-baseline justify-between gap-2">
                             <span className="font-semibold">{c.name}</span>
                             <span className={cn('text-sm tabular-nums', c.fits ? 'text-muted-foreground' : 'font-semibold text-rose-600')}>{c.needed} / {c.capacity} periods</span>
@@ -145,8 +208,8 @@ function ClassFit({ plan, focus }: { plan: TimetablePlan; focus: string | null }
                             <div className={cn('h-full rounded-full', c.fits ? 'bg-emerald-500' : 'bg-rose-500')} style={{ width: `${pct}%` }} />
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">Whole class: {c.core.map(l => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</p>
-                        {basisLine(c) && <p className="mt-1 text-xs text-muted-foreground">{basisLine(c)}</p>}
-                        {!c.fits && <p className="mt-1 text-xs font-medium text-rose-700 dark:text-rose-300">{overloadMessage(c)}</p>}
+                        {c.fits && basisLine(c) && <p className="mt-1 text-xs text-muted-foreground">{basisLine(c)}</p>}
+                        {!c.fits && <FitChooser c={c} onApplied={onApplied} />}
                         {c.blocks.length > 0 && (
                             <ul className="mt-2 flex flex-col gap-1.5">
                                 {c.blocks.map(b => (
@@ -329,7 +392,7 @@ export function TimetableWizard() {
                         <p className="font-semibold">How electives fit: option blocks</p>
                         <p className="text-muted-foreground">Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s <em>Option block</em> to choose them yourself.</p>
                     </div>
-                    <ClassFit plan={plan} focus={focus} />
+                    <ClassFit plan={plan} focus={focus} onApplied={() => { setDayKey(k => k + 1); void refresh(); }} />
                     <TeacherLoads plan={plan} />
                     <Loads onChange={() => void refresh()} />
                 </div>
