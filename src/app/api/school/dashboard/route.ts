@@ -38,6 +38,8 @@ interface UnmarkedExamRow {
 type TermRow = { id: string; name: string; start_date: string | null; end_date: string | null; academic_year_id: string | null };
 
 const DAY = 86_400_000;
+/** A school that took a register within this many days keeps registers; older ones are a trial, not a habit. */
+const REGISTER_RECENCY_DAYS = 7;
 const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY);
 
 function describeTerm(terms: readonly TermRow[], current: TermRow | null, yearName: string | null, today: string): TermSummary {
@@ -95,6 +97,7 @@ export async function GET(_request: NextRequest) {
         subjectsWithoutGradingSystem: 0,
         hasFeeData: false,
         hasAttendanceData: false,
+        takesRegisters: false,
         upcomingExams: [],
         recentActivities: [],
         hasLogo: false,
@@ -111,7 +114,8 @@ export async function GET(_request: NextRequest) {
       // Learners on the roll: transferred and graduated ones are records, not a headcount.
       supabase.from('students').select('id, users!inner(school_id)', { count: 'exact', head: true }).eq('users.school_id', schoolId).eq('status', 'ACTIVE'),
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
-      supabase.from('users').select('id, role').eq('school_id', schoolId).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
+      // Deactivated teachers can no longer sign in or teach; they are not staff on hand.
+      supabase.from('users').select('id, role').eq('school_id', schoolId).eq('is_active', true).in('role', ['CLASS_TEACHER', 'SUBJECT_TEACHER']),
       supabase.from('grade_streams').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('report_cards').select('id, grade_streams!inner(school_id)', { count: 'exact', head: true }).eq('grade_streams.school_id', schoolId),
       supabase.from('academic_years').select('id, name').eq('school_id', schoolId).order('start_date', { ascending: false }),
@@ -172,18 +176,24 @@ export async function GET(_request: NextRequest) {
     // register. The last two decide whether those cards render at all — every
     // school on this instance has zero fee rows and almost no attendance, so
     // the finance and attendance panels were permanently zero.
-    const [classPerfRes, unmarkedRes, feeRowRes, attendanceRowRes, ungradedSubjectsRes] = await Promise.all([
+    const [classPerfRes, unmarkedRes, feeRowRes, attendanceRowRes, recentAttendanceRes, ungradedSubjectsRes] = await Promise.all([
       supabase.rpc('school_class_performance', {
         p_school_id: schoolId,
         p_academic_year_id: currentYear?.id ?? null,
         p_pass_mark: passMark,
       }),
-      supabase.rpc('school_unmarked_exams', {
-        p_school_id: schoolId,
-        p_academic_year_id: currentYear?.id ?? null,
-      }),
+      // The current term's papers: earlier terms' unmarked papers were never
+      // going to be marked, so the year-wide count could never reach zero.
+      currentTerm
+        ? supabase.rpc('school_unmarked_exams_for_term', { p_school_id: schoolId, p_term_id: currentTerm.id })
+        : supabase.rpc('school_unmarked_exams', { p_school_id: schoolId, p_academic_year_id: currentYear?.id ?? null }),
       supabase.from('student_fees').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
       supabase.from('daily_attendance').select('id', { count: 'exact', head: true }).eq('school_id', schoolId),
+      // Whether registers are part of the school's week: a school that took a
+      // register on two days months ago was told every weekday that its whole
+      // roll was missing from today's.
+      supabase.from('daily_attendance').select('id', { count: 'exact', head: true }).eq('school_id', schoolId)
+        .gte('date', new Date(Date.parse(today) - REGISTER_RECENCY_DAYS * DAY).toISOString().slice(0, 10)),
       // How a school grades a subject is a property of its offering now, so
       // the count comes from there rather than from the shared catalogue row.
       supabase
@@ -220,6 +230,7 @@ export async function GET(_request: NextRequest) {
     const examsAwaitingMarks = unmarkedByClass.reduce((sum, row) => sum + row.count, 0);
     const hasFeeData = (feeRowRes.count ?? 0) > 0;
     const hasAttendanceData = (attendanceRowRes.count ?? 0) > 0;
+    const takesRegisters = (recentAttendanceRes.count ?? 0) > 0;
     const subjectsWithoutGradingSystem = ungradedSubjectsRes.count ?? 0;
 
     let upcomingExams: any[] = [];
@@ -419,6 +430,7 @@ export async function GET(_request: NextRequest) {
       upcomingRounds,
       unreleasedResults,
       hasAttendanceData,
+      takesRegisters,
       hasLogo,
       setup,
     });

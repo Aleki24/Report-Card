@@ -85,6 +85,10 @@ export function dueLabel(dueDate: string, today = localToday()): string {
 /** The learner's own hand-in for an assignment. */
 export interface MySubmission {
     submittedAt: string;
+    /** What the learner typed, if anything. */
+    text: string | null;
+    /** The work they attached, if any. */
+    fileUrl: string | null;
     grade: number | null;
     feedback: string | null;
     gradedAt: string | null;

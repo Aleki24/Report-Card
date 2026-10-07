@@ -59,6 +59,8 @@ export interface DashboardData {
    */
   hasFeeData?: boolean;
   hasAttendanceData?: boolean;
+  /** A register was taken in the past week: only then is a missing register today worth flagging. */
+  takesRegisters?: boolean;
   hasLogo: boolean;
   setup: SetupStatus | null;
   /** Where the school is in its own calendar. */
@@ -85,7 +87,7 @@ export function buildTodos(data: DashboardData | null, now: Date = new Date()): 
   if (!data) return [];
   const todos: DashboardTodo[] = [];
   if ((data.unreleasedResults ?? 0) > 0) {
-    todos.push({ key: 'release', hue: 'violet', title: `${plural(data.unreleasedResults ?? 0, 'exam')} ready to release`, detail: 'Marks are in, but report cards and parents can’t see them until released.', cta: 'Release results', href: '/dashboard/exams-marks?tab=publish' });
+    todos.push({ key: 'release', hue: 'violet', title: `${plural(data.unreleasedResults ?? 0, 'paper')} ready to release`, detail: 'Marks are in, but report cards and parents can’t see them until released.', cta: 'Release results', href: '/dashboard/exams-marks?tab=publish' });
   }
   if ((data.examsAwaitingMarks ?? 0) > 0) {
     const worst = (data.unmarkedByClass ?? []).slice(0, 3).map(c => `${c.label} (${c.count})`).join(', ');
@@ -98,7 +100,7 @@ export function buildTodos(data: DashboardData | null, now: Date = new Date()): 
   const weekday = ![0, 6].includes(now.getDay());
   const marked = data.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;
   const unmarked = Math.max(0, data.totalStudents - marked);
-  if (data.hasAttendanceData && inTerm && weekday && unmarked > 0) {
+  if (data.takesRegisters && inTerm && weekday && unmarked > 0) {
     todos.push({ key: 'attendance', hue: 'emerald', title: `${plural(unmarked, 'learner')} not on today’s register`, detail: marked === 0 ? 'No register has been taken yet today.' : `${marked.toLocaleString()} marked so far.`, cta: 'Take attendance', href: '/dashboard/attendance' });
   }
   if (data.hasFeeData && data.overdueFeesCount > 0) {
