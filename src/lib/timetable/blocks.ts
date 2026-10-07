@@ -59,6 +59,8 @@ export interface ClassPlan<L extends BlockLoad = BlockLoad> {
     basis: 'choices' | 'groups' | 'subjects' | 'none';
     /** Learners with recorded choices, when the blocks rest on them. */
     learnersWithChoices: number;
+    /** Whose choices: learners' own, or (Senior School, none recorded) the school's offered combinations. */
+    choiceSource: 'learners' | 'combinations';
     /**
      * With subject groups: learners whose choices put two subjects in one
      * group, so they must change one (or take it outside the timetable).
@@ -72,7 +74,6 @@ export type ClassChoices = ReadonlyMap<string, ReadonlySet<string>>;
 export const blockLabel = (n: number) => `Option ${String.fromCharCode(64 + Math.min(Math.max(n, 1), 26))}`;
 
 const isElective = (l: BlockLoad) => (l.subjectType ?? 'CORE').toUpperCase() !== 'CORE';
-const isMaths = (l: BlockLoad) => /mathematic/i.test(l.subjectName);
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0);
 
 function block<L extends BlockLoad>(number: number, loads: L[], manual: boolean): OptionBlock<L> {
@@ -160,20 +161,35 @@ function colourByChoices<L extends BlockLoad>(electives: readonly L[], choices: 
 }
 
 /** One class's week: whole-class subjects, then option blocks if the electives need them. */
-export function planClass<L extends BlockLoad>(streamId: string, loads: readonly L[], capacity: number, choices?: ClassChoices): ClassPlan<L> {
+export function planClass<L extends BlockLoad>(
+    streamId: string,
+    loads: readonly L[],
+    capacity: number,
+    choices?: ClassChoices,
+    together: readonly { name: string; loads: readonly L[] }[] = [],
+    choiceSource: ClassPlan['choiceSource'] = 'learners',
+): ClassPlan<L> {
     const learners = new Set([...(choices?.values() ?? [])].flatMap(s => [...s])).size;
     const manual = new Map<number, L[]>();
+    // Subjects the school (or every school) teaches at the same time take one slot first.
+    const grouped = new Set(together.flatMap(g => g.loads));
     const rest: L[] = [];
     for (const l of loads) {
         if (l.optionBlock) manual.set(l.optionBlock, [...(manual.get(l.optionBlock) ?? []), l]);
-        else rest.push(l);
+        else if (!grouped.has(l)) rest.push(l);
     }
     const blocks: OptionBlock<L>[] = [...manual.entries()].sort((a, b) => a[0] - b[0]).map(([n, ls]) => block(n, ls, true));
+    let nextNumber = Math.max(0, ...blocks.map(b => b.number)) + 1;
+    for (const g of together) {
+        const free = g.loads.filter(l => !l.optionBlock);
+        if (free.length >= 2) blocks.push({ ...block(nextNumber++, free, true), label: g.name });
+        else rest.push(...free);
+    }
     let basis: ClassPlan['basis'] = 'none';
     let unfit: ClassPlan['unfit'] = [];
     const finish = (core: L[]): ClassPlan<L> => {
         const needed = sum(core.map(l => l.lessons)) + sum(blocks.map(b => b.lessons));
-        return { streamId, capacity, core, blocks, needed, fits: needed <= capacity, basis, learnersWithChoices: basis === 'subjects' || basis === 'none' ? 0 : learners, unfit };
+        return { streamId, capacity, core, blocks, needed, fits: needed <= capacity, basis, learnersWithChoices: basis === 'subjects' || basis === 'none' ? 0 : learners, choiceSource, unfit };
     };
 
     // Recorded choices say which subjects are electives: anything a learner chose.
@@ -184,16 +200,8 @@ export function planClass<L extends BlockLoad>(streamId: string, loads: readonly
 
     const elective = (l: L) => (useChoices ? chosen(l) || isElective(l) : isElective(l));
     const core = rest.filter(l => !elective(l));
-    let electives = rest.filter(elective);
+    const electives = rest.filter(elective);
     let next = Math.max(0, ...blocks.map(b => b.number)) + 1;
-
-    // Core and Essential Mathematics are alternatives: one block between them,
-    // unless learners' recorded choices already say who takes which.
-    const maths = electives.filter(l => isMaths(l) && !chosen(l));
-    if (maths.length > 1) {
-        blocks.push(block(next++, maths, false));
-        electives = electives.filter(l => !maths.includes(l));
-    }
 
     if (useChoices && choices) {
         const exact = colourByChoices(electives, choices);
@@ -253,11 +261,15 @@ function bestGroups<L extends BlockLoad>(electives: readonly L[], choices: Class
 export function planClasses<L extends BlockLoad>(
     loads: readonly L[],
     capacityOf: (streamId: string) => number,
-    choicesOf: (streamId: string) => ClassChoices | undefined = () => undefined,
+    choicesOf: (streamId: string) => { choices: ClassChoices; source: ClassPlan['choiceSource'] } | undefined = () => undefined,
+    togetherOf: (streamId: string, loads: readonly L[]) => { name: string; loads: L[] }[] = () => [],
 ): Map<string, ClassPlan<L>> {
     const byClass = new Map<string, L[]>();
     loads.forEach(l => byClass.set(l.streamId, [...(byClass.get(l.streamId) ?? []), l]));
-    return new Map([...byClass.entries()].map(([id, ls]) => [id, planClass(id, ls, capacityOf(id), choicesOf(id))]));
+    return new Map([...byClass.entries()].map(([id, ls]) => {
+        const c = choicesOf(id);
+        return [id, planClass(id, ls, capacityOf(id), c?.choices, togetherOf(id, ls), c?.source)];
+    }));
 }
 
 /**

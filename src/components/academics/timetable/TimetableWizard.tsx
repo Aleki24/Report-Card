@@ -8,6 +8,7 @@ import { FormField, InputField } from '@/components/ui/FormField';
 import { ResourceManager } from '@/components/ops/ResourceManager';
 import { TimetableBuilder } from '@/components/academics/timetable/TimetableBuilder';
 import { DayStructureEditor } from '@/components/academics/timetable/DayStructureEditor';
+import { TaughtTogether } from '@/components/academics/timetable/TaughtTogether';
 import type { TimetableConfig } from '@/lib/timetable/config';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
@@ -16,7 +17,7 @@ import {
     type ImportLoadsResult, type Room, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import {
-    basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
+    basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
 } from '@/lib/timetable/readiness';
 import { cn } from '@/lib/utils';
 
@@ -212,7 +213,7 @@ function ClassFit({ plan, focus, onApplied }: { plan: TimetablePlan; focus: stri
                         {!c.fits && <FitChooser c={c} onApplied={onApplied} />}
                         {c.unfit.length > 0 && (
                             <div className="mt-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs">
-                                <p className="font-semibold text-amber-700 dark:text-amber-300">{c.unfit.length} learner{c.unfit.length === 1 ? '' : 's'} must change a subject</p>
+                                <p className="font-semibold text-amber-700 dark:text-amber-300">{unfitTitle(c)}</p>
                                 <ul className="mt-0.5 text-muted-foreground">{c.unfit.map(u => <li key={u.name + u.subjects.join()}>{u.name}: {u.subjects.join(' and ')} are in the same group</li>)}</ul>
                             </div>
                         )}
@@ -398,6 +399,7 @@ export function TimetableWizard() {
                         <p className="font-semibold">How electives fit: option blocks</p>
                         <p className="text-muted-foreground">Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s <em>Option block</em> to choose them yourself.</p>
                     </div>
+                    <TaughtTogether onChange={() => void refresh()} />
                     <ClassFit plan={plan} focus={focus} onApplied={() => { setDayKey(k => k + 1); void refresh(); }} />
                     <TeacherLoads plan={plan} />
                     <Loads onChange={() => void refresh()} />

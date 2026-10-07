@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
-import { basisLine, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
+import { basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
 import type { TimetableConfig } from '@shared/timetable/config';
 import {
     IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
@@ -18,6 +18,7 @@ import { opsGet } from '@/lib/ops';
 import { confirmAlert } from '@/lib/confirm';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import { DayStructureEditor, TimetableBuilder } from './TimetablePanels';
+import { TaughtTogether } from './TaughtTogether';
 
 /** Teaching loads: which teacher takes which subject with which class, and how often. */
 function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
@@ -223,7 +224,7 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
                     {!c.fits ? <FitChooser c={c} onApplied={onApplied} onEditLoads={() => onEditLoads(c.name)} /> : null}
                     {c.unfit.length > 0 ? (
                         <View style={[styles.block, { backgroundColor: colors.warningBg }]}>
-                            <Text style={[styles.blockTitle, { color: colors.warningText }]}>{c.unfit.length} learner{c.unfit.length === 1 ? '' : 's'} must change a subject</Text>
+                            <Text style={[styles.blockTitle, { color: colors.warningText }]}>{unfitTitle(c)}</Text>
                             {c.unfit.map((u) => <Text key={u.name + u.subjects.join()} style={styles.fitLine}>{u.name}: {u.subjects.join(' and ')} are in the same group</Text>)}
                         </View>
                     ) : null}
@@ -414,6 +415,7 @@ export function TimetableWizard() {
                     <Text style={styles.blockTitle}>How electives fit: option blocks</Text>
                     <Text style={styles.fitLine}>Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s Option block to choose them yourself.</Text>
                 </View>
+                <TaughtTogether onChange={() => void refresh()} />
                 <ClassFit
                     plan={plan}
                     onApplied={() => { setDayKey((k) => k + 1); void refresh(); }}

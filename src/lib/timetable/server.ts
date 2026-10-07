@@ -4,9 +4,20 @@ import { HttpError } from '@/lib/platform/access';
 import { embedOne } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
 import { syncLoadTeachers } from './assignments';
+import { BUILT_IN_TOGETHER, togetherGroups, type TogetherRule } from './together';
 import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
+
+/** Built-in taught-together rules, then the school's own. */
+export async function loadTogetherRules(schoolId: string): Promise<TogetherRule[]> {
+    const { data, error } = await db().from('timetable_subject_groups').select('id, name, bands, subject_ids').eq('school_id', schoolId).order('created_at');
+    if (error) throw error;
+    return [
+        ...BUILT_IN_TOGETHER,
+        ...(data ?? []).map(r => ({ id: r.id as string, name: r.name as string, bands: (r.bands ?? []) as CurriculumBand[], subjectIds: (r.subject_ids ?? []) as string[], builtIn: false })),
+    ];
+}
 
 export async function saveConfig(schoolId: string, config: TimetableConfig): Promise<TimetableConfig> {
     const { error } = await db().from('timetable_configs').upsert({
@@ -85,7 +96,7 @@ export type PlannedLoad = BlockLoad & { row: LoadRow };
 export async function loadTimetablePlan(schoolId: string) {
     // Loads follow Subjects → Teachers, so a subject that changed hands there is planned with its new teacher.
     await syncLoadTeachers(db(), schoolId);
-    const [config, bands, { data, error }, choiceRows] = await Promise.all([
+    const [config, bands, { data, error }, choiceRows, rules, combos] = await Promise.all([
         loadConfig(schoolId),
         streamBands(schoolId),
         db().from('timetable_requirements')
@@ -98,7 +109,20 @@ export async function loadTimetablePlan(schoolId: string) {
             .eq('school_id', schoolId)
             .eq('role', 'ELECTIVE')
             .limit(20000),
+        loadTogetherRules(schoolId),
+        // The school's offered Senior School combinations stand in for learners' choices until those are recorded.
+        db().from('subject_combinations')
+            .select('code, subjects:subject_combination_subjects(subject_id)')
+            .eq('school_id', schoolId)
+            .eq('is_active', true),
     ]);
+    if (combos.error) throw combos.error;
+    const comboChoices = new Map<string, Set<string>>();
+    for (const c of combos.data ?? []) {
+        for (const s of (c.subjects ?? []) as { subject_id: string }[]) {
+            comboChoices.set(s.subject_id, (comboChoices.get(s.subject_id) ?? new Set()).add(`combination:${c.code as string}`));
+        }
+    }
     if (error) throw error;
     if (choiceRows.error) throw choiceRows.error;
     const choices = new Map<string, Map<string, Set<string>>>();
@@ -121,5 +145,11 @@ export async function loadTimetablePlan(schoolId: string) {
         optionBlock: r.option_block, row: r,
     }));
     const bandOf = (streamId: string) => bands.get(streamId) ?? null;
-    return { config, rows, bandOf, sectionOf, capacityOf, plans: planClasses(loads, capacityOf, id => choices.get(id)) };
+    const choicesOf = (streamId: string) => {
+        const learners = choices.get(streamId);
+        if (learners?.size) return { choices: learners, source: 'learners' as const };
+        return bandOf(streamId) === 'CBC_SENIOR_SCHOOL' && comboChoices.size > 0 ? { choices: comboChoices, source: 'combinations' as const } : undefined;
+    };
+    const togetherOf = (streamId: string, classLoads: readonly PlannedLoad[]) => togetherGroups(classLoads, bandOf(streamId), rules);
+    return { config, rows, bandOf, sectionOf, capacityOf, plans: planClasses(loads, capacityOf, choicesOf, togetherOf) };
 }
