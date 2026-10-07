@@ -33,8 +33,10 @@ export interface PlanClass {
     /** Loads with nobody to teach them. */
     unassigned: number;
     /** What the option blocks rest on: learners' choices, or the subjects' types. */
-    basis: 'choices' | 'subjects' | 'none';
+    basis: 'choices' | 'groups' | 'subjects' | 'none';
     learnersWithChoices: number;
+    /** With subject groups: learners who chose two subjects in one group, and which. */
+    unfit: { name: string; subjects: [string, string] }[];
     /** Loads whose lessons a week differ from the Ministry's figure for the level. */
     offMinistry: { subject: string; lessons: number; ministry: number }[];
     /** For a class that does not fit: the two ready-made ways to make it fit. */
@@ -101,17 +103,20 @@ const quoteList = (xs: readonly string[]) => {
 /** Why a class does not fit its week, and the ways out, in plain words. */
 export function overloadMessage(c: PlanClass): string {
     const over = c.needed - c.capacity;
-    if (c.basis === 'choices' && c.blocks.length > 0) {
+    if ((c.basis === 'choices' || c.basis === 'groups') && c.blocks.length > 0) {
         return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}. Its learners’ subject choices mix so much that their electives need ${plural(c.blocks.length, 'separate group')}, and no two of these groups can be taught at the same time. Give ${c.name} a longer day, or lower some lessons a week (${plural(over, 'lesson')} to find).`;
     }
     return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}: ${plural(over, 'lesson')} too many. Give ${c.name} a longer day, or lower some lessons a week.`;
 }
 
-/** "Blocks follow 19 learners’ choices" — what a class's blocks rest on. */
+/** What a class's elective groups rest on, in a line. */
 export function basisLine(c: PlanClass): string | null {
     if (c.blocks.length === 0) return null;
+    if (c.basis === 'groups') {
+        return `Electives run in ${plural(c.blocks.length, 'subject group')}: each learner takes one subject from each group, as KCSE subject groups are taught.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, 'learner')} chose two subjects in one group and must change one.` : ' Every learner’s choices fit.'}`;
+    }
     if (c.basis === 'choices') return `Option blocks follow ${plural(c.learnersWithChoices, 'learner')}’ recorded subject choices: no learner has two subjects at the same time.`;
-    return 'No subject choices recorded for this class yet, so blocks are spread by subject type. Record learners’ electives for blocks that match them.';
+    return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives for groups that match them.';
 }
 
 /** Blockers and notes from the plan's facts. */
@@ -133,6 +138,13 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
         if (!c.fits) blockers.push({ card: 'loads', streamId: c.streamId, message: `${c.name} has ${plural(c.needed - c.capacity, 'more lesson')} than its week. Open it to pick a fix.` });
         for (const b of c.blocks) {
             if (b.teacherClash) blockers.push({ card: 'loads', streamId: c.streamId, message: `${c.name} ${b.label}: one teacher has two subjects running at the same time.` });
+        }
+        if (c.unfit.length > 0) {
+            notes.push({
+                card: 'loads', streamId: c.streamId,
+                message: `${c.name}: ${plural(c.unfit.length, 'learner')} chose two subjects that run in the same group. Change one of them in the learner’s subjects.`,
+                details: c.unfit.map(u => `${u.name}: ${u.subjects.join(' and ')}`),
+            });
         }
         if (c.unassigned > 0) notes.push({ card: 'loads', streamId: c.streamId, message: `${c.name}: ${plural(c.unassigned, 'load')} without a teacher.` });
         if (c.offMinistry.length > 0) {

@@ -23,6 +23,13 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
         db.from('timetable_versions').select('name, status').eq('school_id', access.schoolId),
     ]);
     const teaching = config.periods.filter(p => !p.is_break);
+    // Names of learners whose choices do not fit their class's subject groups.
+    const unfitIds = [...new Set([...plans.values()].flatMap(p => p.unfit.map(u => u.learnerId)))];
+    const { data: learnerRows, error: learnersError } = unfitIds.length
+        ? await db.from('users').select('id, first_name, last_name').in('id', unfitIds)
+        : { data: [], error: null };
+    if (learnersError) throw learnersError;
+    const learnerName = new Map((learnerRows ?? []).map(u => [u.id as string, `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || 'A learner']));
     const nameOf = new Map(rows.map(r => [r.grade_stream_id, r.stream?.full_name ?? '']));
     const classes = [...plans.values()]
         .map(p => ({
@@ -37,6 +44,7 @@ export const GET = route('timetable plan', { module: 'timetable', permission: 't
             unassigned: [...p.core, ...p.blocks.flatMap(b => b.loads)].filter(l => !l.teacherId).length,
             basis: p.basis,
             learnersWithChoices: p.learnersWithChoices,
+            unfit: p.unfit.map(u => ({ name: learnerName.get(u.learnerId) ?? 'A learner', subjects: u.subjects })),
             offMinistry: rows.filter(r => r.grade_stream_id === p.streamId).flatMap(r => {
                 const ministry = r.subject ? ministryAllocation(r.stream?.grade ?? null, r.subject) : null;
                 return ministry && ministry.lessons !== r.lessons_per_week ? [{ subject: r.subject?.name ?? '', lessons: r.lessons_per_week, ministry: ministry.lessons }] : [];

@@ -210,12 +210,18 @@ function ClassFit({ plan, focus, onApplied }: { plan: TimetablePlan; focus: stri
                         <p className="mt-2 text-xs text-muted-foreground">Whole class: {c.core.map(l => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</p>
                         {c.fits && basisLine(c) && <p className="mt-1 text-xs text-muted-foreground">{basisLine(c)}</p>}
                         {!c.fits && <FitChooser c={c} onApplied={onApplied} />}
+                        {c.unfit.length > 0 && (
+                            <div className="mt-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs">
+                                <p className="font-semibold text-amber-700 dark:text-amber-300">{c.unfit.length} learner{c.unfit.length === 1 ? '' : 's'} must change a subject</p>
+                                <ul className="mt-0.5 text-muted-foreground">{c.unfit.map(u => <li key={u.name + u.subjects.join()}>{u.name}: {u.subjects.join(' and ')} are in the same group</li>)}</ul>
+                            </div>
+                        )}
                         {c.blocks.length > 0 && (
                             <ul className="mt-2 flex flex-col gap-1.5">
                                 {c.blocks.map(b => (
                                     <li key={b.number} className={cn('rounded-lg px-2.5 py-1.5 text-xs', b.teacherClash ? 'bg-amber-500/15' : 'bg-violet-500/10')}>
-                                        <span className="font-semibold text-violet-700 dark:text-violet-300">{b.label}{b.manual ? '' : ' (auto)'} · {b.lessons}/wk</span>
-                                        <span className="text-muted-foreground"> — {b.loads.map(l => l.subject).join(' · ')}</span>
+                                        <span className="font-semibold text-violet-700 dark:text-violet-300">{b.label} · {b.lessons}/wk</span>
+                                        <span className="text-muted-foreground"> — {b.loads.map(l => l.subject).join(' / ')}</span>
                                         {b.teacherClash && <span className="block font-medium text-amber-700 dark:text-amber-300">One teacher has two of these at once: move one to another block.</span>}
                                     </li>
                                 ))}
