@@ -119,13 +119,16 @@ export async function POST(request: NextRequest) {
     const maxScore = typeof max_score === 'number' && max_score > 0 ? max_score : 100;
 
     const client = new Anthropic();
-    const model = process.env.ANTHROPIC_SCAN_MODEL || 'claude-opus-4-8';
+    // Sonnet reads handwritten marksheets well at a fraction of Opus's price;
+    // override with ANTHROPIC_SCAN_MODEL to try another model.
+    const model = process.env.ANTHROPIC_SCAN_MODEL || 'claude-sonnet-5-5';
 
     const response = await client.messages.create({
       model,
       max_tokens: 16000,
       thinking: { type: 'adaptive' },
-      output_config: { format: { type: 'json_schema', schema: EXTRACTION_SCHEMA } },
+      // Transcribing a sheet needs care, not deep reasoning: medium keeps thinking (and cost) modest.
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: EXTRACTION_SCHEMA } },
       messages: [
         {
           role: 'user',
