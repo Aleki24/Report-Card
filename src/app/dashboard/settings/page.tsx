@@ -149,8 +149,8 @@ function SettingsPageInner() {
         body: JSON.stringify({
           school_id: school.id, name: school.name, address: school.address, phone: school.phone, email: school.email,
           logo_url: school.logo_url || null, min_combination_group_size: school.min_combination_group_size ?? null,
-          motto: school.motto, principal_name: school.principal_name,
-          principal_signature_url: school.principal_signature_url || null, pass_mark: school.pass_mark,
+          // The principal's signature saves on its own (Signature field), so it is not sent here.
+          motto: school.motto, principal_name: school.principal_name, pass_mark: school.pass_mark,
           cbc_ranking_enabled: school.cbc_ranking_enabled ?? false, senior_rank_group: school.senior_rank_group ?? 'GRADE',
         }),
       });

@@ -16,6 +16,7 @@ import { DutiesPanel, ModulesPanel } from '@/components/settings/ModulesAndDutie
 import { PaymentsSetup } from '@/components/settings/PaymentsSetup';
 import { NewGradingSystemSheet, OwnSystemActions } from '@/components/settings/GradingEditor';
 import { RequireScreen } from '@/components/RequireScreen';
+import { SignatureCard } from '@/components/account/SignatureCard';
 import type { PaymentSettingsStatus, Term } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
@@ -26,6 +27,8 @@ interface SchoolProfile {
     phone: string | null;
     email: string | null;
     logo_url: string | null;
+    motto: string | null;
+    principal_name: string | null;
     teacher_invite_code?: string | null;
     student_invite_code?: string | null;
     min_combination_group_size: number | null;
@@ -97,6 +100,8 @@ function SchoolTab() {
                 phone: next.phone?.trim() || null,
                 email: next.email?.trim() || null,
                 logo_url: next.logo_url || null,
+                motto: next.motto?.trim() || null,
+                principal_name: next.principal_name?.trim() || null,
                 min_combination_group_size: next.min_combination_group_size ?? null,
                 overall_grading_system_id: next.overall_grading_system_id ?? null,
             });
@@ -143,10 +148,17 @@ function SchoolTab() {
                 <TextField label="Address" value={form.address ?? ''} onChangeText={(v) => set('address', v)} multiline />
                 <TextField label="Phone" value={form.phone ?? ''} onChangeText={(v) => set('phone', v)} keyboardType="phone-pad" />
                 <TextField label="Email" value={form.email ?? ''} onChangeText={(v) => set('email', v)} keyboardType="email-address" autoCapitalize="none" />
+                <TextField label="Motto (printed on report cards)" value={form.motto ?? ''} onChangeText={(v) => set('motto', v)} />
+                <TextField label="Principal’s name (printed on the signature line)" value={form.principal_name ?? ''} onChangeText={(v) => set('principal_name', v)} placeholder="e.g. Mrs. Jane Wanjiku" />
                 <ButtonRow>
                     <Button label="Save profile" onPress={() => void save()} loading={saving} />
                 </ButtonRow>
             </Card>
+            <SignatureCard
+                target="principal"
+                title="Principal’s signature"
+                description="Printed on every report card and mark sheet, so the principal does not sign each one by hand."
+            />
             {form.teacher_invite_code || form.student_invite_code ? (
                 <Card>
                     <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>

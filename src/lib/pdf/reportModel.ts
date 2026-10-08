@@ -57,6 +57,8 @@ export interface ReportModel {
     school: { name: string; address?: string; logo?: string; initial: string; motto?: string };
     /** Who signs as principal, from Settings; both optional. */
     principal: { name?: string; signature?: string };
+    /** The class teacher who signs, and their signature on file; both optional. */
+    classTeacher: { name?: string; signature?: string };
     learner: { name: string; initials: string; admission: string; className: string; pathway?: string };
     exam: { title: string; year: string; openingDate?: string; issued: string };
 
@@ -275,6 +277,10 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         principal: {
             name: data.principalName?.trim() || undefined,
             signature: data.principalSignatureUrl || undefined,
+        },
+        classTeacher: {
+            name: data.classTeacherName?.trim() || undefined,
+            signature: data.classTeacherSignatureUrl || undefined,
         },
         learner: {
             name: data.studentName,

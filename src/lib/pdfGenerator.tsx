@@ -19,6 +19,10 @@ export interface ReportCardData {
     principalName?: string;
     /** A small image data URL laid over the principal's signature line. */
     principalSignatureUrl?: string;
+    /** The class's class teacher, printed on their signature line. */
+    classTeacherName?: string;
+    /** Their signature (a transparent PNG data URL) laid over that line. */
+    classTeacherSignatureUrl?: string;
     examTitle: string;
     academicYear: string;
     studentName: string;

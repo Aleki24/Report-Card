@@ -30,6 +30,7 @@ import {
 } from '@/lib/reports/comparatives';
 import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
+import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 
 export const runtime = 'nodejs';
 
@@ -326,6 +327,7 @@ export async function GET(
             academicYear = (firstExam as any).academic_years?.name || 'Academic Year';
         }
 
+        let termYearId: string | null = null;
         if (termId) {
             const { data: termData } = await supabase
                 .from('terms')
@@ -333,7 +335,14 @@ export async function GET(
                 .eq('id', termId)
                 .maybeSingle();
             openingDate = await resolveReopeningDate(supabase, termData, roundSelection.round);
+            termYearId = termData?.academic_year_id ?? null;
         }
+
+        // The class teacher of the term's year signs the card.
+        const streamId = student.current_grade_stream_id as string | null;
+        const classTeacher = streamId && userSchoolId
+            ? (await classTeacherSignoffs(supabase, userSchoolId, [streamId], termYearId ?? yearId)).get(streamId) ?? {}
+            : {};
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
@@ -705,6 +714,7 @@ export async function GET(
         // 12. Structure data for PDF Generator
         const reportData: ReportCardData = {
             ...school,
+            ...classTeacher,
             examTitle: termTitle,
             academicYear,
             studentName: `${student.users?.first_name} ${student.users?.last_name}`,

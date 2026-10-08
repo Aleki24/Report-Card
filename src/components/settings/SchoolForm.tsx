@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import React, { useId, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowRight, FileSignature, KeyRound, PenLine, School, Trophy, Upload, type LucideIcon } from 'lucide-react';
+import { ArrowRight, FileSignature, KeyRound, School, Trophy, Upload, type LucideIcon } from 'lucide-react';
 import { CardHeading } from '@/components/ui/CardHeading';
 import { FormField, InputField } from '@/components/ui';
 import { shrinkImageToDataUrl } from '@/lib/client/shrink-image';
 import { PASS_MARK, PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
 import { cn } from '@/lib/utils';
+import { SignatureField } from './SignatureField';
 import { SENIOR_RANK_GROUPS, SENIOR_RANK_GROUP_OPTIONS, type SeniorRankGroup } from '@/lib/ranking';
 
 /** The school row as the Settings profile tab edits it. */
@@ -36,7 +37,7 @@ interface SchoolFormProps {
 }
 
 type TextKey = 'name' | 'address' | 'phone' | 'email' | 'motto' | 'principal_name';
-type ImageKey = 'logo_url' | 'principal_signature_url';
+type ImageKey = 'logo_url';
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
@@ -155,14 +156,11 @@ export function SchoolForm({ school, setSchool }: SchoolFormProps) {
         <FormField label="Principal's name" htmlFor={`${id}-principal`} hint="Printed on the principal's signature line.">
           <InputField id={`${id}-principal`} value={school.principal_name} onChange={e => set('principal_name', e.target.value)} placeholder="e.g. Mrs. Jane Wanjiku" maxLength={100} />
         </FormField>
-        <ImageUploadRow
-          label="Signature"
-          description="The principal's signature, laid over their signature line so cards come out signed. Sign on white paper and photograph it close up."
-          value={school.principal_signature_url}
-          onChange={setImage('principal_signature_url')}
-          fallbackIcon={PenLine}
-          maxSide={480}
-          previewClassName="h-16 w-40"
+        {/* Saved on its own when a photo is chosen (cleaned on the server), not with this form. */}
+        <SignatureField
+          target="principal"
+          label="Principal's signature"
+          description="Printed on every report card and mark sheet, so the principal does not sign each one by hand."
         />
         <FormField
           label="Pass mark (%)"

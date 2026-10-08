@@ -380,7 +380,7 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.remark2}>
                     <Text style={s.h3}>Class teacher’s remarks</Text>
                     <Text style={[s.remarkText, m.compact ? { minHeight: 18 } : {}]}>{m.teacherComment}</Text>
-                    <View style={s.sig}><Text style={s.sigText}>Class teacher</Text><Text style={s.sigText}>Signature</Text></View>
+                    <View style={s.sig}><SignatureImage src={m.classTeacher.signature} /><Text style={s.sigText}>{m.classTeacher.name ?? 'Class teacher'}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={s.remark2}>
                     <Text style={s.h3}>Principal’s remarks</Text>
