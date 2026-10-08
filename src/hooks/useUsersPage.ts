@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth, type UserRole } from '@/components/AuthProvider';
+import { jsonBody } from '@/lib/api-error-message';
+import { CLASS_TEACHER_REPLACE } from '@/lib/class-teacher';
 import { fullName, roleGroupOf, type ClassFilter, type GradeGroup, type RoleFilter, type StatusFilter, type UserSort } from '@/components/users/userMeta';
 
 export interface UserRow {
@@ -29,6 +31,8 @@ export type RoleCounts = Record<RoleFilter, number>;
 
 export interface GradeStreamOption { id: string; full_name: string; grade_id?: string; grades?: { academic_level_id: string; name_display: string } }
 export interface ClassTeacherAssignment { user_id: string; current_grade_stream_id: string; }
+/** A class's class teacher this year, for labelling the class pickers. */
+export interface ClassHolder { userId: string; name: string; }
 export interface AcademicLevelOption { id: string; code: string; name: string; }
 export interface SubjectOption { id: string; name: string; code: string; academic_level_id?: string | null; }
 /**
@@ -237,14 +241,29 @@ export function useUsersPage() {
       payload.class_teacher_grade_stream_id = editClassTeacherStreamId || null;
       payload.subject_teacher_subjects = editSubjectTeacherSubjects.filter(s => s.subject_id && s.grade_id);
     }
+    const save = async (body: Record<string, unknown>) => {
+      const res = await fetch('/api/admin/update-user', jsonBody('PUT', body));
+      const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+      return { res, data };
+    };
     try {
-      const res = await fetch('/api/admin/update-user', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      const data = await res.json();
+      let { res, data } = await save(payload);
+      // Giving the teacher a class someone else holds (or moving them from
+      // their own) asks first, in the server's words, then goes ahead.
+      if (res.status === 409 && data.code === CLASS_TEACHER_REPLACE) {
+        if (!window.confirm(data.error)) return;
+        ({ res, data } = await save({ ...payload, replace_class_teacher: true }));
+      }
       if (!res.ok) { setFormError(data.error || 'Failed to update user'); }
-      else { setShowEditModal(false); fetchData(); }
+      else { setShowEditModal(false); fetchData(); fetchDropdowns(); }
     } catch { setFormError('Network error. Please try again.'); }
     finally { setSubmitting(false); }
   };
+
+  const classHolders = useMemo<ReadonlyMap<string, ClassHolder>>(() => {
+    const names = new Map(users.map(u => [u.id, fullName(u)]));
+    return new Map(classTeacherAssignments.map(a => [a.current_grade_stream_id, { userId: a.user_id, name: names.get(a.user_id) ?? 'Another teacher' }]));
+  }, [users, classTeacherAssignments]);
 
   useEffect(() => { setCurrentPage(1); }, [users.length, roleFilter, statusFilter, sortBy, searchQuery, classFilter]);
 
@@ -323,6 +342,6 @@ export function useUsersPage() {
     // Password reset
     resetUserPassword, resettingPasswordId, showResetResult, setShowResetResult, resetResultInviteCode, resetResultNotified,
     // Shared
-    formError, submitting, gradeStreams, academicLevels, subjects, grades, classTeacherAssignments,
+    formError, submitting, gradeStreams, academicLevels, subjects, grades, classTeacherAssignments, classHolders,
   };
 }

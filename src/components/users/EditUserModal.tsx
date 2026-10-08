@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type UserRole } from '@/components/AuthProvider';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
-import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassTeacherAssignment, isTeacherRole } from '@/hooks/useUsersPage';
+import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassHolder, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 import { STAFF_JOB_TITLES } from '@/lib/staff-roles';
 
@@ -27,14 +27,18 @@ interface EditUserModalProps {
   gradeStreams: GradeStreamOption[];
   subjects: SubjectOption[];
   grades: GradeOption[];
-  classTeacherAssignments: ClassTeacherAssignment[];
+  /** Each class's class teacher this year, by class id. */
+  classHolders: ReadonlyMap<string, ClassHolder>;
 }
 
 export function EditUserModal(props: EditUserModalProps) {
   const { editingUser, onClose, onSubmit, formError, submitting } = props;
-  const assignedStreamIds = new Set(
-    props.classTeacherAssignments.filter(a => a.user_id !== editingUser.id).map(a => a.current_grade_stream_id)
-  );
+  // Another teacher's class can be chosen: saving asks before replacing them.
+  const holderOf = (streamId: string) => {
+    const holder = props.classHolders.get(streamId);
+    return holder && holder.userId !== editingUser.id ? holder : null;
+  };
+  const replacing = props.editClassTeacherStreamId ? holderOf(props.editClassTeacherStreamId) : null;
 
   const fullName = `${editingUser.first_name ?? ''} ${editingUser.last_name ?? ''}`.trim();
 
@@ -108,14 +112,21 @@ export function EditUserModal(props: EditUserModalProps) {
           <div className="mt-5 border-t border-border pt-5">
             <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Class teacher <span className="font-normal normal-case">(optional)</span></p>
             <p className="mb-4 text-xs text-muted-foreground">A class teacher keeps the class register and its report cards.</p>
-            <Field id="edit-class" label="Class">
+            <Field
+              id="edit-class"
+              label="Class"
+              hint={replacing ? `${replacing.name} is this class's class teacher. Saving makes them a subject teacher.` : undefined}
+            >
               <select id="edit-class" className="input-field w-full" value={props.editClassTeacherStreamId} onChange={e => props.setEditClassTeacherStreamId(e.target.value)}>
                 <option value="">Not a class teacher</option>
-                {props.gradeStreams.map(gs => (
-                  <option key={gs.id} value={gs.id} disabled={assignedStreamIds.has(gs.id)}>
-                    {gs.full_name}{assignedStreamIds.has(gs.id) ? ' (already has a class teacher)' : ''}
-                  </option>
-                ))}
+                {props.gradeStreams.map(gs => {
+                  const holder = holderOf(gs.id);
+                  return (
+                    <option key={gs.id} value={gs.id}>
+                      {gs.full_name}{holder ? ` (class teacher: ${holder.name})` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </Field>
           </div>

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { GraduationCap, Pencil, School, UserRound, Users } from 'lucide-react-native';
+import { GraduationCap, Pencil, School, UserRoundCog, UserRound, Users } from 'lucide-react-native';
 import { CLASSES_OVERVIEW_URL, classDeleteBlocker, type ClassSummary, type ClassesOverview } from '@shared/classes-overview';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -12,6 +12,7 @@ import {
     Screen, ScreenHeader, SearchField, SectionLabel, StatGrid, StatTile, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
+import { ChangeClassTeacherSheet } from '@/components/people/ChangeClassTeacherSheet';
 import { confirmAlert } from '@/lib/confirm';
 
 export default function ClassesScreen() {
@@ -23,7 +24,7 @@ export default function ClassesScreen() {
 }
 
 /** One class: who teaches it and what it holds, counted on the server. */
-function ClassCard({ c, onEdit, onRoster }: { c: ClassSummary; onEdit: () => void; onRoster: () => void }) {
+function ClassCard({ c, onEdit, onRoster, onChangeTeacher }: { c: ClassSummary; onEdit: () => void; onRoster: () => void; onChangeTeacher: () => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const learners = c.usage.activeStudents;
@@ -46,10 +47,21 @@ function ClassCard({ c, onEdit, onRoster }: { c: ClassSummary; onEdit: () => voi
                     <Pencil size={16} color={colors.muted} />
                 </Pressable>
             </View>
-            <Pressable onPress={onRoster} accessibilityRole="button" style={({ pressed }) => [styles.roster, pressed && { opacity: 0.7 }]}>
-                <Users size={14} color={colors.primary} />
-                <Text style={styles.rosterText}>See learners</Text>
-            </Pressable>
+            <View style={styles.actions}>
+                <Pressable onPress={onRoster} accessibilityRole="button" style={({ pressed }) => [styles.action, pressed && { opacity: 0.7 }]}>
+                    <Users size={14} color={colors.primary} />
+                    <Text style={styles.actionText}>See learners</Text>
+                </Pressable>
+                <Pressable
+                    onPress={onChangeTeacher}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Change the class teacher of ${c.full_name}`}
+                    style={({ pressed }) => [styles.action, styles.actionDivider, pressed && { opacity: 0.7 }]}
+                >
+                    <UserRoundCog size={14} color={colors.primary} />
+                    <Text style={styles.actionText} numberOfLines={1}>{c.class_teachers.length > 0 ? 'Change class teacher' : 'Set class teacher'}</Text>
+                </Pressable>
+            </View>
         </View>
     );
 }
@@ -66,6 +78,7 @@ function ClassesContent() {
     const [fullNameInput, setFullNameInput] = useState('');
     const [editing, setEditing] = useState<{ id: string; name: string; full_name: string } | null>(null);
     const [busy, setBusy] = useState(false);
+    const [changingTeacher, setChangingTeacher] = useState<ClassSummary | null>(null);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
     const grades = overview.data?.grades ?? [];
@@ -180,13 +193,27 @@ function ClassesContent() {
                                     c={c}
                                     onEdit={() => setEditing({ id: c.id, name: c.name, full_name: c.full_name })}
                                     onRoster={() => router.push({ pathname: '/staff/people', params: { tab: 'students', class: c.id } })}
+                                    onChangeTeacher={() => setChangingTeacher(c)}
                                 />
                             ),
                         )}
                     </View>
                 );
             })}
-            <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.md }}>Class teachers are set per person under Users.</Text>
+            <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.md }}>
+                Change a class’s class teacher from its card, or a teacher’s class under Users.
+            </Text>
+            {changingTeacher ? (
+                <ChangeClassTeacherSheet
+                    cls={changingTeacher}
+                    onClose={() => setChangingTeacher(null)}
+                    onChanged={(text) => {
+                        setChangingTeacher(null);
+                        setMessage({ tone: 'success', text });
+                        overview.refresh();
+                    }}
+                />
+            ) : null}
         </Screen>
     );
 }
@@ -201,6 +228,8 @@ const useStyles = makeStyles((colors) => ({
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
     meta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 1 },
     iconBtn: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mutedBg },
-    roster: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: 10 },
-    rosterText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
+    actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border },
+    action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.sm, paddingVertical: 10, minHeight: 44 },
+    actionDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+    actionText: { flexShrink: 1, fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
 }));

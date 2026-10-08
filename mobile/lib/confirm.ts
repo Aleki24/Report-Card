@@ -16,3 +16,22 @@ export function confirmAlert(title: string, message: string, buttons: AlertButto
     const action = buttons.find((b) => b.style !== 'cancel');
     if (action && window.confirm(`${title}\n\n${message}`)) action.onPress?.();
 }
+
+/**
+ * Asks a yes/no question and resolves true only when the user picks
+ * `action`; Cancel, or dismissing the dialog (Android back), resolves false.
+ */
+export function askConfirm(title: string, message: string, action: string): Promise<boolean> {
+    if (Platform.OS === 'web') return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+    return new Promise((resolve) => {
+        Alert.alert(
+            title,
+            message,
+            [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: action, onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+        );
+    });
+}

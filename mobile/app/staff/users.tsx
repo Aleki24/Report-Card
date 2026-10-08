@@ -4,6 +4,8 @@ import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { inviteDeliveryMessage, type InviteDelivery } from '@shared/invite-delivery';
+import { CLASS_TEACHER_URL, holdersByClass, type ClassTeacherCandidates } from '@shared/class-teacher';
+import { sendConfirmingReplace } from '@/lib/classTeacher';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
@@ -267,6 +269,14 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
 
     const effectiveClass = classId ?? assignments.data?.class_teacher?.grade_stream_id ?? NO_CLASS;
     const teacherRole = role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER';
+    // Who holds each class, so a taken class says so before it is picked.
+    const candidates = useApiQuery<ClassTeacherCandidates>(teacherRole ? CLASS_TEACHER_URL : null);
+    const holders = useMemo(() => {
+        const byClass = holdersByClass(candidates.data?.teachers ?? []);
+        for (const [classKey, holder] of byClass) if (holder.id === user.id) byClass.delete(classKey);
+        return byClass;
+    }, [candidates.data, user.id]);
+    const replacing = effectiveClass === NO_CLASS ? null : holders.get(effectiveClass) ?? null;
 
     const save = async () => {
         const payload: Record<string, unknown> = { user_id: user.id, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), role, is_active: active };
@@ -279,8 +289,8 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
         setSaving(true);
         setError(null);
         try {
-            await api.put('/api/admin/update-user', payload);
-            onSaved();
+            const saved = await sendConfirmingReplace((replace) => api.put('/api/admin/update-user', { ...payload, replace_class_teacher: replace }));
+            if (saved) onSaved();
         } catch (err) {
             setError(errorMessage(err, 'Failed to update'));
         } finally {
@@ -309,7 +319,25 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
                 />
             ) : null}
             {teacherRole ? (
-                <ChipSelect label="Class teacher of" options={[{ value: NO_CLASS, label: 'No class' }, ...streams.map((s) => ({ value: s.id, label: s.full_name }))]} value={effectiveClass} onChange={setClassId} />
+                <>
+                    <ChipSelect
+                        label="Class teacher of"
+                        options={[
+                            { value: NO_CLASS, label: 'No class' },
+                            ...streams.map((s) => {
+                                const holder = holders.get(s.id);
+                                return { value: s.id, label: s.full_name, hint: holder ? `Class teacher: ${holder.name}` : undefined };
+                            }),
+                        ]}
+                        value={effectiveClass}
+                        onChange={setClassId}
+                    />
+                    {replacing ? (
+                        <Text style={{ fontSize: 12, color: colors.muted, marginTop: -spacing.xs, marginBottom: spacing.sm }}>
+                            {replacing.name} is this class’s class teacher. Saving makes them a subject teacher.
+                        </Text>
+                    ) : null}
+                </>
             ) : null}
             {role === 'STAFF' ? <TextField label="Job title" value={jobTitle} onChangeText={setJobTitle} /> : null}
             <ToggleRow label="Active" description="Inactive accounts are signed out and can't sign in." value={active} onValueChange={setActive} />

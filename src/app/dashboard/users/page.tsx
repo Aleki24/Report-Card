@@ -116,7 +116,7 @@ export default function UsersPage() {
           editClassTeacherStreamId={h.editClassTeacherStreamId} setEditClassTeacherStreamId={h.setEditClassTeacherStreamId}
           editSubjectTeacherSubjects={h.editSubjectTeacherSubjects} setEditSubjectTeacherSubjects={h.setEditSubjectTeacherSubjects}
           gradeStreams={h.gradeStreams} subjects={h.subjects} grades={h.grades}
-          classTeacherAssignments={h.classTeacherAssignments}
+          classHolders={h.classHolders}
         />
       )}
 
