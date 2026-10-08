@@ -17,7 +17,8 @@ import { ExamPaperDrawer } from '@/components/academics/ExamPaperDrawer';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { paperFileField } from '@/lib/upload-client';
 import { dateTime, personName } from '@/lib/ops/format';
-import type { PaperStatus } from '@/lib/academics/exam-papers';
+import Link from 'next/link';
+import { moderatorNames, type PaperModerator, type PaperStatus } from '@/lib/academics/exam-papers';
 import {
     EMPTY_PAPER_FORM, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint, type ExamPaper,
 } from '@/lib/ops/forms/academics';
@@ -34,6 +35,9 @@ export default function ExamPapersPage() {
     const [files, setFiles] = useState<{ paper: File | null; scheme: File | null }>({ paper: null, scheme: null });
     const [saving, setSaving] = useState(false);
     const [query, setQuery] = useState('');
+    // Straight to moderation unless the teacher wants to keep working on it.
+    const [submitNow, setSubmitNow] = useState(true);
+    const [moderators, setModerators] = useState<PaperModerator[] | null>(null);
 
     const load = useCallback(async () => {
         try { setPapers(await opsFetch<ExamPaper[]>('/api/academics/exam-papers')); }
@@ -41,6 +45,9 @@ export default function ExamPapersPage() {
         finally { setLoading(false); }
     }, []);
     useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        opsFetch<PaperModerator[]>('/api/academics/exam-papers/moderators').then(setModerators).catch(() => setModerators(null));
+    }, []);
 
     const moderator = can('exam_papers.moderate') || can('exam_papers.manage');
     const manager = can('exam_papers.manage');
@@ -69,14 +76,16 @@ export default function ExamPapersPage() {
         if (!form.title.trim() || !form.subject_id || !files.paper) { toast.error('Add a title, subject and the paper file.'); return; }
         const body = new FormData();
         Object.entries(paperFormFields(form)).forEach(([k, v]) => body.append(k, v));
+        body.append('submit', String(submitNow));
         setSaving(true);
         try {
             // Straight to storage: through the server, files over 4.5 MB were refused.
             body.append(...await paperFileField('paper', files.paper));
             if (files.scheme) body.append(...await paperFileField('scheme', files.scheme));
-            await opsFetch('/api/academics/exam-papers', { method: 'POST', body });
-            toast.success('Paper uploaded as a draft. Submit it when ready.');
+            const created = await opsFetch<ExamPaper>('/api/academics/exam-papers', { method: 'POST', body });
+            toast.success(submitNow ? `Sent for moderation to ${moderatorNames(moderators)}.` : 'Saved as a draft. Submit it for moderation when it is ready.');
             setUploading(false);
+            setOpenId(created.id);
             setForm(EMPTY_PAPER_FORM);
             setFiles({ paper: null, scheme: null });
             await load();
@@ -94,9 +103,14 @@ export default function ExamPapersPage() {
         },
         {
             id: 'moderation', label: 'Moderation', icon: ClipboardCheck, hue: 'amber', badge: waiting, visible: moderator,
-            render: () => table(byStatus('SUBMITTED', 'RETURNED'), 'No papers are waiting for moderation.', [
-                { key: 'by', header: 'Set by', render: p => personName(p.uploader) },
-            ]),
+            render: () => (
+                <>
+                    <ModeratorsNote moderators={moderators} canAssign={can('duties.manage')} />
+                    {table(byStatus('SUBMITTED', 'RETURNED'), 'No papers are waiting for moderation.', [
+                        { key: 'by', header: 'Set by', render: p => personName(p.uploader) },
+                    ])}
+                </>
+            ),
         },
         {
             id: 'print', label: 'Print & release', shortLabel: 'Print', icon: Printer, hue: 'violet', badge: toPrint, visible: manager,
@@ -141,7 +155,7 @@ export default function ExamPapersPage() {
                 }))}
             />
 
-            {openId && <ExamPaperDrawer key={openId} paperId={openId} onClose={() => setOpenId(null)} onChanged={() => void load()} />}
+            {openId && <ExamPaperDrawer key={openId} paperId={openId} moderators={moderators} onClose={() => setOpenId(null)} onChanged={() => void load()} />}
 
             <Modal
                 isOpen={uploading}
@@ -181,8 +195,42 @@ export default function ExamPapersPage() {
                     <FormField label="Marking scheme" htmlFor="ep-scheme">
                         <InputField id="ep-scheme" type="file" accept=".pdf,.doc,.docx" onChange={e => setFiles(f => ({ ...f, scheme: e.target.files?.[0] ?? null }))} />
                     </FormField>
+                    <label htmlFor="ep-submit" className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 sm:col-span-2">
+                        <input id="ep-submit" type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" checked={submitNow} onChange={e => setSubmitNow(e.target.checked)} />
+                        <span className="min-w-0 text-sm">
+                            <span className="block font-medium">Submit for moderation now</span>
+                            <span className="block text-muted-foreground">
+                                {submitNow ? `It goes to ${moderatorNames(moderators)}.` : 'Saved as a draft: only you see it until you submit it.'}
+                            </span>
+                        </span>
+                    </label>
                 </FormGrid>
             </Modal>
         </>
+    );
+}
+
+/**
+ * Who moderates, above the queue. With only admins able to, an admin is
+ * shown how to share the work: the HOD and Director of Studies duties
+ * grant moderation.
+ */
+function ModeratorsNote({ moderators, canAssign }: { moderators: readonly PaperModerator[] | null; canAssign: boolean }) {
+    if (!moderators) return null;
+    const onlyAdmins = moderators.every(m => m.via === 'Admin');
+    const who = moderators.map(m => (m.via === 'Admin' ? m.name : `${m.name} (${m.via})`)).join(', ') || 'nobody yet';
+    return (
+        <div
+            role="note"
+            className={`flex flex-col gap-2 rounded-2xl border p-4 text-sm sm:flex-row sm:items-center sm:justify-between ${onlyAdmins ? 'border-amber-500/30 bg-amber-500/[0.06]' : 'border-border bg-muted/40'}`}
+        >
+            <p className="min-w-0">
+                <span className="font-medium">Moderators:</span> {who}.
+                {onlyAdmins && <span className="text-muted-foreground"> Only admins can moderate now. Give teachers the Head of Department or Director of Studies duty so they can moderate too.</span>}
+            </p>
+            {onlyAdmins && canAssign && (
+                <Link href="/dashboard/settings?tab=duties" className="btn-secondary w-full shrink-0 justify-center sm:w-auto">Assign duties</Link>
+            )}
+        </div>
     );
 }

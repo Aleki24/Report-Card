@@ -26,17 +26,23 @@ export const GET = route('exam papers list', { module: 'exam_papers', permission
     return data ?? [];
 });
 
-/** A new paper: details plus the paper (and optionally its marking scheme). */
+/**
+ * A new paper: details plus the paper (and optionally its marking scheme).
+ * With `submit=true` it goes straight to moderation, as SUBMIT would; a
+ * paper left as a draft waited unseen because nothing said it still had to
+ * be submitted.
+ */
 export const POST = route('exam papers create', { module: 'exam_papers', permission: 'exam_papers.upload' }, async ({ access, request }) => {
     const form = await request.formData().catch(() => { throw new HttpError(400, 'Send the paper as a form upload.'); });
     const values = parsePaperFields(detailFields(form), false);
     await assertPaperRefs(values, access.schoolId);
     if (!formHasFile(form, 'paper')) throw new HttpError(400, 'Attach the exam paper.');
+    const submit = form.get('submit') === 'true';
 
     const db = createSupabaseAdmin();
     const { data: created, error } = await db
         .from('exam_papers')
-        .insert({ ...values, school_id: access.schoolId, uploaded_by: access.userId })
+        .insert({ ...values, school_id: access.schoolId, uploaded_by: access.userId, status: submit ? 'SUBMITTED' : 'DRAFT' })
         .select('id')
         .single();
     if (error || !created) throw error ?? new Error('insert failed');
@@ -45,7 +51,13 @@ export const POST = route('exam papers create', { module: 'exam_papers', permiss
         const files = await storeFormFiles(form, access.schoolId, created.id);
         const { data, error: updateError } = await db.from('exam_papers').update(files).eq('id', created.id).select(PAPER_SELECT).single();
         if (updateError) throw updateError;
-        await audit(access, 'create', 'exam_papers', created.id, { title: values.title });
+        if (submit) {
+            const { error: reviewError } = await db.from('exam_paper_reviews').insert({
+                school_id: access.schoolId, paper_id: created.id, reviewer_id: access.userId, action: 'SUBMIT', comment: null,
+            });
+            if (reviewError) throw reviewError;
+        }
+        await audit(access, 'create', 'exam_papers', created.id, { title: values.title, submitted: submit });
         return data;
     } catch (err) {
         // No half-created paper without its file.

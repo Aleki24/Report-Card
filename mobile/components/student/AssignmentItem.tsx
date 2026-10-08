@@ -3,8 +3,9 @@ import { Pressable, Text, View } from 'react-native';
 import { ChevronDown, ChevronUp, CircleCheck, Paperclip, Star, type LucideIcon } from 'lucide-react-native';
 import { dueLabel, dueState, localToday, type StudentAssignment } from '@shared/assignments';
 import { attachmentName } from '@shared/attachments';
-import { errorMessage, formatDate } from '@/lib/format';
-import { openAttachment } from '@/lib/openAttachment';
+import { formatDate } from '@/lib/format';
+import { useFileViewer } from '@/components/FileViewer';
+import { viewableAttachment } from '@/lib/viewableFile';
 import { fonts, makeStyles, radius, spacing, useTheme, type Palette } from '@/lib/theme';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/Toast';
@@ -58,6 +59,7 @@ export function AssignmentItem({ assignment: a, divider, showSubject = true, onC
     const { colors } = useTheme();
     const styles = useStyles();
     const toast = useToast();
+    const viewer = useFileViewer();
     const [open, setOpen] = useState(false);
     const [handingIn, setHandingIn] = useState(false);
     const today = localToday();
@@ -67,7 +69,7 @@ export function AssignmentItem({ assignment: a, divider, showSubject = true, onC
     const Chevron = open ? ChevronUp : ChevronDown;
     const mine = a.submission;
 
-    const view = (url: string) => void openAttachment(url).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
+    const view = (url: string) => viewer.view(viewableAttachment(url));
 
     return (
         <View style={[styles.item, divider && styles.divider]}>

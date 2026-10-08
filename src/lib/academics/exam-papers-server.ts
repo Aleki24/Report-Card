@@ -3,7 +3,9 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { HttpError, assertInSchool, type Access } from '@/lib/platform/access';
 import { optionalCount, optionalDateTime, optionalText, optionalUuid, text, uuid } from '@/lib/ops/zod-fields';
 import { resolveAttachmentType } from '@/lib/attachments';
-import { MAX_PAPER_BYTES, PAPER_FILE_KINDS, PAPER_MIME_TYPES, type PaperFileKind, type PaperStatus } from './exam-papers';
+import { DUTIES, grantAllows, isDutyKey } from '@/lib/platform/permissions';
+import type { ModuleKey } from '@/lib/platform/modules';
+import { MAX_PAPER_BYTES, PAPER_FILE_KINDS, PAPER_MIME_TYPES, type PaperFileKind, type PaperModerator, type PaperStatus } from './exam-papers';
 
 export const BUCKET = 'exam-papers';
 
@@ -131,9 +133,41 @@ export function formHasFile(form: FormData, kind: PaperFileKind): boolean {
     return (file instanceof File && file.size > 0) || (typeof staged === 'string' && staged.length > 0);
 }
 
-/** Form fields minus the staged-upload ones, which are files rather than details. */
+/** Form fields minus the staged-upload ones (files) and `submit` (an action), which are not details. */
 export function detailFields(form: FormData): Record<string, string> {
     const raw = formFields(form);
     for (const kind of PAPER_FILE_KINDS) delete raw[stagedField(kind)];
+    delete raw.submit;
     return raw;
+}
+
+interface NamedUser { id: string; first_name: string | null; last_name: string | null; is_active: boolean | null }
+
+const fullName = (u: Pick<NamedUser, 'first_name' | 'last_name'>) => `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || 'Unnamed';
+
+/**
+ * Everyone who can moderate this school's papers: its admins, and staff
+ * holding a current duty that grants moderation (HOD, Director of Studies,
+ * Deputy, Exams Officer, Principal). Each person once, admins first.
+ */
+export async function paperModerators(schoolId: string, modules: ReadonlySet<ModuleKey>): Promise<PaperModerator[]> {
+    const db = createSupabaseAdmin();
+    const today = new Date().toISOString().slice(0, 10);
+    const [adminsRes, dutiesRes] = await Promise.all([
+        db.from('users').select('id, first_name, last_name, is_active').eq('school_id', schoolId).eq('role', 'ADMIN').eq('is_active', true).order('first_name'),
+        db.from('user_duties').select('duty, starts_on, ends_on, users!user_duties_user_id_fkey ( id, first_name, last_name, is_active )').eq('school_id', schoolId),
+    ]);
+    if (adminsRes.error) throw adminsRes.error;
+    if (dutiesRes.error) throw dutiesRes.error;
+
+    const found = new Map<string, PaperModerator>();
+    for (const u of (adminsRes.data ?? []) as NamedUser[]) found.set(u.id, { id: u.id, name: fullName(u), via: 'Admin' });
+    for (const d of dutiesRes.data ?? []) {
+        const user = (Array.isArray(d.users) ? d.users[0] : d.users) as NamedUser | null;
+        const current = (!d.starts_on || d.starts_on <= today) && (!d.ends_on || d.ends_on >= today);
+        if (!user?.is_active || !current || !isDutyKey(d.duty) || found.has(user.id)) continue;
+        if (!grantAllows(DUTIES[d.duty].grants, modules, 'exam_papers.moderate')) continue;
+        found.set(user.id, { id: user.id, name: fullName(user), via: DUTIES[d.duty].label });
+    }
+    return [...found.values()];
 }

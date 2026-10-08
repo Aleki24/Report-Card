@@ -2,15 +2,15 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { errorMessage, formatPercent, scoreColor } from '@/lib/format';
+import { formatPercent, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     BackLink, Badge, Card, EmptyState, ListCard, ListRow, LoadingView, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
 import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
 import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
-import { useToast } from '@/components/Toast';
-import { openAttachment } from '@/lib/openAttachment';
+import { useFileViewer } from '@/components/FileViewer';
+import { viewableAttachment } from '@/lib/viewableFile';
 import type { DashboardData, PerformanceTrend, Subject } from '@/lib/types';
 
 export default function SubjectDetailScreen() {
@@ -20,7 +20,7 @@ export default function SubjectDetailScreen() {
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');
     const perf = useApiQuery<PerformanceTrend[]>('/api/school/student/performance');
     const dash = useApiQuery<DashboardData>('/api/school/student/dashboard');
-    const toast = useToast();
+    const viewer = useFileViewer();
 
     const subject = (subjects.data ?? []).find((s) => s.id === subjectId) ?? null;
     const trend = useMemo(
@@ -103,7 +103,7 @@ export default function SubjectDetailScreen() {
                 {materials.length === 0 ? (
                     <EmptyState title="No materials for this subject" />
                 ) : (
-                    materials.map((m) => <ListRow key={m.id} title={m.title} subtitle={m.fileType} onPress={m.fileUrl ? () => void openAttachment(m.fileUrl as string).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file'))) : undefined} />)
+                    materials.map((m) => <ListRow key={m.id} title={m.title} subtitle={m.fileType} onPress={m.fileUrl ? () => viewer.view(viewableAttachment(m.fileUrl as string)) : undefined} />)
                 )}
             </ListCard>
         </Screen>
