@@ -107,6 +107,8 @@ export interface Api {
      * itself because the URL needs auth.
      */
     download: (path: string, fileName: string, mimeType?: string) => Promise<SavedFile>;
+    /** Fetches a file into the app's cache (not saved anywhere the person sees), e.g. to show it. */
+    fetchFile: (source: FileSource, fileName: string) => Promise<File>;
     /**
      * Lets the user pick an image and uploads it to `/api/school/upload`
      * (the endpoint the web uses for assignment files, photos and logos).
@@ -151,6 +153,9 @@ function appendFile(form: FormData, field: string, file: PickedFile, type: strin
     // expo/fetch reads `name`, `type` and `bytes()` from the part (expo/src/winter/fetch/convertFormData.ts).
     form.append(field, part as unknown as Blob);
 }
+
+/** Where a file lives: an API route (sent with the sign-in token) or a public link. */
+export type FileSource = { kind: 'api'; path: string } | { kind: 'url'; url: string };
 
 /** A file chosen with the system picker, ready to upload. */
 export interface PickedFile {
@@ -241,6 +246,29 @@ export function useApi(): Api {
             const res = await fetch(signed.uploadUrl, { method: 'PUT', headers: { ...signed.headers, 'x-upsert': 'false' }, body }).catch(() => null);
             return !!res?.ok;
         };
+        const fetchFile = async (source: FileSource, fileName: string): Promise<File> => {
+            const token = source.kind === 'api' ? await getTokenRef.current() : null;
+            const url = source.kind === 'api' ? `${API_URL}${source.path}` : source.url;
+            const target = new File(Paths.cache, fileName);
+            if (target.exists) target.delete();
+            let file: File;
+            try {
+                file = await File.downloadFileAsync(url, target, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            } catch (err) {
+                throw new ApiError(err instanceof Error ? err.message : 'Download failed', 0);
+            }
+            // A failed request still lands on disk; a small JSON body is the
+            // backend's `{ error }`, not a document.
+            if (file.size < 4096) {
+                const text = await file.text();
+                if (text.trimStart().startsWith('{')) {
+                    file.delete();
+                    const body = JSON.parse(text) as ErrorBody;
+                    throw new ApiError(body.error ?? 'Download failed', 0, body.code ?? null);
+                }
+            }
+            return file;
+        };
         // Through the server: fine for logos and photos, but Vercel refuses bodies over 4.5 MB.
         const uploadPicked = async (picked: PickedFile, types: readonly string[], path: string, wrongType: string): Promise<UploadedFile> => {
             const json = await sendForm<{ url?: string }>('POST', path, {}, { file: checkPicked(picked, types, wrongType) });
@@ -264,33 +292,14 @@ export function useApi(): Api {
             put: (path, body) => send('PUT', path, body),
             del: (path, body) => send('DELETE', path, body),
             download: async (path, fileName, mimeType = 'application/pdf') => {
-                const token = await getTokenRef.current();
                 if (Platform.OS === 'web') {
+                    const token = await getTokenRef.current();
                     await downloadInBrowser(`${API_URL}${path}`, token, fileName);
                     return { uri: fileName, name: fileName, mimeType, folder: 'Downloads' };
                 }
-                const target = new File(Paths.cache, fileName);
-                if (target.exists) target.delete();
-                let file: File;
-                try {
-                    file = await File.downloadFileAsync(`${API_URL}${path}`, target, {
-                        headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    });
-                } catch (err) {
-                    throw new ApiError(err instanceof Error ? err.message : 'Download failed', 0);
-                }
-                // A failed request still lands on disk; a small JSON body is the
-                // backend's `{ error }`, not a document.
-                if (file.size < 4096) {
-                    const text = await file.text();
-                    if (text.trimStart().startsWith('{')) {
-                        file.delete();
-                        const body = JSON.parse(text) as ErrorBody;
-                        throw new ApiError(body.error ?? 'Download failed', 0, body.code ?? null);
-                    }
-                }
-                return saveToDevice(file, fileName, mimeType);
+                return saveToDevice(await fetchFile({ kind: 'api', path }, fileName), fileName, mimeType);
             },
+            fetchFile,
             pickFile,
             sendForm,
             putSigned,

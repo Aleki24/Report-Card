@@ -12,19 +12,21 @@ import { paperFileField } from '@/lib/upload-client';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { dateTime, humanize, personName } from '@/lib/ops/format';
 import {
-    EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles,
-    type PaperAction, type PaperFileKind,
+    EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles, paperNextStep,
+    type PaperAction, type PaperFileKind, type PaperModerator,
 } from '@/lib/academics/exam-papers';
 import { PAPER_ACTION_ORDER as ACTION_ORDER, PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from '@/lib/ops/forms/academics';
 
 interface Props {
     paperId: string | null;
+    /** Who moderates, to say where a submitted paper waits. */
+    moderators?: readonly PaperModerator[] | null;
     onClose: () => void;
     onChanged: () => void;
 }
 
 /** A paper's details, files, moderation history and the actions open to the viewer. */
-export function ExamPaperDrawer({ paperId, onClose, onChanged }: Props) {
+export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Props) {
     const { profile, can } = useAuth();
     const [paper, setPaper] = useState<(ExamPaper & { reviews: PaperReview[] }) | null>(null);
     const [comment, setComment] = useState('');
@@ -93,6 +95,7 @@ export function ExamPaperDrawer({ paperId, onClose, onChanged }: Props) {
                 <div className="flex flex-col gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton-bone h-10 rounded-xl" />)}</div>
             ) : (
                 <div className="flex flex-col gap-6">
+                    <p role="note" className="rounded-xl border border-primary/20 bg-primary/[0.05] p-3 text-sm">{paperNextStep(paper, actor, moderators)}</p>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                         <div><dt className="text-xs text-muted-foreground">Status</dt><dd className="mt-0.5"><StatusPill status={paper.status} tones={PAPER_STATUS_TONES} /></dd></div>
                         <div><dt className="text-xs text-muted-foreground">Subject</dt><dd className="mt-0.5 font-medium">{paper.subject?.name ?? '—'} {paper.paper_label && <span className="text-muted-foreground">({paper.paper_label})</span>}</dd></div>

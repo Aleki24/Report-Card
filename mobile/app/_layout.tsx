@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { UserProvider, useCurrentUser } from '@/lib/UserContext';
 import { ToastProvider } from '@/components/Toast';
+import { FileViewerProvider } from '@/components/FileViewer';
 import { Onboarding } from '@/components/Onboarding';
 import { ErrorBanner } from '@/components/ui';
 import { BrandLoader } from '@/components/Loader';
@@ -146,7 +147,9 @@ function AuthGate() {
 
     return (
         <UserProvider>
-            <RoleGate />
+            <FileViewerProvider>
+                <RoleGate />
+            </FileViewerProvider>
         </UserProvider>
     );
 }

@@ -18,7 +18,8 @@ import {
 import { RequireScreen } from '@/components/RequireScreen';
 import type { StaffAssignment, TeacherSubject } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
-import { openAttachment } from '@/lib/openAttachment';
+import { useFileViewer } from '@/components/FileViewer';
+import { viewableAttachment } from '@/lib/viewableFile';
 import { attachmentName } from '@shared/attachments';
 
 interface Draft {
@@ -101,6 +102,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
     const styles = useStyles();
     const api = useApi();
     const toast = useToast();
+    const viewer = useFileViewer();
     const { profile, role } = useCurrentUser();
     const { data, loading, error, refresh } = useApiQuery<StaffAssignment[]>('/api/school/assignments');
     const subjects = useApiQuery<TeacherSubject[]>('/api/school/data?type=subjects');
@@ -159,7 +161,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
         }
     };
 
-    const open = (url: string) => void openAttachment(url).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
+    const open = (url: string) => viewer.view(viewableAttachment(url));
 
     const remove = (a: StaffAssignment) =>
         confirmAlert('Delete this assignment?', `${a.title}${a.submissionCount > 0 ? ` and its ${pluralize(a.submissionCount, 'submission')}` : ''} will be removed.`, [
@@ -312,6 +314,7 @@ function Submissions() {
     const styles = useStyles();
     const api = useApi();
     const toast = useToast();
+    const viewer = useFileViewer();
     const { data, loading, error, refresh } = useApiQuery<Submission[]>('/api/school/submissions');
     const [grading, setGrading] = useState<{ id: string; grade: string; feedback: string } | null>(null);
     const [saving, setSaving] = useState(false);
@@ -357,7 +360,7 @@ function Submissions() {
                                     <TextField label="Grade" value={grading.grade} onChangeText={(grade) => setGrading({ ...grading, grade })} keyboardType="decimal-pad" />
                                     <TextField label="Feedback" value={grading.feedback} onChangeText={(feedback) => setGrading({ ...grading, feedback })} multiline />
                                     <ButtonRow>
-                                        {s.fileUrl ? <Button size="sm" variant="ghost" label="Open file" onPress={() => void openAttachment(s.fileUrl as string).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')))} /> : null}
+                                        {s.fileUrl ? <Button size="sm" variant="ghost" label="Open file" onPress={() => viewer.view(viewableAttachment(s.fileUrl as string))} /> : null}
                                         <Button size="sm" variant="secondary" label="Cancel" onPress={() => setGrading(null)} />
                                         <Button size="sm" label="Save grade" onPress={save} loading={saving} />
                                     </ButtonRow>

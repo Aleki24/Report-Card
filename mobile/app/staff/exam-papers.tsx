@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { dateTime, personName } from '@shared/ops/format';
-import type { PaperStatus } from '@shared/academics/exam-papers';
+import { moderatorNames, paperNextStep, type PaperActor, type PaperModerator, type PaperStatus } from '@shared/academics/exam-papers';
 import {
     EMPTY_PAPER_FORM, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint,
     type ExamPaper, type PaperForm,
 } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, LoadingView, SearchField, StatGrid, StatTile, TextField } from '@/components/ui';
+import { Button, ButtonRow, Card, EmptyState, ErrorBanner, InfoRow, LoadingView, Notice, SearchField, StatGrid, StatTile, TextField, ToggleRow } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { ExamPaperSheet } from '@/components/academics/ExamPaperSheet';
 import { FormSheet } from '@/components/ops/FormSheet';
@@ -18,11 +19,21 @@ import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { useOpsData } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
-import { spacing, useTheme } from '@/lib/theme';
+import { fonts, spacing, useTheme } from '@/lib/theme';
+
+const MODERATORS_URL = '/api/academics/exam-papers/moderators';
 
 type Extra = 'setBy' | 'print';
 
-function PaperList({ papers, empty, extra, onOpen }: { papers: ExamPaper[]; empty: string; extra?: Extra; onOpen: (id: string) => void }) {
+function PaperList({ papers, empty, extra, onOpen, actor, moderators }: {
+    papers: ExamPaper[];
+    empty: string;
+    extra?: Extra;
+    onOpen: (id: string) => void;
+    actor: PaperActor;
+    moderators: readonly PaperModerator[] | null;
+}) {
+    const { colors } = useTheme();
     if (papers.length === 0) return <EmptyState title={empty} />;
     return (
         <View>
@@ -38,6 +49,9 @@ function PaperList({ papers, empty, extra, onOpen }: { papers: ExamPaper[]; empt
                         </>
                     ) : null}
                     <InfoRow label="Updated" value={dateTime(p.updated_at)} />
+                    <Text style={{ fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, marginTop: spacing.xs }}>
+                        {paperNextStep(p, actor, moderators)}
+                    </Text>
                     <ButtonRow>
                         <StatusPill status={p.status} tones={PAPER_STATUS_TONES} />
                         {extra === 'print' ? <StatusPill status={p.print_status} tones={PRINT_STATUS_TONES} /> : null}
@@ -49,12 +63,19 @@ function PaperList({ papers, empty, extra, onOpen }: { papers: ExamPaper[]; empt
     );
 }
 
-function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function UploadSheet({ moderators, onClose, onDone }: {
+    moderators: readonly PaperModerator[] | null;
+    onClose: () => void;
+    /** With the new paper's id, to open it. */
+    onDone: (paperId: string) => void;
+}) {
     const api = useApi();
     const toast = useToast();
     const [form, setForm] = useState<PaperForm>(EMPTY_PAPER_FORM);
     const [files, setFiles] = useState<{ paper: PickedFile | null; scheme: PickedFile | null }>({ paper: null, scheme: null });
     const [saving, setSaving] = useState(false);
+    // Straight to moderation unless the teacher wants to keep working on it.
+    const [submitNow, setSubmitNow] = useState(true);
     // Shown in the form itself: tapping Upload with a field missing used to
     // look like nothing happened.
     const [problem, setProblem] = useState<string | null>(null);
@@ -76,9 +97,13 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
         setSaving(true);
         try {
             const upload = await paperUploadForm(api, files);
-            await api.sendForm('POST', '/api/academics/exam-papers', { ...paperFormFields({ ...form, release_at: form.release_at.replace(' ', 'T') }), ...upload.fields }, upload.files);
-            toast.success('Paper uploaded as a draft. Submit it when ready.');
-            onDone();
+            const { data: created } = await api.sendForm<{ data: ExamPaper }>('POST', '/api/academics/exam-papers', {
+                ...paperFormFields({ ...form, release_at: form.release_at.replace(' ', 'T') }),
+                ...upload.fields,
+                submit: String(submitNow),
+            }, upload.files);
+            toast.success(submitNow ? `Sent for moderation to ${moderatorNames(moderators)}.` : 'Saved as a draft. Submit it for moderation when it is ready.');
+            onDone(created.id);
         } catch (err) {
             setProblem(errorMessage(err, 'Upload failed'));
         } finally {
@@ -99,14 +124,24 @@ function UploadSheet({ onClose, onDone }: { onClose: () => void; onDone: () => v
                 <Button variant="secondary" label={files.paper ? `Paper chosen: ${files.paper.name}` : 'Choose paper (PDF or Word) *'} onPress={() => void pick('paper')} />
                 <Button variant="secondary" label={files.scheme ? `Scheme chosen: ${files.scheme.name}` : 'Choose marking scheme'} onPress={() => void pick('scheme')} />
             </ButtonRow>
+            <ToggleRow
+                label="Submit for moderation now"
+                description={submitNow ? `It goes to ${moderatorNames(moderators)}.` : 'Saved as a draft: only you see it until you submit it.'}
+                value={submitNow}
+                onValueChange={setSubmitNow}
+            />
         </FormSheet>
     );
 }
 
 export default function ExamPapersScreen() {
     const { can, profile } = useCurrentUser();
+    const router = useRouter();
     const { data, loading, error, reload } = useOpsData<ExamPaper[]>('/api/academics/exam-papers');
+    const { data: moderators } = useOpsData<PaperModerator[]>(MODERATORS_URL);
+    const actor: PaperActor = { userId: profile?.id ?? '', can };
     const [openId, setOpenId] = useState<string | null>(null);
+    const list = { actor, moderators, onOpen: setOpenId };
     const [uploading, setUploading] = useState(false);
     const [query, setQuery] = useState('');
     const papers = useMemo(() => data ?? [], [data]);
@@ -139,25 +174,56 @@ export default function ExamPapersScreen() {
                 tabs={[
                     {
                         id: 'mine', label: 'My papers', visible: can('exam_papers.upload'),
-                        render: () => <PaperFrame {...frame}><PaperList papers={filtered.filter((p) => p.uploaded_by === profile?.id)} empty="You have not uploaded any papers yet." onOpen={setOpenId} /></PaperFrame>,
+                        render: () => <PaperFrame {...frame}><PaperList papers={filtered.filter((p) => p.uploaded_by === profile?.id)} empty="You have not uploaded any papers yet." {...list} /></PaperFrame>,
                     },
                     {
                         id: 'moderation', label: `Moderation${waiting ? ` (${waiting})` : ''}`, visible: moderator,
-                        render: () => <PaperFrame {...frame} figures><PaperList papers={byStatus('SUBMITTED', 'RETURNED')} empty="No papers are waiting for moderation." extra="setBy" onOpen={setOpenId} /></PaperFrame>,
+                        render: () => (
+                            <PaperFrame {...frame} figures>
+                                <ModeratorsNote moderators={moderators} canAssign={can('duties.manage')} onAssign={() => router.push({ pathname: '/staff/settings', params: { tab: 'duties' } })} />
+                                <PaperList papers={byStatus('SUBMITTED', 'RETURNED')} empty="No papers are waiting for moderation." extra="setBy" {...list} />
+                            </PaperFrame>
+                        ),
                     },
                     {
                         id: 'print', label: `Print & release${toPrint ? ` (${toPrint})` : ''}`, visible: manager,
-                        render: () => <PaperFrame {...frame} figures><PaperList papers={byStatus('APPROVED', 'LOCKED')} empty="Approved papers appear here for printing." extra="print" onOpen={setOpenId} /></PaperFrame>,
+                        render: () => <PaperFrame {...frame} figures><PaperList papers={byStatus('APPROVED', 'LOCKED')} empty="Approved papers appear here for printing." extra="print" {...list} /></PaperFrame>,
                     },
                     {
                         id: 'archive', label: 'Past papers',
-                        render: () => <PaperFrame {...frame}><PaperList papers={byStatus('RELEASED')} empty="Released papers become a revision library here." onOpen={setOpenId} /></PaperFrame>,
+                        render: () => <PaperFrame {...frame}><PaperList papers={byStatus('RELEASED')} empty="Released papers become a revision library here." {...list} /></PaperFrame>,
                     },
                 ]}
             />
-            {openId ? <ExamPaperSheet key={openId} paperId={openId} onClose={() => setOpenId(null)} onChanged={() => void reload()} /> : null}
-            {uploading ? <UploadSheet onClose={() => setUploading(false)} onDone={() => { setUploading(false); void reload(); }} /> : null}
+            {openId ? <ExamPaperSheet key={openId} paperId={openId} moderators={moderators} onClose={() => setOpenId(null)} onChanged={() => void reload()} /> : null}
+            {uploading ? (
+                <UploadSheet
+                    moderators={moderators}
+                    onClose={() => setUploading(false)}
+                    onDone={(id) => { setUploading(false); setOpenId(id); void reload(); }}
+                />
+            ) : null}
         </>
+    );
+}
+
+/**
+ * Who moderates, above the queue. With only admins able to, an admin is
+ * shown how to share the work: the HOD and Director of Studies duties
+ * grant moderation.
+ */
+function ModeratorsNote({ moderators, canAssign, onAssign }: { moderators: readonly PaperModerator[] | null; canAssign: boolean; onAssign: () => void }) {
+    if (!moderators) return null;
+    const onlyAdmins = moderators.every((m) => m.via === 'Admin');
+    const who = moderators.map((m) => (m.via === 'Admin' ? m.name : `${m.name} (${m.via})`)).join(', ') || 'nobody yet';
+    return (
+        <View style={{ marginBottom: spacing.sm }}>
+            <Notice
+                tone={onlyAdmins ? 'warning' : 'info'}
+                message={`Moderators: ${who}.${onlyAdmins ? ' Only admins can moderate now. Give teachers the Head of Department or Director of Studies duty so they can moderate too.' : ''}`}
+            />
+            {onlyAdmins && canAssign ? <ButtonRow><Button size="sm" variant="secondary" label="Assign duties" onPress={onAssign} /></ButtonRow> : null}
+        </View>
     );
 }
 

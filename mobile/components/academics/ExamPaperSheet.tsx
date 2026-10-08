@@ -1,16 +1,17 @@
-import { useDownload } from '@/lib/useDownload';
 import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { dateTime, humanize, personName } from '@shared/ops/format';
-import { EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles, type PaperAction, type PaperFileKind } from '@shared/academics/exam-papers';
+import { EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles, paperNextStep, type PaperAction, type PaperFileKind, type PaperModerator } from '@shared/academics/exam-papers';
 import { PAPER_ACTION_ORDER, PAPER_STATUS_TONES, type ExamPaper, type PaperReview } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, ChipSelect, InfoRow, LoadingView, SectionLabel, TextField } from '@/components/ui';
+import { Button, ButtonRow, ChipSelect, InfoRow, LoadingView, Notice, SectionLabel, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { FormSheet } from '@/components/ops/FormSheet';
 import { StatusPill } from '@/components/ops/bits';
 import { useApi, type PickedFile } from '@/lib/api';
 import { errorMessage, fileSafe } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
+import { attachmentTypeOf, fileExtension } from '@shared/attachments';
+import { useFileViewer } from '@/components/FileViewer';
 import { paperUploadForm, pickPaperFile } from '@/lib/examPaperFiles';
 import { useCurrentUser } from '@/lib/UserContext';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
@@ -18,8 +19,14 @@ import { spacing, fonts, makeStyles } from '@/lib/theme';
 type Detail = ExamPaper & { reviews: PaperReview[] };
 
 /** A paper's details, files, moderation history and the actions open to the viewer — the web's paper drawer. */
-export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: string; onClose: () => void; onChanged: () => void }) {
-    const download = useDownload();
+export function ExamPaperSheet({ paperId, moderators, onClose, onChanged }: {
+    paperId: string;
+    /** Who moderates, to say where a submitted paper waits. */
+    moderators?: readonly PaperModerator[] | null;
+    onClose: () => void;
+    onChanged: () => void;
+}) {
+    const viewer = useFileViewer();
     const styles = useStyles();
     const api = useApi();
     const toast = useToast();
@@ -58,10 +65,15 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
         `${TRANSITIONS[action].label}: done.`,
     ).then((ok) => { if (ok) setComment(''); });
 
+    // Shown in the app; Save and Open in another app are in the viewer.
     const openFile = (kind: PaperFileKind) => {
-        if (!paper) return;
-        download(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, `${fileSafe(paper.title)}-${kind}.pdf`)
-            .catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')));
+        const path = kind === 'paper' ? paper?.paper_path : paper?.scheme_path;
+        if (!paper || !path) return;
+        viewer.view({
+            source: { kind: 'api', path: `/api/academics/exam-papers/${paperId}/file?kind=${kind}` },
+            name: `${fileSafe(paper.title)}-${kind}.${fileExtension(path)}`,
+            type: attachmentTypeOf(path),
+        });
     };
 
     const pick = async (kind: 'paper' | 'scheme') => {
@@ -82,6 +94,7 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
             {!paper ? <LoadingView /> : (
                 <View>
                     <View style={{ marginBottom: spacing.sm }}><StatusPill status={paper.status} tones={PAPER_STATUS_TONES} /></View>
+                    <Notice tone="info" message={paperNextStep(paper, actor, moderators)} />
                     <InfoRow label="Subject" value={`${paper.subject?.name ?? '—'}${paper.paper_label ? ` (${paper.paper_label})` : ''}`} />
                     <InfoRow label="Class" value={paper.grade?.name_display ?? 'Any'} />
                     <InfoRow label="Term / exam" value={[paper.term?.name, paper.exam?.name].filter(Boolean).join(' · ') || '—'} />
@@ -96,7 +109,7 @@ export function ExamPaperSheet({ paperId, onClose, onChanged }: { paperId: strin
                                 <Button variant="secondary" label="Open paper" onPress={() => openFile('paper')} disabled={!paper.paper_path} />
                                 <Button variant="secondary" label="Marking scheme" onPress={() => openFile('scheme')} disabled={!paper.scheme_path} />
                             </ButtonRow>
-                            <Text style={styles.note}>PDFs open stamped with your name and the time. Every download is logged.</Text>
+                            <Text style={styles.note}>PDFs open stamped with your name and the time. Every opening is logged.</Text>
                         </>
                     ) : null}
 

@@ -18,7 +18,8 @@ import type { DashboardData, FeeRecord } from '@/lib/types';
 import { Notice } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
-import { openAttachment } from '@/lib/openAttachment';
+import { useFileViewer } from '@/components/FileViewer';
+import { viewableAttachment } from '@/lib/viewableFile';
 import { StudyGoals } from '@/components/student/StudyGoals';
 import { HeroActions, HeroChip, HeroFrame, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
@@ -68,6 +69,7 @@ export function StudentHome() {
     const styles = useStyles();
     const router = useRouter();
     const toast = useToast();
+    const viewer = useFileViewer();
     const { profile } = useCurrentUser();
     const passMark = useSchoolPassMark();
     const dash = useApiQuery<DashboardData>('/api/school/student/dashboard');
@@ -248,7 +250,7 @@ export function StudentHome() {
                 {(data?.materials ?? []).length > 0 ? (
                     <InsightCard title="Notes & learning materials" meta="Shared by your teachers">
                         {(data?.materials ?? []).map((m, n) => (
-                            <Pressable key={m.id} disabled={!m.fileUrl} onPress={() => m.fileUrl && void openAttachment(m.fileUrl).catch((err: unknown) => toast.error(errorMessage(err, 'Could not open the file')))} style={[styles.news, n > 0 && styles.hwBorder]} accessibilityRole="link">
+                            <Pressable key={m.id} disabled={!m.fileUrl} onPress={() => m.fileUrl && viewer.view(viewableAttachment(m.fileUrl))} style={[styles.news, n > 0 && styles.hwBorder]} accessibilityRole="link">
                                 <View style={[styles.newsIcon, { backgroundColor: colors.successBg }]}><FileText size={16} color={colors.success} /></View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={styles.resultName} numberOfLines={1}>{m.title}</Text>

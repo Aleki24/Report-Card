@@ -71,3 +71,60 @@ export function canOpenFiles(paper: { status: PaperStatus; uploaded_by: string |
     if (actor.can('exam_papers.moderate') || actor.can('exam_papers.manage')) return true;
     return paper.status === 'RELEASED' && actor.can('exam_papers.upload');
 }
+
+/** Someone who can moderate this school's papers, and what lets them. */
+export interface PaperModerator {
+    id: string;
+    name: string;
+    /** "Admin", or the duty that grants moderation ("Head of Department"). */
+    via: string;
+}
+
+/** "Ann, Ben and Cy"; more than three end "and N others". */
+function nameList(names: readonly string[]): string {
+    if (names.length <= 1) return names[0] ?? '';
+    const shown = names.length > 3 ? [...names.slice(0, 3), `${names.length - 3} other${names.length === 4 ? '' : 's'}`] : names;
+    return `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`;
+}
+
+/** Who a submitted paper waits for, in words. */
+export function moderatorNames(moderators: readonly PaperModerator[] | null | undefined): string {
+    return moderators?.length ? nameList(moderators.map(m => m.name)) : 'a moderator (an HOD or the Director of Studies)';
+}
+
+/**
+ * What happens next to a paper, said to the person looking at it: uploading
+ * a paper used to leave it a draft with no hint that it still had to be
+ * submitted, or who would moderate it.
+ */
+export function paperNextStep(
+    paper: { status: PaperStatus; uploaded_by: string | null },
+    actor: PaperActor,
+    moderators?: readonly PaperModerator[] | null,
+): string {
+    const mine = paper.uploaded_by === actor.userId;
+    switch (paper.status) {
+        case 'DRAFT':
+            return canAct('SUBMIT', paper, actor)
+                ? `Not sent yet. Tap “${TRANSITIONS.SUBMIT.label}” when it is ready, and ${moderatorNames(moderators)} will be able to moderate it.`
+                : 'A draft: the teacher has not submitted it for moderation yet.';
+        case 'SUBMITTED':
+            return canAct('APPROVE', paper, actor)
+                ? 'Waiting for you: open the paper, then approve it or return it with a comment saying what to change.'
+                : `Submitted. Waiting for ${moderatorNames(moderators)} to moderate it.`;
+        case 'RETURNED':
+            return mine
+                ? 'Returned for changes. Read the comments below, replace the file, then submit it again.'
+                : 'Returned to the teacher for changes.';
+        case 'APPROVED':
+            return canAct('LOCK', paper, actor)
+                ? 'Approved. Lock it for printing when the copies are being made.'
+                : 'Approved. The exams office will lock it for printing.';
+        case 'LOCKED':
+            return canAct('RELEASE', paper, actor)
+                ? 'Locked for printing. Release it to past papers once the exam is over.'
+                : 'Locked for printing. It becomes a past paper after the exam.';
+        case 'RELEASED':
+            return 'Released: every teacher can open it under Past papers.';
+    }
+}
