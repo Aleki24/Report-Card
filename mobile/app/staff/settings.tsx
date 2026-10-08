@@ -17,6 +17,7 @@ import { PaymentsSetup } from '@/components/settings/PaymentsSetup';
 import { NewGradingSystemSheet, OwnSystemActions } from '@/components/settings/GradingEditor';
 import { RequireScreen } from '@/components/RequireScreen';
 import { SignatureCard } from '@/components/account/SignatureCard';
+import { SchoolSections } from '@/components/settings/SchoolSections';
 import type { PaymentSettingsStatus, Term } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
@@ -157,8 +158,9 @@ function SchoolTab() {
             <SignatureCard
                 target="principal"
                 title="Principal’s signature"
-                description="Printed on every report card and mark sheet, so the principal does not sign each one by hand."
+                description="Printed on report cards and mark sheets, so the principal does not sign each one by hand. With sections below, each section’s head signs its own classes instead."
             />
+            <SchoolSections />
             {form.teacher_invite_code || form.student_invite_code ? (
                 <Card>
                     <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground, marginBottom: spacing.sm }}>School invite codes</Text>

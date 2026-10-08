@@ -7,8 +7,9 @@ import { SERVER_UPLOAD_MAX_BYTES } from './attachments';
 export const SIGNATURES_URL = '/api/signatures';
 
 /**
- * Whose signature: your own (`me`), the school's principal (admins), or a
- * staff member's by user id (admins).
+ * Whose signature: your own (`me`), the school-wide principal (admins), a
+ * section head (`section:<id>`, admins), or a staff member's by user id
+ * (admins).
  */
 export type SignatureTarget = 'me' | 'principal' | (string & {});
 

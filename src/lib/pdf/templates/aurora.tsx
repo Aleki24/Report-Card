@@ -380,7 +380,7 @@ export function AuroraLayout({ data, qrCodeDataUri }: LayoutProps) {
                 </View>
                 <View style={[s.remarks, { flexGrow: 1, marginTop: 9 }]} wrap={false}>
                     <View style={{ flex: 1, marginRight: 7.5 }}><Remark role="Class teacher" text={m.teacherComment} color={C.ringA} signer={m.classTeacher.name} signature={m.classTeacher.signature} /></View>
-                    <View style={{ flex: 1 }}><Remark role="Principal" text={m.principalComment} color={C.ringB} signer={m.principal.name} signature={m.principal.signature} /></View>
+                    <View style={{ flex: 1 }}><Remark role={m.principal.title} text={m.principalComment} color={C.ringB} signer={m.principal.name} signature={m.principal.signature} /></View>
                 </View>
                 <View style={s.signRow} wrap={false}>
                     <View style={s.signCell}><View style={s.signLine} /><Text style={s.signLabel}>Parent / Guardian</Text></View>

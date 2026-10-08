@@ -264,9 +264,9 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                         <Signature name={m.classTeacher.name ? `${m.classTeacher.name}, class teacher` : "Class teacher's signature"} image={m.classTeacher.signature} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.label}>Principal</Text>
+                        <Text style={s.label}>{m.principal.title}</Text>
                         <Text style={[s.remarkText, m.compact ? { minHeight: 28 } : {}]}>{m.principalComment}</Text>
-                        <Signature name={m.principal.name ? `${m.principal.name}, principal` : "Principal's signature"} image={m.principal.signature} />
+                        <Signature name={m.principal.name ? `${m.principal.name}, ${m.principal.title.toLowerCase()}` : `${m.principal.title}'s signature`} image={m.principal.signature} />
                     </View>
                 </View>
                 <View style={s.parent} wrap={false}>

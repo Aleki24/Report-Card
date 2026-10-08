@@ -2,10 +2,16 @@ import { HttpError, route, type Access } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { isRoleIn } from '@/lib/roles';
+import { isUuid } from '@/lib/postgrest';
 import { SIGNATURE_PHOTO_MAX_BYTES, SIGNING_ROLES, type SignatureRecord } from '@/lib/signatures';
 import { SignatureImageError, cleanSignaturePhoto, pngDataUrl } from '@/lib/signature-image';
 
-type Target = { kind: 'principal' } | { kind: 'user'; userId: string; name: string };
+type Target =
+    | { kind: 'principal' }
+    | { kind: 'section'; sectionId: string }
+    | { kind: 'user'; userId: string; name: string };
+
+const SECTION_PREFIX = 'section:';
 
 const fullName = (u: { first_name: string | null; last_name: string | null }) => `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || null;
 
@@ -20,6 +26,15 @@ async function resolveTarget(access: Access, raw: string | null): Promise<Target
     if (target === 'principal') {
         if (!isAdmin) throw new HttpError(403, 'Only admins can change the principal’s signature.');
         return { kind: 'principal' };
+    }
+    if (target.startsWith(SECTION_PREFIX)) {
+        if (!isAdmin) throw new HttpError(403, 'Only admins can change a section head’s signature.');
+        const sectionId = target.slice(SECTION_PREFIX.length);
+        if (!isUuid(sectionId)) throw new HttpError(400, 'Unknown section.');
+        const { data, error } = await createSupabaseAdmin().from('school_sections').select('id').eq('id', sectionId).eq('school_id', access.schoolId).maybeSingle();
+        if (error) throw error;
+        if (!data) throw new HttpError(404, 'Section not found.');
+        return { kind: 'section', sectionId };
     }
     const userId = target === 'me' ? access.userId : target;
     if (userId !== access.userId && !isAdmin) throw new HttpError(403, 'Only admins can change another person’s signature.');
@@ -41,10 +56,21 @@ async function readSignature(access: Access, target: Target): Promise<SignatureR
         if (error) throw error;
         return { image: data?.principal_signature_url ?? null, name: data?.principal_name ?? null };
     }
+    if (target.kind === 'section') {
+        const { data, error } = await db.from('school_sections').select('head_name, head_signature').eq('id', target.sectionId).maybeSingle();
+        if (error) throw error;
+        return { image: data?.head_signature ?? null, name: data?.head_name ?? null };
+    }
     const { data, error } = await db.from('user_signatures').select('image').eq('user_id', target.userId).maybeSingle();
     if (error) throw error;
     return { image: data?.image ?? null, name: target.name };
 }
+
+/** What the audit log names a signature by. */
+const auditEntity = (access: Access, target: Target): [string, string] =>
+    target.kind === 'principal' ? ['schools.principal_signature', access.schoolId]
+        : target.kind === 'section' ? ['school_sections.head_signature', target.sectionId]
+            : ['user_signatures', target.userId];
 
 /** The signature on file: `?target=me|principal|<user id>`. */
 export const GET = route('signatures GET', {}, async ({ access, request }) => {
@@ -76,6 +102,9 @@ export const POST = route('signatures POST', {}, async ({ access, request }) => 
     if (target.kind === 'principal') {
         const { error } = await db.from('schools').update({ principal_signature_url: image }).eq('id', access.schoolId);
         if (error) throw error;
+    } else if (target.kind === 'section') {
+        const { error } = await db.from('school_sections').update({ head_signature: image, updated_at: new Date().toISOString() }).eq('id', target.sectionId);
+        if (error) throw error;
     } else {
         const { error } = await db.from('user_signatures').upsert(
             { user_id: target.userId, school_id: access.schoolId, image, updated_by: access.userId, updated_at: new Date().toISOString() },
@@ -83,7 +112,7 @@ export const POST = route('signatures POST', {}, async ({ access, request }) => 
         );
         if (error) throw error;
     }
-    await audit(access, 'update', target.kind === 'principal' ? 'schools.principal_signature' : 'user_signatures', target.kind === 'principal' ? access.schoolId : target.userId);
+    await audit(access, 'update', ...auditEntity(access, target));
     return readSignature(access, target);
 });
 
@@ -93,8 +122,10 @@ export const DELETE = route('signatures DELETE', {}, async ({ access, request })
     const db = createSupabaseAdmin();
     const { error } = target.kind === 'principal'
         ? await db.from('schools').update({ principal_signature_url: null }).eq('id', access.schoolId)
-        : await db.from('user_signatures').delete().eq('user_id', target.userId);
+        : target.kind === 'section'
+            ? await db.from('school_sections').update({ head_signature: null, updated_at: new Date().toISOString() }).eq('id', target.sectionId)
+            : await db.from('user_signatures').delete().eq('user_id', target.userId);
     if (error) throw error;
-    await audit(access, 'delete', target.kind === 'principal' ? 'schools.principal_signature' : 'user_signatures', target.kind === 'principal' ? access.schoolId : target.userId);
+    await audit(access, 'delete', ...auditEntity(access, target));
     return readSignature(access, target);
 });
