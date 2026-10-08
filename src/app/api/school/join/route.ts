@@ -90,6 +90,18 @@ export async function POST(request: NextRequest) {
             .from('students').select('id').eq('id', userId).maybeSingle();
 
         if (!alreadyLinked) {
+            // The students row takes its school from the users row it points
+            // at (trigger_set_student_school_id). This account is still
+            // PENDING with no school, so moving the row onto it set
+            // students.school_id to null and the swap was refused (23502).
+            // Give the account its school first; undo that if the swap fails.
+            const { error: schoolErr } = await supabaseAdmin
+                .from('users').update({ school_id: pendingUser.school_id }).eq('id', userId);
+            if (schoolErr) {
+                console.error('[join] could not set school before student swap', { userId, schoolErr });
+                return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
+            }
+
             const { data: swapped, error: swapErr } = await supabaseAdmin
                 .from('students')
                 .update({ id: userId })
@@ -98,6 +110,7 @@ export async function POST(request: NextRequest) {
 
             if (swapErr || !swapped || swapped.length === 0) {
                 console.error('[join] students id-swap failed', { oldUserId, userId, swapErr });
+                await supabaseAdmin.from('users').update({ school_id: null }).eq('id', userId);
                 return NextResponse.json({ error: 'Failed to link your student record. Please contact your school admin.' }, { status: 500 });
             }
         }
