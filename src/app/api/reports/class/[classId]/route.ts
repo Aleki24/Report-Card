@@ -33,6 +33,7 @@ import {
 } from '@/lib/reports/comparatives';
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
+import { sectionHeadForGrade } from '@/lib/school-sections-server';
 export const runtime = 'nodejs';
 
 /*
@@ -211,6 +212,8 @@ export async function GET(
         const school = reportSchoolFields(schoolRes.data);
         // The class teacher of the term's year signs every card in the class.
         const classTeacher = (await classTeacherSignoffs(supabase, userSchoolId, [classId], termRes.data?.academic_year_id ?? yearId)).get(classId) ?? {};
+        // The head of the class's section (Primary, Junior, Senior) signs in place of the school-wide principal.
+        const sectionHead = await sectionHeadForGrade(supabase, userSchoolId, gradeId);
 
         const gradeLevelCode = gradeRes.data?.code || '';
         // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
@@ -612,6 +615,7 @@ export async function GET(
 
             const reportData: ReportCardData = {
                 ...school,
+                ...sectionHead,
                 ...classTeacher,
                 examTitle: termTitle,
                 academicYear: academicYearName,

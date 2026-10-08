@@ -383,9 +383,9 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                     <View style={s.sig}><SignatureImage src={m.classTeacher.signature} /><Text style={s.sigText}>{m.classTeacher.name ?? 'Class teacher'}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={s.remark2}>
-                    <Text style={s.h3}>Principal’s remarks</Text>
+                    <Text style={s.h3}>{m.principal.title}’s remarks</Text>
                     <Text style={[s.remarkText, m.compact ? { minHeight: 18 } : {}]}>{m.principalComment}</Text>
-                    <View style={s.sig}><SignatureImage src={m.principal.signature} /><Text style={s.sigText}>{m.principal.name ?? 'Principal'}</Text><Text style={s.sigText}>Signature</Text></View>
+                    <View style={s.sig}><SignatureImage src={m.principal.signature} /><Text style={s.sigText}>{m.principal.name ?? m.principal.title}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={[s.stamp, m.compact ? { width: 52, height: 52, borderRadius: 26 } : {}]}><Text style={s.stampText}>{'Official\nschool stamp'}</Text></View>
             </View>

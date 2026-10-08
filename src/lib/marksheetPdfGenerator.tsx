@@ -85,6 +85,8 @@ export interface MarkSheetData {
     classTeacherSignatureUrl?: string;
     principalName?: string;
     principalSignatureUrl?: string;
+    /** "Principal" unless the class's section head has another title. */
+    principalTitle?: string;
 }
 
 type Learner = MarkSheetData['students'][number];
@@ -741,7 +743,7 @@ function Signatures({ d }: { d: MarkSheetData }) {
     const lines: { role: string; right: string; name?: string; image?: string }[] = [
         { role: 'Class teacher', right: 'Date', name: d.classTeacherName, image: d.classTeacherSignatureUrl },
         { role: 'Deputy principal (academics)', right: 'Date' },
-        { role: 'Principal', right: 'Stamp', name: d.principalName, image: d.principalSignatureUrl },
+        { role: d.principalTitle || 'Principal', right: 'Stamp', name: d.principalName, image: d.principalSignatureUrl },
     ];
     return (
         <View style={s.signs}>

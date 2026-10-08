@@ -15,6 +15,7 @@ import { AcademicCalendarTab, type AcademicYear, type Term } from '@/components/
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
 import { DutiesTab } from '@/components/settings/DutiesTab';
+import { SchoolSectionsPanel } from '@/components/settings/SchoolSectionsPanel';
 import { SchoolForm, type SchoolProfile } from '@/components/settings/SchoolForm';
 import { isSeniorRankGroup } from '@/lib/ranking';
 import { PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
@@ -283,6 +284,8 @@ function SettingsPageInner() {
                 </div>
               </form>
             )}
+            {/* Outside the profile form: sections save on their own. */}
+            {active === 'profile' && <SchoolSectionsPanel />}
             {active === 'calendar' && (
               <AcademicCalendarTab
                 academicYears={data.academicYears}

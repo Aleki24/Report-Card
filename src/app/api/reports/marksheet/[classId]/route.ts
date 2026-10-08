@@ -3,6 +3,7 @@ import { authorizeClassReport } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
+import { sectionHeadForGrade } from '@/lib/school-sections-server';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -234,6 +235,8 @@ export async function GET(
         const classTeacher = userSchoolId
             ? (await classTeacherSignoffs(supabase, userSchoolId, [classId], termYearId ?? yearId)).get(classId) ?? {}
             : {};
+        // The head of the class's section (Primary, Junior, Senior) signs in place of the school-wide principal.
+        const sectionHead = userSchoolId ? await sectionHeadForGrade(supabase, userSchoolId, gradeId) : null;
         const customTitle = searchParams.get('customTitle');
         if (customTitle) termTitle = customTitle;
 
@@ -611,6 +614,7 @@ export async function GET(
             schoolAddress,
             principalName,
             principalSignatureUrl,
+            ...sectionHead,
             ...classTeacher,
             examTitle: termTitle,
             academicYear: academicYearName,

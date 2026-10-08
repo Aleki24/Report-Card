@@ -31,6 +31,7 @@ import {
 import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/lib/reports/grading-context';
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
+import { sectionHeadForGrade } from '@/lib/school-sections-server';
 
 export const runtime = 'nodejs';
 
@@ -343,6 +344,8 @@ export async function GET(
         const classTeacher = streamId && userSchoolId
             ? (await classTeacherSignoffs(supabase, userSchoolId, [streamId], termYearId ?? yearId)).get(streamId) ?? {}
             : {};
+        // The head of the class's section (Primary, Junior, Senior) signs in place of the school-wide principal.
+        const sectionHead = userSchoolId ? await sectionHeadForGrade(supabase, userSchoolId, gradeId) : null;
 
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
@@ -714,6 +717,7 @@ export async function GET(
         // 12. Structure data for PDF Generator
         const reportData: ReportCardData = {
             ...school,
+            ...sectionHead,
             ...classTeacher,
             examTitle: termTitle,
             academicYear,

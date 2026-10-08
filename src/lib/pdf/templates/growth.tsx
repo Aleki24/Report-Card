@@ -400,7 +400,7 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={[s.remarks, { flexGrow: 1, marginTop: 9 }]} wrap={false}>
                     <Remark role="Class teacher" text={m.teacherComment} sign={m.classTeacher.name ? `${m.classTeacher.name} · Signature` : 'Signature'} signature={m.classTeacher.signature} />
                     <View style={{ width: 9 }} />
-                    <Remark role="Principal" text={m.principalComment} sign={m.principal.name ? `${m.principal.name} · Signature` : 'Signature'} signature={m.principal.signature} />
+                    <Remark role={m.principal.title} text={m.principalComment} sign={m.principal.name ? `${m.principal.name} · Signature` : 'Signature'} signature={m.principal.signature} />
                     <View style={{ width: 9 }} />
                     <View style={[s.remark, { flex: 0.72, backgroundColor: C.deep, borderColor: C.deep }]}>
                         <Text style={[s.h3, { color: C.gold }]}>{m.exam.openingDate ? 'Next term opens' : 'Parent / Guardian'}</Text>

@@ -19,6 +19,11 @@ export interface ReportCardData {
     principalName?: string;
     /** A small image data URL laid over the principal's signature line. */
     principalSignatureUrl?: string;
+    /**
+     * What the head signing the card is called: "Principal" by default, or
+     * the class's section head's title ("Head teacher").
+     */
+    principalTitle?: string;
     /** The class's class teacher, printed on their signature line. */
     classTeacherName?: string;
     /** Their signature (a transparent PNG data URL) laid over that line. */
