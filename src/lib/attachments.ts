@@ -69,9 +69,22 @@ export function resolveAttachmentType(name: string, reportedType: string | null 
 export const extensionFor = (type: AttachmentMimeType): string => EXTENSION_BY_TYPE[type];
 export const isImageType = (type: AttachmentMimeType): type is ImageMimeType => Object.hasOwn(IMAGE_MIME_TYPES, type);
 
-/** "Fractions worksheet (2).pdf" → "Fractions-worksheet-2", safe in a storage path. */
+/** `name` with %-escapes decoded; unchanged when it is not valid escaping. */
+function decodeName(name: string): string {
+    try {
+        return decodeURIComponent(name);
+    } catch {
+        return name;
+    }
+}
+
+/**
+ * "Fractions worksheet (2).pdf" → "Fractions-worksheet-2", safe in a storage path.
+ * The phone app's fetch (expo/fetch) %-encodes file names in forms
+ * ("Fractions%20worksheet.pdf"), so they are decoded first.
+ */
 export function storageSafeName(name: string): string {
-    const base = (name.split('/').pop() ?? '').replace(/\.[^.]+$/, '');
+    const base = (decodeName(name).split('/').pop() ?? '').replace(/\.[^.]+$/, '');
     return base.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'file';
 }
 
