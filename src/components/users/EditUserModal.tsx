@@ -8,6 +8,7 @@ import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { type UserRow, type GradeStreamOption, type SubjectOption, type GradeOption, type ClassHolder, isTeacherRole } from '@/hooks/useUsersPage';
 import { SubjectTeacherFields } from './SubjectTeacherFields';
 import { STAFF_JOB_TITLES } from '@/lib/staff-roles';
+import { SignatureField } from '@/components/settings/SignatureField';
 
 interface EditUserModalProps {
   editingUser: UserRow;
@@ -129,6 +130,16 @@ export function EditUserModal(props: EditUserModalProps) {
                 })}
               </select>
             </Field>
+          </div>
+        )}
+
+        {editingUser.role !== 'STUDENT' && editingUser.role !== 'PARENT' && (
+          <div className="mt-5 border-t border-border pt-5">
+            <SignatureField
+              target={editingUser.id}
+              label="Signature"
+              description={`Printed on the report cards and mark sheets ${editingUser.first_name || 'they'} signs${isTeacherRole(editingUser.role) ? ' as class teacher' : ''}. They can also add it from Profile in the phone app.`}
+            />
           </div>
         )}
 

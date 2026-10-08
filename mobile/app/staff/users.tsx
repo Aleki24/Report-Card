@@ -7,7 +7,9 @@ import { inviteDeliveryMessage, type InviteDelivery } from '@shared/invite-deliv
 import { CLASS_TEACHER_URL, holdersByClass, type ClassTeacherCandidates } from '@shared/class-teacher';
 import { sendConfirmingReplace } from '@/lib/classTeacher';
 import { useGradeStreams } from '@/lib/useSchoolData';
-import { ROLE_LABELS, roleLabel, type UserRole } from '@/lib/roles';
+import { ROLE_LABELS, isRoleIn, roleLabel, type UserRole } from '@/lib/roles';
+import { SIGNING_ROLES } from '@shared/signatures';
+import { SignatureCard } from '@/components/account/SignatureCard';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import {
@@ -341,6 +343,13 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
             ) : null}
             {role === 'STAFF' ? <TextField label="Job title" value={jobTitle} onChangeText={setJobTitle} /> : null}
             <ToggleRow label="Active" description="Inactive accounts are signed out and can't sign in." value={active} onValueChange={setActive} />
+            {isRoleIn(user.role, SIGNING_ROLES) ? (
+                <SignatureCard
+                    target={user.id}
+                    title="Signature"
+                    description={`Printed on the report cards and mark sheets ${user.first_name} signs as class teacher. Collect it here if they cannot add it from their own Profile.`}
+                />
+            ) : null}
             <ButtonRow>
                 <Button size="sm" variant="ghost" label="New invite code" onPress={onReset} loading={resetting} />
                 <Button size="sm" variant="secondary" label="Cancel" onPress={onCancel} />

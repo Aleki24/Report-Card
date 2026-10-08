@@ -9,20 +9,28 @@ import { PASS_MARK, PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
 /** Largest image kept, as a data URL: the settings page shrinks uploads well below this. */
 const MAX_IMAGE_CHARS = 400_000;
 
-const optionalText = (max: number) => z.string().trim().max(max).nullish().transform(v => v || null);
+/**
+ * Optional fields: left out, they stay as they are (undefined); sent empty,
+ * they are cleared (null). Every field used to clear when left out, so the
+ * phone's settings save and the web's grading switch, which do not send the
+ * motto or the principal's name and signature, wiped them.
+ */
+const keepOrClear = <T,>(v: T | null | undefined) => (v === undefined ? undefined : v || null);
+
+const optionalText = (max: number) => z.string().trim().max(max).nullish().transform(keepOrClear);
 
 /** An inline image (as the settings page uploads) or an https URL; empty clears it. */
 const optionalImage = (noun: string) => z.string().max(MAX_IMAGE_CHARS, `That ${noun} is too large; choose a smaller image`).nullish()
     .refine(v => !v || /^data:image\/(png|jpeg|webp|gif);base64,/.test(v) || /^https:\/\//.test(v), `The ${noun} must be an image`)
-    .transform(v => v || null);
+    .transform(keepOrClear);
 
 const schoolUpdateSchema = z.object({
     school_id: z.string().min(1).optional(),
     name: z.string().trim().min(1, 'School name is required').max(150),
     address: optionalText(300),
     phone: optionalText(30),
-    email: z.string().trim().max(200).nullish().transform(v => v || null)
-        .refine(v => v === null || z.string().email().safeParse(v).success, 'Enter a valid email address'),
+    email: z.string().trim().max(200).nullish().transform(keepOrClear)
+        .refine(v => v == null || z.string().email().safeParse(v).success, 'Enter a valid email address'),
     logo_url: optionalImage('logo'),
     motto: optionalText(120),
     principal_name: optionalText(100),
@@ -61,8 +69,7 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createSupabaseAdmin();
-        const { error } = await supabase.from('schools').update({
-            name: body.name,
+        const sent = Object.fromEntries(Object.entries({
             address: body.address,
             phone: body.phone,
             email: body.email,
@@ -70,6 +77,10 @@ export async function POST(request: NextRequest) {
             motto: body.motto,
             principal_name: body.principal_name,
             principal_signature_url: body.principal_signature_url,
+        }).filter(([, v]) => v !== undefined));
+        const { error } = await supabase.from('schools').update({
+            name: body.name,
+            ...sent,
             ...(body.pass_mark !== undefined ? { pass_mark: body.pass_mark ?? PASS_MARK } : {}),
             ...(body.min_combination_group_size != null ? { min_combination_group_size: body.min_combination_group_size } : {}),
             ...(body.overall_grading_system_id !== undefined ? { overall_grading_system_id: body.overall_grading_system_id || null } : {}),

@@ -154,6 +154,24 @@ function appendFile(form: FormData, field: string, file: PickedFile, type: strin
     form.append(field, part as unknown as Blob);
 }
 
+/**
+ * A photo from the camera or the gallery, or null if the person cancelled.
+ * `purpose` finishes "Allow camera access … to …" when the camera is refused.
+ * With `crop`, the phone offers to crop it first (e.g. to just a signature).
+ */
+export async function pickPhoto(source: 'camera' | 'library', purpose: string, opts: { crop?: boolean } = {}): Promise<PickedFile | null> {
+    if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new ApiError(`Allow camera access in your phone’s settings to ${purpose}.`, 0);
+    }
+    // quality below 1 also saves iPhone photos as JPEG rather than HEIC.
+    const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.7, allowsEditing: opts.crop ?? false };
+    const result = source === 'camera' ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+    if (result.canceled || result.assets.length === 0) return null;
+    const asset = result.assets[0];
+    return { uri: asset.uri, name: asset.fileName ?? `Photo-${Date.now()}.jpg`, type: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? null, blob: asset.file };
+}
+
 /** Where a file lives: an API route (sent with the sign-in token) or a public link. */
 export type FileSource = { kind: 'api'; path: string } | { kind: 'url'; url: string };
 
@@ -314,16 +332,8 @@ export function useApi(): Api {
                 return picked ? uploadAttachment(picked, ATTACHMENT_TYPES) : null;
             },
             captureAndUploadPhoto: async () => {
-                const permission = await ImagePicker.requestCameraPermissionsAsync();
-                if (!permission.granted) throw new ApiError('Allow camera access in your phone’s settings to take a photo of your work.', 0);
-                // quality below 1 also saves iPhone photos as JPEG rather than HEIC.
-                const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
-                if (shot.canceled || shot.assets.length === 0) return null;
-                const asset = shot.assets[0];
-                return uploadAttachment(
-                    { uri: asset.uri, name: asset.fileName ?? `Photo-${Date.now()}.jpg`, type: asset.mimeType ?? 'image/jpeg', size: asset.fileSize ?? null, blob: asset.file },
-                    IMAGE_TYPES,
-                );
+                const photo = await pickPhoto('camera', 'take a photo of your work');
+                return photo ? uploadAttachment(photo, IMAGE_TYPES) : null;
             },
         };
     }, []);

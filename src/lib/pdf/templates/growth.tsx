@@ -398,7 +398,7 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                     <AgainstClass m={m} />
                 </View>
                 <View style={[s.remarks, { flexGrow: 1, marginTop: 9 }]} wrap={false}>
-                    <Remark role="Class teacher" text={m.teacherComment} sign="Signature" />
+                    <Remark role="Class teacher" text={m.teacherComment} sign={m.classTeacher.name ? `${m.classTeacher.name} · Signature` : 'Signature'} signature={m.classTeacher.signature} />
                     <View style={{ width: 9 }} />
                     <Remark role="Principal" text={m.principalComment} sign={m.principal.name ? `${m.principal.name} · Signature` : 'Signature'} signature={m.principal.signature} />
                     <View style={{ width: 9 }} />

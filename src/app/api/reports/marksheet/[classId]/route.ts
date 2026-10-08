@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { authorizeClassReport } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -99,6 +100,8 @@ export async function GET(
         let schoolName = 'School';
         let schoolLogoUrl: string | undefined;
         let schoolAddress: string | undefined;
+        let principalName: string | undefined;
+        let principalSignatureUrl: string | undefined;
         
         const targetSchoolId = (students[0].users as any)?.school_id;
 
@@ -107,11 +110,13 @@ export async function GET(
         }
 
         if (targetSchoolId) {
-            const { data: schoolData } = await supabase.from('schools').select('name, logo_url, address').eq('id', targetSchoolId).maybeSingle();
+            const { data: schoolData } = await supabase.from('schools').select('name, logo_url, address, principal_name, principal_signature_url').eq('id', targetSchoolId).maybeSingle();
             if (schoolData) {
                 schoolName = schoolData.name;
                 schoolLogoUrl = schoolData.logo_url || undefined;
                 schoolAddress = schoolData.address || undefined;
+                principalName = schoolData.principal_name || undefined;
+                principalSignatureUrl = schoolData.principal_signature_url || undefined;
             }
         }
 
@@ -219,10 +224,16 @@ export async function GET(
         // 4. Term and Year Titles
         let termTitle = 'Term Report';
         let academicYearName = 'Academic Year';
+        let termYearId: string | null = null;
         if (termId) {
-            const { data: termData } = await supabase.from('terms').select('name').eq('id', termId).maybeSingle();
+            const { data: termData } = await supabase.from('terms').select('name, academic_year_id').eq('id', termId).maybeSingle();
             if (termData) termTitle = termData.name;
+            termYearId = termData?.academic_year_id ?? null;
         }
+        // The class teacher of the term's year signs the sheet.
+        const classTeacher = userSchoolId
+            ? (await classTeacherSignoffs(supabase, userSchoolId, [classId], termYearId ?? yearId)).get(classId) ?? {}
+            : {};
         const customTitle = searchParams.get('customTitle');
         if (customTitle) termTitle = customTitle;
 
@@ -598,6 +609,9 @@ export async function GET(
             schoolName,
             schoolLogoUrl,
             schoolAddress,
+            principalName,
+            principalSignatureUrl,
+            ...classTeacher,
             examTitle: termTitle,
             academicYear: academicYearName,
             className: classNameLabel,

@@ -4,7 +4,7 @@ import type { Style } from '@react-pdf/types';
 import { gradeSymbolFromScales, gradeSymbolRank, type RankingBasis } from '@/lib/analytics';
 import type { GradeBand } from '@/types';
 import { FONTS } from './pdf/pdfTheme';
-import { Crest, BrandFooter } from './pdf/primitives';
+import { Crest, BrandFooter, SignatureImage } from './pdf/primitives';
 import { signed, shortName, firstWords } from './pdf/reportModel';
 import { planPages, type PageDimensions } from './pdf/marksheetPagination';
 import { abbreviateSubject } from './subject-abbreviations';
@@ -80,6 +80,11 @@ export interface MarkSheetData {
     gradeBands?: GradeBand[];
     /** What the class positions were ordered on: marks for CBC, points for 8-4-4. */
     rankedBy: RankingBasis;
+    /** Who signs the sheet, and the signatures on file (transparent PNG data URLs). */
+    classTeacherName?: string;
+    classTeacherSignatureUrl?: string;
+    principalName?: string;
+    principalSignatureUrl?: string;
 }
 
 type Learner = MarkSheetData['students'][number];
@@ -731,12 +736,19 @@ function ProgressPanel({ d, classMean }: { d: MarkSheetData; classMean: number }
     );
 }
 
-function Signatures() {
+/** The sign-off row; the class teacher's and principal's signatures print when on file. */
+function Signatures({ d }: { d: MarkSheetData }) {
+    const lines: { role: string; right: string; name?: string; image?: string }[] = [
+        { role: 'Class teacher', right: 'Date', name: d.classTeacherName, image: d.classTeacherSignatureUrl },
+        { role: 'Deputy principal (academics)', right: 'Date' },
+        { role: 'Principal', right: 'Stamp', name: d.principalName, image: d.principalSignatureUrl },
+    ];
     return (
         <View style={s.signs}>
-            {[['Class teacher', 'Date'], ['Deputy principal (academics)', 'Date'], ['Principal', 'Stamp']].map(([role, right], i) => (
-                <View key={role} style={[s.sign, i < 2 ? { marginRight: 16.5 } : {}]}>
-                    <Text style={s.signText}>{role}</Text><Text style={s.signText}>{right}</Text>
+            {lines.map((line, i) => (
+                <View key={line.role} style={[s.sign, i < lines.length - 1 ? { marginRight: 16.5 } : {}]}>
+                    <SignatureImage src={line.image} />
+                    <Text style={s.signText}>{line.name ? `${line.role} · ${line.name}` : line.role}</Text><Text style={s.signText}>{line.right}</Text>
                 </View>
             ))}
         </View>
@@ -793,7 +805,7 @@ export function MarkSheetDocument({ data }: { data: MarkSheetData }) {
                 <TopFive d={d} ranked={ranked} />
                 <ProgressPanel d={d} classMean={classMean} />
             </View>
-            <Signatures />
+            <Signatures d={d} />
         </View>
     );
 

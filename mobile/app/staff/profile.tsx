@@ -3,11 +3,13 @@ import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
-import { roleLabel, type UserRole } from '@/lib/roles';
+import { isRoleIn, roleLabel, type UserRole } from '@/lib/roles';
 import { errorMessage } from '@/lib/format';
 import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { AccountActions } from '@/components/account/AccountActions';
 import { ProfilePhoto } from '@/components/account/ProfilePhoto';
+import { SignatureCard } from '@/components/account/SignatureCard';
+import { SIGNING_ROLES } from '@shared/signatures';
 import { Card, ChipSelect, InfoRow, Notice, Screen, ScreenHeader } from '@/components/ui';
 
 interface AvailableRoles {
@@ -59,6 +61,14 @@ export default function StaffProfileScreen() {
                     <ChipSelect label="View the app as" options={roles.map((r) => ({ value: r, label: roleLabel(r) }))} value={role} onChange={(r) => void switchTo(r)} />
                     <Text style={styles.email}>{switching ? 'Switching…' : 'You also run a class, so you can switch to the class-teacher view.'}</Text>
                 </Card>
+            ) : null}
+
+            {isRoleIn(baseRole, SIGNING_ROLES) ? (
+                <SignatureCard
+                    target="me"
+                    title="My signature"
+                    description="Printed on the report cards and mark sheets you sign as class teacher, so you do not sign each one by hand."
+                />
             ) : null}
 
             <AccountActions />
