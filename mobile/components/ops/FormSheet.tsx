@@ -17,6 +17,7 @@ export function FormSheet({
     onSubmit,
     submitLabel = 'Save',
     submitting,
+    error,
     children,
 }: {
     visible: boolean;
@@ -26,6 +27,11 @@ export function FormSheet({
     onSubmit?: () => void;
     submitLabel?: string;
     submitting?: boolean;
+    /**
+     * Why the form cannot be saved yet, shown right above the save bar where
+     * it cannot be missed (a toast disappears after a few seconds).
+     */
+    error?: string | null;
     children: React.ReactNode;
 }) {
     const styles = useStyles();
@@ -40,6 +46,11 @@ export function FormSheet({
                     <KeyboardAwareScrollView style={styles.flex} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bottomOffset={spacing.lg}>
                         <View style={styles.content}>{children}</View>
                     </KeyboardAwareScrollView>
+                    {error ? (
+                        <View style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                            <Text style={styles.errorText}>{error}</Text>
+                        </View>
+                    ) : null}
                     <View style={styles.footer}>
                         <Button label={onSubmit ? 'Cancel' : 'Close'} variant="secondary" onPress={onClose} disabled={submitting} />
                         {onSubmit ? <Button label={submitting ? 'Saving…' : submitLabel} onPress={onSubmit} loading={submitting} /> : null}
@@ -59,5 +70,7 @@ const useStyles = makeStyles((colors) => ({
     title: { fontSize: 18, fontFamily: fonts.display, color: colors.foreground, maxWidth: 760, width: '100%', alignSelf: 'center' },
     body: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
     content: { width: '100%', maxWidth: 760, alignSelf: 'center' },
+    error: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.dangerBg, borderTopWidth: 1, borderTopColor: colors.danger },
+    errorText: { maxWidth: 760, width: '100%', alignSelf: 'center', fontSize: 13, lineHeight: 18, fontFamily: fonts.semibold, color: colors.danger },
     footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
 }));
