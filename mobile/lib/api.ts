@@ -125,6 +125,33 @@ export interface Api {
     sendForm: <T>(method: 'POST' | 'PATCH', path: string, fields: Readonly<Record<string, string>>, files: Readonly<Record<string, PickedFile | null>>) => Promise<T>;
 }
 
+/**
+ * A form part for a picked file that expo/fetch can send.
+ *
+ * Since SDK 57 Expo replaces `fetch` with expo/fetch, which builds the
+ * multipart body itself and only accepts Blobs or parts with `bytes()`.
+ * React Native's `{ uri, name, type }` descriptor made it throw before
+ * anything was sent, so every upload from the phone (exam papers, homework,
+ * photos) failed as "Couldn't reach Skulbase".
+ */
+interface BytesPart {
+    name: string;
+    type: string;
+    bytes: () => Promise<Uint8Array>;
+}
+
+/** Adds a picked file to a form, as `type` (defaults to what the picker reported). */
+function appendFile(form: FormData, field: string, file: PickedFile, type: string = file.type): void {
+    if (Platform.OS === 'web' && file.blob) {
+        form.append(field, file.blob, file.name);
+        return;
+    }
+    const local = new File(file.uri);
+    const part: BytesPart = { name: file.name, type, bytes: async () => new Uint8Array(await local.arrayBuffer()) };
+    // expo/fetch reads `name`, `type` and `bytes()` from the part (expo/src/winter/fetch/convertFormData.ts).
+    form.append(field, part as unknown as Blob);
+}
+
 /** A file chosen with the system picker, ready to upload. */
 export interface PickedFile {
     uri: string;
@@ -190,10 +217,7 @@ export function useApi(): Api {
             const form = new FormData();
             Object.entries(fields).forEach(([k, v]) => form.append(k, v));
             Object.entries(files).forEach(([k, f]) => {
-                if (!f) return;
-                // React Native's FormData takes a { uri, name, type } descriptor for files.
-                if (Platform.OS === 'web' && f.blob) form.append(k, f.blob, f.name);
-                else form.append(k, { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
+                if (f) appendFile(form, k, f);
             });
             const token = await getTokenRef.current();
             const res = await fetchWithRetry(`${API_URL}${path}`, { method, body: form, headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -213,8 +237,7 @@ export function useApi(): Api {
         const putSigned = async (signed: SignedTarget, file: PickedFile): Promise<boolean> => {
             const body = new FormData();
             body.append('cacheControl', '3600');
-            if (Platform.OS === 'web' && file.blob) body.append('', file.blob, file.name);
-            else body.append('', { uri: file.uri, name: file.name, type: signed.type } as unknown as Blob);
+            appendFile(body, '', file, signed.type);
             const res = await fetch(signed.uploadUrl, { method: 'PUT', headers: { ...signed.headers, 'x-upsert': 'false' }, body }).catch(() => null);
             return !!res?.ok;
         };
