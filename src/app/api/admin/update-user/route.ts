@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
+import { getCurrentAcademicYearId } from '@/lib/auth-server';
+import { errorResponse } from '@/lib/platform/access';
+import { isUuid } from '@/lib/postgrest';
+import { classTeacherReplaceQuestion, classTeacherReplaceResponse, setClassTeacher } from '@/lib/class-teacher-server';
+
+/** One subject a teacher takes, as the Users forms send it. */
+interface SubjectEntry {
+    subject_id?: string;
+    grade_id?: string;
+    grade_stream_id?: string | null;
+}
 
 export async function PUT(request: NextRequest) {
     try {
@@ -41,6 +52,7 @@ export async function PUT(request: NextRequest) {
             subject_teacher_subjects,         // { subject_id, grade_id }[] | undefined
             is_also_subject_teacher,          // boolean (for class teachers who also teach subjects)
             is_class_teacher,                 // boolean (for subject teachers who are also class teachers)
+            replace_class_teacher,            // boolean: go ahead when the class change replaces someone
         } = body;
 
         if (!user_id) {
@@ -84,8 +96,33 @@ export async function PUT(request: NextRequest) {
             }
         }
 
+        const currentYearId = await getCurrentAcademicYearId(supabase, adminProfile.school_id);
+        const effectiveRole = role || targetUser.role;
+        const classChange = class_teacher_grade_stream_id && currentYearId
+            ? { schoolId: adminProfile.school_id as string, yearId: currentYearId, streamId: class_teacher_grade_stream_id as string, userId: user_id as string }
+            : null;
+
+        // Everything that can refuse the class is checked before anything is
+        // saved: the role used to be written first, so a refused class left a
+        // teacher marked CLASS_TEACHER with no class.
+        if (class_teacher_grade_stream_id) {
+            if (typeof class_teacher_grade_stream_id !== 'string' || !isUuid(class_teacher_grade_stream_id)) {
+                return NextResponse.json({ error: 'Choose a class from the list.' }, { status: 400 });
+            }
+            if (!currentYearId) {
+                return NextResponse.json({ error: 'Set up the academic year before assigning a class teacher.' }, { status: 400 });
+            }
+            if (effectiveRole !== 'CLASS_TEACHER' && effectiveRole !== 'SUBJECT_TEACHER') {
+                return NextResponse.json({ error: 'Only teachers can be class teachers.' }, { status: 400 });
+            }
+        }
+        if (classChange && replace_class_teacher !== true) {
+            const question = await classTeacherReplaceQuestion(supabase, classChange);
+            if (question) return classTeacherReplaceResponse(question);
+        }
+
         // Build update payload (only include fields that were provided)
-        const updates: Record<string, any> = {};
+        const updates: Record<string, string | boolean | null> = {};
         if (first_name !== undefined) updates.first_name = first_name.trim();
         if (last_name !== undefined) updates.last_name = last_name.trim();
         if (phone !== undefined) updates.phone = phone.trim();
@@ -107,17 +144,6 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: error.message }, { status: 400 });
             }
         }
-
-        // Get active academic year for this school
-        const { data: currentYear } = await supabase
-            .from('academic_years')
-            .select('id')
-            .eq('school_id', adminProfile.school_id)
-            .order('start_date', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        const effectiveRole = role || targetUser.role;
 
         // If role is changed to a non-teaching role, clear all teacher assignments
         if (role && ['ADMIN', 'STUDENT', 'STAFF'].includes(role)) {
@@ -150,55 +176,10 @@ export async function PUT(request: NextRequest) {
 
         // ── Handle Class Teacher assignment ──
         if (class_teacher_grade_stream_id !== undefined) {
-            if (class_teacher_grade_stream_id && currentYear) {
-                // Reject if another teacher already holds this stream for the current year
-                const { data: conflict } = await supabase
-                    .from('class_teachers')
-                    .select('id')
-                    .eq('current_grade_stream_id', class_teacher_grade_stream_id)
-                    .eq('academic_year_id', currentYear.id)
-                    .neq('user_id', user_id)
-                    .maybeSingle();
-                if (conflict) {
-                    return NextResponse.json({ error: 'This class already has a class teacher assigned for the current academic year. Remove the existing assignment first.' }, { status: 409 });
-                }
-
-                // Upsert: check if record exists
-                const { data: existing } = await supabase
-                    .from('class_teachers')
-                    .select('id')
-                    .eq('user_id', user_id)
-                    .maybeSingle();
-
-                if (existing) {
-                    const { error } = await supabase
-                        .from('class_teachers')
-                        .update({
-                            current_grade_stream_id: class_teacher_grade_stream_id,
-                            academic_year_id: currentYear.id,
-                        })
-                        .eq('id', existing.id);
-                    if (error) {
-                        console.error('Failed to update class teacher assignment:', error);
-                        const message = error.code === '23505'
-                            ? 'This class already has a class teacher assigned for the current academic year.'
-                            : 'Failed to assign the class. Please try again.';
-                        return NextResponse.json({ error: message }, { status: error.code === '23505' ? 409 : 500 });
-                    }
-                } else {
-                    const { error } = await supabase.from('class_teachers').insert({
-                        user_id,
-                        current_grade_stream_id: class_teacher_grade_stream_id,
-                        academic_year_id: currentYear.id,
-                    });
-                    if (error) {
-                        console.error('Failed to insert class teacher assignment:', error);
-                        const message = error.code === '23505'
-                            ? 'This class already has a class teacher assigned for the current academic year.'
-                            : 'Failed to assign the class. Please try again.';
-                        return NextResponse.json({ error: message }, { status: error.code === '23505' ? 409 : 500 });
-                    }
-                }
+            if (classChange) {
+                // One transaction: the class's old class teacher is released and
+                // becomes a subject teacher, and this teacher leaves any other class.
+                await setClassTeacher(supabase, classChange);
             } else if (class_teacher_grade_stream_id === null || class_teacher_grade_stream_id === '') {
                 // Remove class teacher assignment
                 await supabase
@@ -209,9 +190,9 @@ export async function PUT(request: NextRequest) {
         }
 
         // ── Handle Subject Teacher assignments ──
-        if (subject_teacher_subjects !== undefined && currentYear) {
-            const validSubjects = (subject_teacher_subjects || []).filter(
-                (s: any) => s.subject_id && s.grade_id
+        if (subject_teacher_subjects !== undefined && currentYearId) {
+            const validSubjects = ((subject_teacher_subjects || []) as SubjectEntry[]).filter(
+                (s) => s.subject_id && s.grade_id
             );
 
             // Get or create subject_teachers record
@@ -240,12 +221,12 @@ export async function PUT(request: NextRequest) {
                         .eq('subject_teacher_id', stRecord.id);
 
                     // Insert new assignments
-                    const assignments = validSubjects.map((sub: any) => ({
+                    const assignments = validSubjects.map((sub) => ({
                         subject_teacher_id: stRecord!.id,
                         subject_id: sub.subject_id,
                         grade_id: sub.grade_id,
                         grade_stream_id: sub.grade_stream_id || null,
-                        academic_year_id: currentYear.id,
+                        academic_year_id: currentYearId,
                     }));
 
                     const { error: insertError } = await supabase.from('subject_teacher_assignments').insert(assignments);
@@ -271,8 +252,6 @@ export async function PUT(request: NextRequest) {
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
-        console.error('Update user error:', err);
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return errorResponse('update-user', err);
     }
 }
