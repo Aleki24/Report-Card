@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Text, TextInput, View, useWindowDimensions, type ColorValue } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { Redirect, useRouter, type Href } from 'expo-router';
 import { LifeBuoy, LogOut, Search, type LucideIcon } from 'lucide-react-native';
 import { fonts, makeStyles, radius, shadowFor, spacing, useTheme } from '@/lib/theme';
 import { hueForHref, pageIdentity } from '@/lib/hues';
 import { useSignOut } from '@/lib/useSignOut';
+import { useCurrentUser } from '@/lib/UserContext';
+import { isRoleIn, type UserRole } from '@/lib/roles';
 import { ProfileBar } from './dashboard/Hero';
 import { PressScale } from './dashboard/kit';
 import { Card, IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
@@ -12,6 +14,16 @@ import { Card, IconTile, ListCard, ListRow, Screen, ScreenHeader } from './ui';
 /** A tab bar icon: the web menu's Lucide icon in the tab's tint. */
 export function TabIcon({ icon: Icon, color }: { icon: LucideIcon; color: ColorValue }) {
     return <Icon size={22} color={color as string} strokeWidth={2} />;
+}
+
+/**
+ * Renders a role's tab tree only for that role and sends anyone else to "/",
+ * which opens their own: a deep link or a switched role never shows another
+ * role's screens, whose APIs would refuse the caller.
+ */
+export function RoleGroup({ roles, children }: { roles: readonly UserRole[]; children: React.ReactNode }) {
+    const { role } = useCurrentUser();
+    return isRoleIn(role, roles) ? <>{children}</> : <Redirect href="/" />;
 }
 
 /**
