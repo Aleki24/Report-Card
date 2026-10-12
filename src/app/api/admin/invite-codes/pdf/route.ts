@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchAllRows } from '@/lib/postgrest';
+import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getActiveUserProfile } from '@/lib/auth-server';
@@ -16,7 +18,7 @@ import {
  * category so an admin can hand each person their code in person.
  *
  * Query params:
- *   category  all | admin | teacher | student   (default: all)
+ *   category  all | admin | teacher | staff | student | parent   (default: all)
  *   status    active | all                       (default: active — only codes
  *                                                 that can still be activated)
  *   format    pdf | zip                          (default: pdf; zip returns one
@@ -24,10 +26,12 @@ import {
  */
 
 // Order + labels for the category grouping.
-const CATEGORY_DEFS: { key: 'admin' | 'teacher' | 'student'; label: string; roles: string[] }[] = [
+const CATEGORY_DEFS: { key: 'admin' | 'teacher' | 'staff' | 'student' | 'parent'; label: string; roles: string[] }[] = [
     { key: 'admin', label: 'Administrators', roles: ['ADMIN'] },
     { key: 'teacher', label: 'Teachers', roles: ['CLASS_TEACHER', 'SUBJECT_TEACHER'] },
+    { key: 'staff', label: 'Staff', roles: ['STAFF'] },
     { key: 'student', label: 'Students', roles: ['STUDENT'] },
+    { key: 'parent', label: 'Parents', roles: ['PARENT'] },
 ];
 
 function resolveStatus(row: { is_used: boolean | null; expires_at: string | null }): InviteCodeStatus {
@@ -71,17 +75,22 @@ export async function GET(request: NextRequest) {
             .maybeSingle();
         const schoolName = school?.name || 'School';
 
-        // All invite codes for this school, newest first, with the owning user.
-        const { data: codes, error } = await supabase
-            .from('invite_codes')
-            .select(`
-                code, role, is_used, expires_at, created_at,
-                users ( first_name, last_name, username, phone )
-            `)
-            .eq('school_id', schoolId)
-            .order('created_at', { ascending: false });
+        // The school's invite codes with the owning user, all of them (a large
+        // school has more than PostgREST's 1,000-row page); only the ones that
+        // still work when printing active codes.
+        const { rows: codes, error } = await fetchAllRows(() => {
+            let query = supabase
+                .from('invite_codes')
+                .select(`
+                    id, code, role, is_used, expires_at, created_at,
+                    users ( first_name, last_name, username, phone )
+                `)
+                .eq('school_id', schoolId);
+            if (activeOnly) query = query.eq('is_used', false).gt('expires_at', new Date().toISOString());
+            return query.order('created_at', { ascending: false }).order('id');
+        });
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (error) return internalError('invite-codes pdf', error);
 
         // Map every code into a display row + keep its role for grouping.
         type RawCode = {

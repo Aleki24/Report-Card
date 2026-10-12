@@ -104,6 +104,20 @@ export async function createInviteCodes(
   return byUser;
 }
 
+/**
+ * Ends every unused invite or reset code of an account, so switching an
+ * account off (or a learner leaving) also stops a code already sent by SMS
+ * from activating it. A fresh code can be issued if the account comes back.
+ */
+export async function revokeInviteCodes(supabaseAdmin: SupabaseClient, userId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('invite_codes')
+    .update({ expires_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('is_used', false);
+  if (error) throw error;
+}
+
 export type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
 import type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
 

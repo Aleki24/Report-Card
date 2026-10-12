@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
 import { getCurrentAcademicYearId } from '@/lib/auth-server';
 import { assertInSchool, errorResponse } from '@/lib/platform/access';
+import { revokeInviteCodes } from '@/lib/invite-codes';
 import { isUuid } from '@/lib/postgrest';
 import { classTeacherReplaceQuestion, classTeacherReplaceResponse, setClassTeacher } from '@/lib/class-teacher-server';
 
@@ -147,6 +148,7 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: error.message }, { status: 400 });
             }
         }
+        if (is_active === false) await revokeInviteCodes(supabase, user_id);
 
         // A role that does not teach leaves this year's class and subjects.
         // Earlier years stay: they name the teacher on those report cards.

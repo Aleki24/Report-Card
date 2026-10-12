@@ -52,7 +52,9 @@ export async function POST(request: NextRequest) {
         // Don't disclose whether the username exists — the login form falls
         // back to attempting the raw identifier, and Clerk returns the
         // appropriate "not found" message.
-        if (!user?.email) {
+        // Accounts not yet activated or switched off cannot sign in, so their
+        // address (often typed in by the admin at invite) is not handed out.
+        if (!user?.email || user.is_active === false) {
             return NextResponse.json({ email: null });
         }
 

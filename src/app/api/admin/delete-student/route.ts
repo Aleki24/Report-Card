@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStudent, getCaller } from '@/lib/auth-server';
 import { internalError } from '@/lib/api-errors';
@@ -52,6 +53,16 @@ export async function DELETE(request: NextRequest) {
         // reported success even when the student was still there.
         const { error: deleteError } = await supabaseAdmin.from('users').delete().eq('id', student_id);
         if (deleteError) return internalError('delete-student', deleteError);
+
+        // An activated learner also has a sign-in account (their id is its
+        // Clerk id). Left in place, the next app launch re-created them as a
+        // fresh student of the school from its metadata.
+        if (student_id.startsWith('user_')) {
+            const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+            await clerk.users.deleteUser(student_id).catch((err: unknown) => {
+                if ((err as { status?: number })?.status !== 404) console.error('[delete-student] Clerk delete failed:', student_id, err);
+            });
+        }
 
         return NextResponse.json({ success: true, message: 'Student deleted successfully.' });
     } catch (err: unknown) {

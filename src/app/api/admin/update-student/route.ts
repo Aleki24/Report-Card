@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revokeInviteCodes } from '@/lib/invite-codes';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStream, canManageStudent, getCaller } from '@/lib/auth-server';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
@@ -138,6 +139,9 @@ export async function PATCH(request: NextRequest) {
             if (studentError) {
                 return NextResponse.json({ error: `Update failed: ${studentError.message}` }, { status: 400 });
             }
+            // A learner who left (transferred, graduated, deactivated) can no
+            // longer activate with a code sent while they were enrolled.
+            if (status !== undefined && status !== 'ACTIVE') await revokeInviteCodes(supabaseAdmin, student_id);
         }
 
         // Update user record (name) — student_id IS the user_id (same UUID)
