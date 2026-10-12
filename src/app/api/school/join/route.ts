@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth, createClerkClient } from '@clerk/nextjs/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { moveUserLinks } from '@/lib/platform/user-links';
 
 export async function POST(request: NextRequest) {
   try {
@@ -147,6 +148,14 @@ export async function POST(request: NextRequest) {
                 }
             }
         }
+    }
+
+    // Duties, parent links and driver links given before the person joined:
+    // the pending row's delete below cascades over any left on it.
+    const linkErr = await moveUserLinks(oldUserId, userId);
+    if (linkErr) {
+        console.error('[join] user link swap failed', { oldUserId, userId, linkErr });
+        return NextResponse.json({ error: 'Failed to link your school records. Please contact your school admin.' }, { status: 500 });
     }
 
     // Update the current (real) user record with the admin-provided details.

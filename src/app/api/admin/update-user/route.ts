@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { ASSIGNABLE_ROLES, isRoleIn } from '@/lib/roles';
 import { getCurrentAcademicYearId } from '@/lib/auth-server';
-import { errorResponse } from '@/lib/platform/access';
+import { assertInSchool, errorResponse } from '@/lib/platform/access';
 import { isUuid } from '@/lib/postgrest';
 import { classTeacherReplaceQuestion, classTeacherReplaceResponse, setClassTeacher } from '@/lib/class-teacher-server';
 
@@ -116,6 +116,9 @@ export async function PUT(request: NextRequest) {
                 return NextResponse.json({ error: 'Only teachers can be class teachers.' }, { status: 400 });
             }
         }
+        if (Array.isArray(subject_teacher_subjects)) {
+            await assertInSchool('grade_streams', (subject_teacher_subjects as SubjectEntry[]).map(s => s.grade_stream_id), adminProfile.school_id);
+        }
         if (classChange && replace_class_teacher !== true) {
             const question = await classTeacherReplaceQuestion(supabase, classChange);
             if (question) return classTeacherReplaceResponse(question);
@@ -145,15 +148,15 @@ export async function PUT(request: NextRequest) {
             }
         }
 
-        // If role is changed to a non-teaching role, clear all teacher assignments
-        if (role && ['ADMIN', 'STUDENT', 'STAFF'].includes(role)) {
-            // Delete class teacher assignment
+        // A role that does not teach leaves this year's class and subjects.
+        // Earlier years stay: they name the teacher on those report cards.
+        if (role && ['ADMIN', 'STUDENT', 'STAFF'].includes(role) && currentYearId) {
             await supabase
                 .from('class_teachers')
                 .delete()
-                .eq('user_id', user_id);
+                .eq('user_id', user_id)
+                .eq('academic_year_id', currentYearId);
 
-            // Get subject teacher record
             const { data: stRecord } = await supabase
                 .from('subject_teachers')
                 .select('id')
@@ -161,16 +164,11 @@ export async function PUT(request: NextRequest) {
                 .maybeSingle();
 
             if (stRecord) {
-                // Delete all subject assignments
                 await supabase
                     .from('subject_teacher_assignments')
                     .delete()
-                    .eq('subject_teacher_id', stRecord.id);
-                // Delete subject teacher record
-                await supabase
-                    .from('subject_teachers')
-                    .delete()
-                    .eq('id', stRecord.id);
+                    .eq('subject_teacher_id', stRecord.id)
+                    .eq('academic_year_id', currentYearId);
             }
         }
 
@@ -180,20 +178,29 @@ export async function PUT(request: NextRequest) {
                 // One transaction: the class's old class teacher is released and
                 // becomes a subject teacher, and this teacher leaves any other class.
                 await setClassTeacher(supabase, classChange);
-            } else if (class_teacher_grade_stream_id === null || class_teacher_grade_stream_id === '') {
-                // Remove class teacher assignment
+            } else if ((class_teacher_grade_stream_id === null || class_teacher_grade_stream_id === '') && currentYearId) {
+                // Remove this year's class only; past years stay on their report cards.
                 await supabase
                     .from('class_teachers')
                     .delete()
-                    .eq('user_id', user_id);
+                    .eq('user_id', user_id)
+                    .eq('academic_year_id', currentYearId);
             }
         }
 
         // ── Handle Subject Teacher assignments ──
+        // Only this year's rows are reconciled, by subject and grade: a pair
+        // the form still lists keeps its row as it is (a stream-specific
+        // assignment made on the class's Subject Teachers screen stays
+        // stream-specific), a dropped pair is removed, a new pair is added.
+        // The forms send subject and grade only, and rewriting every row
+        // turned "Grade 7 East" into all of Grade 7 and wiped past years.
         if (subject_teacher_subjects !== undefined && currentYearId) {
             const validSubjects = ((subject_teacher_subjects || []) as SubjectEntry[]).filter(
-                (s) => s.subject_id && s.grade_id
+                (s): s is SubjectEntry & { subject_id: string; grade_id: string } => !!s.subject_id && !!s.grade_id
             );
+            const pairKey = (s: { subject_id: string; grade_id: string }) => `${s.subject_id}|${s.grade_id}`;
+            const wanted = new Map(validSubjects.map(s => [pairKey(s), s]));
 
             // Get or create subject_teachers record
             let { data: stRecord } = await supabase
@@ -214,39 +221,43 @@ export async function PUT(request: NextRequest) {
                 }
 
                 if (stRecord) {
-                    // Delete all existing assignments for this teacher
-                    await supabase
+                    const { data: current, error: currentError } = await supabase
                         .from('subject_teacher_assignments')
-                        .delete()
-                        .eq('subject_teacher_id', stRecord.id);
+                        .select('id, subject_id, grade_id')
+                        .eq('subject_teacher_id', stRecord.id)
+                        .eq('academic_year_id', currentYearId);
+                    if (currentError) throw currentError;
+                    const held = new Set((current ?? []).map(pairKey));
 
-                    // Insert new assignments
-                    const assignments = validSubjects.map((sub) => ({
+                    const dropped = (current ?? []).filter(a => !wanted.has(pairKey(a))).map(a => a.id);
+                    if (dropped.length > 0) {
+                        const { error: deleteError } = await supabase.from('subject_teacher_assignments').delete().in('id', dropped);
+                        if (deleteError) throw deleteError;
+                    }
+
+                    const added = [...wanted.values()].filter(s => !held.has(pairKey(s))).map(sub => ({
                         subject_teacher_id: stRecord!.id,
                         subject_id: sub.subject_id,
                         grade_id: sub.grade_id,
                         grade_stream_id: sub.grade_stream_id || null,
                         academic_year_id: currentYearId,
                     }));
-
-                    const { error: insertError } = await supabase.from('subject_teacher_assignments').insert(assignments);
-                    if (insertError) {
-                        console.error('Failed to insert subject assignments:', insertError);
-                        return NextResponse.json({ error: 'Failed to assign subjects: ' + insertError.message }, { status: 400 });
+                    if (added.length > 0) {
+                        const { error: insertError } = await supabase.from('subject_teacher_assignments').insert(added);
+                        if (insertError) {
+                            console.error('Failed to insert subject assignments:', insertError);
+                            return NextResponse.json({ error: 'Could not save the subjects. Check them and try again.' }, { status: 400 });
+                        }
                     }
                 }
             } else if (stRecord && !is_also_subject_teacher) {
-                // No subjects left and not flagged as "also subject teacher" — clean up
+                // No subjects left this year. Earlier years' rows stay, so
+                // the subject_teachers record they hang on stays too.
                 await supabase
                     .from('subject_teacher_assignments')
                     .delete()
-                    .eq('subject_teacher_id', stRecord.id);
-                // Optionally remove the subject_teachers record too
-                // (keeping it is harmless; removing keeps data clean)
-                await supabase
-                    .from('subject_teachers')
-                    .delete()
-                    .eq('id', stRecord.id);
+                    .eq('subject_teacher_id', stRecord.id)
+                    .eq('academic_year_id', currentYearId);
             }
         }
 
