@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 import { generateExamResultsPdf } from '@/lib/pdf/examResultsPdf';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 export const runtime = 'nodejs';
 
@@ -42,7 +43,8 @@ export async function GET(request: NextRequest) {
         if (!schoolId) {
             return NextResponse.json({ error: 'No school associated' }, { status: 403 });
         }
-        if (role === 'STUDENT') {
+        // Ranked class lists are for admins and teachers only.
+        if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
         // Staff whose duty covers every learner (bursar, nurse, matron,
         // transport, library) see the whole school, not a teacher's slice.
         const wholeSchool = auth.role === 'ADMIN' || (!subjectId && seesAllStudents(await getAccess()));
-        if (!wholeSchool) {
-          const perms = await getTeacherPermissions(auth.userId);
+        const perms = auth.role === 'ADMIN' ? null : await getTeacherPermissions(auth.userId);
+        if (!wholeSchool && perms) {
           // Mark entry: only the streams this teacher teaches the subject in
           // (or their own class), not every learner they can see elsewhere.
           filteredStudents = subjectId
@@ -110,12 +110,13 @@ export async function GET(request: NextRequest) {
                 grade_id: (Array.isArray(student.grade_streams) ? student.grade_streams[0] : student.grade_streams)?.grade_id ?? null,
               }))
             : filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
-          // A class teacher's Students page is their own class, not every
-          // learner they teach a subject to elsewhere.
-          if (!subjectId && searchParams.get('scope') === 'class') {
-            filteredStudents = filteredStudents.filter(student =>
-              perms.isClassTeacher && perms.classTeacherStreams.includes(student.current_grade_stream_id as string));
-          }
+        }
+        // A class teacher's Students page is their own class, not every
+        // learner they teach a subject to elsewhere, nor the whole school a
+        // duty of theirs covers.
+        if (perms && !subjectId && searchParams.get('scope') === 'class') {
+          filteredStudents = filteredStudents.filter(student =>
+            perms.isClassTeacher && perms.classTeacherStreams.includes(student.current_grade_stream_id as string));
         }
 
         // Mark entry passes the exam's subject: only the learners who take it

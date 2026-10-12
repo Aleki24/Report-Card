@@ -6,6 +6,7 @@ import { fetchActiveMultiPaperScheme } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { internalError } from '@/lib/api-errors';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 /**
  * Resolve a { [componentId]: score } payload against the exam's
@@ -111,8 +112,9 @@ export async function GET(request: NextRequest) {
     const role = userProfile?.role as string | null;
     if (!schoolId || !role) return NextResponse.json({ data: [] });
 
-    // Students shouldn't access the class marks list
-    if (role === 'STUDENT') {
+    // The class marks list is for admins and teachers; students, parents and
+    // non-teaching staff see marks through their own portals.
+    if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
