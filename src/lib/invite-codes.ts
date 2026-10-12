@@ -70,6 +70,40 @@ export async function createInviteCode(
   throw new Error('Failed to generate a unique invite code after multiple attempts');
 }
 
+/**
+ * Invite codes for many accounts in one insert (a bulk import), keyed by user
+ * id. A clash with an existing code is rare (31^6 codes); the batch is then
+ * retried with fresh codes, and as a last resort each code is made alone.
+ */
+export async function createInviteCodes(
+  supabaseAdmin: SupabaseClient,
+  userIds: readonly string[],
+  schoolId: string,
+  role: string,
+  expiresInDays: number = 30
+): Promise<Map<string, string>> {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const codes = new Set<string>();
+    while (codes.size < userIds.length) codes.add(generateInviteCode());
+    const rows = [...codes].map((code, i) => ({
+      code,
+      user_id: userIds[i],
+      school_id: schoolId,
+      role,
+      is_used: false,
+      expires_at: expiresAt.toISOString(),
+    }));
+    const { error } = await supabaseAdmin.from('invite_codes').insert(rows);
+    if (!error) return new Map(rows.map(r => [r.user_id, r.code]));
+    if (error.code !== '23505') break;
+  }
+  const byUser = new Map<string, string>();
+  for (const userId of userIds) byUser.set(userId, await createInviteCode(supabaseAdmin, userId, schoolId, role, expiresInDays));
+  return byUser;
+}
+
 export type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
 import type { InviteDelivery as InviteNotifyResult } from './invite-delivery';
 
