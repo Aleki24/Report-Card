@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 const isProtected = createRouteMatcher(['/dashboard(.*)', '/student(.*)', '/parent(.*)']);
 
@@ -27,12 +28,9 @@ export default clerkMiddleware(async (auth, request) => {
       // an already-signed-in user who followed a link asking for a specific
       // page (the report-card QR page's "sign in to see your results", or this
       // middleware's own sign-in bounce above) silently landed on the generic
-      // dashboard instead. Same-site absolute paths only, so the param can't
-      // be used as an open redirect.
-      const requested = request.nextUrl.searchParams.get('redirect_url');
-      const safeRequested = requested && requested.startsWith('/') && !requested.startsWith('//')
-        ? requested
-        : null;
+      // dashboard instead. Same-site paths only (see safeInternalPath), so
+      // the param can't be used as an open redirect.
+      const safeRequested = safeInternalPath(request.nextUrl.searchParams.get('redirect_url'), request.nextUrl.origin);
       const dest = safeRequested ?? (role === 'STUDENT' ? '/student/dashboard' : role === 'PARENT' ? '/parent' : '/dashboard');
       return NextResponse.redirect(new URL(dest, request.url));
     }

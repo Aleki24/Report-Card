@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { useSignIn } from '@clerk/nextjs/legacy';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { useRouter } from 'next/navigation';
@@ -46,9 +47,7 @@ function joinWithOr(items: string[]): string {
  */
 function postLoginDestination(): string {
   if (typeof window === 'undefined') return '/dashboard';
-  const target = new URLSearchParams(window.location.search).get('redirect_url');
-  if (!target || !target.startsWith('/') || target.startsWith('//')) return '/dashboard';
-  return target;
+  return safeInternalPath(new URLSearchParams(window.location.search).get('redirect_url'), window.location.origin) ?? '/dashboard';
 }
 
 export default function LoginPage() {

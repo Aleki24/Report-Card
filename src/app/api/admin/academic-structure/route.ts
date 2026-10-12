@@ -227,14 +227,11 @@ export async function POST(request: NextRequest) {
         const schoolId = auth.schoolId;
         const role = auth.role;
 
-        const isTeacher = role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER';
-
-        // Check role permissions: Teachers can add basic exam-related structure. Admins can add anything.
+        // Years, terms, classes and subjects are school-wide settings, as edits
+        // and deletes already are: a teacher adding a future year made it the
+        // current one and took every class teacher off their class.
         if (role !== 'ADMIN') {
-            const allowedForTeachers = ['subject', 'stream', 'term', 'academic_year'];
-            if (!isTeacher || !allowedForTeachers.includes(type)) {
-                return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
-            }
+            return NextResponse.json({ error: 'Only the school admin can change years, terms, classes and subjects.' }, { status: 403 });
         }
 
         // Global reference data is shared across all schools and cannot be
