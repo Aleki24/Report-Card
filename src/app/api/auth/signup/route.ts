@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { rateLimit } from '@/lib/rate-limit';
+import { isPlatformOwnerEmail } from '@/lib/school-approval';
+import { isUniqueViolationOn } from '@/lib/postgrest';
 
 export async function POST(request: NextRequest) {
     try {
@@ -26,6 +28,12 @@ export async function POST(request: NextRequest) {
                 { error: 'All fields are required: email, password, first_name, last_name' },
                 { status: 400 }
             );
+        }
+
+        // An address typed here is never proven (Clerk marks server-created
+        // emails verified); the platform owner signs in with Google instead.
+        if (isPlatformOwnerEmail(email)) {
+            return NextResponse.json({ error: 'Use “Continue with Google” for this email address.' }, { status: 400 });
         }
 
         if (password.length < 6) {
@@ -65,20 +73,26 @@ export async function POST(request: NextRequest) {
 
         const userId = clerkUser.id;
 
-        const { error: profileError } = await supabaseAdmin.from('users').insert({
+        const row = {
             id: userId,
             first_name,
             last_name,
             email: email.trim(),
-            username: email.trim().split('@')[0],
+            username: email.trim().split('@')[0] || userId,
             role: 'PENDING',
             is_active: true,
             school_id: null,
-        });
+        };
+        let { error: profileError } = await supabaseAdmin.from('users').insert(row);
+        // Another account already uses this email prefix (info@, admin@) as its username.
+        if (profileError && isUniqueViolationOn(profileError, /users_username_key/)) {
+            ({ error: profileError } = await supabaseAdmin.from('users').insert({ ...row, username: userId }));
+        }
 
         if (profileError) {
+            console.error('[signup] profile insert failed:', profileError);
             await clerk.users.deleteUser(userId).catch(() => {});
-            return NextResponse.json({ error: `Profile error: ${profileError.message}` }, { status: 400 });
+            return NextResponse.json({ error: 'Could not finish creating your account. Please try again.' }, { status: 500 });
         }
 
         return NextResponse.json({

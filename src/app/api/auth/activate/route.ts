@@ -5,6 +5,7 @@ import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
 import { rateLimit } from '@/lib/rate-limit';
 import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { createSignInTicket } from '@/lib/sign-in-ticket';
+import { isPlatformOwnerEmail } from '@/lib/school-approval';
 import { moveUserLinks } from '@/lib/platform/user-links';
 
 type ClerkClient = ReturnType<typeof createClerkClient>;
@@ -173,6 +174,10 @@ export async function POST(request: NextRequest) {
 
         // Use provided email or generate placeholder
         const userEmail = email?.trim() || placeholderEmailFor(finalUsername, school?.name);
+        // An address typed here is never proven; the platform owner's must not be claimable.
+        if (isPlatformOwnerEmail(userEmail)) {
+            return NextResponse.json({ error: 'That email address can’t be used here. Use your own email, or leave it empty.' }, { status: 400 });
+        }
 
         // 4. Create the Clerk account with the user's chosen password and username
         let clerkUserId: string;

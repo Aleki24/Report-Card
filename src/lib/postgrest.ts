@@ -53,3 +53,7 @@ export async function fetchAllRows<T>(
     }
     return { rows, error: null, truncated: true };
 }
+
+/** Whether a write failed on the unique constraint matching `key` (e.g. /users_username_key/). */
+export const isUniqueViolationOn = (error: { code?: string; message: string; details?: string | null }, key: RegExp): boolean =>
+    error.code === '23505' && key.test(`${error.message} ${error.details ?? ''}`);
