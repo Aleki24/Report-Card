@@ -33,10 +33,65 @@ export async function POST(request: NextRequest) {
     }
     const { schoolName, schoolEmail, schoolPhone, schoolAddress, academicYear, term, curricula, classes, offerCompulsorySubjects } = parsed.data;
 
+    // Classes: standard grades only, from the curricula the school picked.
+    // Checked before anything is created, so a refused form leaves nothing behind.
+    const { data: gradeRows, error: gradeErr } = await supabaseAdmin
+      .from('grades')
+      .select('id, code, name_display, academic_levels ( code )')
+      .in('id', classes.map(c => c.grade_id));
+    if (gradeErr) throw new Error('Failed to read grades: ' + gradeErr.message);
+    const gradeById = new Map((gradeRows ?? []).map(g => [g.id as string, g]));
+
+    for (const cls of classes) {
+      const grade = gradeById.get(cls.grade_id);
+      const level = grade && (Array.isArray(grade.academic_levels) ? grade.academic_levels[0] : grade.academic_levels);
+      if (!grade || !curricula.includes(level?.code as Curriculum)) {
+        return NextResponse.json({ error: 'A class you picked is not part of the curriculum you chose.' }, { status: 400 });
+      }
+    }
+
     let schoolId = userData.school_id;
 
-    // If PENDING, create the school and upgrade to ADMIN
-    if (userData.role === 'PENDING' || !schoolId) {
+    // A requester who already sent the form (it failed part-way, or was
+    // turned down) continues with the same school rather than opening a
+    // second request: its details are updated, and the owner is only told
+    // again when a turned-down request is sent back for review.
+    if (userData.role === 'PENDING' && schoolId) {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from('schools').select('id, approval_status').eq('id', schoolId).maybeSingle();
+      if (existingError) throw new Error('Failed to read the school: ' + existingError.message);
+      if (existing) {
+        if (!schoolName) return NextResponse.json({ error: 'School name is required' }, { status: 400 });
+        const reopened = existing.approval_status === 'REJECTED';
+        const approvalToken = reopened ? crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '') : null;
+        const { error: updateError } = await supabaseAdmin.from('schools').update({
+          name: schoolName.trim(),
+          email: schoolEmail?.trim() || null,
+          phone: schoolPhone?.trim() || null,
+          address: schoolAddress?.trim() || null,
+          ...(reopened ? { approval_status: 'PENDING_APPROVAL', approval_requested_at: new Date().toISOString(), approval_token: approvalToken } : {}),
+        }).eq('id', schoolId);
+        if (updateError) throw new Error('Failed to update the school: ' + updateError.message);
+        if (reopened && approvalToken) {
+          const ownerRequest = {
+            schoolId,
+            schoolName: schoolName.trim(),
+            schoolEmail: schoolEmail?.trim() || null,
+            schoolPhone: schoolPhone?.trim() || null,
+            schoolAddress: schoolAddress?.trim() || null,
+            requesterName: userData.first_name,
+            requesterEmail: userData.email,
+            approvalToken,
+          };
+          after(() => notifyOwnerOfSchoolRequest(ownerRequest));
+        }
+      } else {
+        schoolId = null;
+      }
+    }
+
+    // A new request: create the school (the account stays PENDING until approval).
+    if (!schoolId) {
       if (!schoolName) {
         return NextResponse.json({ error: 'School name is required' }, { status: 400 });
       }
@@ -133,22 +188,6 @@ export async function POST(request: NextRequest) {
       ? await supabaseAdmin.from('terms').update(termRow).eq('id', existingTerm.id)
       : await supabaseAdmin.from('terms').insert({ ...termRow, academic_year_id: academicYearId, school_id: schoolId, name: term.name });
     if (termErr) throw new Error('Failed to set up the term: ' + termErr.message);
-
-    // Classes: standard grades only, from the curricula the school picked.
-    const { data: gradeRows, error: gradeErr } = await supabaseAdmin
-      .from('grades')
-      .select('id, code, name_display, academic_levels ( code )')
-      .in('id', classes.map(c => c.grade_id));
-    if (gradeErr) throw new Error('Failed to read grades: ' + gradeErr.message);
-    const gradeById = new Map((gradeRows ?? []).map(g => [g.id as string, g]));
-
-    for (const cls of classes) {
-      const grade = gradeById.get(cls.grade_id);
-      const level = grade && (Array.isArray(grade.academic_levels) ? grade.academic_levels[0] : grade.academic_levels);
-      if (!grade || !curricula.includes(level?.code as Curriculum)) {
-        return NextResponse.json({ error: 'A class you picked is not part of the curriculum you chose.' }, { status: 400 });
-      }
-    }
 
     for (const cls of classes) {
       const grade = gradeById.get(cls.grade_id)!;
