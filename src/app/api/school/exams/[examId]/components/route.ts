@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { fetchExamComponentScheme } from '@/lib/multi-paper-server';
+import { fetchExamComponentScheme, papersOverNewMax, recomputeExamComposites } from '@/lib/multi-paper-server';
 import { AGGREGATION_METHODS } from '@/lib/multi-paper';
 
 const VALID_METHODS = new Set(AGGREGATION_METHODS.map(m => m.value));
@@ -117,6 +117,21 @@ export async function PUT(
             }
         }
 
+        // A lowered paper maximum must not leave marks above it: say which
+        // papers, before anything is changed.
+        if (assessmentMode === 'multi_paper' && isEnabled) {
+            const current = await fetchExamComponentScheme(supabase, examId);
+            const newMaxById = new Map<string, { code: string; max: number }>();
+            for (const c of current?.components ?? []) {
+                const incoming = components.find(i => String(i.component_code || '').trim().toUpperCase() === c.component_code);
+                if (incoming) newMaxById.set(c.id, { code: c.component_code, max: Number(incoming.max_score) });
+            }
+            const over = await papersOverNewMax(supabase, examId, newMaxById);
+            if (over.length > 0) {
+                return NextResponse.json({ error: `Some marks are above the new maximum: ${over.join(', ')}. Correct those marks first, or keep the higher maximum.` }, { status: 409 });
+            }
+        }
+
         // Upsert scheme (one per exam)
         const { data: scheme, error: schemeError } = await supabase
             .from('exam_subject_component_schemes')
@@ -190,8 +205,12 @@ export async function PUT(
             }
         }
 
+        // Marks already entered follow the new scheme (maxima, weights,
+        // aggregation, papers removed).
+        const recomputed = await recomputeExamComposites(supabase, examId, Number(exam.max_score) || 100);
+
         const saved = await fetchExamComponentScheme(supabase, examId);
-        return NextResponse.json({ success: true, data: saved });
+        return NextResponse.json({ success: true, data: saved, recomputed });
     } catch (err: unknown) {
         return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 });
     }
