@@ -6,7 +6,7 @@ import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { guardianKey, type ParentContact } from '@/lib/guardians';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
@@ -75,6 +75,17 @@ export async function GET(request: NextRequest) {
     switch (type) {
       case 'students': {
         const gradeStreamId = searchParams.get('grade_stream_id');
+        const gradeId = searchParams.get('grade_id');
+        // A grade-wide mark sheet: that grade's classes in this school.
+        let gradeStreamIds: string[] | null = null;
+        if (gradeId && !gradeStreamId) {
+          if (!isUuid(gradeId)) return NextResponse.json({ error: 'Invalid grade id' }, { status: 400 });
+          const { data: streams, error: streamsError } = await supabase
+            .from('grade_streams').select('id').eq('school_id', schoolId).eq('grade_id', gradeId);
+          if (streamsError) return NextResponse.json({ error: 'Could not load students.' }, { status: 400 });
+          gradeStreamIds = (streams ?? []).map(s => s.id as string);
+          if (gradeStreamIds.length === 0) return NextResponse.json({ data: [] });
+        }
         // Paged: a school past 1,000 learners was silently cut short.
         const { rows: data, error } = await fetchAllRows(() => {
           let query = supabase
@@ -89,6 +100,7 @@ export async function GET(request: NextRequest) {
             `)
             .eq('users.school_id', schoolId);
           if (gradeStreamId) query = query.eq('current_grade_stream_id', gradeStreamId);
+          else if (gradeStreamIds) query = query.in('current_grade_stream_id', gradeStreamIds);
           // Admission numbers are optional, so id keeps the page order stable.
           return query.order('admission_number').order('id');
         });
@@ -388,13 +400,18 @@ export async function GET(request: NextRequest) {
 
       case 'exams': {
         // Every exam of the school (one per subject, grade and sitting, so a
-        // year or two passes PostgREST's 1,000-row page).
-        const { rows: data, error } = await fetchAllRows(() => supabase
-          .from('exams')
-          .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id), grades(academic_level_id)')
-          .eq('school_id', schoolId)
-          .order('created_at', { ascending: false })
-          .order('id'));
+        // year or two passes PostgREST's 1,000-row page), or just ?exam_id=
+        // for a screen that needs one exam's subject and grading.
+        const examId = searchParams.get('exam_id');
+        if (examId && !isUuid(examId)) return NextResponse.json({ error: 'Invalid exam id' }, { status: 400 });
+        const { rows: data, error } = await fetchAllRows(() => {
+          let query = supabase
+            .from('exams')
+            .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id), grades(academic_level_id)')
+            .eq('school_id', schoolId);
+          if (examId) query = query.eq('id', examId);
+          return query.order('created_at', { ascending: false }).order('id');
+        });
 
         if (error) return NextResponse.json({ error: 'Could not load exams.' }, { status: 400 });
 

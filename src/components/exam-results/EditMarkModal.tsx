@@ -97,7 +97,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
         const fetchGrades = async () => {
             try {
                 // Get exam details first
-                const examsRes = await fetch('/api/school/data?type=exams');
+                const examsRes = await fetch(`/api/school/data?type=exams&exam_id=${encodeURIComponent(examId)}`);
                 const examsData = await examsRes.json();
                 const exam = (examsData.data || []).find((e: any) => e.id === examId);
                 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useApi, withQuery } from '@/lib/api';
+import { useApi } from '@/lib/api';
+import { examRosterUrl } from '@shared/marks/roster-url';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { compositePercentage, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
@@ -46,7 +47,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const api = useApi();
     const draftKey = `marks-${exam.id}`;
 
-    const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', subject_id: exam.subject_id }));
+    const students = useApiQuery<StudentListItem[]>(examRosterUrl({ subjectId: exam.subject_id, gradeStreamId: exam.grade_stream_id, gradeId: exam.grade_id }));
     const marks = useApiQuery<ExamMark[]>(`/api/school/exam-marks?exam_id=${exam.id}`);
     const schemeQuery = useApiQuery<ExamPaperScheme | null>(`/api/school/exams/${exam.id}/components`);
     const scheme = isMultiPaper(schemeQuery.data) ? schemeQuery.data : null;

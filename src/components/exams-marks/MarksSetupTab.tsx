@@ -545,7 +545,7 @@ export function MarksSetupTab() {
             subjectId={selectedExam.subject_id}
           />
         )}
-        {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} />}
+        {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} gradeStreamId={selectedExam.grade_stream_id ?? null} gradeId={selectedExam.grade_id} />}
         {mode === 'scan' && (
           <>
             {examIsMultiPaper && (

@@ -17,6 +17,7 @@ import {
 } from '@/lib/mark-entry';
 import { cn } from '@/lib/utils';
 import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/MarkSheetRow';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -189,7 +190,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             try {
                 const [structureRes, studentsRes, savedResult] = await Promise.all([
                     fetch('/api/admin/academic-structure', { cache: 'no-store' }),
-                    fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${encodeURIComponent(subjectId)}` : ''}`, { cache: 'no-store' }),
+                    fetch(examRosterUrl({ subjectId, gradeStreamId, gradeId }), { cache: 'no-store' }),
                     fetchSaved(),
                 ]);
                 const structure = (await structureRes.json()) as StructureResponse;

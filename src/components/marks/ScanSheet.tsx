@@ -4,6 +4,7 @@ import { CardHeading } from '@/components/ui/CardHeading';
 import { Camera, ScanLine, AlertTriangle } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { matchStudent, type MatchCandidate as StudentOption, type ScanRow } from '@/lib/marks/scan-match';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 interface StreamItem { id: string; full_name: string; grade_id: string; }
 
@@ -65,7 +66,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
         (async () => {
             try {
                 const [studentsRes, structureRes] = await Promise.all([
-                    fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`),
+                    fetch(examRosterUrl({ subjectId, gradeStreamId, gradeId })),
                     fetch('/api/admin/academic-structure'),
                 ]);
                 const { data: allStudents } = await studentsRes.json();
@@ -96,7 +97,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
         (async () => {
             try {
                 const [examsRes, structureRes] = await Promise.all([
-                    fetch('/api/school/data?type=exams'),
+                    fetch(`/api/school/data?type=exams&exam_id=${encodeURIComponent(examId)}`),
                     fetch('/api/admin/academic-structure'),
                 ]);
                 if (!examsRes.ok || !structureRes.ok) throw new Error('Grading scale request failed');

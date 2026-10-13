@@ -4,6 +4,7 @@ import { Layers } from 'lucide-react';
 import React, { useState, useCallback, useEffect } from 'react';
 import { parseTabularFile, IMPORT_FILE_ACCEPT } from '@/lib/import/parse-tabular-file';
 import { isMultiPaper } from '@/lib/multi-paper';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 interface ParsedRow {
     [key: string]: string;
@@ -20,9 +21,12 @@ interface Props {
     examId: string;
     /** The exam's subject — scopes admission-number matching to enrolled takers */
     subjectId?: string;
+    /** The exam's class, or its grade for a grade-wide paper: rows for learners elsewhere land in "missing". */
+    gradeStreamId?: string | null;
+    gradeId?: string | null;
 }
 
-export function BulkUpload({ examId, subjectId }: Props) {
+export function BulkUpload({ examId, subjectId, gradeStreamId, gradeId }: Props) {
     const [file, setFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [headers, setHeaders] = useState<string[]>([]);
@@ -107,7 +111,7 @@ export function BulkUpload({ examId, subjectId }: Props) {
             //    a grade can be auto-filled when the CSV has no grade column
             //    (same subject grading system used by manual/quick entry).
             const [examRes, structureRes] = await Promise.all([
-                fetch('/api/school/data?type=exams'),
+                fetch(`/api/school/data?type=exams&exam_id=${encodeURIComponent(examId)}`),
                 fetch('/api/admin/academic-structure'),
             ]);
             const examJson = await examRes.json();
@@ -135,7 +139,7 @@ export function BulkUpload({ examId, subjectId }: Props) {
 
             // 2. Resolve student IDs from admission numbers
             //    (subject-scoped so out-of-subject learners land in "missing")
-            const studentRes = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
+            const studentRes = await fetch(examRosterUrl({ subjectId, gradeStreamId, gradeId }));
             const studentJson = await studentRes.json();
             const studentsData = studentJson.data || [];
 

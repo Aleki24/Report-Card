@@ -5,6 +5,7 @@ import { apiErrorMessage } from '@/lib/api-error-message';
 import React, { useState, useEffect } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 interface StudentMissing {
     id: string;
@@ -45,7 +46,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
             try {
                 // Get all students in the stream (subject-scoped when known,
                 // so only the subject's takers count as "missing")
-                const stuRes = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
+                const stuRes = await fetch(examRosterUrl({ subjectId, gradeStreamId }));
                 const stuData = await stuRes.json();
                 // A failed load is not "everyone is marked" (or "nobody is"):
                 // stop here rather than offer marks over existing ones.
@@ -126,7 +127,7 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
         const fetchScales = async () => {
             try {
                 // First get exam details to find the academic level
-                const examsRes = await fetch('/api/school/data?type=exams');
+                const examsRes = await fetch(`/api/school/data?type=exams&exam_id=${encodeURIComponent(examId)}`);
                 const examsData = await examsRes.json();
                 const exam = (examsData.data || []).find((e: any) => e.id === examId);
                 
