@@ -58,7 +58,7 @@ export type DraftResult = { ok: true; entries: SchemeEntryInput[] } | { ok: fals
 export async function draftScheme(req: DraftRequest): Promise<DraftResult> {
     const client = new Anthropic();
     const response = await client.beta.messages.create({
-        model: process.env.ANTHROPIC_DRAFT_MODEL || 'claude-opus-5',
+        model: process.env.ANTHROPIC_DRAFT_MODEL || 'claude-opus-5-5',
         max_tokens: 16000,
         thinking: { type: 'adaptive' },
         output_config: { effort: 'medium', format: { type: 'json_schema', schema: DRAFT_SCHEMA } },
