@@ -78,20 +78,27 @@ export const PATCH = route<Params>('timetable lesson update', { module: 'timetab
         throw new HttpError(409, 'Swapping would double-book the other lesson’s teacher or room.');
     }
 
-    const set = async (ids: string[], values: Record<string, unknown>) => {
-        if (ids.length === 0) return;
-        const { error: e } = await db.from('timetable_lessons').update(values).in('id', ids);
-        if (e) throw e;
-    };
-    const locked = body.locked !== undefined ? { locked: body.locked } : {};
     if (!moving) {
-        await set([a.id], { room_id: roomId, ...locked });
+        const locked = body.locked !== undefined ? { locked: body.locked } : {};
+        const { error: e } = await db.from('timetable_lessons').update({ room_id: roomId, ...locked }).eq('id', a.id);
+        if (e) throw e;
         return { swapped: false };
     }
-    // Park the slot's lessons outside the grid first, so no class ever holds a subject twice mid-swap.
-    await set(swapGroup.map(o => o.id), { period: PARK_PERIOD });
-    await set(group.map(o => o.id), { day, period, ...locked });
-    if (roomId !== a.room_id) await set([a.id], { room_id: roomId });
-    await set(swapGroup.map(o => o.id), { day: a.day, period: a.period });
+    // One transaction: the slot's lessons are parked outside the grid, the
+    // group moves in and they move back, or nothing changes at all.
+    const { error: swapError } = await db.rpc('swap_timetable_slot', {
+        p_version_id: a.version_id,
+        p_group: group.map(o => o.id),
+        p_swap: swapGroup.map(o => o.id),
+        p_to_day: day,
+        p_to_period: period,
+        p_from_day: a.day,
+        p_from_period: a.period,
+        p_park_period: PARK_PERIOD,
+        p_lesson: a.id,
+        p_room: roomId,
+        p_locked: body.locked ?? null,
+    });
+    if (swapError) throw swapError;
     return { swapped: swapGroup.length > 0 };
 });

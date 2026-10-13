@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { ModuleKey } from '../platform/modules';
 import type { DutyKey, Permission } from '../platform/permissions';
+import type { UserRole } from '../../types';
 
 /**
  * A school-scoped table served by the shared operations API
@@ -67,6 +68,17 @@ export interface ResourceDef<S extends z.ZodObject = z.ZodObject> {
      * anyone: what was approved stays what is on record.
      */
     frozen?: { column: string; values: readonly string[]; fields: readonly string[] };
+    /**
+     * Rows meant for some readers only: a role listed in `byRole` lists just
+     * the rows whose `column` holds one of its values (a learner's calendar
+     * has no staff meetings). Roles not listed see every row they may read.
+     */
+    audience?: { column: string; byRole: Partial<Record<UserRole, readonly string[]>> };
+    /**
+     * Only staff may read these rows, whatever a role's grants say: lesson
+     * cover records why a teacher is away, which is not for learners.
+     */
+    staffOnly?: boolean;
     /** Write an audit entry for every change. */
     audit?: boolean;
     /** Largest page returned by a list. */

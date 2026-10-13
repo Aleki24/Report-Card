@@ -8,6 +8,7 @@ import { writeErrorMessage } from '@/lib/api-errors';
 import { fetchAllRows } from '@/lib/postgrest';
 import { HttpError, assertInSchool, type Access } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
+import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import type { ResourceDef } from './resource';
 import { getResource } from './registry';
 
@@ -28,6 +29,7 @@ function rightsFor(def: ResourceDef, access: Access): Rights {
     const read = write || def.read.some(p => access.can(p));
     const own = !!def.own && access.can(def.own.permission);
     if (!read && !own) throw new HttpError(403, 'You do not have permission to do this.');
+    if (def.staffOnly && !isRoleIn(access.role, STAFF_ROLES)) throw new HttpError(403, 'You do not have permission to do this.');
     return { read, write, own };
 }
 
@@ -81,6 +83,8 @@ export async function listRows(def: ResourceDef, access: Access, params: URLSear
             if (params.get(flag) === '1') query = isNull ? query.is(column, null) : query.not(column, 'is', null);
         }
         if (!rights.read && def.own) query = query.eq(def.own.column, access.userId);
+        const audience = def.audience?.byRole[access.role];
+        if (def.audience && audience) query = query.in(def.audience.column, [...audience]);
         if (def.order) query = query.order(def.order.column, { ascending: def.order.ascending ?? true });
         // A stable tiebreak, so paging never skips or repeats a row.
         return query.order('id');
