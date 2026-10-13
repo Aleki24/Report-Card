@@ -8,7 +8,7 @@ import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
 import { getExamType } from '@/lib/exam-types';
-import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
+import type { StaffDashboardData, TermSummary, UpcomingRound } from '@/lib/dashboard';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -56,6 +56,17 @@ function describeTerm(terms: readonly TermRow[], current: TermRow | null, yearNa
   return { kind: 'break', lastName: last?.name ?? null, nextName: next?.name ?? null, nextStart: next?.start_date ?? null };
 }
 
+type YearRow = { id: string; name: string };
+
+/** The term the school is in today, its year, and how far through it is. */
+function termContext(terms: readonly (TermRow & { is_current?: boolean | null })[], years: readonly YearRow[], today: string) {
+  const activeTermId = findActiveTermId(terms.map(t => ({ ...t, start_date: t.start_date ?? undefined, end_date: t.end_date ?? undefined, is_current: t.is_current ?? undefined })));
+  const currentTerm = terms.find(t => t.id === activeTermId) ?? null;
+  // The current term's year: the newest year row can be next year's, set
+  // up early, which emptied every figure below until it began.
+  const currentYear = years.find(y => y.id === currentTerm?.academic_year_id) ?? years[0] ?? null;
+  return { currentTerm, currentYear, term: describeTerm(terms, currentTerm, currentYear?.name ?? null, today) };
+}
 
 export async function GET(_request: NextRequest) {
   try {
@@ -78,7 +89,18 @@ export async function GET(_request: NextRequest) {
     const schoolId = userProfile?.school_id as string | null;
     const role = userProfile?.role as string;
 
-    // School-wide figures are for the people running the school.
+    // School-wide figures are for the people running the school; other
+    // staff get the calendar their home screen shows.
+    if (role === 'STAFF') {
+      if (!schoolId) return NextResponse.json({ term: { kind: 'none' } } satisfies StaffDashboardData);
+      const [termsRes, yearsRes] = await Promise.all([
+        supabase.from('terms').select('id, name, start_date, end_date, is_current, academic_year_id').eq('school_id', schoolId),
+        supabase.from('academic_years').select('id, name').eq('school_id', schoolId).order('start_date', { ascending: false }),
+      ]);
+      if (termsRes.error || yearsRes.error) return NextResponse.json({ error: 'Could not load the school calendar' }, { status: 500 });
+      const { term } = termContext(termsRes.data ?? [], yearsRes.data ?? [], schoolToday());
+      return NextResponse.json({ term } satisfies StaffDashboardData);
+    }
     if (!isRoleIn(role, STAFF_TEACHING_ROLES)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -128,13 +150,7 @@ export async function GET(_request: NextRequest) {
       // Exams published by teachers and awaiting admin approval before report cards can be downloaded.
     ]);
 
-    const activeTermId = findActiveTermId(termsRes?.data || []);
-    const currentTerm = (termsRes?.data || []).find(t => t.id === activeTermId) || null;
-    // The current term's year: the newest year row can be next year's, set
-    // up early, which emptied every figure below until it began.
-    const years = (currentYearRes?.data ?? []) as { id: string; name: string }[];
-    const currentYear = years.find(y => y.id === currentTerm?.academic_year_id) ?? years[0] ?? null;
-    const term = describeTerm(termsRes?.data ?? [], currentTerm, currentYear?.name ?? null, today);
+    const { currentTerm, currentYear, term } = termContext(termsRes?.data ?? [], currentYearRes?.data ?? [], today);
     const totalStudents = studentsRes.count ?? 0;
     const totalUsers = usersRes.count ?? 0;
     const totalTeachers = teachersRes.data?.length ?? 0;

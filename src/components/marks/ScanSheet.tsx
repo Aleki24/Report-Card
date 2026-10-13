@@ -52,6 +52,7 @@ async function fileToDataUrl(file: File): Promise<string> {
 export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
     const [students, setStudents] = useState<StudentOption[]>([]);
     const [gradingScales, setGradingScales] = useState<{ symbol: string; label: string; min_percentage: number; max_percentage: number }[]>([]);
+    const [scaleStatus, setScaleStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
     const [photo, setPhoto] = useState<string | null>(null);
     const [phase, setPhase] = useState<'capture' | 'scanning' | 'review' | 'saving'>('capture');
     const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -98,6 +99,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                     fetch('/api/school/data?type=exams'),
                     fetch('/api/admin/academic-structure'),
                 ]);
+                if (!examsRes.ok || !structureRes.ok) throw new Error('Grading scale request failed');
                 const examsData = await examsRes.json();
                 const structureData = await structureRes.json();
                 const exam = (examsData.data || []).find((e: any) => e.id === examId);
@@ -120,8 +122,10 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                     });
                 });
                 setGradingScales(scales);
+                setScaleStatus('ready');
             } catch (err) {
                 console.error('Failed to load grading scales:', err);
+                setScaleStatus('failed');
             }
         })();
     }, [examId]);
@@ -213,14 +217,31 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
     const removeRow = (key: number) => setRows(prev => prev.filter(r => r.key !== key));
 
     const selectedIds = useMemo(() => new Set(rows.map(r => r.studentId).filter(Boolean)), [rows]);
+    // A scan read before the scale arrived is graded once it does.
+    useEffect(() => {
+        setRows(prev => prev.map(r => {
+            if (r.grade || r.error || r.score === '') return r;
+            const grade = resolveGrade(parseFloat(r.score));
+            return grade ? { ...r, grade } : r;
+        }));
+    }, [resolveGrade]);
+
     const readyRows = rows.filter(r => r.studentId && r.score !== '' && !r.error && r.grade);
+    // Matched, valid scores that still have no grade: say why, since Save
+    // can't take them and would otherwise just stay greyed out.
+    const ungradedCount = rows.filter(r => r.studentId && r.score !== '' && !r.error && !r.grade).length;
+    const ungradedReason = ungradedCount === 0 ? null
+        : scaleStatus === 'loading' ? 'Loading the grading scale…'
+            : scaleStatus === 'failed' ? 'The grading scale did not load, so these scores cannot be graded yet. Check your connection and open this tab again.'
+                : gradingScales.length === 0 ? 'This subject has no grading scale, so its scores cannot be graded. Add one in Settings → Grading, then save.'
+                    : `${ungradedCount} score${ungradedCount !== 1 ? 's fall' : ' falls'} outside this subject's grading scale. Check that the scale covers 0–100% in Settings → Grading.`;
     const unmatchedCount = rows.filter(r => !r.studentId).length;
     const needsCheckCount = rows.filter(r => r.studentId && (r.ambiguous || r.confidence === 'low')).length;
 
     /* ── Save ── */
     const handleSave = async () => {
         if (readyRows.length === 0) {
-            setMessage({ type: 'error', text: 'No complete rows to save — match students and fix scores first.' });
+            setMessage({ type: 'error', text: ungradedReason ?? 'No complete rows to save — match students and fix scores first.' });
             return;
         }
         setPhase('saving');
@@ -411,6 +432,11 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                             </table>
                         </div>
 
+                        {ungradedReason && (
+                            <div role="status" className="mt-4 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+                                <AlertTriangle className="size-4 shrink-0" aria-hidden />{ungradedReason}
+                            </div>
+                        )}
                         <div className="mt-5 flex flex-col justify-between gap-3 sm:flex-row">
                             <button className="btn-secondary justify-center" onClick={reset} disabled={phase === 'saving'}>
                                 ↺ Scan another photo
@@ -424,7 +450,7 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                             </button>
                         </div>
                         <p className="mt-2 text-[11px] text-muted-foreground">
-                            Nothing is saved until you confirm. Rows without an assigned student or score are skipped.
+                            Nothing is saved until you confirm. Rows without an assigned student, a valid score or a grade are skipped.
                         </p>
                     </div>
                 </div>

@@ -34,6 +34,12 @@ export interface ClassPerformance {
 
 export interface AttendanceToday { present: number; absent: number; late: number; excused: number }
 
+/**
+ * GET /api/school/dashboard for non-teaching staff (bursar, nurse, driver…):
+ * the school calendar only, since the figures are for the people running it.
+ */
+export type StaffDashboardData = Pick<DashboardData, 'term'>;
+
 /** GET /api/school/dashboard: the staff home, for the web and the app alike. */
 export interface DashboardData {
   totalStudents: number;

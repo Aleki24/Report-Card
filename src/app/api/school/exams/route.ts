@@ -4,7 +4,7 @@ import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
-import { isUuid } from '@/lib/postgrest';
+import { fetchAllRows, isUuid } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
 
 async function getSession() {
@@ -58,51 +58,57 @@ export async function GET(request: NextRequest) {
       if (!termId) return NextResponse.json({ data: [] });
     }
 
-    let query = supabase
-      .from('exams')
-      .select(`
-        id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
-        status, published_by, published_at, approved_by,${ready ? '\n        exam_marks ( count ),' : ''}
-        subjects:subject_id ( name, code, category ),
-        grades:grade_id ( name_display ),
-        grade_streams:grade_stream_id ( full_name ),
-        terms:term_id ( name ),
-        publisher:published_by ( first_name, last_name )
-      `)
-      .eq('school_id', schoolId)
-      .order('exam_type', { ascending: true });
-
-    // New: filter by term
-    if (termId) query = query.eq('term_id', termId);
-    // New: filter by exam type
-    if (examType) query = query.eq('exam_type', examType);
-    // New: filter by subject
-    if (subjectId) query = query.eq('subject_id', subjectId);
-    // New: filter by workflow status — lets the Publish screen pull every exam
-    // awaiting approval across the school in one call, with no class picked.
-    if (ready) {
-      query = query.eq('status', 'DRAFT');
-    } else if (status && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(status)) {
-      query = query.eq('status', status);
-    }
-
     // Filter by stream/grade. Both are interpolated into the or() filter
     // string below, so they must be plain ids, not filter syntax.
     if ((streamId && !isUuid(streamId)) || (gradeId && !isUuid(gradeId))) {
       return NextResponse.json({ error: 'Invalid stream or grade id' }, { status: 400 });
     }
-    if (streamId && gradeId) {
-      query = query.or(
-        `grade_stream_id.eq.${streamId},and(grade_id.eq.${gradeId},grade_stream_id.is.null)`
-      );
-    } else if (streamId) {
-      query = query.eq('grade_stream_id', streamId);
-    } else if (gradeId) {
-      query = query.eq('grade_id', gradeId);
-    }
 
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    const buildQuery = () => {
+      let query = supabase
+        .from('exams')
+        .select(`
+          id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
+          status, published_by, published_at, approved_by,${ready ? '\n        exam_marks ( count ),' : ''}
+          subjects:subject_id ( name, code, category ),
+          grades:grade_id ( name_display ),
+          grade_streams:grade_stream_id ( full_name ),
+          terms:term_id ( name ),
+          publisher:published_by ( first_name, last_name )
+        `)
+        .eq('school_id', schoolId)
+        .order('exam_type', { ascending: true })
+        // Tiebreaker so paging past 1,000 exams never skips or repeats one.
+        .order('id', { ascending: true });
+
+      // New: filter by term
+      if (termId) query = query.eq('term_id', termId);
+      // New: filter by exam type
+      if (examType) query = query.eq('exam_type', examType);
+      // New: filter by subject
+      if (subjectId) query = query.eq('subject_id', subjectId);
+      // New: filter by workflow status — lets the Publish screen pull every exam
+      // awaiting approval across the school in one call, with no class picked.
+      if (ready) {
+        query = query.eq('status', 'DRAFT');
+      } else if (status && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(status)) {
+        query = query.eq('status', status);
+      }
+
+      if (streamId && gradeId) {
+        query = query.or(
+          `grade_stream_id.eq.${streamId},and(grade_id.eq.${gradeId},grade_stream_id.is.null)`
+        );
+      } else if (streamId) {
+        query = query.eq('grade_stream_id', streamId);
+      } else if (gradeId) {
+        query = query.eq('grade_id', gradeId);
+      }
+      return query;
+    };
+
+    const { rows: data, error } = await fetchAllRows(buildQuery);
+    if (error) return NextResponse.json({ error: (error as { message?: string }).message ?? 'Could not load exams' }, { status: 400 });
 
     /** Marks entered for an exam; only selected (as an aggregate) with ?ready=1. */
     const markCount = (e: object): number => (e as { exam_marks?: { count: number }[] | null }).exam_marks?.[0]?.count ?? 0;

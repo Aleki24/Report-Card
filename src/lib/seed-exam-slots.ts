@@ -9,6 +9,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { isBuiltInExamType } from './exam-types';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
+import { fetchAllRows } from '@/lib/postgrest';
 
 export const STANDARD_EXAM_TYPES = ['OPENER', 'MIDTERM', 'ENDTERM'] as const;
 export type StandardExamType = typeof STANDARD_EXAM_TYPES[number];
@@ -57,14 +58,18 @@ export async function seedExamSlots(options: SeedOptions) {
   if (!subjects?.length) return { created: 0, skipped: 0, error: 'No subjects found' };
 
   // Get existing exams for this term to avoid duplicates
-  const { data: existing } = await supabase
+  // Paged: a school already has 640 papers in one term, and a short read
+  // here would seed duplicates of every paper past the first 1,000.
+  const { rows: existing, error: existingError } = await fetchAllRows(() => supabase
     .from('exams')
     .select('subject_id, grade_id, exam_type')
     .eq('term_id', termId)
-    .eq('school_id', schoolId);
+    .eq('school_id', schoolId)
+    .order('id'));
+  if (existingError) return { created: 0, skipped: 0, error: 'Could not read the existing exams' };
 
   const existingSet = new Set(
-    (existing || []).map(e => `${e.subject_id}|${e.grade_id}|${e.exam_type}`)
+    existing.map(e => `${e.subject_id}|${e.grade_id}|${e.exam_type}`)
   );
 
   // Get explicit subject-to-grade assignments to allow cross-level seeding
@@ -181,15 +186,16 @@ export async function seedExamSlots(options: SeedOptions) {
 export async function fillExamSlotsForOfferedSubjects(schoolId: string): Promise<{ created: number }> {
   const supabase = createSupabaseAdmin();
   const today = new Date().toISOString().slice(0, 10);
-  const { data: rows, error } = await supabase
+  const { rows, error } = await fetchAllRows(() => supabase
     .from('exams')
     .select('term_id, academic_year_id, exam_type, term:terms!inner(end_date)')
     .eq('school_id', schoolId)
-    .or(`end_date.gte.${today},end_date.is.null`, { referencedTable: 'term' });
+    .or(`end_date.gte.${today},end_date.is.null`, { referencedTable: 'term' })
+    .order('id'));
   if (error) throw error;
 
   const terms = new Map<string, { academicYearId: string; types: Set<string> }>();
-  for (const r of rows ?? []) {
+  for (const r of rows) {
     if (!r.term_id || !r.academic_year_id) continue;
     const t = terms.get(r.term_id as string) ?? { academicYearId: r.academic_year_id as string, types: new Set<string>() };
     t.types.add(r.exam_type as string);
