@@ -48,6 +48,27 @@ export const PAPER_MIME_TYPES: Readonly<Record<string, string>> = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
 };
 
+/** The content type a stored paper is served with, from its extension (never from what the uploader claimed). */
+export function paperTypeForPath(path: string): string | null {
+    const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+    return Object.entries(PAPER_MIME_TYPES).find(([, e]) => e === ext)?.[0] ?? null;
+}
+
+/**
+ * Whether the bytes really are the document their extension says: a PDF
+ * starts "%PDF-", a .docx is a zip ("PK\x03\x04") and a .doc an OLE file.
+ * A page or script renamed to .pdf is refused rather than served.
+ */
+export function bytesMatchPaperType(bytes: Uint8Array, path: string): boolean {
+    const starts = (sig: readonly number[]) => sig.every((b, i) => bytes[i] === b);
+    switch (path.slice(path.lastIndexOf('.') + 1).toLowerCase()) {
+        case 'pdf': return starts([0x25, 0x50, 0x44, 0x46, 0x2d]);
+        case 'docx': return starts([0x50, 0x4b, 0x03, 0x04]);
+        case 'doc': return starts([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+        default: return false;
+    }
+}
+
 export interface PaperActor {
     userId: string;
     can: (p: Permission) => boolean;

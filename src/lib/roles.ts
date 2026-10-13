@@ -11,6 +11,9 @@ export const TEACHER_ROLES = ['CLASS_TEACHER', 'SUBJECT_TEACHER'] as const satis
 /** Roles that run the school day to day: admins and teachers. */
 export const STAFF_TEACHING_ROLES = ['ADMIN', ...TEACHER_ROLES] as const satisfies readonly UserRole[];
 
+/** Everyone who works at the school: admins, teachers and non-teaching staff. */
+export const STAFF_ROLES = [...STAFF_TEACHING_ROLES, 'STAFF'] as const satisfies readonly UserRole[];
+
 /** Roles an admin may give an account from the Users page. */
 export const ASSIGNABLE_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT'] as const satisfies readonly UserRole[];
 

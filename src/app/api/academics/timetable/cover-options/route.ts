@@ -1,4 +1,5 @@
 import { route, HttpError } from '@/lib/platform/access';
+import { STAFF_TEACHING_ROLES } from '@/lib/roles';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { loadLessons, publishedVersionId } from '@/lib/timetable/server';
 import type { TimetableLesson } from '@/lib/timetable/config';
@@ -22,7 +23,7 @@ export const GET = route('timetable cover options', { module: 'timetable', permi
     const db = createSupabaseAdmin();
     const [all, { data: staff, error: staffError }, { data: covers, error: coversError }] = await Promise.all([
         loadLessons(versionId),
-        db.from('users').select('id, first_name, last_name').eq('school_id', access.schoolId).in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER']),
+        db.from('users').select('id, first_name, last_name').eq('school_id', access.schoolId).in('role', STAFF_TEACHING_ROLES).eq('is_active', true),
         db.from('timetable_substitutions').select('lesson_id, cover_teacher_id').eq('school_id', access.schoolId).eq('cover_date', date),
     ]);
     if (staffError || coversError) throw staffError ?? coversError;
