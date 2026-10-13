@@ -22,6 +22,10 @@ export const POST = route<Params>('scheme transition', { module: 'lesson_records
     if (step.reviewer ? !scheme.isReviewer : !scheme.isOwner) throw new HttpError(403, 'You cannot do that with this scheme.');
     if (!step.from.includes(scheme.status)) throw new HttpError(409, `A ${scheme.status.toLowerCase()} scheme cannot be ${step.to.toLowerCase()}.`);
     if (action === 'RETURN' && !comment) throw new HttpError(400, 'Say what needs changing.');
+    // A reviewer does not approve their own scheme (the admin may, in a school of one reviewer).
+    if (action === 'APPROVE' && scheme.isOwner && access.role !== 'ADMIN') {
+        throw new HttpError(403, 'Another reviewer must approve your own scheme.');
+    }
 
     const db = createSupabaseAdmin();
     if (action === 'SUBMIT') {

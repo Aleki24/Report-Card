@@ -80,6 +80,9 @@ export function canAct(action: PaperAction, paper: { status: PaperStatus; upload
     if (t.by === 'owner') return paper.uploaded_by === actor.userId || actor.can('exam_papers.manage');
     // An author comments on their own paper; moderators and managers on any.
     if (action === 'COMMENT' && paper.uploaded_by === actor.userId) return true;
+    // Moderation is a second pair of eyes: an author does not approve their
+    // own paper unless they manage the paper bank (the admin, the DOS).
+    if (action === 'APPROVE' && paper.uploaded_by === actor.userId) return actor.can('exam_papers.manage');
     return actor.can(t.by) || actor.can('exam_papers.manage');
 }
 
