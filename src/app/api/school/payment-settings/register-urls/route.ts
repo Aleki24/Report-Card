@@ -60,10 +60,9 @@ export async function POST() {
         }
 
         const confirmationUrl = `${appUrl}/api/mpesa/c2b/confirmation/${schoolId}/${webhookToken}`;
-        // No Validation URL implementation (see the confirmation route's
-        // comment) — point it at the same confirmation endpoint since
-        // Safaricom requires a value here even when unused.
-        const validationUrl = confirmationUrl;
+        // Validation only accepts (it runs before the money moves); the
+        // confirmation records the payment.
+        const validationUrl = `${appUrl}/api/mpesa/c2b/validation/${schoolId}/${webhookToken}`;
 
         const result = await registerC2BUrls(
             { environment: settings.environment as MpesaEnvironment, shortcode: settings.shortcode, consumerKey: settings.consumer_key, consumerSecret: decryptSecret(settings.consumer_secret) },

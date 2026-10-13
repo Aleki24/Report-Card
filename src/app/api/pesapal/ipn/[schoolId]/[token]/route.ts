@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getPesapalTransactionStatus, mapPesapalStatus, type PesapalEnvironment } from '@/lib/pesapal';
+import { getPesapalTransactionStatus, nextPaymentStatus, type PesapalEnvironment } from '@/lib/pesapal';
 import { decryptSecret, verifyWebhookToken } from '@/lib/crypto';
 
 export const runtime = 'nodejs';
@@ -57,9 +57,9 @@ async function handleIpn(request: NextRequest, schoolId: string, token: string) 
             console.error('[pesapal ipn] no matching payment', orderTrackingId, schoolId);
             return ack(orderTrackingId);
         }
-        if (payment.status !== 'PENDING') {
-            return ack(orderTrackingId); // already processed — no-op
-        }
+        // Settled rows can still move (a retried order succeeding, a
+        // reversal); a payment voided by staff stays voided.
+        if (payment.status === 'CANCELLED') return ack(orderTrackingId);
 
         if (!school?.pesapal_consumer_key || !school.pesapal_consumer_secret) {
             console.error('[pesapal ipn] missing credentials for school', schoolId);
@@ -70,38 +70,21 @@ async function handleIpn(request: NextRequest, schoolId: string, token: string) 
             { environment: school.pesapal_environment as PesapalEnvironment, consumerKey: school.pesapal_consumer_key, consumerSecret: decryptSecret(school.pesapal_consumer_secret) },
             orderTrackingId
         );
-        const mapped = mapPesapalStatus(txn.status_code);
+        const next = nextPaymentStatus(payment.status, txn.status_code);
+        if (!next) return ack(orderTrackingId);
 
-        if (mapped === 'COMPLETED') {
-            await supabase
-                .from('fee_payments')
-                .update({
-                    status: 'COMPLETED',
-                    amount: txn.amount,
-                    pesapal_confirmation_code: txn.confirmation_code,
-                    pesapal_payment_method: txn.payment_method,
-                    paid_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', payment.id)
-                // Only a still-PENDING row moves: a void, or a concurrent
-                // delivery that already settled it, must not be overwritten.
-                .eq('status', 'PENDING');
-        } else if (mapped === 'FAILED') {
-            await supabase
-                .from('fee_payments')
-                .update({
-                    status: 'FAILED',
-                    notes: txn.payment_status_description,
-                    pesapal_payment_method: txn.payment_method,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', payment.id)
-                // Only a still-PENDING row moves: a void, or a concurrent
-                // delivery that already settled it, must not be overwritten.
-                .eq('status', 'PENDING');
-        }
-        // mapped === 'PENDING' (unrecognized status_code) — leave as-is, Pesapal will notify again on the next change
+        const now = new Date().toISOString();
+        const update = next === 'COMPLETED'
+            ? { status: next, amount: txn.amount, pesapal_confirmation_code: txn.confirmation_code, pesapal_payment_method: txn.payment_method, paid_at: now, updated_at: now }
+            : { status: next, notes: next === 'CANCELLED' ? `Reversed by Pesapal: ${txn.payment_status_description ?? ''}`.trim() : txn.payment_status_description, pesapal_payment_method: txn.payment_method, updated_at: now };
+        const { error: updateError } = await supabase
+            .from('fee_payments')
+            .update(update)
+            .eq('id', payment.id)
+            // Only from the status read above: a concurrent delivery or a
+            // staff void in between must not be overwritten.
+            .eq('status', payment.status);
+        if (updateError) console.error('[pesapal ipn] update failed', orderTrackingId, updateError);
 
         return ack(orderTrackingId);
     } catch (err) {

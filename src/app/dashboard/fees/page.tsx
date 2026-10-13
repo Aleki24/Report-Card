@@ -5,6 +5,7 @@ import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } fr
 import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { requestJson, jsonBody } from '@/lib/api-error-message';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
@@ -294,22 +295,38 @@ function FeesPageInner() {
         return () => window.clearTimeout(timer);
     }, [plSearch]);
 
+    // Only the latest request may fill the list: an earlier, slower one (all
+    // terms, or the previous term) landing last showed another term's records
+    // under this term's name.
+    const feesRequest = useRef(0);
     const fetchFees = useCallback(async () => {
+        const request = ++feesRequest.current;
         try {
             const params = new URLSearchParams();
             if (selectedTerm) params.set('term_id', selectedTerm);
-            const res = await fetch(`/api/school/fees?${params}`);
-            const json = await res.json();
-            if (json.data) setFees(json.data);
+            const res = await fetch(`/api/school/fees?${params}`, { cache: 'no-store' });
+            const json: unknown = await res.json().catch(() => null);
+            if (request !== feesRequest.current) return;
+            if (!res.ok) {
+                setFees([]);
+                toast.error(apiErrorMessage(json, 'Could not load fee records.'));
+            } else {
+                setFees((json as { data?: FeeRecord[] } | null)?.data ?? []);
+            }
         } catch (err) {
+            if (request !== feesRequest.current) return;
             console.error('Failed to load fees:', err);
+            toast.error('Could not load fee records. Check your connection.');
         }
         setLoading(false);
     }, [selectedTerm]);
 
+    // Wait for the terms, which pick the current one: fetching before that
+    // pulled every term's records first.
+    const [termsReady, setTermsReady] = useState(false);
     useEffect(() => {
-        fetchFees();
-    }, [fetchFees]);
+        if (termsReady) void fetchFees();
+    }, [fetchFees, termsReady]);
 
     useEffect(() => {
         (async () => {
@@ -333,7 +350,9 @@ function FeesPageInner() {
             if (gsData.data) {
                 setGradeStreams(gsData.data);
             }
-        })();
+        })()
+            .catch(err => console.error('Failed to load terms:', err))
+            .finally(() => setTermsReady(true));
     }, []);
 
     const filtered = useMemo(() => {

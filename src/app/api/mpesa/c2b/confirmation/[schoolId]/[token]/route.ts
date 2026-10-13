@@ -26,10 +26,8 @@ export const runtime = 'nodejs';
  * as an unmatched payment for staff to assign from the Fees dashboard,
  * rather than silently being dropped or mis-applied.
  *
- * The (optional) C2B Validation URL is intentionally not implemented —
- * Safaricom only invokes it when a shortcode has explicitly opted in via
- * support, so most integrations (including this one) rely on
- * Confirmation-only, which Safaricom defaults to auto-accepting.
+ * The (optional) C2B validation call has its own route (../validation),
+ * which accepts and records nothing.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ schoolId: string; token: string }> }) {
     const { schoolId, token } = await params;

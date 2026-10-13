@@ -129,11 +129,21 @@ export async function getPesapalTransactionStatus(creds: PesapalCredentials, ord
     return json as TransactionStatusResponse;
 }
 
-/** Maps Pesapal's numeric status_code to our own fee_payments status. */
-export function mapPesapalStatus(statusCode: PesapalStatusCode): 'COMPLETED' | 'FAILED' | 'PENDING' {
-    if (statusCode === 1) return 'COMPLETED';
-    // FAILED (2), INVALID (0), and REVERSED (3) all mean the money isn't
-    // (or no longer is) ours — none should count toward paid_amount.
-    if (statusCode === 2 || statusCode === 0 || statusCode === 3) return 'FAILED';
-    return 'PENDING'; // anything unrecognized — don't guess, re-check later
+type FeePaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+/**
+ * The fee_payments status a Pesapal status_code moves a payment to, from its
+ * current status, or null to leave it. Pesapal codes: 0 INVALID (not paid
+ * yet, or bad details), 1 COMPLETED, 2 FAILED, 3 REVERSED.
+ *
+ * A failed attempt is not final: the payer can retry on the same order and
+ * succeed, so FAILED can still become COMPLETED. A reversal takes a
+ * completed payment back out (CANCELLED), so it stops counting toward what
+ * the learner has paid. INVALID leaves the payment waiting.
+ */
+export function nextPaymentStatus(current: FeePaymentStatus, statusCode: PesapalStatusCode): FeePaymentStatus | null {
+    if (statusCode === 1) return current === 'PENDING' || current === 'FAILED' ? 'COMPLETED' : null;
+    if (statusCode === 2) return current === 'PENDING' ? 'FAILED' : null;
+    if (statusCode === 3) return current === 'COMPLETED' ? 'CANCELLED' : current === 'PENDING' ? 'FAILED' : null;
+    return null;
 }
