@@ -284,9 +284,18 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
         const payload: Record<string, unknown> = { user_id: user.id, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), role, is_active: active };
         if (role === 'STAFF') payload.job_title = jobTitle.trim();
         if (teacherRole) {
-            payload.role = effectiveClass === NO_CLASS ? 'SUBJECT_TEACHER' : 'CLASS_TEACHER';
-            payload.class_teacher_grade_stream_id = effectiveClass === NO_CLASS ? null : effectiveClass;
-            payload.subject_teacher_subjects = (assignments.data?.subject_assignments ?? []).map(({ subject_id, grade_id }) => ({ subject_id, grade_id }));
+            // A teacher's class and subjects are only sent once they loaded (or
+            // a class was picked here): an empty form removed them.
+            const classKnown = !isTeacher || !!assignments.data || classId !== null;
+            if (classKnown) {
+                payload.role = effectiveClass === NO_CLASS ? 'SUBJECT_TEACHER' : 'CLASS_TEACHER';
+                payload.class_teacher_grade_stream_id = effectiveClass === NO_CLASS ? null : effectiveClass;
+            } else {
+                payload.role = user.role;
+            }
+            if (assignments.data) {
+                payload.subject_teacher_subjects = assignments.data.subject_assignments.map(({ subject_id, grade_id }) => ({ subject_id, grade_id }));
+            }
         }
         setSaving(true);
         setError(null);
@@ -305,6 +314,9 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
     return (
         <View style={{ padding: spacing.md, backgroundColor: colors.mutedBg }}>
             {error ? <ErrorBanner message={error} /> : null}
+            {isTeacher && assignments.error ? (
+                <ErrorBanner message="Couldn’t load this teacher’s class and subjects. Other changes save; their class and subjects stay as they are." onRetry={assignments.reload} />
+            ) : null}
             <TextField label="First name" value={first} onChangeText={setFirst} />
             <TextField label="Last name" value={last} onChangeText={setLast} />
             <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />

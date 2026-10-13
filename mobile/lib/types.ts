@@ -483,6 +483,8 @@ export interface AttendanceNotifyResult {
 }
 
 export interface StaffFeeRecord extends FeeRecord {
+    /** The learner the record bills (admission numbers are optional, ids are not). */
+    studentId: string | null;
     studentName: string | null;
     admissionNumber: string | null;
 }

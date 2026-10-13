@@ -216,9 +216,13 @@ function BillForm({ defaultTermId, onCancel, onDone }: { defaultTermId: string |
                 await api.post('/api/school/fees', { ...details, student_id: studentId });
                 onDone('Fee record added.');
             } else {
-                // Learners already billed this term are left alone rather than double-billed.
-                const billed = new Set((termFees.data ?? []).map((f) => f.admissionNumber).filter(Boolean));
-                const targets = roster.filter((s) => !s.admission_number || !billed.has(s.admission_number));
+                // Learners already billed this term are left alone rather than
+                // re-billed (which would replace their amount). Matched by id:
+                // many learners have no admission number. Without the term's
+                // records there is no telling who is billed, so stop.
+                if (!termFees.data) throw new Error('Could not load this term’s fee records. Try again.');
+                const billed = new Set(termFees.data.map((f) => f.studentId).filter(Boolean));
+                const targets = roster.filter((s) => !billed.has(s.id));
                 const results = await Promise.all(targets.map((s) => api.post('/api/school/fees', { ...details, student_id: s.id }).then(() => true).catch(() => false)));
                 const ok = results.filter(Boolean).length;
                 onDone(`Billed ${pluralize(ok, 'learner')}${roster.length - targets.length ? ` · ${roster.length - targets.length} already billed` : ''}${ok < targets.length ? ` · ${targets.length - ok} failed` : ''}.`);
