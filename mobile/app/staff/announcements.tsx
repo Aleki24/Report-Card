@@ -31,8 +31,8 @@ export default function AnnouncementsScreen() {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-    // Admins and class teachers manage any post; a subject teacher only their own (as on the server).
-    const canManage = (a: StaffAnnouncement) => role === 'ADMIN' || role === 'CLASS_TEACHER' || (role === 'SUBJECT_TEACHER' && a.postedById === profile?.id);
+    // The admin manages any post; everyone else only their own (as on the server and the web).
+    const canManage = (a: StaffAnnouncement) => role === 'ADMIN' || (!!profile && a.postedById === profile.id);
 
     const submit = async () => {
         if (!draft || !draft.title.trim() || !draft.content.trim()) return;
