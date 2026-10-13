@@ -227,13 +227,14 @@ export function VoteHeadStatementPanel({ canRemind }: { canRemind: boolean }) {
                             <Card key={`${l.voteHeadId}-${l.name}`} style={{ marginBottom: spacing.sm, padding: spacing.md }}>
                                 <Text style={styles.name}>{l.name}</Text>
                                 <InfoRow label="Billed" value={money(l.billed)} />
+                                {l.waived > 0 ? <InfoRow label="Waived (bursaries)" value={money(l.waived)} /> : null}
                                 <InfoRow label="Collected" value={money(l.collected)} />
                                 <InfoRow label="Owed" value={money(l.outstanding)} />
                                 <InfoRow label="Spent" value={money(l.spent)} />
                             </Card>
                         ))}
                         <Text style={styles.note}>
-                            Totals: billed {money(statementTotal(report, 'billed'))} · collected {money(statementTotal(report, 'collected'))} · owed {money(statementTotal(report, 'outstanding'))}
+                            Totals: billed {money(statementTotal(report, 'billed'))} · waived {money(statementTotal(report, 'waived'))} · collected {money(statementTotal(report, 'collected'))} · owed {money(statementTotal(report, 'outstanding'))}
                             {report.overpaid > 0 ? ` · overpayments ${money(report.overpaid)}` : ''}
                         </Text>
                     </>
