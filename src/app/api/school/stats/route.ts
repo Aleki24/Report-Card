@@ -4,6 +4,9 @@ import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { aggregateStudentPerformance, isKCSEGradeLevel, rankingBasisFor, type ExamMarkWithDetails } from '@/lib/analytics';
 import { getSchoolPassMark } from '@/lib/pass-mark';
+import { fetchAllRows } from '@/lib/postgrest';
+import { findActiveTermId } from '@/lib/term-calendar';
+import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
 interface MarkSummaryRow {
@@ -289,22 +292,28 @@ export async function GET(request: NextRequest) {
         const studentIds = (streamStudents || []).map(s => s.id);
 
         if (studentIds.length > 0 && currentYear) {
-          // Calculate stream average from exam marks
-          const { data: marks } = await supabase
-            .from('exam_marks')
-            .select('percentage')
-            .in('student_id', studentIds);
-
-          if (marks && marks.length > 0) {
-            const sum = marks.reduce((a, m) => a + Number(m.percentage), 0);
-            streamAvg = (sum / marks.length).toFixed(1);
-          }
-
           // Get terms for current year to count how many report cards needed
           const { data: terms } = await supabase
             .from('terms')
-            .select('id')
+            .select('id, name, start_date, end_date, is_current')
             .eq('academic_year_id', currentYear.id);
+
+          // The class's mean this term (the year when no term is running),
+          // over every mark: it mixed all years and stopped at 1,000 marks.
+          const termId = findActiveTermId(terms ?? []);
+          const { rows: marks } = await fetchAllRows(() => {
+            let q = supabase
+              .from('exam_marks')
+              .select('id, percentage, exams!inner(term_id, academic_year_id)')
+              .in('student_id', studentIds);
+            q = termId ? q.eq('exams.term_id', termId) : q.eq('exams.academic_year_id', currentYear.id);
+            return q.order('id');
+          });
+          const scored = marks.filter(m => m.percentage != null);
+          if (scored.length > 0) {
+            const sum = scored.reduce((a, m) => a + Number(m.percentage), 0);
+            streamAvg = (sum / scored.length).toFixed(1);
+          }
 
           const termCount = terms?.length || 1;
           const requiredReports = studentIds.length * termCount;
@@ -334,45 +343,37 @@ export async function GET(request: NextRequest) {
         .limit(1)
         .maybeSingle();
 
-      let examQuery = supabase
-        .from('exams')
-        .select('id', { count: 'exact', head: true })
-        .eq('created_by_teacher_id', userId);
-
-      if (currentYear) {
-        examQuery = examQuery.eq('academic_year_id', currentYear.id);
-      }
-      const { count: examCount } = await examQuery;
-
-      let examsQuery = supabase
-        .from('exams')
-        .select('id')
-        .eq('created_by_teacher_id', userId);
-
-      if (currentYear) {
-        examsQuery = examsQuery.eq('academic_year_id', currentYear.id);
-      }
-
-      const { data: teacherExams } = await examsQuery;
+      // The exams this teacher teaches (admins create the exams, so
+      // created_by_teacher_id was always someone else and the tile stayed
+      // blank), and the mean of their marks this year.
+      const [{ data: yearExams }, perms] = await Promise.all([
+        currentYear
+          ? supabase.from('exams').select('id, subject_id, grade_id, grade_stream_id, created_by_teacher_id').eq('school_id', schoolId).eq('academic_year_id', currentYear.id)
+          : Promise.resolve({ data: [] as { id: string; subject_id: string; grade_id: string; grade_stream_id: string | null; created_by_teacher_id: string | null }[] }),
+        getTeacherPermissions(userId),
+      ]);
+      const teacherExams = (yearExams ?? []).filter(e => isExamVisibleToTeacher(e, perms, userId));
+      const examCount = teacherExams.length;
 
       let avg = '—';
       let markCount = 0;
 
-      if (teacherExams && teacherExams.length > 0) {
+      if (teacherExams.length > 0) {
         const examIds = teacherExams.map(e => e.id);
-        const { data: marks } = await supabase
+        const { rows: marks } = await fetchAllRows(() => supabase
           .from('exam_marks')
-          .select('percentage')
-          .in('exam_id', examIds);
-
-        if (marks && marks.length > 0) {
-          markCount = marks.length;
-          const sum = marks.reduce((a, m) => a + Number(m.percentage), 0);
-          avg = `${(sum / marks.length).toFixed(1)}`;
+          .select('id, percentage')
+          .in('exam_id', examIds)
+          .order('id'));
+        const scored = marks.filter(m => m.percentage != null);
+        if (scored.length > 0) {
+          markCount = scored.length;
+          const sum = scored.reduce((a, m) => a + Number(m.percentage), 0);
+          avg = `${(sum / scored.length).toFixed(1)}`;
         }
       }
 
-      return NextResponse.json({ examCount: examCount ?? 0, avg, markCount });
+      return NextResponse.json({ examCount, avg, markCount });
     }
 
     // ── STUDENT stats ────────────────────────────────────────

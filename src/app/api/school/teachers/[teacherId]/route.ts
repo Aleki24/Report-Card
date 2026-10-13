@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 import type { StaffProfileResponse } from '@/types/user-profile';
 
 export async function GET(
@@ -36,7 +37,7 @@ export async function GET(
       return NextResponse.json({ error: 'Teacher not found' }, { status: 404 });
     }
 
-    const [classTeacherRes, subjectTeacherRes, examsRes] = await Promise.all([
+    const [classTeacherRes, subjectTeacherRes, schoolExamsRes, teacherPerms] = await Promise.all([
       supabase
         .from('class_teachers')
         .select(`
@@ -50,13 +51,17 @@ export async function GET(
         .select('id')
       .eq('user_id', teacherId)
       .maybeSingle(),
+      // The school's recent exams, narrowed below to the ones this teacher
+      // teaches (admins create exams, so "created by" was always empty).
       supabase
         .from('exams')
-        .select('id, name, exam_type, exam_date, max_score, grade_stream_id, grade_id, subjects(name), grades(name_display)')
-        .eq('created_by_teacher_id', teacherId)
+        .select('id, name, exam_type, exam_date, max_score, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(name), grades(name_display)')
+        .eq('school_id', schoolId)
         .order('exam_date', { ascending: false })
-        .limit(20),
+        .limit(500),
+      getTeacherPermissions(teacherId),
     ]);
+    const examsRes = { data: (schoolExamsRes.data ?? []).filter(e => isExamVisibleToTeacher(e, teacherPerms, teacherId)).slice(0, 20) };
 
     const classAssignments = classTeacherRes.data || [];
     const stEntry = subjectTeacherRes.data;

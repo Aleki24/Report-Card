@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchAllRows } from '@/lib/postgrest';
 import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -319,17 +320,21 @@ export async function GET(_request: NextRequest) {
             .order('created_at', { ascending: false })
             .limit(5)
         : Promise.resolve({ data: [] }),
-      supabase
+      // Today's register and the term's fees are a row per learner: read
+      // them all (a 1,300-learner school's totals stopped at 1,000 rows).
+      fetchAllRows(() => supabase
         .from('daily_attendance')
-        .select('status')
+        .select('id, status')
         .eq('school_id', schoolId)
-        .eq('date', today),
+        .eq('date', today)
+        .order('id')).then(r => ({ data: r.rows, error: r.error })),
       currentTerm
-        ? supabase
+        ? fetchAllRows(() => supabase
             .from('student_fees')
-            .select('total_fee, paid_amount, status')
+            .select('id, total_fee, paid_amount, status')
             .eq('school_id', schoolId)
             .eq('term_id', currentTerm.id)
+            .order('id')).then(r => ({ data: r.rows, error: r.error }))
         : Promise.resolve({ data: [] }),
       // Counted in the database: aggregate selects are disabled over PostgREST,
       // so this used to fetch raw percentages capped at 500. A school with
