@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { z } from 'zod';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { isPlaceholderEmail } from '@/lib/placeholder-email';
 import { createSignInTicket } from '@/lib/sign-in-ticket';
 
@@ -40,9 +40,8 @@ export async function POST(request: NextRequest) {
 
         // Unauthenticated password check: throttle per IP and per account.
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const byIp = rateLimit(`password-ticket:ip:${ip}`, { maxRequests: 10, windowMs: 60_000 });
-        const byAccount = rateLimit(`password-ticket:id:${identifier.toLowerCase()}`, { maxRequests: 5, windowMs: 60_000 });
-        if (!byIp.allowed || !byAccount.allowed) {
+        const byIp = await rateLimitShared(`password-ticket:ip:${ip}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!byIp) {
             return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
         }
 
@@ -52,6 +51,13 @@ export async function POST(request: NextRequest) {
         );
         const user = matches.length === 1 ? matches[0] : undefined;
         if (!user) return NextResponse.json(INVALID, { status: 401 });
+
+        // Per account, keyed on the account itself (a username and its email
+        // used to be counted separately), and over a longer window, so
+        // password guesses spread across addresses and minutes add up.
+        if (!(await rateLimitShared(`password-ticket:user:${user.id}`, { maxRequests: 10, windowMs: 15 * 60_000 }))) {
+            return NextResponse.json({ error: 'Too many attempts. Please wait a few minutes and try again.' }, { status: 429 });
+        }
 
         const canReceiveCode =
             user.phoneNumbers.length > 0 ||

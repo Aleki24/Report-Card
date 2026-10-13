@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { createSignInTicket } from '@/lib/sign-in-ticket';
 import { isPlatformOwnerEmail } from '@/lib/school-approval';
@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
     try {
         // Unauthenticated endpoint: throttle invite-code guessing per IP
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const limit = rateLimit(`activate:${ip}`, { maxRequests: 10, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`activate:${ip}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json(
                 { error: 'Too many attempts. Please wait a minute and try again.' },
                 { status: 429 }

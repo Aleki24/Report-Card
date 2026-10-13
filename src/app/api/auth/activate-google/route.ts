@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { moveUserLinks } from '@/lib/platform/user-links';
 
 export async function POST(request: NextRequest) {
@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Rate-limit invite-code attempts per user to prevent brute forcing.
-        const rl = rateLimit(`activate-google:${userId}`, { maxRequests: 10, windowMs: 60_000 });
-        if (!rl.allowed) {
+        const rl = await rateLimitShared(`activate-google:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!rl) {
             return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
         }
 

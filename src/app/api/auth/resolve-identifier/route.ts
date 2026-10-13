@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { escapeLikePattern } from '@/lib/postgrest';
 
 /**
@@ -23,8 +23,8 @@ import { escapeLikePattern } from '@/lib/postgrest';
 export async function POST(request: NextRequest) {
     try {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const limit = rateLimit(`resolve-identifier:${ip}`, { maxRequests: 20, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`resolve-identifier:${ip}`, { maxRequests: 20, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json({ error: 'Too many attempts. Please wait a moment and try again.' }, { status: 429 });
         }
 

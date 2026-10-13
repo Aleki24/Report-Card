@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { isPlatformOwnerEmail } from '@/lib/school-approval';
 import { isUniqueViolationOn } from '@/lib/postgrest';
 
@@ -12,8 +12,8 @@ export async function POST(request: NextRequest) {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
             || request.headers.get('x-real-ip')?.trim()
             || 'unknown';
-        const limit = rateLimit(`signup:${ip}`, { maxRequests: 5, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`signup:${ip}`, { maxRequests: 5, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json(
                 { error: 'Too many attempts. Please wait a minute and try again.' },
                 { status: 429 }
