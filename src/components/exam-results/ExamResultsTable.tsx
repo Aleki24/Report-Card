@@ -23,6 +23,14 @@ export interface MarkRow {
     components?: Record<string, number>;
 }
 
+/** The part of a /api/school/exam-marks/stream row used for total points. */
+interface StreamMark {
+    student_id: string;
+    exam_id: string;
+    grade_symbol: string | null;
+    exams: { id: string; exam_type: string | null; subject_id: string | null } | null;
+}
+
 interface Props {
     marks: MarkRow[];
     maxScore: number;
@@ -98,7 +106,17 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                 const structureData = await structureRes.json();
                 const schoolData = schoolRes.ok ? await schoolRes.json() : { data: null };
 
-                const allMarks = marksData.data || [];
+                // The stream route returns the whole term (every round). Total
+                // points belong to this exam's round only, one mark per subject:
+                // adding Opener and Midterm together doubled every total.
+                const termMarks: StreamMark[] = marksRes.ok ? marksData.data ?? [] : [];
+                const round = termMarks.find(m => m.exams?.id === examId)?.exams?.exam_type;
+                const bySubject = new Map<string, StreamMark>();
+                for (const m of termMarks) {
+                    if (round && m.exams?.exam_type !== round) continue;
+                    bySubject.set(`${m.student_id}|${m.exams?.subject_id ?? m.exam_id}`, m);
+                }
+                const allMarks = [...bySubject.values()];
                 const gradingSystems = structureData.grading_systems || [];
                 const gradingScales = structureData.grading_scales || [];
 
@@ -472,6 +490,7 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                     maxScore={maxScore}
                     examId={examId}
                     scheme={scheme}
+                    totalPoints={aggregatesApply ? studentPoints[editingMark.student_id] ?? null : null}
                     onClose={() => setEditingMark(null)}
                     onSaved={(patched) => {
                         setEditingMark(null);
