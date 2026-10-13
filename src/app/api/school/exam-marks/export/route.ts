@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeFileName } from '@/lib/filename';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
@@ -7,9 +8,7 @@ import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 export const runtime = 'nodejs';
 
-function safeName(s: string) {
-    return (s || 'export').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'export';
-}
+const safeName = (s: string) => safeFileName(s, 'export');
 
 export async function GET(request: NextRequest) {
     try {

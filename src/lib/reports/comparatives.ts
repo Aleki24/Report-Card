@@ -21,6 +21,7 @@ import {
     type RankingBasis,
 } from '@/lib/analytics';
 import type { GradingScale } from '@/types';
+import { fetchAllRows } from '@/lib/postgrest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /* The service-role client the report routes already hold. Rows come back
@@ -83,7 +84,7 @@ export function overallClassMean(aggregates: { percentage: number }[]): number |
  */
 export async function fetchSubjectTeachers(
     supabase: Supabase,
-    { gradeId, gradeStreamId, yearId }: { gradeId?: string | null; gradeStreamId?: string | null; yearId?: string | null }
+    { schoolId, gradeId, gradeStreamId, yearId }: { schoolId: string; gradeId?: string | null; gradeStreamId?: string | null; yearId?: string | null }
 ): Promise<Map<string, string>> {
     const bySubject = new Map<string, string>();
     if (!gradeId) return bySubject;
@@ -119,9 +120,11 @@ export async function fetchSubjectTeachers(
         const userIds = [...new Set(userIdByTeacher.values())];
         if (userIds.length === 0) return bySubject;
 
+        // Grades are shared by every school: only this school's teachers name a subject.
         const { data: userData } = await supabase
             .from('users')
             .select('id, first_name, last_name')
+            .eq('school_id', schoolId)
             .in('id', userIds);
         const nameByUser = new Map<string, string>(
             ((userData || []) as UserRow[]).map(u => [u.id, `${u.first_name || ''} ${u.last_name || ''}`.trim()])
@@ -176,6 +179,7 @@ function roundLabel(examType: string | null | undefined, fallback: string): stri
 export async function fetchPreviousRound(
     supabase: Supabase,
     {
+        schoolId,
         studentIds,
         gradeId,
         before,
@@ -184,6 +188,7 @@ export async function fetchPreviousRound(
         gradingSystemType,
         rankingBasis,
     }: {
+        schoolId: string;
         studentIds: string[];
         gradeId?: string | null;
         /** ISO timestamp — used to find "earlier" only when the round's term is unknown. */
@@ -199,10 +204,10 @@ export async function fetchPreviousRound(
     if (!gradeId || studentIds.length === 0) return null;
 
     try {
-        const candidates = await findPreviousRounds(supabase, { gradeId, before, current });
+        const candidates = await findPreviousRounds(supabase, { schoolId, gradeId, before, current });
         for (const previous of candidates.slice(0, MAX_ROUNDS_TRIED)) {
             const stats = await loadRound(supabase, previous, {
-                studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis,
+                schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis,
             });
             if (stats) return stats;
         }
@@ -219,7 +224,8 @@ const MAX_ROUNDS_TRIED = 3;
 async function loadRound(
     supabase: Supabase,
     previous: RoundRef,
-    { studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis }: {
+    { schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis }: {
+        schoolId: string;
         studentIds: string[];
         gradeId: string;
         current: { termId?: string | null; examType?: string | null };
@@ -231,6 +237,7 @@ async function loadRound(
     const { data: roundExams } = await supabase
         .from('exams')
         .select('id, max_score, subjects(id, name, category)')
+        .eq('school_id', schoolId)
         .eq('grade_id', gradeId)
         .eq('term_id', previous.term_id)
         .eq('exam_type', previous.exam_type);
@@ -249,13 +256,14 @@ async function loadRound(
     }
     if (examMeta.size === 0) return null;
 
-    const { data: marks } = await supabase
+    const { rows: marks } = await fetchAllRows(() => supabase
         .from('exam_marks')
-        .select('student_id, raw_score, grade_symbol, exam_id')
+        .select('id, student_id, raw_score, grade_symbol, exam_id')
         .in('exam_id', [...examMeta.keys()])
-        .in('student_id', studentIds);
+        .in('student_id', studentIds)
+        .order('id'));
 
-    if (!marks || marks.length === 0) return null;
+    if (marks.length === 0) return null;
 
     // A subject sat more than once in the round (a re-sit, two exam rows)
     // counts once, at its average — the last row read used to overwrite
@@ -358,16 +366,21 @@ const roundKey = (termId: string | null | undefined, examType: string | null | u
  */
 export async function findPreviousRounds(
     supabase: Supabase,
-    { gradeId, before, current }: {
+    { schoolId, gradeId, before, current }: {
+        schoolId: string;
         gradeId: string;
         before?: string | null;
         current: { termId?: string | null; examType?: string | null };
     }
 ): Promise<RoundRef[]> {
-    const { data } = await supabase
+    // This school's exams for the grade (grades are shared by every school),
+    // all of them.
+    const { rows: data } = await fetchAllRows(() => supabase
         .from('exams')
-        .select('term_id, exam_type, name, exam_date, created_at, terms(start_date)')
-        .eq('grade_id', gradeId);
+        .select('id, term_id, exam_type, name, exam_date, created_at, terms(start_date)')
+        .eq('school_id', schoolId)
+        .eq('grade_id', gradeId)
+        .order('id'));
 
     const rounds = new Map<string, Round>();
     for (const row of (data || []) as unknown as ExamRoundRow[]) {

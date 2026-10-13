@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeFileName } from '@/lib/filename';
 import { fetchAllRows } from '@/lib/postgrest';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
@@ -40,9 +41,7 @@ function resolveStatus(row: { is_used: boolean | null; expires_at: string | null
     return 'Active';
 }
 
-function safeName(s: string): string {
-    return (s || 'school').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'school';
-}
+const safeName = (s: string) => safeFileName(s, 'school');
 
 export async function GET(request: NextRequest) {
     try {

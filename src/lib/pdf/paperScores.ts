@@ -5,6 +5,7 @@
  * columns wherever a subject was assessed in components.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllRows } from '@/lib/postgrest';
 
 export interface PaperScoreEntry {
     code: string;
@@ -36,13 +37,15 @@ export async function fetchPaperScores(
     }
 
     // Per-student component scores
-    const { data: scores, error: scoresErr } = await supabase
+    // A class's papers are learners x papers per subject: read them all.
+    const { rows: scores, error: scoresErr } = await fetchAllRows(() => supabase
         .from('exam_mark_components')
-        .select('exam_id, student_id, component_id, raw_score')
+        .select('id, exam_id, student_id, component_id, raw_score')
         .in('exam_id', examIds)
-        .in('student_id', studentIds);
+        .in('student_id', studentIds)
+        .order('id'));
 
-    if (scoresErr || !scores) return result;
+    if (scoresErr) return result;
 
     const withOrder = new Map<string, (PaperScoreEntry & { order: number })[]>();
     for (const s of scores as { exam_id: string; student_id: string; component_id: string; raw_score: number | string }[]) {

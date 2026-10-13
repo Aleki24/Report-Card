@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { safeFileName } from '@/lib/filename';
+import { fetchAllRows } from '@/lib/postgrest';
 import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -399,10 +401,12 @@ export async function GET(
         let classmateIds: string[] = [];
 
         if (gradeStreamId) {
+            // Learners still enrolled in the class, as the class batch ranks them.
             const { data: classmates } = await supabase
                 .from('students')
                 .select('id')
-                .eq('current_grade_stream_id', gradeStreamId);
+                .eq('current_grade_stream_id', gradeStreamId)
+                .eq('status', 'ACTIVE');
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;
@@ -425,17 +429,18 @@ export async function GET(
                   so ranking against it is consistent by construction rather
                   than by the two queries happening to agree.
                 */
-                let rankQuery = supabase
-                    .from('exam_marks')
-                    .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, exam_type, subjects(id, name, category))')
-                    .in('student_id', classmateIds);
-
-                if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
-                if (yearId) rankQuery = rankQuery.eq('exams.academic_year_id', yearId);
-                if (roundSelection.round) rankQuery = rankQuery.eq('exams.exam_type', roundSelection.round);
-                if (releasedOnly) rankQuery = rankQuery.eq('exams.status', 'APPROVED');
-
-                const { data: allMarks } = await rankQuery;
+                // Every classmate's mark (past PostgREST's 1,000-row page).
+                const { rows: allMarks } = await fetchAllRows(() => {
+                    let rankQuery = supabase
+                        .from('exam_marks')
+                        .select('id, student_id, raw_score, grade_symbol, exams!inner(id, max_score, term_id, academic_year_id, exam_type, status, subjects(id, name, category))')
+                        .in('student_id', classmateIds);
+                    if (termId) rankQuery = rankQuery.eq('exams.term_id', termId);
+                    if (yearId) rankQuery = rankQuery.eq('exams.academic_year_id', yearId);
+                    if (roundSelection.round) rankQuery = rankQuery.eq('exams.exam_type', roundSelection.round);
+                    if (releasedOnly) rankQuery = rankQuery.eq('exams.status', 'APPROVED');
+                    return rankQuery.order('id');
+                });
 
                 if (allMarks && allMarks.length > 0) {
                     // Per-classmate marks (for overall points/percentage ranking)
@@ -573,6 +578,7 @@ export async function GET(
         // are best-effort — a first-ever exam simply prints no deviation.
         const [previousRound, subjectTeacherNames] = await Promise.all([
             fetchPreviousRound(supabase, {
+                schoolId: targetSchoolId || userSchoolId,
                 studentIds: classmateIds.length > 0 ? classmateIds : [studentId],
                 gradeId,
                 before: earliestExamCreatedAt(safeMarks),
@@ -581,7 +587,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
             }),
-            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId, yearId }),
+            fetchSubjectTeachers(supabase, { schoolId: targetSchoolId || userSchoolId, gradeId, gradeStreamId, yearId }),
         ]);
 
         // 10. Build subject marks with category, points/rubric, ranks, and teacher comments
@@ -768,7 +774,7 @@ export async function GET(
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="${student.users?.first_name}_${student.users?.last_name}_${termTitle}.pdf"`,
+                'Content-Disposition': `attachment; filename="${safeFileName(`${student.users?.first_name ?? ''}_${student.users?.last_name ?? ''}_${termTitle}`, 'Report_card')}.pdf"`,
             },
         });
 

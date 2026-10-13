@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { safeFileName } from '@/lib/filename';
+import { fetchAllRows } from '@/lib/postgrest';
 import { authorizeClassReport } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -36,10 +38,7 @@ export const runtime = 'nodejs';
 */
 export const maxDuration = 60;
 
-/** Keep a class label like "Grade 6 — STEM" usable as a filename. */
-function safeName(value: string): string {
-    return (value || 'MarkSheet').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'MarkSheet';
-}
+const safeName = (value: string) => safeFileName(value, 'MarkSheet');
 
 export async function GET(
     request: Request,
@@ -87,7 +86,9 @@ export async function GET(
         let studentsQuery = supabase
             .from('students')
             .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id)')
-            .eq('current_grade_stream_id', classId);
+            .eq('current_grade_stream_id', classId)
+            // Learners who left (transferred, graduated) are not listed or ranked.
+            .eq('status', 'ACTIVE');
         if (combinationId) studentsQuery = studentsQuery.eq('subject_combination_id', combinationId);
         if (pathwayFilter) studentsQuery = studentsQuery.eq('pathway', pathwayFilter);
 
@@ -153,11 +154,15 @@ export async function GET(
             }
             
             // Fetch grading systems for this academic level - get the one with scales
+            // This school's tables and the seeded defaults, in a fixed order (as
+            // the single card picks them).
             const { data: allGradingSystems } = await supabase
                 .from('grading_systems')
                 .select('id, name')
                 .eq('academic_level_id', firstAcademicLevelId)
-                .neq('system_kind', 'OVERALL');
+                .neq('system_kind', 'OVERALL')
+                .or(`school_id.eq.${userSchoolId},school_id.is.null`)
+                .order('name', { ascending: true });
 
             // Find the grading system with scales (prefer KCSE/8-4-4 letter grades)
             let gradingSystemId: string | null = null;
@@ -248,21 +253,22 @@ export async function GET(
         // 5. Fetch all marks
         const studentIds = students.map(s => s.id);
 
-        let marksQuery = supabase
-            .from('exam_marks')
-            .select(`
-                id, student_id, percentage, raw_score, grade_symbol, remarks,
-                exams!inner ( id, name, max_score, exam_type, exam_date, created_at, term_id, academic_year_id,
-                    subjects ( id, code, name, category, display_order )
-                )
-            `)
-            .in('student_id', studentIds)
-            .eq('exams.term_id', termId);
-
-        if (yearId) marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
-        if (examType) marksQuery = marksQuery.eq('exams.exam_type', examType);
-
-        const { data: fetchedMarks, error: marksErr } = await marksQuery;
+        // Every mark of the class, past PostgREST's 1,000-row page.
+        const { rows: fetchedMarks, error: marksErr } = await fetchAllRows(() => {
+            let q = supabase
+                .from('exam_marks')
+                .select(`
+                    id, student_id, percentage, raw_score, grade_symbol, remarks,
+                    exams!inner ( id, name, max_score, exam_type, exam_date, created_at, term_id, academic_year_id,
+                        subjects ( id, code, name, category, display_order )
+                    )
+                `)
+                .in('student_id', studentIds)
+                .eq('exams.term_id', termId);
+            if (yearId) q = q.eq('exams.academic_year_id', yearId);
+            if (examType) q = q.eq('exams.exam_type', examType);
+            return q.order('id');
+        });
         if (marksErr) throw marksErr;
 
         // Narrow to ONE sitting. Without this the sheet averaged every round in
@@ -297,6 +303,7 @@ export async function GET(
         // whole sheet: the round before this one, and who teaches each subject.
         const [previousRound, subjectTeacherNames] = await Promise.all([
             fetchPreviousRound(supabase, {
+                schoolId: targetSchoolId || userSchoolId,
                 studentIds,
                 gradeId,
                 before: earliestExamCreatedAt(allMarks),
@@ -305,7 +312,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
             }),
-            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
+            fetchSubjectTeachers(supabase, { schoolId: targetSchoolId || userSchoolId, gradeId, gradeStreamId: classId, yearId }),
         ]);
 
         // Collect all distinct subject names and codes for the table columns
