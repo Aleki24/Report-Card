@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2 } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import React, { useState, useEffect } from 'react';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -46,11 +47,15 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
                 // so only the subject's takers count as "missing")
                 const stuRes = await fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${subjectId}` : ''}`);
                 const stuData = await stuRes.json();
+                // A failed load is not "everyone is marked" (or "nobody is"):
+                // stop here rather than offer marks over existing ones.
+                if (!stuRes.ok) throw new Error(apiErrorMessage(stuData, 'Could not load the learners.'));
                 const allStudents = (stuData.data || []).filter((s: any) => s.current_grade_stream_id === gradeStreamId);
 
                 // Get existing marks
                 const marksRes = await fetch(`/api/school/exam-marks?exam_id=${examId}`);
                 const existingData = await marksRes.json();
+                if (!marksRes.ok) throw new Error(apiErrorMessage(existingData, 'Could not load the marks already entered.'));
                 const markedIds = new Set((existingData.data || []).map((m: any) => m.student_id));
 
                 const missing = allStudents
@@ -67,7 +72,8 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
                 setComponentScores({});
             } catch (err) {
                 console.error('Failed to load missing students:', err);
-                setMessage({ type: 'error', text: 'Error loading students.' });
+                setStudents([]);
+                setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Error loading students.' });
             } finally {
                 setLoading(false);
             }
@@ -334,6 +340,12 @@ export function QuickMarkEntry({ examId, gradeStreamId, subjectId, onSaved }: Pr
             <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
                 <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Loading students…</p>
             </div>
+        );
+    }
+
+    if (students.length === 0 && message?.type === 'error') {
+        return (
+            <div role="alert" className="card p-8 text-center text-sm text-destructive">{message.text}</div>
         );
     }
 
