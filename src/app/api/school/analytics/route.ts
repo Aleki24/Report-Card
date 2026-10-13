@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server';
 import type { GradeBand } from '@/types';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import { fetchAllRows, MAX_PAGED_ROWS } from '@/lib/postgrest';
+import type { ExamTotal, ExamTotalsResponse, ResultSubjectMeta } from '@/lib/grade-results';
 
 /**
  * A subject as the dashboard needs to reason about it: which curriculum it
@@ -16,14 +17,7 @@ import { fetchAllRows, MAX_PAGED_ROWS } from '@/lib/postgrest';
  * silently merges the two, which is how a CBC learner's EE2 ended up counting
  * towards an 8-4-4 subject's letter grade.
  */
-export interface SubjectMeta {
-    id: string;
-    name: string;
-    academic_level_id: string | null;
-    level_code: string | null;
-    level_name: string | null;
-    grading_system_id: string | null;
-}
+export type SubjectMeta = ResultSubjectMeta;
 
 /** Bands keyed by grading system id, for turning a percentage into a symbol. */
 export type GradeBandsBySystem = Record<string, GradeBand[]>;
@@ -42,6 +36,39 @@ export interface AnalyticsScope {
     academic_year_name: string | null;
     mark_count: number;
     truncated: boolean;
+}
+
+/** To-one relations come back as an object or a one-element array; either way, the row. */
+function one(rel: unknown): Record<string, unknown> {
+  const v = Array.isArray(rel) ? rel[0] : rel;
+  return (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+}
+
+function subjectMetaOf(rows: unknown): SubjectMeta[] {
+  return ((rows || []) as Record<string, unknown>[]).map(s => {
+    const level = one(s.academic_levels);
+    return {
+      id: s.id as string,
+      name: ((s.name as string) || '').trim() || 'Unknown',
+      academic_level_id: (s.academic_level_id as string) ?? null,
+      level_code: (level.code as string) ?? null,
+      level_name: (level.name as string) ?? null,
+      grading_system_id: (s.grading_system_id as string) ?? null,
+    };
+  });
+}
+
+/** Each subject grading system's bands, highest first; systems without bands are left out. */
+function gradingScalesOf(rows: unknown): GradeBandsBySystem {
+  const out: GradeBandsBySystem = {};
+  for (const system of (rows || []) as Record<string, unknown>[]) {
+    const bands = (system.grading_scales as GradeBand[] | null) || [];
+    if (bands.length === 0) continue;
+    out[system.id as string] = bands
+      .map(b => ({ symbol: b.symbol, min_percentage: Number(b.min_percentage), max_percentage: Number(b.max_percentage) }))
+      .sort((a, b) => b.min_percentage - a.min_percentage);
+  }
+  return out;
 }
 
 export async function GET(request: NextRequest) {
@@ -75,6 +102,9 @@ export async function GET(request: NextRequest) {
     const yearId = searchParams.get('year_id');
     const termId = searchParams.get('term_id');
     const allTerms = searchParams.get('all_terms') === 'true';
+    // ?summary=exams: each exam's marks totalled in Postgres instead of every
+    // mark, for the dashboard results card (see lib/grade-results).
+    const summary = searchParams.get('summary') === 'exams';
 
     /**
      * Default to the term the school says it is in.
@@ -181,7 +211,9 @@ export async function GET(request: NextRequest) {
       const { data: streamExams } = await examQuery;
       const examIds = (streamExams || []).map((e: { id: string }) => e.id);
       if (examIds.length === 0) {
-        return NextResponse.json({ marks: [], subjects: [], gradingScales: {}, scope: emptyScope });
+        return NextResponse.json(summary
+          ? { exams: [], subjects: [], gradingScales: {}, scope: emptyScope }
+          : { marks: [], subjects: [], gradingScales: {}, scope: emptyScope });
       }
       scopedExamIds = examIds;
     }
@@ -189,9 +221,7 @@ export async function GET(request: NextRequest) {
     // The school's subjects and its grading scales, fetched alongside the marks
     // rather than joined onto each one: both lists are small and shared by every
     // mark, so sending them once keeps the payload flat.
-    const [marksRes, subjectsRes, systemsRes] = await Promise.all([
-      // Paged, so the answer is every matching mark rather than the first 1000.
-      fetchAllRows<Record<string, unknown>>(buildQuery),
+    const metaRes = Promise.all([
       supabaseAdmin
         .from(SCHOOL_SUBJECT_VIEW)
         .select('id, name, academic_level_id, band, grading_system_id, academic_levels ( code, name )')
@@ -206,6 +236,46 @@ export async function GET(request: NextRequest) {
         .neq('system_kind', 'OVERALL'),
     ]);
 
+    if (summary) {
+      // The exam filter narrows the class's exams, as .in() and .eq() do below.
+      const examIds = examId ? (scopedExamIds && !scopedExamIds.includes(examId) ? [] : [examId]) : scopedExamIds;
+      const [totalsRes, [subjectsRes, systemsRes]] = await Promise.all([
+        fetchAllRows<ExamTotal>(() => supabaseAdmin
+          .rpc('exam_mark_totals', {
+            p_school_id: schoolId,
+            p_term_id: effectiveTermId,
+            p_year_id: effectiveYearId,
+            p_subject_id: subjectId,
+            p_exam_ids: examIds,
+          })
+          .order('exam_id')),
+        metaRes,
+      ]);
+      if (totalsRes.error) {
+        console.error('Analytics totals error:', totalsRes.error);
+        return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
+      }
+      // numeric and bigint can arrive as strings.
+      const exams: ExamTotal[] = totalsRes.rows.map(e => ({
+        ...e,
+        mark_count: Number(e.mark_count),
+        scored_count: Number(e.scored_count),
+        percentage_sum: Number(e.percentage_sum),
+      }));
+      const body: ExamTotalsResponse & { scope: AnalyticsScope } = {
+        exams,
+        subjects: subjectMetaOf(subjectsRes.data),
+        gradingScales: gradingScalesOf(systemsRes.data),
+        scope: { ...emptyScope, mark_count: exams.reduce((n, e) => n + e.mark_count, 0), truncated: totalsRes.truncated },
+      };
+      return NextResponse.json(body);
+    }
+
+    const [marksRes, [subjectsRes, systemsRes]] = await Promise.all([
+      // Paged, so the answer is every matching mark rather than the first 1000.
+      fetchAllRows<Record<string, unknown>>(buildQuery),
+      metaRes,
+    ]);
     const { rows: marks, error, truncated } = marksRes;
 
     if (error) {
@@ -220,10 +290,6 @@ export async function GET(request: NextRequest) {
     // Supabase returns to-one relations as either an object or a single-element
     // array depending on inference; normalise both. Flatten into the shape the
     // Analytics page consumes (subject_name / student_name / exam_name / etc.).
-    const one = (rel: unknown): Record<string, unknown> => {
-      const v = Array.isArray(rel) ? rel[0] : rel;
-      return (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-    };
 
     const flat = (marks || []).map((m: Record<string, unknown>) => {
       const exam = one(m.exams);
@@ -249,30 +315,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const subjects: SubjectMeta[] = ((subjectsRes.data || []) as Record<string, unknown>[]).map(s => {
-      const level = one(s.academic_levels);
-      return {
-        id: s.id as string,
-        name: ((s.name as string) || '').trim() || 'Unknown',
-        academic_level_id: (s.academic_level_id as string) ?? null,
-        level_code: (level.code as string) ?? null,
-        level_name: (level.name as string) ?? null,
-        grading_system_id: (s.grading_system_id as string) ?? null,
-      };
-    });
-
-    const gradingScales: GradeBandsBySystem = {};
-    for (const system of (systemsRes.data || []) as Record<string, unknown>[]) {
-      const bands = (system.grading_scales as GradeBand[] | null) || [];
-      if (bands.length === 0) continue;
-      gradingScales[system.id as string] = bands
-        .map(b => ({
-          symbol: b.symbol,
-          min_percentage: Number(b.min_percentage),
-          max_percentage: Number(b.max_percentage),
-        }))
-        .sort((a, b) => b.min_percentage - a.min_percentage);
-    }
+    const subjects = subjectMetaOf(subjectsRes.data);
+    const gradingScales = gradingScalesOf(systemsRes.data);
 
     const scope: AnalyticsScope = {
       term_id: effectiveTermId,
