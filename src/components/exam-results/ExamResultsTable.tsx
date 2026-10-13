@@ -74,6 +74,33 @@ const OVERALL_POINTS_GRADES = [
 
 type SortKey = 'student_name' | 'percentage' | 'grade_symbol';
 
+/**
+ * A column header that sorts the table: a real button (focusable, works
+ * from the keyboard) inside a th that tells screen readers the order.
+ */
+function SortHeader({ label, column, sortKey, sortAsc, onSort, align = 'left' }: {
+    label: string;
+    column: SortKey;
+    sortKey: SortKey;
+    sortAsc: boolean;
+    onSort: (key: SortKey) => void;
+    align?: 'left' | 'center';
+}) {
+    const active = sortKey === column;
+    return (
+        <th style={{ ...thStyle, textAlign: align }} aria-sort={active ? (sortAsc ? 'ascending' : 'descending') : 'none'}>
+            <button
+                type="button"
+                onClick={() => onSort(column)}
+                className="inline-flex cursor-pointer items-center gap-1 rounded uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+                {label}
+                <span aria-hidden className={`text-xs ${active ? 'opacity-100' : 'opacity-30'}`}>{active ? (sortAsc ? '▲' : '▼') : '⇅'}</span>
+            </button>
+        </th>
+    );
+}
+
 export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, scheme, onRefresh, onMarkPatched, markEntryLink }: Props) {
     const multiPaper = isMultiPaper(scheme);
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
@@ -314,12 +341,6 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
         return GRADE_COLORS[grade] || GRADE_COLORS[base] || 'var(--color-text-muted)';
     };
 
-    const SortIcon = ({ active, asc }: { active: boolean; asc: boolean }) => (
-        <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3, fontSize: 12 }}>
-            {active ? (asc ? '▲' : '▼') : '⇅'}
-        </span>
-    );
-
     if (marks.length === 0) {
         return (
             <div className="card" style={{ textAlign: 'center', padding: 'var(--space-12)' }}>
@@ -380,16 +401,10 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                           <thead>
                               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                                   <th style={{ ...thStyle, textAlign: 'center' }}>Position</th>
-                                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleSort('student_name')}>
-                                      Student <SortIcon active={sortKey === 'student_name'} asc={sortAsc} />
-                                  </th>
+                                  <SortHeader label="Student" column="student_name" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                                   <th style={thStyle}>Adm No</th>
-                                  <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('percentage')}>
-                                      Score <SortIcon active={sortKey === 'percentage'} asc={sortAsc} />
-                                  </th>
-                                  <th style={{ ...thStyle, cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('grade_symbol')}>
-                                      Grade <SortIcon active={sortKey === 'grade_symbol'} asc={sortAsc} />
-                                  </th>
+                                  <SortHeader label="Score" column="percentage" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} align="center" />
+                                  <SortHeader label="Grade" column="grade_symbol" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} align="center" />
                                   {aggregatesApply && (
                                       <>
                                           <th style={{ ...thStyle, textAlign: 'center' }}>Total Pts</th>

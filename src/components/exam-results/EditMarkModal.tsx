@@ -1,7 +1,8 @@
 "use client";
 
 import { Trash2 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { toast } from 'sonner';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -47,6 +48,8 @@ interface Props {
 }
 
 export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved, onDeleted, totalPoints }: Props) {
+    const { panelRef, backdropProps } = useDialogBehavior(true, onClose);
+    const titleId = useId();
     const multiPaper = isMultiPaper(scheme);
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
 
@@ -340,17 +343,21 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-            onClick={onClose}
+            {...backdropProps}
         >
             <div
-                className="card w-full max-w-md p-5 sm:p-6"
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+                className="card w-full max-w-md p-5 outline-none sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
-                onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">Edit Result</h2>
+                        <h2 id={titleId} className="text-lg font-bold font-[family-name:var(--font-display)]">Edit Result</h2>
                         <p className="text-sm text-muted-foreground mt-1">
                             {mark.student_name} <span className="text-xs">({mark.admission_number})</span>
                         </p>
@@ -359,6 +366,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                         onClick={onClose}
                         className="text-muted-foreground hover:text-[var(--color-text)] text-xl leading-none cursor-pointer"
                         title="Close"
+                        aria-label="Close"
                     >
                         ×
                     </button>

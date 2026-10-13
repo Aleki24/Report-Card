@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -28,6 +29,8 @@ interface Props {
 }
 
 export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Props) {
+  const { panelRef, backdropProps } = useDialogBehavior(true, onClose);
+  const titleId = useId();
   const { user, profile } = useAuth();
 
   const [creating, setCreating] = useState(false);
@@ -244,14 +247,18 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
+      {...backdropProps}
     >
       <div
-        className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 outline-none sm:p-6"
         style={{ animation: 'fadeIn .2s ease' }}
-        onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-6">Create New Exam</h2>
+        <h2 id={titleId} className="text-lg font-bold font-[family-name:var(--font-display)] mb-6">Create New Exam</h2>
 
         {quickMsg && (
           <div className={`mb-4 p-2 rounded text-xs ${quickMsg.startsWith('✅') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
