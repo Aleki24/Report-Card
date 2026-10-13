@@ -3,14 +3,14 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import { internalError } from '@/lib/api-errors';
-import { isPlatformOwnerEmail } from '@/lib/school-approval';
+import { isPlatformOwner } from '@/lib/platform-owner';
 import type { PendingSchool } from '@/lib/pending-schools';
 
 export const runtime = 'nodejs';
 
 /**
- * Schools waiting for approval, for the platform owner only (their account
- * email is one of the owner addresses). Each carries the same single-use
+ * Schools waiting for approval, for the platform owner only (see
+ * isPlatformOwner: an owner address they proved is theirs). Each carries the same single-use
  * approve / reject links the request email has, so the owner can decide from
  * the app when a message never arrived.
  */
@@ -19,7 +19,7 @@ export async function GET() {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const user = await getActiveUserProfile(userId);
-        if (!user || !isPlatformOwnerEmail(user.email)) {
+        if (!user || !(await isPlatformOwner(userId))) {
             return NextResponse.json({ error: 'Only the platform owner can see pending schools.' }, { status: 403 });
         }
 

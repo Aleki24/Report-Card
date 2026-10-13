@@ -190,6 +190,23 @@ const WHOLE_SCHOOL_PERMISSIONS: readonly Permission[] = [
     'fees.view', 'billing.view', 'health.view', 'boarding.view', 'transport.view', 'discipline.manage', 'library.manage',
 ];
 
+/**
+ * Whether the caller sees every learner: an admin, or someone holding a duty
+ * (bursar, nurse, boarding master…) whose work spans the school. A teacher's
+ * own role grants do not count: a class teacher may view health and boarding
+ * records, but only for their own class.
+ */
 export function seesAllStudents(access: Access | null): boolean {
-    return !!access && WHOLE_SCHOOL_PERMISSIONS.some(p => access.can(p));
+    if (!access) return false;
+    if (access.role === 'ADMIN') return true;
+    return WHOLE_SCHOOL_PERMISSIONS.some(p => dutyAllows(access, p));
+}
+
+/**
+ * Whether one of the caller's duties (not their role) grants `permission`.
+ * Role grants are per class (a teacher assesses their own classes); a duty
+ * such as DOS or Deputy covers the whole school.
+ */
+export function dutyAllows(access: Access, permission: Permission): boolean {
+    return grantAllows(collectGrants(null, access.duties.map(d => d.duty)), access.modules, permission);
 }

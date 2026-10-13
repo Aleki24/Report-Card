@@ -5,6 +5,9 @@ import { loadTripForOperator } from '@/lib/transport/server';
 
 type Params = { id: string };
 
+/** How far ahead of the server a phone's clock may be before its fixes are corrected. */
+const CLOCK_TOLERANCE_MS = 60_000;
+
 const bodySchema = z.object({
     points: z.array(z.object({
         lat: z.number().min(-90).max(90),
@@ -26,7 +29,13 @@ export const POST = route<Params>('trip positions', { module: 'transport_trackin
     const trip = await loadTripForOperator(params.id, access);
     if (trip.status !== 'IN_PROGRESS') throw new HttpError(409, 'The trip is not running.');
     const db = createSupabaseAdmin();
-    const rows = points.map(p => ({ ...p, recorded_at: new Date(p.recorded_at).toISOString(), trip_id: trip.id, school_id: access.schoolId }));
+    // A phone whose clock runs ahead stamped fixes in the future, which froze
+    // the live position (later real fixes looked older) and hid the stale
+    // warning. A batch ahead of the server is moved back, keeping its order.
+    const now = Date.now();
+    const newest = Math.max(...points.map(p => Date.parse(p.recorded_at)));
+    const skew = Math.max(0, newest - (now + CLOCK_TOLERANCE_MS));
+    const rows = points.map(p => ({ ...p, recorded_at: new Date(Date.parse(p.recorded_at) - skew).toISOString(), trip_id: trip.id, school_id: access.schoolId }));
     const { error } = await db.from('vehicle_positions').upsert(rows, { onConflict: 'trip_id,recorded_at', ignoreDuplicates: true });
     if (error) throw error;
 
@@ -34,7 +43,7 @@ export const POST = route<Params>('trip positions', { module: 'transport_trackin
     const fastest = Math.max(trip.max_speed_kmh ?? 0, ...rows.map(r => r.speed_kmh ?? 0));
     const { error: tripError } = await db.from('trips').update({
         last_lat: latest.lat, last_lng: latest.lng, last_speed_kmh: latest.speed_kmh ?? null, last_seen_at: latest.recorded_at, max_speed_kmh: fastest,
-    }).eq('id', trip.id).or(`last_seen_at.is.null,last_seen_at.lt.${latest.recorded_at}`);
+    }).eq('id', trip.id).or(`last_seen_at.is.null,last_seen_at.lt."${latest.recorded_at}"`);
     if (tripError) throw tripError;
     return { stored: rows.length };
 });

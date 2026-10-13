@@ -48,6 +48,7 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
                         columns={[
                             { key: 'name', header: 'Vote head', render: l => <span className="font-medium">{l.name}</span> },
                             { key: 'billed', header: 'Billed', numeric: true, render: l => money(l.billed) },
+                            { key: 'waived', header: 'Waived', numeric: true, hideOnMobile: true, render: l => money(l.waived) },
                             { key: 'collected', header: 'Collected', numeric: true, render: l => money(l.collected) },
                             { key: 'outstanding', header: 'Owed', numeric: true, render: l => money(l.outstanding) },
                             { key: 'spent', header: 'Spent', numeric: true, hideOnMobile: true, render: l => money(l.spent) },
@@ -57,7 +58,7 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
                         emptyState="Bill the term to see its vote-head statement."
                     />
                     <p className="text-sm text-muted-foreground">
-                        Totals: billed {money(total('billed'))} · collected {money(total('collected'))} · owed {money(total('outstanding'))}
+                        Totals: billed {money(total('billed'))} · waived {money(total('waived'))} · collected {money(total('collected'))} · owed {money(total('outstanding'))}
                         {report.overpaid > 0 && ` · overpayments ${money(report.overpaid)}`}
                     </p>
                 </>

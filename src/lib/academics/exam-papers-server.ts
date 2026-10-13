@@ -5,7 +5,7 @@ import { optionalCount, optionalDateTime, optionalText, optionalUuid, text, uuid
 import { resolveAttachmentType } from '@/lib/attachments';
 import { DUTIES, grantAllows, isDutyKey } from '@/lib/platform/permissions';
 import type { ModuleKey } from '@/lib/platform/modules';
-import { MAX_PAPER_BYTES, PAPER_FILE_KINDS, PAPER_MIME_TYPES, type PaperFileKind, type PaperModerator, type PaperStatus } from './exam-papers';
+import { MAX_PAPER_BYTES, PAPER_FILE_KINDS, PAPER_MIME_TYPES, bytesMatchPaperType, type PaperFileKind, type PaperModerator, type PaperStatus } from './exam-papers';
 
 export const BUCKET = 'exam-papers';
 
@@ -104,9 +104,22 @@ export const stagedField = (kind: PaperFileKind) => `${kind}_upload`;
 async function claimStagedFile(path: string, schoolId: string, kind: PaperFileKind): Promise<string> {
     const match = new RegExp(`^${schoolId}/staged/([0-9a-f-]{36})/${kind}\\.(pdf|docx?)$`).exec(path);
     if (!match) throw new HttpError(400, 'That upload is not valid. Attach the file again.');
-    const { data, error } = await createSupabaseAdmin().storage.from(BUCKET).list(`${schoolId}/staged/${match[1]}`);
+    const storage = createSupabaseAdmin().storage.from(BUCKET);
+    const { data, error } = await storage.list(`${schoolId}/staged/${match[1]}`);
     if (error) throw new Error(`storage list failed: ${error.message}`);
-    if (!data?.some(f => f.name === path.split('/').pop())) throw new HttpError(400, 'The file did not finish uploading. Attach it again.');
+    const entry = data?.find(f => f.name === path.split('/').pop());
+    if (!entry) throw new HttpError(400, 'The file did not finish uploading. Attach it again.');
+
+    // The browser uploaded it straight to storage, so its size and type are
+    // whatever it sent: check them here, as a form upload is checked.
+    const size = Number((entry.metadata as { size?: unknown } | null)?.size ?? 0);
+    const { data: blob, error: readError } = size > MAX_PAPER_BYTES ? { data: null, error: null } : await storage.download(path);
+    if (readError) throw new Error(`storage download failed: ${readError.message}`);
+    const head = blob ? new Uint8Array(await blob.slice(0, 8).arrayBuffer()) : new Uint8Array();
+    if (!blob || !bytesMatchPaperType(head, path)) {
+        await storage.remove([path]);
+        throw new HttpError(400, size > MAX_PAPER_BYTES ? 'Files must be 15 MB or smaller.' : 'That file is not a PDF or Word document. Attach the paper again.');
+    }
     return path;
 }
 

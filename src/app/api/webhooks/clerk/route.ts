@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import type { UserJSON, WebhookEvent } from '@clerk/nextjs/server';
 import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { existingSchoolId, provisionUserFromClerk } from '@/lib/provision-user';
+import { provisionUserFromClerk } from '@/lib/provision-user';
+
+/** The account's primary email (Clerk lists every address; the first is not always the primary). */
+const primaryEmail = (user: UserJSON): string =>
+  (user.email_addresses.find(e => e.id === user.primary_email_address_id) ?? user.email_addresses[0])?.email_address ?? '';
 
 const webhookSecret = process.env.CLERK_WEBHOOK_SECRET || '';
 
@@ -32,23 +37,23 @@ export async function POST(req: Request) {
   }
 
   const wh = new Webhook(webhookSecret);
-  let evt: any;
+  let evt: WebhookEvent;
   try {
     evt = wh.verify(rawBody, {
       'svix-id': svixId,
       'svix-timestamp': svixTimestamp,
       'svix-signature': svixSignature,
-    });
+    }) as WebhookEvent;
   } catch {
     return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
   }
 
-  const { type, data } = evt;
   const supabase = createSupabaseAdmin();
 
   try {
-    switch (type) {
+    switch (evt.type) {
       case 'user.created': {
+        const data = evt.data;
         const clerkId = data.id;
         const { data: existing } = await supabase
           .from('users')
@@ -60,7 +65,7 @@ export async function POST(req: Request) {
 
         const { error: provisionErr } = await provisionUserFromClerk(supabase, {
           id: clerkId,
-          email: data.email_addresses?.[0]?.email_address || '',
+          email: primaryEmail(data),
           firstName: data.first_name || '',
           lastName: data.last_name || '',
           publicMetadata: data.public_metadata || {},
@@ -70,33 +75,21 @@ export async function POST(req: Request) {
       }
 
       case 'user.updated': {
-        const clerkId = data.id;
-        const email = data.email_addresses?.[0]?.email_address || '';
-        const firstName = data.first_name || '';
-        const lastName = data.last_name || '';
-        const metadata = data.public_metadata || {};
-
-        const updateData: any = {
-          email,
-          first_name: firstName,
-          last_name: lastName,
-        };
-
-        if (metadata.role) updateData.role = metadata.role;
-        // A school id for a school that no longer exists would fail the FK
-        // check and drop the whole update (name and email included).
-        const schoolId = await existingSchoolId(supabase, metadata.school_id);
-        if (schoolId) updateData.school_id = schoolId;
-
-        await supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', clerkId);
+        // The database is the source of truth for role, school and names:
+        // admins change them there (Users page, class teacher changes), and
+        // Clerk's copy is not kept in step. Writing Clerk's back on every
+        // update (a photo change, a role switch) restored roles admins had
+        // taken away. Only the sign-in email is Clerk's to own.
+        const email = primaryEmail(evt.data);
+        if (email) {
+          const { error } = await supabase.from('users').update({ email }).eq('id', evt.data.id);
+          if (error) console.error('[Clerk Webhook] Failed to sync email:', error);
+        }
         break;
       }
 
       case 'user.deleted': {
-        const clerkId = data.id;
+        const clerkId = evt.data.id;
         if (!clerkId) break;
         // Cascade delete related records to avoid FK constraint errors
         await supabase.from('exam_marks').delete().eq('student_id', clerkId);
@@ -117,7 +110,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Clerk Webhook] Error:', err);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }

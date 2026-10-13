@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { escapeHtml } from '@/lib/html';
 import { CONTACT_DETAILS, contactSchema } from '@/lib/contact';
 
@@ -9,8 +9,8 @@ const CONTACT_INBOX = CONTACT_DETAILS.email;
 export async function POST(request: NextRequest) {
     try {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const limit = rateLimit(`contact:${ip}`, { maxRequests: 5, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`contact:${ip}`, { maxRequests: 5, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json({ error: 'Too many messages sent. Please wait a minute and try again.' }, { status: 429 });
         }
 

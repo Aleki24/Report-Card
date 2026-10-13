@@ -73,17 +73,27 @@ export const PUT = route('rollcall save', { module: 'boarding', permission: ['bo
     if (error) throw error;
     const allowed = new Set((beds ?? []).map(b => b.student_id as string));
     if (body.entries.some(e => !allowed.has(e.student_id))) throw new HttpError(400, 'Some learners are not allocated to this dorm.');
+    const marked = new Set(body.entries.map(e => e.student_id));
+    if (marked.size !== body.entries.length) throw new HttpError(400, 'A learner appears twice in this roll.');
 
     const { data: call, error: callError } = await db.from('roll_calls').upsert({
         school_id: access.schoolId, dorm_id: body.dorm_id, session: body.session, taken_on: body.date,
         taken_by: access.userId, notes: body.notes ?? null,
     }, { onConflict: 'dorm_id,session,taken_on' }).select('id').single();
     if (callError || !call) throw callError ?? new Error('roll call upsert failed');
-    const { error: delError } = await db.from('roll_call_entries').delete().eq('roll_call_id', call.id);
-    if (delError) throw delError;
+    // Write the new roll before clearing anything from the old one, so a
+    // failed save leaves the previous entries rather than an empty roll.
     if (body.entries.length > 0) {
-        const { error: insError } = await db.from('roll_call_entries').insert(body.entries.map(e => ({ ...e, roll_call_id: call.id, school_id: access.schoolId })));
-        if (insError) throw insError;
+        const { error: upsertError } = await db.from('roll_call_entries')
+            .upsert(body.entries.map(e => ({ ...e, roll_call_id: call.id, school_id: access.schoolId })), { onConflict: 'roll_call_id,student_id' });
+        if (upsertError) throw upsertError;
+    }
+    const { data: previous, error: prevError } = await db.from('roll_call_entries').select('student_id').eq('roll_call_id', call.id);
+    if (prevError) throw prevError;
+    const dropped = (previous ?? []).map(e => e.student_id as string).filter(id => !marked.has(id));
+    if (dropped.length > 0) {
+        const { error: delError } = await db.from('roll_call_entries').delete().eq('roll_call_id', call.id).in('student_id', dropped);
+        if (delError) throw delError;
     }
     const absent = body.entries.filter(e => e.status === 'ABSENT').length;
     return { saved: body.entries.length, absent };

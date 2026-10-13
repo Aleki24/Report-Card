@@ -4,7 +4,7 @@ import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
 import { getCaller } from '@/lib/auth-server';
 import { internalError } from '@/lib/api-errors';
-import { escapeLikePattern } from '@/lib/postgrest';
+import { escapeLikePattern, fetchAllRows } from '@/lib/postgrest';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import {
     ANNOUNCEMENTS_PAGE_SIZE, announcementCreateSchema, announcementSmsText,
@@ -148,15 +148,18 @@ export async function POST(request: NextRequest) {
                 // error here made the page offer to post it again.
                 warning = 'The announcement was posted, but texts were not sent: too many SMS blasts in the last minute. Try again shortly.';
             } else {
-                const { data: students } = await supabase
+                // Every active learner's guardian, past PostgREST's 1,000-row page.
+                const { rows: students, error: studentsError } = await fetchAllRows(() => supabase
                     .from('students')
-                    .select('guardian_phone, users!inner(school_id)')
+                    .select('id, guardian_phone, users!inner(school_id)')
                     .eq('users.school_id', schoolId)
                     .eq('status', 'ACTIVE')
-                    .not('guardian_phone', 'is', null);
+                    .not('guardian_phone', 'is', null)
+                    .order('id'));
+                if (studentsError) return internalError('announcement guardians', studentsError);
 
-                const phones = Array.from(new Set((students ?? [])
-                    .map((s: { guardian_phone: string | null }) => s.guardian_phone?.trim() ?? '')
+                const phones = Array.from(new Set(students
+                    .map(s => s.guardian_phone?.trim() ?? '')
                     .filter(Boolean)));
 
                 if (phones.length > 0) {

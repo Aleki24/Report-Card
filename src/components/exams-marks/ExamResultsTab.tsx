@@ -15,6 +15,7 @@ import { BarChart3, ClipboardList, Download, FileText, LayoutGrid, Package, Penc
 import { InitialsAvatar } from '@/components/ui/InitialsAvatar';
 import { cn } from '@/lib/utils';
 import { STEP_TONES } from './examTheme';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
 interface ExamOption {
@@ -207,7 +208,7 @@ export function ExamResultsTab() {
         if (!selectedStreamId) { setClassStudents([]); return; }
         
         try {
-            const res = await fetch('/api/school/data?type=students');
+            const res = await fetch(examRosterUrl({ gradeStreamId: selectedStreamId }));
             const json = await res.json();
             const allStudents = (json.data || []) as any[];
             

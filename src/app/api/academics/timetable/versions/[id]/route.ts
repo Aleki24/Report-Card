@@ -19,22 +19,23 @@ const patchSchema = z.object({
 /** Rename, or publish (the previously published timetable is archived). */
 export const PATCH = route<Params>('timetable version update', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, params, request }) => {
     const body = await parseBody(request, patchSchema);
+    if (!body.name && !body.status) throw new HttpError(400, 'Nothing to update.');
     const version = await loadVersion(params.id, access.schoolId);
     const db = createSupabaseAdmin();
     if (body.status === 'PUBLISHED' && version.status !== 'PUBLISHED') {
-        const { error } = await db.from('timetable_versions').update({ status: 'ARCHIVED' }).eq('school_id', access.schoolId).eq('status', 'PUBLISHED');
+        // Archiving the live timetable and publishing this one happen together,
+        // so a failure never leaves the school without a live timetable.
+        const { error } = await db.rpc('publish_timetable_version', { p_school_id: access.schoolId, p_version_id: version.id });
         if (error) throw error;
+        await audit(access, 'release', 'timetable_versions', version.id, { name: version.name });
     }
     const update: Record<string, unknown> = {};
     if (body.name) update.name = body.name;
-    if (body.status) {
-        update.status = body.status;
-        if (body.status === 'PUBLISHED') update.published_at = new Date().toISOString();
-    }
-    if (Object.keys(update).length === 0) throw new HttpError(400, 'Nothing to update.');
-    const { data, error } = await db.from('timetable_versions').update(update).eq('id', version.id).select('*').single();
+    if (body.status && body.status !== 'PUBLISHED') update.status = body.status;
+    const { data, error } = Object.keys(update).length > 0
+        ? await db.from('timetable_versions').update(update).eq('id', version.id).select('*').single()
+        : await db.from('timetable_versions').select('*').eq('id', version.id).single();
     if (error) throw error;
-    if (body.status === 'PUBLISHED') await audit(access, 'release', 'timetable_versions', version.id, { name: version.name });
     return data;
 });
 

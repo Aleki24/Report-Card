@@ -5,6 +5,7 @@ import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
 import { examTypeLabel } from '@/lib/academics';
 import { customExamTypeCode, isValidExamType } from '@shared/exam-types';
+import { filterSubjectsForGrade } from '@shared/curriculum-bands';
 import { errorMessage, toISODate } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, FilterGrid, ErrorBanner, Notice, TextField } from '@/components/ui';
@@ -69,7 +70,12 @@ function CreateExamForm({ term, structure, onCancel, onCreated }: { term: Term; 
     }, [structure, streams]);
     const grade = grades.find((g) => g.id === gradeId) ?? null;
     const gradeStreams = streams.filter((s) => s.grade_id === gradeId);
-    const subjects = (structure?.subjects ?? []).filter((s) => !grade || s.academic_level_id === grade.academic_level_id);
+    // The grade's curriculum and its band within it: CBC is one level from
+    // PP1 to Grade 12, and the server refuses a subject the grade doesn't take.
+    const subjects = useMemo(() => {
+        const all = structure?.subjects ?? [];
+        return grade ? filterSubjectsForGrade(all.filter((s) => s.academic_level_id === grade.academic_level_id), grade) : all;
+    }, [structure, grade]);
     const subject = subjects.find((s) => s.id === subjectId) ?? null;
 
     const submit = async () => {

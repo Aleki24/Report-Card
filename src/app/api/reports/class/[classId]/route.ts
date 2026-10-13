@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { safeFileName } from '@/lib/filename';
 import { authorizeClassReport } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { fetchAllRows } from '@/lib/postgrest';
 import type { ReportCardData, ReportTemplateId } from '@/lib/pdfGenerator';
 import {
     aggregateStudentPerformance,
@@ -45,10 +47,7 @@ export const runtime = 'nodejs';
 */
 export const maxDuration = 60;
 
-/** Keep a class or combination label usable as a filename. */
-function safeName(value: string): string {
-    return (value || 'Class').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Class';
-}
+const safeName = (value: string) => safeFileName(value, 'Class');
 
 function fileResponse(body: Uint8Array<ArrayBuffer>, contentType: string, filename: string): NextResponse {
     return new NextResponse(body, {
@@ -160,7 +159,9 @@ export async function GET(
         const { data: students, error: studentsErr } = await supabase
             .from('students')
             .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)')
-            .eq('current_grade_stream_id', classId);
+            .eq('current_grade_stream_id', classId)
+            // Learners who left (transferred, graduated) are not printed or ranked.
+            .eq('status', 'ACTIVE');
 
         if (studentsErr || !students || students.length === 0) {
             return NextResponse.json({ error: 'No students found in this class' }, { status: 404 });
@@ -204,7 +205,10 @@ export async function GET(
             targetSchoolId ? supabase.from('schools').select(REPORT_SCHOOL_COLUMNS).eq('id', targetSchoolId).maybeSingle() : Promise.resolve({ data: null }),
             gradeId ? supabase.from('grades').select('code').eq('id', gradeId).maybeSingle() : Promise.resolve({ data: null }),
             firstAcademicLevelId ? supabase.from('academic_levels').select('code').eq('id', firstAcademicLevelId).maybeSingle() : Promise.resolve({ data: null }),
-            firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL') : Promise.resolve({ data: [] as any[] }),
+            // This school's tables and the seeded defaults, in a fixed order (as
+            // the single card picks them): unscoped, another school's custom
+            // table could grade this class.
+            firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL').or(`school_id.eq.${userSchoolId},school_id.is.null`).order('name', { ascending: true }) : Promise.resolve({ data: [] as any[] }),
             termId ? supabase.from('terms').select('name, start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
@@ -317,23 +321,23 @@ export async function GET(
         // 6. Fetch all marks and also ALL exams for this term and class
         const studentIds = students.map(s => s.id);
 
-        let marksQuery = supabase
-            .from('exam_marks')
-            .select(`
-                id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
-                exams!inner ( id, name, max_score, exam_type, exam_date, term_id, academic_year_id, created_at,
-                    subjects ( id, name, code, category, display_order )
-                )
-            `)
-            .in('student_id', studentIds)
-            .eq('exams.term_id', termId);
-
-        if (yearId) {
-            marksQuery = marksQuery.eq('exams.academic_year_id', yearId);
-        }
-        if (examType) {
-            marksQuery = marksQuery.eq('exams.exam_type', examType);
-        }
+        // Every mark of the class (a class is learners x subjects x rounds,
+        // past PostgREST's 1,000-row page), read in full.
+        const marksQuery = fetchAllRows(() => {
+            let q = supabase
+                .from('exam_marks')
+                .select(`
+                    id, student_id, percentage, raw_score, grade_symbol, rubric, remarks,
+                    exams!inner ( id, name, max_score, exam_type, exam_date, term_id, academic_year_id, created_at,
+                        subjects ( id, name, code, category, display_order )
+                    )
+                `)
+                .in('student_id', studentIds)
+                .eq('exams.term_id', termId);
+            if (yearId) q = q.eq('exams.academic_year_id', yearId);
+            if (examType) q = q.eq('exams.exam_type', examType);
+            return q.order('id');
+        });
 
         // Fetch all exams for this term and grade to ensure all subjects are shown even if missing from exam_marks
         let examsQ = supabase
@@ -345,7 +349,7 @@ export async function GET(
         if (examType) examsQ = examsQ.eq('exam_type', examType);
 
         // Independent of each other — fetch together.
-        const [{ data: fetchedMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);
+        const [{ rows: fetchedMarks, error: marksErr }, { data: termExams }] = await Promise.all([marksQuery, examsQ]);
 
         // Without an explicit round, narrow the whole class to ONE sitting.
         // Otherwise every round in the term (Mid Term, End Term, ...) would be
@@ -415,9 +419,11 @@ export async function GET(
         }
 
         // Aggregate each student for overall ranking
-        const aggregates = students.map(student => {
-            const marks = marksByStudent[student.id] || [];
-            if (marks.length === 0) return { studentId: student.id, percentage: 0, totalPoints: 0 };
+        // Only learners with marks are ranked (and counted in 'x of N'), as on
+        // the single card and the mark sheet; a learner who sat nothing gets
+        // no position rather than the last one.
+        const aggregates = students.filter(student => (marksByStudent[student.id] || []).length > 0).map(student => {
+            const marks = marksByStudent[student.id];
             
             const mapped: ExamMarkWithDetails[] = marks.map((m: any) => ({
                 id: m.id,
@@ -470,6 +476,7 @@ export async function GET(
         const classMeanPercentage = overallClassMean(aggregates);
         const [previousRound, subjectTeacherNames] = await Promise.all([
             fetchPreviousRound(supabase, {
+                schoolId: userSchoolId,
                 studentIds,
                 gradeId,
                 before: earliestExamCreatedAt(allMarks || []),
@@ -478,7 +485,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
             }),
-            fetchSubjectTeachers(supabase, { gradeId, gradeStreamId: classId, yearId }),
+            fetchSubjectTeachers(supabase, { schoolId: userSchoolId, gradeId, gradeStreamId: classId, yearId }),
         ]);
 
         // Build per-subject rank maps: subjectId -> Map<studentId, rank>

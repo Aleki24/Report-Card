@@ -16,15 +16,18 @@ export const POST = route<Params>('trip boarding', { module: 'transport', permis
     const { data: rider } = await db.from('student_transport').select('id').eq('student_id', body.student_id).eq('route_id', trip.route_id ?? '').maybeSingle();
     if (!rider) throw new HttpError(400, 'That learner is not on this route.');
     const now = new Date().toISOString();
-    const { error } = await db.from('trip_boardings').upsert(
+    // Recorded once per learner per event: a repeat tap on a slow link keeps
+    // the first record and does not text the guardian again.
+    const { data: inserted, error } = await db.from('trip_boardings').upsert(
         { school_id: access.schoolId, trip_id: trip.id, student_id: body.student_id, event: body.event, recorded_at: now, recorded_by: access.userId },
-        { onConflict: 'trip_id,student_id,event' },
-    );
+        { onConflict: 'trip_id,student_id,event', ignoreDuplicates: true },
+    ).select('id');
     if (error) throw error;
+    const isNew = (inserted ?? []).length > 0;
     let notified = false;
-    if (body.notify) {
+    if (body.notify && isNew) {
         const verb = body.event === 'BOARDED' ? 'boarded the school bus' : body.event === 'ALIGHTED' ? 'was dropped off' : 'was not at the pick-up point';
         notified = await notifyGuardian(body.student_id, access.schoolId, c => `${c.schoolName}: ${c.firstName} ${verb} at ${smsTime(now)}.`);
     }
-    return { recorded: true, notified };
+    return { recorded: true, notified, alreadyRecorded: !isNew };
 });

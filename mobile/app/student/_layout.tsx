@@ -3,9 +3,13 @@ import { Menu } from 'lucide-react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { STUDENT_SCREENS, getStudentNav, type StudentScreen } from '@/lib/roles';
-import { TabIcon, useTabScreenOptions } from '@/components/nav';
+import { RoleGroup, TabIcon, useTabScreenOptions } from '@/components/nav';
 
 export default function StudentTabsLayout() {
+    return <RoleGroup roles={['STUDENT']}><StudentTabs /></RoleGroup>;
+}
+
+function StudentTabs() {
     // Same unread count the web sidebar badges on the student dashboard.
     const notifications = useApiQuery<{ count: number }>('/api/school/student/notifications');
     const unread = notifications.data?.count ?? 0;

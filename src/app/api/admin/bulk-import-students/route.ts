@@ -1,11 +1,86 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import crypto from 'crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { canManageStream, getCaller } from '@/lib/auth-server';
 import { normalizeGender } from '@/lib/gender';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import crypto from 'crypto';
-import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
+import { createInviteCodes, notifyInviteCode } from '@/lib/invite-codes';
+import { generateUsername } from '@/lib/generate-username';
+import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { internalError, writeErrorMessage } from '@/lib/api-errors';
 
-import { writeErrorMessage } from '@/lib/api-errors';
+/** One row of the import file, as the web and app send it. */
+interface ImportRow {
+    first_name?: string;
+    last_name?: string;
+    admission_number?: string | null;
+    grade_stream_id?: string | null;
+    academic_level_id?: string | null;
+    class?: string | null;
+    stream?: string | null;
+    guardian_phone?: string | null;
+    guardian_name?: string | null;
+    guardian_email?: string | null;
+    gender?: string | null;
+    date_of_birth?: string | null;
+}
+
+/** A row that passed the checks, before its username is settled. */
+interface AcceptedRow {
+    id: string;
+    firstName: string;
+    lastName: string;
+    baseUsername: string;
+    admissionNumber: string | null;
+    streamId: string;
+    academicLevelId: string;
+    guardianPhone: string | null;
+    guardianName: string | null;
+    guardianEmail: string | null;
+    gender: ReturnType<typeof normalizeGender>;
+    dateOfBirth: string | null;
+}
+
+/** Guardians texted/emailed at once after an import. */
+const NOTIFY_CONCURRENCY = 5;
+/** Usernames checked per query (they go in the request URL). */
+const USERNAME_CHUNK = 200;
+
+/** Runs `work` over `items`, at most `limit` at a time; one failure does not stop the rest. */
+async function forEachLimited<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const item = items[next++];
+            await work(item).catch(err => console.error('[bulk-import] notify failed:', err));
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+/**
+ * Usernames for the batch, each free in the database and within the batch.
+ * Only the candidates are looked up (not every user on the platform); a taken
+ * one gets a random suffix and is checked again.
+ */
+async function uniqueUsernames(supabase: SupabaseClient, bases: readonly string[]): Promise<string[]> {
+    const result = [...bases];
+    for (let round = 0; round < 6; round++) {
+        const seen = new Set<string>();
+        const clashing = new Set<number>();
+        result.forEach((name, i) => { if (seen.has(name)) clashing.add(i); seen.add(name); });
+        const names = [...seen];
+        for (let i = 0; i < names.length; i += USERNAME_CHUNK) {
+            const { data, error } = await supabase.from('users').select('username').in('username', names.slice(i, i + USERNAME_CHUNK));
+            if (error) throw error;
+            const taken = new Set((data ?? []).map(u => u.username as string));
+            result.forEach((name, j) => { if (taken.has(name)) clashing.add(j); });
+        }
+        if (clashing.size === 0) return result;
+        clashing.forEach(i => { result[i] = `${bases[i]}${crypto.randomInt(10, 10000)}`; });
+    }
+    throw new Error('Could not find free usernames for the import. Please try again.');
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -57,30 +132,19 @@ export async function POST(request: NextRequest) {
             .eq('school_id', effectiveSchoolId);
         const defaultAcademicLevelId = schoolLevels && schoolLevels.length > 0 ? schoolLevels[0].academic_level_id : null;
 
-        const { generateUsername } = await import('@/lib/generate-username');
+        // This school's admission numbers, all of them (a students row is one
+        // per user, so read it directly rather than through an embed).
+        const { rows: existingStudents, error: admNoError } = await fetchAllRows(() => supabaseAdmin
+            .from('students')
+            .select('admission_number')
+            .eq('school_id', effectiveSchoolId)
+            .not('admission_number', 'is', null)
+            .order('id'));
+        if (admNoError) return internalError('bulk-import admission numbers', admNoError);
+        const takenAdmNos = new Set(existingStudents.map(s => String(s.admission_number).toLowerCase()));
 
-        // Get existing usernames to avoid collision
-        const { data: existingUsers } = await supabaseAdmin
-            .from('users')
-            .select('username');
-        const existingUsernames = new Set((existingUsers || []).map(u => u.username));
-
-        // Get existing admission numbers in the school
-        const { data: existingStudents } = await supabaseAdmin
-            .from('users')
-            .select('students!inner(admission_number)')
-            .eq('school_id', effectiveSchoolId);
-        
-        const takenAdmNos = new Set<string>();
-        existingStudents?.forEach((u: any) => {
-            if (u.students?.[0]?.admission_number) {
-                takenAdmNos.add(u.students[0].admission_number.toLowerCase());
-            }
-        });
-
-        const usersToInsert: any[] = [];
-        const studentsToInsert: any[] = [];
-        const skippedRows: { row: any; reason: string }[] = [];
+        const accepted: AcceptedRow[] = [];
+        const skippedRows: { row: ImportRow; reason: string }[] = [];
 
         // Pre-fetch grade streams for matching class names from CSV
         const { data: allStreams } = await supabaseAdmin
@@ -88,16 +152,9 @@ export async function POST(request: NextRequest) {
             .select('id, full_name, grades!inner(academic_level_id)')
             .eq('school_id', effectiveSchoolId);
         const streamMap = new Map((allStreams || []).map(s => [s.full_name.toLowerCase().trim(), s.id]));
-        const streamLevelMap = new Map((allStreams || []).map(s => [s.id, (s as any).grades?.academic_level_id]));
+        const streamLevelMap = new Map((allStreams || []).map(s => [s.id, embedOne<{ academic_level_id: string }>(s.grades)?.academic_level_id ?? null]));
 
-        const createdCredentials: { first_name: string; last_name: string; username: string; invite_code: string }[] = [];
-        // Track user IDs for invite code generation after insert
-        const pendingInvites: {
-            userId: string; username: string; firstName: string; lastName: string;
-            guardianName: string | null; guardianPhone: string | null; guardianEmail: string | null;
-        }[] = [];
-
-        for (const student of students) {
+        for (const student of students as ImportRow[]) {
             const { first_name, last_name, admission_number, grade_stream_id, academic_level_id, guardian_phone, guardian_name, guardian_email, gender, date_of_birth } = student;
 
             if (!first_name?.trim() || !last_name?.trim()) {
@@ -152,65 +209,57 @@ export async function POST(request: NextRequest) {
             }
 
             const sequenceMatch = finalAdmNo?.match(/\d+/);
-            const sequence_number = sequenceMatch ? parseInt(sequenceMatch[0], 10) : Math.floor(Math.random() * 900) + 100;
+            const sequence_number = sequenceMatch ? parseInt(sequenceMatch[0], 10) : crypto.randomInt(100, 1000);
 
-            const username = generateUsername(first_name, school.name, sequence_number);
-            let uniqueUsername = username;
-            
-            while (existingUsernames.has(uniqueUsername)) {
-                 uniqueUsername = `${username}${Math.floor(Math.random() * 1000)}`;
-            }
-            existingUsernames.add(uniqueUsername);
-
-            const emailBase = (finalAdmNo || uniqueUsername).toLowerCase().replace(/[^a-z0-9]/g, '');
-            const placeholderEmail = `${emailBase}@${school.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.school.local`;
-
-            // Generate a temporary UUID (will be replaced with Clerk ID on activation)
-            const tempUserId = crypto.randomUUID();
-
-            usersToInsert.push({
-                id: tempUserId,
-                first_name: first_name.trim(),
-                last_name: last_name.trim(),
-                email: placeholderEmail,
-                role: 'STUDENT',
-                school_id: effectiveSchoolId,
-                username: uniqueUsername,
-                is_active: false // Will be activated when user sets their password
-            });
-
-            studentsToInsert.push({
-                id: tempUserId,
-                admission_number: finalAdmNo,
-                current_grade_stream_id: resolvedStreamId,
-                academic_level_id: effectiveAcademicLevelId,
-                guardian_phone: guardian_phone?.trim() || null,
-                guardian_name: guardian_name?.trim() || null,
-                guardian_email: guardian_email?.trim() || null,
-                gender: normalizeGender(gender),
-                date_of_birth: date_of_birth || null,
-            });
-
-            pendingInvites.push({
-                userId: tempUserId,
-                username: uniqueUsername,
+            accepted.push({
+                id: crypto.randomUUID(), // replaced with the Clerk id on activation
                 firstName: first_name.trim(),
                 lastName: last_name.trim(),
-                guardianName: guardian_name?.trim() || null,
+                baseUsername: generateUsername(first_name, school.name, sequence_number),
+                admissionNumber: finalAdmNo,
+                streamId: resolvedStreamId,
+                academicLevelId: effectiveAcademicLevelId,
                 guardianPhone: guardian_phone?.trim() || null,
+                guardianName: guardian_name?.trim() || null,
                 guardianEmail: guardian_email?.trim() || null,
+                gender: normalizeGender(gender),
+                dateOfBirth: date_of_birth || null,
             });
         }
 
-        if (usersToInsert.length === 0) {
+        if (accepted.length === 0) {
              return NextResponse.json({ error: 'No valid students could be parsed from the batch. Make sure required fields are filled and admission numbers are unique.' }, { status: 400 });
         }
+
+        const usernames = await uniqueUsernames(supabaseAdmin, accepted.map(a => a.baseUsername));
+        const schoolDomain = school.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const usersToInsert = accepted.map((a, i) => ({
+            id: a.id,
+            first_name: a.firstName,
+            last_name: a.lastName,
+            email: `${(a.admissionNumber || usernames[i]).toLowerCase().replace(/[^a-z0-9]/g, '')}@${schoolDomain}.school.local`,
+            role: 'STUDENT',
+            school_id: effectiveSchoolId,
+            username: usernames[i],
+            is_active: false, // activated when the learner sets their password
+        }));
+        const studentsToInsert = accepted.map(a => ({
+            id: a.id,
+            admission_number: a.admissionNumber,
+            current_grade_stream_id: a.streamId,
+            academic_level_id: a.academicLevelId,
+            guardian_phone: a.guardianPhone,
+            guardian_name: a.guardianName,
+            guardian_email: a.guardianEmail,
+            gender: a.gender,
+            date_of_birth: a.dateOfBirth,
+        }));
 
         // Insert into public.users
         const { error: userError } = await supabaseAdmin.from('users').insert(usersToInsert);
 
         if (userError) {
-            return NextResponse.json({ error: `User record batch creation failed: ${userError.message}` }, { status: 400 });
+            return NextResponse.json({ error: writeErrorMessage(userError, 'Could not create the student accounts. Please try again.') }, { status: 400 });
         }
 
         // Insert into public.students
@@ -222,34 +271,30 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: writeErrorMessage(studentError, 'Could not import the student records. Please try again.') }, { status: 400 });
         }
 
-        // Generate invite codes for all successfully inserted students
-        for (const invite of pendingInvites) {
-            try {
-                const code = await createInviteCode(supabaseAdmin, invite.userId, effectiveSchoolId, 'STUDENT');
-                // Best-effort delivery to the guardian — the code is still
-                // shown to the admin regardless of whether this succeeds.
-                await notifyInviteCode({
-                    phone: invite.guardianPhone,
-                    email: invite.guardianEmail,
-                    firstName: invite.guardianName || invite.firstName,
-                    schoolName: school.name,
-                    code,
-                });
-                createdCredentials.push({
-                    first_name: invite.firstName,
-                    last_name: invite.lastName,
-                    username: invite.username,
-                    invite_code: code
-                });
-            } catch (err) {
-                console.error(`Failed to create invite code for ${invite.username}:`, err);
-                createdCredentials.push({
-                    first_name: invite.firstName,
-                    last_name: invite.lastName,
-                    username: invite.username,
-                    invite_code: 'ERROR'
-                });
-            }
+        // One insert for every learner's invite code, so the admin gets the
+        // list at once; texting and emailing guardians happens after the
+        // response (one text per guardian takes seconds each).
+        let codes = new Map<string, string>();
+        try {
+            codes = await createInviteCodes(supabaseAdmin, accepted.map(a => a.id), effectiveSchoolId, 'STUDENT');
+        } catch (err) {
+            console.error('[bulk-import] invite codes failed:', err);
+        }
+        const createdCredentials = accepted.map((a, i) => ({
+            first_name: a.firstName,
+            last_name: a.lastName,
+            username: usernames[i],
+            invite_code: codes.get(a.id) ?? 'ERROR',
+        }));
+        const toNotify = accepted.filter(a => codes.has(a.id) && (a.guardianPhone || a.guardianEmail));
+        if (toNotify.length > 0) {
+            after(() => forEachLimited(toNotify, NOTIFY_CONCURRENCY, a => notifyInviteCode({
+                phone: a.guardianPhone,
+                email: a.guardianEmail,
+                firstName: a.guardianName || a.firstName,
+                schoolName: school.name,
+                code: codes.get(a.id) as string,
+            }).then(() => undefined)));
         }
 
         return NextResponse.json({

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { createSignInTicket } from '@/lib/sign-in-ticket';
+import { isPlatformOwnerEmail } from '@/lib/school-approval';
 import { moveUserLinks } from '@/lib/platform/user-links';
 
 type ClerkClient = ReturnType<typeof createClerkClient>;
@@ -28,8 +29,8 @@ export async function POST(request: NextRequest) {
     try {
         // Unauthenticated endpoint: throttle invite-code guessing per IP
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const limit = rateLimit(`activate:${ip}`, { maxRequests: 10, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`activate:${ip}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json(
                 { error: 'Too many attempts. Please wait a minute and try again.' },
                 { status: 429 }
@@ -173,6 +174,10 @@ export async function POST(request: NextRequest) {
 
         // Use provided email or generate placeholder
         const userEmail = email?.trim() || placeholderEmailFor(finalUsername, school?.name);
+        // An address typed here is never proven; the platform owner's must not be claimable.
+        if (isPlatformOwnerEmail(userEmail)) {
+            return NextResponse.json({ error: 'That email address can’t be used here. Use your own email, or leave it empty.' }, { status: 400 });
+        }
 
         // 4. Create the Clerk account with the user's chosen password and username
         let clerkUserId: string;

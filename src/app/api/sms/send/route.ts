@@ -3,6 +3,8 @@ import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
+import { fetchAllRows } from '@/lib/postgrest';
+import { internalError } from '@/lib/api-errors';
 import { getExamType } from '@/lib/exam-types';
 import { selectExamRound } from '@/lib/reports/exam-round';
 import {
@@ -75,9 +77,7 @@ export async function POST(request: Request) {
             .select('id, admission_number, guardian_phone, guardian_name, current_grade_stream_id, users(first_name, last_name, school_id)')
             .in('id', studentIds);
 
-        if (studentsErr) {
-            return NextResponse.json({ error: studentsErr.message }, { status: 500 });
-        }
+        if (studentsErr) return internalError('sms/send students', studentsErr);
 
         // Tenant-scope: only keep students that belong to the caller's school.
         // Class-scope too: the results sent are this class's, so a student
@@ -154,22 +154,39 @@ export async function POST(request: Request) {
         // taken from a different aggregate again. Everything below now comes
         // from the same sitting as the report cards: the round chosen on the
         // page, else the most recent one entered (same rule as the reports).
-        const { data: classStudents } = await supabase
+        //
+        // Only released results are texted (parents can't be sent marks the
+        // school is still correcting), every mark of the class is read (a
+        // class's term passes PostgREST's 1,000-row page), and positions are
+        // among the learners still enrolled in the class.
+        const { data: classStudents, error: classError } = await supabase
             .from('students')
             .select('id')
-            .eq('current_grade_stream_id', gradeStreamId);
+            .eq('current_grade_stream_id', gradeStreamId)
+            .eq('status', 'ACTIVE');
+        if (classError) return internalError('sms/send class', classError);
         const classStudentIds = (classStudents ?? []).map(s => s.id as string);
 
-        let marksQuery = supabase
-            .from('exam_marks')
-            .select('student_id, percentage, grade_symbol, exams!inner(id, exam_type, exam_date, created_at, term_id, subjects (id, name))')
-            .in('student_id', classStudentIds.length > 0 ? classStudentIds : scopedStudentIds)
-            .eq('exams.term_id', termId);
-        if (requestedRound) marksQuery = marksQuery.eq('exams.exam_type', requestedRound);
-        const { data: termMarks } = await marksQuery;
+        const { rows: termMarks, error: marksError } = await fetchAllRows(() => {
+            let marksQuery = supabase
+                .from('exam_marks')
+                .select('id, student_id, percentage, grade_symbol, exams!inner(id, exam_type, exam_date, created_at, term_id, status, subjects (id, name))')
+                .in('student_id', classStudentIds.length > 0 ? classStudentIds : scopedStudentIds)
+                .eq('exams.term_id', termId)
+                .eq('exams.status', 'APPROVED');
+            if (requestedRound) marksQuery = marksQuery.eq('exams.exam_type', requestedRound);
+            return marksQuery.order('id');
+        });
+        if (marksError) return internalError('sms/send marks', marksError);
         const { round, marks } = requestedRound
-            ? { round: requestedRound, marks: termMarks ?? [] }
-            : selectExamRound(termMarks ?? []);
+            ? { round: requestedRound, marks: termMarks }
+            : selectExamRound(termMarks);
+        if (marks.length === 0) {
+            return NextResponse.json(
+                { error: 'There are no released results for this sitting yet. Release the results, then send them.' },
+                { status: 400 }
+            );
+        }
         const roundLabel = round ? (getExamType(round)?.shortName ?? round) : '';
 
         // Mean percentage per learner over the round's subjects, and the class
@@ -245,11 +262,7 @@ export async function POST(request: Request) {
             skipped,
             results: result.results,
         });
-    } catch (err: any) {
-        console.error('SMS API error:', err);
-        return NextResponse.json(
-            { error: err.message || 'Internal server error' },
-            { status: 500 }
-        );
+    } catch (err: unknown) {
+        return internalError('sms/send', err);
     }
 }

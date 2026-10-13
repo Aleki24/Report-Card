@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { createClerkClient } from '@clerk/nextjs/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
+import { moveUserLinks } from '@/lib/platform/user-links';
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,8 +15,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Rate-limit invite-code attempts per user to prevent brute forcing.
-        const rl = rateLimit(`activate-google:${userId}`, { maxRequests: 10, windowMs: 60_000 });
-        if (!rl.allowed) {
+        const rl = await rateLimitShared(`activate-google:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+        if (!rl) {
             return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
         }
 
@@ -152,6 +153,14 @@ export async function POST(request: NextRequest) {
                 console.error('[activate-google] teacher assignment swap failed', { oldUserId, clerk_user_id, ctErr, stErr });
                 return NextResponse.json({ error: 'Failed to link your teaching assignments. Please contact your school admin.' }, { status: 500 });
             }
+        }
+
+        // Duties, parent links and driver links given before activation:
+        // the pending row's delete below cascades over any left on it.
+        const linkErr = await moveUserLinks(oldUserId, clerk_user_id);
+        if (linkErr) {
+            console.error('[activate-google] user link swap failed', { oldUserId, clerk_user_id, linkErr });
+            return NextResponse.json({ error: 'Failed to link your school records. Please contact your school admin.' }, { status: 500 });
         }
 
         // Everything is linked — only now burn the invite code and drop the

@@ -1,6 +1,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 import { createClerkClient } from '@clerk/nextjs/server';
 import { isUserRole } from '@/lib/roles';
+import { isUniqueViolationOn } from '@/lib/postgrest';
 import type { UserRole } from '@/types';
 
 /** The parts of a Clerk account a users row is built from. */
@@ -25,9 +26,6 @@ export async function existingSchoolId(supabase: SupabaseClient, schoolId: unkno
     const { data } = await supabase.from('schools').select('id').eq('id', schoolId).maybeSingle();
     return data?.id ?? null;
 }
-
-const isUniqueViolationOn = (error: PostgrestError, key: RegExp) =>
-    error.code === '23505' && key.test(`${error.message} ${error.details ?? ''}`);
 
 /**
  * Creates the users row for a Clerk account that has none yet (the webhook

@@ -8,6 +8,7 @@ import { writeErrorMessage } from '@/lib/api-errors';
 import { fetchAllRows } from '@/lib/postgrest';
 import { HttpError, assertInSchool, type Access } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
+import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import type { ResourceDef } from './resource';
 import { getResource } from './registry';
 
@@ -28,6 +29,7 @@ function rightsFor(def: ResourceDef, access: Access): Rights {
     const read = write || def.read.some(p => access.can(p));
     const own = !!def.own && access.can(def.own.permission);
     if (!read && !own) throw new HttpError(403, 'You do not have permission to do this.');
+    if (def.staffOnly && !isRoleIn(access.role, STAFF_ROLES)) throw new HttpError(403, 'You do not have permission to do this.');
     return { read, write, own };
 }
 
@@ -81,6 +83,8 @@ export async function listRows(def: ResourceDef, access: Access, params: URLSear
             if (params.get(flag) === '1') query = isNull ? query.is(column, null) : query.not(column, 'is', null);
         }
         if (!rights.read && def.own) query = query.eq(def.own.column, access.userId);
+        const audience = def.audience?.byRole[access.role];
+        if (def.audience && audience) query = query.in(def.audience.column, [...audience]);
         if (def.order) query = query.order(def.order.column, { ascending: def.order.ascending ?? true });
         // A stable tiebreak, so paging never skips or repeats a row.
         return query.order('id');
@@ -104,6 +108,7 @@ export async function createRow(def: ResourceDef, access: Access, body: unknown)
         values[def.own.column] = access.userId;
     }
     checkRules(def, values);
+    assertDutyScope(def, access, values);
     if (def.createdByColumn) values[def.createdByColumn] = access.userId;
     await assertRefs(def, values, access.schoolId);
 
@@ -116,6 +121,21 @@ export async function createRow(def: ResourceDef, access: Access, body: unknown)
     const row = data as unknown as Row;
     if (def.audit) await audit(access, 'create', def.table, row.id, values);
     return row;
+}
+
+/** A scoped duty holder (a dorm's patron) writes only their own unit's rows. */
+function assertDutyScope(def: ResourceDef, access: Access, row: Record<string, unknown>) {
+    const scope = def.dutyScope;
+    if (!scope || access.can(scope.unless)) return;
+    const ids = access.scopeIds(scope.duty);
+    if (ids.length > 0 && !ids.includes(String(row[scope.column]))) {
+        throw new HttpError(403, `That ${def.label.singular.toLowerCase()} is not one of yours.`);
+    }
+}
+
+/** Whether a row is past the point where its recorded fields may change. */
+function isFrozen(def: ResourceDef, row: Record<string, unknown>): boolean {
+    return !!def.frozen && def.frozen.values.includes(String(row[def.frozen.column]));
 }
 
 function checkRules(def: ResourceDef, values: Record<string, unknown>) {
@@ -161,6 +181,11 @@ export async function updateRow(def: ResourceDef, access: Access, id: string, bo
     }
     if (def.createdByColumn) delete values[def.createdByColumn];
     if (Object.keys(values).length === 0) throw new HttpError(400, 'Nothing to update.');
+    if (isFrozen(def, before) && def.frozen!.fields.some(f => f in values && values[f] !== before[f])) {
+        throw new HttpError(409, `This ${def.label.singular.toLowerCase()} is ${String(before[def.frozen!.column]).toLowerCase()}; its details can no longer change.`);
+    }
+    assertDutyScope(def, access, before);
+    assertDutyScope(def, access, { ...before, ...values });
     checkRules(def, { ...before, ...values });
     await assertRefs(def, values, access.schoolId);
 
@@ -182,6 +207,8 @@ export async function updateRow(def: ResourceDef, access: Access, id: string, bo
 export async function deleteRow(def: ResourceDef, access: Access, id: string): Promise<void> {
     const rights = rightsFor(def, access);
     const before = await loadOwned(def, access, id, rights);
+    if (isFrozen(def, before)) throw new HttpError(409, `This ${def.label.singular.toLowerCase()} is ${String(before[def.frozen!.column]).toLowerCase()} and can no longer be deleted.`);
+    assertDutyScope(def, access, before);
     const { error } = await createSupabaseAdmin().from(def.table).delete().eq('id', id).eq('school_id', access.schoolId);
     if (error) dbError(error, `delete ${def.table}`);
     if (def.audit) await audit(access, 'delete', def.table, id, before);

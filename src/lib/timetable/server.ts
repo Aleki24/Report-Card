@@ -1,7 +1,7 @@
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { bandForGrade, type CurriculumBand } from '@/lib/curriculum-bands';
 import { HttpError } from '@/lib/platform/access';
-import { embedOne } from '@/lib/postgrest';
+import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
 import { syncLoadTeachers } from './assignments';
 import { BUILT_IN_TOGETHER, togetherGroups, type TogetherRule } from './together';
@@ -55,11 +55,15 @@ export async function publishedVersionId(schoolId: string): Promise<string | nul
 }
 
 export async function loadLessons(versionId: string, filter: { column: 'grade_stream_id' | 'teacher_id' | 'room_id'; value: string } | null = null): Promise<TimetableLesson[]> {
-    let q = db().from('timetable_lessons').select(LESSON_SELECT).eq('version_id', versionId);
-    if (filter) q = q.eq(filter.column, filter.value);
-    const { data, error } = await q.order('day').order('period').limit(10_000);
+    // A school's week (classes x slots) passes PostgREST's 1,000-row page,
+    // which .limit() cannot raise: read every page.
+    const { rows, error } = await fetchAllRows(() => {
+        let q = db().from('timetable_lessons').select(LESSON_SELECT).eq('version_id', versionId);
+        if (filter) q = q.eq(filter.column, filter.value);
+        return q.order('day').order('period').order('id');
+    });
     if (error) throw error;
-    return (data ?? []) as unknown as TimetableLesson[];
+    return rows as unknown as TimetableLesson[];
 }
 
 /** Each class's curriculum band, read from its grade, so it follows its section's bell. */
@@ -99,16 +103,16 @@ export async function loadTimetablePlan(schoolId: string) {
     const [config, bands, { data, error }, choiceRows, rules, combos] = await Promise.all([
         loadConfig(schoolId),
         streamBands(schoolId),
-        db().from('timetable_requirements')
+        fetchAllRows(() => db().from('timetable_requirements')
             .select('id, grade_stream_id, subject_id, teacher_id, lessons_per_week, double_lessons, room_type, option_block, subject:subjects(name, code, category, subject_type), stream:grade_streams(full_name, grade:grades(code, name_display)), teacher:users!timetable_requirements_teacher_id_fkey(first_name, last_name)')
             .eq('school_id', schoolId)
-            .limit(5000),
+            .order('id')).then(r => ({ data: r.rows, error: r.error })),
         // Learners' elective choices, read through their class, so blocks follow what is actually taken together.
-        db().from('student_subjects')
-            .select('student_id, subject_id, student:students!inner(current_grade_stream_id)')
+        fetchAllRows(() => db().from('student_subjects')
+            .select('id, student_id, subject_id, student:students!inner(current_grade_stream_id)')
             .eq('school_id', schoolId)
             .eq('role', 'ELECTIVE')
-            .limit(20000),
+            .order('id')).then(r => ({ data: r.rows, error: r.error })),
         loadTogetherRules(schoolId),
         // The school's offered Senior School combinations stand in for learners' choices until those are recorded.
         db().from('subject_combinations')

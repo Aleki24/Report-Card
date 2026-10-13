@@ -44,8 +44,9 @@ async function computePublishReadiness(
     if (exam.grade_stream_id) {
         streamIds = [exam.grade_stream_id];
     } else {
-        const { data: streams } = await supabase.from('grade_streams').select('id').eq('grade_id', exam.grade_id);
-        streamIds = (streams || []).map((s: any) => s.id);
+        // Grades are shared by every school; only this school's streams count.
+        const { data: streams } = await supabase.from('grade_streams').select('id').eq('school_id', exam.school_id).eq('grade_id', exam.grade_id);
+        streamIds = (streams ?? []).map(s => s.id as string);
     }
 
     let roster: { id: string; admission_number: string; name: string }[] = [];

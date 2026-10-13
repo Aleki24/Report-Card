@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { route, HttpError } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { canOpenFiles, PAPER_FILE_KINDS, type PaperFileKind } from '@/lib/academics/exam-papers';
+import { bytesMatchPaperType, canOpenFiles, PAPER_FILE_KINDS, paperTypeForPath, type PaperFileKind } from '@/lib/academics/exam-papers';
 import { BUCKET, loadPaper } from '@/lib/academics/exam-papers-server';
 import { watermarkPdf } from '@/lib/academics/watermark';
 
@@ -33,6 +33,13 @@ export const GET = route<Params>(
 
         const isPdf = path.endsWith('.pdf');
         let bytes = new Uint8Array(await blob.arrayBuffer());
+        // Served under the app's own address, so it must really be the
+        // document it claims to be: a page renamed .pdf would otherwise run
+        // as the reviewer.
+        const contentType = paperTypeForPath(path);
+        if (!contentType || !bytesMatchPaperType(bytes, path)) {
+            throw new HttpError(422, 'This file is not a valid PDF or Word document. Ask for the paper to be uploaded again.');
+        }
         if (isPdf) {
             try { bytes = new Uint8Array(await watermarkPdf(bytes, stamp)); }
             catch (err) { console.error('[exam paper watermark]', err); }
@@ -42,7 +49,8 @@ export const GET = route<Params>(
         const ext = path.slice(path.lastIndexOf('.') + 1);
         return new NextResponse(Buffer.from(bytes), {
             headers: {
-                'Content-Type': blob.type || 'application/octet-stream',
+                'Content-Type': contentType,
+                'X-Content-Type-Options': 'nosniff',
                 'Content-Disposition': `${isPdf ? 'inline' : 'attachment'}; filename="${kind}-${paper.id.slice(0, 8)}.${ext}"`,
                 'Cache-Control': 'private, no-store',
             },

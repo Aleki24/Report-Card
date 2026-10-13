@@ -4,7 +4,7 @@ import { Square, SquareCheck } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { useAcademicYears, useGradeStreams, useTerms } from '@/lib/useSchoolData';
+import { useAcademicYears, useManagedGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
 import { CompareTerms } from '@/components/reports/CompareTerms';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
@@ -54,7 +54,7 @@ export default function ReportsScreen() {
 function ReportsContent() {
     const { years, loading: yearsLoading } = useAcademicYears();
     const { terms, activeTermId, loading: termsLoading } = useTerms();
-    const { streams, loading: streamsLoading } = useGradeStreams();
+    const { streams, loading: streamsLoading } = useManagedGradeStreams();
     const [yearId, setYearId] = useState<string | null>(null);
     const [termId, setTermId] = useState<string | null>(null);
     const [streamId, setStreamId] = useState<string | null>(null);
@@ -265,29 +265,31 @@ function CommentsPanel({ scope }: { scope: Scope }) {
 
     const edit = (id: string, patch: Partial<StudentComment>) => setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
+    // One request for every edited learner, as the web saves them. A failure
+    // keeps the typed comments and says why, so nothing is lost.
     const saveAll = async () => {
+        if (dirty.length === 0) return;
         setSaving(true);
         setMessage(null);
-        const results = await Promise.all(
-            dirty.map((c) =>
-                api
-                    .post('/api/reports/comments', {
-                        student_id: c.student_id,
-                        term_id: scope.termId,
-                        academic_year_id: scope.yearId,
-                        grade_stream_id: scope.streamId,
-                        comments_class_teacher: c.comments_class_teacher,
-                        comments_principal: c.comments_principal,
-                    })
-                    .then(() => c.student_id)
-                    .catch(() => null),
-            ),
-        );
-        const saved = results.filter((id): id is string => id !== null);
-        setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !saved.includes(id))));
-        setMessage(saved.length === dirty.length ? { tone: 'success', text: `Saved comments for ${pluralize(saved.length, 'learner')}.` } : { tone: 'danger', text: `Saved ${saved.length} of ${dirty.length}. Try again for the rest.` });
-        setSaving(false);
-        reload();
+        try {
+            await api.post('/api/reports/comments', {
+                term_id: scope.termId,
+                academic_year_id: scope.yearId,
+                grade_stream_id: scope.streamId,
+                comments: dirty.map((c) => ({
+                    student_id: c.student_id,
+                    comments_class_teacher: c.comments_class_teacher,
+                    comments_principal: c.comments_principal,
+                })),
+            });
+            setEdits({});
+            setMessage({ tone: 'success', text: `Saved comments for ${pluralize(dirty.length, 'learner')}.` });
+            reload();
+        } catch (err) {
+            setMessage({ tone: 'danger', text: errorMessage(err, 'Could not save the comments. Try again.') });
+        } finally {
+            setSaving(false);
+        }
     };
 
     if (loading) return <LoadingView />;
@@ -348,7 +350,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
         setSending(true);
         setMessage(null);
         try {
-            const res = await api.post<SmsResult>('/api/sms/send', { studentIds: selected.map((s) => s.id), termId: scope.termId, academicYearId: scope.yearId, gradeStreamId: scope.streamId });
+            const res = await api.post<SmsResult>('/api/sms/send', { studentIds: selected.map((s) => s.id), termId: scope.termId, academicYearId: scope.yearId, gradeStreamId: scope.streamId, examType: scope.examType });
             const reasons = [...new Set((res.results ?? []).filter((r) => !r.success && r.error).map((r) => r.error as string))];
             if (res.sent === 0) setMessage({ tone: 'danger', text: `SMS failed to send${res.error ? `: ${res.error}` : reasons[0] ? `: ${reasons[0]}` : ''}` });
             else if (res.failed > 0) setMessage({ tone: 'warning', text: `${res.sent} delivered, ${res.failed} failed${reasons[0] ? ` (${reasons[0]})` : ''}` });

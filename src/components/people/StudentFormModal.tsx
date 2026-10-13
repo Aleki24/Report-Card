@@ -35,6 +35,13 @@ function formFor(s: StudentRow | null): StudentForm {
   };
 }
 
+/** The fields of `next` that differ from `before`. */
+function changedFields(before: StudentForm, next: StudentForm): Partial<StudentForm> {
+  return Object.fromEntries((Object.keys(next) as (keyof StudentForm)[])
+    .filter(key => next[key] !== before[key])
+    .map(key => [key, next[key]]));
+}
+
 /** Why the form can't be saved yet, or null when it can. */
 function formProblem(f: StudentForm): string | null {
   // The common mistake of typing the phone number into Guardian Name, caught
@@ -80,12 +87,16 @@ function StudentForm({ student, onClose, onSaved, gradeStreams, academicLevels, 
   const save = async () => {
     const problem = formProblem(form);
     if (problem) { toast.error(problem); return; }
+    // An edit sends only what changed, as the app does: re-sending every
+    // field re-applied the subject combination and cleared electives.
+    const changes = editing ? changedFields(formFor(student), form) : null;
+    if (changes && Object.keys(changes).length === 0) { onClose(); return; }
     setSaving(true);
     try {
       const res = await fetch(editing ? '/api/admin/update-student' : '/api/admin/add-student', {
         method: editing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editing ? { ...form, student_id: student.id } : { ...form, status: undefined }),
+        body: JSON.stringify(editing ? { ...changes, student_id: student.id } : { ...form, status: undefined }),
       });
       const json: unknown = await res.json().catch(() => null);
       if (!res.ok) throw new Error(apiErrorMessage(json, editing ? 'Could not save the student.' : 'Could not add the student.'));

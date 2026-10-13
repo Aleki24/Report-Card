@@ -1,5 +1,6 @@
 import 'server-only';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { fetchAllRows } from '@/lib/postgrest';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -263,12 +264,18 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
                 .select('id')
                 .eq('current_grade_stream_id', student.current_grade_stream_id);
 
-            if (classmates && classmates.length > 0) {
-                const { data: allMarks } = await supabase
+            // Rank on the same sitting the marks above come from, as the
+            // printed card does: ranking on every round of the term gave a
+            // different position, which made genuine cards look forged.
+            const rankRound = examType || round?.round || null;
+            const rankExamIds = rankRound ? scopedExams.filter(e => e.exam_type === rankRound).map(e => e.id) : approvedExamIds;
+            if (classmates && classmates.length > 0 && rankExamIds.length > 0) {
+                const { rows: allMarks } = await fetchAllRows(() => supabase
                     .from('exam_marks')
-                    .select('student_id, raw_score, grade_symbol, exams!inner(id, max_score, subjects(id, name, category))')
+                    .select('id, student_id, raw_score, grade_symbol, exams!inner(id, max_score, subjects(id, name, category))')
                     .in('student_id', classmates.map(c => c.id))
-                    .in('exam_id', approvedExamIds);
+                    .in('exam_id', rankExamIds)
+                    .order('id'));
 
                 const byStudent: Record<string, ExamMarkWithDetails[]> = {};
                 const rankNames: Record<string, string> = {};

@@ -104,6 +104,7 @@ export function useUsersPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [editClassTeacherStreamId, setEditClassTeacherStreamId] = useState('');
   const [editSubjectTeacherSubjects, setEditSubjectTeacherSubjects] = useState<{subject_id: string, grade_id: string}[]>([]);
+  const [editAssignmentsLoaded, setEditAssignmentsLoaded] = useState(true);
 
   // Invite form state
   const [formFirstName, setFormFirstName] = useState('');
@@ -209,22 +210,29 @@ export function useUsersPage() {
   };
 
   const handleEditClick = async (user: UserRow) => {
+    const isTeacher = isTeacherRole(user.role);
     setEditingUser(user); setEditFirstName(user.first_name); setEditLastName(user.last_name);
     setEditPhone(user.phone || ''); setEditRole(user.role); setEditJobTitle(user.job_title || ''); setEditIsActive(user.is_active);
     setEditClassTeacherStreamId(''); setEditSubjectTeacherSubjects([]);
+    // A teacher's class and subjects are only sent back once they have loaded:
+    // saving the empty form before (or after a failed load) removed them.
+    setEditAssignmentsLoaded(!isTeacher);
     setFormError('');
     try { await fetchDropdowns(); } catch (err) { console.error('Failed to load dropdowns', err); }
     setShowEditModal(true);
-    if (user.role === 'CLASS_TEACHER' || user.role === 'SUBJECT_TEACHER') {
+    if (isTeacher) {
       try {
         const res = await fetch(`/api/admin/user-assignments?user_id=${user.id}`, { cache: 'no-store' });
-        const data = await res.json();
-        if (res.ok) {
-          if (data.class_teacher) setEditClassTeacherStreamId(data.class_teacher.grade_stream_id);
-          if (data.subject_assignments?.length > 0) setEditSubjectTeacherSubjects(data.subject_assignments.map((a: any) => ({ subject_id: a.subject_id, grade_id: a.grade_id })));
-          else if (user.role === 'SUBJECT_TEACHER' || user.role === 'CLASS_TEACHER') setEditSubjectTeacherSubjects([{ subject_id: '', grade_id: '' }]);
-        }
-      } catch (err) { console.error('Failed to fetch assignments', err); }
+        const data = (await res.json()) as { class_teacher?: { grade_stream_id: string } | null; subject_assignments?: { subject_id: string; grade_id: string }[] };
+        if (!res.ok) throw new Error('assignments');
+        if (data.class_teacher) setEditClassTeacherStreamId(data.class_teacher.grade_stream_id);
+        const subjects = data.subject_assignments ?? [];
+        setEditSubjectTeacherSubjects(subjects.length > 0 ? subjects.map(a => ({ subject_id: a.subject_id, grade_id: a.grade_id })) : [{ subject_id: '', grade_id: '' }]);
+        setEditAssignmentsLoaded(true);
+      } catch (err) {
+        console.error('Failed to fetch assignments', err);
+        setFormError('Could not load this teacher’s class and subjects. Other changes can be saved; their class and subjects will be left as they are.');
+      }
     }
   };
 
@@ -234,7 +242,10 @@ export function useUsersPage() {
     setFormError(''); setSubmitting(true);
     const payload: Record<string, any> = { user_id: editingUser.id, first_name: editFirstName.trim(), last_name: editLastName.trim(), phone: editPhone.trim(), role: editRole, is_active: editIsActive };
     if (editRole === 'STAFF') { payload.job_title = editJobTitle; }
-    if (isTeacherRole(editRole)) {
+    if (isTeacherRole(editRole) && !editAssignmentsLoaded) {
+      // Their assignments never loaded: leave role, class and subjects untouched.
+      payload.role = editingUser.role;
+    } else if (isTeacherRole(editRole)) {
       // Same as invite: the class field is optional, so clearing/setting it is what
       // decides CLASS_TEACHER vs SUBJECT_TEACHER — no separate role switch to make.
       payload.role = editClassTeacherStreamId ? 'CLASS_TEACHER' : 'SUBJECT_TEACHER';

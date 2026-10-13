@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { createInviteCode, notifyInviteCode } from '@/lib/invite-codes';
 import { placeholderEmailFor } from '@/lib/placeholder-email';
 import { inviteUserSchema } from '@/lib/schemas';
+import { assertInSchool, errorResponse } from '@/lib/platform/access';
 
 export async function POST(request: NextRequest) {
     try {
@@ -75,6 +76,17 @@ export async function POST(request: NextRequest) {
         }
 
         const school_id = caller.schoolId;
+
+        // Every class named in the request must be one of this school's.
+        try {
+            await assertInSchool('grade_streams', [
+                grade_stream_id,
+                class_teacher_grade_stream_id,
+                ...(subject_teacher_subjects ?? []).map(s => s.grade_stream_id),
+            ], school_id);
+        } catch (err) {
+            return errorResponse('create-user', err);
+        }
 
         // Get school name for username generation
         const { data: school } = await supabaseAdmin

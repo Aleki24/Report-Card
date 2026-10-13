@@ -2,7 +2,7 @@ import { route, HttpError } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
-import { ROLE_LABELS } from '@/lib/roles';
+import { ROLE_LABELS, STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import { isLookupType, type LookupOption, type LookupType } from '@/lib/ops/lookups';
 import type { UserRole } from '@/types';
 
@@ -44,7 +44,9 @@ const LOADERS: Record<LookupType, Loader> = {
         const rows = orThrow(await db().from('users')
             .select('id, first_name, last_name, role, job_title')
             .eq('school_id', schoolId)
-            .in('role', ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF'])
+            .in('role', STAFF_ROLES)
+            // Someone who has left is not offered for duties, cover or requisitions.
+            .eq('is_active', true)
             .order('first_name'));
         return rows.map(u => ({
             id: u.id as string,
@@ -124,7 +126,7 @@ const LOADERS: Record<LookupType, Loader> = {
  * lists name every learner and member of staff in the school.
  */
 export const GET = route('ops lookups', {}, async ({ access, request }) => {
-    if (access.role === 'STUDENT') throw new HttpError(403, 'You do not have permission to do this.');
+    if (!isRoleIn(access.role, STAFF_ROLES)) throw new HttpError(403, 'You do not have permission to do this.');
     const type = request.nextUrl.searchParams.get('type');
     if (!isLookupType(type)) throw new HttpError(400, 'Unknown lookup type.');
     return LOADERS[type](access.schoolId, request.nextUrl.searchParams);

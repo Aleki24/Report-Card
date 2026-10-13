@@ -89,7 +89,7 @@ function NavLink({ item, collapsed, active, badge, onHint }: NavLinkProps) {
 export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
-    const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading, can, hasModule } = useAuth();
+    const { profile, role, baseRole, availableRoles, switchRole, schoolName, loading, can, hasModule, studentRecordMissing } = useAuth();
     const viewer = useMemo(() => ({ role, can, hasModule }), [role, can, hasModule]);
 
     const [searchQuery, setSearchQuery] = useState("");
@@ -110,12 +110,13 @@ export function Sidebar({ collapsed = false, setCollapsed }: SidebarProps) {
     }, []);
 
     useEffect(() => {
-        if (role !== "STUDENT") return;
+        // A student account not yet enrolled has no record for the API to read.
+        if (role !== "STUDENT" || studentRecordMissing) return;
         fetch("/api/school/student/notifications")
             .then((res) => res.json())
             .then((data) => setNotifCount(data.data?.count ?? 0))
             .catch(() => {});
-    }, [role]);
+    }, [role, studentRecordMissing]);
 
     const badges: Record<string, number> = role === "STUDENT" ? { "/student/dashboard": notifCount } : {};
 

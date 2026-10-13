@@ -3,13 +3,13 @@
 import { cn } from '@/lib/utils';
 import { hueForHref } from '@/components/ui/pageHues';
 import { TONES } from '@/components/ui/tones';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import {
   Users, GraduationCap, FileText, ArrowRight, BarChart3, ClipboardList, Wallet,
   BookOpen, Search, CheckCircle2, Send, Bell, Award, CalendarCheck, UserPlus, Megaphone, Briefcase,
-  type LucideIcon,
+  AlertTriangle, type LucideIcon,
 } from 'lucide-react';
 import { buildTodos, totalAttendanceCount, type DashboardData, type TodoKey } from '@/lib/dashboard';
 
@@ -17,6 +17,7 @@ import { buildTodos, totalAttendanceCount, type DashboardData, type TodoKey } fr
 
 import { DashboardSkeleton as LoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import KpiTile from '@/components/dashboard/KpiTile';
+import EmptyState from '@/components/dashboard/EmptyState';
 import GradeResultsCard from '@/components/dashboard/GradeResultsCard';
 import InsightCard from '@/components/dashboard/InsightCard';
 import SectionTitle from '@/components/dashboard/SectionTitle';
@@ -48,21 +49,43 @@ function AdminDashboard({ userName }: { userName: string }) {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/school/dashboard');
-        if (res.ok) setData(await res.json());
-      } catch (err) {
-        console.error('Dashboard fetch error:', err);
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
+    try {
+      const res = await fetch('/api/school/dashboard', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`dashboard ${res.status}`);
+      setData(await res.json());
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      setFailed(true);
+    } finally {
       setLoading(false);
-    })();
+    }
   }, []);
+  useEffect(() => { void load(); }, [load]);
 
   if (loading) return <LoadingSkeleton />;
+  // Zeros and "all caught up" from a failed request read as an empty or
+  // finished school; say it failed instead.
+  if (failed || !data) {
+    return (
+      <div className="mx-auto w-full max-w-7xl px-2 pb-8 sm:px-3 lg:px-4">
+        <div className="card">
+          <EmptyState
+            hue="amber"
+            icon={<AlertTriangle className="size-6" />}
+            title="Couldn’t load the dashboard"
+            description="Your school’s figures didn’t load. Check your connection and try again."
+            action={<button type="button" className="btn-primary" onClick={() => void load()}>Try again</button>}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const passRate = data?.academicSummary?.markCount ? data.academicSummary.passRate : null;
   const attendanceTotal = data?.attendanceToday ? totalAttendanceCount(data.attendanceToday) : 0;

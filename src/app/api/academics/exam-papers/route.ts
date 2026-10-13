@@ -1,4 +1,5 @@
 import { route, HttpError } from '@/lib/platform/access';
+import { fetchAllRows } from '@/lib/postgrest';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import {
@@ -12,18 +13,19 @@ const READERS = ['exam_papers.upload', 'exam_papers.moderate', 'exam_papers.mana
  * released past papers.
  */
 export const GET = route('exam papers list', { module: 'exam_papers', permission: READERS }, async ({ access }) => {
-    let query = createSupabaseAdmin()
-        .from('exam_papers')
-        .select(PAPER_SELECT)
-        .eq('school_id', access.schoolId)
-        .order('updated_at', { ascending: false })
-        .limit(1000);
-    if (!access.can('exam_papers.moderate') && !access.can('exam_papers.manage')) {
-        query = query.or(`uploaded_by.eq.${access.userId},status.eq.RELEASED`);
-    }
-    const { data, error } = await query;
+    // The paper bank grows every term: read all of it, not the newest 1,000.
+    const { rows, error } = await fetchAllRows(() => {
+        let query = createSupabaseAdmin()
+            .from('exam_papers')
+            .select(PAPER_SELECT)
+            .eq('school_id', access.schoolId);
+        if (!access.can('exam_papers.moderate') && !access.can('exam_papers.manage')) {
+            query = query.or(`uploaded_by.eq.${access.userId},status.eq.RELEASED`);
+        }
+        return query.order('updated_at', { ascending: false }).order('id');
+    });
     if (error) throw error;
-    return data ?? [];
+    return rows;
 });
 
 /**

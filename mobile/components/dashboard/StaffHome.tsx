@@ -1,7 +1,7 @@
 import React from 'react';
 import { HomeScreen } from './Hero';
 import { Bell } from 'lucide-react-native';
-import type { DashboardData } from '@shared/dashboard';
+import type { StaffDashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { OperationsOverview } from '@/components/OperationsOverview';
 import { DashboardHero } from './Hero';
@@ -12,7 +12,7 @@ import { InsightCard, LinkRow, Reveal } from './kit';
  * figures of whatever duties their menu holds.
  */
 export function StaffHome({ name, jobTitle }: { name: string; jobTitle: string | null }) {
-    const summary = useApiQuery<DashboardData>('/api/school/dashboard', { raw: true });
+    const summary = useApiQuery<StaffDashboardData>('/api/school/dashboard', { raw: true });
     return (
         <HomeScreen onRefresh={summary.refresh} refreshing={summary.refreshing}>
             <Reveal index={0}>

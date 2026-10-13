@@ -1,7 +1,8 @@
 "use client";
 
 import { Trash2 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { toast } from 'sonner';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -38,9 +39,17 @@ interface Props {
     /** Receives the patched row so the parent can update in place instead of refetching the whole grid. */
     onSaved: (patched?: EditMarkData) => void;
     onDeleted: () => void;
+    /**
+     * The learner's total points for this round, from the results table
+     * (which already has the class's marks); omitted where a points total
+     * means nothing (CBC).
+     */
+    totalPoints?: number | null;
 }
 
-export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved, onDeleted }: Props) {
+export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved, onDeleted, totalPoints }: Props) {
+    const { panelRef, backdropProps } = useDialogBehavior(true, onClose);
+    const titleId = useId();
     const multiPaper = isMultiPaper(scheme);
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
 
@@ -76,7 +85,6 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
     const [deleting, setDeleting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [gradeOptions, setGradeOptions] = useState<GradeOption[]>([]);
-    const [totalPoints, setTotalPoints] = useState<number>(0);
     const [isCBC, setIsCBC] = useState(false);
 
     // CBC grade to rubric points mapping
@@ -92,7 +100,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
         const fetchGrades = async () => {
             try {
                 // Get exam details first
-                const examsRes = await fetch('/api/school/data?type=exams');
+                const examsRes = await fetch(`/api/school/data?type=exams&exam_id=${encodeURIComponent(examId)}`);
                 const examsData = await examsRes.json();
                 const exam = (examsData.data || []).find((e: any) => e.id === examId);
                 
@@ -163,62 +171,6 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
         fetchGrades();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId]);
-
-    // Fetch total points for this student
-    useEffect(() => {
-        const fetchTotalPoints = async () => {
-            if (!mark.student_id) return;
-
-            try {
-                const [marksRes, structureRes] = await Promise.all([
-                    fetch('/api/school/data?type=students'),
-                    fetch('/api/admin/academic-structure')
-                ]);
-
-                const studentsData = await marksRes.json();
-                const structureData = await structureRes.json();
-
-                const student = (studentsData.data || []).find((s: any) => s.id === mark.student_id);
-                const streamId = student?.current_grade_stream_id;
-
-                if (!streamId) return;
-
-                const streamMarksRes = await fetch(`/api/school/exam-marks/stream?stream_id=${streamId}`);
-                const marksData = await streamMarksRes.json();
-
-                const allMarks = marksData.data || [];
-                const gradingScales = structureData.grading_scales || [];
-                // Points come only from SUBJECT-kind scales — OVERALL systems
-                // reuse the same symbols with no per-grade points and would
-                // otherwise zero out a subject's points in this symbol map.
-                const overallSystemIds = new Set(
-                    (structureData.grading_systems || []).filter((gs: any) => gs.system_kind === 'OVERALL').map((gs: any) => gs.id)
-                );
-
-                const scalesMap: Record<string, number> = {};
-                gradingScales.forEach((sc: any) => {
-                    if (overallSystemIds.has(sc.grading_system_id)) return;
-                    scalesMap[sc.symbol] = sc.points ?? 0;
-                });
-
-                let totalPts = 0;
-                allMarks
-                    .filter((m: any) => m.student_id === mark.student_id)
-                    .forEach((m: any) => {
-                        const gradeSymbol = m.grade_symbol;
-                        if (gradeSymbol && scalesMap[gradeSymbol]) {
-                            totalPts += scalesMap[gradeSymbol];
-                        }
-                    });
-
-                setTotalPoints(totalPts);
-            } catch (err) {
-                console.error("Failed to load total points", err);
-            }
-        };
-
-        fetchTotalPoints();
-    }, [mark.student_id]);
 
     // Auto-resolve grade when score changes (only if teacher hasn't manually set a grade)
     const autoResolveGrade = useCallback((newScore: number) => {
@@ -391,17 +343,21 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-            onClick={onClose}
+            {...backdropProps}
         >
             <div
-                className="card w-full max-w-md p-5 sm:p-6"
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                tabIndex={-1}
+                className="card w-full max-w-md p-5 outline-none sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
-                onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h2 className="text-lg font-bold font-[family-name:var(--font-display)]">Edit Result</h2>
+                        <h2 id={titleId} className="text-lg font-bold font-[family-name:var(--font-display)]">Edit Result</h2>
                         <p className="text-sm text-muted-foreground mt-1">
                             {mark.student_name} <span className="text-xs">({mark.admission_number})</span>
                         </p>
@@ -410,6 +366,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                         onClick={onClose}
                         className="text-muted-foreground hover:text-[var(--color-text)] text-xl leading-none cursor-pointer"
                         title="Close"
+                        aria-label="Close"
                     >
                         ×
                     </button>
@@ -535,9 +492,11 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                     </div>
 
                     {/* Total Points */}
-                    <div className="text-xs text-primary bg-primary/10 p-2 rounded-md">
-                        Total Points (all subjects): <strong>{totalPoints}</strong>
-                    </div>
+                    {totalPoints != null && (
+                        <div className="text-xs text-primary bg-primary/10 p-2 rounded-md">
+                            Total points this round (all subjects): <strong>{totalPoints}</strong>
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions */}

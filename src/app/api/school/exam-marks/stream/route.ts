@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { getActiveUserProfile, getCurrentAcademicYearId } from '@/lib/auth-server';
+import { fetchAllRows } from '@/lib/postgrest';
+import { internalError } from '@/lib/api-errors';
 import { getTeacherPermissions, isStreamVisibleToTeacher } from '@/lib/teacher-utils';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
@@ -65,22 +67,28 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    let query = supabase
-        .from('exam_marks')
-        .select(`
-            id, raw_score, percentage, grade_symbol, student_id, exam_id, remarks,
-            exams!inner ( id, name, exam_type, subject_id, term_id, academic_year_id, subjects(name, code) ),
-            students!inner ( current_grade_stream_id, admission_number, users!inner(first_name, last_name, school_id) )
-        `)
-        .eq('students.current_grade_stream_id', streamId)
-        .eq('students.users.school_id', schoolId);
+    // Without an exam, the class's marks for this academic year (the terms
+    // the broadsheet offers), not every year it has been in school.
+    if (!examId) yearId = await getCurrentAcademicYearId(supabase, schoolId);
 
-    if (termId) query = query.eq('exams.term_id', termId);
-    if (yearId) query = query.eq('exams.academic_year_id', yearId);
+    // A class has thousands of marks a year (45 learners x 11 subjects x
+    // several exams a term), past PostgREST's 1,000-row page: read them all.
+    const { rows: marks, error } = await fetchAllRows(() => {
+        let query = supabase
+            .from('exam_marks')
+            .select(`
+                id, raw_score, percentage, grade_symbol, student_id, exam_id, remarks,
+                exams!inner ( id, name, exam_type, subject_id, term_id, academic_year_id, subjects(name, code) ),
+                students!inner ( current_grade_stream_id, admission_number, users!inner(first_name, last_name, school_id) )
+            `)
+            .eq('students.current_grade_stream_id', streamId)
+            .eq('students.users.school_id', schoolId);
+        if (termId) query = query.eq('exams.term_id', termId);
+        if (yearId) query = query.eq('exams.academic_year_id', yearId);
+        return query.order('id');
+    });
 
-    const { data: marks, error } = await query;
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) return internalError('exam-marks/stream', error);
 
     return NextResponse.json({ data: marks });
   } catch (err: unknown) {

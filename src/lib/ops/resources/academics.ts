@@ -27,6 +27,7 @@ export const schoolEvents = defineResource({
     validate: v => (v.ends_on && String(v.ends_on) < String(v.starts_on) ? 'The end date must not be before the start.' : null),
     order: { column: 'starts_on', ascending: true },
     filters: ['event_type', 'audience'],
+    audience: { column: 'audience', byRole: { STUDENT: ['ALL', 'STUDENTS'], PARENT: ['ALL', 'PARENTS'] } },
     refs: { exam_id: 'exams' },
     createdByColumn: 'created_by',
 });
@@ -86,6 +87,7 @@ export const timetableSubstitutions = defineResource({
     select: '*, lesson:timetable_lessons(day, period, stream:grade_streams(full_name), subject:subjects(name)), cover:users!timetable_substitutions_cover_teacher_id_fkey(first_name, last_name), absent:users!timetable_substitutions_absent_teacher_id_fkey(first_name, last_name)',
     order: { column: 'cover_date', ascending: false },
     filters: ['cover_date'],
+    staffOnly: true,
     refs: { lesson_id: 'timetable_lessons' },
     userRefs: ['absent_teacher_id', 'cover_teacher_id'],
     createdByColumn: 'created_by',

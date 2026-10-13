@@ -84,9 +84,10 @@ export async function GET() {
         const exams = ((examRows ?? []) as unknown as ExamRow[]).filter(e => isExamVisibleToTeacher(e, perms, userId));
         if (exams.length === 0) return NextResponse.json(empty);
 
-        // Learners in every stream these exams reach.
+        // Learners in every stream of this school these exams reach (grades
+        // are shared by every school; streams are each school's own).
         const gradeIds = [...new Set(exams.map(e => e.grade_id))];
-        const { data: streams, error: streamsError } = await supabase.from('grade_streams').select('id, grade_id').in('grade_id', gradeIds);
+        const { data: streams, error: streamsError } = await supabase.from('grade_streams').select('id, grade_id').eq('school_id', schoolId).in('grade_id', gradeIds);
         if (streamsError) throw new Error(streamsError.message);
         const gradeOfStream = new Map((streams ?? []).map(s => [s.id as string, s.grade_id as string]));
         const streamIds = [...gradeOfStream.keys()];

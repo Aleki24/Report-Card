@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useApiQuery } from './useApiQuery';
 import { withQuery } from './api';
 import { findActiveTermId } from './academics';
+import { MANAGED_STREAMS_URL, type ManagedStream } from '@shared/managed-streams';
 import type { AcademicStructure, AcademicYear, ExamSlot, GradeStream, Term } from './types';
 
 /**
@@ -25,6 +26,27 @@ export function useAcademicYears() {
 export function useGradeStreams() {
     const query = useApiQuery<GradeStream[]>('/api/school/data?type=grade_streams');
     return { ...query, streams: query.data ?? [] };
+}
+
+/**
+ * The classes the user runs: every class for an admin, their own for a class
+ * teacher. Registers, report cards, mark sheets and adding or editing
+ * learners are limited to these (the general list also holds classes a
+ * teacher only teaches a subject in, which those APIs refuse).
+ */
+export function useManagedGradeStreams() {
+    const all = useGradeStreams();
+    const managed = useApiQuery<ManagedStream[]>(MANAGED_STREAMS_URL);
+    const streams = useMemo(() => {
+        const ids = new Set((managed.data ?? []).map((s) => s.id));
+        return all.streams.filter((s) => ids.has(s.id));
+    }, [all.streams, managed.data]);
+    return {
+        streams,
+        loading: all.loading || managed.loading,
+        error: all.error ?? managed.error,
+        reload: () => { all.reload(); managed.reload(); },
+    };
 }
 
 export function useAcademicStructure() {

@@ -3,6 +3,7 @@
 import { CardHeading } from '@/components/ui/CardHeading';
 import { Layers } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import {
     PaperSchemeEditor,
     DEFAULT_SCHEME_DRAFT,
@@ -27,6 +28,7 @@ interface Props {
  * normal single-mark flow.
  */
 export function PaperSchemeModal({ examId, subjectName, onClose, onSaved }: Props) {
+    const { panelRef, backdropProps } = useDialogBehavior(true, onClose);
     const [draft, setDraft] = useState<PaperSchemeDraft>(DEFAULT_SCHEME_DRAFT);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -104,12 +106,16 @@ export function PaperSchemeModal({ examId, subjectName, onClose, onSaved }: Prop
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-            onClick={onClose}
+            {...backdropProps}
         >
             <div
-                className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 sm:p-6"
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={subjectName ? `Papers configuration, ${subjectName}` : 'Papers configuration'}
+                tabIndex={-1}
+                className="card w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 outline-none sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
-                onClick={e => e.stopPropagation()}
             >
                 <div className="flex justify-between items-start mb-4">
                     <div>
@@ -122,6 +128,7 @@ export function PaperSchemeModal({ examId, subjectName, onClose, onSaved }: Prop
                         onClick={onClose}
                         className="text-muted-foreground hover:text-[var(--color-text)] text-xl leading-none cursor-pointer"
                         title="Close"
+                        aria-label="Close"
                     >
                         ×
                     </button>

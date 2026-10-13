@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider';
 import {
     saveDraft, loadDraft, clearDraft,
     enqueueBatch, flushQueue, pendingCountForExam, isOnline,
+    rejectedBatchesForExam, removeBatch, retryBatch, type QueuedMarkBatch,
 } from '@/lib/offline-marks';
 import {
     emptyEntry, hasScore, rowStatus, scoreToText, validateEntry,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/mark-entry';
 import { cn } from '@/lib/utils';
 import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/MarkSheetRow';
+import { examRosterUrl } from '@/lib/marks/roster-url';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -143,6 +145,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     /* ── Offline-first entry ── */
     const [offline, setOffline] = useState(false);
     const [pendingSync, setPendingSync] = useState(0);
+    const [refusedSync, setRefusedSync] = useState<QueuedMarkBatch[]>([]);
     const [lastDraftAt, setLastDraftAt] = useState<number | null>(null);
     // Autosave only once the draft for this exam has been read back, so the
     // empty initial state never overwrites a draft that is still loading.
@@ -187,7 +190,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             try {
                 const [structureRes, studentsRes, savedResult] = await Promise.all([
                     fetch('/api/admin/academic-structure', { cache: 'no-store' }),
-                    fetch(`/api/school/data?type=students${subjectId ? `&subject_id=${encodeURIComponent(subjectId)}` : ''}`, { cache: 'no-store' }),
+                    fetch(examRosterUrl({ subjectId, gradeStreamId, gradeId }), { cache: 'no-store' }),
                     fetchSaved(),
                 ]);
                 const structure = (await structureRes.json()) as StructureResponse;
@@ -249,16 +252,18 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     }, [edits, examId]);
 
     /* ── Connectivity + flush of marks queued while offline ── */
+    const syncNow = useCallback(async () => {
+        const result = await flushQueue();
+        setPendingSync(pendingCountForExam(examId));
+        setRefusedSync(rejectedBatchesForExam(examId));
+        if (result.sent > 0) {
+            await refreshSaved();
+            flash({ tone: 'success', text: `Synced ${result.sent} batch${result.sent !== 1 ? 'es' : ''} of marks that were saved offline.` });
+        }
+    }, [examId, refreshSaved, flash]);
+
     useEffect(() => {
         setOffline(!isOnline());
-        const syncNow = async () => {
-            const result = await flushQueue();
-            setPendingSync(pendingCountForExam(examId));
-            if (result.sent > 0) {
-                await refreshSaved();
-                flash({ tone: 'success', text: `Synced ${result.sent} batch${result.sent !== 1 ? 'es' : ''} of marks that were saved offline.` });
-            }
-        };
         const handleOnline = () => { setOffline(false); void syncNow(); };
         const handleOffline = () => setOffline(true);
         window.addEventListener('online', handleOnline);
@@ -268,7 +273,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [examId, refreshSaved, flash]);
+    }, [syncNow]);
+
+    const retryRefused = (batch: QueuedMarkBatch) => { retryBatch(batch.id); void syncNow(); };
+    const discardRefused = (batch: QueuedMarkBatch) => {
+        if (!window.confirm(`Discard ${batch.label ?? 'these marks'} saved on this device? They were never saved to the school.`)) return;
+        removeBatch(batch.id);
+        setRefusedSync(rejectedBatchesForExam(examId));
+    };
 
     /* ── Roster: the exam's class, sorted by name ── */
     const streamNameById = useMemo(() => new Map(streams.map(s => [s.id, s.full_name])), [streams]);
@@ -660,6 +672,21 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     )}
                 </div>
             </header>
+
+            {/* ── Offline marks the server refused: kept until the teacher decides ── */}
+            {refusedSync.map(batch => (
+                <div key={batch.id} role="alert" className="flex flex-col gap-2 border-b border-destructive/30 bg-destructive/[0.06] px-4 py-3 text-sm sm:flex-row sm:items-center sm:px-5">
+                    <AlertCircle size={16} className="shrink-0 text-destructive" aria-hidden />
+                    <p className="min-w-0 flex-1">
+                        <strong>{batch.label ?? 'Marks'} saved offline were not accepted:</strong> {batch.rejected}{' '}
+                        They are still on this device.
+                    </p>
+                    <div className="flex shrink-0 gap-2">
+                        <button type="button" className="btn-secondary" onClick={() => retryRefused(batch)}>Try again</button>
+                        <button type="button" className="btn-secondary text-destructive" onClick={() => discardRefused(batch)}>Discard</button>
+                    </div>
+                </div>
+            ))}
 
             {/* ── How to correct a mark: said once, where the teacher is looking ── */}
             <div className="flex items-start gap-2 border-b border-border/60 bg-primary/[0.04] px-4 py-2.5 text-xs text-muted-foreground sm:px-5">

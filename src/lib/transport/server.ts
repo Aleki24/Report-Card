@@ -3,6 +3,8 @@ import { HttpError, type Access } from '@/lib/platform/access';
 import { embedOne } from '@/lib/postgrest';
 
 export interface TripRow {
+    /** MORNING, EVENING or OTHER (a trip, a fixture). */
+    direction: string;
     id: string;
     status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
     route_id: string | null;
@@ -19,7 +21,7 @@ export interface TripRow {
 export async function loadTripForOperator(id: string, access: Access): Promise<TripRow> {
     const { data, error } = await createSupabaseAdmin()
         .from('trips')
-        .select('id, status, route_id, vehicle_id, driver_id, max_speed_kmh, driver:transport_crew(user_id)')
+        .select('id, status, direction, route_id, vehicle_id, driver_id, max_speed_kmh, driver:transport_crew(user_id)')
         .eq('id', id)
         .eq('school_id', access.schoolId)
         .maybeSingle();

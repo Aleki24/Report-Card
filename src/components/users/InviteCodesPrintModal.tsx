@@ -6,13 +6,15 @@ import React, { useState } from 'react';
 import { ModalOverlay } from '@/components/ui/ModalOverlay';
 import { downloadBlob, filenameFromResponse } from '@/lib/download';
 
-type Category = 'all' | 'admin' | 'teacher' | 'student';
+type Category = 'all' | 'admin' | 'teacher' | 'staff' | 'student' | 'parent';
 type Status = 'active' | 'all';
 
 const CATEGORY_OPTIONS: { value: Category; label: string; hint: string }[] = [
-    { value: 'all', label: 'All categories', hint: 'One PDF with Administrators, Teachers & Students, each on its own page' },
+    { value: 'all', label: 'All categories', hint: 'One PDF with every group (administrators, teachers, staff, students, parents), each on its own page' },
     { value: 'teacher', label: 'Teachers only', hint: 'Class & subject teachers' },
     { value: 'student', label: 'Students only', hint: 'All students' },
+    { value: 'parent', label: 'Parents only', hint: 'Parent accounts' },
+    { value: 'staff', label: 'Staff only', hint: 'Non-teaching staff' },
     { value: 'admin', label: 'Administrators only', hint: 'School admins' },
 ];
 

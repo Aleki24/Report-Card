@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { route, parseBody, HttpError, assertInSchool } from '@/lib/platform/access';
+import { route, parseBody, HttpError, assertInSchool, dutyAllows } from '@/lib/platform/access';
+import { canTeacherMarkStudent, getTeacherPermissions } from '@/lib/teacher-utils';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne } from '@/lib/postgrest';
 import { CBC_LEVELS } from '@/lib/ops/resources/academics';
@@ -68,6 +69,17 @@ export const PUT = route('cbc save', { ...MODULE, permission: 'cbc.assess' }, as
         assertInSchool('terms', [body.term_id], access.schoolId),
         assertInSchool('school_subject_catalogue', [body.subject_id], access.schoolId),
     ]);
+    // A teacher records levels for the classes and subjects they teach; the
+    // admin and whole-school duties (DOS, Deputy) for any.
+    if (access.role !== 'ADMIN' && !dutyAllows(access, 'cbc.assess')) {
+        const [perms, { data: stream }] = await Promise.all([
+            getTeacherPermissions(access.userId),
+            db.from('grade_streams').select('grade_id').eq('id', body.grade_stream_id).maybeSingle(),
+        ]);
+        if (!canTeacherMarkStudent(perms, body.subject_id, { current_grade_stream_id: body.grade_stream_id, grade_id: (stream?.grade_id as string | undefined) ?? null })) {
+            throw new HttpError(403, 'You can only assess the classes and subjects you teach.');
+        }
+    }
     const { data: roster, error } = await db.from('students').select('id').eq('school_id', access.schoolId).eq('current_grade_stream_id', body.grade_stream_id);
     if (error) throw error;
     const inClass = new Set((roster ?? []).map(r => r.id as string));

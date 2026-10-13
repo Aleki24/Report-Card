@@ -4,6 +4,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import type { StudentProfileResponse } from '@/types/user-profile';
 import { embedOne } from '@/lib/postgrest';
 import { getTeacherPermissions, isStudentVisibleToTeacher } from '@/lib/teacher-utils';
+import { getAccess, seesAllStudents } from '@/lib/platform/access';
+import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 export async function GET(
   _request: NextRequest,
@@ -55,9 +57,13 @@ export async function GET(
       return NextResponse.json({ error: 'Cannot access data from another school' }, { status: 403 });
     }
 
-    if (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER') {
-      const perms = await getTeacherPermissions(userId);
-      if (!isStudentVisibleToTeacher(student, perms)) {
+    // Admins, the learner, their teachers and staff whose duty spans the
+    // school (nurse, bursar, boarding) may see the profile. Parents use the
+    // parent portal, which shows only their own children.
+    if (role !== 'ADMIN' && role !== 'STUDENT') {
+      const teaches = (role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER')
+        && isStudentVisibleToTeacher(student, await getTeacherPermissions(userId));
+      if (!teaches && !seesAllStudents(await getAccess())) {
         return NextResponse.json({ error: 'Not authorized to view this student' }, { status: 403 });
       }
     }
@@ -95,9 +101,9 @@ export async function GET(
             `)
             .eq('student_id', studentId)
             .eq('exams.term_id', term.id);
-          // A learner viewing their own profile sees released results only,
-          // like everywhere else in the student portal.
-          if (role === 'STUDENT') marksQuery = marksQuery.eq('exams.status', 'APPROVED');
+          // Only admins and teachers see results before they are released,
+          // like everywhere else in the app.
+          if (!isRoleIn(role, STAFF_TEACHING_ROLES)) marksQuery = marksQuery.eq('exams.status', 'APPROVED');
           const { data: marks } = await marksQuery;
 
           const subjects = (marks || []).map((m: any) => ({

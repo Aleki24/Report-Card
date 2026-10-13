@@ -69,7 +69,12 @@ export interface Structure {
 export interface Award { id: string; kind: string; sponsor: string | null; amount: number; reference: string | null; term: { name: string } | null; student: StudentEmbed | null }
 export interface InvoiceSummary { learners: number; unbilled: number; billed: number; awards: number; dry_run: boolean }
 export interface Invoice { id: string; total: number; structure: { name: string } | null; student: StudentEmbed | null; lines: { id: string; description: string; amount: number }[] }
-export interface VoteHeadLine { voteHeadId: string | null; name: string; billed: number; collected: number; outstanding: number; spent: number }
+/**
+ * One vote head's term: billed (invoice lines), waived (bursaries,
+ * scholarships, waivers and discounts), collected (payments), owed (billed
+ * less waived and collected) and spent (approved expenses).
+ */
+export interface VoteHeadLine { voteHeadId: string | null; name: string; billed: number; waived: number; collected: number; outstanding: number; spent: number }
 export interface VoteHeadStatement { lines: VoteHeadLine[]; overpaid: number }
 export type Residence = 'DAY' | 'BOARDER';
 export interface ResidenceLearner { id: string; admission_number: string | null; residence: Residence; user: PersonName | null }
@@ -118,5 +123,5 @@ export const AWARD_DEFAULTS = { kind: 'BURSARY' } as const;
 export const BILL_TERM_WARNING = "Each learner's fee for the term is set from their fee structure (and transport), less bursaries. Payments already made are kept. Running it again replaces the term's invoices.";
 export const AWARDS_NOTE = 'Awards reduce what a learner owes when the term is billed (bill again after adding one).';
 
-export const statementTotal = (report: VoteHeadStatement | null, key: 'billed' | 'collected' | 'outstanding' | 'spent') =>
+export const statementTotal = (report: VoteHeadStatement | null, key: 'billed' | 'waived' | 'collected' | 'outstanding' | 'spent') =>
     report?.lines.reduce((n, l) => n + l[key], 0) ?? 0;

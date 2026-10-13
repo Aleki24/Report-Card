@@ -6,7 +6,7 @@ import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { guardianKey, type ParentContact } from '@/lib/guardians';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
 import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
@@ -75,6 +75,17 @@ export async function GET(request: NextRequest) {
     switch (type) {
       case 'students': {
         const gradeStreamId = searchParams.get('grade_stream_id');
+        const gradeId = searchParams.get('grade_id');
+        // A grade-wide mark sheet: that grade's classes in this school.
+        let gradeStreamIds: string[] | null = null;
+        if (gradeId && !gradeStreamId) {
+          if (!isUuid(gradeId)) return NextResponse.json({ error: 'Invalid grade id' }, { status: 400 });
+          const { data: streams, error: streamsError } = await supabase
+            .from('grade_streams').select('id').eq('school_id', schoolId).eq('grade_id', gradeId);
+          if (streamsError) return NextResponse.json({ error: 'Could not load students.' }, { status: 400 });
+          gradeStreamIds = (streams ?? []).map(s => s.id as string);
+          if (gradeStreamIds.length === 0) return NextResponse.json({ data: [] });
+        }
         // Paged: a school past 1,000 learners was silently cut short.
         const { rows: data, error } = await fetchAllRows(() => {
           let query = supabase
@@ -89,6 +100,7 @@ export async function GET(request: NextRequest) {
             `)
             .eq('users.school_id', schoolId);
           if (gradeStreamId) query = query.eq('current_grade_stream_id', gradeStreamId);
+          else if (gradeStreamIds) query = query.in('current_grade_stream_id', gradeStreamIds);
           // Admission numbers are optional, so id keeps the page order stable.
           return query.order('admission_number').order('id');
         });
@@ -100,8 +112,8 @@ export async function GET(request: NextRequest) {
         // Staff whose duty covers every learner (bursar, nurse, matron,
         // transport, library) see the whole school, not a teacher's slice.
         const wholeSchool = auth.role === 'ADMIN' || (!subjectId && seesAllStudents(await getAccess()));
-        if (!wholeSchool) {
-          const perms = await getTeacherPermissions(auth.userId);
+        const perms = auth.role === 'ADMIN' ? null : await getTeacherPermissions(auth.userId);
+        if (!wholeSchool && perms) {
           // Mark entry: only the streams this teacher teaches the subject in
           // (or their own class), not every learner they can see elsewhere.
           filteredStudents = subjectId
@@ -110,12 +122,13 @@ export async function GET(request: NextRequest) {
                 grade_id: (Array.isArray(student.grade_streams) ? student.grade_streams[0] : student.grade_streams)?.grade_id ?? null,
               }))
             : filteredStudents.filter(student => isStudentVisibleToTeacher(student, perms));
-          // A class teacher's Students page is their own class, not every
-          // learner they teach a subject to elsewhere.
-          if (!subjectId && searchParams.get('scope') === 'class') {
-            filteredStudents = filteredStudents.filter(student =>
-              perms.isClassTeacher && perms.classTeacherStreams.includes(student.current_grade_stream_id as string));
-          }
+        }
+        // A class teacher's Students page is their own class, not every
+        // learner they teach a subject to elsewhere, nor the whole school a
+        // duty of theirs covers.
+        if (perms && !subjectId && searchParams.get('scope') === 'class') {
+          filteredStudents = filteredStudents.filter(student =>
+            perms.isClassTeacher && perms.classTeacherStreams.includes(student.current_grade_stream_id as string));
         }
 
         // Mark entry passes the exam's subject: only the learners who take it
@@ -280,10 +293,12 @@ export async function GET(request: NextRequest) {
           .eq('school_id', schoolId)
           .order('full_name');
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (error) return NextResponse.json({ error: 'Could not load classes.' }, { status: 400 });
         let filteredStreams = data || [];
 
-        if (auth.role !== 'ADMIN') {
+        // Staff whose duty spans the school (bursar, nurse) pick from every
+        // class, as they see every learner; teachers see their own.
+        if (auth.role !== 'ADMIN' && !seesAllStudents(await getAccess())) {
           const perms = await getTeacherPermissions(auth.userId);
           filteredStreams = filteredStreams.filter(stream => isStreamVisibleToTeacher(stream, perms));
         }
@@ -319,20 +334,23 @@ export async function GET(request: NextRequest) {
       }
 
       case 'users': {
-        const { data, error } = await supabase
+        // Every account of the school: learners and parents are users too,
+        // so a mid-size school passes PostgREST's 1,000-row page.
+        const { rows: data, error } = await fetchAllRows(() => supabase
           .from('users')
           .select(`
             id, first_name, last_name, email, username, phone, role, is_active, created_at, school_id, job_title, avatar_url,
             students!left ( admission_number, avatar_url, grade_streams ( full_name, grades ( name_display, numeric_order ) ) )
           `)
           .eq('school_id', schoolId)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .order('id'));
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (error) return NextResponse.json({ error: 'Could not load users.' }, { status: 400 });
 
         // Flatten the one-to-one students row: a learner's photo lives on
         // students.avatar_url, everyone else's on users.avatar_url.
-        const mapped = (data ?? []).map(({ students, ...u }) => {
+        const mapped = data.map(({ students, ...u }) => {
           const student = embedOne(students);
           const stream = embedOne(student?.grade_streams);
           const grade = embedOne(stream?.grades);
@@ -381,13 +399,21 @@ export async function GET(request: NextRequest) {
       }
 
       case 'exams': {
-        const { data, error } = await supabase
-          .from('exams')
-          .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id), grades(academic_level_id)')
-          .eq('school_id', schoolId)
-          .order('created_at', { ascending: false });
+        // Every exam of the school (one per subject, grade and sitting, so a
+        // year or two passes PostgREST's 1,000-row page), or just ?exam_id=
+        // for a screen that needs one exam's subject and grading.
+        const examId = searchParams.get('exam_id');
+        if (examId && !isUuid(examId)) return NextResponse.json({ error: 'Invalid exam id' }, { status: 400 });
+        const { rows: data, error } = await fetchAllRows(() => {
+          let query = supabase
+            .from('exams')
+            .select('id, name, exam_type, max_score, academic_year_id, term_id, status, published_by, approved_by, created_at, grade_stream_id, grade_id, subject_id, created_by_teacher_id, subjects(academic_level_id), grades(academic_level_id)')
+            .eq('school_id', schoolId);
+          if (examId) query = query.eq('id', examId);
+          return query.order('created_at', { ascending: false }).order('id');
+        });
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (error) return NextResponse.json({ error: 'Could not load exams.' }, { status: 400 });
 
         // The grading system moved off the subject onto the school's offering,
         // and PostgREST cannot reach a join table from inside an embed. Look it
@@ -396,7 +422,7 @@ export async function GET(request: NextRequest) {
         // the scan sheet, the bulk upload and the edit-mark modal all take the
         // subject's grading system from exactly there.
         const gradingBySubject = await gradingSystemBySubject(supabase, schoolId);
-        const withGrading = (data ?? []).map(exam => {
+        const withGrading = data.map(exam => {
           const subject = exam.subjects as { academic_level_id?: string } | null;
           return {
             ...exam,

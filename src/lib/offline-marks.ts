@@ -94,6 +94,11 @@ export interface QueuedMarkBatch {
     queuedAt: number;
     /** Human label for the toast/indicator (e.g. exam or subject name). */
     label?: string;
+    /**
+     * Why the server refused it, when it did. A refused batch is kept on the
+     * device (never silently deleted) until the teacher retries or discards it.
+     */
+    rejected?: string;
 }
 
 export function loadQueue(): QueuedMarkBatch[] {
@@ -134,14 +139,33 @@ export function removeBatch(id: string): void {
     writeQueue(loadQueue().filter(b => b.id !== id));
 }
 
+/** Batches for this exam still waiting to be sent. */
 export function pendingCountForExam(examId: string): number {
-    return loadQueue().filter(b => b.examId === examId).length;
+    return loadQueue().filter(b => b.examId === examId && !b.rejected).length;
+}
+
+/** Batches for this exam the server refused, kept for the teacher to retry or discard. */
+export function rejectedBatchesForExam(examId: string): QueuedMarkBatch[] {
+    return loadQueue().filter(b => b.examId === examId && !!b.rejected);
+}
+
+/** Puts a refused batch back in line, for the next flush to try again. */
+export function retryBatch(id: string): void {
+    writeQueue(loadQueue().map(b => (b.id === id ? { ...b, rejected: undefined } : b)));
 }
 
 export interface FlushResult {
     sent: number;
     remaining: number;
+    /** Batches the server refused on this pass (kept, marked rejected). */
+    rejected: number;
 }
+
+/**
+ * Statuses worth retrying later: signed out while offline (401), access
+ * still being refreshed (403), a timeout (408) or a rate limit (429).
+ */
+const RETRYABLE = new Set([401, 403, 408, 429]);
 
 /**
  * Try to POST every queued batch. Each success is removed from the queue;
@@ -150,8 +174,9 @@ export interface FlushResult {
  * dropped immediately.
  */
 export async function flushQueue(): Promise<FlushResult> {
-    const queue = loadQueue();
+    const queue = loadQueue().filter(b => !b.rejected);
     let sent = 0;
+    let rejected = 0;
 
     for (const batch of queue) {
         try {
@@ -163,22 +188,26 @@ export async function flushQueue(): Promise<FlushResult> {
             if (res.ok) {
                 removeBatch(batch.id);
                 sent += 1;
-            } else {
-                // A 4xx means the server rejected the data itself; retrying
-                // won't help, so drop it rather than looping forever. Network
-                // errors throw and are caught below (kept for retry).
-                if (res.status >= 400 && res.status < 500) {
-                    removeBatch(batch.id);
-                }
-                // 5xx: leave queued for a later attempt.
+                continue;
             }
+            // The session is not ready yet (it often lags the 'online' event):
+            // keep everything and try again on the next pass.
+            if (res.status === 401 || res.status === 403) break;
+            if (RETRYABLE.has(res.status) || res.status >= 500) continue;
+            // The server refused the marks themselves (a closed exam, a
+            // learner no longer in the class). Retrying as-is won't help, but
+            // the marks are the teacher's work: keep them, say why.
+            const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+            const reason = typeof body?.error === 'string' && body.error ? body.error : `The server refused them (${res.status}).`;
+            writeQueue(loadQueue().map(b => (b.id === batch.id ? { ...b, rejected: reason } : b)));
+            rejected += 1;
         } catch {
             // Still offline / unreachable — stop early, keep the rest queued.
             break;
         }
     }
 
-    return { sent, remaining: loadQueue().length };
+    return { sent, remaining: loadQueue().filter(b => !b.rejected).length, rejected };
 }
 
 export function isOnline(): boolean {

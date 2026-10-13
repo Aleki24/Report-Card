@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth, createClerkClient } from '@clerk/nextjs/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
+import { moveUserLinks } from '@/lib/platform/user-links';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +12,8 @@ export async function POST(request: NextRequest) {
     // Invite codes are six characters, so an unthrottled endpoint lets a
     // signed-up account guess its way into a school. Same limit as the
     // other code-redeeming routes (activate, activate-google).
-    const limit = rateLimit(`join:${userId}`, { maxRequests: 10, windowMs: 60_000 });
-    if (!limit.allowed) {
+    const limit = await rateLimitShared(`join:${userId}`, { maxRequests: 10, windowMs: 60_000 });
+    if (!limit) {
       return NextResponse.json({ error: 'Too many attempts. Please wait a minute and try again.' }, { status: 429 });
     }
 
@@ -147,6 +148,14 @@ export async function POST(request: NextRequest) {
                 }
             }
         }
+    }
+
+    // Duties, parent links and driver links given before the person joined:
+    // the pending row's delete below cascades over any left on it.
+    const linkErr = await moveUserLinks(oldUserId, userId);
+    if (linkErr) {
+        console.error('[join] user link swap failed', { oldUserId, userId, linkErr });
+        return NextResponse.json({ error: 'Failed to link your school records. Please contact your school admin.' }, { status: 500 });
     }
 
     // Update the current (real) user record with the admin-provided details.

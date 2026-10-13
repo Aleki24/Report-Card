@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revokeInviteCodes } from '@/lib/invite-codes';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStream, canManageStudent, getCaller } from '@/lib/auth-server';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
@@ -46,7 +47,7 @@ export async function PATCH(request: NextRequest) {
         // Verify the student belongs to this school
         const { data: student } = await supabaseAdmin
             .from('students')
-            .select('id, status, users!inner(school_id)')
+            .select('id, status, subject_combination_id, users!inner(school_id)')
             .eq('id', student_id)
             .eq('users.school_id', profile.school_id)
             .maybeSingle();
@@ -84,7 +85,12 @@ export async function PATCH(request: NextRequest) {
         if (avatar_url !== undefined) studentUpdates.avatar_url = avatar_url || null;
         if (pathway !== undefined) studentUpdates.pathway = pathway || null;
         if (track !== undefined) studentUpdates.track = track?.trim() || null;
-        if (subject_combination_id !== undefined) {
+        // Only a real change of combination re-syncs subjects: the sync clears
+        // enrolments made directly (electives), so re-sending the same value
+        // with an unrelated edit wiped them.
+        const combinationChanged = subject_combination_id !== undefined
+            && (subject_combination_id || null) !== (student.subject_combination_id ?? null);
+        if (combinationChanged) {
             if (subject_combination_id) {
                 // Combination must belong to the caller's school
                 const { data: combination } = await supabaseAdmin
@@ -115,7 +121,7 @@ export async function PATCH(request: NextRequest) {
         // Combination changed (or cleared) — re-sync subject enrollments
         // BEFORE persisting the pointer, so a sync failure leaves the
         // student untouched instead of half-assigned
-        if (subject_combination_id !== undefined) {
+        if (combinationChanged) {
             try {
                 await syncStudentSubjects(supabaseAdmin, {
                     studentId: student_id,
@@ -138,6 +144,9 @@ export async function PATCH(request: NextRequest) {
             if (studentError) {
                 return NextResponse.json({ error: `Update failed: ${studentError.message}` }, { status: 400 });
             }
+            // A learner who left (transferred, graduated, deactivated) can no
+            // longer activate with a code sent while they were enrolled.
+            if (status !== undefined && status !== 'ACTIVE') await revokeInviteCodes(supabaseAdmin, student_id);
         }
 
         // Update user record (name) — student_id IS the user_id (same UUID)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitShared } from '@/lib/rate-limit';
 import { escapeLikePattern } from '@/lib/postgrest';
 
 /**
@@ -23,8 +23,8 @@ import { escapeLikePattern } from '@/lib/postgrest';
 export async function POST(request: NextRequest) {
     try {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        const limit = rateLimit(`resolve-identifier:${ip}`, { maxRequests: 20, windowMs: 60_000 });
-        if (!limit.allowed) {
+        const limit = await rateLimitShared(`resolve-identifier:${ip}`, { maxRequests: 20, windowMs: 60_000 });
+        if (!limit) {
             return NextResponse.json({ error: 'Too many attempts. Please wait a moment and try again.' }, { status: 429 });
         }
 
@@ -52,7 +52,9 @@ export async function POST(request: NextRequest) {
         // Don't disclose whether the username exists — the login form falls
         // back to attempting the raw identifier, and Clerk returns the
         // appropriate "not found" message.
-        if (!user?.email) {
+        // Accounts not yet activated or switched off cannot sign in, so their
+        // address (often typed in by the admin at invite) is not handed out.
+        if (!user?.email || user.is_active === false) {
             return NextResponse.json({ email: null });
         }
 

@@ -247,7 +247,26 @@ export async function getStudentReportCards(student: CurrentStudent) {
         loadRankingSettings(supabase, student.schoolId),
     ]);
     const showPositions = ranksCurriculum(settings, level?.code === 'CBC' ? 'CBC' : 'KCSE');
-    return (data ?? []).map(rc => (showPositions ? rc : { ...rc, overall_position: null }));
+
+    // A card exists as soon as a teacher saves comments, often weeks before
+    // results are out. Learners and parents see a term's card only once the
+    // term has released results for this learner (its PDF is built from them).
+    const cards = data ?? [];
+    const termIds = [...new Set(cards.map(rc => embedOne<{ id: string }>(rc.terms)?.id).filter((id): id is string => !!id))];
+    const { data: released, error: releasedError } = termIds.length === 0
+        ? { data: [], error: null }
+        : await supabase
+            .from('exam_marks')
+            .select('exams!inner(term_id)')
+            .eq('student_id', student.studentId)
+            .eq('exams.status', 'APPROVED')
+            .in('exams.term_id', termIds);
+    if (releasedError) throw releasedError;
+    const releasedTerms = new Set((released ?? []).map(r => embedOne<{ term_id: string }>(r.exams)?.term_id));
+
+    return cards
+        .filter(rc => releasedTerms.has(embedOne<{ id: string }>(rc.terms)?.id))
+        .map(rc => (showPositions ? rc : { ...rc, overall_position: null }));
 }
 
 // ── Attendance ──────────────────────────────────────────────

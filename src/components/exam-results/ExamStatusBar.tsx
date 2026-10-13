@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 type ExamStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
 
@@ -36,10 +37,9 @@ const STATUS_COLOR: Record<ExamStatus, string> = {
 };
 
 /**
- * Publish → Approve → (download-ready) workflow controls for a single exam's
- * results. A subject/class teacher publishes what they entered, an admin
- * approves it, and either side can unpublish to send it back for correction
- * (undoing an approval is admin-only).
+ * Release controls for a single exam's results. Releasing makes them
+ * visible at once to learners, parents and the report-card QR page (there
+ * is no separate approval step); unpublishing sends them back for correction.
  *
  * Publishing is a two-step confirm: the teacher first sees a readiness report
  * (who is fully marked, who is missing papers, who has no marks and will be
@@ -51,6 +51,9 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
     const [error, setError] = useState('');
     const [readiness, setReadiness] = useState<PublishReadiness | null>(null);
     const [confirming, setConfirming] = useState(false);
+    // Escape and the backdrop close the release dialog, except mid-release.
+    const { panelRef, backdropProps } = useDialogBehavior(confirming && !!readiness, () => { if (!busy) setConfirming(false); });
+    const releaseTitleId = useId();
 
     const loadReadiness = useCallback(async () => {
         try {
@@ -168,11 +171,11 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
             </div>
 
             {confirming && readiness && (
-                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => !busy && setConfirming(false)}>
-                    <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 sm:p-6" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-base font-bold font-display mb-1">Publish these results?</h2>
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} {...backdropProps}>
+                    <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={releaseTitleId} tabIndex={-1} className="card w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 outline-none sm:p-6">
+                        <h2 id={releaseTitleId} className="text-base font-bold font-display mb-1">Release these results?</h2>
                         <p className="text-xs text-muted-foreground mb-4">
-                            Once published, an admin reviews and approves before report cards can be downloaded.
+                            Learners and parents see them as soon as you release, so check the marks first. You can unpublish to correct them later.
                         </p>
 
                         <div className="grid grid-cols-3 gap-2 mb-4">
@@ -231,7 +234,7 @@ export function ExamStatusBar({ examId, status, onChanged }: Props) {
                         <div className="flex justify-end gap-2 pt-2 border-t border-border">
                             <button type="button" className="btn-secondary" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
                             <button type="button" className="btn-primary disabled:opacity-50" onClick={confirmPublish} disabled={busy}>
-                                {busy ? 'Publishing…' : readiness.hasIssues ? 'Publish anyway' : 'Publish for review'}
+                                {busy ? 'Releasing…' : readiness.hasIssues ? 'Release anyway' : 'Release now'}
                             </button>
                         </div>
                     </div>

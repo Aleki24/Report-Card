@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ChevronRight, Loader2, Calendar, BookOpen, Users, Building, GraduationCap, School, Library, Hourglass, Ban } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -44,8 +45,7 @@ export default function OnboardingWizard() {
   // rather than dumping them on the generic dashboard. Same-site paths only.
   const [nextPath] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    const raw = new URLSearchParams(window.location.search).get('next');
-    return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+    return safeInternalPath(new URLSearchParams(window.location.search).get('next'), window.location.origin);
   });
 
   // Name of the student a scanned report card identified, shown so they can

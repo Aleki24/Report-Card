@@ -6,7 +6,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { inviteDeliveryMessage } from '@shared/invite-delivery';
 import type { CreatedCredential } from '@shared/import/student-rows';
 import { ImportStudentsSheet } from '@/components/people/ImportStudentsSheet';
-import { useAcademicStructure, useGradeStreams } from '@/lib/useSchoolData';
+import { useAcademicStructure, useManagedGradeStreams } from '@/lib/useSchoolData';
 import { isSeniorSchoolGrade } from '@shared/curriculum-bands';
 import { PATHWAY_ORDER, pathwayLabel } from '@shared/pathway-definitions';
 import { BulkPathwaySheet, type CombinationOption } from '@/components/people/BulkPathwaySheet';
@@ -77,8 +77,10 @@ function StudentsSection() {
     const { colors } = useTheme();
     const router = useRouter();
     const { role } = useCurrentUser();
-    const { data, loading, error, refresh } = useApiQuery<StudentListItem[]>('/api/school/data?type=students');
-    const { streams } = useGradeStreams();
+    // A class teacher's People is their own class (as on the web), and they
+    // add or move learners only within the classes they run.
+    const { data, loading, error, refresh } = useApiQuery<StudentListItem[]>(`/api/school/data?type=students${role === 'CLASS_TEACHER' ? '&scope=class' : ''}`);
+    const { streams } = useManagedGradeStreams();
     const structure = useAcademicStructure();
     const combinations = useApiQuery<CombinationOption[]>('/api/school/data?type=subject_combinations');
     const [pathway, setPathway] = useState<string>('');
