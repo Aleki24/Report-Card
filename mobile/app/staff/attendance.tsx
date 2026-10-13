@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
-import { useGradeStreams } from '@/lib/useSchoolData';
+import { useManagedGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
@@ -32,7 +32,7 @@ function AttendanceContent() {
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
-    const { streams, loading: streamsLoading, error: streamsError } = useGradeStreams();
+    const { streams, loading: streamsLoading, error: streamsError } = useManagedGradeStreams();
     const [streamId, setStreamId] = useState<string | null>(null);
     const [date, setDate] = useState(toISODate());
     const [rows, setRows] = useState<ClassAttendanceRow[]>([]);

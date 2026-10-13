@@ -4,7 +4,7 @@ import { Square, SquareCheck } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { useAcademicYears, useGradeStreams, useTerms } from '@/lib/useSchoolData';
+import { useAcademicYears, useManagedGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
 import { CompareTerms } from '@/components/reports/CompareTerms';
 import { errorMessage, fileSafe, fullName, pluralize } from '@/lib/format';
@@ -54,7 +54,7 @@ export default function ReportsScreen() {
 function ReportsContent() {
     const { years, loading: yearsLoading } = useAcademicYears();
     const { terms, activeTermId, loading: termsLoading } = useTerms();
-    const { streams, loading: streamsLoading } = useGradeStreams();
+    const { streams, loading: streamsLoading } = useManagedGradeStreams();
     const [yearId, setYearId] = useState<string | null>(null);
     const [termId, setTermId] = useState<string | null>(null);
     const [streamId, setStreamId] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { useAuth } from '@/components/AuthProvider';
 
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
@@ -130,7 +131,7 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
         body: JSON.stringify({ type, user_id: profile?.id, ...payload }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      if (!res.ok) throw new Error(apiErrorMessage(data, 'Failed'));
       setQuickMsg('✅ Added!');
       await fetchDropdowns();
       setTimeout(() => setQuickMsg(''), 2000);
@@ -169,7 +170,8 @@ export function CreateExamModal({ onClose, onCreated, preselectedSubjectId }: Pr
   const handleQuickAddSubject = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     if (!qSubject.name.trim() || !qSubject.code.trim() || !qSubject.academic_level_id) return;
-    const result = await quickAdd('subject', qSubject);
+    // The grading system is optional: send null, not "", which fails validation.
+    const result = await quickAdd('subject', { ...qSubject, grading_system_id: qSubject.grading_system_id || null });
     if (result) { setSelectedSubjectId(result.id); setQSubject({ name: '', code: '', academic_level_id: '', grading_system_id: '', subject_type: 'CORE' }); setAddingSubject(false); }
   };
 

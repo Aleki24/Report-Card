@@ -281,10 +281,12 @@ export async function GET(request: NextRequest) {
           .eq('school_id', schoolId)
           .order('full_name');
 
-        if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        if (error) return NextResponse.json({ error: 'Could not load classes.' }, { status: 400 });
         let filteredStreams = data || [];
 
-        if (auth.role !== 'ADMIN') {
+        // Staff whose duty spans the school (bursar, nurse) pick from every
+        // class, as they see every learner; teachers see their own.
+        if (auth.role !== 'ADMIN' && !seesAllStudents(await getAccess())) {
           const perms = await getTeacherPermissions(auth.userId);
           filteredStreams = filteredStreams.filter(stream => isStreamVisibleToTeacher(stream, perms));
         }
