@@ -1,4 +1,5 @@
 import { route } from '@/lib/platform/access';
+import { fetchAllRows } from '@/lib/postgrest';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { STUDENT_JOIN } from '@/lib/ops/resource';
 
@@ -22,7 +23,7 @@ export const GET = route('health status', { module: 'health', permission: 'healt
     let trends: { complaint: string; visits: number; alert: boolean }[] = [];
     if (access.can('health.clinical')) {
         const since = new Date(Date.now() - 48 * 3600_000).toISOString();
-        const { data, error } = await db.from('clinic_visits').select('complaint').eq('school_id', access.schoolId).gte('visited_at', since).limit(2000);
+        const { rows: data, error } = await fetchAllRows(() => db.from('clinic_visits').select('id, complaint').eq('school_id', access.schoolId).gte('visited_at', since).order('id'));
         if (error) throw error;
         const counts = new Map<string, number>();
         for (const v of data ?? []) {
