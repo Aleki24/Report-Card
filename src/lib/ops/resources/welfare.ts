@@ -94,6 +94,8 @@ export const dormInspections = defineResource({
     filters: ['dorm_id'],
     refs: { dorm_id: 'dorms' },
     createdByColumn: 'inspected_by',
+    // A patron inspects their own dorm; the matron (boarding.manage) any.
+    dutyScope: { column: 'dorm_id', duty: 'PATRON', unless: 'boarding.manage' },
 });
 
 // ── Health ───────────────────────────────────────────────────

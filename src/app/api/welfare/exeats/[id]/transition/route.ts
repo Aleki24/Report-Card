@@ -27,12 +27,29 @@ const passCode = () => Array.from(crypto.randomBytes(6), b => 'ABCDEFGHJKMNPQRST
 export const POST = route<Params>('exeat transition', { module: 'boarding', permission: ['boarding.manage', 'boarding.rollcall'] }, async ({ access, params, request }) => {
     const { action } = await parseBody(request, bodySchema);
     const step = ACTIONS[action];
-    if (step.manage && !access.can('boarding.manage')) throw new HttpError(403, 'Only the matron or deputy approves exeats.');
+    if (step.manage && !access.can('boarding.manage')) throw new HttpError(403, 'Approving exeats needs the Matron duty (boarding management) or the admin.');
     const db = createSupabaseAdmin();
-    const { data: exeat, error } = await db.from('exeats').select('id, status, student_id, return_by').eq('id', params.id).eq('school_id', access.schoolId).maybeSingle();
+    const { data: exeat, error } = await db.from('exeats').select('id, status, student_id, leave_at, return_by').eq('id', params.id).eq('school_id', access.schoolId).maybeSingle();
     if (error) throw error;
     if (!exeat) throw new HttpError(404, 'Exeat not found.');
     if (!(step.from as readonly string[]).includes(exeat.status as string)) throw new HttpError(409, `This exeat is ${String(exeat.status).toLowerCase()}.`);
+
+    // A patron works the gate for their own dorm's learners only.
+    if (!access.can('boarding.manage')) {
+        const dorms = access.scopeIds('PATRON');
+        if (dorms.length > 0) {
+            const { data: bed, error: bedError } = await db.from('dorm_allocations').select('dorm_id')
+                .eq('school_id', access.schoolId).eq('student_id', exeat.student_id as string).is('ended_on', null).maybeSingle();
+            if (bedError) throw bedError;
+            if (!bed || !dorms.includes(bed.dorm_id as string)) throw new HttpError(403, 'That learner is not in your dorm.');
+        }
+    }
+    // A learner leaves only within the pass's window.
+    if (action === 'CHECK_OUT') {
+        const nowMs = Date.now();
+        if (exeat.leave_at && new Date(exeat.leave_at as string).getTime() > nowMs) throw new HttpError(409, 'This exeat does not start yet.');
+        if (exeat.return_by && new Date(exeat.return_by as string).getTime() < nowMs) throw new HttpError(409, 'This exeat has already ended.');
+    }
 
     const now = new Date().toISOString();
     const update: Record<string, unknown> = { status: step.to };

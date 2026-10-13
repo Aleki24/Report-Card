@@ -199,6 +199,14 @@ const WHOLE_SCHOOL_PERMISSIONS: readonly Permission[] = [
 export function seesAllStudents(access: Access | null): boolean {
     if (!access) return false;
     if (access.role === 'ADMIN') return true;
-    const dutyGrants = collectGrants(null, access.duties.map(d => d.duty));
-    return WHOLE_SCHOOL_PERMISSIONS.some(p => grantAllows(dutyGrants, access.modules, p));
+    return WHOLE_SCHOOL_PERMISSIONS.some(p => dutyAllows(access, p));
+}
+
+/**
+ * Whether one of the caller's duties (not their role) grants `permission`.
+ * Role grants are per class (a teacher assesses their own classes); a duty
+ * such as DOS or Deputy covers the whole school.
+ */
+export function dutyAllows(access: Access, permission: Permission): boolean {
+    return grantAllows(collectGrants(null, access.duties.map(d => d.duty)), access.modules, permission);
 }

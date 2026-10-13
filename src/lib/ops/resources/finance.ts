@@ -134,5 +134,8 @@ export const expenses = defineResource({
         fields: ['description', 'amount', 'expense_date', 'supplier_id', 'vote_head_id', 'payment_method', 'reference'],
         editableWhile: { column: 'status', values: ['PENDING'] },
     },
+    // What was approved stays on record: after approval or payment only the
+    // payment details (method, reference) can still be filled in.
+    frozen: { column: 'status', values: ['APPROVED', 'PAID'], fields: ['description', 'amount', 'expense_date', 'supplier_id', 'vote_head_id'] },
     audit: true,
 });

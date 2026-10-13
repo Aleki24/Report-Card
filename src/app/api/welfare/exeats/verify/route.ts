@@ -17,6 +17,10 @@ export const GET = route('exeat verify', { module: 'boarding', permission: ['boa
     if (error) throw error;
     if (!data) throw new HttpError(404, 'No exeat has that pass code.');
     const now = Date.now();
-    const valid = (data.status === 'APPROVED' || data.status === 'OUT') && now <= Date.parse(data.return_by as string);
+    // Valid from the time leave starts until the learner is due back (an
+    // approved pass for the weekend does not open the gate on Wednesday).
+    // A learner already out stays valid until they return.
+    const started = data.status === 'OUT' || Date.parse(data.leave_at as string) <= now;
+    const valid = (data.status === 'APPROVED' || data.status === 'OUT') && started && now <= Date.parse(data.return_by as string);
     return { ...data, valid };
 });
