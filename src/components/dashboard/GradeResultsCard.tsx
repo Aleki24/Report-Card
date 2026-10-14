@@ -3,114 +3,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { startingTermIndex, termsNewestFirst } from '@/lib/term-fallback';
 import Link from 'next/link';
-import { gradeSymbolFromScales } from '@/lib/analytics';
-import { shortCurriculumLabel } from '@/lib/curriculum-labels';
+import { resultSeries, subjectResults, type ExamTotal, type ExamTotalsResponse } from '@/lib/grade-results';
 import { cn } from '@/lib/utils';
-import type { GradeBand } from '@/types';
 import EmptyState from './EmptyState';
 
 interface Stream { id: string; full_name: string }
 
-interface Mark {
-  subject_id: string | null;
-  subject_name: string;
-  percentage: number | null;
-  exam_id: string;
-  exam_name: string;
-  exam_date: string | null;
-}
-
-/** Mirrors `SubjectMeta` from /api/school/analytics. */
-interface SubjectMeta {
-  id: string;
-  name: string;
-  academic_level_id: string | null;
-  level_code: string | null;
-  level_name: string | null;
-  grading_system_id: string | null;
-}
-
-interface AnalyticsResponse {
-  marks?: Mark[];
-  subjects?: SubjectMeta[];
-  gradingScales?: Record<string, GradeBand[]>;
-}
-
-interface SubjectAgg {
-  /** Subject id where the mark has one; the name is only a fallback key. */
-  key: string;
-  subject: string;
-  levelId: string;
-  levelLabel: string;
-  avg: number;
-  count: number;
-  /** Null when the subject has no grading system — never a guess. */
-  grade: string | null;
-}
-
 interface LevelOption { id: string; label: string; count: number }
 
-/** One assessment series, e.g. "Term 2 Midterm" — the per-subject exam records grouped back together. */
-interface SeriesOption { key: string; name: string; date: number; examIds: string[] }
-
-/** Stable identity so the memos below don't rerun on every loading render. */
-const EMPTY_MARKS: Mark[] = [];
-
-const UNKNOWN_LEVEL = '__unknown__';
-
-function levelLabelOf(subject: SubjectMeta | undefined): string {
-  if (!subject) return 'Other';
-  return shortCurriculumLabel(subject.level_code, subject.level_name) ?? 'Other';
-}
-
-/**
- * Subject averages for one assessment series.
- *
- * Grouping is by `subject_id`, not by name. A school running both curricula has
- * two subjects called "Agriculture" — one CBC, one 8-4-4, each with its own
- * grading scale — and keying on the name merged them into a single row whose
- * marks came off two different tables.
- *
- * The badge is the school's own scale applied to the average. It used to be the
- * most frequent `grade_symbol` among the individual marks, which is a different
- * quantity from the number beside it and, once the two curricula were merged,
- * not even a grade this subject can be awarded: a class averaging 50 was
- * labelled A while the school's table put 50 at B-. Where a subject has no
- * grading system configured there is no badge at all.
- */
-function aggregateBySubject(
-  marks: Mark[],
-  subjectsById: Map<string, SubjectMeta>,
-  scalesBySystem: Map<string, GradeBand[]>,
-): SubjectAgg[] {
-  const by = new Map<string, { name: string; meta?: SubjectMeta; sum: number; n: number }>();
-
-  for (const m of marks) {
-    if (m.percentage == null) continue;
-    const meta = m.subject_id ? subjectsById.get(m.subject_id) : undefined;
-    const key = m.subject_id ?? `name:${m.subject_name}`;
-    const bucket = by.get(key) ?? { name: (meta?.name || m.subject_name || '').trim(), meta, sum: 0, n: 0 };
-    bucket.sum += Number(m.percentage);
-    bucket.n += 1;
-    by.set(key, bucket);
-  }
-
-  return [...by.entries()]
-    .map(([key, v]) => {
-      const avg = Math.round(v.sum / v.n);
-      const systemId = v.meta?.grading_system_id;
-      return {
-        key,
-        subject: v.name || 'Unknown',
-        levelId: v.meta?.academic_level_id ?? UNKNOWN_LEVEL,
-        levelLabel: levelLabelOf(v.meta),
-        avg,
-        count: v.n,
-        grade: systemId ? gradeSymbolFromScales(avg, scalesBySystem.get(systemId)) : null,
-      };
-    })
-    .sort((a, b) => b.avg - a.avg);
-}
+/** Stable identities so the memos below don't rerun on every loading render. */
+const EMPTY_EXAMS: ExamTotal[] = [];
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 /* Red is reserved for genuinely alarming scores (≤20%); everything else gets
    calm colors — green for strong, amber for good, blue for the middle band. */
@@ -167,7 +70,7 @@ export default function GradeResultsCard() {
    * render — no effect, no second render pass, and no window in which the
    * previous class's marks are on screen under the new class's heading.
    */
-  const [byScope, setByScope] = useState<Record<string, AnalyticsResponse>>({});
+  const [byScope, setByScope] = useState<Record<string, Partial<ExamTotalsResponse>>>({});
 
   // The term: the current one, stepping back past terms with no marks yet
   // (the first weeks of a term) unless someone picks a term themselves.
@@ -197,7 +100,7 @@ export default function GradeResultsCard() {
 
   const scopeData = byScope[cacheKey];
   const loading = !streamsLoaded || scopeData === undefined;
-  const marks = scopeData?.marks ?? EMPTY_MARKS;
+  const exams = scopeData?.exams ?? EMPTY_EXAMS;
 
   useEffect(() => {
     if (!streamsLoaded || byScope[cacheKey] !== undefined) return;
@@ -205,10 +108,11 @@ export default function GradeResultsCard() {
     const params = new URLSearchParams();
     if (scopeKey !== 'all') params.set('stream_id', scopeKey);
     if (term) params.set('term_id', term.id);
-    const qs = params.toString();
-    fetch(`/api/school/analytics${qs ? `?${qs}` : ''}`)
+    // Each exam's marks totalled on the server, not every mark of the term.
+    params.set('summary', 'exams');
+    fetch(`/api/school/analytics?${params.toString()}`)
       .then(res => (res.ok ? res.json() : {}))
-      .then((json: AnalyticsResponse) => {
+      .then((json: Partial<ExamTotalsResponse>) => {
         if (!cancelled) setByScope(prev => ({ ...prev, [cacheKey]: json }));
       })
       .catch(() => {
@@ -218,66 +122,31 @@ export default function GradeResultsCard() {
   }, [cacheKey, scopeKey, term, streamsLoaded, byScope]);
 
   // The whole school has nothing in this term yet: show the term before it.
-  const termEmpty = scopeIdx === -1 && !seeking && !loading && marks.length === 0;
+  const termEmpty = scopeIdx === -1 && !seeking && !loading && exams.length === 0;
   const canStepBack = !termChosen && (termIdx ?? startTerm) < terms.length - 1;
   useEffect(() => {
     if (termEmpty && canStepBack) setTermIdx((termIdx ?? startTerm) + 1);
   }, [termEmpty, canStepBack, termIdx, startTerm]);
-  const steppedBackFrom = !termChosen && termIdx !== null && termIdx !== startTerm && marks.length > 0 ? terms[startTerm] : null;
+  const steppedBackFrom = !termChosen && termIdx !== null && termIdx !== startTerm && exams.length > 0 ? terms[startTerm] : null;
 
   useEffect(() => {
     if (!seeking || !streamsLoaded) return;
     if (streams.length === 0 || scopeIdx === -1) { setScopeIdx(-1); setSeeking(false); return; }
     if (loading) return; // this scope's marks are not in yet
-    if (marks.length > 0) { setSeeking(false); return; }
+    if (exams.length > 0) { setSeeking(false); return; }
     if (scopeIdx < streams.length - 1) setScopeIdx(scopeIdx + 1);
     else { setScopeIdx(-1); setSeeking(false); } // no class had marks — fall back to All classes
-  }, [seeking, streamsLoaded, loading, marks, scopeIdx, streams.length]);
+  }, [seeking, streamsLoaded, loading, exams, scopeIdx, streams.length]);
 
   const subjectsById = useMemo(
     () => new Map((scopeData?.subjects ?? []).map(s => [s.id, s])),
     [scopeData],
   );
-  const scalesBySystem = useMemo(
-    () => new Map(Object.entries(scopeData?.gradingScales ?? {})),
-    [scopeData],
-  );
+  const gradingScales = scopeData?.gradingScales;
 
-  // Exams in this app are per-subject records ("Term 2 Midterm - English",
-  // sometimes with extra decoration like "(English)" appended), so group them
-  // back into assessment series. The subject name is removed wherever it
-  // appears in the exam name — tolerant of separators, parentheses and
-  // ordering — and leftover punctuation is cleaned, so every subject of a
-  // sitting lands in the same series regardless of naming quirks.
-  const seriesOptions = useMemo<SeriesOption[]>(() => {
-    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const seriesNameOf = (examName: string, subjectName: string) => {
-      let n = examName;
-      const subj = subjectName.trim();
-      if (subj) n = n.replace(new RegExp(escapeRe(subj), 'gi'), '');
-      n = n
-        .replace(/\(\s*\)/g, ' ')          // empty parens left by removal
-        .replace(/\s*[-–—:/]\s*(?=$)/g, '') // dangling trailing separators
-        .replace(/^\s*[-–—:/]\s*/g, '')     // dangling leading separators
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-      return n || examName;
-    };
-    const byKey = new Map<string, { name: string; date: number; examIds: Set<string> }>();
-    for (const m of marks) {
-      const seriesName = seriesNameOf(m.exam_name || 'Exam', m.subject_name || '');
-      const time = m.exam_date ? new Date(m.exam_date).getTime() : 0;
-      // Year-scope the key so a recurring series name doesn't merge across years.
-      const key = `${seriesName.toLowerCase()}|${time ? new Date(time).getFullYear() : 0}`;
-      const cur = byKey.get(key) ?? { name: seriesName, date: 0, examIds: new Set<string>() };
-      cur.date = Math.max(cur.date, time);
-      cur.examIds.add(m.exam_id);
-      byKey.set(key, cur);
-    }
-    return [...byKey.entries()]
-      .map(([key, v]) => ({ key, name: v.name, date: v.date, examIds: [...v.examIds] }))
-      .sort((a, b) => b.date - a.date);
-  }, [marks]);
+  // Exams in this app are per-subject records ("Term 2 Midterm - English"),
+  // grouped back into the sitting they belong to.
+  const seriesOptions = useMemo(() => resultSeries(exams), [exams]);
 
   // Default to the newest series whenever the scope's marks change.
   useEffect(() => {
@@ -285,10 +154,10 @@ export default function GradeResultsCard() {
   }, [seriesOptions]);
 
   const series = seriesOptions.find(s => s.key === examId) ?? null;
-  const seriesExamIds = useMemo(() => new Set(series?.examIds ?? []), [series]);
+  const seriesExamIds = series?.examIds ?? EMPTY_IDS;
   const allSubjects = useMemo(
-    () => aggregateBySubject(marks.filter(m => seriesExamIds.has(m.exam_id)), subjectsById, scalesBySystem),
-    [marks, seriesExamIds, subjectsById, scalesBySystem],
+    () => subjectResults(exams.filter(e => seriesExamIds.has(e.exam_id)), subjectsById, gradingScales ?? {}),
+    [exams, seriesExamIds, subjectsById, gradingScales],
   );
 
   // ── Curriculum, the outermost scope ──

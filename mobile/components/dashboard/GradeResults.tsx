@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { LifeBuoy, Trophy, type LucideIcon } from 'lucide-react-native';
-import { gradeSymbolFromScales } from '@shared/analytics';
-import { shortCurriculumLabel } from '@shared/curriculum-labels';
+import { resultSeries, subjectResults, type ExamTotal, type ExamTotalsResponse, type SubjectResult } from '@shared/grade-results';
 import { withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
@@ -12,67 +11,8 @@ import { Card, ChipSelect, EmptyState, FilterGrid, LoadingView } from '@/compone
 import { SectionTitle } from './kit';
 import { ColumnChart, Ring, type Column } from './charts';
 
-/** GET /api/school/analytics (the parts the web's GradeResultsCard reads). */
-interface Mark { subject_id: string | null; subject_name: string; percentage: number | null; exam_id: string; exam_name: string; exam_date: string | null }
-interface SubjectMeta { id: string; name: string; academic_level_id: string | null; level_code: string | null; level_name: string | null; grading_system_id: string | null }
-interface GradeBand { min_percentage: number; max_percentage: number; symbol: string }
-interface AnalyticsResponse { marks?: Mark[]; subjects?: SubjectMeta[]; gradingScales?: Record<string, GradeBand[]> }
-
-interface SubjectAgg { key: string; subject: string; levelId: string; levelLabel: string; avg: number; count: number; grade: string | null }
-interface Series { key: string; name: string; date: number; examIds: Set<string> }
-
 const ALL = 'all';
-const UNKNOWN_LEVEL = '__unknown__';
-
-/** Per-subject exam records grouped back into a sitting: the subject's name is taken out of the exam name. */
-function seriesNameOf(examName: string, subjectName: string): string {
-    const subj = subjectName.trim();
-    let n = subj ? examName.replace(new RegExp(subj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '') : examName;
-    n = n.replace(/\(\s*\)/g, ' ').replace(/\s*[-–—:/]\s*(?=$)/g, '').replace(/^\s*[-–—:/]\s*/g, '').replace(/\s{2,}/g, ' ').trim();
-    return n || examName;
-}
-
-function seriesOf(marks: readonly Mark[]): Series[] {
-    const byKey = new Map<string, Series>();
-    for (const m of marks) {
-        const name = seriesNameOf(m.exam_name || 'Exam', m.subject_name || '');
-        const time = m.exam_date ? new Date(m.exam_date).getTime() : 0;
-        // Year-scoped so a recurring series name doesn't merge across years.
-        const key = `${name.toLowerCase()}|${time ? new Date(time).getFullYear() : 0}`;
-        const cur = byKey.get(key) ?? { key, name, date: 0, examIds: new Set<string>() };
-        cur.date = Math.max(cur.date, time);
-        cur.examIds.add(m.exam_id);
-        byKey.set(key, cur);
-    }
-    return [...byKey.values()].sort((a, b) => b.date - a.date);
-}
-
-/** Averages by subject id (two curricula can share a subject name); the grade is the school's own scale applied to the average. */
-function bySubject(marks: readonly Mark[], subjects: ReadonlyMap<string, SubjectMeta>, scales: Readonly<Record<string, GradeBand[]>>): SubjectAgg[] {
-    const by = new Map<string, { name: string; meta?: SubjectMeta; sum: number; n: number }>();
-    for (const m of marks) {
-        if (m.percentage == null) continue;
-        const meta = m.subject_id ? subjects.get(m.subject_id) : undefined;
-        const key = m.subject_id ?? `name:${m.subject_name}`;
-        const bucket = by.get(key) ?? { name: (meta?.name || m.subject_name || '').trim(), meta, sum: 0, n: 0 };
-        bucket.sum += Number(m.percentage);
-        bucket.n += 1;
-        by.set(key, bucket);
-    }
-    return [...by.entries()].map(([key, v]) => {
-        const avg = Math.round(v.sum / v.n);
-        const system = v.meta?.grading_system_id;
-        return {
-            key,
-            subject: v.name || 'Unknown',
-            levelId: v.meta?.academic_level_id ?? UNKNOWN_LEVEL,
-            levelLabel: (v.meta && shortCurriculumLabel(v.meta.level_code, v.meta.level_name)) ?? 'Other',
-            avg,
-            count: v.n,
-            grade: system ? gradeSymbolFromScales(avg, scales[system]) : null,
-        };
-    }).sort((a, b) => b.avg - a.avg);
-}
+const EMPTY_EXAMS: ExamTotal[] = [];
 
 /** Red only for genuinely alarming scores; calm colours otherwise, as on the web. */
 function sevColor(colors: Palette, avg: number): string {
@@ -91,7 +31,7 @@ const BANDS = [
 ] as const;
 
 /** One highlighted subject: the strongest, or the one that needs help. */
-function Spotlight({ title, subject, color, icon: Icon }: { title: string; subject: SubjectAgg; color: string; icon: LucideIcon }) {
+function Spotlight({ title, subject, color, icon: Icon }: { title: string; subject: SubjectResult; color: string; icon: LucideIcon }) {
     const styles = useStyles();
     return (
         <View style={[styles.spot, { borderColor: `${color}55`, backgroundColor: `${color}14` }]}>
@@ -125,11 +65,12 @@ export function GradeResults({ passMark }: { passMark?: number }) {
     const startIndex = startingTermIndex(terms);
     const autoTerm = terms[autoIndex ?? startIndex] ?? null;
     const activeTermId = termId ?? autoTerm?.id ?? null;
-    const query = useApiQuery<AnalyticsResponse>(
-        terms.length === 0 && !termRows ? null : withQuery('/api/school/analytics', { stream_id: scope === ALL ? null : scope, term_id: activeTermId }),
+    // Each exam's marks totalled on the server, not every mark of the term.
+    const query = useApiQuery<Partial<ExamTotalsResponse>>(
+        terms.length === 0 && !termRows ? null : withQuery('/api/school/analytics', { stream_id: scope === ALL ? null : scope, term_id: activeTermId, summary: 'exams' }),
         { raw: true },
     );
-    const empty = !!query.data && (query.data.marks ?? []).length === 0;
+    const empty = !!query.data && (query.data.exams ?? []).length === 0;
     useEffect(() => {
         if (termId || !empty || query.loading) return;
         const i = autoIndex ?? startIndex;
@@ -137,13 +78,13 @@ export function GradeResults({ passMark }: { passMark?: number }) {
     }, [empty, termId, query.loading, autoIndex, startIndex, terms.length]);
     const steppedBack = !termId && autoIndex !== null && autoIndex !== startIndex && !empty ? terms[startIndex] : null;
 
-    const marks = useMemo(() => query.data?.marks ?? [], [query.data]);
-    const series = useMemo(() => seriesOf(marks), [marks]);
+    const exams = query.data?.exams ?? EMPTY_EXAMS;
+    const series = useMemo(() => resultSeries(exams), [exams]);
     const active = series.find((s) => s.key === seriesKey) ?? series[0] ?? null;
     const subjectMeta = useMemo(() => new Map((query.data?.subjects ?? []).map((s) => [s.id, s])), [query.data]);
     const all = useMemo(
-        () => (active ? bySubject(marks.filter((m) => active.examIds.has(m.exam_id)), subjectMeta, query.data?.gradingScales ?? {}) : []),
-        [marks, active, subjectMeta, query.data],
+        () => (active ? subjectResults(exams.filter((e) => active.examIds.has(e.exam_id)), subjectMeta, query.data?.gradingScales ?? {}) : []),
+        [exams, active, subjectMeta, query.data],
     );
     // One curriculum at a time: CBC and 8-4-4 are graded on different tables.
     const levels = useMemo(() => {
