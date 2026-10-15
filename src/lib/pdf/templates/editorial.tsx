@@ -6,7 +6,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
-import { FONTS } from '../pdfTheme';
+import { FONTS, FONT_STACKS } from '../pdfTheme';
 import { buildReportModel, signed, type ReportModel, type SubjectRow } from '../reportModel';
 import { BrandFooter, SignatureImage, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
@@ -18,14 +18,15 @@ const HAIR = '#D6D6D6';
 const X = 34.5;
 
 const sans = FONTS.inter;
-const serif = FONTS.instrument;
+const serif = FONT_STACKS.instrument;
+const serifItalic = FONT_STACKS.instrumentItalic;
 
 const s = StyleSheet.create({
     page: { flex: 1, backgroundColor: '#FFFFFF', fontFamily: sans, color: INK, paddingTop: 28.5, paddingHorizontal: X },
     head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     school: { fontFamily: serif, fontSize: 22.5, lineHeight: 1 },
     address: { fontSize: 6.4, color: SOFT, marginTop: 5 },
-    motto: { fontFamily: serif, fontStyle: 'italic', fontSize: 8.5, color: SOFT, marginTop: 3 },
+    motto: { fontFamily: serifItalic, fontStyle: 'italic', fontSize: 8.5, color: SOFT, marginTop: 3 },
     doc: { fontWeight: 600, fontSize: 6, textTransform: 'uppercase', letterSpacing: 1.5, textAlign: 'right', lineHeight: 1.5 },
     rule: { height: 2.25, backgroundColor: INK, marginTop: 10.5 },
 
@@ -51,7 +52,7 @@ const s = StyleSheet.create({
     n: { fontSize: 7.5, textAlign: 'center' },
     nb: { fontWeight: 700, fontSize: 7.5, textAlign: 'center' },
     nm: { fontSize: 7.5, textAlign: 'center', color: GREY },
-    remark: { fontFamily: serif, fontStyle: 'italic', fontSize: 8.3, color: '#333333' },
+    remark: { fontFamily: serifItalic, fontStyle: 'italic', fontSize: 8.3, color: '#333333' },
     track: { height: 3.8, backgroundColor: '#EDEDED', position: 'relative' },
     fill: { height: 3.8, backgroundColor: INK },
     tick: { position: 'absolute', top: -2.2, width: 0.9, height: 8.2, backgroundColor: INK },

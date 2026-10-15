@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
+import { FONT_STACKS } from './pdfTheme';
 import { bandForGrade } from '@/lib/curriculum-bands';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, sectionFor, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';
@@ -38,12 +39,12 @@ const LABEL_W = 58;
 const BREAK_W = 15;
 
 const st = StyleSheet.create({
-    page: { padding: PAGE.margin, paddingBottom: PAGE.margin + FOOTER_H, fontFamily: 'Helvetica', fontSize: 8, color: INK },
-    watermark: { position: 'absolute', top: 230, left: 0, right: 0, textAlign: 'center', fontSize: 120, fontFamily: 'Helvetica-Bold', color: BRAND, opacity: 0.045, transform: 'rotate(-24deg)', letterSpacing: 6 },
+    page: { padding: PAGE.margin, paddingBottom: PAGE.margin + FOOTER_H, fontFamily: FONT_STACKS.helvetica, fontSize: 8, color: INK },
+    watermark: { position: 'absolute', top: 230, left: 0, right: 0, textAlign: 'center', fontSize: 120, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: BRAND, opacity: 0.045, transform: 'rotate(-24deg)', letterSpacing: 6 },
     header: { height: HEADER_H, flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
     logo: { width: 38, height: 38, objectFit: 'contain', marginRight: 10 },
     school: { fontSize: 8, color: MUTED, textTransform: 'uppercase', letterSpacing: 1 },
-    title: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: BRAND, marginTop: 1 },
+    title: { fontSize: 18, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: BRAND, marginTop: 1 },
     chip: { marginLeft: 'auto', alignItems: 'flex-end' },
     chipLabel: { fontSize: 7, color: '#FFFFFF', backgroundColor: BRAND, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 3, textTransform: 'uppercase', letterSpacing: 0.8 },
     chipSub: { fontSize: 7.5, color: MUTED, marginTop: 4 },
@@ -51,31 +52,31 @@ const st = StyleSheet.create({
     table: { borderWidth: 1, borderColor: LINE, borderRadius: 4 },
     row: { flexDirection: 'row' },
     headCell: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 2, borderLeftWidth: 1, borderLeftColor: LINE },
-    headLabel: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: BRAND },
+    headLabel: { fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 7.5, color: BRAND },
     headTime: { fontSize: 6, color: MUTED, marginTop: 1 },
     rowLabel: { width: LABEL_W, justifyContent: 'center', paddingHorizontal: 6, backgroundColor: '#F8FAFC' },
-    rowLabelText: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: BRAND },
+    rowLabelText: { fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 8.5, color: BRAND },
     rowLabelSub: { fontSize: 6, color: MUTED, marginTop: 1 },
     cell: { padding: 1.5, borderLeftWidth: 1, borderLeftColor: LINE },
     lesson: { flex: 1, borderRadius: 3, paddingHorizontal: 3, paddingVertical: 2, justifyContent: 'center' },
-    top: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, lineHeight: 1.15 },
+    top: { fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 7.5, lineHeight: 1.15 },
     bottom: { fontSize: 6, color: '#4B5563', marginTop: 1.5 },
     breakCol: { width: BREAK_W, backgroundColor: BREAK_FILL, borderLeftWidth: 1, borderLeftColor: LINE, justifyContent: 'center', alignItems: 'center' },
     breakText: { fontSize: 5.5, color: '#92400E', letterSpacing: 0.6, textTransform: 'uppercase', transform: 'rotate(-90deg)', width: 90, textAlign: 'center' },
     footer: { position: 'absolute', left: PAGE.margin, right: PAGE.margin, bottom: 12, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: LINE, paddingTop: 5, fontSize: 6.5, color: MUTED },
-    brandMark: { fontFamily: 'Helvetica-Bold', color: BRAND },
+    brandMark: { fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: BRAND },
     coverBand: { backgroundColor: BRAND, borderRadius: 8, padding: 28, marginTop: 40 },
     coverEyebrow: { fontSize: 9, color: '#BFDBFE', textTransform: 'uppercase', letterSpacing: 2 },
-    coverTitle: { fontSize: 30, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', marginTop: 6 },
+    coverTitle: { fontSize: 30, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: '#FFFFFF', marginTop: 6 },
     coverSub: { fontSize: 12, color: '#DBEAFE', marginTop: 6 },
     statRow: { flexDirection: 'row', marginTop: 26, gap: 14 },
     stat: { flex: 1, borderWidth: 1, borderColor: LINE, borderRadius: 6, padding: 12 },
-    statValue: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: INK },
+    statValue: { fontSize: 22, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK },
     statLabel: { fontSize: 7.5, color: MUTED, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 },
-    contentsHead: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: BRAND, textTransform: 'uppercase', letterSpacing: 1, marginTop: 22, marginBottom: 6 },
+    contentsHead: { fontSize: 9, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: BRAND, textTransform: 'uppercase', letterSpacing: 1, marginTop: 22, marginBottom: 6 },
     contentsLine: { fontSize: 9, color: INK, marginBottom: 3 },
     loadRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 5 },
-    loadName: { width: 170, fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
+    loadName: { width: 170, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 8.5 },
     loadNum: { width: 60, fontSize: 8.5, textAlign: 'right', paddingRight: 10 },
     loadTrack: { width: 160, height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, marginRight: 12 },
     loadClasses: { flex: 1, fontSize: 7.5, color: MUTED },

@@ -41,6 +41,22 @@ export const FONTS = {
     dmSerif: 'DM Serif Display',
 } as const;
 
+/**
+ * Font stacks for families that cannot set every name. Kikuyu, Meru and Embu
+ * names use ĩ and ũ (Wanjirũ, Mũthoni, Kĩmani): DM Serif and Instrument Serif
+ * have neither, nor has the built-in Helvetica, which printed "K)mani". A
+ * stack keeps its first family for every letter that family has and takes
+ * only the missing ones from the next. react-pdf refuses a style one family
+ * of the stack lacks, so italics get a stack of their own.
+ */
+export const FONT_STACKS = {
+    dmSerif: [FONTS.dmSerif, FONTS.playfair],
+    instrument: [FONTS.instrument, FONTS.playfair],
+    instrumentItalic: [FONTS.instrument, FONTS.sourceSerif],
+    /** The plain documents (receipts, invite codes, results, timetables). Upright only: Inter has no italic. */
+    helvetica: ['Helvetica', FONTS.inter],
+} satisfies Record<string, string[]>;
+
 type Weight = 400 | 600 | 700 | 800;
 
 const FAMILY_FILES: { family: string; fonts: { file: string; fontWeight: Weight; fontStyle?: 'italic' }[] }[] = [

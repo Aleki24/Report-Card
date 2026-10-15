@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import { FONT_STACKS } from '@/lib/pdf/pdfTheme';
 import { ATTENDANCE_LABELS, countAttendance, type AttendanceRosterEntry, type AttendanceStatus } from '@/lib/attendance';
 import { formatIsoDate } from '@/lib/dates';
 
@@ -16,7 +17,7 @@ const STATUS_COLOURS: Record<AttendanceStatus, string> = {
 };
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: 'Helvetica' },
+  page: { padding: 40, fontSize: 10, fontFamily: FONT_STACKS.helvetica },
   title: { fontSize: 16, fontWeight: 'bold', marginBottom: 4, color: '#1E293B' },
   subtitle: { fontSize: 10, color: '#64748B', marginBottom: 24 },
   headRow: { flexDirection: 'row', borderBottom: '2 solid #E2E8F0', paddingBottom: 4, marginBottom: 4 },

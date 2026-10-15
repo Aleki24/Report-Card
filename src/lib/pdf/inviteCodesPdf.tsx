@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { FONT_STACKS } from './pdfTheme';
 
 /**
  * inviteCodesPdf.tsx
@@ -42,22 +43,22 @@ export interface InviteCodesPdfData {
 }
 
 const st = StyleSheet.create({
-    page: { paddingTop: 28, paddingBottom: 40, paddingHorizontal: 32, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700 },
+    page: { paddingTop: 28, paddingBottom: 40, paddingHorizontal: 32, fontFamily: FONT_STACKS.helvetica, fontSize: 9, color: GRAY_700 },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
     logo: { width: 40, height: 40, objectFit: 'contain', marginRight: 10 },
-    schoolName: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: NAVY, textTransform: 'uppercase', letterSpacing: 0.5 },
+    schoolName: { fontSize: 15, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: 0.5 },
     docTitle: { fontSize: 9, color: GRAY_400, marginTop: 2 },
     categoryBanner: {
         backgroundColor: NAVY, color: '#fff', paddingVertical: 6, paddingHorizontal: 12,
         borderRadius: 4, marginTop: 16, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     },
-    categoryTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
+    categoryTitle: { fontSize: 12, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
     categoryCount: { fontSize: 9, color: '#CBD5E1' },
     table: { borderWidth: 1, borderColor: GRAY_200, borderRadius: 3, overflow: 'hidden' },
     tableHeader: { flexDirection: 'row', backgroundColor: LIGHT, borderBottomWidth: 1, borderBottomColor: GRAY_200 },
     row: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: GRAY_200 },
     rowAlt: { backgroundColor: '#FAFBFC' },
-    th: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY, textTransform: 'uppercase', paddingVertical: 6, paddingHorizontal: 6 },
+    th: { fontSize: 8, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: NAVY, textTransform: 'uppercase', paddingVertical: 6, paddingHorizontal: 6 },
     td: { fontSize: 9, paddingVertical: 6, paddingHorizontal: 6, color: GRAY_700 },
     // Column widths
     cNum: { width: '6%' },
@@ -67,7 +68,8 @@ const st = StyleSheet.create({
     cCode: { width: '14%' },
     cStatus: { width: '8%' },
     codeText: { fontFamily: 'Courier-Bold', fontSize: 11, letterSpacing: 1, color: NAVY },
-    emptyNote: { fontSize: 9, color: GRAY_400, fontStyle: 'italic', paddingVertical: 10, paddingHorizontal: 6 },
+    // Helvetica alone: the stack's Inter has no italic, and this note is fixed text.
+    emptyNote: { fontSize: 9, color: GRAY_400, fontFamily: 'Helvetica', fontStyle: 'italic', paddingVertical: 10, paddingHorizontal: 6 },
     footer: {
         position: 'absolute', bottom: 18, left: 32, right: 32,
         flexDirection: 'row', justifyContent: 'space-between',
@@ -110,7 +112,7 @@ function CategoryBlock({ category }: { category: InviteCategory }) {
                             <Text style={[st.td, st.cUser]}>{r.username || '—'}</Text>
                             <Text style={[st.td, st.cPhone]}>{r.phone || '—'}</Text>
                             <Text style={[st.td, st.cCode]}><Text style={st.codeText}>{r.code}</Text></Text>
-                            <Text style={[st.td, st.cStatus, { color: statusColor(r.status), fontFamily: 'Helvetica-Bold', fontSize: 7 }]}>{r.status}</Text>
+                            <Text style={[st.td, st.cStatus, { color: statusColor(r.status), fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 7 }]}>{r.status}</Text>
                         </View>
                     ))
                 )}

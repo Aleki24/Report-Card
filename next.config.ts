@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/reports/**': ['./public/fonts/report/*.ttf', './public/images/logo.png'],
     '/api/school/generate-reports': ['./public/fonts/report/*.ttf', './public/images/logo.png'],
+    // The plain documents set ĩ and ũ in Inter (FONT_STACKS.helvetica).
+    '/api/school/fees/payments/**': ['./public/fonts/report/inter-*.ttf'],
+    '/api/admin/invite-codes/pdf': ['./public/fonts/report/inter-*.ttf'],
+    '/api/school/exam-marks/export': ['./public/fonts/report/inter-*.ttf'],
+    '/api/academics/timetable/pdf': ['./public/fonts/report/inter-*.ttf'],
   },
   // Old dashboard URLs folded into other pages. Kept as redirects rather than
   // pages so bookmarks and links in messages already sent still land somewhere.
