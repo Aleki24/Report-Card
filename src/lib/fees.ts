@@ -56,6 +56,29 @@ export const FEE_PAYMENT_METHODS: FeePaymentMethod[] = ['MPESA', 'PESAPAL', 'CAS
 
 export type PaymentProvider = 'NONE' | 'DARAJA' | 'PESAPAL';
 
+/** What a payer's screen does with an online payment's status while it waits. */
+export type PaymentWaitStep = 'paid' | 'failed' | 'wait';
+
+/**
+ * Whether an online payment's status ends the wait. An M-Pesa prompt that
+ * failed (cancelled, wrong PIN) is over. A Pesapal order marked FAILED is
+ * not: the payer can retry on the same checkout page and the IPN then
+ * records it COMPLETED, so stopping there invited a second payment.
+ */
+export function paymentWaitStep(status: string | null | undefined, provider: PaymentProvider): PaymentWaitStep {
+    if (status === 'COMPLETED') return 'paid';
+    if (status === 'CANCELLED' || (status === 'FAILED' && provider !== 'PESAPAL')) return 'failed';
+    return 'wait';
+}
+
+/** When the wait for an online payment ends with no confirmation. */
+export const PAYMENT_UNCONFIRMED_MESSAGE =
+    'We haven’t had confirmation yet. If you completed the payment, it will still be recorded — check back in a few minutes before paying again.';
+
+/** When the wait ends on a Pesapal attempt it reported as unsuccessful. */
+export const PESAPAL_NOT_CONFIRMED_MESSAGE =
+    'Pesapal reported this attempt as unsuccessful. If you retried on the Pesapal page it may still go through — check your fees before paying again.';
+
 export interface FeePayment {
     id: string;
     studentFeeId: string | null;

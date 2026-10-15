@@ -8,6 +8,8 @@
 import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
+import { BAND_BY_LEVEL, catalogueLevelForGrade } from '@/lib/standard-subjects';
+import type { GradeLike } from '@/lib/curriculum-bands';
 import { getCurrentStudent } from './get-current-student';
 import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
 import type { CurrentStudent } from '@/types';
@@ -133,13 +135,23 @@ export async function getStudentSubjects(student: CurrentStudent) {
         }
     }
 
-    // Default: all subjects at the student's academic level
-    const { data, error } = await supabase
+    // Default: the subjects of the learner's band. One CBC level spans
+    // pre-primary to Senior School, so the level alone listed all of them.
+    const { data: stream } = await supabase
+        .from('grade_streams')
+        .select('grades ( code, name_display )')
+        .eq('id', student.gradeStreamId)
+        .maybeSingle();
+    const grade = embedOne<GradeLike>(stream?.grades);
+    const level = grade ? catalogueLevelForGrade(grade) : null;
+    let query = supabase
         .from(SCHOOL_SUBJECT_VIEW)
         .select('id, code, name, subject_type, display_order, category, band')
         .eq('academic_level_id', student.academicLevelId)
-        .eq('school_id', student.schoolId)
-        .order('display_order', { ascending: true });
+        .eq('school_id', student.schoolId);
+    // A school's own subject without a band is offered to every class.
+    if (level) query = query.or(`band.eq.${BAND_BY_LEVEL[level]},band.is.null`);
+    const { data, error } = await query.order('display_order', { ascending: true });
 
     if (error) throw error;
     return data ?? [];

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
 import type { FeePayment, FeeRecord, FeeStatus, PaymentSettingsStatus, PaymentStatusResponse, StkPushResponse } from '@/lib/types';
+import { PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep } from '@shared/fees';
 
 const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warning' | 'info' }> = {
     PENDING: { label: 'Pending', variant: 'warning' },
@@ -183,18 +184,19 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
         timer.current = setInterval(async () => {
             try {
                 const res = await api.get<{ data: PaymentStatusResponse }>(statusPath);
-                if (res.data.status === 'COMPLETED') {
+                const step = paymentWaitStep(res.data.status, provider);
+                if (step === 'paid') {
                     if (timer.current) clearInterval(timer.current);
                     setState('success');
                     onPaid();
-                } else if (res.data.status === 'FAILED' || res.data.status === 'CANCELLED') {
+                } else if (step === 'failed') {
                     if (timer.current) clearInterval(timer.current);
                     setState('failed');
                     setError(res.data.notes ?? 'The payment was not completed.');
                 } else if (Date.now() > deadline) {
                     if (timer.current) clearInterval(timer.current);
                     setState('failed');
-                    setError('Timed out waiting for confirmation. If you completed the payment, it will still be recorded shortly.');
+                    setError(res.data.status === 'FAILED' ? PESAPAL_NOT_CONFIRMED_MESSAGE : PAYMENT_UNCONFIRMED_MESSAGE);
                 }
             } catch {
                 // A dropped request is not a failed payment; keep polling until the deadline.

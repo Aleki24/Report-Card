@@ -23,7 +23,11 @@ export default clerkMiddleware(async (auth, request) => {
     // Only redirect on the exact /login, /signup, or /activate page, NOT on sub-paths
     // like /login/factor-one, /login/sso-callback, /activate/callback, or /activate/process that need processing
     const pathname = request.nextUrl.pathname;
-    if (pathname === '/login' || pathname === '/signup' || pathname === '/activate') {
+    // An invite or reset link (/activate?code=…) may be for someone else on
+    // this device, often a learner on a parent's phone: the page offers to
+    // sign out and use it, where a bounce here silently threw the code away.
+    const carriesCode = pathname === '/activate' && request.nextUrl.searchParams.has('code');
+    if ((pathname === '/login' || pathname === '/signup' || pathname === '/activate') && !carriesCode) {
       // Honour ?redirect_url= on this bounce too. It was previously dropped, so
       // an already-signed-in user who followed a link asking for a specific
       // page (the report-card QR page's "sign in to see your results", or this
