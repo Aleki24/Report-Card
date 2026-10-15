@@ -84,7 +84,10 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     const { data: peerData } = await supabase
         .from('students')
         .select('id, pathway, subject_combination_id, subject_combinations ( code )')
-        .in('current_grade_stream_id', streamIds);
+        .in('current_grade_stream_id', streamIds)
+        // Learners who have left keep their last class; only those on the roll
+        // are ranked, as the stream position already does.
+        .eq('status', 'ACTIVE');
     const peers = (peerData ?? []) as unknown as PeerRow[];
     if (peers.length === 0) return empty;
 

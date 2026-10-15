@@ -476,8 +476,11 @@ export function calculateClassRanks(
     const ranks = new Map<string, number>();
     if (!studentAggregates || studentAggregates.length === 0) return ranks;
 
+    // Compared in hundredths: equal totals summed from different marks can
+    // differ in the last bit of a double (442.5 vs 442.50000000000006) and
+    // split a tie, so two cards showing the same total got different positions.
     const sorted = [...studentAggregates]
-        .map(a => ({ id: a.studentId, value: rankingValue(a, rankingBy) }))
+        .map(a => ({ id: a.studentId, value: Math.round(rankingValue(a, rankingBy) * 100) }))
         .sort((a, b) => b.value - a.value);
 
     let currentRank = 1;

@@ -187,6 +187,7 @@ export async function fetchPreviousRound(
         gradingScales,
         gradingSystemType,
         rankingBasis,
+        releasedOnly = false,
     }: {
         schoolId: string;
         studentIds: string[];
@@ -199,15 +200,17 @@ export async function fetchPreviousRound(
         gradingSystemType: 'KCSE' | 'CBC';
         /** Marks for CBC learners, points for 8-4-4 — see rankingBasisFor. */
         rankingBasis: RankingBasis;
+        /** A learner's own card compares only with rounds the school has released. */
+        releasedOnly?: boolean;
     }
 ): Promise<PreviousRoundStats | null> {
     if (!gradeId || studentIds.length === 0) return null;
 
     try {
-        const candidates = await findPreviousRounds(supabase, { schoolId, gradeId, before, current });
+        const candidates = await findPreviousRounds(supabase, { schoolId, gradeId, before, current, releasedOnly });
         for (const previous of candidates.slice(0, MAX_ROUNDS_TRIED)) {
             const stats = await loadRound(supabase, previous, {
-                schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis,
+                schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis, releasedOnly,
             });
             if (stats) return stats;
         }
@@ -224,7 +227,7 @@ const MAX_ROUNDS_TRIED = 3;
 async function loadRound(
     supabase: Supabase,
     previous: RoundRef,
-    { schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis }: {
+    { schoolId, studentIds, gradeId, current, gradingScales, gradingSystemType, rankingBasis, releasedOnly }: {
         schoolId: string;
         studentIds: string[];
         gradeId: string;
@@ -232,15 +235,18 @@ async function loadRound(
         gradingScales: GradingScale[];
         gradingSystemType: 'KCSE' | 'CBC';
         rankingBasis: RankingBasis;
+        releasedOnly: boolean;
     }
 ): Promise<PreviousRoundStats | null> {
-    const { data: roundExams } = await supabase
+    let roundQuery = supabase
         .from('exams')
         .select('id, max_score, subjects(id, name, category)')
         .eq('school_id', schoolId)
         .eq('grade_id', gradeId)
         .eq('term_id', previous.term_id)
         .eq('exam_type', previous.exam_type);
+    if (releasedOnly) roundQuery = roundQuery.eq('status', 'APPROVED');
+    const { data: roundExams } = await roundQuery;
 
     if (!roundExams || roundExams.length === 0) return null;
 
@@ -366,21 +372,24 @@ const roundKey = (termId: string | null | undefined, examType: string | null | u
  */
 export async function findPreviousRounds(
     supabase: Supabase,
-    { schoolId, gradeId, before, current }: {
+    { schoolId, gradeId, before, current, releasedOnly = false }: {
         schoolId: string;
         gradeId: string;
         before?: string | null;
         current: { termId?: string | null; examType?: string | null };
+        releasedOnly?: boolean;
     }
 ): Promise<RoundRef[]> {
     // This school's exams for the grade (grades are shared by every school),
-    // all of them.
-    const { rows: data } = await fetchAllRows(() => supabase
-        .from('exams')
-        .select('id, term_id, exam_type, name, exam_date, created_at, terms(start_date)')
-        .eq('school_id', schoolId)
-        .eq('grade_id', gradeId)
-        .order('id'));
+    // all of them, or only the released ones for a learner's own card.
+    const { rows: data } = await fetchAllRows(() => {
+        const query = supabase
+            .from('exams')
+            .select('id, term_id, exam_type, name, exam_date, created_at, terms(start_date)')
+            .eq('school_id', schoolId)
+            .eq('grade_id', gradeId);
+        return (releasedOnly ? query.eq('status', 'APPROVED') : query).order('id');
+    });
 
     const rounds = new Map<string, Round>();
     for (const row of (data || []) as unknown as ExamRoundRow[]) {

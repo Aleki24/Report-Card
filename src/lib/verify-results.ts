@@ -262,7 +262,9 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
             const { data: classmates } = await supabase
                 .from('students')
                 .select('id')
-                .eq('current_grade_stream_id', student.current_grade_stream_id);
+                .eq('current_grade_stream_id', student.current_grade_stream_id)
+                // As the printed card ranks: learners on the roll only.
+                .eq('status', 'ACTIVE');
 
             // Rank on the same sitting the marks above come from, as the
             // printed card does: ranking on every round of the term gave a

@@ -105,13 +105,15 @@ export async function POST(request: NextRequest) {
                 payerLastName: student?.users?.last_name || undefined,
             });
 
-            await supabase
+            const { error: trackError } = await supabase
                 .from('fee_payments')
                 .update({
                     pesapal_order_tracking_id: order.order_tracking_id,
                     pesapal_merchant_reference: order.merchant_reference,
                 })
                 .eq('id', payment.id);
+            // Not fatal: the IPN also finds the payment by its merchant reference.
+            if (trackError) console.error('[pesapal checkout] could not save the tracking id', payment.id, trackError);
 
             return NextResponse.json({
                 data: {

@@ -586,6 +586,8 @@ export async function GET(
                 gradingScales,
                 gradingSystemType,
                 rankingBasis,
+                // A learner's own card must not show an unreleased earlier round.
+                releasedOnly,
             }),
             fetchSubjectTeachers(supabase, { schoolId: targetSchoolId || userSchoolId, gradeId, gradeStreamId, yearId }),
         ]);

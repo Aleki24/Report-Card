@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getPesapalTransactionStatus, nextPaymentStatus, type PesapalEnvironment } from '@/lib/pesapal';
 import { decryptSecret, verifyWebhookToken } from '@/lib/crypto';
+import { isUuid } from '@/lib/postgrest';
 
 export const runtime = 'nodejs';
 
@@ -50,11 +51,26 @@ async function handleIpn(request: NextRequest, schoolId: string, token: string) 
     }
 
     try {
-        const { data: payment } = await supabase
+        let { data: payment } = await supabase
             .from('fee_payments')
             .select('id, school_id, status')
             .eq('pesapal_order_tracking_id', orderTrackingId)
             .maybeSingle();
+        // The merchant reference is our payment id: it still finds the payment
+        // when saving the tracking id after checkout did not go through.
+        if (!payment && isUuid(orderMerchantReference)) {
+            ({ data: payment } = await supabase
+                .from('fee_payments')
+                .select('id, school_id, status')
+                .eq('id', orderMerchantReference)
+                .eq('school_id', schoolId)
+                // Only a payment no order has claimed yet.
+                .is('pesapal_order_tracking_id', null)
+                .maybeSingle());
+            if (payment) {
+                await supabase.from('fee_payments').update({ pesapal_order_tracking_id: orderTrackingId }).eq('id', payment.id);
+            }
+        }
 
         if (!payment || payment.school_id !== schoolId) {
             console.error('[pesapal ipn] no matching payment', orderTrackingId, schoolId);
