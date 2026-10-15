@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
 import { VerificationCodeStep } from '@/components/auth/VerificationCodeStep';
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { resolveLoginIdentifier } from '@/lib/login-identifier';
 import {
   AUTH_INPUT, AUTH_LABEL, AUTH_LINK, AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON,
   AuthDivider, AuthShell, GoogleIcon,
@@ -73,30 +74,11 @@ export default function LoginPage() {
     setAvailableMethods([]);
 
     // The identifier actually handed to Clerk (a username is resolved to its
-    // email below). Kept at function scope so the error-recovery paths reuse it.
+    // email). Kept at function scope so the error-recovery paths reuse it.
     let loginIdentifier = identifier.trim();
 
     try {
-      // Teachers/students sign in with a generated username. Username may not
-      // be an enabled Clerk sign-in identifier (that yields
-      // "identifier is invalid"), so resolve a non-email identifier to the
-      // account's email first — email is always accepted. Email logins and
-      // any resolver failure fall straight through to the raw identifier.
-      if (!loginIdentifier.includes('@')) {
-        try {
-          const resolveRes = await fetch('/api/auth/resolve-identifier', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identifier: loginIdentifier }),
-          });
-          if (resolveRes.ok) {
-            const { email } = await resolveRes.json();
-            if (email) loginIdentifier = email;
-          }
-        } catch {
-          /* fall back to the raw identifier */
-        }
-      }
+      loginIdentifier = await resolveLoginIdentifier(loginIdentifier);
 
       const result = await signIn.create({
         identifier: loginIdentifier,

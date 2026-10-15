@@ -7,7 +7,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge, StatTile } from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
-import { isOverdue, PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep, type FeePayment, type PaymentProvider, type SchoolBankAccount } from '@/lib/fees';
+import { isOverdue, PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep, totalCredit, totalOwed, type FeePayment, type PaymentProvider, type SchoolBankAccount } from '@/lib/fees';
 import { normalizeMpesaPhone } from '@/lib/phone';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -260,8 +260,8 @@ export default function StudentFeesPage() {
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
     // Owed and credit are kept apart: an overpaid term must not hide a term still owing.
-    const owed = fees.reduce((sum, f) => sum + Math.max(0, f.balance), 0);
-    const credit = fees.reduce((sum, f) => sum + Math.max(0, -f.balance), 0);
+    const owed = totalOwed(fees);
+    const credit = totalCredit(fees);
     const overdueCount = fees.filter(f => isOverdue(f.dueDate, f.balance)).length;
     const termCount = fees.length;
     const canPayOnline = paymentProvider !== 'NONE';

@@ -49,6 +49,20 @@ export function isOverdue(dueDate: string | null | undefined, balance: number): 
  * — every entry point (manual recording, M-Pesa STK Push, M-Pesa C2B
  * confirmation) writes here rather than touching the aggregate directly.
  */
+/**
+ * What is still owed across fee records. Owed and credit are kept apart: an
+ * overpaid term must not hide a term still owing, as a plain sum of balances
+ * did on the dashboards.
+ */
+export function totalOwed(fees: readonly { balance: number }[]): number {
+    return fees.reduce((sum, f) => sum + Math.max(0, f.balance || 0), 0);
+}
+
+/** Money paid beyond what was billed, across fee records. */
+export function totalCredit(fees: readonly { balance: number }[]): number {
+    return fees.reduce((sum, f) => sum + Math.max(0, -(f.balance || 0)), 0);
+}
+
 export type FeePaymentMethod = 'MPESA' | 'PESAPAL' | 'CASH' | 'BANK' | 'CHEQUE' | 'OTHER';
 export type FeePaymentRecordStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 

@@ -12,7 +12,7 @@ import {
 } from '@/components/ui';
 import { PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
 import type { FeePayment, FeeRecord, FeeStatus, PaymentSettingsStatus, PaymentStatusResponse, StkPushResponse } from '@/lib/types';
-import { PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep } from '@shared/fees';
+import { PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep, totalOwed } from '@shared/fees';
 
 const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warning' | 'info' }> = {
     PENDING: { label: 'Pending', variant: 'warning' },
@@ -38,7 +38,7 @@ export default function StudentFeesScreen() {
     const fees = data ?? [];
     const billed = fees.reduce((s, f) => s + f.totalFee, 0);
     const paid = fees.reduce((s, f) => s + f.paidAmount, 0);
-    const balance = fees.reduce((s, f) => s + f.balance, 0);
+    const balance = totalOwed(fees);
     const overdue = fees.filter((f) => isOverdue(f.dueDate, f.balance)).length;
     const provider = settings.data?.provider ?? 'NONE';
 

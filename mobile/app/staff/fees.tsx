@@ -15,6 +15,7 @@ import {
 import { RequireScreen } from '@/components/RequireScreen';
 import { FeeDetail, PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
 import type { FeePaymentStatus, FeeStatus, StaffFeeRecord, StudentListItem } from '@/lib/types';
+import { totalOwed } from '@shared/fees';
 
 const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warning' | 'info' }> = {
     PENDING: { label: 'Pending', variant: 'warning' },
@@ -104,7 +105,7 @@ function Balances() {
 
     const billed = fees.reduce((s, f) => s + f.totalFee, 0);
     const paid = fees.reduce((s, f) => s + f.paidAmount, 0);
-    const outstanding = fees.reduce((s, f) => s + Math.max(0, f.balance), 0);
+    const outstanding = totalOwed(fees);
     const overdue = fees.filter((f) => isOverdue(f.dueDate, f.balance)).length;
 
     const exportXlsx = async () => {

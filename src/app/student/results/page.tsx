@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Trophy, Download, FileText, ChevronDown, ChevronUp, GraduationCap } from 'lucide-react';
+import { Trophy, Download, FileText, ChevronDown, ChevronUp, GraduationCap, RotateCcw } from 'lucide-react';
 import { REPORT_TEMPLATES, DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
@@ -10,6 +10,7 @@ import FilterBar, { FilterField } from '@/components/ui/FilterBar';
 import { Badge, Select } from '@/components/ui';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
+import { useJsonList } from '@/hooks/useJsonList';
 import { getExamType } from '@/lib/exam-types';
 
 interface ExamResult {
@@ -234,20 +235,26 @@ function ExamMarksTab() {
 function ReportCardsTab() {
     // Green from the school's own pass mark, as on its dashboards.
     const passMark = useSchoolPassMark();
-    const [reports, setReports] = useState<ReportCard[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { rows: reports, loading, error, retry } = useJsonList<ReportCard>('/api/school/student/report-cards', 'Couldn’t load your report cards.');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [template, setTemplate] = useState<ReportTemplateId>(DEFAULT_TEMPLATE);
-
-    useEffect(() => {
-        fetch('/api/school/student/report-cards').then(r => r.json()).then(j => setReports(j.data || [])).catch(() => {}).finally(() => setLoading(false));
-    }, []);
 
     if (loading) {
         return (
             <div className="flex flex-col gap-4">
                 {[1, 2].map(i => <div key={i} className="skeleton-bone h-40 rounded-2xl" />)}
             </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <EmptyState
+                icon={<FileText className="h-6 w-6" />}
+                title="Couldn’t load your report cards"
+                description={error}
+                action={<button type="button" onClick={retry} className="btn-primary"><RotateCcw className="size-4" aria-hidden />Try again</button>}
+            />
         );
     }
 

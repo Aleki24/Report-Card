@@ -7,14 +7,17 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { AUTH_INPUT, AUTH_LABEL, AUTH_LINK, AUTH_PRIMARY_BUTTON, AuthShell } from '@/components/auth/AuthShell';
+import { AUTH_INPUT, AUTH_LABEL, AUTH_LINK, AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus } from '@/components/auth/AuthShell';
 import { PasswordInput } from '@/components/auth/PasswordInput';
+import { resolveLoginIdentifier } from '@/lib/login-identifier';
+import { isPlaceholderEmail } from '@/lib/placeholder-email';
 import { cn } from '@/lib/utils';
 
 const CODE_LENGTH = 6;
 const MIN_PASSWORD = 8;
 
-type Step = 'request' | 'reset';
+/** 'no-email': the account has only a placeholder address, so no code can reach it. */
+type Step = 'request' | 'reset' | 'no-email';
 
 function clerkMessage(err: unknown, known: Record<string, string>, fallback: string): string {
   const apiError = isClerkAPIResponseError(err) ? err.errors[0] : undefined;
@@ -36,6 +39,8 @@ export default function ForgotPasswordPage() {
 
   const [step, setStep] = useState<Step>('request');
   const [email, setEmail] = useState('');
+  /** Where the code went: the typed email, or the one a username resolved to. */
+  const [sentTo, setSentTo] = useState('');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -47,11 +52,20 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError(null);
     try {
-      await signIn.create({ strategy: 'reset_password_email_code', identifier: email.trim() });
+      // Learners and teachers sign in with a username: it resolves to the
+      // account's email, as on the sign-in page.
+      const identifier = await resolveLoginIdentifier(email);
+      if (isPlaceholderEmail(identifier)) {
+        setStep('no-email');
+        return;
+      }
+      await signIn.create({ strategy: 'reset_password_email_code', identifier });
+      setSentTo(identifier);
       setStep('reset');
-      toast.success(`We've emailed a ${CODE_LENGTH}-digit code to ${email.trim()}.`);
+      toast.success(`We've emailed a ${CODE_LENGTH}-digit code to ${identifier}.`);
     } catch (err) {
-      setError(clerkMessage(err, { form_identifier_not_found: 'No account uses this email address.' }, 'We couldn’t send a code. Please try again.'));
+      const notFound = 'No account uses this email address or username.';
+      setError(clerkMessage(err, { form_identifier_not_found: notFound, form_identifier_invalid: notFound }, 'We couldn’t send a code. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -92,6 +106,20 @@ export default function ForgotPasswordPage() {
     setError(null);
   };
 
+  if (step === 'no-email') {
+    return (
+      <AuthShell title="Ask your school for a reset code">
+        <AuthStatus
+          tone="waiting"
+          message="Your account has no email address, so a code can’t be sent to you. Your school administrator can give you a password reset code: enter it on the activation page to choose a new password."
+        >
+          <Link href="/activate" className={`${AUTH_PRIMARY_BUTTON} no-underline`}>I have a reset code</Link>
+          <button type="button" onClick={backToRequest} className={AUTH_SECONDARY_BUTTON}>Try a different account</button>
+        </AuthStatus>
+      </AuthShell>
+    );
+  }
+
   const errorLine = error && (
     <p id="reset-error" role="alert" className="text-xs font-medium text-destructive">{error}</p>
   );
@@ -101,20 +129,21 @@ export default function ForgotPasswordPage() {
       title={step === 'request' ? 'Reset your password' : 'Choose a new password'}
       subtitle={step === 'request'
         ? 'We’ll email you a code. This also works if you’ve only ever signed in with Google.'
-        : <>Enter the code sent to <span className="font-semibold break-all text-slate-700 dark:text-slate-200">{email.trim()}</span> and your new password.</>}
+        : <>Enter the code sent to <span className="font-semibold break-all text-slate-700 dark:text-slate-200">{sentTo}</span> and your new password.</>}
       footer={<span>Remembered it? <Link href="/login" className={AUTH_LINK}>Back to sign in</Link></span>}
     >
       {step === 'request' ? (
         <form onSubmit={handleRequestCode} className="flex flex-col gap-5" noValidate>
           <div className="flex flex-col gap-2">
-            <label htmlFor="reset-email" className={AUTH_LABEL}>Email address</label>
+            <label htmlFor="reset-email" className={AUTH_LABEL}>Email or username</label>
             <input
               id="reset-email"
-              type="email"
+              type="text"
+              inputMode="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="you@school.com"
-              autoComplete="email"
+              placeholder="you@school.com or your username"
+              autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
               autoFocus

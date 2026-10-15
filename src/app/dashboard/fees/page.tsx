@@ -14,7 +14,7 @@ import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { computeFeeStatus, isOverdue, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { computeFeeStatus, isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
 
 interface FeeRecord {
     id: string;
@@ -381,7 +381,7 @@ function FeesPageInner() {
     const kpi = useMemo(() => {
         const expected = kpiFees.reduce((s, f) => s + f.totalFee, 0);
         const collected = kpiFees.reduce((s, f) => s + f.paidAmount, 0);
-        const outstanding = kpiFees.reduce((s, f) => s + f.balance, 0);
+        const outstanding = totalOwed(kpiFees);
         const overdue = kpiFees.filter(f => isOverdue(f.dueDate, f.balance));
         const overdueAmount = overdue.reduce((s, f) => s + f.balance, 0);
         const collectionRate = expected > 0 ? Math.round((collected / expected) * 100) : 0;

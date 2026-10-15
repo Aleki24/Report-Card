@@ -25,6 +25,7 @@ import { HeroActions, HeroChip, HeroFrame, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
 import { ScoreRing, TrendChart } from './charts';
 import { InsightCard, KpiGrid, KpiTile, Meter, Reveal, SectionTitle } from './kit';
+import { totalOwed } from '@shared/fees';
 
 const STUDENT_HERO = ['#2563eb', '#4f46e5', '#7c3aed'] as const;
 const STUDENT_HERO_DARK = ['#1e3a8a', '#3730a3', '#5b21b6'] as const;
@@ -84,7 +85,7 @@ export function StudentHome() {
     const latest = data?.latestResults ?? [];
     const exams = data?.upcomingExams ?? [];
     const feeRows = fees.data ?? [];
-    const feesBalance = feeRows.reduce((sum, f) => sum + (f.balance || 0), 0);
+    const feesBalance = totalOwed(feeRows);
     const hasResults = (stats?.examsTaken ?? 0) > 0;
     const average = hasResults ? stats?.averageScore ?? null : null;
     const current = trends.at(-1);

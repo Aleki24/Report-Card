@@ -20,6 +20,7 @@ import { localToday, type StudentAssignment } from '@/lib/assignments';
 import HomeworkPanel from '@/components/student/dashboard/HomeworkPanel';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { cn } from '@/lib/utils';
+import { totalOwed } from '@/lib/fees';
 
 interface Announcement { id: string; title: string; content: string; isImportant: boolean; createdAt: string }
 interface LearningMaterial { id: string; title: string; subjectName: string; fileUrl: string | null; fileType: string | null; fileSizeBytes: number | null }
@@ -120,7 +121,7 @@ export default function StudentDashboardPage() {
     const trends = data?.trends ?? [];
     const latestResults = data?.latestResults ?? [];
     const latestReport = data?.latestReport ?? null;
-    const feesBalance = feesData.reduce((sum, f) => sum + (f.balance || 0), 0);
+    const feesBalance = totalOwed(feesData);
 
     const hasResults = (stats?.examsTaken ?? 0) > 0;
     const average = hasResults ? stats?.averageScore ?? null : null;
