@@ -402,6 +402,8 @@ export interface StudentDashboardSummary {
     stats: {
         subjectsCount: number;
         averageScore: number;
+        /** The term `averageScore` is for: this term, or the latest with released results. */
+        averageTerm: string | null;
         attendanceRate: number;
         hasReportCard: boolean;
         examsTaken: number;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { getCurrentStudent } from '@/lib/student/get-current-student';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { internalError } from '@/lib/api-errors';
@@ -14,13 +15,9 @@ export async function GET(request: NextRequest) {
         }
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
+        const userProfile = await getActiveUserProfile(userId);
 
-        if (!userProfile || userProfile.is_active === false) {
+        if (!userProfile) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 

@@ -156,7 +156,7 @@ export function StudentHome() {
             <Reveal index={i++}>
                 <SectionTitle title="At a glance" />
                 <KpiGrid>
-                    <KpiTile title={current ? `${current.termName} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={TrendingUp} hue="blue" href="/student/results" />
+                    <KpiTile title={stats?.averageTerm ? `${stats.averageTerm} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={TrendingUp} hue="blue" href="/student/results" />
                     <KpiTile title="Subjects" value={stats?.subjectsCount ?? 0} icon={BookOpen} hue="emerald" href="/student/subjects" />
                     <KpiTile title="Results released" value={stats?.examsTaken ?? 0} icon={GraduationCap} hue="violet" href="/student/results" />
                     {(stats?.attendanceRecords ?? 0) > 0 ? (

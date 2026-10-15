@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { FEE_VIEWER_ROLES } from '@/lib/fees';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
 import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
@@ -16,12 +17,8 @@ export async function POST(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-        if (!userProfile || userProfile.is_active === false) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userProfile = await getActiveUserProfile(userId);
+        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await request.json();
         const { student_fee_id, phone_number, amount } = body;

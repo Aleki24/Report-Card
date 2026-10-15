@@ -6,6 +6,7 @@ import { getClassTeacherStreamIds } from '@/lib/auth-server';
 import { getAccess } from '@/lib/platform/access';
 import { provisionUserFromClerk } from '@/lib/provision-user';
 import type { ClientAccess } from '@/lib/platform/client-access';
+import { isLockedOutStudentStatus, LOCKED_OUT_STUDENT_MESSAGE } from '@/lib/student/status-access';
 
 export async function GET() {
   try {
@@ -55,6 +56,14 @@ export async function GET() {
         { error: 'Your account has been deactivated. Please contact your administrator.', code: 'ACCOUNT_DEACTIVATED' },
         { status: 403 }
       );
+    }
+    // A learner the school deactivated or transferred keeps an active users
+    // row; their record's status locks them out (see lib/student/status-access).
+    if (dbUser.role === 'STUDENT') {
+      const { data: learner } = await supabase.from('students').select('status').eq('id', dbUser.id).maybeSingle();
+      if (isLockedOutStudentStatus(learner?.status)) {
+        return NextResponse.json({ error: LOCKED_OUT_STUDENT_MESSAGE, code: 'ACCOUNT_DEACTIVATED' }, { status: 403 });
+      }
     }
 
     // Fetch school name and onboarding status

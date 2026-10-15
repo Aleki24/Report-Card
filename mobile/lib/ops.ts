@@ -9,7 +9,7 @@ import type { LookupOption, LookupType } from '@shared/ops/lookups';
 import { useToast } from '@/components/Toast';
 import { useApi, withQuery, type Api } from './api';
 import { errorMessage } from './format';
-import { readMemory, readStored, useCacheKey, writeCache } from './queryCache';
+import { readMemory, readStored, sharedRequest, useCacheKey, writeCache } from './queryCache';
 
 export type QueryParams = Record<string, string | undefined | null>;
 
@@ -118,22 +118,17 @@ export function useOpsData<T>(path: string | null) {
     return { data, loading, error, reload };
 }
 
-/* Lists change rarely within a visit and many forms on a screen share them. */
-const lookupCache = new Map<string, Promise<LookupOption[]>>();
+/*
+ * Lists change rarely within a visit and many forms on a screen share them.
+ * Kept a couple of minutes, so a learner or teacher added meanwhile appears.
+ */
+const LOOKUP_TTL_MS = 2 * 60 * 1000;
 
 export const lookupPath = (type: LookupType, params?: Record<string, string | undefined>) => withQuery('/api/ops/lookups', { type, ...params });
 
 export function loadLookup(api: Api, type: LookupType, params?: Record<string, string | undefined>): Promise<LookupOption[]> {
     const path = lookupPath(type, params);
-    let pending = lookupCache.get(path);
-    if (!pending) {
-        pending = opsGet<LookupOption[]>(api, path).catch((err: unknown) => {
-            lookupCache.delete(path);
-            throw err;
-        });
-        lookupCache.set(path, pending);
-    }
-    return pending;
+    return sharedRequest(path, LOOKUP_TTL_MS, () => opsGet<LookupOption[]>(api, path));
 }
 
 /** Picker options; an empty list while loading or when the request fails. */

@@ -48,9 +48,29 @@ export function writeCache(key: string | null, data: unknown): void {
     AsyncStorage.setItem(key, JSON.stringify(stored)).catch(() => undefined);
 }
 
+/**
+ * Answers many screens share within a session (picker lists), kept briefly so
+ * a form full of pickers asks once. Cleared with everything else on sign-out,
+ * so the next account never gets the last one's options.
+ */
+const shared = new Map<string, { at: number; value: Promise<unknown> }>();
+
+/** `load()`'s answer for `key`, reused for `ttlMs`; a failed load is forgotten so the next call retries. */
+export function sharedRequest<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+    const hit = shared.get(key);
+    if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
+    const value: Promise<T> = load().catch((err: unknown) => {
+        if (shared.get(key)?.value === value) shared.delete(key);
+        throw err;
+    });
+    shared.set(key, { at: Date.now(), value });
+    return value;
+}
+
 /** On sign-out: nothing of the last account stays on the phone. */
 export async function clearCache(): Promise<void> {
     memory.clear();
+    shared.clear();
     try {
         const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
         if (keys.length) await AsyncStorage.multiRemove(keys);

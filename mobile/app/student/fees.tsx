@@ -56,6 +56,8 @@ export default function StudentFeesScreen() {
 
             {paying ? (
                 <PayPanel
+                    // A fresh panel per fee: the amount, state and any poll belonged to the first fee opened.
+                    key={paying.id}
                     fee={paying}
                     provider={provider}
                     onClose={() => setPaying(null)}

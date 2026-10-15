@@ -38,6 +38,8 @@ export interface MeResponse {
 export interface DashboardStats {
     attendanceRate: number;
     averageScore: number;
+    /** The term `averageScore` is for: this term, or the latest with released results. */
+    averageTerm?: string | null;
     examsTaken: number;
     subjectsCount: number;
     /** Attendance days on record; 0 when the school does not take registers. */
@@ -110,6 +112,9 @@ export interface ExamResult {
     remarks: string | null;
     exams: {
         id: string;
+        name: string;
+        exam_type: string | null;
+        exam_date: string | null;
         max_score: number;
         subjects: { id: string; name: string } | null;
         academic_years: { id: string; name: string } | null;

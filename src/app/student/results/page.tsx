@@ -11,7 +11,8 @@ import { Badge, Select } from '@/components/ui';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { useJsonList } from '@/hooks/useJsonList';
-import { getExamType } from '@/lib/exam-types';
+import type { StudentReportCardListItem, StudentReportSubject } from '@/lib/student/queries';
+import { groupResultsByRound } from '@/lib/student/result-groups';
 
 interface ExamResult {
     id: string;
@@ -31,32 +32,8 @@ interface ExamResult {
     } | null;
 }
 
-interface ReportSubject {
-    id: string;
-    total_score: number | null;
-    total_max_score: number | null;
-    percentage: number | null;
-    grade_symbol: string | null;
-    teacher_comment: string | null;
-    subjects: { id: string; name: string } | null;
-}
-
-interface ReportCard {
-    id: string;
-    student_id: string;
-    overall_average: number | null;
-    overall_position: number | null;
-    comments_class_teacher: string | null;
-    comments_principal: string | null;
-    behaviour_summary: string | null;
-    attendance_present: number;
-    attendance_total: number;
-    generated_at: string | null;
-    academic_years: { id: string; name: string } | null;
-    terms: { id: string; name: string } | null;
-    grade_streams: { id: string; name: string; full_name: string } | null;
-    report_card_subjects: ReportSubject[];
-}
+type ReportCard = StudentReportCardListItem;
+type ReportSubject = StudentReportSubject;
 
 export default function StudentCombinedResultsPage() {
     const [activeTab, setActiveTab] = useState<'marks' | 'reports'>('marks');
@@ -85,8 +62,6 @@ export default function StudentCombinedResultsPage() {
     );
 }
 
-interface RoundGroup { key: string; label: string; date: string | null; items: ExamResult[]; average: number }
-interface TermGroup { key: string; term: string; year: string; rounds: RoundGroup[] }
 
 const optionsOf = (results: readonly ExamResult[], pick: (r: ExamResult) => { id: string; name: string } | null | undefined) =>
     Array.from(new Map(results.flatMap(r => { const o = pick(r); return o ? [[o.id, o.name] as const] : []; })).entries());
@@ -124,40 +99,10 @@ function ExamMarksTab() {
     const terms = useMemo(() => optionsOf(all.filter(r => !yearFilter || r.exams?.academic_years?.id === yearFilter), r => r.exams?.terms), [all, yearFilter]);
     const subjects = useMemo(() => optionsOf(all, r => r.exams?.subjects).sort((a, b) => a[1].localeCompare(b[1])), [all]);
 
-    const grouped = useMemo<TermGroup[]>(() => {
-        const shown = all.filter(r =>
-            (!yearFilter || r.exams?.academic_years?.id === yearFilter)
-            && (!termFilter || r.exams?.terms?.id === termFilter)
-            && (!subjectFilter || r.exams?.subjects?.id === subjectFilter));
-        const termMap = new Map<string, TermGroup & { roundMap: Map<string, RoundGroup> }>();
-        for (const r of shown) {
-            const ex = r.exams;
-            const termKey = `${ex?.academic_years?.id ?? 'x'}_${ex?.terms?.id ?? 'x'}`;
-            let t = termMap.get(termKey);
-            if (!t) {
-                t = { key: termKey, term: ex?.terms?.name ?? 'Term', year: ex?.academic_years?.name ?? '', rounds: [], roundMap: new Map() };
-                termMap.set(termKey, t);
-            }
-            const roundKey = ex?.exam_type ?? 'OTHER';
-            let round = t.roundMap.get(roundKey);
-            if (!round) {
-                round = { key: roundKey, label: (ex?.exam_type && getExamType(ex.exam_type)?.name) || ex?.exam_type || 'Exam', date: ex?.exam_date ?? null, items: [], average: 0 };
-                t.roundMap.set(roundKey, round);
-            }
-            round.items.push(r);
-            if (ex?.exam_date && (!round.date || ex.exam_date > round.date)) round.date = ex.exam_date;
-        }
-        return [...termMap.values()].map(({ roundMap, ...t }) => ({
-            ...t,
-            rounds: [...roundMap.values()]
-                .map(rd => ({
-                    ...rd,
-                    items: [...rd.items].sort((a, b) => (a.exams?.subjects?.name ?? '').localeCompare(b.exams?.subjects?.name ?? '')),
-                    average: Math.round((rd.items.reduce((n, i) => n + Number(i.percentage), 0) / rd.items.length) * 10) / 10,
-                }))
-                .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')),
-        }));
-    }, [all, yearFilter, termFilter, subjectFilter]);
+    const grouped = useMemo(() => groupResultsByRound(all.filter(r =>
+        (!yearFilter || r.exams?.academic_years?.id === yearFilter)
+        && (!termFilter || r.exams?.terms?.id === termFilter)
+        && (!subjectFilter || r.exams?.subjects?.id === subjectFilter))), [all, yearFilter, termFilter, subjectFilter]);
 
     const columns: DataTableColumn<ExamResult>[] = [
         { key: 'subject', header: 'Subject', render: r => <span className="font-semibold text-foreground">{r.exams?.subjects?.name || '—'}</span> },
@@ -259,21 +204,16 @@ function ReportCardsTab() {
     }
 
     if (reports.length === 0) {
-        return <EmptyState icon={<FileText className="h-6 w-6" />} title="No report cards" description="Report cards will appear here once generated by your teachers." />;
+        return <EmptyState icon={<FileText className="h-6 w-6" />} title="No report cards yet" description="A term’s report card appears here once your school releases its results." />;
     }
 
     const subjectColumns: DataTableColumn<ReportSubject>[] = [
-        { key: 'subject', header: 'Subject', render: s => <span className="font-semibold text-foreground">{s.subjects?.name || '—'}</span> },
-        { key: 'score', header: 'Score', render: s => <span className="text-muted-foreground">{s.total_score ?? '—'}/{s.total_max_score ?? '—'}</span> },
+        { key: 'subject', header: 'Subject', render: s => <span className="font-semibold text-foreground">{s.subjects.name}</span> },
+        // The term's average; the PDF prints each paper's score and grade.
         {
-            key: 'percentage', header: '%', numeric: true,
-            render: s => <span className={`font-bold ${(s.percentage ?? 0) >= passMark ? 'text-emerald-600' : 'text-destructive'}`}>{s.percentage ?? 0}%</span>,
+            key: 'percentage', header: 'Term average', numeric: true,
+            render: s => <span className={`font-bold ${s.percentage >= passMark ? 'text-emerald-600' : 'text-destructive'}`}>{s.percentage}%</span>,
         },
-        {
-            key: 'grade', header: 'Grade',
-            render: s => <Badge variant={(s.percentage ?? 0) >= passMark ? 'success' : 'danger'}>{s.grade_symbol || '—'}</Badge>,
-        },
-        { key: 'comment', header: 'Comment', hideOnMobile: true, render: s => <span className="text-muted-foreground">{s.teacher_comment || '—'}</span> },
     ];
 
     return (

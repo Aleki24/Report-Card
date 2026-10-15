@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import type { CurrentStudent } from '@/types';
+import { isLockedOutStudentStatus } from './status-access';
 
 export async function getCurrentStudent(): Promise<CurrentStudent | null> {
     const clerkAuth = await auth();
@@ -33,6 +34,7 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
         .from('students')
         .select(`
             id,
+            status,
             admission_number,
             current_grade_stream_id,
             academic_level_id,
@@ -52,6 +54,7 @@ export async function getCurrentStudent(): Promise<CurrentStudent | null> {
         console.error('[getCurrentStudent] no students row for id', userId, 'schoolId', schoolId, error);
         return null;
     }
+    if (isLockedOutStudentStatus(data.status)) return null;
 
     const user = data.users as any;
 

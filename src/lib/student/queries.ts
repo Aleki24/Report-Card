@@ -5,14 +5,13 @@
 // Uses admin client since NextAuth (not Supabase Auth) is used.
 // ============================================================
 
-import { loadRankingSettings, ranksCurriculum } from '@/lib/ranking';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { BAND_BY_LEVEL, catalogueLevelForGrade } from '@/lib/standard-subjects';
 import type { GradeLike } from '@/lib/curriculum-bands';
 import { getCurrentStudent } from './get-current-student';
 import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory } from '@/lib/analytics';
-import type { CurrentStudent } from '@/types';
+import type { CurrentStudent, StudentTermTrend } from '@/types';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { embedOne } from '@/lib/postgrest';
 import { STUDENT_ASSIGNMENT_LOOKBACK_DAYS, type StudentAssignment } from '@/lib/assignments';
@@ -213,72 +212,93 @@ export async function getStudentResults(
 
 // ── Report Cards ────────────────────────────────────────────
 
-export async function getStudentReportCards(student: CurrentStudent) {
+/** One subject on a report card in the learner's list: its average over the term's released exams. */
+export interface StudentReportSubject {
+    id: string;
+    /** The list has the term average only; the PDF prints scores and grades. */
+    total_score: null;
+    total_max_score: null;
+    percentage: number;
+    grade_symbol: null;
+    teacher_comment: null;
+    subjects: { id: string; name: string };
+}
+
+/** A term's report card as the learner's and parent's lists show it. */
+export interface StudentReportCardListItem {
+    id: string;
+    student_id: string;
+    overall_average: number | null;
+    /** On the PDF, which ranks the class; not worked out for the list. */
+    overall_position: null;
+    comments_class_teacher: string | null;
+    comments_principal: string | null;
+    behaviour_summary: string | null;
+    attendance_present: number;
+    attendance_total: number;
+    generated_at: string | null;
+    academic_years: { id: string; name: string };
+    terms: { id: string; name: string };
+    grade_streams: { id: string; name: string; full_name: string } | null;
+    report_card_subjects: StudentReportSubject[];
+}
+
+/**
+ * The learner's report cards, newest first: one for every term with released
+ * results, the card /api/reports/student/[id]?term=&year= builds from those
+ * marks, with the average the dashboard shows (best seven for 8-4-4). Comments
+ * a teacher saved for the term ride along.
+ *
+ * The list used to be the report_cards rows, which only the comments screen
+ * writes: a learner with released results but no saved comments had no card,
+ * and so no way to download one, and those that existed showed no average.
+ * Pass `trends` when they are already loaded.
+ */
+export async function getStudentReportCards(
+    student: CurrentStudent,
+    trends?: StudentTermTrend[],
+): Promise<StudentReportCardListItem[]> {
     const supabase = createSupabaseAdmin();
-
-    const { data, error } = await supabase
-        .from('report_cards')
-        .select(`
-            id,
-            student_id,
-            overall_average,
-            overall_position,
-            comments_class_teacher,
-            comments_principal,
-            behaviour_summary,
-            attendance_present,
-            attendance_total,
-            generated_at,
-            academic_years ( id, name ),
-            terms ( id, name ),
-            grade_streams (
-                id,
-                name,
-                full_name,
-                grades ( id, code, name_display )
-            ),
-            report_card_subjects (
-                id,
-                total_score,
-                total_max_score,
-                percentage,
-                grade_symbol,
-                teacher_comment,
-                subjects ( id, code, name )
-            )
-        `)
-        .eq('student_id', student.studentId)
-        .order('generated_at', { ascending: false });
-
-    if (error) throw error;
-
-    // The portal shows a position only where the printed card does: CBC
-    // only when the school ranks (KNEC does not rank CBC learners).
-    const [{ data: level }, settings] = await Promise.all([
-        supabase.from('academic_levels').select('code').eq('id', student.academicLevelId).maybeSingle(),
-        loadRankingSettings(supabase, student.schoolId),
+    const [terms, commentsRes, streamRes] = await Promise.all([
+        trends ?? getStudentPerformanceTrends(student),
+        supabase
+            .from('report_cards')
+            .select('id, term_id, academic_year_id, comments_class_teacher, comments_principal, behaviour_summary, attendance_present, attendance_total, generated_at, grade_streams ( id, name, full_name )')
+            .eq('student_id', student.studentId),
+        supabase.from('grade_streams').select('id, name, full_name').eq('id', student.gradeStreamId).maybeSingle(),
     ]);
-    const showPositions = ranksCurriculum(settings, level?.code === 'CBC' ? 'CBC' : 'KCSE');
+    if (commentsRes.error) throw commentsRes.error;
+    type Stream = StudentReportCardListItem['grade_streams'];
+    const saved = new Map((commentsRes.data ?? []).map(rc => [`${rc.term_id}_${rc.academic_year_id}`, rc]));
 
-    // A card exists as soon as a teacher saves comments, often weeks before
-    // results are out. Learners and parents see a term's card only once the
-    // term has released results for this learner (its PDF is built from them).
-    const cards = data ?? [];
-    const termIds = [...new Set(cards.map(rc => embedOne<{ id: string }>(rc.terms)?.id).filter((id): id is string => !!id))];
-    const { data: released, error: releasedError } = termIds.length === 0
-        ? { data: [], error: null }
-        : await supabase
-            .from('exam_marks')
-            .select('exams!inner(term_id)')
-            .eq('student_id', student.studentId)
-            .eq('exams.status', 'APPROVED')
-            .in('exams.term_id', termIds);
-    if (releasedError) throw releasedError;
-    const releasedTerms = new Set((released ?? []).map(r => embedOne<{ term_id: string }>(r.exams)?.term_id));
-
-    return cards
-        .filter(rc => releasedTerms.has(embedOne<{ id: string }>(rc.terms)?.id))
-        .map(rc => (showPositions ? rc : { ...rc, overall_position: null }));
+    return [...terms].reverse().filter(t => t.termId && t.yearId).map(t => {
+        const rc = saved.get(`${t.termId}_${t.yearId}`);
+        return {
+            id: rc?.id ?? `${t.termId}_${t.yearId}`,
+            student_id: student.studentId,
+            overall_average: t.overallAverage,
+            overall_position: null,
+            comments_class_teacher: rc?.comments_class_teacher ?? null,
+            comments_principal: rc?.comments_principal ?? null,
+            behaviour_summary: rc?.behaviour_summary ?? null,
+            attendance_present: rc?.attendance_present ?? 0,
+            attendance_total: rc?.attendance_total ?? 0,
+            generated_at: rc?.generated_at ?? null,
+            academic_years: { id: t.yearId, name: t.yearName },
+            terms: { id: t.termId, name: t.termName },
+            // The class the comments were written for, else the learner's own.
+            grade_streams: embedOne<NonNullable<Stream>>(rc?.grade_streams) ?? (streamRes.data as Stream) ?? null,
+            report_card_subjects: t.subjects.map(sub => ({
+                id: sub.id,
+                total_score: null,
+                total_max_score: null,
+                percentage: sub.average,
+                grade_symbol: null,
+                teacher_comment: null,
+                subjects: { id: sub.id, name: sub.name },
+            })),
+        };
+    });
 }
 
 // ── Attendance ──────────────────────────────────────────────
@@ -305,7 +325,7 @@ export async function getStudentAttendance(
 
 // ── Performance Trends ──────────────────────────────────────
 
-export async function getStudentPerformanceTrends(student: CurrentStudent) {
+export async function getStudentPerformanceTrends(student: CurrentStudent): Promise<StudentTermTrend[]> {
     const supabase = createSupabaseAdmin();
 
     // KCSE (8-4-4) grades only the best 7 of a student's subjects; CBC has no
@@ -558,16 +578,18 @@ export async function getStudentMaterials(student: CurrentStudent) {
 export async function getStudentDashboardSummary(student: CurrentStudent) {
     const supabase = createSupabaseAdmin();
 
+    // Loaded once: the report cards are built from the same term averages.
+    const trendsLoad = getStudentPerformanceTrends(student);
     const [profileRes, subjectsRes, resultsRes, reportsRes, attendanceRes, announcementsRes, assignmentsRes, materialsRes, trendsRes] = await Promise.allSettled([
         getCurrentStudentProfile(student),
         getStudentSubjects(student),
         getStudentResults(student),
-        getStudentReportCards(student),
+        trendsLoad.then(trends => getStudentReportCards(student, trends)),
         getStudentAttendance(student),
         getSchoolAnnouncements(student),
         getStudentAssignments(student),
         getStudentMaterials(student),
-        getStudentPerformanceTrends(student),
+        trendsLoad,
     ]);
 
     const profile = profileRes.status === 'fulfilled' ? profileRes.value : null;
@@ -620,19 +642,12 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
     const latestResults = results.slice(0, 5);
     const latestReport = reports[0] ?? null;
 
-    // Prefer the current term's KCSE-selection-aware average (best 7
-    // subjects, matching the report card/marksheet) over a plain average of
-    // every mark ever entered. Fall back to the plain average when the
-    // current term has no marks yet (e.g. start of term).
-    const currentTermTrend = currentTerm
-        ? trends.find((t) => t.termId === currentTerm.id)
-        : null;
-
-    const avgScore = currentTermTrend
-        ? currentTermTrend.overallAverage
-        : results.length > 0
-            ? Math.round((results.reduce((sum: number, item: any) => sum + Number(item.percentage || 0), 0) / results.length) * 10) / 10
-            : 0;
+    // One term's average, as its report card has it (best seven for 8-4-4):
+    // this term's, or before its results are out the latest term with some.
+    // It used to fall back to a plain mean of every mark ever released, all
+    // years and rounds together, under a label naming a single term.
+    const averageTerm = (currentTerm && trends.find((t) => t.termId === currentTerm.id)) || trends.at(-1) || null;
+    const avgScore = averageTerm?.overallAverage ?? 0;
 
     const attendancePresent = attendance.filter((a: any) => a.status === 'present').length;
     const attendanceRate = attendance.length > 0
@@ -644,6 +659,8 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
         stats: {
             subjectsCount: subjects.length,
             averageScore: avgScore,
+            /** The term `averageScore` is for, to label it with. */
+            averageTerm: averageTerm ? averageTerm.termName : null,
             attendanceRate,
             hasReportCard: !!latestReport,
             examsTaken: results.length,

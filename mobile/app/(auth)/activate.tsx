@@ -112,9 +112,12 @@ export default function ActivateScreen() {
     };
 
     const handleGoogle = () => {
-        // Onboarding joins the school with this code once Google has signed the person in.
+        // Onboarding joins the school with this code once Google has signed the
+        // person in, and takes it then; it is dropped here only when no one was
+        // signed in. Clearing it on success too threw it away before Onboarding,
+        // which waits on /api/auth/me, could read it.
         setPendingInviteCode(code);
-        void google.start().then(() => setPendingInviteCode(null), () => setPendingInviteCode(null));
+        void google.start().then(signedIn => { if (!signedIn) setPendingInviteCode(null); });
     };
 
     /** Signs in with the username and password just chosen; false if that fails. */

@@ -148,7 +148,7 @@ export default function StudentDashboardPage() {
         : null;
 
     const kpis: React.ReactNode[] = [
-        <KpiTile key="avg" title={current ? `${current.termName} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />,
+        <KpiTile key="avg" title={stats?.averageTerm ? `${stats.averageTerm} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />,
         <KpiTile key="subjects" title="Subjects" value={stats?.subjectsCount ?? 0} icon={<BookOpen size={17} />} href="/student/subjects" hue="emerald" />,
         <KpiTile key="exams" title="Results released" value={stats?.examsTaken ?? 0} icon={<GraduationCap size={17} />} href="/student/results" hue="violet" />,
     ];
