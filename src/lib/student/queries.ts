@@ -582,15 +582,28 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
     const today = new Date().toISOString().split('T')[0];
     const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const { data: upcomingExams } = await supabase
-        .from('exams')
-        .select('id, name, exam_date, subjects(name)')
-        .eq('school_id', student.schoolId)
-        .eq('academic_level_id', student.academicLevelId)
-        .gte('exam_date', today)
-        .lte('exam_date', thirtyDays)
-        .order('exam_date', { ascending: true })
-        .limit(5);
+    // The learner's own class: its papers, and the grade-wide ones for its
+    // grade. (This filtered on exams.academic_level_id, a column exams does
+    // not have, so the query failed and the list was always empty.)
+    const { data: stream } = student.gradeStreamId
+        ? await supabase.from('grade_streams').select('grade_id').eq('id', student.gradeStreamId).maybeSingle()
+        : { data: null };
+    const classFilter = !student.gradeStreamId
+        ? null
+        : stream?.grade_id
+            ? `grade_stream_id.eq.${student.gradeStreamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`
+            : `grade_stream_id.eq.${student.gradeStreamId}`;
+    const { data: upcomingExams } = classFilter
+        ? await supabase
+            .from('exams')
+            .select('id, name, exam_date, subjects(name)')
+            .eq('school_id', student.schoolId)
+            .or(classFilter)
+            .gte('exam_date', today)
+            .lte('exam_date', thirtyDays)
+            .order('exam_date', { ascending: true })
+            .limit(5)
+        : { data: [] };
 
     const latestResults = results.slice(0, 5);
     const latestReport = reports[0] ?? null;

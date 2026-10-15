@@ -58,7 +58,7 @@ export default function UsersPage() {
       )}
 
       <UsersDirectory
-        loading={h.loading} totalUsers={h.users.length} paginatedUsers={h.paginatedUsers}
+        loading={h.loading} loadError={h.usersError} onRetry={h.refreshUsers} totalUsers={h.users.length} paginatedUsers={h.paginatedUsers}
         filteredCount={h.filteredUsers.length} roleCounts={h.roleCounts} totalPages={h.totalPages}
         currentPage={h.currentPage} setCurrentPage={h.setCurrentPage} usersPerPage={h.usersPerPage}
         roleFilter={h.roleFilter} setRoleFilter={h.setRoleFilter}

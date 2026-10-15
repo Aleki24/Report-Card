@@ -4,6 +4,7 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { provisionUserFromClerk } from '@/lib/provision-user';
+import { revokeInviteCodes } from '@/lib/invite-codes';
 
 /** The account's primary email (Clerk lists every address; the first is not always the primary). */
 const primaryEmail = (user: UserJSON): string =>
@@ -91,20 +92,21 @@ export async function POST(req: Request) {
       case 'user.deleted': {
         const clerkId = evt.data.id;
         if (!clerkId) break;
-        // Cascade delete related records to avoid FK constraint errors
-        await supabase.from('exam_marks').delete().eq('student_id', clerkId);
-        await supabase.from('daily_attendance').delete().eq('student_id', clerkId);
-        await supabase.from('student_fees').delete().eq('student_id', clerkId);
-        await supabase.from('announcements').delete().eq('posted_by', clerkId);
-        await supabase.from('students').delete().eq('id', clerkId);
-        await supabase.from('class_teachers').delete().eq('user_id', clerkId);
-        const { data: stRecord } = await supabase.from('subject_teachers').select('id').eq('user_id', clerkId).maybeSingle();
-        if (stRecord) {
-          await supabase.from('subject_teacher_assignments').delete().eq('subject_teacher_id', stRecord.id);
-          await supabase.from('subject_teachers').delete().eq('id', stRecord.id);
+        // Only the sign-in is gone. Our own routes (account deletion, admin
+        // deletes, activation rollbacks) settle the database before they
+        // delete a Clerk user; what is left is the school's record — a
+        // learner's marks and fees, a teacher's announcements — and a deletion
+        // from the Clerk dashboard must never erase it. The account is
+        // switched off; only a bare pending account, which holds nothing, is
+        // removed so its email can be used again.
+        const { data: row } = await supabase.from('users').select('role').eq('id', clerkId).maybeSingle();
+        if (!row) break;
+        if (row.role === 'PENDING') {
+          await supabase.from('users').delete().eq('id', clerkId);
+        } else {
+          await supabase.from('users').update({ is_active: false }).eq('id', clerkId);
+          await revokeInviteCodes(supabase, clerkId);
         }
-        await supabase.from('active_users').delete().eq('user_id', clerkId);
-        await supabase.from('users').delete().eq('id', clerkId);
         break;
       }
     }

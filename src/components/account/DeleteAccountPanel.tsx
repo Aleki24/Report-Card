@@ -2,16 +2,17 @@
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useAuth, useClerk } from '@clerk/nextjs';
+import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { Check, Trash2, X } from 'lucide-react';
 import { Button, Input, Spinner } from '@/components/ui';
 import {
   ACCOUNT_DELETION_ENDPOINT,
-  DELETED_DATA,
   DELETE_CONFIRMATION_WORD,
-  RETAINED_DATA,
+  DELETION_SUMMARY,
+  deletionKindForRole,
   isDeleteConfirmation,
   type DeleteAccountRequest,
+  type DeletionSummary,
 } from '@/lib/account-deletion';
 import { CONTACT_DETAILS } from '@/lib/contact';
 
@@ -29,6 +30,25 @@ function DataList({ items, kept }: { items: readonly string[]; kept?: boolean })
   );
 }
 
+/** What a deletion removes and keeps, side by side. */
+function SummaryCards({ summary, label }: { summary: DeletionSummary; label?: string }) {
+  return (
+    <section className="flex flex-col gap-3">
+      {label && <h2 className="text-sm font-semibold text-foreground">{label}</h2>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Deleted</h3>
+          <DataList items={summary.deleted} />
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Kept by the school</h3>
+          <DataList items={summary.retained} kept />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 type Status = { state: 'idle' } | { state: 'deleting' } | { state: 'error'; message: string } | { state: 'deleted' };
 
 /**
@@ -38,6 +58,10 @@ type Status = { state: 'idle' } | { state: 'deleting' } | { state: 'error'; mess
 export function DeleteAccountPanel() {
   const { isLoaded, isSignedIn } = useAuth();
   const { signOut } = useClerk();
+  const { user } = useUser();
+  // The role Clerk carries is only for choosing the words; the server decides
+  // from the account itself.
+  const kind = deletionKindForRole((user?.publicMetadata as { role?: string } | undefined)?.role);
   const [confirm, setConfirm] = useState('');
   const [status, setStatus] = useState<Status>({ state: 'idle' });
 
@@ -73,16 +97,14 @@ export function DeleteAccountPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Deleted</h2>
-          <DataList items={DELETED_DATA} />
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-          <h2 className="mb-3 text-sm font-semibold text-foreground">Kept by the school</h2>
-          <DataList items={RETAINED_DATA} kept />
-        </div>
-      </div>
+      {isLoaded && isSignedIn ? (
+        <SummaryCards summary={DELETION_SUMMARY[kind]} />
+      ) : (
+        <>
+          <SummaryCards label="Staff and parents" summary={DELETION_SUMMARY.member} />
+          <SummaryCards label="Learners" summary={DELETION_SUMMARY.learner} />
+        </>
+      )}
 
       <div className="rounded-3xl border border-destructive/30 bg-card p-5 shadow-sm sm:p-8">
         {!isLoaded ? (

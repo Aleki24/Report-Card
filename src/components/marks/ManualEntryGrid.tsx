@@ -479,7 +479,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         };
     };
 
-    /** Move the given edits into `saved` (with ids when the server returned them) and drop them from `edits`. */
+    /** Move the given edits into `saved` (with ids when the server returned them) and drop them from `edits` unless changed since. */
     const commit = (upserted: { studentId: string; values: EntryValues }[], ids: Map<string, string>, removed: string[]) => {
         setSaved(prev => {
             const next = { ...prev };
@@ -489,8 +489,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             for (const studentId of removed) delete next[studentId];
             return next;
         });
-        const done = new Set([...upserted.map(u => u.studentId), ...removed]);
-        setEdits(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => !done.has(id))));
+        // Drop an edit only if it is still what was sent: a mark typed into the
+        // row while the save was in flight is a newer edit and stays unsaved.
+        const sent = new Map(upserted.map(u => [u.studentId, u.values]));
+        const removedIds = new Set(removed);
+        setEdits(prev => Object.fromEntries(Object.entries(prev).filter(([id, values]) =>
+            !removedIds.has(id) && sent.get(id) !== values)));
     };
 
     const handleSave = async () => {

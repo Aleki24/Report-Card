@@ -88,10 +88,14 @@ export function BulkUpload({ examId, subjectId, gradeStreamId, gradeId }: Props)
     const validateData = useCallback(() => {
         const errs: string[] = [];
         parsedData.forEach((row, idx) => {
-            const score = parseFloat(row[mapping.score]);
-            if (isNaN(score)) errs.push(`Row ${idx + 1}: Invalid score "${row[mapping.score]}"`);
-            if (score < 0) errs.push(`Row ${idx + 1}: Score ${score} cannot be negative`);
             if (!row[mapping.admissionNumber]) errs.push(`Row ${idx + 1}: Missing admission number`);
+            // A blank score is "no mark yet" (an absent learner): the upload
+            // skips it, so it must not block the preview either.
+            const rawText = String(row[mapping.score] ?? '').trim();
+            if (rawText === '') return;
+            const score = Number(rawText);
+            if (!Number.isFinite(score)) errs.push(`Row ${idx + 1}: Invalid score "${rawText}"`);
+            else if (score < 0) errs.push(`Row ${idx + 1}: Score ${score} cannot be negative`);
         });
         setErrors(errs);
         if (errs.length === 0) setStep('preview');

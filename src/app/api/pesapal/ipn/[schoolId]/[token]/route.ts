@@ -13,7 +13,10 @@ export const runtime = 'nodejs';
  * rejected before anything is read or written. Even past that, the
  * notification body is never trusted: we always call GetTransactionStatus
  * ourselves to learn the real outcome. Always ack cleanly to Pesapal on the
- * legitimate path so it doesn't retry into a loop.
+ * legitimate path so it doesn't retry into a loop — except when we failed to
+ * process a real notification (Pesapal unreachable, the update refused):
+ * answering status 500 then makes Pesapal send it again, instead of leaving a
+ * paid order PENDING for good.
  */
 async function handleIpn(request: NextRequest, schoolId: string, token: string) {
     const supabase = createSupabaseAdmin();
@@ -34,12 +37,12 @@ async function handleIpn(request: NextRequest, schoolId: string, token: string) 
     const orderMerchantReference = searchParams.get('OrderMerchantReference') || '';
     const orderNotificationType = searchParams.get('OrderNotificationType') || 'IPNCHANGE';
 
-    const ack = (trackingId: string | null) => NextResponse.json({
+    const ack = (trackingId: string | null, processed = true) => NextResponse.json({
         orderNotificationType,
         orderTrackingId: trackingId,
         orderMerchantReference,
-        status: 200,
-    });
+        status: processed ? 200 : 500,
+    }, { status: processed ? 200 : 500 });
 
     if (!orderTrackingId) {
         console.error('[pesapal ipn] missing OrderTrackingId for school', schoolId);
@@ -84,12 +87,15 @@ async function handleIpn(request: NextRequest, schoolId: string, token: string) 
             // Only from the status read above: a concurrent delivery or a
             // staff void in between must not be overwritten.
             .eq('status', payment.status);
-        if (updateError) console.error('[pesapal ipn] update failed', orderTrackingId, updateError);
+        if (updateError) {
+            console.error('[pesapal ipn] update failed', orderTrackingId, updateError);
+            return ack(orderTrackingId, false);
+        }
 
         return ack(orderTrackingId);
     } catch (err) {
         console.error('[pesapal ipn] error processing notification for school', schoolId, err);
-        return ack(orderTrackingId);
+        return ack(orderTrackingId, false);
     }
 }
 

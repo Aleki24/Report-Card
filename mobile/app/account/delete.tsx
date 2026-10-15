@@ -4,12 +4,13 @@ import { useAuth } from '@clerk/clerk-expo';
 import { Check, X, type LucideIcon } from 'lucide-react-native';
 import {
     ACCOUNT_DELETION_ENDPOINT,
-    DELETED_DATA,
     DELETE_CONFIRMATION_WORD,
-    RETAINED_DATA,
+    DELETION_SUMMARY,
+    deletionKindForRole,
     isDeleteConfirmation,
     type DeleteAccountRequest,
 } from '@shared/account-deletion';
+import { useCurrentUser } from '@/lib/UserContext';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
@@ -39,6 +40,8 @@ export default function DeleteAccountScreen() {
     const styles = useStyles();
     const api = useApi();
     const { signOut } = useAuth();
+    const { baseRole } = useCurrentUser();
+    const summary = DELETION_SUMMARY[deletionKindForRole(baseRole)];
     const [confirm, setConfirm] = useState('');
     const [deleting, setDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -60,8 +63,8 @@ export default function DeleteAccountScreen() {
         <Screen>
             <BackLink />
             <ScreenHeader title="Delete account" description="This permanently removes your Skulbase account. It can’t be undone." />
-            <DataList title="Deleted" items={DELETED_DATA} icon={X} tint={colors.danger} />
-            <DataList title="Kept by the school" items={RETAINED_DATA} icon={Check} tint={colors.muted} />
+            <DataList title="Deleted" items={summary.deleted} icon={X} tint={colors.danger} />
+            <DataList title="Kept by the school" items={summary.retained} icon={Check} tint={colors.muted} />
 
             <Card style={styles.confirmCard}>
                 <Text style={styles.cardTitle}>Type {DELETE_CONFIRMATION_WORD} to confirm</Text>

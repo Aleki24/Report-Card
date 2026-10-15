@@ -128,7 +128,7 @@ export default function BoardingScreen() {
                                 <ResourceList<'exeats', Exeat>
                                     resource="exeats"
                                     fields={EXEAT_FIELDS}
-                                    canCreate={manage || rollcall}
+                                    canCreate={manage}
                                     canEdit={(e) => manage && e.status === 'PENDING'}
                                     canDelete={(e) => manage && e.status === 'PENDING'}
                                     defaults={EXEAT_DEFAULTS}

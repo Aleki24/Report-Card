@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, RotateCcw, School, Settings, UserCog } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -90,6 +90,13 @@ function SettingsPageInner() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [school, setSchool] = useState<SchoolProfile>(() => toSchool(null));
   const [savedSchool, setSavedSchool] = useState<SchoolProfile | null>(null);
+  // fetchAll is created once; it reads the latest of these through refs, or a
+  // refresh after any calendar or grading change would wipe unsaved profile
+  // edits (it only ever saw the first render's savedSchool, null).
+  const savedSchoolRef = useRef(savedSchool);
+  const loadStateRef = useRef(load.state);
+  useEffect(() => { savedSchoolRef.current = savedSchool; }, [savedSchool]);
+  useEffect(() => { loadStateRef.current = load.state; }, [load.state]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<{ type: StructureType; id: string; label: string } | null>(null);
@@ -123,12 +130,13 @@ function SettingsPageInner() {
           school: loadedSchool,
         },
       });
-      setSchool(prev => (savedSchool === null || prev === savedSchool ? loadedSchool : prev));
+      const saved = savedSchoolRef.current;
+      setSchool(prev => (saved === null || prev === saved ? loadedSchool : prev));
       setSavedSchool(loadedSchool);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load settings.';
       setLoad(prev => (prev.state === 'ready' ? prev : { state: 'error', message }));
-      if (load.state === 'ready') toast.error(message);
+      if (loadStateRef.current === 'ready') toast.error(message);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineResource } from '../resource';
 import {
     text, optionalText, isoDate, optionalDate, optionalUuid, uuid, oneOf,
-    count, optionalCount, optionalPersonId, personId,
+    count, optionalCount, optionalPersonId, personId, orDefault,
 } from '../zod-fields';
 
 export const EVENT_TYPES = ['EXAM', 'CAT', 'MARKS_DEADLINE', 'REPORT_RELEASE', 'MEETING', 'HOLIDAY', 'SPORTS', 'OPENING', 'CLOSING', 'OTHER'] as const;
@@ -57,7 +57,7 @@ export const timetableRequirements = defineResource({
         subject_id: uuid,
         teacher_id: optionalPersonId,
         lessons_per_week: count(20).pipe(z.number().min(1, 'At least one lesson')),
-        double_lessons: count(10).default(0),
+        double_lessons: orDefault(count(10), 0),
         room_type: z.preprocess(v => (v === '' ? null : v), z.enum(ROOM_TYPES).nullable()).optional(),
         /** Electives taught in parallel; empty lets the generator decide. */
         option_block: z.preprocess(v => (v === '' || v === undefined ? null : Number(v)), z.number().int().min(1).max(12).nullable()).optional(),

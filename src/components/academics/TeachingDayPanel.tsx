@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -49,9 +49,18 @@ export function TeachingDayPanel({ onChanged }: { onChanged?: () => void }) {
     const [data, setData] = useState<TeachingDay | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
 
+    // The day the panel is showing. A slower load for a day the teacher has
+    // already left must not fill it: its lessons would then be recorded as
+    // taught on the new date.
+    const dayRef = useRef(day);
+    useEffect(() => { dayRef.current = day; }, [day]);
     const load = useCallback(async () => {
-        try { setData(await opsFetch<TeachingDay>(`${URL}?date=${day}`)); }
-        catch (err) { toast.error(errorText(err)); }
+        try {
+            const result = await opsFetch<TeachingDay>(`${URL}?date=${day}`);
+            if (dayRef.current === day) setData(result);
+        } catch (err) {
+            if (dayRef.current === day) toast.error(errorText(err));
+        }
     }, [day]);
     useEffect(() => { setData(null); void load(); }, [load]);
 

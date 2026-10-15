@@ -10,6 +10,7 @@ import { requestJson, jsonBody } from '@/lib/api-error-message';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
+import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
@@ -209,6 +210,9 @@ function FeesPageInner() {
     // The admin, or staff with a finance duty (bursar, accountant).
     const canViewAll = can('fees.view');
     const canManageFees = can('fees.manage');
+    // Recording payments (and matching unmatched Paybill money) is fees.collect:
+    // an accountant can, without billing or editing fee records.
+    const canCollect = can('fees.collect');
     const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || canViewAll), [canViewAll]);
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
@@ -269,7 +273,7 @@ function FeesPageInner() {
     /** How many payments match, when the log shows only the newest of them. */
     const [paymentsLogTotal, setPaymentsLogTotal] = useState<number | null>(null);
     const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
-    // Paybill money that could not be matched to a student; assigned in Settings > Payments.
+    // Paybill money that could not be matched to a student; assigned on the Payments tab.
     const [unmatchedCount, setUnmatchedCount] = useState(0);
     const [plSearch, setPlSearch] = useState('');
     // What the log is actually filtered by: the search box, 300ms after typing stops.
@@ -645,15 +649,29 @@ function FeesPageInner() {
 
     // ── Batch entry ──
 
+    // Only the latest class/term load may fill the sheet: a slower earlier
+    // response must not overwrite it.
+    const batchLoadRef = useRef(0);
     const loadBatchStudents = useCallback(async () => {
         if (!batchStream || !batchTerm) return;
+        const requestId = ++batchLoadRef.current;
         try {
             const [res, feeRes] = await Promise.all([
-                fetch(`/api/school/data?type=students&grade_stream_id=${batchStream}`, { cache: 'no-store' }),
-                fetch(`/api/school/fees?term_id=${batchTerm}`, { cache: 'no-store' }),
+                fetch(`/api/school/data?type=students&grade_stream_id=${encodeURIComponent(batchStream)}`, { cache: 'no-store' }),
+                fetch(`/api/school/fees?term_id=${encodeURIComponent(batchTerm)}`, { cache: 'no-store' }),
             ]);
+            if (requestId !== batchLoadRef.current) return;
+            // A failed fees read would show every learner as not billed yet,
+            // and saving would then bill them again.
+            if (!res.ok || !feeRes.ok) {
+                setBatchStudents([]);
+                setBatchEntries({});
+                setBatchMsg({ type: 'error', text: 'Could not load this class and its fees. Try again.' });
+                return;
+            }
             const json: { data?: StudentApiRow[] } = await res.json();
             const feeJson: { data?: FeeRecord[] } = await feeRes.json();
+            if (requestId !== batchLoadRef.current) return;
             const mapped = (json.data || [])
                 .filter(s => !s.status || s.status === 'ACTIVE')
                 .map(toStudentOption)
@@ -663,6 +681,7 @@ function FeesPageInner() {
             setBatchStudents(mapped);
             setBatchEntries(Object.fromEntries(mapped.map(s => [s.id, emptyBatchEntry(byStudent.get(s.id) ?? null)])));
         } catch (err) {
+            if (requestId !== batchLoadRef.current) return;
             console.error('Failed to load batch students:', err);
             setBatchMsg({ type: 'error', text: 'Failed to load students.' });
         }
@@ -826,9 +845,11 @@ function FeesPageInner() {
                             <Download className="size-4" aria-hidden="true" />Export
                         </button>
                     )}
-                    <button className={cn('btn-primary h-11', mode === 'batch' && 'col-span-2')} onClick={openAdd}>
-                        <Plus className="size-4" aria-hidden="true" />Add record
-                    </button>
+                    {canManageFees && (
+                        <button className={cn('btn-primary h-11', mode === 'batch' && 'col-span-2')} onClick={openAdd}>
+                            <Plus className="size-4" aria-hidden="true" />Add record
+                        </button>
+                    )}
                 </div>
                 }
             />
@@ -841,7 +862,18 @@ function FeesPageInner() {
                         <span className="font-semibold">{unmatchedCount} M-Pesa payment{unmatchedCount === 1 ? '' : 's'} not matched to a student.</span>{' '}
                         <span className="text-muted-foreground">The payer used an account number we couldn&apos;t recognise. Assign it so it counts towards the right balance.</span>
                     </p>
-                    <a href="/dashboard/settings?tab=payments" className="btn-secondary w-full shrink-0 sm:w-auto">Assign payments</a>
+                    {mode !== 'payments' && (
+                        <button
+                            type="button"
+                            className="btn-secondary w-full shrink-0 sm:w-auto"
+                            onClick={() => {
+                                changeMode('payments');
+                                window.requestAnimationFrame(() => document.getElementById('unmatched-payments')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                            }}
+                        >
+                            {canCollect ? 'Assign payments' : 'View payments'}
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -899,7 +931,8 @@ function FeesPageInner() {
                         </div>
 
                         {batchStream && batchTerm && batchStudents.length > 0 && (
-                            <div className="mt-4 grid gap-3 border-t border-border/60 pt-4 md:grid-cols-3">
+                            <div className={cn('mt-4 grid gap-3 border-t border-border/60 pt-4', canManageFees && 'md:grid-cols-3')}>
+                                {canManageFees && (<>
                                 <div>
                                     <label htmlFor="bulk-fee" className="mb-2 block text-xs font-medium text-muted-foreground">Same fee for everyone (KSh)</label>
                                     <div className="flex gap-2">
@@ -914,6 +947,7 @@ function FeesPageInner() {
                                         <button type="button" className="btn-secondary h-11 shrink-0" onClick={() => applyToAll('dueDate', bulkDue)} disabled={!bulkDue}>Apply</button>
                                     </div>
                                 </div>
+                                </>)}
                                 <div>
                                     <label htmlFor="batch-method" className="mb-2 block text-xs font-medium text-muted-foreground">Payments below were received by</label>
                                     <select id="batch-method" className="input-field w-full" value={batchMethod} onChange={e => setBatchMethod(e.target.value as FeePaymentMethod)}>
@@ -972,20 +1006,20 @@ function FeesPageInner() {
                                                             <div className="text-[11px] text-muted-foreground">{s.admission || 'No admission no.'}{entry.existing ? '' : ' · not billed yet'}</div>
                                                         </td>
                                                         <td data-label="Fee (KSh)">
-                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Fee for ${s.name}`} value={entry.total} onChange={e => updateBatchEntry(s.id, 'total', e.target.value)} />
+                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Fee for ${s.name}`} value={entry.total} onChange={e => updateBatchEntry(s.id, 'total', e.target.value)} disabled={!canManageFees} />
                                                         </td>
                                                         <td data-label="Paid so far" className="text-right tabular-nums text-muted-foreground">{paidSoFar.toLocaleString()}</td>
                                                         <td data-label="Payment now">
-                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Payment received now for ${s.name}`} value={entry.payNow} onChange={e => updateBatchEntry(s.id, 'payNow', e.target.value)} />
+                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Payment received now for ${s.name}`} value={entry.payNow} onChange={e => updateBatchEntry(s.id, 'payNow', e.target.value)} disabled={!canManageFees && !entry.existing} title={!canManageFees && !entry.existing ? 'Not billed yet: the bursar or an admin sets the fee first' : undefined} />
                                                         </td>
                                                         <td data-label="Balance after" className="text-right font-mono font-semibold tabular-nums" style={{ color: hasTotal ? balanceColor(balance) : undefined }}>
                                                             {hasTotal ? balance.toLocaleString() : '—'}
                                                         </td>
                                                         <td data-label="Due date">
-                                                            <input type="date" className="input-field input-field-sm min-w-32" aria-label={`Due date for ${s.name}`} value={entry.dueDate} onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)} />
+                                                            <input type="date" className="input-field input-field-sm min-w-32" aria-label={`Due date for ${s.name}`} value={entry.dueDate} onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)} disabled={!canManageFees} />
                                                         </td>
                                                         <td data-label="Notes">
-                                                            <input type="text" className="input-field input-field-sm w-full min-w-24" placeholder="Notes" aria-label={`Notes for ${s.name}`} value={entry.notes} onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)} />
+                                                            <input type="text" className="input-field input-field-sm w-full min-w-24" placeholder="Notes" aria-label={`Notes for ${s.name}`} value={entry.notes} onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)} disabled={!canManageFees} />
                                                         </td>
                                                         <td data-label="Status">{hasTotal ? statusBadge(computeFeeStatus(total, paidAfter)) : '—'}</td>
                                                     </tr>
@@ -1022,6 +1056,11 @@ function FeesPageInner() {
             {/* ════════════════════════════════════════════ */}
             {mode === 'payments' && (
                 <div>
+                    {unmatchedCount > 0 && (
+                        <div className="mb-4">
+                            <UnmatchedPaymentsPanel canAssign={canCollect} onCountChange={setUnmatchedCount} />
+                        </div>
+                    )}
                     <section aria-label="Payment filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
                         <div className="relative">
                             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -1183,9 +1222,12 @@ function FeesPageInner() {
                                 <Wallet size={32} className="text-primary" />
                             </div>
                             <h3 className="text-lg font-bold mb-2">No Fee Records Yet</h3>
-                            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-8 leading-relaxed">
-                                Get started by setting up fee structures, adding individual records, or importing data in bulk for your classes.
+                            <p className={cn('text-sm text-muted-foreground max-w-md mx-auto leading-relaxed', canManageFees && 'mb-8')}>
+                                {canManageFees
+                                    ? 'Get started by setting up fee structures, adding individual records, or importing data in bulk for your classes.'
+                                    : 'The bursar or an admin bills learners first; payments can be recorded here once a learner has a fee record.'}
                             </p>
+                            {canManageFees && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
                                 <button
                                     className="rounded-2xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
@@ -1212,6 +1254,7 @@ function FeesPageInner() {
                                     </p>
                                 </button>
                             </div>
+                            )}
                         </div>
                     ) : (
                         <DataTable<FeeRecord>
@@ -1260,7 +1303,7 @@ function FeesPageInner() {
                                 <span className="inline-flex items-center gap-1 whitespace-nowrap">
                                     <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
                                     <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openHistory(fee)} title="Payment history" aria-label={`Payment history for ${fee.studentName ?? 'student'}`}><History size={14} /></button>
-                                    <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>
+                                    {canManageFees && <button className="btn-icon text-muted-foreground hover:text-foreground" onClick={() => openEdit(fee)} title="Edit" aria-label={`Edit fee record for ${fee.studentName ?? 'student'}`}><Edit3 size={14} /></button>}
                                     {canManageFees && <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => handleDelete(fee)} title="Delete" aria-label={`Delete fee record for ${fee.studentName ?? 'student'}`}><Trash2 size={14} /></button>}
                                 </span>
                             )}

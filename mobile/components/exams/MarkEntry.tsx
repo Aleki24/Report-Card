@@ -212,10 +212,16 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             }
             return { ...base, raw_score: Number(e.score) };
         });
+        // What was sent, by row: a row edited while the save is in flight is
+        // a new object and stays as unsaved work (the autosave keeps its draft).
+        const sent = new Map(pendingIds.map((id) => [id, entries[id]] as const));
         try {
             await api.post('/api/school/exam-marks', { exam_id: exam.id, marks: payload });
-            setEntries({});
-            clearDraft(draftKey);
+            setEntries((prev) => {
+                const next = { ...prev };
+                for (const [id, entry] of sent) if (next[id] === entry) delete next[id];
+                return next;
+            });
             setMessage({ tone: 'success', text: `Saved ${pluralize(payload.length, 'mark')}.` });
             marks.refresh();
         } catch (err) {
