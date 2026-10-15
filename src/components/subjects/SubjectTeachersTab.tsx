@@ -6,7 +6,14 @@ import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 
 interface Grade { id: string; name_display: string; academic_level_id: string; numeric_order: number }
 interface Stream { id: string; full_name: string; grade_id: string }
-interface SubjectRow { id: string; name: string; code: string; teacher_user_id: string | null }
+interface SubjectRow {
+    id: string;
+    name: string;
+    code: string;
+    teacher_user_id: string | null;
+    /** 'grade' on a stream view: the teacher is set for the whole class, not this stream. */
+    teacher_scope: 'stream' | 'grade' | null;
+}
 interface StaffOption { id: string; name: string }
 
 /**
@@ -53,8 +60,15 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
 
     const assign = async (subjectId: string, teacherUserId: string) => {
         const previous = subjects;
+        // On a stream view a whole-class teacher has no stream row to clear.
+        if (!teacherUserId && streamId && previous.find(s => s.id === subjectId)?.teacher_scope === 'grade') {
+            toast.info('This teacher is set for the whole class. Choose "All streams in this class" to remove them.');
+            return;
+        }
         // Optimistic: the select shouldn't snap back while the request is out.
-        setSubjects(prev => prev.map(s => (s.id === subjectId ? { ...s, teacher_user_id: teacherUserId || null } : s)));
+        setSubjects(prev => prev.map(s => (s.id === subjectId
+            ? { ...s, teacher_user_id: teacherUserId || null, teacher_scope: teacherUserId ? (streamId ? 'stream' : 'grade') : null }
+            : s)));
         setSavingId(subjectId);
         try {
             const res = await fetch('/api/admin/subject-teachers', {
@@ -142,6 +156,9 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
                                                 <option value="">— No teacher —</option>
                                                 {staff.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                             </select>
+                                            {streamId && subject.teacher_scope === 'grade' && (
+                                                <p className="mt-1 text-[11px] text-muted-foreground">Set for the whole class</p>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

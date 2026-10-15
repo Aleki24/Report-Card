@@ -75,7 +75,8 @@ export function RecordForm({ fields, values, onChange }: RecordFormProps) {
                                 <TextField
                                     label={label}
                                     value={isDateTime ? text.replace('T', ' ') : text}
-                                    onChangeText={(v) => set(isDateTime ? v.trim().replace(' ', 'T') : v)}
+                                    // No trim here: it ate the space typed between date and time.
+                                    onChangeText={(v) => set(isDateTime ? v.replace(' ', 'T') : v)}
                                     placeholder={PLACEHOLDER[field.kind]}
                                     keyboardType={KEYBOARD[field.kind]}
                                     autoCapitalize="none"

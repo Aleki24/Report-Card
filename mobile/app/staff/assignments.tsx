@@ -97,7 +97,7 @@ function AssignmentsContent() {
     );
 }
 
-function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; setDraft: (d: Draft | null) => void; startDraft: () => void }) {
+function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; setDraft: React.Dispatch<React.SetStateAction<Draft | null>>; startDraft: () => void }) {
     const { colors, tones } = useTheme();
     const styles = useStyles();
     const api = useApi();
@@ -153,7 +153,9 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
         setProblem(null);
         try {
             const file = await api.pickAndUploadAttachment();
-            if (file) setDraft({ ...draft, fileUrl: file.url, fileName: file.name });
+            // Functional update: the title and instructions typed during the
+            // upload must not revert to what they were when it started.
+            if (file) setDraft((d) => (d ? { ...d, fileUrl: file.url, fileName: file.name } : d));
         } catch (err) {
             setProblem(errorMessage(err, 'Upload failed'));
         } finally {

@@ -16,7 +16,7 @@ import {
 } from '@/lib/ops/forms/operations';
 
 function Requisitions({ manage }: { manage: boolean }) {
-    const { profile } = useAuth();
+    const { profile, role } = useAuth();
     const items = useOpsList<Item>('inventory');
     const fields = requisitionFields(items.rows);
     const mine = (r: Requisition) => r.requested_by === profile?.id;
@@ -30,7 +30,7 @@ function Requisitions({ manage }: { manage: boolean }) {
             addLabel="Request from store"
             rowActions={(r, reload) => (manage ? (
                 <>
-                    {requisitionDecisions(r.status).map(d => (
+                    {requisitionDecisions(r.status, { ownRequest: mine(r), isAdmin: role === 'ADMIN' }).map(d => (
                         <ActionButton key={d.decision} url={`/api/inventory/requisitions/${r.id}/decision`} body={{ decision: d.decision }} success={d.success} onDone={reload}
                             variant={d.decision === 'REJECT' ? 'destructive' : d.decision === 'ISSUE' ? 'outline' : 'default'}>{d.label}</ActionButton>
                     ))}

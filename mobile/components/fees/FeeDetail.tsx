@@ -9,6 +9,7 @@ import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { useCurrentUser } from '@/lib/UserContext';
 
 const METHODS: { value: FeePaymentMethod; label: string }[] = [
     { value: 'CASH', label: 'Cash' },
@@ -24,6 +25,8 @@ type Panel = 'history' | 'pay' | 'edit';
 
 /** One fee record, expanded: its payments, recording a payment, and editing the bill. */
 export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: () => void }) {
+    // Editing a bill and voiding receipts are fees.manage; collectors record payments.
+    const canManage = useCurrentUser().can('fees.manage');
     const download = useDownload();
     const styles = useStyles();
     const api = useApi();
@@ -128,7 +131,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
                 options={[
                     { value: 'pay', label: 'Record payment' },
                     { value: 'history', label: 'History' },
-                    { value: 'edit', label: 'Edit bill' },
+                    ...(canManage ? [{ value: 'edit' as const, label: 'Edit bill' }] : []),
                 ]}
                 value={panel}
                 onChange={setPanel}
@@ -167,7 +170,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
                                     {p.status === 'COMPLETED' ? (
                                         <View style={{ flexDirection: 'row', gap: 4 }}>
                                             <Button size="sm" variant="ghost" label="Receipt" onPress={() => receipt(p)} loading={busy === `r-${p.id}`} />
-                                            <Button size="sm" variant="ghost" label="Void" onPress={() => voidPayment(p)} loading={busy === p.id} />
+                                            {canManage ? <Button size="sm" variant="ghost" label="Void" onPress={() => voidPayment(p)} loading={busy === p.id} /> : null}
                                         </View>
                                     ) : null}
                                 </View>

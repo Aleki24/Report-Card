@@ -1,4 +1,4 @@
-import type { UserRole } from '@/types';
+import type { UserRole } from '../types';
 
 /**
  * Role groups shared by pages, navigation and API routes, so a role check

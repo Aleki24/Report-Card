@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useManagedGradeStreams } from '@/lib/useSchoolData';
@@ -45,19 +45,24 @@ function AttendanceContent() {
 
     const effectiveStreamId = streamId ?? streams[0]?.id ?? null;
 
+    // Only the latest class and date may fill the register: a slower earlier
+    // load would otherwise show (and save) one day's statuses under another.
+    const loadId = useRef(0);
     const loadRoster = useCallback(async () => {
         if (!effectiveStreamId) return;
+        const id = ++loadId.current;
         setLoading(true);
         setError(null);
         setPending({});
         try {
             const res = await api.get<{ data: ClassAttendanceRow[] }>(withQuery('/api/school/attendance', { stream_id: effectiveStreamId, date }));
-            setRows(res.data ?? []);
+            if (id === loadId.current) setRows(res.data ?? []);
         } catch (err) {
+            if (id !== loadId.current) return;
             setRows([]);
             setError(errorMessage(err, 'Failed to load attendance'));
         } finally {
-            setLoading(false);
+            if (id === loadId.current) setLoading(false);
         }
     }, [api, effectiveStreamId, date]);
 

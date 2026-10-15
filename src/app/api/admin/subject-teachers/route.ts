@@ -114,13 +114,15 @@ export async function GET(request: NextRequest) {
 
         // Stream-specific assignment wins over a grade-wide one, mirroring how
         // the reports resolve the name they print.
-        const bySubject = new Map<string, string>();
+        // `scope` says where the shown teacher comes from: a stream view can
+        // show the grade-wide teacher, which only the whole-grade view removes.
+        const bySubject = new Map<string, { userId: string; scope: 'stream' | 'grade' }>();
         for (const a of assignments) {
             if (!a.subject_id) continue;
             if (a.grade_stream_id && gradeStreamId && a.grade_stream_id !== gradeStreamId) continue;
             if (a.grade_stream_id || !bySubject.has(a.subject_id)) {
                 const uid = userIdByTeacher.get(a.subject_teacher_id || '');
-                if (uid) bySubject.set(a.subject_id, uid);
+                if (uid) bySubject.set(a.subject_id, { userId: uid, scope: a.grade_stream_id ? 'stream' : 'grade' });
             }
         }
 
@@ -129,7 +131,8 @@ export async function GET(request: NextRequest) {
                 id: s.id,
                 name: s.name,
                 code: s.code,
-                teacher_user_id: bySubject.get(s.id) || null,
+                teacher_user_id: bySubject.get(s.id)?.userId ?? null,
+                teacher_scope: bySubject.get(s.id)?.scope ?? null,
             })),
             staff: (staff || []).map(u => ({
                 id: u.id,

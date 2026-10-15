@@ -89,12 +89,16 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
             return;
         }
         setSaving(true);
-        const payload = fromFormValues(fields, values);
-        const ok = editing === 'new'
-            ? await create(payload, `${def.label.singular} added.`)
-            : await update(editing.id, payload, `${def.label.singular} updated.`);
-        setSaving(false);
-        if (ok) setEditing(null);
+        try {
+            const payload = fromFormValues(fields, values);
+            const ok = editing === 'new'
+                ? await create(payload, `${def.label.singular} added.`)
+                : await update(editing.id, payload, `${def.label.singular} updated.`);
+            if (ok) setEditing(null);
+        } finally {
+            // Whatever happens, the sheet must not stay on "Saving…" with Cancel disabled.
+            setSaving(false);
+        }
     };
 
     const confirmDelete = (row: T) =>

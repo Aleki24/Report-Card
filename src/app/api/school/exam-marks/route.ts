@@ -6,6 +6,7 @@ import { fetchActiveMultiPaperScheme } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { internalError } from '@/lib/api-errors';
+import { fetchAllRows } from '@/lib/postgrest';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 /**
@@ -175,13 +176,18 @@ export async function GET(request: NextRequest) {
     const scheme = await fetchActiveMultiPaperScheme(supabase, examId);
     const componentsByStudent = new Map<string, Record<string, number>>();
     if (scheme && returnedStudentIds.length > 0) {
-      const { data: markComponents } = await supabase
+      // Every paper score of the exam, paged (a class sitting four papers
+      // passes 1,000 rows), then narrowed to the learners returned; listing
+      // their ids in the URL also overflowed it for a large class.
+      const returned = new Set(returnedStudentIds);
+      const { rows: markComponents, error: componentsError } = await fetchAllRows<{ id: string; student_id: string; component_id: string; raw_score: number }>(() => supabase
         .from('exam_mark_components')
-        .select('student_id, component_id, raw_score')
+        .select('id, student_id, component_id, raw_score')
         .eq('exam_id', examId)
-        .in('student_id', returnedStudentIds);
+        .order('id'));
+      if (componentsError) return internalError('exam-marks paper scores load', componentsError);
 
-      for (const mc of markComponents || []) {
+      for (const mc of markComponents.filter(c => returned.has(c.student_id))) {
         const entry = componentsByStudent.get(mc.student_id) || {};
         entry[mc.component_id] = Number(mc.raw_score);
         componentsByStudent.set(mc.student_id, entry);
@@ -344,6 +350,25 @@ export async function POST(request: NextRequest) {
         .from('exam_mark_components')
         .upsert(componentRows, { onConflict: 'component_id,student_id' });
       if (compError) return internalError('exam-marks paper scores save', compError);
+
+      // A paper the teacher cleared is not in the upsert, so its old score
+      // would stay and print on the report card (PATCH removes it the same way).
+      const kept = new Set(componentRows.map(r => `${r.student_id}|${r.component_id}`));
+      const learners = [...new Set(componentRows.map(r => r.student_id))];
+      const stale: string[] = [];
+      for (let i = 0; i < learners.length; i += 150) {
+        const { data: existing, error: existingError } = await supabase
+          .from('exam_mark_components')
+          .select('id, student_id, component_id')
+          .eq('exam_id', exam_id)
+          .in('student_id', learners.slice(i, i + 150));
+        if (existingError) return internalError('exam-marks paper scores tidy', existingError);
+        for (const row of existing ?? []) if (!kept.has(`${row.student_id}|${row.component_id}`)) stale.push(row.id as string);
+      }
+      for (let i = 0; i < stale.length; i += 150) {
+        const { error: delError } = await supabase.from('exam_mark_components').delete().in('id', stale.slice(i, i + 150));
+        if (delError) return internalError('exam-marks paper scores tidy', delError);
+      }
     }
 
     return NextResponse.json({ success: true, data });

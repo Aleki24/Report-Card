@@ -14,6 +14,7 @@ import {
     Screen, ScreenHeader, SearchField, SectionLabel, SegmentedTabs, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
+import { useCurrentUser } from '@/lib/UserContext';
 import { DEFAULT_TEMPLATE, REPORT_TEMPLATES, templateParam as toTemplateParam, type ReportTemplateId } from '@/lib/reportTemplates';
 import type { StudentListItem } from '@/lib/types';
 
@@ -248,6 +249,8 @@ interface StudentComment {
 function CommentsPanel({ scope }: { scope: Scope }) {
     const styles = useStyles();
     const api = useApi();
+    // Only an admin writes the principal's comment; the server keeps theirs alone.
+    const isAdmin = useCurrentUser().role === 'ADMIN';
     const { data, loading, error, reload } = useApiQuery<StudentComment[]>(
         withQuery('/api/reports/comments', { grade_stream_id: scope.streamId, term_id: scope.termId, academic_year_id: scope.yearId }),
     );
@@ -271,6 +274,8 @@ function CommentsPanel({ scope }: { scope: Scope }) {
         if (dirty.length === 0) return;
         setSaving(true);
         setMessage(null);
+        // What was sent: a comment typed while saving is newer and stays unsaved.
+        const sent = edits;
         try {
             await api.post('/api/reports/comments', {
                 term_id: scope.termId,
@@ -279,10 +284,10 @@ function CommentsPanel({ scope }: { scope: Scope }) {
                 comments: dirty.map((c) => ({
                     student_id: c.student_id,
                     comments_class_teacher: c.comments_class_teacher,
-                    comments_principal: c.comments_principal,
+                    ...(isAdmin ? { comments_principal: c.comments_principal } : {}),
                 })),
             });
-            setEdits({});
+            setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([id, patch]) => sent[id] !== patch)));
             setMessage({ tone: 'success', text: `Saved comments for ${pluralize(dirty.length, 'learner')}.` });
             reload();
         } catch (err) {
@@ -305,7 +310,11 @@ function CommentsPanel({ scope }: { scope: Scope }) {
                     <Text style={styles.cardTitle}>{c.student_name}</Text>
                     <Text style={[styles.muted, { marginBottom: spacing.sm }]}>{c.admission_number}</Text>
                     <TextField label="Class teacher" value={c.comments_class_teacher} onChangeText={(v) => edit(c.student_id, { comments_class_teacher: v })} multiline />
-                    <TextField label="Principal" value={c.comments_principal} onChangeText={(v) => edit(c.student_id, { comments_principal: v })} multiline />
+                    {isAdmin ? (
+                        <TextField label="Principal" value={c.comments_principal} onChangeText={(v) => edit(c.student_id, { comments_principal: v })} multiline />
+                    ) : (
+                        <Text style={styles.muted}>Principal: {c.comments_principal || 'not written yet'}</Text>
+                    )}
                 </Card>
             ))}
             <ButtonRow>

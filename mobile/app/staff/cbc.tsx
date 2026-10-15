@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { ModuleScreen } from '@/components/ops/ModuleScreen';
 import { LookupField } from '@/components/ops/SelectField';
 import { TonePill, toneColor } from '@/components/ops/bits';
+import { confirmAlert } from '@/lib/confirm';
 import { useApi, withQuery } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
@@ -38,7 +39,15 @@ function RubricGrid() {
         return () => { live = false; };
     }, [api, filter.subject_id]);
 
-    const set = (patch: Partial<CbcFilter>) => { setFilter((f) => ({ ...f, ...patch })); setRows(null); };
+    const apply = (patch: Partial<CbcFilter>) => { setFilter((f) => ({ ...f, ...patch })); setRows(null); setDirty(false); };
+    // A filter change closes the list, so ask first when levels are unsaved.
+    const set = (patch: Partial<CbcFilter>) => {
+        if (!dirty) { apply(patch); return; }
+        confirmAlert('Discard unsaved levels?', 'Changing the class, learning area, term or strand closes this list.', [
+            { text: 'Keep editing', style: 'cancel' },
+            { text: 'Discard', style: 'destructive', onPress: () => apply(patch) },
+        ]);
+    };
 
     const load = async () => {
         if (!cbcFilterReady(filter)) { toast.error('Choose a class, subject, term and strand.'); return; }

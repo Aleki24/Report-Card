@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DateField } from '@/components/DateField';
 import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
@@ -82,12 +82,18 @@ function SchoolTab() {
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState<Msg>(null);
 
+    // A background refresh must not overwrite what is being typed: the form
+    // follows the server only until it is edited, and again after a save.
+    const touched = useRef(false);
     useEffect(() => {
-        if (data) setForm(data);
+        if (data && !touched.current) setForm(data);
     }, [data]);
 
     if (loading || !form) return error ? <ErrorBanner message={error} onRetry={reload} /> : <LoadingView />;
-    const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => setForm({ ...form, [k]: v });
+    const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => {
+        touched.current = true;
+        setForm({ ...form, [k]: v });
+    };
 
     const save = async (next: SchoolProfile = form) => {
         if (!next.name.trim()) return setMessage({ tone: 'danger', text: 'School name is required.' });
@@ -107,6 +113,7 @@ function SchoolTab() {
                 overall_grading_system_id: next.overall_grading_system_id ?? null,
             });
             setMessage({ tone: 'success', text: 'School profile saved.' });
+            touched.current = false;
             reload();
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save') });
