@@ -7,6 +7,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
 import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow } from '@/lib/term-dates';
+import { withPrintableSignatures } from '@/lib/pdf/printableSignatures';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -657,7 +658,8 @@ export async function GET(
           browser was rendering, so the file is unchanged.
         */
         if (wantsPdf) {
-            const pdfBuffer = await generateMarkSheetPDF(markSheetData);
+            const [printable] = await withPrintableSignatures([markSheetData]);
+            const pdfBuffer = await generateMarkSheetPDF(printable);
             return new NextResponse(new Uint8Array(pdfBuffer), {
                 status: 200,
                 headers: {
