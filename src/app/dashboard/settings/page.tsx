@@ -138,7 +138,6 @@ function SettingsPageInner() {
       setLoad(prev => (prev.state === 'ready' ? prev : { state: 'error', message }));
       if (loadStateRef.current === 'ready') toast.error(message);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { if (profile?.id) void fetchAll(); }, [profile?.id, fetchAll]);
