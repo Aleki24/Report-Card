@@ -180,7 +180,7 @@ function CalendarTab() {
     const { years, loading: yLoading, reload: reloadYears } = useAcademicYears();
     const { terms, loading: tLoading, reload: reloadTerms } = useTerms();
     const [yearDraft, setYearDraft] = useState<{ name: string; start: string; end: string } | null>(null);
-    const [termDraft, setTermDraft] = useState<{ id: string | null; yearId: string | null; name: string; start: string; end: string; midterm: string; reopening: string; current: boolean } | null>(null);
+    const [termDraft, setTermDraft] = useState<{ id: string | null; yearId: string | null; name: string; start: string; end: string; midtermClose: string; midterm: string; reopening: string; current: boolean } | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<Msg>(null);
 
@@ -213,6 +213,7 @@ function CalendarTab() {
             start_date: termDraft.start.trim(),
             end_date: termDraft.end.trim(),
             is_current: termDraft.current,
+            midterm_closing_date: termDraft.midtermClose.trim() || null,
             midterm_reopening_date: termDraft.midterm.trim() || null,
             reopening_date: termDraft.reopening.trim() || null,
         };
@@ -254,6 +255,7 @@ function CalendarTab() {
                     <TextField label="Term name" value={termDraft.name} onChangeText={(name) => setTermDraft({ ...termDraft, name })} placeholder="Term 1" />
                     <DateField label="Starts" value={termDraft.start} onChange={(start) => setTermDraft({ ...termDraft, start })} />
                     <DateField label="Ends" min={termDraft.start || undefined} value={termDraft.end} onChange={(end) => setTermDraft({ ...termDraft, end })} />
+                    <DateField label="Mid-term closing (optional)" optional value={termDraft.midtermClose} onChange={(midtermClose) => setTermDraft({ ...termDraft, midtermClose })} />
                     <DateField label="Mid-term reopening (optional)" optional value={termDraft.midterm} onChange={(midterm) => setTermDraft({ ...termDraft, midterm })} />
                     <DateField label="Next term reopening (optional)" optional value={termDraft.reopening} onChange={(reopening) => setTermDraft({ ...termDraft, reopening })} />
                     <ToggleRow label="Current term" value={termDraft.current} onValueChange={(current) => setTermDraft({ ...termDraft, current })} />
@@ -267,7 +269,7 @@ function CalendarTab() {
             {!yearDraft && !termDraft ? (
                 <ButtonRow>
                     <Button variant="secondary" label="+ Year" onPress={() => setYearDraft({ name: '', start: '', end: '' })} />
-                    <Button label="+ Term" onPress={() => setTermDraft({ id: null, yearId: years[0]?.id ?? null, name: '', start: '', end: '', midterm: '', reopening: '', current: false })} disabled={years.length === 0} />
+                    <Button label="+ Term" onPress={() => setTermDraft({ id: null, yearId: years[0]?.id ?? null, name: '', start: '', end: '', midtermClose: '', midterm: '', reopening: '', current: false })} disabled={years.length === 0} />
                 </ButtonRow>
             ) : null}
 
@@ -287,7 +289,7 @@ function CalendarTab() {
                                     right={
                                         <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
                                             {t.id === activeId ? <Badge label="Active" variant="success" /> : null}
-                                            <Button size="sm" variant="ghost" label="Edit" onPress={() => setTermDraft({ id: t.id, yearId: t.academic_year_id, name: t.name, start: t.start_date ?? '', end: t.end_date ?? '', midterm: t.midterm_reopening_date ?? '', reopening: t.reopening_date ?? '', current: t.is_current })} />
+                                            <Button size="sm" variant="ghost" label="Edit" onPress={() => setTermDraft({ id: t.id, yearId: t.academic_year_id, name: t.name, start: t.start_date ?? '', end: t.end_date ?? '', midtermClose: t.midterm_closing_date ?? '', midterm: t.midterm_reopening_date ?? '', reopening: t.reopening_date ?? '', current: t.is_current })} />
                                             <Button size="sm" variant="ghost" label="✕" onPress={() => deleteTerm(t)} />
                                         </View>
                                     }

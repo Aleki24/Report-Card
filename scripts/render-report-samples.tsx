@@ -51,7 +51,7 @@ const kcse: ReportCardData = {
     totalPoints: 76, overallPointsGrade: 'B+', rankedBy: 'points', totalMarks: 659, showPositions: true, classRank: 4, totalStudents: 42,
     overallRank: 9, overallSize: 126, overallRankLabel: 'Form 3, all streams', classMeanPercentage: 59.7,
     previousExamLabel: 'Term 1', previousOverallPercentage: 69.8, previousTotalPoints: 71, previousClassRank: 7,
-    gradeBoundaries: [], resultUrl: 'https://skulbase.app/r/abc123', openingDate: '5 January 2027',
+    gradeBoundaries: [], resultUrl: 'https://skulbase.app/r/abc123', closingDate: '2026-08-01', openingDate: '2026-08-25',
     totalScore: 659, totalPossible: 900,
 };
 

@@ -462,7 +462,7 @@ export async function POST(request: NextRequest) {
                 }
                 const { data: result, error } = await supabaseAdmin
                     .from('terms')
-                    .insert({ academic_year_id: data.academic_year_id, name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: data.is_current ?? false, midterm_reopening_date: data.midterm_reopening_date || null, reopening_date: data.reopening_date || null, school_id: schoolId })
+                    .insert({ academic_year_id: data.academic_year_id, name: data.name, start_date: data.start_date, end_date: data.end_date, is_current: data.is_current ?? false, midterm_closing_date: data.midterm_closing_date || null, midterm_reopening_date: data.midterm_reopening_date || null, reopening_date: data.reopening_date || null, school_id: schoolId })
                     .select().single();
                 if (error) return handleDatabaseError(error, 'term');
                 return NextResponse.json({ success: true, data: result });
@@ -772,7 +772,7 @@ export async function PATCH(request: NextRequest) {
         if (type === 'academic_year' || type === 'term') {
             const data = type === 'term' ? termUpdateSchema.parse(payload) : academicYearUpdateSchema.parse(payload);
             for (const [key, value] of Object.entries(data)) {
-                // Reopening dates print on report cards; empty clears them.
+                // Closing and reopening dates print on report cards; empty clears them.
                 if (value !== undefined) updateData[key] = value === '' ? null : value;
             }
             // Dates are checked against the stored ones they are paired with.

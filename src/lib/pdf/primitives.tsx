@@ -9,19 +9,20 @@ import { APP_LOGO, BRAND, FONTS } from './pdfTheme';
 
 /* ── Signature ──────────────────────────────────────────────── */
 
+/** How tall a signature prints: about 12 mm, legible on paper and on a phone. */
+export const SIGNATURE_HEIGHT = 34;
+
 /**
- * A scanned signature laid over a signature line. Absolutely positioned so it
- * takes no height: a card that fits one page still fits with a signature on.
- * Place it inside the element whose top edge is the line; `lift` is how far
- * above that edge the image's bottom sits.
+ * The room above a signature line, with the scanned signature on file sitting
+ * on the line. It takes real height, so a signature never prints over the
+ * remark above it, and a card without one on file still leaves room to sign
+ * by hand. Place it directly above the element whose top edge is the line.
  */
-export function SignatureImage({ src, height = 20, lift = 1 }: { src?: string; height?: number; lift?: number }) {
-    if (!src) return null;
+export function SignatureSpace({ src, height = SIGNATURE_HEIGHT }: { src?: string; height?: number }) {
     return (
-        <Image
-            src={src}
-            style={{ position: 'absolute', left: 0, top: -(height + lift), height, width: height * 3.5, objectFit: 'contain' }}
-        />
+        <View style={{ height, justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+            {src && <Image src={src} style={{ height, width: height * 3.5, objectFit: 'contain' }} />}
+        </View>
     );
 }
 
