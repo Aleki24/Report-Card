@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, signed, levelFamily, type ReportModel, type SubjectRow, type LevelFamily } from '../reportModel';
-import { Crest, ScoreRing, SignatureImage, Trend, BrandFooter, reportFooterMeta } from '../primitives';
+import { Crest, ScoreRing, SignatureSpace, Trend, BrandFooter, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -114,7 +114,7 @@ const s = StyleSheet.create({
     remarks: { flexGrow: 1, flexDirection: 'row', alignItems: 'stretch', marginHorizontal: X, marginTop: 9 },
     remark2: { flex: 1, marginRight: 12 },
     remarkText: { flexGrow: 1, fontFamily: FONTS.sourceSerif, fontStyle: 'italic', fontSize: 7.5, lineHeight: 1.5, color: C.ink, minHeight: 30 },
-    sig: { borderTop: `0.6pt solid ${C.ink}`, marginTop: 11, paddingTop: 2.5, flexDirection: 'row', justifyContent: 'space-between' },
+    sig: { borderTop: `0.6pt solid ${C.ink}`, paddingTop: 2.5, flexDirection: 'row', justifyContent: 'space-between' },
     sigText: { fontSize: 5.3, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.75 },
     stamp: { alignSelf: 'flex-end', width: 64, height: 64, borderRadius: 32, border: `0.9pt dashed ${C.gold}`, alignItems: 'center', justifyContent: 'center' },
     stampText: { fontSize: 5.3, color: C.gold, textTransform: 'uppercase', letterSpacing: 0.75, textAlign: 'center' },
@@ -380,12 +380,14 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.remark2}>
                     <Text style={s.h3}>Class teacher’s remarks</Text>
                     <Text style={[s.remarkText, m.compact ? { minHeight: 18 } : {}]}>{m.teacherComment}</Text>
-                    <View style={s.sig}><SignatureImage src={m.classTeacher.signature} /><Text style={s.sigText}>{m.classTeacher.name ?? 'Class teacher'}</Text><Text style={s.sigText}>Signature</Text></View>
+                    <SignatureSpace src={m.classTeacher.signature} />
+                    <View style={s.sig}><Text style={s.sigText}>{m.classTeacher.name ?? 'Class teacher'}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={s.remark2}>
                     <Text style={s.h3}>{m.principal.title}’s remarks</Text>
                     <Text style={[s.remarkText, m.compact ? { minHeight: 18 } : {}]}>{m.principalComment}</Text>
-                    <View style={s.sig}><SignatureImage src={m.principal.signature} /><Text style={s.sigText}>{m.principal.name ?? m.principal.title}</Text><Text style={s.sigText}>Signature</Text></View>
+                    <SignatureSpace src={m.principal.signature} />
+                    <View style={s.sig}><Text style={s.sigText}>{m.principal.name ?? m.principal.title}</Text><Text style={s.sigText}>Signature</Text></View>
                 </View>
                 <View style={[s.stamp, m.compact ? { width: 52, height: 52, borderRadius: 26 } : {}]}><Text style={s.stampText}>{'Official\nschool stamp'}</Text></View>
             </View>
@@ -395,9 +397,13 @@ export function HeritageLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.parentLine} />
                 <Text style={s.parentText}>Date</Text>
                 <View style={[s.parentLine, { flex: 0.45 }]} />
-                {m.exam.openingDate && (
+                {m.termDates.length > 0 && (
                     <View style={s.open}>
-                        <Text style={s.openText}>Next term opens <Text style={{ fontWeight: 700, color: '#FFFFFF' }}>{m.exam.openingDate}</Text></Text>
+                        <Text style={s.openText}>
+                            {m.termDates.map((d, i) => (
+                                <Text key={d.label}>{i > 0 ? '   ·   ' : ''}{d.label} <Text style={{ fontWeight: 700, color: '#FFFFFF' }}>{d.value}</Text></Text>
+                            ))}
+                        </Text>
                     </View>
                 )}
             </View>

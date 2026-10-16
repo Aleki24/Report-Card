@@ -4,8 +4,8 @@ import type { Style } from '@react-pdf/types';
 import { gradeSymbolFromScales, gradeSymbolRank, type RankingBasis } from '@/lib/analytics';
 import type { GradeBand } from '@/types';
 import { FONTS } from './pdf/pdfTheme';
-import { Crest, BrandFooter, SignatureImage } from './pdf/primitives';
-import { signed, shortName, firstWords } from './pdf/reportModel';
+import { Crest, BrandFooter, SignatureSpace, SIGNATURE_HEIGHT } from './pdf/primitives';
+import { signed, shortName, firstWords, printedDate } from './pdf/reportModel';
 import { planPages, type PageDimensions } from './pdf/marksheetPagination';
 import { abbreviateSubject } from './subject-abbreviations';
 
@@ -87,6 +87,9 @@ export interface MarkSheetData {
     principalSignatureUrl?: string;
     /** "Principal" unless the class's section head has another title. */
     principalTitle?: string;
+    /** The day the school closes for this round's break, and opens again (`YYYY-MM-DD`). */
+    closingDate?: string;
+    openingDate?: string;
 }
 
 type Learner = MarkSheetData['students'][number];
@@ -167,9 +170,13 @@ const H = {
     footer: 26,
     panelHead: 24,
     panelRow: 10.2,
-    signature: 30,
+    /** Room to sign, then the line and its caption. */
+    signature: SIGNATURE_HEIGHT + 12,
     summaryGap: 10,
 } as const;
+
+/** Facts per row in the letterhead's document panel (two rows of them). */
+const DOC_COLUMNS = 4;
 
 const s = StyleSheet.create({
     page: { fontFamily: font, color: C.ink, backgroundColor: '#FFFFFF', paddingHorizontal: X, paddingBottom: H.footer },
@@ -180,11 +187,11 @@ const s = StyleSheet.create({
     school: { fontFamily: FONTS.playfair, fontWeight: 700, fontSize: 17, color: C.navy, letterSpacing: 0.2 },
     schoolRule: { width: 34, height: 1.2, backgroundColor: C.gold, marginTop: 3, marginBottom: 3 },
     address: { fontSize: 6.8, color: C.muted, letterSpacing: 0.2 },
-    docCard: { width: 330, border: `0.75pt solid ${C.navy}`, borderRadius: 3, overflow: 'hidden' },
+    docCard: { width: 460, border: `0.75pt solid ${C.navy}`, borderRadius: 3, overflow: 'hidden' },
     docStrip: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.navy, paddingHorizontal: 8, paddingVertical: 3.5 },
     docStripText: { fontWeight: 700, fontSize: 6.4, color: '#FFFFFF', textTransform: 'uppercase', letterSpacing: 1.4 },
     docGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-    docFact: { width: '33.333%', paddingHorizontal: 7, paddingVertical: 3, borderRight: `0.5pt solid #E2E8F0`, borderBottom: `0.5pt solid #E2E8F0` },
+    docFact: { width: `${100 / DOC_COLUMNS}%`, paddingHorizontal: 7, paddingVertical: 3, borderRight: `0.5pt solid #E2E8F0`, borderBottom: `0.5pt solid #E2E8F0` },
     docLabel: { fontWeight: 700, fontSize: 4.9, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.8 },
     docValue: { fontWeight: 700, fontSize: 7.2, color: C.navy, marginTop: 0.5, maxLines: 1, textOverflow: 'ellipsis' },
 
@@ -254,7 +261,7 @@ const s = StyleSheet.create({
     liNo: { fontSize: 6.8, color: C.faint, width: 11 },
 
     signs: { height: H.signature, flexDirection: 'row', alignItems: 'flex-end' },
-    sign: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', borderTop: `0.75pt solid ${C.body}`, paddingTop: 2.5 },
+    sign: { flexDirection: 'row', justifyContent: 'space-between', borderTop: `0.75pt solid ${C.body}`, paddingTop: 2.5 },
     signText: { fontSize: 5.8, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.75 },
 });
 
@@ -333,6 +340,8 @@ function Masthead({ d }: { d: MarkSheetData }) {
         ['Ranked by', d.rankedBy === 'points' ? 'Total points' : d.rankedBy === 'totalMarks' ? 'Total marks' : 'Mean marks'],
         ['Compared with', d.previousExamLabel || 'No earlier exam'],
         ['Scale', d.gradingSystemType === 'KCSE' ? 'KCSE 12-point' : 'CBC competency levels'],
+        ['Closing day', printedDate(d.closingDate) ?? '—'],
+        ['Opening day', printedDate(d.openingDate) ?? '—'],
     ];
     return (
         <View style={s.masthead}>
@@ -349,7 +358,7 @@ function Masthead({ d }: { d: MarkSheetData }) {
                 </View>
                 <View style={s.docGrid}>
                     {facts.map(([label, value], i) => (
-                        <View key={label} style={[s.docFact, i % 3 === 2 ? { borderRightWidth: 0 } : {}, i >= 3 ? { borderBottomWidth: 0 } : {}]}>
+                        <View key={label} style={[s.docFact, i % DOC_COLUMNS === DOC_COLUMNS - 1 ? { borderRightWidth: 0 } : {}, i >= facts.length - DOC_COLUMNS ? { borderBottomWidth: 0 } : {}]}>
                             <Text style={s.docLabel}>{label}</Text>
                             <Text style={s.docValue}>{value}</Text>
                         </View>
@@ -748,9 +757,11 @@ function Signatures({ d }: { d: MarkSheetData }) {
     return (
         <View style={s.signs}>
             {lines.map((line, i) => (
-                <View key={line.role} style={[s.sign, i < lines.length - 1 ? { marginRight: 16.5 } : {}]}>
-                    <SignatureImage src={line.image} />
-                    <Text style={s.signText}>{line.name ? `${line.role} · ${line.name}` : line.role}</Text><Text style={s.signText}>{line.right}</Text>
+                <View key={line.role} style={[{ flex: 1 }, i < lines.length - 1 ? { marginRight: 16.5 } : {}]}>
+                    <SignatureSpace src={line.image} />
+                    <View style={s.sign}>
+                        <Text style={s.signText}>{line.name ? `${line.role} · ${line.name}` : line.role}</Text><Text style={s.signText}>{line.right}</Text>
+                    </View>
                 </View>
             ))}
         </View>

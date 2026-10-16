@@ -7,7 +7,10 @@ import { formatIsoDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 
 export interface AcademicYear { id: string; name: string; start_date: string; end_date: string }
-export interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_reopening_date?: string | null; reopening_date?: string | null }
+export interface Term { id: string; academic_year_id: string; name: string; start_date: string; end_date: string; is_current: boolean; midterm_closing_date?: string | null; midterm_reopening_date?: string | null; reopening_date?: string | null }
+
+/** The break dates a term carries; they print on report cards and mark sheets. */
+export type TermDateField = 'midterm_closing_date' | 'midterm_reopening_date' | 'reopening_date';
 
 type CalendarKind = 'academic_year' | 'term';
 
@@ -20,11 +23,11 @@ interface AcademicCalendarTabProps {
     /** Asks first, then deletes. */
     onDelete: (type: CalendarKind, id: string, label: string) => void;
     onSetCurrentTerm: (term: Term) => void;
-    onUpdateTermDates: (termId: string, field: 'midterm_reopening_date' | 'reopening_date', value: string) => void;
+    onUpdateTermDates: (termId: string, field: TermDateField, value: string) => void;
 }
 
 const EMPTY_YEAR = { name: '', start_date: '', end_date: '' };
-const EMPTY_TERM = { name: '', start_date: '', end_date: '', midterm_reopening_date: '', reopening_date: '' };
+const EMPTY_TERM = { name: '', start_date: '', end_date: '', midterm_closing_date: '', midterm_reopening_date: '', reopening_date: '' };
 
 const shortDate = (value: string) => formatIsoDate(value, { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -75,9 +78,10 @@ function AddTermForm({ yearId, saving, onCreate }: { yearId: string; saving: boo
                 <FormField label="Name" htmlFor={`${id}-name`}><InputField id={`${id}-name`} placeholder="e.g. Term 1" value={form.name} onChange={e => set('name', e.target.value)} /></FormField>
                 <FormField label="Starts" htmlFor={`${id}-start`}><InputField id={`${id}-start`} type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} /></FormField>
                 <FormField label="Ends" htmlFor={`${id}-end`} error={problem ?? undefined}><InputField id={`${id}-end`} type="date" value={form.end_date} min={form.start_date || undefined} onChange={e => set('end_date', e.target.value)} /></FormField>
+                <FormField label="Closes for mid-term" htmlFor={`${id}-midclose`} hint="Optional"><InputField id={`${id}-midclose`} type="date" value={form.midterm_closing_date} onChange={e => set('midterm_closing_date', e.target.value)} /></FormField>
                 <FormField label="Reopens after mid-term" htmlFor={`${id}-mid`} hint="Optional"><InputField id={`${id}-mid`} type="date" value={form.midterm_reopening_date} onChange={e => set('midterm_reopening_date', e.target.value)} /></FormField>
                 <FormField label="Reopens after term" htmlFor={`${id}-reopen`} hint="Optional"><InputField id={`${id}-reopen`} type="date" value={form.reopening_date} onChange={e => set('reopening_date', e.target.value)} /></FormField>
-                <div className="flex items-end">
+                <div className="flex items-end sm:col-span-3">
                     <button type="submit" className="btn-primary w-full" disabled={saving || !form.name.trim() || !form.start_date || !form.end_date || !!problem}>
                         <Plus className="size-4" aria-hidden />Add term
                     </button>
@@ -118,11 +122,14 @@ function TermCard({ term, saving, onSetCurrent, onDelete, onUpdateDates }: {
                     </button>
                 </div>
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border/60 pt-3 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border/60 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                <FormField label="Closes for mid-term" htmlFor={`${id}-midclose`} hint="Closing day on mid-term report cards. End of term uses the term's end date.">
+                    <InputField id={`${id}-midclose`} type="date" value={term.midterm_closing_date || ''} onChange={e => onUpdateDates(term.id, 'midterm_closing_date', e.target.value)} />
+                </FormField>
                 <FormField label="Reopens after mid-term" htmlFor={`${id}-mid`} hint="Printed on mid-term report cards.">
                     <InputField id={`${id}-mid`} type="date" value={term.midterm_reopening_date || ''} onChange={e => onUpdateDates(term.id, 'midterm_reopening_date', e.target.value)} />
                 </FormField>
-                <FormField label="Reopens after term" htmlFor={`${id}-reopen`} hint="Printed on end-of-term report cards as “Next term begins”.">
+                <FormField label="Reopens after term" htmlFor={`${id}-reopen`} hint="Opening day on end-of-term report cards.">
                     <InputField id={`${id}-reopen`} type="date" value={term.reopening_date || ''} onChange={e => onUpdateDates(term.id, 'reopening_date', e.target.value)} />
                 </FormField>
             </div>
@@ -132,8 +139,8 @@ function TermCard({ term, saving, onSetCurrent, onDelete, onUpdateDates }: {
 
 /**
  * Academic years and their terms. The current term drives what the
- * dashboard, attendance and report cards treat as "now"; the reopening dates
- * print on report cards.
+ * dashboard, attendance and report cards treat as "now"; the closing and
+ * reopening dates print on report cards and mark sheets.
  */
 export function AcademicCalendarTab({ academicYears, terms, saving, onCreate, onDelete, onSetCurrentTerm, onUpdateTermDates }: AcademicCalendarTabProps) {
     const [selectedYearId, setSelectedYearId] = useState(() => {

@@ -36,6 +36,7 @@ import {
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
+import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow } from '@/lib/term-dates';
 export const runtime = 'nodejs';
 
 /*
@@ -209,7 +210,7 @@ export async function GET(
             // the single card picks them): unscoped, another school's custom
             // table could grade this class.
             firstAcademicLevelId ? supabase.from('grading_systems').select('id, name').eq('academic_level_id', firstAcademicLevelId).neq('system_kind', 'OVERALL').or(`school_id.eq.${userSchoolId},school_id.is.null`).order('name', { ascending: true }) : Promise.resolve({ data: [] as any[] }),
-            termId ? supabase.from('terms').select('name, start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date').eq('id', termId).maybeSingle() : Promise.resolve({ data: null }),
+            termId ? supabase.from('terms').select(`name, ${TERM_DATE_COLUMNS}`).eq('id', termId).maybeSingle<TermDateRow & { name: string }>() : Promise.resolve({ data: null }),
             yearId ? supabase.from('academic_years').select('name').eq('id', yearId).maybeSingle() : Promise.resolve({ data: null }),
         ]);
 
@@ -289,30 +290,6 @@ export async function GET(
         // 5. Term/year info (fetched in the batch above)
         let termTitle = termRes.data?.name || 'Term Report';
         const academicYearName = yearRes.data?.name || 'Academic Year';
-        // Reopening day the admin set on the term (mid-term break vs end of
-        // term), falling back to the next term's start — never this term's own
-        // start_date, which is when the term began rather than when learners
-        // come back. Mirrors resolveReopeningDate in the single-student route.
-        // Resolved once the round is known (below): a default report on the
-        // Midterm needs the mid-term reopening date, which the requested
-        // examType alone (empty on the default) cannot tell.
-        const resolveOpeningDate = async (round: string | null): Promise<string | undefined> => {
-            const t: any = termRes.data;
-            if (!t) return undefined;
-            const isMidTerm = (round || '').toUpperCase().includes('MID');
-            const chosen = (isMidTerm ? (t.midterm_reopening_date || t.reopening_date) : t.reopening_date) || undefined;
-            if (chosen || !t.end_date || !t.academic_year_id) return chosen;
-            const { data: nextTerm } = await supabase
-                .from('terms')
-                .select('start_date')
-                .eq('academic_year_id', t.academic_year_id)
-                .gt('start_date', t.end_date)
-                .order('start_date', { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            return nextTerm?.start_date || undefined;
-        };
-
         const customTitle = searchParams.get('customTitle');
         if (customTitle) {
             termTitle = customTitle;
@@ -359,7 +336,10 @@ export async function GET(
             ? { round: examType, marks: fetchedMarks || [] }
             : selectExamRound(fetchedMarks || []);
         const allMarks = roundSelection.marks;
-        const openingDate = await resolveOpeningDate(roundSelection.round);
+        // Resolved once the round is known: a default report on the Midterm
+        // prints the mid-term dates, which the requested examType alone
+        // (empty on the default) cannot tell.
+        const termDates = await resolveTermDates(supabase, termRes.data, roundSelection.round);
         termTitle = titleWithRound(termTitle, roundSelection.round, customTitle);
 
         if (marksErr) {
@@ -658,7 +638,7 @@ export async function GET(
                 resultUrl: buildVerifyUrl(baseUrl, student.id, termId, examType),
                 totalScore: computedTotalScore,
                 totalPossible: computedTotalPossible,
-                openingDate,
+                ...termDates,
             };
 
             reportCardsData.push(reportData);

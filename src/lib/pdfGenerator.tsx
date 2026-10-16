@@ -100,6 +100,9 @@ export interface ReportCardData {
     principalComment?: string;
     gradeBoundaries: { symbol: string; label: string; min: number; max: number; points?: number }[];
     resultUrl?: string;
+    /** The day the school closes for this round's break, `YYYY-MM-DD`. */
+    closingDate?: string;
+    /** The day it opens again, `YYYY-MM-DD`. */
     openingDate?: string;
     totalScore?: number;
     totalPossible?: number;
@@ -114,8 +117,12 @@ export type { ReportTemplateId };
 /* ── One rendered report card page body ───────────────────── */
 function ReportCardPageBody({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     const Layout = getTemplateLayout(template);
+    // A report card is one sheet: the page-tall body never breaks. Breakable,
+    // a card a few points too long pushed its footer alone onto a second,
+    // otherwise empty page. The layouts tighten as a card fills (see
+    // reportModel's compact and tight) so everything stays on the sheet.
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} wrap={false}>
             <Layout data={data} qrCodeDataUri={qrCodeDataUri} />
         </View>
     );

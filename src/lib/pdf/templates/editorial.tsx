@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, signed, type ReportModel, type SubjectRow } from '../reportModel';
-import { BrandFooter, SignatureImage, reportFooterMeta } from '../primitives';
+import { BrandFooter, SignatureSpace, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const INK = '#000000';
@@ -205,8 +205,15 @@ function Glance({ m }: { m: ReportModel }) {
     );
 }
 
-function Signature({ name, image }: { name: string; image?: string }) {
-    return <View><View style={s.sigLine}><SignatureImage src={image} lift={-16.5} /></View><Text style={s.sigText}>{name}</Text></View>;
+/** A line to sign on; `signer` lines (staff) leave signature-sized room, with the one on file printed in it. */
+function Signature({ name, image, signer = false }: { name: string; image?: string; signer?: boolean }) {
+    return (
+        <View>
+            {signer && <SignatureSpace src={image} />}
+            <View style={[s.sigLine, signer ? { height: 0 } : {}]} />
+            <Text style={s.sigText}>{name}</Text>
+        </View>
+    );
 }
 
 export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
@@ -261,19 +268,21 @@ export function EditorialLayout({ data, qrCodeDataUri }: LayoutProps) {
                     <View style={{ flex: 1, marginRight: 19.5 }}>
                         <Text style={s.label}>Class teacher</Text>
                         <Text style={[s.remarkText, m.compact ? { minHeight: 28 } : {}]}>{m.teacherComment}</Text>
-                        <Signature name={m.classTeacher.name ? `${m.classTeacher.name}, class teacher` : "Class teacher's signature"} image={m.classTeacher.signature} />
+                        <Signature name={m.classTeacher.name ? `${m.classTeacher.name}, class teacher` : "Class teacher's signature"} image={m.classTeacher.signature} signer />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={s.label}>{m.principal.title}</Text>
                         <Text style={[s.remarkText, m.compact ? { minHeight: 28 } : {}]}>{m.principalComment}</Text>
-                        <Signature name={m.principal.name ? `${m.principal.name}, ${m.principal.title.toLowerCase()}` : `${m.principal.title}'s signature`} image={m.principal.signature} />
+                        <Signature name={m.principal.name ? `${m.principal.name}, ${m.principal.title.toLowerCase()}` : `${m.principal.title}'s signature`} image={m.principal.signature} signer />
                     </View>
                 </View>
                 <View style={s.parent} wrap={false}>
                     <View style={{ flex: 1, marginRight: 19.5 }}><Signature name="Parent / Guardian" /></View>
                     <View style={{ flex: 0.6, marginRight: 19.5 }}><Signature name="Date" /></View>
-                    <View style={[{ flex: 1 }, m.exam.openingDate ? s.open : {}]}>
-                        {m.exam.openingDate && (<><Text style={s.label}>Next term opens</Text><Text style={s.openValue}>{m.exam.openingDate}</Text></>)}
+                    <View style={{ flex: 1.6, flexDirection: 'row' }}>
+                        {m.termDates.map(d => (
+                            <View key={d.label} style={[s.open, { flex: 1 }]}><Text style={s.label}>{d.label}</Text><Text style={s.openValue}>{d.value}</Text></View>
+                        ))}
                     </View>
                 </View>
             </View>
