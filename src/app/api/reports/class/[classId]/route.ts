@@ -221,7 +221,7 @@ export async function GET(
         const sectionHead = await sectionHeadForGrade(supabase, userSchoolId, gradeId);
 
         const gradeLevelCode = gradeRes.data?.code || '';
-        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
+        // 8-4-4 Forms are graded KCSE-style; every CBC grade on CBC levels.
         const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {

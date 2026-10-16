@@ -129,8 +129,7 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
         let academicLevelCode: string | null = null;
 
-        // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
-        // G1-G6, G9-G10 use CBC style (rubric-based)
+        // 8-4-4 Forms are graded KCSE-style (points); every CBC grade on CBC levels.
         const firstAcademicLevelId = students[0].academic_level_id;
         const streamName = (students[0] as any)?.grade_streams?.full_name || '';
         const gradeId = (students[0] as any)?.grade_streams?.grade_id;
@@ -142,7 +141,6 @@ export async function GET(
             if (gradeData) gradeLevelCode = gradeData.code || '';
         }
         
-        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
         const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {

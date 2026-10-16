@@ -291,7 +291,10 @@ function columnWidths(subjectCount: number, isKCSE: boolean, showDev: boolean, s
 /* ── Helpers ─────────────────────────────────────────────── */
 
 const gradeOf = (bands: GradeBand[] | undefined, pct: number) => gradeSymbolFromScales(pct, bands) ?? '';
-const roundLabel = (d: MarkSheetData) => `${d.examTitle}${d.examRound ? ` ${d.examRound}` : ''} ${d.academicYear}`;
+/** The exam's name, with its round unless the title already carries it ("Term 3 · Midterm"). */
+const examName = (d: MarkSheetData) =>
+    d.examRound && !d.examTitle.toLowerCase().includes(d.examRound.toLowerCase()) ? `${d.examTitle} ${d.examRound}` : d.examTitle;
+const roundLabel = (d: MarkSheetData) => `${examName(d)} ${d.academicYear}`;
 
 /** The pass line: C+ and above in 8-4-4, Meeting Expectations and above in CBC. */
 function passes(grade: string, isKCSE: boolean): boolean {
@@ -335,7 +338,7 @@ function rankingFigure(d: MarkSheetData, st: Learner): string {
  * off a staffroom table still explains itself.
  */
 function Masthead({ d }: { d: MarkSheetData }) {
-    const exam = `${d.examTitle}${d.examRound ? ` ${d.examRound}` : ''}`;
+    const exam = examName(d);
     const facts: [string, string][] = [
         ['Class', d.className],
         ['Exam', exam],
