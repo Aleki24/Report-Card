@@ -4,7 +4,7 @@ import type { Style } from '@react-pdf/types';
 import { gradeSymbolFromScales, gradeSymbolRank, type RankingBasis } from '@/lib/analytics';
 import type { GradeBand } from '@/types';
 import { FONTS } from './pdf/pdfTheme';
-import { Crest, BrandFooter, SignatureSpace, SIGNATURE_HEIGHT } from './pdf/primitives';
+import { Crest, BrandFooter, SignatureSpace } from './pdf/primitives';
 import { signed, shortName, firstWords, printedDate } from './pdf/reportModel';
 import { planPages, type PageDimensions } from './pdf/marksheetPagination';
 import { abbreviateSubject } from './subject-abbreviations';
@@ -155,6 +155,9 @@ const PAGE_W = 842;
 const PAGE_H = 595;
 const X = 18;
 
+/** How tall signatures print on the sheet: smaller than on a report card, which has a page to itself, so the sign-off still fits under the table. */
+const SHEET_SIGNATURE = 40;
+
 /* Fixed heights — the pagination plan is exact because of them. */
 const H = {
     masthead: 66,
@@ -171,7 +174,7 @@ const H = {
     panelHead: 24,
     panelRow: 10.2,
     /** Room to sign, then the line and its caption. */
-    signature: SIGNATURE_HEIGHT + 12,
+    signature: SHEET_SIGNATURE + 12,
     summaryGap: 10,
 } as const;
 
@@ -288,7 +291,10 @@ function columnWidths(subjectCount: number, isKCSE: boolean, showDev: boolean, s
 /* ── Helpers ─────────────────────────────────────────────── */
 
 const gradeOf = (bands: GradeBand[] | undefined, pct: number) => gradeSymbolFromScales(pct, bands) ?? '';
-const roundLabel = (d: MarkSheetData) => `${d.examTitle}${d.examRound ? ` ${d.examRound}` : ''} ${d.academicYear}`;
+/** The exam's name, with its round unless the title already carries it ("Term 3 · Midterm"). */
+const examName = (d: MarkSheetData) =>
+    d.examRound && !d.examTitle.toLowerCase().includes(d.examRound.toLowerCase()) ? `${d.examTitle} ${d.examRound}` : d.examTitle;
+const roundLabel = (d: MarkSheetData) => `${examName(d)} ${d.academicYear}`;
 
 /** The pass line: C+ and above in 8-4-4, Meeting Expectations and above in CBC. */
 function passes(grade: string, isKCSE: boolean): boolean {
@@ -332,7 +338,7 @@ function rankingFigure(d: MarkSheetData, st: Learner): string {
  * off a staffroom table still explains itself.
  */
 function Masthead({ d }: { d: MarkSheetData }) {
-    const exam = `${d.examTitle}${d.examRound ? ` ${d.examRound}` : ''}`;
+    const exam = examName(d);
     const facts: [string, string][] = [
         ['Class', d.className],
         ['Exam', exam],
@@ -758,7 +764,7 @@ function Signatures({ d }: { d: MarkSheetData }) {
         <View style={s.signs}>
             {lines.map((line, i) => (
                 <View key={line.role} style={[{ flex: 1 }, i < lines.length - 1 ? { marginRight: 16.5 } : {}]}>
-                    <SignatureSpace src={line.image} />
+                    <SignatureSpace src={line.image} height={SHEET_SIGNATURE} />
                     <View style={s.sign}>
                         <Text style={s.signText}>{line.name ? `${line.role} · ${line.name}` : line.role}</Text><Text style={s.signText}>{line.right}</Text>
                     </View>

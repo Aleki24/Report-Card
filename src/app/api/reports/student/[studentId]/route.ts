@@ -5,7 +5,8 @@ import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/repo
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
-import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
+import type { ReportCardData } from '@/lib/pdfGenerator';
+import { generateStudentReportCardPDF } from '@/lib/pdfGeneratorServer';
 import { isReportTemplateId } from '@/lib/pdf/templates';
 import {
     aggregateStudentPerformance,

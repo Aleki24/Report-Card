@@ -165,12 +165,9 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
                     .find((g: { id: string }) => g.id === stream?.grade_id);
 
                 /*
-                  isKCSEGradeLevel, not the academic level's code. The two
-                  disagree on purpose: Grades 7, 8, 11 and 12 sit under CBC but
-                  are graded KCSE-style, and the report-card route already
-                  decides it this way. Asking the same question the printed
-                  report asks keeps the screen and the document from
-                  contradicting each other.
+                  isKCSEGradeLevel: the question the printed report asks, so
+                  the screen and the document never disagree on whether a
+                  class carries KCSE points.
                 */
                 const usesPointsAggregate = isKCSEGradeLevel(grade?.code, stream?.full_name);
                 setAggregatesApply(usesPointsAggregate);

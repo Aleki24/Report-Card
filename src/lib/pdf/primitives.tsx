@@ -9,8 +9,8 @@ import { APP_LOGO, BRAND, FONTS } from './pdfTheme';
 
 /* ── Signature ──────────────────────────────────────────────── */
 
-/** How tall a signature prints: about 12 mm, legible on paper and on a phone. */
-export const SIGNATURE_HEIGHT = 34;
+/** How tall a signature prints: about 20 mm, plainly legible on paper and on a phone. */
+export const SIGNATURE_HEIGHT = 56;
 
 /**
  * The room above a signature line, with the scanned signature on file sitting
@@ -21,7 +21,7 @@ export const SIGNATURE_HEIGHT = 34;
 export function SignatureSpace({ src, height = SIGNATURE_HEIGHT }: { src?: string; height?: number }) {
     return (
         <View style={{ height, justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-            {src && <Image src={src} style={{ height, width: height * 3.5, objectFit: 'contain' }} />}
+            {src && <Image src={src} style={{ height, width: height * 4, objectFit: 'contain' }} />}
         </View>
     );
 }
