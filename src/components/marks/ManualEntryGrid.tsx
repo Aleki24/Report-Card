@@ -387,7 +387,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     );
 
     const change = (studentId: string, update: (v: EntryValues) => EntryValues) => {
-        setEdits(prev => ({ ...prev, [studentId]: update(prev[studentId] ?? saved[studentId] ?? emptyEntry()) }));
+        setEdits(prev => {
+            const current = prev[studentId];
+            if (current) return { ...prev, [studentId]: { ...update(current), basePapers: current.basePapers } };
+            const start = saved[studentId] ?? emptyEntry();
+            return { ...prev, [studentId]: { ...update(start), basePapers: { ...start.componentScores } } };
+        });
     };
 
     const undo = (studentId: string) => {
@@ -459,14 +464,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const buildPayloadRow = (studentId: string, values: EntryValues) => {
         const remarks = values.remarks.trim() || null;
         if (components.length > 0) {
-            // Papers left out are kept by the server; a saved paper the
-            // teacher emptied is sent as null so it is removed.
+            // Papers left out are kept by the server; a paper this edit
+            // started with and the teacher emptied is sent as null to remove it.
             const scores: Record<string, number | null> = {};
-            const savedPapers = saved[studentId]?.componentScores ?? {};
+            const basePapers = values.basePapers ?? {};
             for (const c of components) {
                 const text = (values.componentScores[c.id] ?? '').trim();
                 if (text !== '') scores[c.id] = Number(text);
-                else if ((savedPapers[c.id] ?? '').trim() !== '') scores[c.id] = null;
+                else if ((basePapers[c.id] ?? '').trim() !== '') scores[c.id] = null;
             }
             const pct = composite(values).finalPercentage;
             return {

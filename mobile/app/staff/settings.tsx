@@ -87,7 +87,10 @@ function SchoolTab() {
     // a week old), and the fresh one arriving after the first keystroke must
     // still replace it, or Save would write the old logo, motto and principal back.
     const edits = useRef<Partial<SchoolProfile>>({});
+    /** The latest server profile, for saves that start before a render catches up. */
+    const latest = useRef<SchoolProfile | null>(null);
     useEffect(() => {
+        latest.current = data ?? latest.current;
         if (data) setForm({ ...data, ...edits.current });
     }, [data]);
 
@@ -134,7 +137,9 @@ function SchoolTab() {
             const url = await api.pickAndUploadImage();
             if (url) {
                 set('logo_url', url);
-                await save({ ...form, logo_url: url });
+                // The picker and upload take a while: save on the profile as it
+                // is now, not as it was when "Change logo" was tapped.
+                await save({ ...(latest.current ?? form), ...edits.current });
             }
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Upload failed') });

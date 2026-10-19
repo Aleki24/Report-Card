@@ -1,6 +1,7 @@
 import 'server-only';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { fetchAllRows, onRollOr } from '@/lib/postgrest';
+import { fetchAllRows } from '@/lib/postgrest';
+import { ranksAmongOnRoll } from '@/lib/student/status-access';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -132,7 +133,7 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
         const { data: student } = await supabase
             .from('students')
             .select(`
-                id, admission_number, academic_level_id, current_grade_stream_id,
+                id, status, admission_number, academic_level_id, current_grade_stream_id,
                 users(first_name, last_name, school_id),
                 grade_streams(full_name, grade_id)
             `)
@@ -259,13 +260,14 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
             ? ranksCurriculum(await loadRankingSettings(supabase, schoolId), grading.gradingSystemType)
             : grading.gradingSystemType === 'KCSE';
         if (showPositions && student.current_grade_stream_id) {
-            const { data: classmates } = await supabase
+            // As the printed card ranks: learners on the roll, or the whole
+            // class for a leaver (a college checking a graduate's card).
+            let classmatesQuery = supabase
                 .from('students')
                 .select('id')
-                .eq('current_grade_stream_id', student.current_grade_stream_id)
-                // As the printed card ranks: learners on the roll, and this
-                // one even after leaving (a college checking a leaver's card).
-                .or(onRollOr(studentId));
+                .eq('current_grade_stream_id', student.current_grade_stream_id);
+            if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
+            const { data: classmates } = await classmatesQuery;
 
             // Rank on the same sitting the marks above come from, as the
             // printed card does: ranking on every round of the term gave a

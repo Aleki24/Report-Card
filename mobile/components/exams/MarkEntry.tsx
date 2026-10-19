@@ -18,6 +18,8 @@ import { MarkFillTools, type FillSummary } from './MarkFillTools';
 interface Entry {
     score: string;
     papers: Record<string, string>;
+    /** The saved papers this entry started from: only these can be cleared (see the web's EntryValues.basePapers). */
+    basePapers?: Record<string, string>;
     grade: string;
     gradeManual: boolean;
     remarks: string;
@@ -28,9 +30,11 @@ type Entries = Record<string, Entry>;
 const ALL_STREAMS = '__all__';
 
 function entryFromMark(mark: ExamMark | undefined): Entry {
+    const papers = Object.fromEntries(Object.entries(mark?.components ?? {}).map(([k, v]) => [k, String(v)]));
     return {
         score: mark ? String(mark.raw_score) : '',
-        papers: Object.fromEntries(Object.entries(mark?.components ?? {}).map(([k, v]) => [k, String(v)])),
+        papers,
+        basePapers: { ...papers },
         grade: mark?.grade_symbol ?? '',
         gradeManual: false,
         remarks: mark?.remarks ?? '',
@@ -211,13 +215,14 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             const e = entries[id];
             const base = { student_id: id, grade_symbol: e.grade, remarks: e.remarks.trim() || null };
             if (scheme) {
-                // Papers left out are kept by the server; a saved paper the
-                // teacher emptied is sent as null so it is removed.
-                const savedPapers = marksByStudent.get(id)?.components ?? {};
+                // Papers left out are kept by the server; a paper this entry
+                // started with and the teacher emptied is sent as null to remove
+                // it. A restored draft never clears a paper saved since it began.
+                const basePapers = e.basePapers ?? {};
                 const components: Record<string, number | null> = {};
                 for (const p of papers) {
                     if (!isBlank(e.papers[p.id])) components[p.id] = Number(e.papers[p.id]);
-                    else if (savedPapers[p.id] != null) components[p.id] = null;
+                    else if (!isBlank(basePapers[p.id])) components[p.id] = null;
                 }
                 const composite = compositePercentage(scheme, e.papers);
                 return { ...base, components, ...(composite.entered > 0 ? { percentage: composite.percentage } : {}) };

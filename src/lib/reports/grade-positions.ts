@@ -4,7 +4,6 @@ import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import type { SeniorRankGroup } from '@/lib/ranking';
 import type { GradingScale } from '@/types';
-import { onRollOr } from '@/lib/postgrest';
 
 /**
  * Overall positions: every stream of a grade ranked together.
@@ -50,8 +49,8 @@ type Options = {
     rankingBasis: RankingBasis;
     /** The school's Senior School grouping; applies to CBC Grades 10-12 only. */
     seniorRankGroup: SeniorRankGroup;
-    /** The learner whose card this is: ranked even after leaving the school. */
-    forStudentId?: string;
+    /** Rank among learners on the roll only (default); false for a leaver's card (see ranksAmongOnRoll). */
+    onRollOnly?: boolean;
 };
 
 type PeerRow = {
@@ -84,13 +83,15 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     const streamIds = (streams ?? []).map(s => s.id as string);
     if (streamIds.length === 0) return empty;
 
-    const { data: peerData } = await supabase
+    let peerQuery = supabase
         .from('students')
         .select('id, pathway, subject_combination_id, subject_combinations ( code )')
-        .in('current_grade_stream_id', streamIds)
-        // Learners who have left keep their last class; only those on the roll
-        // are ranked, as the stream position already does, and the card's own.
-        .or(onRollOr(opts.forStudentId));
+        .in('current_grade_stream_id', streamIds);
+    // Learners who have left keep their last class; only those on the roll
+    // are ranked, as the stream position already does (a leaver's own card
+    // ranks among the whole class).
+    if (opts.onRollOnly !== false) peerQuery = peerQuery.eq('status', 'ACTIVE');
+    const { data: peerData } = await peerQuery;
     const peers = (peerData ?? []) as unknown as PeerRow[];
     if (peers.length === 0) return empty;
 

@@ -66,8 +66,9 @@ const st = StyleSheet.create({
     cName: { width: '26%' },
     cUser: { width: '30%' },
     cPhone: { width: '16%' },
-    cCode: { width: '14%' },
-    cStatus: { width: '8%' },
+    // The 6-character code needs ~45pt; "STATUS" in the header needs ~32pt.
+    cCode: { width: '13%' },
+    cStatus: { width: '9%' },
     codeText: { fontFamily: 'Courier-Bold', fontSize: 11, letterSpacing: 1, color: NAVY },
     // Helvetica alone: the stack's Inter has no italic, and this note is fixed text.
     emptyNote: { fontSize: 9, color: GRAY_400, fontFamily: 'Helvetica', fontStyle: 'italic', paddingVertical: 10, paddingHorizontal: 6 },
@@ -87,8 +88,12 @@ const HELVETICA_WIDTH: Readonly<Record<string, number>> = {
 };
 const DIGIT_WIDTH = 556;
 const WIDEST = 833;
-/** The username column's text width on A4: 30% of 531pt, less its 12pt of padding. */
-const USERNAME_WIDTH_PT = 0.3 * 531 - 12;
+/**
+ * The username column's text width on A4: 30% of the 529pt row (531pt inside
+ * the margins, less the table's 1pt borders), less 12pt of padding and a few
+ * points to spare, so a username measured to fit never wraps.
+ */
+const USERNAME_WIDTH_PT = 0.3 * 529 - 12 - 4;
 
 /**
  * The font size that fits a username on one line. A username is one long

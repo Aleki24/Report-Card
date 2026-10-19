@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { safeFileName } from '@/lib/filename';
-import { fetchAllRows, onRollOr } from '@/lib/postgrest';
+import { fetchAllRows } from '@/lib/postgrest';
+import { ranksAmongOnRoll } from '@/lib/student/status-access';
 import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -369,12 +370,13 @@ export async function GET(
 
         if (gradeStreamId) {
             // Learners still enrolled in the class, as the class batch ranks
-            // them, and this learner even after leaving (a graduate's card).
-            const { data: classmates } = await supabase
+            // them; a leaver's card ranks among the whole class.
+            let classmatesQuery = supabase
                 .from('students')
                 .select('id')
-                .eq('current_grade_stream_id', gradeStreamId)
-                .or(onRollOr(studentId));
+                .eq('current_grade_stream_id', gradeStreamId);
+            if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
+            const { data: classmates } = await classmatesQuery;
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;
@@ -499,7 +501,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
                 seniorRankGroup: rankingSettings.seniorRankGroup,
-                forStudentId: studentId,
+                onRollOnly: ranksAmongOnRoll(student.status),
             })
             : null;
         const overallPosition = gradePositions?.differsFromStream ? gradePositions.byStudent.get(studentId) : undefined;

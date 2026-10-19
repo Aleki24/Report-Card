@@ -344,7 +344,11 @@ export async function POST(request: NextRequest) {
         }
         // The screen graded the papers it had; with stored papers merged in
         // the score can differ, and the grade follows it on the same scale.
-        const clientPct = Number(m.percentage);
+        // Older app bundles send no percentage: theirs is the sent papers'.
+        const sentOnly = Number.isFinite(Number(m.percentage)) || sentPapers.size === 0
+          ? null
+          : resolveComponentEntry(scheme, Number(examRow?.max_score) || 100, Object.fromEntries([...sentPapers].map(id => [id, sent[id]])));
+        const clientPct = sentOnly && !('error' in sentOnly) ? sentOnly.percentage : Number(m.percentage);
         const gradeSymbol = Number.isFinite(clientPct) && Math.abs(clientPct - resolved.percentage) > 0.005
           ? regrade({ percentage: clientPct, grade_symbol: m.grade_symbol ?? null }, resolved.percentage, scales ??= await examGradingScales(supabase, exam_id))
           : m.grade_symbol;
