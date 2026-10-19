@@ -6,6 +6,8 @@ import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
+import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow } from '@/lib/term-dates';
+import { withPrintableSignatures } from '@/lib/pdf/printableSignatures';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -127,8 +129,7 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
         let academicLevelCode: string | null = null;
 
-        // Determine grading system by grade code - G7-8, G11-12, F3-4 use KCSE style (points-based)
-        // G1-G6, G9-G10 use CBC style (rubric-based)
+        // 8-4-4 Forms are graded KCSE-style (points); every CBC grade on CBC levels.
         const firstAcademicLevelId = students[0].academic_level_id;
         const streamName = (students[0] as any)?.grade_streams?.full_name || '';
         const gradeId = (students[0] as any)?.grade_streams?.grade_id;
@@ -140,7 +141,6 @@ export async function GET(
             if (gradeData) gradeLevelCode = gradeData.code || '';
         }
         
-        // Check if grade code indicates KCSE-style grading (G7-8, G11-12, F3-4)
         const isKCSEGrade = isKCSEGradeLevel(gradeLevelCode, streamName);
 
         if (firstAcademicLevelId) {
@@ -230,12 +230,13 @@ export async function GET(
         // 4. Term and Year Titles
         let termTitle = 'Term Report';
         let academicYearName = 'Academic Year';
-        let termYearId: string | null = null;
-        if (termId) {
-            const { data: termData } = await supabase.from('terms').select('name, academic_year_id').eq('id', termId).maybeSingle();
-            if (termData) termTitle = termData.name;
-            termYearId = termData?.academic_year_id ?? null;
-        }
+        const { data: termData } = await supabase
+            .from('terms')
+            .select(`name, ${TERM_DATE_COLUMNS}`)
+            .eq('id', termId)
+            .maybeSingle<TermDateRow & { name: string }>();
+        if (termData) termTitle = termData.name;
+        const termYearId = termData?.academic_year_id ?? null;
         // The class teacher of the term's year signs the sheet.
         const classTeacher = userSchoolId
             ? (await classTeacherSignoffs(supabase, userSchoolId, [classId], termYearId ?? yearId)).get(classId) ?? {}
@@ -279,6 +280,7 @@ export async function GET(
             ? { round: examType, marks: fetchedMarks || [] }
             : selectExamRound(fetchedMarks || []);
         termTitle = titleWithRound(termTitle, roundSelection.round, customTitle);
+        const termDates = await resolveTermDates(supabase, termData, roundSelection.round);
 
         // One mark per learner per subject, deterministically the most recent.
         const orderedMarks = [...roundSelection.marks].sort((a: any, b: any) =>
@@ -625,6 +627,7 @@ export async function GET(
             ...classTeacher,
             examTitle: termTitle,
             academicYear: academicYearName,
+            ...termDates,
             className: classNameLabel,
             gradingSystemType,
             subjects: subjectsArray,
@@ -653,7 +656,8 @@ export async function GET(
           browser was rendering, so the file is unchanged.
         */
         if (wantsPdf) {
-            const pdfBuffer = await generateMarkSheetPDF(markSheetData);
+            const [printable] = await withPrintableSignatures([markSheetData]);
+            const pdfBuffer = await generateMarkSheetPDF(printable);
             return new NextResponse(new Uint8Array(pdfBuffer), {
                 status: 200,
                 headers: {

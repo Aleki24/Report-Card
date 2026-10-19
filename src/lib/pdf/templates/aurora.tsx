@@ -8,7 +8,7 @@ import { Text, View, Image, StyleSheet, Svg, Rect, Defs, LinearGradient, Stop, C
 import type { Style } from '@react-pdf/types';
 import { FONTS } from '../pdfTheme';
 import { buildReportModel, type ReportModel, type SubjectRow } from '../reportModel';
-import { Crest, ScoreRing, SignatureImage, Trend, BrandFooter, reportFooterMeta } from '../primitives';
+import { Crest, ScoreRing, SignatureSpace, Trend, BrandFooter, reportFooterMeta } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -112,7 +112,7 @@ const s = StyleSheet.create({
     remarkDot: { width: 6, height: 6, borderRadius: 2, marginRight: 4.5 },
     remarkRole: { fontWeight: 800, fontSize: 6, textTransform: 'uppercase', letterSpacing: 0.75, color: C.muted },
     remarkText: { flexGrow: 1, fontSize: 7.5, lineHeight: 1.55, color: C.body, marginTop: 4.5, minHeight: 34 },
-    sig: { borderTop: `0.75pt solid #D9D9EC`, marginTop: 12, paddingTop: 2.5, width: '55%' },
+    sig: { borderTop: `0.75pt solid #D9D9EC`, paddingTop: 2.5, width: '55%' },
     sigText: { fontSize: 5.6, color: C.faintest, textTransform: 'uppercase', letterSpacing: 0.75 },
 
     signRow: { flexDirection: 'row', alignItems: 'flex-end', marginHorizontal: X, marginTop: 9 },
@@ -356,8 +356,8 @@ function Remark({ role, text, color, signer, signature }: { role: string; text: 
         <View style={s.remark}>
             <View style={s.remarkHead}><View style={[s.remarkDot, { backgroundColor: color }]} /><Text style={s.remarkRole}>{role}</Text></View>
             <Text style={s.remarkText}>{text}</Text>
+            <SignatureSpace src={signature} />
             <View style={s.sig}>
-                <SignatureImage src={signature} />
                 <Text style={s.sigText}>{signer ? `${signer} · Signature` : 'Signature'}</Text>
             </View>
         </View>
@@ -385,9 +385,9 @@ export function AuroraLayout({ data, qrCodeDataUri }: LayoutProps) {
                 <View style={s.signRow} wrap={false}>
                     <View style={s.signCell}><View style={s.signLine} /><Text style={s.signLabel}>Parent / Guardian</Text></View>
                     <View style={s.signCell}><View style={s.signLine} /><Text style={s.signLabel}>Date</Text></View>
-                    {m.exam.openingDate && (
-                        <View style={s.open}><Text style={s.openLabel}>Next term opens</Text><Text style={s.openValue}>{m.exam.openingDate}</Text></View>
-                    )}
+                    {m.termDates.map((d, i) => (
+                        <View key={d.label} style={[s.open, i > 0 ? { marginLeft: 6 } : {}]}><Text style={s.openLabel}>{d.label}</Text><Text style={s.openValue}>{d.value}</Text></View>
+                    ))}
                 </View>
             </View>
 

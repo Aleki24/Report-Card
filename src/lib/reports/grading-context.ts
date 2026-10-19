@@ -132,8 +132,7 @@ export async function resolveGradingContext(
     student: StudentLike,
     schoolId?: string | null
 ): Promise<GradingContext> {
-    // Determine grading system by grade code — G7-8, G11-12, F3-4 use KCSE
-    // style; Grade 9 and 10 are CBC.
+    // 8-4-4 Forms are graded KCSE-style; every CBC grade on CBC levels.
     const streamName = student.grade_streams?.full_name || '';
     const gradeId = student.grade_streams?.grade_id;
 

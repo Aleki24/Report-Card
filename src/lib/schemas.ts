@@ -50,6 +50,8 @@ export const termSchema = z.object({
     start_date: isoDate,
     end_date: isoDate,
     is_current: z.boolean().optional(),
+    /** When the school closes for the mid-term break. */
+    midterm_closing_date: optionalDate,
     /** When learners return after the mid-term break. */
     midterm_reopening_date: optionalDate,
     /** When learners return after this term ends (i.e. next term begins). */
@@ -62,6 +64,7 @@ export const termUpdateSchema = z.object({
     start_date: isoDate.optional(),
     end_date: isoDate.optional(),
     is_current: z.boolean().optional(),
+    midterm_closing_date: optionalDate,
     midterm_reopening_date: optionalDate,
     reopening_date: optionalDate,
 });

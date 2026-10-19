@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, View, renderToBuffer, type DocumentProps } from '@react-pdf/renderer';
+import { Document, Page, View, type DocumentProps } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { getTemplateLayout, type ReportTemplateId } from './pdf/templates';
 import type { RankingBasis } from './analytics';
@@ -100,6 +100,9 @@ export interface ReportCardData {
     principalComment?: string;
     gradeBoundaries: { symbol: string; label: string; min: number; max: number; points?: number }[];
     resultUrl?: string;
+    /** The day the school closes for this round's break, `YYYY-MM-DD`. */
+    closingDate?: string;
+    /** The day it opens again, `YYYY-MM-DD`. */
     openingDate?: string;
     totalScore?: number;
     totalPossible?: number;
@@ -114,8 +117,12 @@ export type { ReportTemplateId };
 /* ── One rendered report card page body ───────────────────── */
 function ReportCardPageBody({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     const Layout = getTemplateLayout(template);
+    // A report card is one sheet: the page-tall body never breaks. Breakable,
+    // a card a few points too long pushed its footer alone onto a second,
+    // otherwise empty page. The layouts tighten as a card fills (see
+    // reportModel's compact and tight) so everything stays on the sheet.
     return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} wrap={false}>
             <Layout data={data} qrCodeDataUri={qrCodeDataUri} />
         </View>
     );
@@ -136,24 +143,6 @@ export function ReportCardDocument({ data, qrCodeDataUri, template }: { data: Re
 export function ReportCardContent({ data, qrCodeDataUri, template }: { data: ReportCardData; qrCodeDataUri?: string; template?: ReportTemplateId }) {
     const Layout = getTemplateLayout(template);
     return <Layout data={data} qrCodeDataUri={qrCodeDataUri} />;
-}
-
-/* ── Generate single student PDF ─────────────────────────── */
-export async function generateStudentReportCardPDF(data: ReportCardData, template?: ReportTemplateId): Promise<Buffer> {
-    let qrCodeDataUri = undefined;
-    if (data.resultUrl) {
-        try {
-            // margin omitted → library's spec-compliant 4-module quiet zone;
-            // width raised so print doesn't upscale a blurry source image.
-            qrCodeDataUri = await QRCode.toDataURL(data.resultUrl, { width: 180 });
-        } catch (e) {
-            console.error("Failed to generate QR code", e);
-        }
-    }
-    const buffer = await renderToBuffer(
-        <ReportCardDocument data={data} qrCodeDataUri={qrCodeDataUri} template={template} />
-    );
-    return Buffer.from(buffer);
 }
 
 /* ── Build the bulk document for an entire class ──────────── */

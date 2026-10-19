@@ -30,20 +30,17 @@ export function getOverallGradeFromMeanPoints(meanPoints: number): string {
 }
 
 /**
- * Whether a grade level uses KCSE-style (points-based) grading rather than CBC.
- * G7-8, G11-12, and F3-4 are KCSE. Checks both the grade code and the stream
- * name so a class carrying its level only in one field is still classified
- * consistently everywhere — report cards, marksheets, the student dashboard,
- * and school stats must all agree, or the same student can rank by points in
- * one view and by percentage in another.
+ * Whether a class is graded KCSE-style (letter grades and points) rather than
+ * on CBC levels: the 8-4-4 secondary Forms, F1 to F4. Every CBC grade,
+ * Junior and Senior School included, is graded on CBC levels (EE1 to BE2);
+ * Grades 7, 8, 11 and 12 used to be counted here, which printed KCSE grades
+ * and points on CBC mark sheets and report cards. Checks the grade code and
+ * the stream name, so a class carrying its level only in one field is still
+ * classified the same way in every view.
  */
 export function isKCSEGradeLevel(gradeCode?: string | null, streamName?: string | null): boolean {
-    const code = gradeCode || '';
-    const stream = streamName || '';
-    const combined = `${code} ${stream}`;
-    return /^(G[78]|G1[12]|F[34])/i.test(code)
-        || /^(G[78]|G1[12]|F[34])/i.test(stream)
-        || /\b(F[34]|G[78]|G1[12])\b/i.test(combined);
+    return /^F[1-4]$/i.test((gradeCode || '').trim())
+        || /^(F|Form\s*)[1-4]\b/i.test((streamName || '').trim());
 }
 
 export function getGradeFromPercentageSimple(percentage: number): string {
@@ -441,11 +438,8 @@ export type RankingBasis = 'totalMarks' | 'percentage' | 'points';
  * subjects outrank one who scored more marks overall (a mean of 78 from six
  * subjects beating 500 marks from eight).
  *
- * Grading style and ranking basis are separate questions. Grades 7, 8, 11
- * and 12 sit under the CBC level but are graded KCSE-style (see
- * isKCSEGradeLevel), so `gradingSystemType` alone reads 'KCSE' for them. They
- * are still CBC learners, and a CBC learner is ranked on marks, so the
- * academic level decides here whenever it is known.
+ * The academic level decides whenever it is known; the grading style is the
+ * fallback.
  */
 export function rankingBasisFor(
     gradingSystemType: 'KCSE' | 'CBC',

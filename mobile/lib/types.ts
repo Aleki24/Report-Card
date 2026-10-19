@@ -269,6 +269,7 @@ export interface Term {
     start_date?: string | null;
     end_date?: string | null;
     is_current: boolean;
+    midterm_closing_date?: string | null;
     midterm_reopening_date?: string | null;
     reopening_date?: string | null;
 }

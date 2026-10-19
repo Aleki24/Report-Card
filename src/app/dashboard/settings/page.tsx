@@ -11,7 +11,7 @@ import { ConfirmDialog, Modal } from '@/components/ui';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { AcademicStructureTab } from '@/components/settings/AcademicStructureTab';
 import { GradingSystemsTab } from '@/components/settings/GradingSystemsTab';
-import { AcademicCalendarTab, type AcademicYear, type Term } from '@/components/settings/AcademicCalendarTab';
+import { AcademicCalendarTab, type AcademicYear, type Term, type TermDateField } from '@/components/settings/AcademicCalendarTab';
 import { PaymentsTab } from '@/components/settings/PaymentsTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
 import { DutiesTab } from '@/components/settings/DutiesTab';
@@ -230,17 +230,17 @@ function SettingsPageInner() {
   const setCurrentTerm = (term: Term) =>
     void patch('term', term.id, { is_current: true }).then(ok => { if (ok) toast.success(`${term.name} is now the current term`); });
 
-  /** Reopening dates save as they are picked; the list updates at once so the picker doesn't snap back. */
-  const updateTermDates = async (termId: string, field: 'midterm_reopening_date' | 'reopening_date', value: string) => {
+  /** Break dates save as they are picked; the list updates at once so the picker doesn't snap back. */
+  const updateTermDates = async (termId: string, field: TermDateField, value: string) => {
     if (!data) return;
     const previous = data.terms;
     setLoad({ state: 'ready', data: { ...data, terms: data.terms.map(t => (t.id === termId ? { ...t, [field]: value || null } : t)) } });
     try {
       const res = await fetch(STRUCTURE_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'term', id: termId, [field]: value || null }) });
-      if (!res.ok) throw new Error(apiErrorMessage(await readJson(res), 'Could not save the reopening date.'));
+      if (!res.ok) throw new Error(apiErrorMessage(await readJson(res), 'Could not save the date.'));
     } catch (err) {
       setLoad(prev => (prev.state === 'ready' ? { state: 'ready', data: { ...prev.data, terms: previous } } : prev));
-      toast.error(err instanceof Error ? err.message : 'Could not save the reopening date.');
+      toast.error(err instanceof Error ? err.message : 'Could not save the date.');
     }
   };
 

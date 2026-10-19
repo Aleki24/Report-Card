@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import QRCode from 'qrcode';
 import { ReportCardDocument, buildBulkReportCardsDocument, type ReportCardData, type ReportTemplateId } from './pdfGenerator';
+import { withPrintableSignatures } from './pdf/printableSignatures';
 
 /**
  * Server-only PDF generation using renderToBuffer (Node.js API).
@@ -11,7 +12,8 @@ import { ReportCardDocument, buildBulkReportCardsDocument, type ReportCardData, 
  */
 
 /* ── Generate single student PDF (server-only) ─────────────────────────── */
-export async function generateStudentReportCardPDF(data: ReportCardData, template?: ReportTemplateId): Promise<Buffer> {
+export async function generateStudentReportCardPDF(report: ReportCardData, template?: ReportTemplateId): Promise<Buffer> {
+    const [data] = await withPrintableSignatures([report]);
     let qrCodeDataUri = undefined;
     if (data.resultUrl) {
         try {
@@ -39,6 +41,6 @@ export async function generateBulkReportCardsPDF(
     reportCardsData: ReportCardData[],
     template?: ReportTemplateId,
 ): Promise<Buffer> {
-    const document = await buildBulkReportCardsDocument(reportCardsData, template);
+    const document = await buildBulkReportCardsDocument(await withPrintableSignatures(reportCardsData), template);
     return Buffer.from(await renderToBuffer(document));
 }

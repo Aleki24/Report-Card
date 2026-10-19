@@ -6,6 +6,7 @@
  */
 import type { ReportCardData } from '../pdfGenerator';
 import { generateShortFeedback, generateClassTeacherComment, generatePrincipalComment } from './pdfHelpers';
+import { formatIsoDate } from '../dates';
 
 type SubjectMark = ReportCardData['subjectMarks'][number];
 
@@ -63,15 +64,17 @@ export interface ReportModel {
     /** The class teacher who signs, and their signature on file; both optional. */
     classTeacher: { name?: string; signature?: string };
     learner: { name: string; initials: string; admission: string; className: string; pathway?: string };
-    exam: { title: string; year: string; openingDate?: string; issued: string };
+    exam: { title: string; year: string; issued: string };
+    /** The closing and opening days that are set, labelled and ready to print ("5 January 2027"). */
+    termDates: { label: string; value: string }[];
 
     subjects: SubjectRow[];
     paperCodes: string[];
     hasPrevious: boolean;
     hasClassAverage: boolean;
-    /** Many subjects: templates tighten spacing so the card stays on one page. */
+    /** A full card (many subjects, long remarks): templates tighten spacing so it stays on one page. */
     compact: boolean;
-    /** Few subjects: how much to open up row padding so the table carries the page. */
+    /** A light card: how much to open up row padding so the table carries the page. */
     rowScale: number;
 
     mean: number;
@@ -139,6 +142,10 @@ export function shortName(name?: string): string {
 }
 
 /** The first `count` words of a name, for places a full name will not fit. */
+/** A stored `YYYY-MM-DD` as it prints on paper: "5 January 2027". */
+export const printedDate = (value?: string | null): string | undefined =>
+    value ? formatIsoDate(value, { day: 'numeric', month: 'long', year: 'numeric' }) : undefined;
+
 export const firstWords = (name: string, count = 2): string => name.trim().split(/\s+/).slice(0, count).join(' ');
 
 /* ── Scales ─────────────────────────────────────────────────── */
@@ -194,10 +201,24 @@ function bandFor(data: ReportCardData, pct: number) {
 /* ── Model ──────────────────────────────────────────────────── */
 
 const MAX_PAPERS = 3;
-/** Beyond this many subjects the layouts tighten their rows. */
+/** From this load (see cardLoad) the layouts tighten their rows. */
 const COMPACT_FROM = 10;
-/** Below this many subjects the layouts open their rows up. */
+/** Below this load the layouts open their rows up. */
 const ROOMY_BELOW = 9;
+/** Roughly how many characters fill one line of a remark, in the narrowest template. */
+const REMARK_LINE_CHARS = 70;
+/** Remark lines every layout has room for before the remarks start to cost rows. */
+const REMARK_LINES_FREE = 3;
+
+/**
+ * How full a card is, in subject rows: one per subject, plus one for every
+ * line the longer remark runs past what the layouts leave room for. Counting
+ * subjects alone let a nine-subject card with long remarks run off the page.
+ */
+function cardLoad(subjectCount: number, remarks: string[]): number {
+    const lines = Math.max(0, ...remarks.map(text => Math.ceil(text.length / REMARK_LINE_CHARS)));
+    return subjectCount + Math.max(0, lines - REMARK_LINES_FREE);
+}
 
 function subjectRow(sm: SubjectMark, paperCount: number, showPositions: boolean): SubjectRow {
     const mark = sm.percentage == null || !Number.isFinite(sm.percentage) ? null : Math.round(sm.percentage);
@@ -261,6 +282,12 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         };
     });
 
+    const teacherComment = data.classTeacherComment?.trim()
+        || generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints);
+    const principalComment = data.principalComment?.trim()
+        || generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints);
+    const load = cardLoad(subjects.length, [teacherComment, principalComment]);
+
     const hasRank = showPositions && data.classRank > 0 && data.totalStudents > 0;
     const classMean = data.classMeanPercentage != null ? Math.round(data.classMeanPercentage) : undefined;
 
@@ -298,16 +325,21 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         exam: {
             title: data.examTitle,
             year: data.academicYear,
-            openingDate: data.openingDate || undefined,
+
             issued: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
         },
+
+        termDates: [
+            { label: 'Closing day', value: printedDate(data.closingDate) },
+            { label: 'Opening day', value: printedDate(data.openingDate) },
+        ].filter((d): d is { label: string; value: string } => d.value != null),
 
         subjects,
         paperCodes,
         hasPrevious: subjects.some(s => s.previous != null),
         hasClassAverage: subjects.some(s => s.classAverage != null),
-        compact: subjects.length >= COMPACT_FROM,
-        rowScale: Math.min(2, 1 + 0.22 * Math.max(0, ROOMY_BELOW - subjects.length)),
+        compact: load >= COMPACT_FROM,
+        rowScale: Math.min(2, 1 + 0.22 * Math.max(0, ROOMY_BELOW - load)),
 
         mean,
         meanChange: likeForLikeChange(subjects)
@@ -339,10 +371,8 @@ export function buildReportModel(data: ReportCardData, qrCode?: string): ReportM
         aboveClassCount: marked.filter(s => s.classAverage != null && (s.mark ?? 0) >= s.classAverage).length,
         improvedCount: movers.filter(s => (s.change ?? 0) > 0).length,
 
-        teacherComment: data.classTeacherComment?.trim()
-            || generateClassTeacherComment(data.overallPercentage, data.overallGrade, data.totalPoints),
-        principalComment: data.principalComment?.trim()
-            || generatePrincipalComment(data.overallPercentage, data.overallGrade, data.totalPoints),
+        teacherComment,
+        principalComment,
         qrCode,
     };
 }

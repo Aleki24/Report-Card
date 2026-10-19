@@ -9,7 +9,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
 import { FONTS, FONT_STACKS } from '../pdfTheme';
 import { buildReportModel, levelFamily, type ReportModel, type SubjectRow, type LevelFamily } from '../reportModel';
-import { Crest, SignatureImage, Trend, BrandFooter, reportFooterMeta, type TrendColors } from '../primitives';
+import { Crest, SignatureSpace, Trend, BrandFooter, reportFooterMeta, type TrendColors } from '../primitives';
 import type { LayoutProps } from '../templates';
 
 const C = {
@@ -309,7 +309,8 @@ function Remark({ role, text, sign, signature }: { role: string; text: string; s
         <View style={s.remark}>
             <Text style={s.h3}>{role}</Text>
             <Text style={s.remarkText}>{text}</Text>
-            <View style={s.sigLine}><SignatureImage src={signature} lift={-10.5} /></View>
+            <SignatureSpace src={signature} />
+            <View style={[s.sigLine, { height: 0, marginTop: 0 }]} />
             <Text style={s.sigText}>{sign}</Text>
         </View>
     );
@@ -403,8 +404,15 @@ export function GrowthLayout({ data, qrCodeDataUri }: LayoutProps) {
                     <Remark role={m.principal.title} text={m.principalComment} sign={m.principal.name ? `${m.principal.name} · Signature` : 'Signature'} signature={m.principal.signature} />
                     <View style={{ width: 9 }} />
                     <View style={[s.remark, { flex: 0.72, backgroundColor: C.deep, borderColor: C.deep }]}>
-                        <Text style={[s.h3, { color: C.gold }]}>{m.exam.openingDate ? 'Next term opens' : 'Parent / Guardian'}</Text>
-                        <Text style={{ fontFamily: display, fontSize: 14.3, color: '#FFFFFF', flexGrow: 1 }}>{m.exam.openingDate ?? ''}</Text>
+                        <View style={{ flexGrow: 1 }}>
+                            {m.termDates.length === 0 && <Text style={[s.h3, { color: C.gold }]}>Parent / Guardian</Text>}
+                            {m.termDates.map((d, i) => (
+                                <View key={d.label} style={i > 0 ? { marginTop: 5 } : {}}>
+                                    <Text style={[s.h3, { color: C.gold, marginBottom: 1.5 }]}>{d.label}</Text>
+                                    <Text style={{ fontFamily: display, fontSize: 11.5, color: '#FFFFFF' }}>{d.value}</Text>
+                                </View>
+                            ))}
+                        </View>
                         <View style={[s.sigLine, { borderBottomColor: '#6D9A96' }]} />
                         <Text style={[s.sigText, { color: C.mint }]}>Parent / Guardian</Text>
                     </View>

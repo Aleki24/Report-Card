@@ -5,7 +5,8 @@ import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/repo
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { gradingSystemBySubject } from '@/lib/school-subjects';
-import { generateStudentReportCardPDF, ReportCardData } from '@/lib/pdfGenerator';
+import type { ReportCardData } from '@/lib/pdfGenerator';
+import { generateStudentReportCardPDF } from '@/lib/pdfGeneratorServer';
 import { isReportTemplateId } from '@/lib/pdf/templates';
 import {
     aggregateStudentPerformance,
@@ -34,43 +35,9 @@ import { buildVerifyUrl, resolveGradingContext, resolveOverallGrade } from '@/li
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
+import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow, type TermDates } from '@/lib/term-dates';
 
 export const runtime = 'nodejs';
-
-/**
- * Which date the report card should print as the reopening day.
- *
- * A school breaks twice per term, so the admin sets both dates on the term:
- * after the mid-term break and after the term ends. A mid-term report prints
- * the first, everything else prints the second. When neither is set we fall
- * back to the NEXT term's start date — never this term's own start_date,
- * which is the day the term began, not the day learners come back.
- */
-async function resolveReopeningDate(
-    supabase: ReturnType<typeof createSupabaseAdmin>,
-    term: { start_date?: string; end_date?: string; academic_year_id?: string; midterm_reopening_date?: string | null; reopening_date?: string | null } | null,
-    examType: string | null
-): Promise<string | undefined> {
-    if (!term) return undefined;
-    const isMidTerm = (examType || '').toUpperCase().includes('MID');
-    const chosen = isMidTerm
-        ? term.midterm_reopening_date || term.reopening_date
-        : term.reopening_date;
-    if (chosen) return chosen;
-
-    if (term.end_date && term.academic_year_id) {
-        const { data: nextTerm } = await supabase
-            .from('terms')
-            .select('start_date')
-            .eq('academic_year_id', term.academic_year_id)
-            .gt('start_date', term.end_date)
-            .order('start_date', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-        if (nextTerm?.start_date) return nextTerm.start_date;
-    }
-    return undefined;
-}
 
 export async function GET(
     request: Request,
@@ -323,7 +290,7 @@ export async function GET(
 
         let termTitle = 'Term Report';
         let academicYear = 'Academic Year';
-        let openingDate: string | undefined;
+        let termDates: TermDates = {};
         
         if (firstExam) {
             termTitle = (firstExam as any).terms?.name || 'Term Report';
@@ -334,10 +301,10 @@ export async function GET(
         if (termId) {
             const { data: termData } = await supabase
                 .from('terms')
-                .select('start_date, end_date, academic_year_id, midterm_reopening_date, reopening_date')
+                .select(TERM_DATE_COLUMNS)
                 .eq('id', termId)
-                .maybeSingle();
-            openingDate = await resolveReopeningDate(supabase, termData, roundSelection.round);
+                .maybeSingle<TermDateRow>();
+            termDates = await resolveTermDates(supabase, termData, roundSelection.round);
             termYearId = termData?.academic_year_id ?? null;
         }
 
@@ -767,7 +734,7 @@ export async function GET(
             resultUrl: buildVerifyUrl(baseUrl, studentId, termId, examType),
             totalScore: computedTotalScore,
             totalPossible: computedTotalPossible,
-            openingDate,
+            ...termDates,
             subjectTrendData: subjectTrendData.length > 0 ? subjectTrendData : undefined,
         };
 
