@@ -4,7 +4,7 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { provisionUserFromClerk } from '@/lib/provision-user';
-import { revokeInviteCodes } from '@/lib/invite-codes';
+import { closeAccount } from '@/lib/account-closing';
 
 /** The account's primary email (Clerk lists every address; the first is not always the primary). */
 const primaryEmail = (user: UserJSON): string =>
@@ -92,21 +92,15 @@ export async function POST(req: Request) {
       case 'user.deleted': {
         const clerkId = evt.data.id;
         if (!clerkId) break;
-        // Only the sign-in is gone. Our own routes (account deletion, admin
-        // deletes, activation rollbacks) settle the database before they
-        // delete a Clerk user; what is left is the school's record — a
-        // learner's marks and fees, a teacher's announcements — and a deletion
-        // from the Clerk dashboard must never erase it. The account is
-        // switched off; only a bare pending account, which holds nothing, is
-        // removed so its email can be used again.
+        // Our own routes settle the database before they delete a Clerk user;
+        // a deletion from the Clerk dashboard (e.g. a request by email) lands
+        // here and closes the account exactly as the person's own request
+        // does: a learner's school record is kept, without their details,
+        // and every email and username is freed for a new account.
         const { data: row } = await supabase.from('users').select('role').eq('id', clerkId).maybeSingle();
         if (!row) break;
-        if (row.role === 'PENDING') {
-          await supabase.from('users').delete().eq('id', clerkId);
-        } else {
-          await supabase.from('users').update({ is_active: false }).eq('id', clerkId);
-          await revokeInviteCodes(supabase, clerkId);
-        }
+        const { error } = await closeAccount(supabase, clerkId, row.role);
+        if (error) console.error('[Clerk Webhook] Failed to close account:', clerkId, error);
         break;
       }
     }

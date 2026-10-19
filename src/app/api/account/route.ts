@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth, createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { internalError } from '@/lib/api-errors';
-import { deletionKindForRole, isDeleteConfirmation } from '@/lib/account-deletion';
-import { revokeInviteCodes } from '@/lib/invite-codes';
+import { isDeleteConfirmation } from '@/lib/account-deletion';
+import { closeAccount } from '@/lib/account-closing';
 
 /** A school must keep at least one admin, or nobody could run it. */
 async function isLastAdmin(userId: string): Promise<boolean> {
@@ -56,23 +56,8 @@ export async function DELETE(request: Request) {
     const { data: me, error: meError } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
     if (meError) return internalError('account-delete', meError);
 
-    if (deletionKindForRole(me?.role) === 'learner') {
-      const { error } = await supabase.from('users').update({
-        is_active: false,
-        // Email is required and unique: a .local placeholder (never mailed,
-        // see isPlaceholderEmail) frees the real one.
-        email: `deleted+${userId}@deleted.local`,
-        username: null,
-        password_hash: null,
-        phone: null,
-        avatar_url: null,
-      }).eq('id', userId);
-      if (error) return internalError('account-delete', error);
-      await revokeInviteCodes(supabase, userId);
-    } else {
-      const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (error) return internalError('account-delete', error);
-    }
+    const { error: closeError } = await closeAccount(supabase, userId, me?.role);
+    if (closeError) return internalError('account-delete', closeError);
 
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
     await clerk.users.deleteUser(userId);

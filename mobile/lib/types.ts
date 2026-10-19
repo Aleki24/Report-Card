@@ -407,9 +407,12 @@ export interface ExamMark {
 export interface MarkEntryInput {
     student_id: string;
     raw_score?: number;
+    /** The score the grade was given for, so the server can re-grade if stored papers change it. */
+    percentage?: number;
     grade_symbol: string;
     remarks: string | null;
-    components?: Record<string, number>;
+    /** Paper scores; null clears a saved paper, and papers left out are kept. */
+    components?: Record<string, number | null>;
 }
 
 interface StudentGap {

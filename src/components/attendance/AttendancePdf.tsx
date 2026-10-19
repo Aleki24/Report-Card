@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
-import { FONT_STACKS } from '@/lib/pdf/pdfTheme';
+import { FONT_STACKS } from '@/lib/pdf/pdfFonts';
 import { ATTENDANCE_LABELS, countAttendance, type AttendanceRosterEntry, type AttendanceStatus } from '@/lib/attendance';
 import { formatIsoDate } from '@/lib/dates';
 

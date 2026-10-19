@@ -1058,7 +1058,12 @@ function FeesPageInner() {
                 <div>
                     {unmatchedCount > 0 && (
                         <div className="mb-4">
-                            <UnmatchedPaymentsPanel canAssign={canCollect} onCountChange={setUnmatchedCount} />
+                            <UnmatchedPaymentsPanel
+                                canAssign={canCollect}
+                                onCountChange={setUnmatchedCount}
+                                // The money is now on the learner's record: refresh what shows it.
+                                onAssigned={() => void Promise.all([fetchFees(), fetchPaymentsLog()])}
+                            />
                         </div>
                     )}
                     <section aria-label="Payment filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
@@ -1165,7 +1170,7 @@ function FeesPageInner() {
                                         <Receipt size={14} />
                                     </a>
                                 )}
-                                {p.status === 'COMPLETED' && p.studentFeeId && (
+                                {canManageFees && p.status === 'COMPLETED' && p.studentFeeId && (
                                     <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidLogPayment(p)} title="Void Payment">
                                         <Ban size={14} />
                                     </button>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
-import { FONT_STACKS } from './pdfTheme';
+import { FONT_STACKS } from './pdfFonts';
 
 const NAVY = '#1A365D';
 const GRAY_200 = '#E2E6ED';

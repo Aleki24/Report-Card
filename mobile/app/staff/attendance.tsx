@@ -86,6 +86,8 @@ function AttendanceContent() {
     const markAllPresent = () => setPending(Object.fromEntries(rows.map((r) => [r.id, 'present' as const])));
 
     const save = async () => {
+        // While a class or date loads, the rows on screen are the previous one's.
+        if (loading) return;
         if (!effectiveStreamId || rows.length === 0) return;
         setSaving(true);
         setMessage(null);
@@ -134,7 +136,7 @@ function AttendanceContent() {
         <Screen
             footer={
                 rows.length > 0 ? (
-                    <Button block label={saving ? 'Saving…' : unsaved ? `Save register${changed ? ` (${changed} changed)` : ''}` : 'Register saved ✓'} onPress={save} loading={saving} disabled={!unsaved} />
+                    <Button block label={saving ? 'Saving…' : unsaved ? `Save register${changed ? ` (${changed} changed)` : ''}` : 'Register saved ✓'} onPress={save} loading={saving} disabled={!unsaved || loading} />
                 ) : undefined
             }
         >

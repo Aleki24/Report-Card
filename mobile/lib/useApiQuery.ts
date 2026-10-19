@@ -27,7 +27,11 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
     const api = useApi();
     const { userId } = useAuth();
     const raw = opts?.raw ?? false;
-    const key = path === null ? null : cacheKey(userId, path);
+    // A raw answer is a different shape from the plain one for the same path
+    // (the whole body, not its data), so it is cached under its own key: a
+    // screen switching to raw, or an older bundle reading after a newer one,
+    // never gets the other shape back.
+    const key = path === null ? null : cacheKey(userId, raw ? `raw:${path}` : path);
     const cached = readMemory<T>(key);
     const [data, setData] = useState<T | null>(cached ?? null);
     const [loading, setLoading] = useState(path !== null && cached === undefined);

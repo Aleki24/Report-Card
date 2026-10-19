@@ -87,6 +87,16 @@ export function BulkUpload({ examId, subjectId, gradeStreamId, gradeId }: Props)
 
     const validateData = useCallback(() => {
         const errs: string[] = [];
+        // Blank scores are skipped below, so a missing or empty score column
+        // would otherwise pass and fail later with a message about admission numbers.
+        if (!mapping.score) {
+            setErrors(['Choose which column holds the scores.']);
+            return;
+        }
+        if (parsedData.length > 0 && parsedData.every(row => String(row[mapping.score] ?? '').trim() === '')) {
+            setErrors([`No scores found in the "${mapping.score}" column. Check that you picked the score column.`]);
+            return;
+        }
         parsedData.forEach((row, idx) => {
             if (!row[mapping.admissionNumber]) errs.push(`Row ${idx + 1}: Missing admission number`);
             // A blank score is "no mark yet" (an absent learner): the upload

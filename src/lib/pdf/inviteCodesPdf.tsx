@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
-import { FONT_STACKS } from './pdfTheme';
+import { FONT_STACKS } from './pdfFonts';
 
 /**
  * inviteCodesPdf.tsx
@@ -60,11 +60,12 @@ const st = StyleSheet.create({
     rowAlt: { backgroundColor: '#FAFBFC' },
     th: { fontSize: 8, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: NAVY, textTransform: 'uppercase', paddingVertical: 6, paddingHorizontal: 6 },
     td: { fontSize: 9, paddingVertical: 6, paddingHorizontal: 6, color: GRAY_700 },
-    // Column widths
+    // Column widths. Names wrap at their spaces; a username is one word
+    // and must print whole, so it gets the room (see usernameSize).
     cNum: { width: '6%' },
-    cName: { width: '30%' },
-    cUser: { width: '24%' },
-    cPhone: { width: '18%' },
+    cName: { width: '26%' },
+    cUser: { width: '30%' },
+    cPhone: { width: '16%' },
     cCode: { width: '14%' },
     cStatus: { width: '8%' },
     codeText: { fontFamily: 'Courier-Bold', fontSize: 11, letterSpacing: 1, color: NAVY },
@@ -77,6 +78,28 @@ const st = StyleSheet.create({
         fontSize: 7, color: GRAY_400,
     },
 });
+
+/** Helvetica advance widths (per 1000 em) of the characters usernames are made of. */
+const HELVETICA_WIDTH: Readonly<Record<string, number>> = {
+    a: 556, b: 556, c: 500, d: 556, e: 556, f: 278, g: 556, h: 556, i: 222, j: 222, k: 500, l: 222, m: 833,
+    n: 556, o: 556, p: 556, q: 556, r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500,
+    '.': 278, '_': 556, '-': 333,
+};
+const DIGIT_WIDTH = 556;
+const WIDEST = 833;
+/** The username column's text width on A4: 30% of 531pt, less its 12pt of padding. */
+const USERNAME_WIDTH_PT = 0.3 * 531 - 12;
+
+/**
+ * The font size that fits a username on one line. A username is one long
+ * word (names run together, then digits): wrapping it either overprinted the
+ * Phone column or, broken at a hyphenation point, printed a "-" that is not
+ * part of it, and people sign in by copying it from this sheet.
+ */
+function usernameSize(username: string): number {
+    const em = [...username].reduce((sum, ch) => sum + (/\d/.test(ch) ? DIGIT_WIDTH : HELVETICA_WIDTH[ch] ?? WIDEST), 0) / 1000;
+    return em === 0 ? 9 : Math.max(5.5, Math.min(9, Math.floor((USERNAME_WIDTH_PT / em) * 10) / 10));
+}
 
 function statusColor(status: InviteCodeStatus): string {
     if (status === 'Active') return GREEN;
@@ -109,7 +132,7 @@ function CategoryBlock({ category }: { category: InviteCategory }) {
                         <View key={i} style={i % 2 === 1 ? [st.row, st.rowAlt] : st.row} wrap={false}>
                             <Text style={[st.td, st.cNum, { color: GRAY_400 }]}>{i + 1}</Text>
                             <Text style={[st.td, st.cName]}>{r.name || '—'}</Text>
-                            <Text style={[st.td, st.cUser]}>{r.username || '—'}</Text>
+                            <Text style={[st.td, st.cUser, r.username ? { fontSize: usernameSize(r.username) } : {}]}>{r.username || '—'}</Text>
                             <Text style={[st.td, st.cPhone]}>{r.phone || '—'}</Text>
                             <Text style={[st.td, st.cCode]}><Text style={st.codeText}>{r.code}</Text></Text>
                             <Text style={[st.td, st.cStatus, { color: statusColor(r.status), fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 7 }]}>{r.status}</Text>

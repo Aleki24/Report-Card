@@ -459,10 +459,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const buildPayloadRow = (studentId: string, values: EntryValues) => {
         const remarks = values.remarks.trim() || null;
         if (components.length > 0) {
-            const scores: Record<string, number> = {};
+            // Papers left out are kept by the server; a saved paper the
+            // teacher emptied is sent as null so it is removed.
+            const scores: Record<string, number | null> = {};
+            const savedPapers = saved[studentId]?.componentScores ?? {};
             for (const c of components) {
                 const text = (values.componentScores[c.id] ?? '').trim();
                 if (text !== '') scores[c.id] = Number(text);
+                else if ((savedPapers[c.id] ?? '').trim() !== '') scores[c.id] = null;
             }
             const pct = composite(values).finalPercentage;
             return {

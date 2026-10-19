@@ -1,6 +1,6 @@
 import 'server-only';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { fetchAllRows } from '@/lib/postgrest';
+import { fetchAllRows, onRollOr } from '@/lib/postgrest';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -263,8 +263,9 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
                 .from('students')
                 .select('id')
                 .eq('current_grade_stream_id', student.current_grade_stream_id)
-                // As the printed card ranks: learners on the roll only.
-                .eq('status', 'ACTIVE');
+                // As the printed card ranks: learners on the roll, and this
+                // one even after leaving (a college checking a leaver's card).
+                .or(onRollOr(studentId));
 
             // Rank on the same sitting the marks above come from, as the
             // printed card does: ranking on every round of the term gave a

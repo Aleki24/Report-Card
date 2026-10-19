@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer';
-import { FONT_STACKS } from './pdfTheme';
+import { FONT_STACKS } from './pdfFonts';
 import { bandForGrade } from '@/lib/curriculum-bands';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, sectionFor, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';

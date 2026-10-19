@@ -2,13 +2,13 @@
 
 Typefaces for the report card templates and the class mark sheet, bundled as
 `.ttf` so PDFs render the same everywhere. They are registered in
-`src/lib/pdf/pdfTheme.ts`.
+`src/lib/pdf/pdfFonts.ts`.
 
 | Files | Family | Used by |
 |---|---|---|
 | `playfair-700` | Playfair Display Bold | Heritage display, mark sheet school name |
 | `sourcesans-400/600/700` | Source Sans 3 | Heritage body |
-| `sourceserif-400i` | Source Serif 4 Italic | Heritage remarks |
+| `sourceserif-400`, `-400i` | Source Serif 4 | Heritage remarks; Editorial's ĩ and ũ, which Instrument Serif lacks |
 | `jakarta-400/600/700/800` | Plus Jakarta Sans | Aurora |
 | `instrumentserif-400`, `-400i` | Instrument Serif | Editorial display |
 | `inter-400/600/700/800` | Inter | Editorial body, mark sheet, footers |

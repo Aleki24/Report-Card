@@ -102,7 +102,8 @@ function SettingsPageInner() {
   const [deleting, setDeleting] = useState<{ type: StructureType; id: string; label: string } | null>(null);
   const [blocked, setBlocked] = useState<{ label: string; message: string } | null>(null);
 
-  const fetchAll = useCallback(async () => {
+  /** Loads everything; the profile form takes the server's copy unless it holds unsaved edits, or when `takeProfile` (after a save). */
+  const fetchAll = useCallback(async (takeProfile = false) => {
     try {
       const [structureRes, schoolRes, yearsRes, termsRes] = await Promise.all([
         fetch(STRUCTURE_URL, { cache: 'no-store' }),
@@ -130,8 +131,11 @@ function SettingsPageInner() {
           school: loadedSchool,
         },
       });
+      // Compared by value: after a save the form and the saved copy are
+      // different objects with the same fields, and later refreshes must
+      // still bring in changes made elsewhere.
       const saved = savedSchoolRef.current;
-      setSchool(prev => (saved === null || prev === saved ? loadedSchool : prev));
+      setSchool(prev => (takeProfile || saved === null || JSON.stringify(prev) === JSON.stringify(saved) ? loadedSchool : prev));
       setSavedSchool(loadedSchool);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load settings.';
@@ -168,7 +172,9 @@ function SettingsPageInner() {
       // The name and logo also show in the sidebar, which reads them once.
       const shellChanged = savedSchool && (savedSchool.name !== school.name.trim() || savedSchool.logo_url !== school.logo_url);
       if (shellChanged) window.location.reload();
-      else await fetchAll();
+      // The stored profile is what the server kept (trimmed text, the default
+      // pass mark for a cleared one), so the form takes it and reads as saved.
+      else await fetchAll(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not save the profile.');
     } finally {

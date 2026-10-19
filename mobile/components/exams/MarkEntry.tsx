@@ -110,6 +110,11 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
         });
     }, [draftKey]);
 
+    // The latest entries, for the save to update the draft file even when the
+    // screen was left before it finished (the debounced autosave never runs then).
+    const entriesRef = useRef(entries);
+    useEffect(() => { entriesRef.current = entries; }, [entries]);
+
     useEffect(() => {
         if (!draftLoaded.current) return;
         const t = setTimeout(() => {
@@ -206,9 +211,16 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             const e = entries[id];
             const base = { student_id: id, grade_symbol: e.grade, remarks: e.remarks.trim() || null };
             if (scheme) {
-                const components: Record<string, number> = {};
-                for (const p of papers) if (!isBlank(e.papers[p.id])) components[p.id] = Number(e.papers[p.id]);
-                return { ...base, components };
+                // Papers left out are kept by the server; a saved paper the
+                // teacher emptied is sent as null so it is removed.
+                const savedPapers = marksByStudent.get(id)?.components ?? {};
+                const components: Record<string, number | null> = {};
+                for (const p of papers) {
+                    if (!isBlank(e.papers[p.id])) components[p.id] = Number(e.papers[p.id]);
+                    else if (savedPapers[p.id] != null) components[p.id] = null;
+                }
+                const composite = compositePercentage(scheme, e.papers);
+                return { ...base, components, ...(composite.entered > 0 ? { percentage: composite.percentage } : {}) };
             }
             return { ...base, raw_score: Number(e.score) };
         });
@@ -217,11 +229,17 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
         const sent = new Map(pendingIds.map((id) => [id, entries[id]] as const));
         try {
             await api.post('/api/school/exam-marks', { exam_id: exam.id, marks: payload });
-            setEntries((prev) => {
-                const next = { ...prev };
+            const unsaved = (all: Entries): Entries => {
+                const next = { ...all };
                 for (const [id, entry] of sent) if (next[id] === entry) delete next[id];
                 return next;
-            });
+            };
+            // Straight to the draft file, so marks just saved never come back
+            // as "unsaved" if the teacher has already gone back.
+            const remaining = unsaved(entriesRef.current);
+            if (Object.keys(remaining).length === 0) clearDraft(draftKey);
+            else saveDraft(draftKey, remaining);
+            setEntries(unsaved);
             setMessage({ tone: 'success', text: `Saved ${pluralize(payload.length, 'mark')}.` });
             marks.refresh();
         } catch (err) {

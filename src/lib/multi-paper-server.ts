@@ -91,21 +91,21 @@ export async function papersOverNewMax(
     });
 }
 
-interface ExamScales {
+export interface ExamScales {
     /** The subject's own grading system, which mark entry grades on by default. */
     own: GradeBand[] | null;
     /** Every system a mark can have been graded on, the subject's own first. */
     candidates: GradeBand[][];
 }
 
-interface StoredMark { student_id: string; percentage: number | string | null; grade_symbol: string | null }
+interface StoredMark { percentage: number | string | null; grade_symbol: string | null }
 
 /**
  * The bands of every grading system a mark of this exam can have been graded
  * on: the subject's own, and the others for its level a teacher can pick at
  * mark entry (the school's and the shared ones).
  */
-async function examGradingScales(supabase: SupabaseClient, examId: string): Promise<ExamScales> {
+export async function examGradingScales(supabase: SupabaseClient, examId: string): Promise<ExamScales> {
     const none: ExamScales = { own: null, candidates: [] };
     const { data: exam, error } = await supabase
         .from('exams')
@@ -145,7 +145,7 @@ async function examGradingScales(supabase: SupabaseClient, examId: string): Prom
  * is kept. An ungraded mark takes the subject's own scale, or none (null),
  * which the exam_marks trigger then fills.
  */
-function regrade(stored: StoredMark | undefined, percentage: number, scales: ExamScales): string | null {
+export function regrade(stored: StoredMark | undefined, percentage: number, scales: ExamScales): string | null {
     const symbol = stored?.grade_symbol?.trim() ?? '';
     if (!symbol) return scales.own ? gradeSymbolFromScales(percentage, scales.own) : null;
     if (stored?.percentage == null) return symbol;
@@ -169,7 +169,7 @@ export async function recomputeExamComposites(supabase: SupabaseClient, examId: 
     if (!scheme) return 0;
     const [papersByStudent, storedRes, scales] = await Promise.all([
         paperScoresByStudent(supabase, examId),
-        fetchAllRows<StoredMark & { id: string }>(() => supabase
+        fetchAllRows<StoredMark & { id: string; student_id: string }>(() => supabase
             .from('exam_marks')
             .select('id, student_id, percentage, grade_symbol')
             .eq('exam_id', examId)

@@ -23,6 +23,15 @@ export function isUuid(value: string): boolean {
  * object at runtime, but supabase-js without generated types infers an array.
  * Normalise either shape to the single row, or null when there is none.
  */
+/**
+ * A PostgREST `or` filter for learners on the roll, plus one learner who may
+ * have left: the one whose card is being printed or verified ranks among the
+ * classmates they were ranked with, while other leavers stay out.
+ */
+export function onRollOr(studentId: string | null | undefined): string {
+    return studentId ? `status.eq.ACTIVE,id.eq."${studentId.replace(/"/g, '')}"` : 'status.eq.ACTIVE';
+}
+
 export function embedOne<T>(value: T | T[] | null | undefined): T | null {
     return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }

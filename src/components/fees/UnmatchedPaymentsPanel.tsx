@@ -4,8 +4,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { FeePayment } from '@/lib/fees';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { findActiveTermId } from '@/lib/term-calendar';
 
-interface TermOption { id: string; name: string }
+interface TermRow { id: string; name: string; academic_year_name: string | null; start_date?: string; end_date?: string; is_current?: boolean }
+/** "Term 1" repeats every year, so the year is part of the label. */
+interface TermOption { id: string; label: string }
 interface FeeMatch { id: string; admissionNumber: string | null }
 
 /**
@@ -13,15 +16,19 @@ interface FeeMatch { id: string; admissionNumber: string | null }
  * form that assigns it to the right fee record. Lives with the fees (bursars
  * and accountants do this, with fees.collect) and in Settings › Payments.
  */
-export function UnmatchedPaymentsPanel({ canAssign, onCountChange }: {
+export function UnmatchedPaymentsPanel({ canAssign, onCountChange, onAssigned }: {
     canAssign: boolean;
     /** Told how many payments are still unmatched after each load. */
     onCountChange?: (count: number) => void;
+    /** A payment was assigned to a learner's fees: balances and logs elsewhere on the page are stale. */
+    onAssigned?: () => void;
 }) {
     const [unmatched, setUnmatched] = useState<FeePayment[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [terms, setTerms] = useState<TermOption[]>([]);
+    /** The current term, preselected for each payment. */
+    const [currentTermId, setCurrentTermId] = useState('');
     const [assignTerm, setAssignTerm] = useState<Record<string, string>>({});
     const [assignAdmission, setAssignAdmission] = useState<Record<string, string>>({});
     const [assigning, setAssigning] = useState<string | null>(null);
@@ -46,13 +53,18 @@ export function UnmatchedPaymentsPanel({ canAssign, onCountChange }: {
         void load();
         fetch('/api/school/data?type=terms')
             .then(r => (r.ok ? r.json() : { data: [] }))
-            .then((j: { data?: TermOption[] }) => setTerms((j.data ?? []).map(t => ({ id: t.id, name: t.name }))))
+            .then((j: { data?: TermRow[] }) => {
+                const rows = j.data ?? [];
+                // Newest first, with the year, so last year's "Term 1" is not picked by mistake.
+                setTerms([...rows].reverse().map(t => ({ id: t.id, label: t.academic_year_name ? `${t.name} · ${t.academic_year_name}` : t.name })));
+                setCurrentTermId(findActiveTermId(rows) ?? '');
+            })
             .catch(() => {});
     }, [load]);
 
     const assign = async (payment: FeePayment) => {
         const admission = (assignAdmission[payment.id] || '').trim();
-        const termId = assignTerm[payment.id];
+        const termId = assignTerm[payment.id] || currentTermId;
         if (!admission || !termId) {
             toast.error('Enter an admission number and pick a term.');
             return;
@@ -76,6 +88,7 @@ export function UnmatchedPaymentsPanel({ canAssign, onCountChange }: {
             const json: unknown = await res.json();
             if (!res.ok) throw new Error(apiErrorMessage(json, 'Failed to assign'));
             toast.success('Payment assigned.');
+            onAssigned?.();
             await load();
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to assign payment');
@@ -123,11 +136,11 @@ export function UnmatchedPaymentsPanel({ canAssign, onCountChange }: {
                                         <span className="sr-only">Term for KSh {p.amount.toLocaleString()}</span>
                                         <select
                                             className="input-field h-8 w-full text-xs"
-                                            value={assignTerm[p.id] || ''}
+                                            value={assignTerm[p.id] || currentTermId}
                                             onChange={e => setAssignTerm(prev => ({ ...prev, [p.id]: e.target.value }))}
                                         >
                                             <option value="">Term…</option>
-                                            {terms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                            {terms.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                                         </select>
                                     </label>
                                     <button type="button" className="btn-primary h-8 text-xs" onClick={() => void assign(p)} disabled={assigning === p.id}>

@@ -82,23 +82,26 @@ function SchoolTab() {
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState<Msg>(null);
 
-    // A background refresh must not overwrite what is being typed: the form
-    // follows the server only until it is edited, and again after a save.
-    const touched = useRef(false);
+    // The fields edited and not yet saved. The server's answer fills every
+    // other field: the screen opens on the profile cached on the phone (up to
+    // a week old), and the fresh one arriving after the first keystroke must
+    // still replace it, or Save would write the old logo, motto and principal back.
+    const edits = useRef<Partial<SchoolProfile>>({});
     useEffect(() => {
-        if (data && !touched.current) setForm(data);
+        if (data) setForm({ ...data, ...edits.current });
     }, [data]);
 
     if (loading || !form) return error ? <ErrorBanner message={error} onRetry={reload} /> : <LoadingView />;
     const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => {
-        touched.current = true;
-        setForm({ ...form, [k]: v });
+        edits.current = { ...edits.current, [k]: v };
+        setForm((prev) => (prev ? { ...prev, [k]: v } : prev));
     };
 
     const save = async (next: SchoolProfile = form) => {
         if (!next.name.trim()) return setMessage({ tone: 'danger', text: 'School name is required.' });
         setSaving(true);
         setMessage(null);
+        const sent = edits.current;
         try {
             await api.post('/api/admin/school', {
                 school_id: next.id,
@@ -113,7 +116,10 @@ function SchoolTab() {
                 overall_grading_system_id: next.overall_grading_system_id ?? null,
             });
             setMessage({ tone: 'success', text: 'School profile saved.' });
-            touched.current = false;
+            // Saved edits now come from the server; anything typed meanwhile stays.
+            const left: Partial<SchoolProfile> = { ...edits.current };
+            for (const k of Object.keys(sent) as (keyof SchoolProfile)[]) if (left[k] === sent[k]) delete left[k];
+            edits.current = left;
             reload();
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save') });
@@ -127,9 +133,8 @@ function SchoolTab() {
         try {
             const url = await api.pickAndUploadImage();
             if (url) {
-                const next = { ...form, logo_url: url };
-                setForm(next);
-                await save(next);
+                set('logo_url', url);
+                await save({ ...form, logo_url: url });
             }
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Upload failed') });

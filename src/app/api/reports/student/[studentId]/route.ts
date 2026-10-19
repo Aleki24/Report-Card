@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { safeFileName } from '@/lib/filename';
-import { fetchAllRows } from '@/lib/postgrest';
+import { fetchAllRows, onRollOr } from '@/lib/postgrest';
 import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -401,12 +401,13 @@ export async function GET(
         let classmateIds: string[] = [];
 
         if (gradeStreamId) {
-            // Learners still enrolled in the class, as the class batch ranks them.
+            // Learners still enrolled in the class, as the class batch ranks
+            // them, and this learner even after leaving (a graduate's card).
             const { data: classmates } = await supabase
                 .from('students')
                 .select('id')
                 .eq('current_grade_stream_id', gradeStreamId)
-                .eq('status', 'ACTIVE');
+                .or(onRollOr(studentId));
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;
@@ -531,6 +532,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
                 seniorRankGroup: rankingSettings.seniorRankGroup,
+                forStudentId: studentId,
             })
             : null;
         const overallPosition = gradePositions?.differsFromStream ? gradePositions.byStudent.get(studentId) : undefined;

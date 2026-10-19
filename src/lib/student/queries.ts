@@ -627,16 +627,24 @@ export async function getStudentDashboardSummary(student: CurrentStudent) {
         : stream?.grade_id
             ? `grade_stream_id.eq.${student.gradeStreamId},and(grade_id.eq.${stream.grade_id},grade_stream_id.is.null)`
             : `grade_stream_id.eq.${student.gradeStreamId}`;
-    const { data: upcomingExams } = classFilter
-        ? await supabase
+    // Only papers the learner sits: a grade's exams are one per subject, and
+    // a Senior School grade has some forty, so the first five by date were
+    // mostly other learners' electives. When the subjects could not be read,
+    // the grade's papers are better than none.
+    const subjectIds = subjects.map((s: { id: string }) => s.id).filter(Boolean);
+    let upcomingQuery = classFilter
+        ? supabase
             .from('exams')
             .select('id, name, exam_date, subjects(name)')
             .eq('school_id', student.schoolId)
             .or(classFilter)
             .gte('exam_date', today)
             .lte('exam_date', thirtyDays)
-            .order('exam_date', { ascending: true })
-            .limit(5)
+        : null;
+    if (upcomingQuery && subjectIds.length > 0) upcomingQuery = upcomingQuery.in('subject_id', subjectIds);
+    const { data: upcomingExams } = upcomingQuery
+        // A whole round shares one date: the id keeps the five the same on every load.
+        ? await upcomingQuery.order('exam_date', { ascending: true }).order('id').limit(5)
         : { data: [] };
 
     const latestResults = results.slice(0, 5);
