@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher, markableStudentIds, type TeacherPermissions } from '@/lib/teacher-utils';
 import { examGradingScales, fetchActiveMultiPaperScheme, regrade, type ExamScales } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
@@ -99,13 +100,9 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('school_id, role, is_active')
-      .eq('id', userId)
-      .maybeSingle();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -219,13 +216,9 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
@@ -429,13 +422,9 @@ export async function PATCH(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
@@ -553,13 +542,9 @@ export async function DELETE(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {

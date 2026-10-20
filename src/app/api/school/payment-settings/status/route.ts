@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { mapBankAccountRow } from '@/lib/fees';
 
 /** Any signed-in user in the school can check which payment channels are switched on — no secrets here. */
@@ -11,12 +12,8 @@ export async function GET() {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-        if (!userProfile || userProfile.is_active === false) {
+        const userProfile = await getActiveUserProfile(userId);
+        if (!userProfile) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         if (!userProfile?.school_id) {

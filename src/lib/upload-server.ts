@@ -1,5 +1,5 @@
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { auth } from '@clerk/nextjs/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { extensionFor, isImageType, storageSafeName, type AttachmentMimeType } from '@/lib/attachments';
 
 /** Homework documents live apart from photos. */
@@ -7,11 +7,11 @@ export const DOCUMENT_BUCKET = 'assignment-files';
 export const PHOTO_BUCKET = 'photos';
 
 /** The signed-in, active uploader's school, or why they may not upload. */
-export async function uploaderSchool(supabase: SupabaseClient): Promise<{ schoolId: string } | { error: string; status: 401 | 403 }> {
+export async function uploaderSchool(): Promise<{ schoolId: string } | { error: string; status: 401 | 403 }> {
     const { userId } = await auth();
     if (!userId) return { error: 'Unauthorized', status: 401 };
-    const { data: profile } = await supabase.from('users').select('school_id, is_active').eq('id', userId).maybeSingle();
-    if (!profile || profile.is_active === false) return { error: 'Unauthorized', status: 401 };
+    const profile = await getActiveUserProfile(userId);
+    if (!profile) return { error: 'Unauthorized', status: 401 };
     if (!profile.school_id) return { error: 'No school associated', status: 403 };
     return { schoolId: profile.school_id as string };
 }

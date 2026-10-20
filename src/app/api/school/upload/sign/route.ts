@@ -24,7 +24,7 @@ const signSchema = z.object({
 export async function POST(request: NextRequest) {
     try {
         const supabase = createSupabaseAdmin();
-        const uploader = await uploaderSchool(supabase);
+        const uploader = await uploaderSchool();
         if ('error' in uploader) return NextResponse.json({ error: uploader.error }, { status: uploader.status });
 
         const parsed = signSchema.safeParse(await request.json().catch(() => null));
