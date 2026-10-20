@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from './supabase-admin';
 import type { UserRole } from '@/types';
 import type { Permission } from '@/lib/platform/permissions';
+import { isLockedOutStudentStatus } from '@/lib/student/status-access';
 
 export interface ServerSession {
   userId: string;
@@ -30,8 +31,8 @@ export async function getAuthSession(): Promise<ServerSession | null> {
   // whose Clerk session is still valid. Previously a null row skipped the
   // is_active guard and reconstructed role/school from the stale JWT claims,
   // handing a deleted admin a fully-authorized session until token expiry.
-  const dbUser = await getUserDbRecord(clerkAuth.userId);
-  if (!dbUser || dbUser.is_active === false || !dbUser.role) {
+  const dbUser = await getActiveUserProfile(clerkAuth.userId);
+  if (!dbUser?.role) {
     return null;
   }
 
@@ -130,8 +131,8 @@ export async function getCaller(): Promise<Caller | null> {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const dbUser = await getUserDbRecord(userId);
-  if (!dbUser || dbUser.is_active === false || !dbUser.role) return null;
+  const dbUser = await getActiveUserProfile(userId);
+  if (!dbUser?.role) return null;
 
   const baseRole = dbUser.role as UserRole;
   const schoolId = (dbUser.school_id as string | null) ?? null;
@@ -196,12 +197,14 @@ export async function getUserDbRecord(clerkUserId: string) {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from('users')
-    .select('id, role, school_id, first_name, last_name, email, is_active')
+    .select('id, role, school_id, first_name, last_name, email, is_active, students ( status )')
     .eq('id', clerkUserId)
     .single();
 
   if (error || !data) return null;
-  return data;
+  const { students, ...user } = data;
+  const learner = (Array.isArray(students) ? students[0] : students) as { status: string | null } | null | undefined;
+  return { ...user, student_status: learner?.status ?? null };
 }
 
 export type UserDbRecord = NonNullable<Awaited<ReturnType<typeof getUserDbRecord>>>;
@@ -215,5 +218,8 @@ export type UserDbRecord = NonNullable<Awaited<ReturnType<typeof getUserDbRecord
  */
 export async function getActiveUserProfile(clerkUserId: string): Promise<UserDbRecord | null> {
   const dbUser = await getUserDbRecord(clerkUserId);
-  return dbUser && dbUser.is_active !== false ? dbUser : null;
+  if (!dbUser || dbUser.is_active === false) return null;
+  // A learner the school deactivated or transferred keeps an active row.
+  if (dbUser.role === 'STUDENT' && isLockedOutStudentStatus(dbUser.student_status)) return null;
+  return dbUser;
 }

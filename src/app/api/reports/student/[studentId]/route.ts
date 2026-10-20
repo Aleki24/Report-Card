@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { safeFileName } from '@/lib/filename';
 import { fetchAllRows } from '@/lib/postgrest';
+import { ranksAmongOnRoll } from '@/lib/student/status-access';
 import { canStaffReportOnStream, requireSchoolSession } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
@@ -368,12 +369,14 @@ export async function GET(
         let classmateIds: string[] = [];
 
         if (gradeStreamId) {
-            // Learners still enrolled in the class, as the class batch ranks them.
-            const { data: classmates } = await supabase
+            // Learners still enrolled in the class, as the class batch ranks
+            // them; a leaver's card ranks among the whole class.
+            let classmatesQuery = supabase
                 .from('students')
                 .select('id')
-                .eq('current_grade_stream_id', gradeStreamId)
-                .eq('status', 'ACTIVE');
+                .eq('current_grade_stream_id', gradeStreamId);
+            if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
+            const { data: classmates } = await classmatesQuery;
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;
@@ -498,6 +501,7 @@ export async function GET(
                 gradingSystemType,
                 rankingBasis,
                 seniorRankGroup: rankingSettings.seniorRankGroup,
+                onRollOnly: ranksAmongOnRoll(student.status),
             })
             : null;
         const overallPosition = gradePositions?.differsFromStream ? gradePositions.byStudent.get(studentId) : undefined;
@@ -553,6 +557,8 @@ export async function GET(
                 gradingScales,
                 gradingSystemType,
                 rankingBasis,
+                // A learner's own card must not show an unreleased earlier round.
+                releasedOnly,
             }),
             fetchSubjectTeachers(supabase, { schoolId: targetSchoolId || userSchoolId, gradeId, gradeStreamId, yearId }),
         ]);

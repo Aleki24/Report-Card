@@ -30,6 +30,16 @@ export const count = (max = 1_000_000) => z.preprocess(toNumber, z.number().int(
 export const optionalCount = (max = 1_000_000) => z.preprocess(v => toNumber(blankToNull(v)), z.number().int().min(0).max(max).nullable()).optional();
 export const decimal = (min: number, max: number) => z.preprocess(toNumber, z.number().min(min).max(max));
 
+const blankToUndefined = (value: unknown) => (value === null || value === '' ? undefined : value);
+/**
+ * A number column with a default. A blank field arrives as null, and Zod's
+ * `.default()` only fills undefined, so a blank "Beds" or "Fee per term"
+ * rejected the whole form; here a blank takes the default like an omitted
+ * value does.
+ */
+export const orDefault = (schema: z.ZodType<number, unknown>, fallback: number) =>
+    z.preprocess(blankToUndefined, schema.default(fallback));
+
 export const bool = z.preprocess(v => (v === 'true' ? true : v === 'false' ? false : v), z.boolean());
 
 export const oneOf = <const T extends readonly [string, ...string[]]>(values: T) => z.enum(values);

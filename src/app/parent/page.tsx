@@ -10,7 +10,7 @@ import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { date, dateTime, humanize, money, personName } from '@/lib/ops/format';
 import {
-    ATTENDANCE_TONES, FEE_STATUS_TONES as FEE_TONES, absences as countAbsences, feeBalance, rideLine,
+    ATTENDANCE_TONES, FEE_STATUS_TONES as FEE_TONES, absences as countAbsences, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview as Overview,
 } from '@/lib/ops/forms/platform';
 import { cn } from '@/lib/utils';
@@ -39,7 +39,7 @@ function ChildOverview({ childId }: { childId: string }) {
     return (
         <div className="flex flex-col gap-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                {data.summary && <StatTile icon={GraduationCap} label="Average score" value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} hint={data.summary.currentTerm?.name} hue="blue" />}
+                {data.summary && <StatTile icon={GraduationCap} label="Average score" value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} hint={data.summary.stats.averageTerm ?? undefined} hue="blue" />}
                 {data.attendance.length > 0 && <StatTile icon={CalendarCheck} label="Absent (30 days)" value={absences} tone={absences > 2 ? 'warn' : 'good'} />}
                 {data.fees.length > 0 && <StatTile icon={DollarSign} label="Fee balance" value={money(balance)} tone={balance > 0 ? 'warn' : 'good'} />}
             </div>
@@ -86,7 +86,10 @@ function ChildOverview({ childId }: { childId: string }) {
                     <Section title="Report cards" icon={FileText}>
                         {data.reports.slice(0, 3).map(r => (
                             <div key={r.id} className="mb-3 text-sm last:mb-0">
-                                <p className="font-medium">Average {r.overall_average ?? '—'}%{r.overall_position ? ` · position ${r.overall_position}` : ''}</p>
+                                <p className="font-medium">{reportTermLabel(r)}</p>
+                                {r.overall_average != null && (
+                                    <p className="text-muted-foreground">Average {r.overall_average}%{r.overall_position ? ` · position ${r.overall_position}` : ''}</p>
+                                )}
                                 {r.comments_class_teacher && <p className="text-muted-foreground">Class teacher: {r.comments_class_teacher}</p>}
                                 {r.comments_principal && <p className="text-muted-foreground">Principal: {r.comments_principal}</p>}
                             </div>

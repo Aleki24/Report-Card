@@ -12,7 +12,7 @@ import {
     withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
-import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
+import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { LookupField, SelectField } from '@/components/ops/SelectField';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
@@ -45,12 +45,19 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
     const [view, setView] = useState<TimetableView>('mine');
     const [targetId, setTargetId] = useState('');
     const [data, setData] = useState<TimetableViewResult | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const rooms = useOpsList<{ id: string; name: string }>('rooms', {}, { enabled: canBrowse && view === 'room' });
 
     const load = useCallback(async () => {
         if (view !== 'mine' && !targetId) return;
+        setLoadError(null);
         try { setData(await opsGet<TimetableViewResult>(api, withQuery('/api/academics/timetable/view', { view, id: targetId || undefined }))); }
-        catch (err) { toast.error(errorMessage(err, 'Could not load the timetable')); }
+        catch (err) {
+            // With nothing on screen it says so, with Try again; it used to spin forever.
+            const message = errorMessage(err, 'Could not load the timetable');
+            setLoadError(message);
+            toast.error(message);
+        }
     }, [api, view, targetId, toast]);
     useEffect(() => { void load(); }, [load]);
     useRefreshSignal(load);
@@ -67,7 +74,9 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
                 </>
             ) : null}
             {!data ? (
-                view !== 'mine' && !targetId ? <EmptyState title="Choose whose timetable to show." /> : <LoadingView />
+                view !== 'mine' && !targetId ? <EmptyState title="Choose whose timetable to show." />
+                    : loadError ? <ErrorBanner message={loadError} onRetry={() => void load()} />
+                    : <LoadingView />
             ) : !data.published ? (
                 <EmptyState title="No timetable has been published yet." />
             ) : data.lessons.length === 0 ? (

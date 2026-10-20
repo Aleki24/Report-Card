@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineResource, STUDENT_JOIN, personJoin } from '../resource';
 import {
     text, optionalText, isoDate, optionalDate, uuid, optionalUuid, oneOf, count, optionalCount,
-    money, optionalMoney, personId, optionalPersonId, isoDateTime, optionalTime, decimal,
+    money, optionalMoney, personId, optionalPersonId, isoDateTime, optionalTime, decimal, orDefault,
 } from '../zod-fields';
 
 // ── Transport ────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export const transportRoutes = defineResource({
         name: text(120),
         vehicle_id: optionalUuid,
         driver_id: optionalUuid,
-        fee_per_term: money.default(0),
+        fee_per_term: orDefault(money, 0),
         description: optionalText(1000),
     }),
     select: '*, vehicle:vehicles(registration), driver:transport_crew(full_name), stops:route_stops(count), riders:student_transport(count)',
@@ -89,7 +89,7 @@ export const routeStops = defineResource({
     schema: z.object({
         route_id: uuid,
         name: text(120),
-        sequence: count(200).default(1),
+        sequence: orDefault(count(200), 1),
         pickup_time: optionalTime,
         dropoff_time: optionalTime,
         lat: optionalCoordinate(90),
@@ -177,7 +177,7 @@ export const libraryBooks = defineResource({
         isbn: optionalText(20),
         category: optionalText(100),
         shelf: optionalText(50),
-        copies_total: count(10_000).default(1),
+        copies_total: orDefault(count(10_000), 1),
     }),
     order: { column: 'title' },
     filters: ['category'],
@@ -196,7 +196,7 @@ export const libraryLoans = defineResource({
         issued_on: isoDate,
         due_on: isoDate,
         returned_on: optionalDate,
-        fine_amount: money.default(0),
+        fine_amount: orDefault(money, 0),
     }),
     validate: v => (String(v.due_on) < String(v.issued_on) ? 'The due date must not be before the issue date.' : null),
     select: `*, book:library_books(title, author), ${personJoin('borrower', 'library_loans', 'borrower_id')}`,
@@ -227,7 +227,7 @@ export const inventoryItems = defineResource({
         category: optionalText(100),
         unit: text(30).default('pcs'),
         quantity: decimal(0, 1e9),
-        reorder_level: decimal(0, 1e9).default(0),
+        reorder_level: orDefault(decimal(0, 1e9), 0),
         location: optionalText(100),
         serial_number: optionalText(100),
         unit_value: optionalMoney,

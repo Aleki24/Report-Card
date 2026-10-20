@@ -142,6 +142,25 @@ export function getPointsForGradeSymbol(symbol: string, scales?: GradingScale[])
 }
 
 /**
+ * An 8-4-4 mark's points, as per its grade: first from the subject's own
+ * scale (so a school's custom points are honoured), then the fixed A=12
+ * table, then from the percentage when no grade was stored (bulk-uploaded
+ * scores) — without that last step every such mark scored 0 and the whole
+ * class tied. The best-seven choice and the total both count these points.
+ */
+export function kcseMarkPoints(mark: ExamMarkWithDetails, scales?: GradingScale[]): number {
+    const symbol = mark.grade_symbol || '';
+    const fromScale = getPointsForGradeSymbol(symbol, scales);
+    if (fromScale !== undefined) return fromScale;
+    const fromGrade = getPointsFromGrade(symbol);
+    if (fromGrade) return fromGrade;
+    if (scales && scales.length > 0) {
+        return getPointsFromScales(calculatePercentage(mark.raw_score, mark.max_score), scales) ?? 0;
+    }
+    return 0;
+}
+
+/**
  * Overall/mean grade from a student's TOTAL POINTS, using an "overall" grading
  * system whose bands are expressed in points (not percentage). This is the
  * 8-4-4 flow: subject grades → points → summed → total points → overall grade.
@@ -320,7 +339,6 @@ export function aggregateStudentPerformance(
         marksToProcess = selectedMarks as ExamMarkWithDetails[];
         selectedSubjectIds = selectedMarks.map(m => m.subject_id);
         used844Selection = true;
-        console.log('[aggregateStudentPerformance] 844 Selection applied:', marksWithNames.length, '->', selectedMarks.length, 'subjects');
     }
 
     const totalScore = marksToProcess.reduce((sum, mark) => sum + mark.raw_score, 0);
@@ -331,24 +349,7 @@ export function aggregateStudentPerformance(
     // Use grade-based points for KCSE, scale-based points for CBC
     let totalPoints = 0;
     if (gradingSystemType === 'KCSE') {
-        for (const mark of marksToProcess) {
-            const symbol = (mark as any).grade_symbol || '';
-            // Points as per the grade: first from the subject's own scale (so a
-            // school's custom points are honoured), then the fixed A=12 table,
-            // then finally derived from the percentage when no grade was stored
-            // (e.g. bulk-uploaded scores). Without the last fallback every such
-            // mark scored 0 and the whole class tied.
-            let pts: number | undefined = getPointsForGradeSymbol(symbol, scales);
-            if (pts === undefined) {
-                const fromGrade = getPointsFromGrade(symbol);
-                if (fromGrade) pts = fromGrade;
-            }
-            if (pts === undefined && scales && scales.length > 0) {
-                const pct = calculatePercentage(mark.raw_score, mark.max_score);
-                pts = getPointsFromScales(pct, scales);
-            }
-            totalPoints += pts || 0;
-        }
+        for (const mark of marksToProcess) totalPoints += kcseMarkPoints(mark, scales);
     } else {
         // CBC: use points from grading scales
         for (const mark of marksToProcess) {
@@ -470,8 +471,11 @@ export function calculateClassRanks(
     const ranks = new Map<string, number>();
     if (!studentAggregates || studentAggregates.length === 0) return ranks;
 
+    // Compared in hundredths: equal totals summed from different marks can
+    // differ in the last bit of a double (442.5 vs 442.50000000000006) and
+    // split a tie, so two cards showing the same total got different positions.
     const sorted = [...studentAggregates]
-        .map(a => ({ id: a.studentId, value: rankingValue(a, rankingBy) }))
+        .map(a => ({ id: a.studentId, value: Math.round(rankingValue(a, rankingBy) * 100) }))
         .sort((a, b) => b.value - a.value);
 
     let currentRank = 1;
@@ -609,7 +613,10 @@ export interface MarkWithSubjectName extends ExamMarkWithDetails {
     points?: number;
 }
 
-function sortByPointsDesc(arr: MarkWithSubjectName[]): MarkWithSubjectName[] {
+/** How many subjects' points make an 8-4-4 total. */
+const KCSE_COUNTED_SUBJECTS = 7;
+
+function sortByPointsDesc<T extends MarkWithSubjectName>(arr: readonly T[]): T[] {
     return [...arr].sort((a, b) => (b.points ?? 0) - (a.points ?? 0));
 }
 
@@ -629,6 +636,7 @@ function identifySubjectCategory(subjectName: string): SubjectCategory | null {
     if (name.includes('physics')) return 'SCIENCE';
     if (name.includes('chemistry')) return 'SCIENCE';
     if (name.includes('biology')) return 'SCIENCE';
+    if (name.includes('general science')) return 'SCIENCE';
     if (name.includes('geography')) return 'HUMANITY';
     if (name.includes('history')) return 'HUMANITY';
     if (name.includes('christian religious') || name === 'cre') return 'HUMANITY';
@@ -646,93 +654,64 @@ function identifySubjectCategory(subjectName: string): SubjectCategory | null {
     return null;
 }
 
+/** KCSE Group I: the three subjects every candidate's seven include. */
+type CompulsorySubject = 'english' | 'kiswahili' | 'mathematics';
+const COMPULSORY_SUBJECTS: readonly CompulsorySubject[] = ['english', 'kiswahili', 'mathematics'];
+
+/**
+ * The Group I subject a name stands for, by name or bare KNEC code (101, 102,
+ * 121/122). Matched by name, not by the LANGUAGE category: French, German,
+ * Arabic and Sign Language are languages too, and none of them is compulsory.
+ */
+function compulsorySubjectOf(subjectName: string, category: SubjectCategory): CompulsorySubject | null {
+    const name = subjectName.toLowerCase().trim();
+    if (name.includes('english') || name === '101') return 'english';
+    if (name.includes('kiswahili') || name === '102') return 'kiswahili';
+    if (name.includes('math') || name === '121' || name === '122' || category === 'MATHEMATICS') return 'mathematics';
+    return null;
+}
+
+/** Kenya Sign Language, which deaf candidates sit in Kiswahili's place (504). */
+const isSignLanguage = (subjectName: string) => /sign language|\bksl\b|^504$/i.test(subjectName.trim());
+
+/** The KCSE category clustering uses for a subject (see identifySubjectCategory). */
+function kcseCategoryOf(mark: MarkWithSubjectName): SubjectCategory {
+    // CREATIVE electives fold into TECHNICAL; anything unknown is TECHNICAL.
+    const db = mark.category as string | undefined;
+    return identifySubjectCategory(mark.subjectName || '')
+        ?? ((db === 'CREATIVE' ? 'TECHNICAL' : db) as SubjectCategory | undefined)
+        ?? 'TECHNICAL';
+}
+
+/**
+ * The seven subjects whose points make an 8-4-4 learner's total, as KNEC
+ * counts them (see lib/kcse): English, Kiswahili (or Kenya Sign Language)
+ * and Mathematics; the best two sciences; the best humanity; then the best
+ * one of everything left — a third science, a second humanity, a technical
+ * subject or a foreign language, whichever scored most. A learner with seven
+ * subjects or fewer counts them all. Ranked by the same points the total
+ * adds up (kcseMarkPoints), so the choice and the sum agree.
+ */
 export function select844Subjects(marks: MarkWithSubjectName[], scales: GradingScale[]): MarkWithSubjectName[] {
-    if (!marks || marks.length === 0) return marks;
-    
-    const numSubjects = marks.length;
-    
-    if (numSubjects <= 7) {
-        return marks;
+    if (!marks || marks.length <= KCSE_COUNTED_SUBJECTS) return marks;
+
+    type Scored = MarkWithSubjectName & { category: SubjectCategory; points: number };
+    const scored: Scored[] = marks.map(m => ({ ...m, category: kcseCategoryOf(m), points: kcseMarkPoints(m, scales) }));
+    const selected = new Set<Scored>();
+    const best = (pick: (m: Scored) => boolean) =>
+        sortByPointsDesc(scored.filter(m => !selected.has(m) && pick(m)));
+
+    for (const subject of COMPULSORY_SUBJECTS) {
+        let [first] = best(m => compulsorySubjectOf(m.subjectName || '', m.category) === subject);
+        if (!first && subject === 'kiswahili') [first] = best(m => isSignLanguage(m.subjectName || ''));
+        if (first) selected.add(first);
     }
-    
-    const marksWithCategory = marks.map(m => {
-        // Use user-selected grade_symbol for points, not percentage-based
-        const pts = getPointsFromGrade((m as any).grade_symbol || '');
-        // Categorise by NAME first (a confident keyword match), then fall back
-        // to the school's stored subjects.category. Name wins because the DB
-        // category is frequently wrong for applied subjects — Business Studies
-        // is an applied/TECHNICAL subject for 8-4-4 clustering but is commonly
-        // seeded as HUMANITY. Name matching only returns null for subjects
-        // stored under a bare KNEC code (e.g. "565"), and only then do we trust
-        // the DB category. CREATIVE electives fold into TECHNICAL for
-        // clustering; anything still unknown defaults to TECHNICAL.
-        const nameCategory = identifySubjectCategory(m.subjectName || '');
-        const rawDb = m.category as string | undefined;
-        const dbCategory = rawDb === 'CREATIVE' ? 'TECHNICAL' : rawDb;
-        const category: SubjectCategory = nameCategory
-            ?? (dbCategory as SubjectCategory | undefined)
-            ?? 'TECHNICAL';
-        return {
-            ...m,
-            category,
-            points: pts,
-        };
-    });
-
-    const languages = marksWithCategory.filter(m => m.category === 'LANGUAGE');
-    const mathematics = marksWithCategory.filter(m => m.category === 'MATHEMATICS');
-    const sciences = marksWithCategory.filter(m => m.category === 'SCIENCE');
-    const humanities = marksWithCategory.filter(m => m.category === 'HUMANITY');
-    const technicals = marksWithCategory.filter(m => m.category === 'TECHNICAL');
-
-    // KCSE 8-4-4 cluster rule for the 7 subjects that earn points:
-    //   • Compulsory  → English, Kiswahili and Mathematics always count.
-    //   • Sciences    → the best 2 of Biology / Chemistry / Physics count;
-    //                   a 3rd (weakest) science is dropped.
-    //   • Humanities  → the best 1 (History / Geography / CRE / IRE / HRE).
-    //   • Technicals  → the best 1 (Agriculture / Business / Computer / etc.).
-    // Those quotas total exactly 7 for the standard combination. If a student
-    // is short in some category (e.g. no technical), the remaining slots are
-    // filled up to 7 with the best of everything left over — so the graded
-    // set always reaches 7 when the student takes 8+ subjects.
-    const selected: MarkWithSubjectName[] = [];
-
-    // 1. Compulsory: all languages (English + Kiswahili) and Mathematics.
-    selected.push(...languages);
-    selected.push(...mathematics);
-
-    // 2. Sciences: best 2 (sorted before slicing).
-    selected.push(...sortByPointsDesc(sciences).slice(0, 2));
-
-    // 3. Humanities: best 1.
-    selected.push(...sortByPointsDesc(humanities).slice(0, 1));
-
-    // 4. Technicals: best 1.
-    selected.push(...sortByPointsDesc(technicals).slice(0, 1));
-
-    // 5. Fill any still-empty slots up to 7 with the best of everything left
-    //    over (a 3rd science, a 2nd humanity/technical) so the total reaches 7.
-    const remaining = sortByPointsDesc(marksWithCategory.filter(m => !selected.includes(m)));
-    for (const m of remaining) {
-        if (selected.length >= 7) break;
-        selected.push(m);
+    best(m => m.category === 'SCIENCE').slice(0, 2).forEach(m => selected.add(m));
+    best(m => m.category === 'HUMANITY').slice(0, 1).forEach(m => selected.add(m));
+    for (const m of best(() => true)) {
+        if (selected.size >= KCSE_COUNTED_SUBJECTS) break;
+        selected.add(m);
     }
 
-    // 6. Defensive cap: the compulsory pushes above are unconditional, so a
-    //    student taking 3+ languages could exceed 7. Trim the lowest-scoring
-    //    non-mathematics subjects until exactly 7 remain (Mathematics is
-    //    single and always compulsory; languages are trimmed before it).
-    let finalSelected = selected;
-    if (finalSelected.length > 7) {
-        const excess = finalSelected.length - 7;
-        const trimmable = finalSelected
-            .filter(m => m.category !== 'MATHEMATICS')
-            .sort((a, b) => (a.points ?? 0) - (b.points ?? 0))
-            .slice(0, excess);
-        finalSelected = finalSelected.filter(m => !trimmable.includes(m));
-    }
-
-    console.log('[select844Subjects] Input subjects:', numSubjects, 'Selected:', finalSelected.length, 'Categories:', finalSelected.map(s => `${s.subjectName}(${s.category},${s.points})`).join(', '));
-
-    return finalSelected;
+    return scored.filter(m => selected.has(m));
 }

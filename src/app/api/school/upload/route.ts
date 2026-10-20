@@ -12,7 +12,7 @@ import { attachmentTarget, uploaderSchool } from '@/lib/upload-server';
 export async function POST(request: NextRequest) {
     try {
         const supabase = createSupabaseAdmin();
-        const uploader = await uploaderSchool(supabase);
+        const uploader = await uploaderSchool();
         if ('error' in uploader) return NextResponse.json({ error: uploader.error }, { status: uploader.status });
 
         const formData = await request.formData();

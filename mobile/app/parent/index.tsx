@@ -4,7 +4,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { MODULES } from '@shared/platform/modules';
 import { date, dateTime, humanize, money, personName } from '@shared/ops/format';
 import {
-    ATTENDANCE_TONES, FEE_STATUS_TONES, absences, feeBalance, rideLine,
+    ATTENDANCE_TONES, FEE_STATUS_TONES, absences, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview,
 } from '@shared/ops/forms/platform';
 import { Bus, CalendarCheck, CalendarDays, GraduationCap, Users, Wallet } from 'lucide-react-native';
@@ -62,7 +62,7 @@ function Overview({ childId }: { childId: string }) {
         <View>
             <Reveal index={i++}>
                 <KpiGrid>
-                    {data.summary ? <KpiTile title={data.summary.currentTerm?.name ? `Average · ${data.summary.currentTerm.name}` : 'Average score'} value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} icon={GraduationCap} hue="blue" /> : null}
+                    {data.summary ? <KpiTile title={data.summary.stats.averageTerm ? `Average · ${data.summary.stats.averageTerm}` : 'Average score'} value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} icon={GraduationCap} hue="blue" /> : null}
                     {data.attendance.length > 0 ? <KpiTile title="Absent (30 days)" value={absent} icon={CalendarCheck} hue="teal" tone={absent > 2 ? 'warn' : 'good'} /> : null}
                     {data.fees.length > 0 ? <KpiTile title="Fee balance" value={money(balance)} icon={Wallet} hue="emerald" tone={balance > 0 ? 'warn' : 'good'} /> : null}
                 </KpiGrid>
@@ -116,7 +116,8 @@ function Overview({ childId }: { childId: string }) {
                     <InsightCard title="Report cards">
                         {data.reports.slice(0, 3).map((r, n) => (
                             <View key={r.id} style={[styles.report, n > 0 && styles.rowBorder]}>
-                                <Text style={styles.title}>Average {r.overall_average ?? '—'}%{r.overall_position ? ` · position ${r.overall_position}` : ''}</Text>
+                                <Text style={styles.title}>{reportTermLabel(r)}</Text>
+                                {r.overall_average != null ? <Text style={styles.body}>Average {r.overall_average}%{r.overall_position ? ` · position ${r.overall_position}` : ''}</Text> : null}
                                 {r.comments_class_teacher ? <Text style={styles.quote}>Class teacher: “{r.comments_class_teacher}”</Text> : null}
                                 {r.comments_principal ? <Text style={styles.quote}>Principal: “{r.comments_principal}”</Text> : null}
                             </View>

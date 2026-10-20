@@ -193,7 +193,9 @@ export async function flushQueue(): Promise<FlushResult> {
             // The session is not ready yet (it often lags the 'online' event):
             // keep everything and try again on the next pass.
             if (res.status === 401 || res.status === 403) break;
-            if (RETRYABLE.has(res.status) || res.status >= 500) continue;
+            // Stop the pass rather than skip ahead: a later batch for the same
+            // learners must never land before this older one is replayed over it.
+            if (RETRYABLE.has(res.status) || res.status >= 500) break;
             // The server refused the marks themselves (a closed exam, a
             // learner no longer in the class). Retrying as-is won't help, but
             // the marks are the teacher's work: keep them, say why.

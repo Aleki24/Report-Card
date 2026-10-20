@@ -4,9 +4,11 @@
  * stay importable from client components.)
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ExamSubjectComponentScheme } from '@/types';
+import type { ExamSubjectComponentScheme, GradeBand } from '@/types';
+import { gradeSymbolFromScales } from '@/lib/analytics';
 import { calculateCompositeSubjectScore, isMultiPaper, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import { fetchAllRows } from '@/lib/postgrest';
+import { findOfferedSubject } from '@/lib/school-subjects';
 
 /**
  * Fetch the component scheme (with its components, sorted by
@@ -89,19 +91,97 @@ export async function papersOverNewMax(
     });
 }
 
+export interface ExamScales {
+    /** The subject's own grading system, which mark entry grades on by default. */
+    own: GradeBand[] | null;
+    /** Every system a mark can have been graded on, the subject's own first. */
+    candidates: GradeBand[][];
+}
+
+interface StoredMark { percentage: number | string | null; grade_symbol: string | null }
+
+/**
+ * The bands of every grading system a mark of this exam can have been graded
+ * on: the subject's own, and the others for its level a teacher can pick at
+ * mark entry (the school's and the shared ones).
+ */
+export async function examGradingScales(supabase: SupabaseClient, examId: string): Promise<ExamScales> {
+    const none: ExamScales = { own: null, candidates: [] };
+    const { data: exam, error } = await supabase
+        .from('exams')
+        .select('school_id, subject_id')
+        .eq('id', examId)
+        .maybeSingle<{ school_id: string; subject_id: string | null }>();
+    if (error) throw error;
+    if (!exam?.subject_id) return none;
+    // How this school grades the subject lives on its offering of it.
+    const subject = await findOfferedSubject(supabase, exam.school_id, exam.subject_id, 'grading_system_id, academic_level_id');
+    if (!subject) return none;
+
+    const scopes = [
+        subject.grading_system_id && `id.eq.${subject.grading_system_id}`,
+        subject.academic_level_id && `and(academic_level_id.eq.${subject.academic_level_id},or(school_id.eq.${exam.school_id},school_id.is.null))`,
+    ].filter(Boolean);
+    if (scopes.length === 0) return none;
+    const { data: systems, error: systemsError } = await supabase
+        .from('grading_systems')
+        .select('id, system_kind, grading_scales ( symbol, min_percentage, max_percentage )')
+        .or(scopes.join(','));
+    if (systemsError) throw systemsError;
+
+    const usable = ((systems ?? []) as { id: string; system_kind: string | null; grading_scales: GradeBand[] | null }[])
+        .filter(sys => sys.system_kind !== 'OVERALL' && (sys.grading_scales?.length ?? 0) > 0)
+        .sort((a, b) => Number(b.id === subject.grading_system_id) - Number(a.id === subject.grading_system_id));
+    return {
+        own: usable.find(sys => sys.id === subject.grading_system_id)?.grading_scales ?? null,
+        candidates: usable.map(sys => sys.grading_scales!),
+    };
+}
+
+/**
+ * A mark's grade at its new percentage, on the scale it was graded on: the
+ * one whose band for the old percentage is its stored grade, the subject's
+ * own first. A grade no scale gives that percentage was picked by hand and
+ * is kept. An ungraded mark takes the subject's own scale, or none (null),
+ * which the exam_marks trigger then fills.
+ */
+export function regrade(stored: StoredMark | undefined, percentage: number, scales: ExamScales): string | null {
+    const symbol = stored?.grade_symbol?.trim() ?? '';
+    if (!symbol) return scales.own ? gradeSymbolFromScales(percentage, scales.own) : null;
+    if (stored?.percentage == null) return symbol;
+    const gradedOn = scales.candidates.find(bands => gradeSymbolFromScales(Number(stored.percentage), bands) === symbol);
+    return (gradedOn && gradeSymbolFromScales(percentage, gradedOn)) ?? symbol;
+}
+
 /**
  * Re-derives every learner's subject score for an exam from their saved
  * paper scores under the exam's current scheme. A stored subject score is
  * computed when it is saved; changing a paper's maximum, weight, the
  * aggregation or removing a paper otherwise left every stored percentage
- * (and so report cards, rankings and analytics) on the old scheme. Writing
- * the row also re-grades it (the exam_marks trigger).
+ * (and so report cards, rankings and analytics) on the old scheme.
+ *
+ * The grade moves with it. The exam_marks trigger grades only a row without
+ * one, and mark entry always sends one, so a new percentage kept its old
+ * grade and points: 65% printed beside the C that 50% had earned.
  */
 export async function recomputeExamComposites(supabase: SupabaseClient, examId: string, examMaxScore: number): Promise<number> {
     const scheme = await fetchActiveMultiPaperScheme(supabase, examId);
     if (!scheme) return 0;
-    const updates: { exam_id: string; student_id: string; raw_score: number; percentage: number }[] = [];
-    for (const [studentId, papers] of await paperScoresByStudent(supabase, examId)) {
+    const [papersByStudent, storedRes, scales] = await Promise.all([
+        paperScoresByStudent(supabase, examId),
+        fetchAllRows<StoredMark & { id: string; student_id: string }>(() => supabase
+            .from('exam_marks')
+            .select('id, student_id, percentage, grade_symbol')
+            .eq('exam_id', examId)
+            .order('id')),
+        examGradingScales(supabase, examId),
+    ]);
+    if (storedRes.error) throw storedRes.error;
+    const stored = new Map(storedRes.rows.map(m => [m.student_id, m]));
+
+    // Every row carries its grade: an upsert sets a column a row leaves out to null.
+    const updates: { exam_id: string; student_id: string; raw_score: number; percentage: number; grade_symbol: string | null }[] = [];
+    for (const [studentId, papers] of papersByStudent) {
         const inputs = (scheme.components ?? []).map(c => ({
             componentId: c.id,
             code: c.component_code,
@@ -116,6 +196,7 @@ export async function recomputeExamComposites(supabase: SupabaseClient, examId: 
             student_id: studentId,
             raw_score: normalizeResolvedRawScore(result.finalPercentage, examMaxScore),
             percentage: result.finalPercentage,
+            grade_symbol: regrade(stored.get(studentId), result.finalPercentage, scales),
         });
     }
     for (let i = 0; i < updates.length; i += 500) {

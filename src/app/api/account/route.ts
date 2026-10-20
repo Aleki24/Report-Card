@@ -3,6 +3,7 @@ import { auth, createClerkClient } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { internalError } from '@/lib/api-errors';
 import { isDeleteConfirmation } from '@/lib/account-deletion';
+import { closeAccount } from '@/lib/account-closing';
 
 /** A school must keep at least one admin, or nobody could run it. */
 async function isLastAdmin(userId: string): Promise<boolean> {
@@ -21,10 +22,17 @@ async function isLastAdmin(userId: string): Promise<boolean> {
 
 /**
  * Deletes the signed-in person's account (Google Play's account-deletion
- * requirement). The user row goes first: every foreign key to it cascades
- * (records that are only theirs) or sets null (records they made for the
- * school), so one delete is all or nothing. The Clerk sign-in goes second;
- * if that fails the person can simply try again.
+ * requirement). The database goes first, then the Clerk sign-in; if that
+ * fails the person can simply try again.
+ *
+ * Everyone but a learner: the user row is deleted. Every foreign key to it
+ * cascades (records that are only theirs) or sets null (records they made for
+ * the school), so one delete is all or nothing.
+ *
+ * A learner: the user row is the learner record too. Deleting it cascaded
+ * through students into their marks, report cards, fee statements and the
+ * payments recorded against them, receipts the school must keep. So the row
+ * stays, switched off and stripped of the sign-in and contact details.
  */
 export async function DELETE(request: Request) {
   try {
@@ -45,8 +53,11 @@ export async function DELETE(request: Request) {
     }
 
     const supabase = createSupabaseAdmin();
-    const { error } = await supabase.from('users').delete().eq('id', userId);
-    if (error) return internalError('account-delete', error);
+    const { data: me, error: meError } = await supabase.from('users').select('role').eq('id', userId).maybeSingle();
+    if (meError) return internalError('account-delete', meError);
+
+    const { error: closeError } = await closeAccount(supabase, userId, me?.role);
+    if (closeError) return internalError('account-delete', closeError);
 
     const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
     await clerk.users.deleteUser(userId);

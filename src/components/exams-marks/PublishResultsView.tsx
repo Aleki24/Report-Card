@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { CheckCircle2, Eye, EyeOff, Info, Loader2, PenLine, Send } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Info, Loader2, PenLine, RotateCcw, Send } from 'lucide-react';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { markEntryHref } from '@/lib/marking-progress';
@@ -94,6 +94,7 @@ export function PublishResultsView() {
 
     const [termExams, setTermExams] = useState<ExamRow[]>([]);
     const [loadingExams, setLoadingExams] = useState(false);
+    const [examsError, setExamsError] = useState<string | null>(null);
     const [busyExamId, setBusyExamId] = useState<string | null>(null);
     const [bulkBusy, setBulkBusy] = useState(false);
     const [confirmExam, setConfirmExam] = useState<{ id: string; name: string; subject: string; readiness: PublishReadiness } | null>(null);
@@ -132,23 +133,31 @@ export function PublishResultsView() {
     }, []);
 
     // ── Every exam for the class in the term; the round filter is applied locally ──
+    // Only the latest class and term may fill the list: a slower answer for the
+    // class just left would otherwise show, and Release would act on, its exams.
+    const examsLoad = useRef(0);
     const loadExams = useCallback(async () => {
+        const id = ++examsLoad.current;
         const stream = streams.find(s => s.id === streamId);
-        if (!stream || !termId) { setTermExams([]); return; }
+        setTermExams([]);
+        setExamsError(null);
+        if (!stream || !termId) { setLoadingExams(false); return; }
         setLoadingExams(true);
         try {
             const params = new URLSearchParams({ stream_id: streamId, grade_id: stream.grade_id, term_id: termId });
-            const res = await fetch(`/api/school/exams?${params.toString()}`);
-            const json = (await res.json()) as { data?: ApiExam[] };
+            const res = await fetch(`/api/school/exams?${params.toString()}`, { cache: 'no-store' });
+            const json = (await res.json().catch(() => ({}))) as { data?: ApiExam[]; error?: string };
+            if (!res.ok) throw new Error(json.error || 'Could not load this class’s exams.');
+            if (id !== examsLoad.current) return;
             setTermExams((json.data ?? []).map(e => ({
                 id: e.id, name: e.name, exam_type: e.exam_type, subject_id: e.subject_id,
                 subject_name: e.subject_name || 'N/A', subject_category: e.subject_category ?? null, status: e.status ?? 'DRAFT',
             })));
         } catch (err) {
-            console.error('Failed to load exams', err);
-            setTermExams([]);
+            if (id !== examsLoad.current) return;
+            setExamsError(err instanceof Error ? err.message : 'Could not load this class’s exams.');
         } finally {
-            setLoadingExams(false);
+            if (id === examsLoad.current) setLoadingExams(false);
         }
     }, [streamId, termId, streams]);
 
@@ -166,8 +175,11 @@ export function PublishResultsView() {
     );
 
     // ── Marks for the round: per-subject counts and the ranking preview ──
+    const previewLoad = useRef(0);
     const loadPreview = useCallback(async () => {
-        if (!streamId || exams.length === 0) { setMarks([]); return; }
+        const id = ++previewLoad.current;
+        setMarks([]);
+        if (!streamId || exams.length === 0) { setLoadingPreview(false); return; }
         setLoadingPreview(true);
         try {
             const [marksRes, structRes] = await Promise.all([
@@ -182,14 +194,14 @@ export function PublishResultsView() {
             for (const sc of struct.grading_scales ?? []) {
                 if (!overallIds.has(sc.grading_system_id)) map[sc.symbol] = sc.points ?? 0;
             }
+            if (id !== previewLoad.current) return;
             setPointsBySymbol(map);
             const examIds = new Set(exams.map(e => e.id));
             setMarks((marksJson.data ?? []).filter(m => examIds.has(m.exam_id)));
         } catch (err) {
             console.error('Failed to load preview', err);
-            setMarks([]);
         } finally {
-            setLoadingPreview(false);
+            if (id === previewLoad.current) setLoadingPreview(false);
         }
     }, [streamId, exams]);
 
@@ -385,6 +397,13 @@ export function PublishResultsView() {
 
                         {loadingExams ? (
                             <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+                        ) : examsError ? (
+                            <div role="alert" className="flex flex-col items-start gap-3 p-6 text-sm text-destructive">
+                                <p>{examsError}</p>
+                                <button type="button" className="btn-secondary" onClick={() => void loadExams()}>
+                                    <RotateCcw className="size-4" aria-hidden />Try again
+                                </button>
+                            </div>
                         ) : exams.length === 0 ? (
                             <p className="p-6 text-sm text-muted-foreground">No exams for this class in the selected term.</p>
                         ) : (

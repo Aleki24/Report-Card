@@ -59,6 +59,11 @@ export function toFormValues(
     }));
 }
 
+const toIsoOrRaw = (value: string): string => {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : d.toISOString();
+};
+
 /** What the API receives: numbers as numbers, local times as ISO, blanks as ''. */
 export function fromFormValues(fields: readonly FieldDef[], values: FormValues): Record<string, unknown> {
     return Object.fromEntries(fields.map(f => {
@@ -66,7 +71,9 @@ export function fromFormValues(fields: readonly FieldDef[], values: FormValues):
         if (f.kind === 'checkbox') return [f.name, v === true];
         const s = typeof v === 'string' ? v.trim() : '';
         if (f.kind === 'number') return [f.name, s === '' ? null : Number(s)];
-        if (f.kind === 'datetime') return [f.name, s === '' ? '' : new Date(s).toISOString()];
+        // A typed time that does not parse goes as typed: the server answers
+        // "Use a valid date and time" instead of toISOString() throwing here.
+        if (f.kind === 'datetime') return [f.name, s === '' ? '' : toIsoOrRaw(s)];
         if (f.kind === 'numberList') return [f.name, s.split(/[,\s]+/).filter(Boolean).map(Number)];
         return [f.name, s];
     }));

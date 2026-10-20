@@ -15,6 +15,7 @@ import {
 import { RequireScreen } from '@/components/RequireScreen';
 import { FeeDetail, PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
 import type { FeePaymentStatus, FeeStatus, StaffFeeRecord, StudentListItem } from '@/lib/types';
+import { totalOwed } from '@shared/fees';
 
 const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warning' | 'info' }> = {
     PENDING: { label: 'Pending', variant: 'warning' },
@@ -51,16 +52,22 @@ export default function StaffFeesScreen() {
 }
 
 function FeesContent() {
-    const { role } = useCurrentUser();
+    const { can } = useCurrentUser();
     const [tab, setTab] = useState<Tab>('balances');
     const tabs = [
         { value: 'balances' as const, label: 'Balances' },
         { value: 'payments' as const, label: 'Payments' },
-        ...(role === 'ADMIN' ? [{ value: 'unmatched' as const, label: 'Unmatched' }] : []),
+        // Matching Paybill money is fees.collect work: the bursar or accountant, not only an admin.
+        ...(can('fees.collect') ? [{ value: 'unmatched' as const, label: 'Unmatched' }] : []),
     ];
     return (
         <Screen>
-            <ScreenHeader title="Fees" description={role === 'ADMIN' ? 'Bill learners, record payments and follow up balances.' : 'Fee balances for your class.'} />
+            <ScreenHeader
+                title="Fees"
+                description={can('fees.manage')
+                    ? 'Bill learners, record payments and follow up balances.'
+                    : can('fees.collect') ? 'Record payments and follow up balances.' : 'Fee balances for your class.'}
+            />
             <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} />
             {tab === 'balances' ? <Balances /> : tab === 'payments' ? <Payments /> : <Unmatched />}
         </Screen>
@@ -73,6 +80,8 @@ function Balances() {
     const download = useDownload();
     const { colors } = useTheme();
     const api = useApi();
+    // Billing is fees.manage; an accountant records payments only.
+    const { can } = useCurrentUser();
     const { terms, activeTermId } = useTerms();
     const [termId, setTermId] = useState<string>('');
     const [status, setStatus] = useState<'all' | 'owing' | 'overdue' | 'paid'>('all');
@@ -96,7 +105,7 @@ function Balances() {
 
     const billed = fees.reduce((s, f) => s + f.totalFee, 0);
     const paid = fees.reduce((s, f) => s + f.paidAmount, 0);
-    const outstanding = fees.reduce((s, f) => s + Math.max(0, f.balance), 0);
+    const outstanding = totalOwed(fees);
     const overdue = fees.filter((f) => isOverdue(f.dueDate, f.balance)).length;
 
     const exportXlsx = async () => {
@@ -136,7 +145,7 @@ function Balances() {
             ) : (
                 <ButtonRow>
                     <Button variant="secondary" label="Export" onPress={exportXlsx} loading={exporting} />
-                    <Button label="+ Bill learners" onPress={() => setBilling(true)} />
+                    {can('fees.manage') ? <Button label="+ Bill learners" onPress={() => setBilling(true)} /> : null}
                 </ButtonRow>
             )}
 
@@ -274,7 +283,11 @@ function Payments() {
     const [search, setSearch] = useState('');
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
-    const { data, loading, error, refresh } = useApiQuery<LedgerPayment[]>(withQuery('/api/school/fees/payments', { method }));
+    // Raw: the answer says how many payments there are in all, and the list
+    // carries only the newest of them (the export has every one).
+    const ledger = useApiQuery<{ data?: LedgerPayment[]; total?: number; truncated?: boolean }>(withQuery('/api/school/fees/payments', { method }), { raw: true });
+    const { loading, error, refresh } = ledger;
+    const data = ledger.data?.data;
 
     const q = search.trim().toLowerCase();
     const rows = (data ?? []).filter((p) => !q || `${p.studentName ?? ''} ${p.admissionNumber ?? ''} ${p.receiptNumber} ${p.mpesaReceiptNumber ?? ''}`.toLowerCase().includes(q));
@@ -301,6 +314,9 @@ function Payments() {
                 onChange={setMethod}
             />
             <SearchField value={search} onChangeText={setSearch} placeholder="Search name, receipt or M-Pesa code" />
+            {ledger.data?.truncated ? (
+                <Notice tone="info" message={`Showing the newest ${(data ?? []).length} of ${ledger.data.total ?? 'many'} payments. Export the ledger for all of them.`} />
+            ) : null}
             <StatGrid>
                 <StatTile label="Payments" value={rows.length} />
                 <StatTile label="Completed total" value={formatCurrency(total)} tone={colors.success} />
@@ -343,7 +359,7 @@ function Payments() {
     );
 }
 
-// ── Unmatched M-Pesa (admin) ───────────────────────────────
+// ── Unmatched M-Pesa (fees.collect) ───────────────────────
 
 interface UnmatchedPayment {
     id: string;

@@ -79,12 +79,21 @@ export const needsReorder = (i: Item) => i.item_type === 'CONSUMABLE' && Number(
 export const stockValue = (items: readonly Item[]) => items.reduce((n, r) => n + Number(r.quantity) * Number(r.unit_value ?? 0), 0);
 
 /** The store keeper's next steps on a requisition. */
-export const requisitionDecisions = (status: RequisitionStatus) =>
+const APPROVE = { decision: 'APPROVE', label: 'Approve', success: 'Approved.' } as const;
+const REJECT = { decision: 'REJECT', label: 'Reject', success: 'Rejected.' } as const;
+const ISSUE = { decision: 'ISSUE', label: 'Issue', success: 'Issued and taken off stock.' } as const;
+
+/**
+ * What a storekeeper can do with a requisition now. Only an admin approves
+ * their own request (the server refuses everyone else), so `ownRequest`
+ * without `isAdmin` leaves Approve out.
+ */
+export const requisitionDecisions = (status: RequisitionStatus, { ownRequest = false, isAdmin = false }: { ownRequest?: boolean; isAdmin?: boolean } = {}) =>
     status === 'PENDING'
-        ? ([{ decision: 'APPROVE', label: 'Approve', success: 'Approved.' }, { decision: 'REJECT', label: 'Reject', success: 'Rejected.' }] as const)
+        ? (ownRequest && !isAdmin ? [REJECT] : [APPROVE, REJECT])
         : status === 'APPROVED'
-            ? ([{ decision: 'ISSUE', label: 'Issue', success: 'Issued and taken off stock.' }] as const)
-            : ([] as const);
+            ? [ISSUE]
+            : [];
 
 // ── Staff leave ──────────────────────────────────────────────
 

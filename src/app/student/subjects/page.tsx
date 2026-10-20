@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { BookOpen, Search, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Search, ChevronRight, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge, Input } from '@/components/ui';
+import { useJsonList } from '@/hooks/useJsonList';
 
 interface Subject {
     id: string;
@@ -26,13 +27,8 @@ function typeBadge(type: Subject['subject_type']) {
 }
 
 export default function StudentSubjectsPage() {
-    const [subjects, setSubjects] = useState<Subject[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { rows: subjects, loading, error, retry } = useJsonList<Subject>('/api/school/student/subjects', 'Couldn’t load your subjects.');
     const [search, setSearch] = useState('');
-
-    useEffect(() => {
-        fetch('/api/school/student/subjects').then(r => r.json()).then(j => setSubjects(j.data || [])).catch(() => {}).finally(() => setLoading(false));
-    }, []);
 
     const filtered = subjects.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.code?.toLowerCase().includes(search.toLowerCase()));
 
@@ -62,7 +58,14 @@ export default function StudentSubjectsPage() {
                 />
             </div>
 
-            {filtered.length === 0 ? (
+            {error ? (
+                <EmptyState
+                    icon={<BookOpen className="h-6 w-6" />}
+                    title="Couldn’t load your subjects"
+                    description={error}
+                    action={<button type="button" onClick={retry} className="btn-primary"><RotateCcw className="size-4" aria-hidden />Try again</button>}
+                />
+            ) : filtered.length === 0 ? (
                 <EmptyState icon={<BookOpen className="h-6 w-6" />} title="No subjects found" description="No subjects match your search or are assigned to your level." />
             ) : (
                 <div className="grid grid-cols-1 gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))]">

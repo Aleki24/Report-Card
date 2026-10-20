@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AUTH_SECONDARY_BUTTON, AuthShell, AuthStatus, type AuthStatusTone } from '@/components/auth/AuthShell';
+import { PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep } from '@/lib/fees';
 
 type ViewState = 'checking' | 'completed' | 'failed' | 'pending';
 
@@ -13,7 +14,7 @@ const POLL_INTERVAL_MS = 2500;
 const VIEWS: Record<ViewState, { tone: AuthStatusTone; title: string; message: string }> = {
   checking: { tone: 'working', title: 'Confirming your payment', message: 'Checking with Pesapal. Please keep this tab open.' },
   completed: { tone: 'success', title: 'Payment received', message: 'Your fee balance has been updated. You can close this tab and go back to Skulbase.' },
-  failed: { tone: 'error', title: 'Payment not completed', message: 'Nothing was charged. Go back to your fees page to try again.' },
+  failed: { tone: 'error', title: 'Payment not confirmed', message: PESAPAL_NOT_CONFIRMED_MESSAGE },
   pending: { tone: 'waiting', title: 'Still processing', message: 'If you finished paying, your balance will update as soon as Pesapal confirms it. You can close this tab.' },
 };
 
@@ -32,6 +33,7 @@ function PesapalCallbackContent() {
     if (!orderTrackingId) return;
     let cancelled = false;
     let attempts = 0;
+    let lastStatus: string | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const check = async () => {
@@ -39,16 +41,18 @@ function PesapalCallbackContent() {
       try {
         const res = await fetch(`/api/pesapal/status?order_tracking_id=${encodeURIComponent(orderTrackingId)}`);
         if (res.ok) {
-          const status = ((await res.json()) as StatusResponse).data?.status;
+          lastStatus = ((await res.json()) as StatusResponse).data?.status;
           if (cancelled) return;
-          if (status === 'COMPLETED') return setView('completed');
-          if (status === 'FAILED') return setView('failed');
+          // A FAILED attempt can still succeed on a retry: keep checking.
+          const step = paymentWaitStep(lastStatus, 'PESAPAL');
+          if (step === 'paid') return setView('completed');
+          if (step === 'failed') return setView('failed');
         }
       } catch {
         // A dropped request just uses up one attempt.
       }
       if (cancelled) return;
-      if (attempts >= POLL_ATTEMPTS) setView('pending');
+      if (attempts >= POLL_ATTEMPTS) setView(lastStatus === 'FAILED' ? 'failed' : 'pending');
       else timer = setTimeout(check, POLL_INTERVAL_MS);
     };
 

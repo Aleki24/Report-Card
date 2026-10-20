@@ -3,18 +3,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useSignUp } from '@clerk/nextjs/legacy';
 import { isClerkAPIResponseError } from '@clerk/nextjs/errors';
-import { ArrowRight, CheckCircle2, KeyRound, Loader2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, KeyRound, Loader2, LogOut } from 'lucide-react';
 import { useSignInCodeVerification } from '@/hooks/useSignInCodeVerification';
-import { extractInviteCode, INVITE_CODE_LENGTH, savePendingActivation } from '@/lib/activation-link';
+import { activationUrl, extractInviteCode, INVITE_CODE_LENGTH, savePendingActivation } from '@/lib/activation-link';
+import { isPlaceholderEmail } from '@/lib/placeholder-email';
 import { ROLE_LABELS } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
 import { PasswordInput } from '@/components/auth/PasswordInput';
 import {
     AUTH_INPUT, AUTH_LABEL, AUTH_LINK, AUTH_PRIMARY_BUTTON, AUTH_SECONDARY_BUTTON,
-    AuthDivider, AuthShell, GoogleIcon,
+    AuthDivider, AuthShell, AuthStatus, GoogleIcon,
 } from '@/components/auth/AuthShell';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -82,6 +84,10 @@ export default function ActivatePage() {
     const [error, setError] = useState<string | null>(null);
     const [doneMessage, setDoneMessage] = useState('');
     const [signedIn, setSignedIn] = useState(false);
+    const { isSignedIn } = useAuth();
+    const { user } = useUser();
+    const { signOut } = useClerk();
+    const [signingOut, setSigningOut] = useState(false);
 
     async function verifyCode(value: string) {
         if (value.length !== INVITE_CODE_LENGTH || verifying) return;
@@ -192,6 +198,34 @@ export default function ActivatePage() {
         } finally {
             setSubmitting(false);
         }
+    }
+
+    // Someone is already signed in on this device: a code can't be redeemed
+    // over their session. Say who, and sign out back to this same code. (Not
+    // while this page's own sign-in is landing, just before 'done'.)
+    if (isSignedIn && stage !== 'done' && !submitting) {
+        const email = user?.primaryEmailAddress?.emailAddress;
+        const who = user?.username || user?.fullName || (!isPlaceholderEmail(email) && email) || 'another account';
+        return (
+            <AuthShell title="You’re already signed in" subtitle={code ? 'This invite code is for a new sign-in.' : undefined}>
+                <AuthStatus
+                    tone="waiting"
+                    message={<>You’re signed in as <strong className="font-semibold text-slate-900 dark:text-white">{who}</strong>. To use {code ? 'this code' : 'an invite code'}, sign out first{code ? ' — it opens here again' : ''}.</>}
+                >
+                    <button
+                        type="button"
+                        disabled={signingOut}
+                        onClick={() => { setSigningOut(true); void signOut({ redirectUrl: activationUrl(code) }); }}
+                        className={AUTH_PRIMARY_BUTTON}
+                    >
+                        {signingOut
+                            ? <><Loader2 className="size-5 animate-spin" aria-hidden />Signing out…</>
+                            : <><LogOut className="size-5" aria-hidden />Sign out and continue</>}
+                    </button>
+                    <Link href="/dashboard" className={`${AUTH_SECONDARY_BUTTON} no-underline`}>Stay signed in</Link>
+                </AuthStatus>
+            </AuthShell>
+        );
     }
 
     const firstName = invite?.name.split(' ')[0] || '';

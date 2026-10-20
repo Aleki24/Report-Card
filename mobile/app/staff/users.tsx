@@ -9,6 +9,7 @@ import { sendConfirmingReplace } from '@/lib/classTeacher';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { ROLE_LABELS, isRoleIn, roleLabel, type UserRole } from '@/lib/roles';
 import { SIGNING_ROLES } from '@shared/signatures';
+import { ASSIGNABLE_ROLES } from '@shared/roles';
 import { SignatureCard } from '@/components/account/SignatureCard';
 import { errorMessage, formatDate, fullName, pluralize } from '@/lib/format';
 import { spacing, fonts, useTheme } from '@/lib/theme';
@@ -280,8 +281,12 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
     }, [candidates.data, user.id]);
     const replacing = effectiveClass === NO_CLASS ? null : holders.get(effectiveClass) ?? null;
 
+    // Parents and pending accounts keep their role: the server only assigns
+    // staff and learner roles, so sending theirs refused every edit.
+    const roleEditable = isRoleIn(user.role, ASSIGNABLE_ROLES);
     const save = async () => {
-        const payload: Record<string, unknown> = { user_id: user.id, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), role, is_active: active };
+        const payload: Record<string, unknown> = { user_id: user.id, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), is_active: active };
+        if (roleEditable) payload.role = role;
         if (role === 'STAFF') payload.job_title = jobTitle.trim();
         if (teacherRole) {
             // A teacher's class and subjects are only sent once they loaded (or
@@ -320,7 +325,7 @@ function EditUser({ user, onSaved, onCancel, onReset, resetting }: { user: Schoo
             <TextField label="First name" value={first} onChangeText={setFirst} />
             <TextField label="Last name" value={last} onChangeText={setLast} />
             <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-            {user.role !== 'STUDENT' ? (
+            {roleEditable && user.role !== 'STUDENT' ? (
                 <ChipSelect
                     label="Role"
                     wrap

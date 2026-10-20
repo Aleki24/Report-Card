@@ -32,9 +32,10 @@ const TYPE_LABEL: Record<NonNullable<Subject['subject_type']>, string> = {
     OPTIONAL: 'Optional',
 };
 
+/** A failed request throws, so the page says it couldn't load rather than showing nothing. */
 async function getData<T>(url: string): Promise<T | null> {
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`${url} answered ${res.status}`);
     return ((await res.json()) as { data?: T }).data ?? null;
 }
 

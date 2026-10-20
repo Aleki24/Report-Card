@@ -38,14 +38,18 @@ export function useGoogleSignIn() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const start = useCallback(async () => {
+    /** True once Google has signed the person in; false when they cancelled or it failed (shown as `error`). */
+    const start = useCallback(async (): Promise<boolean> => {
         setError(null);
         setLoading(true);
         try {
             const { createdSessionId, setActive } = await startSSOFlow({ strategy: 'oauth_google', redirectUrl: SSO_REDIRECT_URL });
-            if (createdSessionId && setActive) await setActive({ session: createdSessionId });
+            if (!createdSessionId || !setActive) return false;
+            await setActive({ session: createdSessionId });
+            return true;
         } catch (err) {
             setError(describeAuthError(err, 'Google sign-in failed.'));
+            return false;
         } finally {
             setLoading(false);
         }

@@ -7,7 +7,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import type { Style } from '@react-pdf/types';
-import { FONTS } from '../pdfTheme';
+import { FONTS, FONT_STACKS } from '../pdfTheme';
 import { buildReportModel, levelFamily, type ReportModel, type SubjectRow, type LevelFamily } from '../reportModel';
 import { Crest, SignatureSpace, Trend, BrandFooter, reportFooterMeta, type TrendColors } from '../primitives';
 import type { LayoutProps } from '../templates';
@@ -41,7 +41,7 @@ const C = {
 const TREND: TrendColors = { up: C.up, down: C.down, flat: C.muted };
 const X = 28.5;
 const font = FONTS.manrope;
-const display = FONTS.dmSerif;
+const display = FONT_STACKS.dmSerif;
 
 const s = StyleSheet.create({
     page: { flex: 1, backgroundColor: C.sand, fontFamily: font, color: C.ink },

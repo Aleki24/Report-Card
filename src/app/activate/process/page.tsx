@@ -1,6 +1,6 @@
 "use client";
 
-import { clearPendingActivation, readPendingActivation } from '@/lib/activation-link';
+import { activationUrl, clearPendingActivation, readPendingActivation } from '@/lib/activation-link';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSignUp, useSignIn } from '@clerk/nextjs/legacy';
@@ -14,7 +14,7 @@ interface ActivateResponse { error?: string; role?: string }
 type View =
   | { kind: 'working'; message: string }
   | { kind: 'done' }
-  | { kind: 'error'; message: string; existingAccount?: boolean };
+  | { kind: 'error'; message: string; existingAccount?: boolean; code?: string };
 
 function describe(err: unknown): string {
   if (isClerkAPIResponseError(err)) return err.errors[0]?.longMessage ?? err.errors[0]?.message ?? 'Google sign-in failed.';
@@ -51,7 +51,7 @@ export default function ActivateProcessPage() {
         // This Google account already has a Skulbase login. Linking it would
         // take over whatever account it belongs to, so stop here.
         if (signIn?.status === 'complete') {
-          setView({ kind: 'error', existingAccount: true, message: 'This Google account is already linked to a Skulbase account. Sign in with it, or activate your invite with a different Google account.' });
+          setView({ kind: 'error', existingAccount: true, code: inviteCode, message: 'This Google account is already linked to a Skulbase account. Sign in with it, or activate your invite with a different Google account.' });
           return;
         }
 
@@ -101,7 +101,7 @@ export default function ActivateProcessPage() {
     return (
       <AuthShell title="Activation didn’t finish">
         <AuthStatus tone="error" message={view.message}>
-          <Link href="/activate" className={`${AUTH_PRIMARY_BUTTON} no-underline`}>Start activation again</Link>
+          <Link href={activationUrl(view.code)} className={`${AUTH_PRIMARY_BUTTON} no-underline`}>Start activation again</Link>
           {view.existingAccount && <Link href="/login" className={`${AUTH_SECONDARY_BUTTON} no-underline`}>Sign in instead</Link>}
         </AuthStatus>
       </AuthShell>

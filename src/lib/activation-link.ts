@@ -1,10 +1,11 @@
 /**
  * The page an invite code is redeemed on, with the code already filled in —
  * opening it checks the code straight away, so nobody has to retype it.
- * Client-safe; pass the site origin to get an absolute URL for SMS/email.
+ * Without a code, the bare page. Client-safe; pass the site origin to get an
+ * absolute URL for SMS/email.
  */
-export function activationUrl(code: string, origin = ''): string {
-  return `${origin}/activate?code=${encodeURIComponent(code)}`;
+export function activationUrl(code?: string | null, origin = ''): string {
+  return code ? `${origin}/activate?code=${encodeURIComponent(code)}` : `${origin}/activate`;
 }
 
 export const INVITE_CODE_LENGTH = 6;

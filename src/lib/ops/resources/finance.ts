@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineResource, STUDENT_JOIN } from '../resource';
 import {
-    text, optionalText, isoDate, optionalUuid, uuid, oneOf, money, count, bool, personId,
+    text, optionalText, isoDate, optionalUuid, uuid, oneOf, money, count, bool, personId, orDefault,
 } from '../zod-fields';
 
 export const RESIDENCES = ['DAY', 'BOARDER'] as const;
@@ -21,7 +21,7 @@ export const voteHeads = defineResource({
     schema: z.object({
         name: text(120),
         code: optionalText(20),
-        priority: count(10_000).default(100),
+        priority: orDefault(count(10_000), 100),
         is_active: bool.default(true),
     }),
     order: { column: 'priority' },

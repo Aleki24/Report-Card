@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { ToggleRight } from 'lucide-react';
 import { OPTIONAL_MODULES } from '@/components/landing/optionalModules';
 import { Wordmark } from '@/components/Wordmark';
@@ -5,6 +6,11 @@ import { MarketingShell } from '@/components/landing/ui/MarketingShell';
 import { PageHero } from '@/components/landing/ui/PageHero';
 import { Section } from '@/components/landing/ui/Section';
 import { ModuleGrid } from '@/components/landing/ui/ModuleGrid';
+
+export const metadata: Metadata = {
+  title: 'Features · Skulbase',
+  description: 'Report cards, exams and marks, attendance, fees, SMS, analytics and more: every module Skulbase gives a school.',
+};
 
 export default function FeaturesPage() {
   return (

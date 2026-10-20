@@ -387,7 +387,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     );
 
     const change = (studentId: string, update: (v: EntryValues) => EntryValues) => {
-        setEdits(prev => ({ ...prev, [studentId]: update(prev[studentId] ?? saved[studentId] ?? emptyEntry()) }));
+        setEdits(prev => {
+            const current = prev[studentId];
+            if (current) return { ...prev, [studentId]: { ...update(current), basePapers: current.basePapers } };
+            const start = saved[studentId] ?? emptyEntry();
+            return { ...prev, [studentId]: { ...update(start), basePapers: { ...start.componentScores } } };
+        });
     };
 
     const undo = (studentId: string) => {
@@ -459,10 +464,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const buildPayloadRow = (studentId: string, values: EntryValues) => {
         const remarks = values.remarks.trim() || null;
         if (components.length > 0) {
-            const scores: Record<string, number> = {};
+            // Papers left out are kept by the server; a paper this edit
+            // started with and the teacher emptied is sent as null to remove it.
+            const scores: Record<string, number | null> = {};
+            const basePapers = values.basePapers ?? {};
             for (const c of components) {
                 const text = (values.componentScores[c.id] ?? '').trim();
                 if (text !== '') scores[c.id] = Number(text);
+                else if ((basePapers[c.id] ?? '').trim() !== '') scores[c.id] = null;
             }
             const pct = composite(values).finalPercentage;
             return {
@@ -479,7 +488,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         };
     };
 
-    /** Move the given edits into `saved` (with ids when the server returned them) and drop them from `edits`. */
+    /** Move the given edits into `saved` (with ids when the server returned them) and drop them from `edits` unless changed since. */
     const commit = (upserted: { studentId: string; values: EntryValues }[], ids: Map<string, string>, removed: string[]) => {
         setSaved(prev => {
             const next = { ...prev };
@@ -489,8 +498,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             for (const studentId of removed) delete next[studentId];
             return next;
         });
-        const done = new Set([...upserted.map(u => u.studentId), ...removed]);
-        setEdits(prev => Object.fromEntries(Object.entries(prev).filter(([id]) => !done.has(id))));
+        // Drop an edit only if it is still what was sent: a mark typed into the
+        // row while the save was in flight is a newer edit and stays unsaved.
+        const sent = new Map(upserted.map(u => [u.studentId, u.values]));
+        const removedIds = new Set(removed);
+        setEdits(prev => Object.fromEntries(Object.entries(prev).filter(([id, values]) =>
+            !removedIds.has(id) && sent.get(id) !== values)));
     };
 
     const handleSave = async () => {

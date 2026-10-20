@@ -18,6 +18,8 @@ import { MarkFillTools, type FillSummary } from './MarkFillTools';
 interface Entry {
     score: string;
     papers: Record<string, string>;
+    /** The saved papers this entry started from: only these can be cleared (see the web's EntryValues.basePapers). */
+    basePapers?: Record<string, string>;
     grade: string;
     gradeManual: boolean;
     remarks: string;
@@ -28,9 +30,11 @@ type Entries = Record<string, Entry>;
 const ALL_STREAMS = '__all__';
 
 function entryFromMark(mark: ExamMark | undefined): Entry {
+    const papers = Object.fromEntries(Object.entries(mark?.components ?? {}).map(([k, v]) => [k, String(v)]));
     return {
         score: mark ? String(mark.raw_score) : '',
-        papers: Object.fromEntries(Object.entries(mark?.components ?? {}).map(([k, v]) => [k, String(v)])),
+        papers,
+        basePapers: { ...papers },
         grade: mark?.grade_symbol ?? '',
         gradeManual: false,
         remarks: mark?.remarks ?? '',
@@ -109,6 +113,11 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             }
         });
     }, [draftKey]);
+
+    // The latest entries, for the save to update the draft file even when the
+    // screen was left before it finished (the debounced autosave never runs then).
+    const entriesRef = useRef(entries);
+    useEffect(() => { entriesRef.current = entries; }, [entries]);
 
     useEffect(() => {
         if (!draftLoaded.current) return;
@@ -206,16 +215,36 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             const e = entries[id];
             const base = { student_id: id, grade_symbol: e.grade, remarks: e.remarks.trim() || null };
             if (scheme) {
-                const components: Record<string, number> = {};
-                for (const p of papers) if (!isBlank(e.papers[p.id])) components[p.id] = Number(e.papers[p.id]);
-                return { ...base, components };
+                // Papers left out are kept by the server; a paper this entry
+                // started with and the teacher emptied is sent as null to remove
+                // it. A restored draft never clears a paper saved since it began.
+                const basePapers = e.basePapers ?? {};
+                const components: Record<string, number | null> = {};
+                for (const p of papers) {
+                    if (!isBlank(e.papers[p.id])) components[p.id] = Number(e.papers[p.id]);
+                    else if (!isBlank(basePapers[p.id])) components[p.id] = null;
+                }
+                const composite = compositePercentage(scheme, e.papers);
+                return { ...base, components, ...(composite.entered > 0 ? { percentage: composite.percentage } : {}) };
             }
             return { ...base, raw_score: Number(e.score) };
         });
+        // What was sent, by row: a row edited while the save is in flight is
+        // a new object and stays as unsaved work (the autosave keeps its draft).
+        const sent = new Map(pendingIds.map((id) => [id, entries[id]] as const));
         try {
             await api.post('/api/school/exam-marks', { exam_id: exam.id, marks: payload });
-            setEntries({});
-            clearDraft(draftKey);
+            const unsaved = (all: Entries): Entries => {
+                const next = { ...all };
+                for (const [id, entry] of sent) if (next[id] === entry) delete next[id];
+                return next;
+            };
+            // Straight to the draft file, so marks just saved never come back
+            // as "unsaved" if the teacher has already gone back.
+            const remaining = unsaved(entriesRef.current);
+            if (Object.keys(remaining).length === 0) clearDraft(draftKey);
+            else saveDraft(draftKey, remaining);
+            setEntries(unsaved);
             setMessage({ tone: 'success', text: `Saved ${pluralize(payload.length, 'mark')}.` });
             marks.refresh();
         } catch (err) {

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
-import { useGradeStreams } from '@/lib/useSchoolData';
+import { useManagedGradeStreams } from '@/lib/useSchoolData';
 import { roleLabel } from '@/lib/roles';
 import { errorMessage, formatDate, formatPercent, fullName, initials, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
@@ -29,7 +29,8 @@ function StudentView({ id }: { id: string }) {
     const router = useRouter();
     const { role } = useCurrentUser();
     const { data, loading, error, reload } = useApiQuery<StudentDetail>(`/api/school/students/${id}`, { raw: true });
-    const { streams } = useGradeStreams();
+    // Only the classes this person may move learners into (a class teacher: their own).
+    const { streams } = useManagedGradeStreams();
     const [editing, setEditing] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);

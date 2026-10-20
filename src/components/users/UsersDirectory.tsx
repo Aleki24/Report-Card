@@ -16,6 +16,9 @@ import {
 
 interface UsersDirectoryProps {
   loading: boolean;
+  /** Set when the list could not be loaded; shown instead of "No users yet". */
+  loadError?: string | null;
+  onRetry?: () => void;
   totalUsers: number;
   paginatedUsers: UserRow[];
   filteredCount: number;
@@ -210,7 +213,7 @@ const VIEW_OPTIONS: readonly { value: DirectoryView; label: string; icon: Lucide
 
 export function UsersDirectory(props: UsersDirectoryProps) {
   const {
-    loading, totalUsers, paginatedUsers, filteredCount, roleCounts, totalPages, currentPage, setCurrentPage, usersPerPage,
+    loading, loadError, onRetry, totalUsers, paginatedUsers, filteredCount, roleCounts, totalPages, currentPage, setCurrentPage, usersPerPage,
     roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy, classFilter, setClassFilter, gradeGroups, searchQuery, setSearchQuery,
     view, setView, resettingPasswordId, onView, onEdit, onResetPassword, onAddUser,
   } = props;
@@ -222,6 +225,16 @@ export function UsersDirectory(props: UsersDirectoryProps) {
 
   const renderBody = () => {
     if (loading) return <DirectorySkeleton view={view} />;
+    if (loadError && totalUsers === 0) {
+      return (
+        <EmptyState
+          icon={SearchX}
+          title="Could not load users"
+          body={loadError}
+          action={onRetry ? <button type="button" className="btn-secondary" onClick={onRetry}>Try again</button> : null}
+        />
+      );
+    }
     if (totalUsers === 0) {
       return (
         <EmptyState

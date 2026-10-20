@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { FONT_STACKS } from './pdfFonts';
 
 const NAVY = '#1A365D';
 const GRAY_200 = '#E2E6ED';
@@ -28,23 +29,23 @@ export interface ExamResultsPdfData {
 }
 
 const st = StyleSheet.create({
-    page: { paddingTop: 28, paddingBottom: 36, paddingHorizontal: 32, fontFamily: 'Helvetica', fontSize: 9, color: GRAY_700 },
-    schoolName: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: NAVY, textTransform: 'uppercase', letterSpacing: 0.5 },
-    docTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: GRAY_700, marginTop: 6 },
+    page: { paddingTop: 28, paddingBottom: 36, paddingHorizontal: 32, fontFamily: FONT_STACKS.helvetica, fontSize: 9, color: GRAY_700 },
+    schoolName: { fontSize: 15, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: NAVY, textTransform: 'uppercase', letterSpacing: 0.5 },
+    docTitle: { fontSize: 11, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GRAY_700, marginTop: 6 },
     subTitle: { fontSize: 9, color: GRAY_400, marginTop: 2, marginBottom: 12 },
     table: { borderWidth: 1, borderColor: GRAY_200, borderRadius: 2 },
     headerRow: { flexDirection: 'row', backgroundColor: NAVY, paddingVertical: 6 },
     row: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: GRAY_200, paddingVertical: 5 },
     rowAlt: { backgroundColor: LIGHT },
-    colPos: { width: '10%', paddingHorizontal: 6, color: 'white', fontFamily: 'Helvetica-Bold' },
-    colName: { width: '38%', paddingHorizontal: 6, color: 'white', fontFamily: 'Helvetica-Bold' },
-    colAdm: { width: '20%', paddingHorizontal: 6, color: 'white', fontFamily: 'Helvetica-Bold' },
-    colMarks: { width: '14%', paddingHorizontal: 6, color: 'white', fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-    colGrade: { width: '18%', paddingHorizontal: 6, color: 'white', fontFamily: 'Helvetica-Bold', textAlign: 'center' },
-    cellPos: { width: '10%', paddingHorizontal: 6, fontFamily: 'Helvetica-Bold', color: GREEN },
+    colPos: { width: '10%', paddingHorizontal: 6, color: 'white', fontFamily: FONT_STACKS.helvetica, fontWeight: 700 },
+    colName: { width: '38%', paddingHorizontal: 6, color: 'white', fontFamily: FONT_STACKS.helvetica, fontWeight: 700 },
+    colAdm: { width: '20%', paddingHorizontal: 6, color: 'white', fontFamily: FONT_STACKS.helvetica, fontWeight: 700 },
+    colMarks: { width: '14%', paddingHorizontal: 6, color: 'white', fontFamily: FONT_STACKS.helvetica, fontWeight: 700, textAlign: 'center' },
+    colGrade: { width: '18%', paddingHorizontal: 6, color: 'white', fontFamily: FONT_STACKS.helvetica, fontWeight: 700, textAlign: 'center' },
+    cellPos: { width: '10%', paddingHorizontal: 6, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GREEN },
     cellName: { width: '38%', paddingHorizontal: 6 },
     cellAdm: { width: '20%', paddingHorizontal: 6, color: GRAY_400 },
-    cellMarks: { width: '14%', paddingHorizontal: 6, textAlign: 'center', fontFamily: 'Helvetica-Bold' },
+    cellMarks: { width: '14%', paddingHorizontal: 6, textAlign: 'center', fontFamily: FONT_STACKS.helvetica, fontWeight: 700 },
     cellGrade: { width: '18%', paddingHorizontal: 6, textAlign: 'center' },
     footer: { position: 'absolute', bottom: 16, left: 32, right: 32, fontSize: 7, color: GRAY_400, textAlign: 'center' },
 });

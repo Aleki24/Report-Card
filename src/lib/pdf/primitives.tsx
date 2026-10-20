@@ -35,7 +35,7 @@ export function Crest({ logo, initial, size, background, color, fontFamily, radi
     size: number;
     background: string;
     color: string;
-    fontFamily: string;
+    fontFamily: string | string[];
     /** Corner radius; defaults to a circle. */
     radius?: number;
     /** An outer keyline, e.g. Heritage's gold ring. */
@@ -114,7 +114,7 @@ export function Trend({ value, unit = '', size, colors, fontFamily, fontWeight =
     unit?: string;
     size: number;
     colors: TrendColors;
-    fontFamily: string;
+    fontFamily: string | string[];
     fontWeight?: 400 | 600 | 700 | 800;
     suffix?: string;
     style?: Style;

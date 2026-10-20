@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import type { LucideIcon } from 'lucide-react';
 import {
   FileText,
@@ -481,4 +482,10 @@ export const modules: Module[] = [
 // ── Helper to find a module by slug ──────────────────────────
 export function getModuleBySlug(slug: string): Module | undefined {
   return modules.find((m) => m.slug === slug);
+}
+
+/** A module's public feature page title and description (/features/<slug>). */
+export function moduleMetadata(slug: string): Metadata {
+  const mod = getModuleBySlug(slug);
+  return mod ? { title: `${mod.title} · Skulbase`, description: mod.description } : {};
 }

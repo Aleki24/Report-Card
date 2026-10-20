@@ -7,7 +7,7 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge, StatTile } from '@/components/ui';
 import { Modal } from '@/components/ui/Modal';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
-import { isOverdue, type FeePayment, type PaymentProvider, type SchoolBankAccount } from '@/lib/fees';
+import { isOverdue, PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, paymentWaitStep, totalCredit, totalOwed, type FeePayment, type PaymentProvider, type SchoolBankAccount } from '@/lib/fees';
 import { normalizeMpesaPhone } from '@/lib/phone';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -136,7 +136,7 @@ export default function StudentFeesPage() {
         if (wasWaiting) window.setTimeout(fetchFees, 5_000);
     };
 
-    const pollUntilResolved = (statusUrl: string) => {
+    const pollUntilResolved = (statusUrl: string, provider: PaymentProvider) => {
         stopPolling();
         const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
         pollTimer.current = setInterval(async () => {
@@ -144,19 +144,20 @@ export default function StudentFeesPage() {
                 const statusRes = await fetch(statusUrl, { cache: 'no-store' });
                 const statusJson: { data?: { status?: string; notes?: string | null; id?: string } } = await statusRes.json();
                 const status = statusJson.data?.status;
-                if (status === 'COMPLETED') {
+                const step = paymentWaitStep(status, provider);
+                if (step === 'paid') {
                     stopPolling();
                     setPaidPaymentId(statusJson.data?.id ?? null);
                     setPayState('success');
                     await fetchFees();
-                } else if (status === 'FAILED' || status === 'CANCELLED') {
+                } else if (step === 'failed') {
                     stopPolling();
                     setPayState('failed');
                     setPayError(statusJson.data?.notes || 'The payment was not completed.');
                 } else if (Date.now() > deadline) {
                     stopPolling();
                     setPayState('failed');
-                    setPayError('We haven\'t had confirmation yet. If you completed the payment, it will still be recorded — check back in a few minutes before paying again.');
+                    setPayError(status === 'FAILED' ? PESAPAL_NOT_CONFIRMED_MESSAGE : PAYMENT_UNCONFIRMED_MESSAGE);
                     fetchFees();
                 }
             } catch {
@@ -199,7 +200,7 @@ export default function StudentFeesPage() {
                 return;
             }
             setPayState('waiting');
-            pollUntilResolved(`/api/mpesa/stkpush/status?checkout_request_id=${json.data.checkoutRequestId}`);
+            pollUntilResolved(`/api/mpesa/stkpush/status?checkout_request_id=${json.data.checkoutRequestId}`, 'DARAJA');
         } catch (err) {
             setPayState('failed');
             setPayError(err instanceof Error ? err.message : 'We couldn\'t send the M-Pesa prompt.');
@@ -239,7 +240,7 @@ export default function StudentFeesPage() {
             else window.open(json.data.redirectUrl, '_blank');
 
             setPayState('waiting');
-            pollUntilResolved(`/api/pesapal/status?order_tracking_id=${json.data.orderTrackingId}`);
+            pollUntilResolved(`/api/pesapal/status?order_tracking_id=${json.data.orderTrackingId}`, 'PESAPAL');
         } catch (err) {
             if (win) win.close();
             setPayState('failed');
@@ -259,8 +260,8 @@ export default function StudentFeesPage() {
     const totalBilled = fees.reduce((sum, f) => sum + f.totalFee, 0);
     const totalPaid = fees.reduce((sum, f) => sum + f.paidAmount, 0);
     // Owed and credit are kept apart: an overpaid term must not hide a term still owing.
-    const owed = fees.reduce((sum, f) => sum + Math.max(0, f.balance), 0);
-    const credit = fees.reduce((sum, f) => sum + Math.max(0, -f.balance), 0);
+    const owed = totalOwed(fees);
+    const credit = totalCredit(fees);
     const overdueCount = fees.filter(f => isOverdue(f.dueDate, f.balance)).length;
     const termCount = fees.length;
     const canPayOnline = paymentProvider !== 'NONE';

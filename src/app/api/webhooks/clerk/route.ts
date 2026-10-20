@@ -4,6 +4,7 @@ import { Webhook } from 'svix';
 import { headers } from 'next/headers';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { provisionUserFromClerk } from '@/lib/provision-user';
+import { closeAccount } from '@/lib/account-closing';
 
 /** The account's primary email (Clerk lists every address; the first is not always the primary). */
 const primaryEmail = (user: UserJSON): string =>
@@ -91,20 +92,15 @@ export async function POST(req: Request) {
       case 'user.deleted': {
         const clerkId = evt.data.id;
         if (!clerkId) break;
-        // Cascade delete related records to avoid FK constraint errors
-        await supabase.from('exam_marks').delete().eq('student_id', clerkId);
-        await supabase.from('daily_attendance').delete().eq('student_id', clerkId);
-        await supabase.from('student_fees').delete().eq('student_id', clerkId);
-        await supabase.from('announcements').delete().eq('posted_by', clerkId);
-        await supabase.from('students').delete().eq('id', clerkId);
-        await supabase.from('class_teachers').delete().eq('user_id', clerkId);
-        const { data: stRecord } = await supabase.from('subject_teachers').select('id').eq('user_id', clerkId).maybeSingle();
-        if (stRecord) {
-          await supabase.from('subject_teacher_assignments').delete().eq('subject_teacher_id', stRecord.id);
-          await supabase.from('subject_teachers').delete().eq('id', stRecord.id);
-        }
-        await supabase.from('active_users').delete().eq('user_id', clerkId);
-        await supabase.from('users').delete().eq('id', clerkId);
+        // Our own routes settle the database before they delete a Clerk user;
+        // a deletion from the Clerk dashboard (e.g. a request by email) lands
+        // here and closes the account exactly as the person's own request
+        // does: a learner's school record is kept, without their details,
+        // and every email and username is freed for a new account.
+        const { data: row } = await supabase.from('users').select('role').eq('id', clerkId).maybeSingle();
+        if (!row) break;
+        const { error } = await closeAccount(supabase, clerkId, row.role);
+        if (error) console.error('[Clerk Webhook] Failed to close account:', clerkId, error);
         break;
       }
     }

@@ -13,7 +13,7 @@ import { useOpsList } from '@/lib/ops';
 import { useCurrentUser } from '@/lib/UserContext';
 
 function Requisitions({ manage }: { manage: boolean }) {
-    const { profile } = useCurrentUser();
+    const { profile, role } = useCurrentUser();
     const items = useOpsList<Item>('inventory');
     const mine = (r: Requisition) => r.requested_by === profile?.id;
     return (
@@ -33,7 +33,7 @@ function Requisitions({ manage }: { manage: boolean }) {
             ]}
             rowActions={(r, reload) => (manage ? (
                 <>
-                    {requisitionDecisions(r.status).map((d) => (
+                    {requisitionDecisions(r.status, { ownRequest: mine(r), isAdmin: role === 'ADMIN' }).map((d) => (
                         <ActionButton
                             key={d.decision}
                             path={`/api/inventory/requisitions/${r.id}/decision`}

@@ -199,7 +199,8 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
 }
 
 interface SubjectTeacherPayload {
-    subjects: { id: string; name: string; code: string | null; teacher_user_id: string | null }[];
+    /** teacher_scope 'grade' on a stream view: set for the whole grade, not this stream. */
+    subjects: { id: string; name: string; code: string | null; teacher_user_id: string | null; teacher_scope?: 'stream' | 'grade' | null }[];
     staff: { id: string; name: string }[];
 }
 
@@ -257,13 +258,19 @@ function SubjectTeachers({ structure }: { structure: AcademicStructure | null })
                 <ListCard>
                     {(data?.subjects ?? []).map((s) => {
                         const teacher = data?.staff.find((t) => t.id === s.teacher_user_id);
+                        // A whole-grade teacher has no row on this stream: Unassign here did nothing.
+                        const inherited = stream !== null && s.teacher_scope === 'grade';
                         return (
                             <View key={s.id}>
-                                <ListRow title={s.name} subtitle={teacher ? teacher.name : 'Unassigned'} danger={!teacher} onPress={() => setOpen(open === s.id ? null : s.id)} />
+                                <ListRow title={s.name} subtitle={teacher ? `${teacher.name}${inherited ? ' · whole grade' : ''}` : 'Unassigned'} danger={!teacher} onPress={() => setOpen(open === s.id ? null : s.id)} />
                                 {open === s.id ? (
                                     <View style={{ padding: spacing.md, backgroundColor: colors.mutedBg }}>
                                         <ChipSelect wrap label="Teacher" options={(data?.staff ?? []).map((t) => ({ value: t.id, label: t.name }))} value={s.teacher_user_id} onChange={(id) => void assign(s.id, id)} />
-                                        {teacher ? <Button size="sm" variant="ghost" label="Unassign" onPress={() => void assign(s.id, null)} /> : null}
+                                        {teacher && inherited ? (
+                                            <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.sm }}>Set for the whole grade. Choose Whole grade above to unassign.</Text>
+                                        ) : teacher ? (
+                                            <Button size="sm" variant="ghost" label="Unassign" onPress={() => void assign(s.id, null)} />
+                                        ) : null}
                                     </View>
                                 ) : null}
                             </View>

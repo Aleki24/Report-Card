@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher, markableStudentIds, type TeacherPermissions } from '@/lib/teacher-utils';
-import { fetchActiveMultiPaperScheme } from '@/lib/multi-paper-server';
+import { examGradingScales, fetchActiveMultiPaperScheme, regrade, type ExamScales } from '@/lib/multi-paper-server';
 import { calculateCompositeSubjectScore, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { internalError } from '@/lib/api-errors';
+import { fetchAllRows } from '@/lib/postgrest';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 
 /**
@@ -98,13 +100,9 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('school_id, role, is_active')
-      .eq('id', userId)
-      .maybeSingle();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -175,13 +173,18 @@ export async function GET(request: NextRequest) {
     const scheme = await fetchActiveMultiPaperScheme(supabase, examId);
     const componentsByStudent = new Map<string, Record<string, number>>();
     if (scheme && returnedStudentIds.length > 0) {
-      const { data: markComponents } = await supabase
+      // Every paper score of the exam, paged (a class sitting four papers
+      // passes 1,000 rows), then narrowed to the learners returned; listing
+      // their ids in the URL also overflowed it for a large class.
+      const returned = new Set(returnedStudentIds);
+      const { rows: markComponents, error: componentsError } = await fetchAllRows<{ id: string; student_id: string; component_id: string; raw_score: number }>(() => supabase
         .from('exam_mark_components')
-        .select('student_id, component_id, raw_score')
+        .select('id, student_id, component_id, raw_score')
         .eq('exam_id', examId)
-        .in('student_id', returnedStudentIds);
+        .order('id'));
+      if (componentsError) return internalError('exam-marks paper scores load', componentsError);
 
-      for (const mc of markComponents || []) {
+      for (const mc of markComponents.filter(c => returned.has(c.student_id))) {
         const entry = componentsByStudent.get(mc.student_id) || {};
         entry[mc.component_id] = Number(mc.raw_score);
         componentsByStudent.set(mc.student_id, entry);
@@ -213,13 +216,9 @@ export async function POST(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
@@ -287,24 +286,75 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     const scheme = await fetchActiveMultiPaperScheme(supabase, exam_id);
     const componentRows: { exam_id: string; subject_id?: string; student_id: string; component_id: string; raw_score: number }[] = [];
+    /** Paper scores a teacher cleared (sent as null or ''), to delete. */
+    const clearedPapers: { student_id: string; component_id: string }[] = [];
 
+    // Papers a save leaves out are kept, and the subject score is worked out
+    // from the stored papers with the sent ones over them. A save only names
+    // the papers its screen had: deleting the rest let one teacher's save of
+    // P1 wipe the P2 another teacher had just entered, or a stale draft wipe
+    // a paper saved since. A paper the teacher cleared is sent as null.
+    const multiPaperLearners = scheme
+      ? [...new Set(marks.filter(m => m.components && typeof m.components === 'object').map(m => m.student_id as string))]
+      : [];
+    const storedPapers = new Map<string, Record<string, number>>();
+    for (let i = 0; i < multiPaperLearners.length; i += 150) {
+      const { data: stored, error: storedError } = await supabase
+        .from('exam_mark_components')
+        .select('student_id, component_id, raw_score')
+        .eq('exam_id', exam_id)
+        .in('student_id', multiPaperLearners.slice(i, i + 150));
+      if (storedError) return internalError('exam-marks paper scores load', storedError);
+      for (const row of stored ?? []) {
+        const papers = storedPapers.get(row.student_id as string) ?? {};
+        papers[row.component_id as string] = Number(row.raw_score);
+        storedPapers.set(row.student_id as string, papers);
+      }
+    }
+
+    let scales: ExamScales | undefined;
     const processedMarks: any[] = [];
     for (const m of marks) {
       if (scheme && m.components && typeof m.components === 'object') {
-        const resolved = resolveComponentEntry(scheme, Number(examRow?.max_score) || 100, m.components);
+        const sent = m.components as Record<string, unknown>;
+        const stored = storedPapers.get(m.student_id) ?? {};
+        const merged: Record<string, unknown> = { ...stored };
+        const sentPapers = new Set<string>();
+        for (const c of scheme.components || []) {
+          if (!(c.id in sent)) continue;
+          const value = sent[c.id];
+          if (value === null || value === '') {
+            delete merged[c.id];
+            if (c.id in stored) clearedPapers.push({ student_id: m.student_id, component_id: c.id });
+          } else {
+            merged[c.id] = value;
+            sentPapers.add(c.id);
+          }
+        }
+        const resolved = resolveComponentEntry(scheme, Number(examRow?.max_score) || 100, merged);
         if ('error' in resolved) {
           return NextResponse.json({ error: `Student ${m.student_id}: ${resolved.error}` }, { status: 400 });
         }
+        // The screen graded the papers it had; with stored papers merged in
+        // the score can differ, and the grade follows it on the same scale.
+        // Older app bundles send no percentage: theirs is the sent papers'.
+        const sentOnly = Number.isFinite(Number(m.percentage)) || sentPapers.size === 0
+          ? null
+          : resolveComponentEntry(scheme, Number(examRow?.max_score) || 100, Object.fromEntries([...sentPapers].map(id => [id, sent[id]])));
+        const clientPct = sentOnly && !('error' in sentOnly) ? sentOnly.percentage : Number(m.percentage);
+        const gradeSymbol = Number.isFinite(clientPct) && Math.abs(clientPct - resolved.percentage) > 0.005
+          ? regrade({ percentage: clientPct, grade_symbol: m.grade_symbol ?? null }, resolved.percentage, scales ??= await examGradingScales(supabase, exam_id))
+          : m.grade_symbol;
         processedMarks.push({
           student_id: m.student_id,
           exam_id,
           raw_score: resolved.raw_score,
           percentage: resolved.percentage,
-          grade_symbol: m.grade_symbol,
+          grade_symbol: gradeSymbol,
           rubric: m.rubric || null,
           remarks: m.remarks,
         });
-        for (const row of resolved.rows) {
+        for (const row of resolved.rows.filter(r => sentPapers.has(r.component_id))) {
           componentRows.push({
             exam_id,
             subject_id: scheme.subject_id,
@@ -345,6 +395,20 @@ export async function POST(request: NextRequest) {
         .upsert(componentRows, { onConflict: 'component_id,student_id' });
       if (compError) return internalError('exam-marks paper scores save', compError);
     }
+    // Cleared papers go, so their old score stops printing (PATCH does the same).
+    const clearedByPaper = new Map<string, string[]>();
+    for (const p of clearedPapers) clearedByPaper.set(p.component_id, [...(clearedByPaper.get(p.component_id) ?? []), p.student_id]);
+    for (const [componentId, learners] of clearedByPaper) {
+      for (let i = 0; i < learners.length; i += 150) {
+        const { error: delError } = await supabase
+          .from('exam_mark_components')
+          .delete()
+          .eq('exam_id', exam_id)
+          .eq('component_id', componentId)
+          .in('student_id', learners.slice(i, i + 150));
+        if (delError) return internalError('exam-marks paper scores clear', delError);
+      }
+    }
 
     return NextResponse.json({ success: true, data });
   } catch (err: unknown) {
@@ -358,13 +422,9 @@ export async function PATCH(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {
@@ -482,13 +542,9 @@ export async function DELETE(request: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('role, school_id, is_active')
-      .eq('id', userId)
-      .single();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!['ADMIN', 'SUBJECT_TEACHER', 'CLASS_TEACHER'].includes(userProfile.role)) {

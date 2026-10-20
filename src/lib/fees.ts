@@ -49,12 +49,49 @@ export function isOverdue(dueDate: string | null | undefined, balance: number): 
  * — every entry point (manual recording, M-Pesa STK Push, M-Pesa C2B
  * confirmation) writes here rather than touching the aggregate directly.
  */
+/**
+ * What is still owed across fee records. Owed and credit are kept apart: an
+ * overpaid term must not hide a term still owing, as a plain sum of balances
+ * did on the dashboards.
+ */
+export function totalOwed(fees: readonly { balance: number }[]): number {
+    return fees.reduce((sum, f) => sum + Math.max(0, f.balance || 0), 0);
+}
+
+/** Money paid beyond what was billed, across fee records. */
+export function totalCredit(fees: readonly { balance: number }[]): number {
+    return fees.reduce((sum, f) => sum + Math.max(0, -(f.balance || 0)), 0);
+}
+
 export type FeePaymentMethod = 'MPESA' | 'PESAPAL' | 'CASH' | 'BANK' | 'CHEQUE' | 'OTHER';
 export type FeePaymentRecordStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 
 export const FEE_PAYMENT_METHODS: FeePaymentMethod[] = ['MPESA', 'PESAPAL', 'CASH', 'BANK', 'CHEQUE', 'OTHER'];
 
 export type PaymentProvider = 'NONE' | 'DARAJA' | 'PESAPAL';
+
+/** What a payer's screen does with an online payment's status while it waits. */
+export type PaymentWaitStep = 'paid' | 'failed' | 'wait';
+
+/**
+ * Whether an online payment's status ends the wait. An M-Pesa prompt that
+ * failed (cancelled, wrong PIN) is over. A Pesapal order marked FAILED is
+ * not: the payer can retry on the same checkout page and the IPN then
+ * records it COMPLETED, so stopping there invited a second payment.
+ */
+export function paymentWaitStep(status: string | null | undefined, provider: PaymentProvider): PaymentWaitStep {
+    if (status === 'COMPLETED') return 'paid';
+    if (status === 'CANCELLED' || (status === 'FAILED' && provider !== 'PESAPAL')) return 'failed';
+    return 'wait';
+}
+
+/** When the wait for an online payment ends with no confirmation. */
+export const PAYMENT_UNCONFIRMED_MESSAGE =
+    'We haven’t had confirmation yet. If you completed the payment, it will still be recorded — check back in a few minutes before paying again.';
+
+/** When the wait ends on a Pesapal attempt it reported as unsuccessful. */
+export const PESAPAL_NOT_CONFIRMED_MESSAGE =
+    'Pesapal reported this attempt as unsuccessful. If you retried on the Pesapal page it may still go through — check your fees before paying again.';
 
 export interface FeePayment {
     id: string;

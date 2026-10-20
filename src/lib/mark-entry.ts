@@ -22,6 +22,14 @@ export interface EntryValues {
     remarks: string;
     /** The teacher picked the grade by hand, so a score change must not overwrite it. */
     gradeOverridden: boolean;
+    /**
+     * The saved paper scores this edit started from. A paper is cleared (and
+     * sent as null, so the server removes it) only when it was here and is now
+     * blank: a paper a colleague saved after this edit, or its draft, began was
+     * never on this screen and must be left alone. Older drafts lack it and
+     * clear nothing.
+     */
+    basePapers?: Record<string, string>;
 }
 
 /** A mark already stored on the server. */

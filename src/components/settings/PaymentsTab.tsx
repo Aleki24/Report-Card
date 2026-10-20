@@ -5,11 +5,10 @@ import { toast } from 'sonner';
 import { Trash2, Star } from 'lucide-react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { ConfirmDialog } from '@/components/ui';
-import type { FeePayment, PaymentProvider, SchoolBankAccount } from '@/lib/fees';
+import type { PaymentProvider, SchoolBankAccount } from '@/lib/fees';
+import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
 
 import { KENYA_BANKS, PAYMENT_PROVIDERS as PROVIDERS, paymentSettingsPayload, type PaymentSettings } from '@/lib/payments/settings';
-
-interface TermOption { id: string; name: string; }
 
 export function PaymentsTab() {
     const [settings, setSettings] = useState<PaymentSettings | null>(null);
@@ -44,18 +43,17 @@ export function PaymentsTab() {
     const [pesapalConsumerKey, setPesapalConsumerKey] = useState('');
     const [pesapalConsumerSecret, setPesapalConsumerSecret] = useState('');
 
-    const [unmatched, setUnmatched] = useState<FeePayment[]>([]);
-    const [unmatchedLoading, setUnmatchedLoading] = useState(true);
-    const [terms, setTerms] = useState<TermOption[]>([]);
-    const [assignTerm, setAssignTerm] = useState<Record<string, string>>({});
-    const [assignAdmission, setAssignAdmission] = useState<Record<string, string>>({});
-    const [assigning, setAssigning] = useState<string | null>(null);
+    // A failed load must not show the form's defaults: saving them would
+    // overwrite the school's real settings.
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const fetchSettings = useCallback(async () => {
         setLoading(true);
+        setLoadError(null);
         try {
-            const res = await fetch('/api/school/payment-settings');
+            const res = await fetch('/api/school/payment-settings', { cache: 'no-store' });
             const json = await res.json();
+            if (!res.ok) throw new Error(json?.error || 'Could not load payment settings.');
             if (json.data) {
                 setSettings(json.data);
                 setActiveProvider(json.data.activeProvider);
@@ -68,6 +66,7 @@ export function PaymentsTab() {
             }
         } catch (err) {
             console.error('Failed to load payment settings:', err);
+            setLoadError(err instanceof Error ? err.message : 'Could not load payment settings.');
         }
         setLoading(false);
     }, []);
@@ -84,24 +83,10 @@ export function PaymentsTab() {
         setBankAccountsLoading(false);
     }, []);
 
-    const fetchUnmatched = useCallback(async () => {
-        setUnmatchedLoading(true);
-        try {
-            const res = await fetch('/api/school/fees/unmatched');
-            const json = await res.json();
-            setUnmatched(json.data || []);
-        } catch (err) {
-            console.error('Failed to load unmatched payments:', err);
-        }
-        setUnmatchedLoading(false);
-    }, []);
-
     useEffect(() => {
         fetchSettings();
-        fetchUnmatched();
         fetchBankAccounts();
-        fetch('/api/school/data?type=terms').then(r => r.json()).then(j => setTerms((j.data || []).map((t: any) => ({ id: t.id, name: t.name })))).catch(() => {});
-    }, [fetchSettings, fetchUnmatched, fetchBankAccounts]);
+    }, [fetchSettings, fetchBankAccounts]);
 
     const saveSettings = async () => {
         setSaving(true);
@@ -206,42 +191,16 @@ export function PaymentsTab() {
         setBankAccountBusyId(null);
     };
 
-    const assignPayment = async (payment: FeePayment) => {
-        const admission = (assignAdmission[payment.id] || '').trim();
-        const termId = assignTerm[payment.id];
-        if (!admission || !termId) {
-            toast.error('Enter an admission number and pick a term.');
-            return;
-        }
-        setAssigning(payment.id);
-        try {
-            const feesRes = await fetch(`/api/school/fees?term_id=${termId}`);
-            const feesJson = await feesRes.json();
-            const match = (feesJson.data || []).find(
-                (f: any) => f.admissionNumber?.toLowerCase() === admission.toLowerCase()
-            );
-            if (!match) {
-                toast.error('No fee record found for that admission number in this term. Create one from the Fees list first.');
-                setAssigning(null);
-                return;
-            }
-            const res = await fetch(`/api/school/fees/unmatched/${payment.id}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ student_fee_id: match.id }),
-            });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Failed to assign');
-            toast.success('Payment assigned.');
-            await fetchUnmatched();
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Failed to assign payment');
-        }
-        setAssigning(null);
-    };
-
     if (loading) {
         return <div className="lg:col-span-3 p-12 text-center text-muted-foreground">Loading payment settings...</div>;
+    }
+    if (loadError) {
+        return (
+            <div role="alert" className="lg:col-span-3 flex flex-col items-center gap-3 p-12 text-center text-sm text-destructive">
+                <p>{loadError}</p>
+                <button type="button" className="btn-secondary" onClick={() => void fetchSettings()}>Try again</button>
+            </div>
+        );
     }
 
     return (
@@ -458,54 +417,7 @@ export function PaymentsTab() {
                 </button>
             </div>
 
-            <div className="card p-5">
-                <h3 className="font-bold text-sm mb-1">Unmatched Payments</h3>
-                <p className="text-xs text-muted-foreground mb-4">Money confirmed but not yet matched to a student&apos;s current-term bill.</p>
-                {unmatchedLoading ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
-                ) : unmatched.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">Nothing to reconcile — all payments matched automatically.</p>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {unmatched.map(p => (
-                            <div key={p.id} className="rounded-xl border border-border/60 p-3 flex flex-wrap items-end gap-3">
-                                <div className="min-w-[160px]">
-                                    <div className="text-sm font-semibold">KSh {p.amount.toLocaleString()}</div>
-                                    <div className="text-[11px] text-muted-foreground">
-                                        Ref &quot;{p.unmatchedAccountReference}&quot; · {p.phoneNumber || '—'} · {new Date(p.paidAt).toLocaleDateString('en-GB')}
-                                    </div>
-                                </div>
-                                <div className="flex-1 min-w-[140px]">
-                                    <input
-                                        type="text"
-                                        className="input-field w-full"
-                                        style={{ height: 32, fontSize: 12 }}
-                                        placeholder="Admission number"
-                                        value={assignAdmission[p.id] || ''}
-                                        onChange={e => setAssignAdmission(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                    />
-                                </div>
-                                <div className="flex-1 min-w-[140px]">
-                                    <select
-                                        className="input-field w-full"
-                                        style={{ height: 32, fontSize: 12 }}
-                                        value={assignTerm[p.id] || ''}
-                                        onChange={e => setAssignTerm(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                    >
-                                        <option value="">Term...</option>
-                                        {terms.map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <button className="btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => assignPayment(p)} disabled={assigning === p.id}>
-                                    {assigning === p.id ? 'Assigning...' : 'Assign'}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+            <UnmatchedPaymentsPanel canAssign />
             <ConfirmDialog
                 isOpen={removingAccount !== null}
                 onClose={() => setRemovingAccount(null)}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import { FONT_STACKS } from './pdfFonts';
 
 const INK = '#111111';
 const GRAY = '#555555';
@@ -8,32 +9,32 @@ const RULE = '#D8D8D8';
 const GOOD = '#0F7A3D';
 
 const s = StyleSheet.create({
-    page: { paddingHorizontal: 44, paddingTop: 36, paddingBottom: 36, fontFamily: 'Helvetica' },
+    page: { paddingHorizontal: 44, paddingTop: 36, paddingBottom: 36, fontFamily: FONT_STACKS.helvetica },
 
     letterhead: { alignItems: 'center', marginBottom: 10 },
     logo: { width: 40, height: 40, objectFit: 'contain', marginBottom: 6 },
-    schoolName: { fontSize: 15, fontFamily: 'Helvetica-Bold', color: INK, textAlign: 'center' },
+    schoolName: { fontSize: 15, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK, textAlign: 'center' },
     schoolAddress: { fontSize: 8, color: GRAY, marginTop: 2, textAlign: 'center' },
 
     titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 4 },
-    docTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: INK, textTransform: 'uppercase', letterSpacing: 1.5 },
-    receiptNo: { fontSize: 10, fontFamily: 'Helvetica-Bold', color: INK },
+    docTitle: { fontSize: 12, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK, textTransform: 'uppercase', letterSpacing: 1.5 },
+    receiptNo: { fontSize: 10, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK },
     doubleRule: { borderBottom: `2pt solid ${INK}`, marginBottom: 14 },
 
     row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
     col: { width: '48%' },
-    label: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: GRAY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+    label: { fontSize: 7.5, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
     value: { fontSize: 10, color: INK },
 
     amountBox: { marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 6, backgroundColor: '#F3F7F4', borderWidth: 1, borderColor: '#D9E6DC', alignItems: 'center' },
-    amountLabel: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: GRAY, textTransform: 'uppercase', letterSpacing: 1 },
-    amountValue: { fontSize: 22, fontFamily: 'Helvetica-Bold', color: GOOD, marginTop: 4 },
+    amountLabel: { fontSize: 8, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: 1 },
+    amountValue: { fontSize: 22, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GOOD, marginTop: 4 },
     amountWords: { fontSize: 8, color: GRAY, marginTop: 4, textAlign: 'center' },
 
     summaryTable: { borderTop: `1pt solid ${INK}`, borderBottom: `1pt solid ${INK}`, paddingVertical: 8, marginBottom: 18 },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
     summaryLabel: { fontSize: 9, color: GRAY },
-    summaryValue: { fontSize: 9, fontFamily: 'Helvetica-Bold', color: INK },
+    summaryValue: { fontSize: 9, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK },
 
     sigRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 },
     sigBlock: { width: '45%', alignItems: 'center' },

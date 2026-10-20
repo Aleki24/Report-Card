@@ -71,7 +71,8 @@ export default function DataTable<T>({
   return (
     <div className={className}>
       {/* Desktop table */}
-      <div className="hidden overflow-hidden rounded-2xl border border-border/60 bg-card/90 shadow-sm md:block">
+      {/* Scrolls sideways on a tablet rather than clipping the last columns (row actions). */}
+      <div className="hidden overflow-x-auto rounded-2xl border border-border/60 bg-card/90 shadow-sm md:block">
         <table className="w-full border-collapse">
           <thead>
             <tr>

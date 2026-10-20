@@ -2,6 +2,7 @@ import { route } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getStudentAttendance, getStudentDashboardSummary, getStudentReportCards } from '@/lib/student/queries';
 import { loadLinkedChild } from '@/lib/parents/server';
+import { totalOwed } from '@/lib/fees';
 
 type Params = { id: string };
 
@@ -17,12 +18,16 @@ export const GET = route<Params>('parent child overview', { module: 'parent_port
     const in60 = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10);
     const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
 
-    const [summary, reports, attendance, fees, events, ride] = await Promise.all([
+    const [summary, reports, attendance, fees, allFees, events, ride] = await Promise.all([
         access.hasModule('exams') ? getStudentDashboardSummary(child) : Promise.resolve(null),
         access.hasModule('report_cards') ? getStudentReportCards(child) : Promise.resolve([]),
         access.hasModule('attendance') ? getStudentAttendance(child, { from: since30, to: today }) : Promise.resolve([]),
         access.hasModule('fees')
             ? db.from('student_fees').select('id, total_fee, paid_amount, status, due_date, term:terms(name)').eq('student_id', child.studentId).order('created_at', { ascending: false }).limit(6).then(r => r.data ?? [])
+            : Promise.resolve([]),
+        // The balance counts every term, not only the six listed: older arrears were left out.
+        access.hasModule('fees')
+            ? db.from('student_fees').select('total_fee, paid_amount').eq('student_id', child.studentId).then(r => r.data ?? [])
             : Promise.resolve([]),
         access.hasModule('calendar')
             ? db.from('school_events').select('id, title, event_type, starts_on, ends_on').eq('school_id', access.schoolId).in('audience', ['ALL', 'PARENTS']).gte('starts_on', today).lte('starts_on', in60).order('starts_on').limit(10).then(r => r.data ?? [])
@@ -43,5 +48,6 @@ export const GET = route<Params>('parent child overview', { module: 'parent_port
         }
     }
 
-    return { child: { id: child.studentId, name: child.fullName, admissionNumber: child.admissionNumber }, summary, reports, attendance, fees, events, ride, bus };
+    const feeOwed = totalOwed(allFees.map(f => ({ balance: Number(f.total_fee) - Number(f.paid_amount) })));
+    return { child: { id: child.studentId, name: child.fullName, admissionNumber: child.admissionNumber }, summary, reports, attendance, fees, feeOwed, events, ride, bus };
 });

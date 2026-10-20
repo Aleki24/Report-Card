@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineResource, STUDENT_JOIN, personJoin } from '../resource';
 import {
     text, optionalText, isoDate, optionalDate, uuid, oneOf, count, bool, personId,
-    optionalPersonId, isoDateTime, optionalUuid,
+    optionalPersonId, isoDateTime, optionalUuid, orDefault,
 } from '../zod-fields';
 
 // ── Boarding ─────────────────────────────────────────────────
@@ -26,7 +26,7 @@ export const dorms = defineResource({
         name: text(100),
         house: optionalText(100),
         gender: oneOf(DORM_GENDERS).default('MIXED'),
-        capacity: count(2000).default(0),
+        capacity: orDefault(count(2000), 0),
         patron_id: optionalPersonId,
     }),
     select: `*, ${personJoin('patron', 'dorms', 'patron_id')}`,
@@ -169,7 +169,7 @@ export const medicineStock = defineResource({
         name: text(150),
         unit: text(30).default('tablet'),
         quantity: count(),
-        reorder_level: count().default(0),
+        reorder_level: orDefault(count(), 0),
         batch: optionalText(60),
         expiry_date: optionalDate,
     }),
@@ -188,7 +188,7 @@ export const medicationLogs = defineResource({
         stock_id: optionalUuid,
         medicine: text(150),
         dose: optionalText(100),
-        quantity: count(1000).default(1),
+        quantity: orDefault(count(1000), 1),
         given_at: isoDateTime,
         notes: optionalText(1000),
     }),

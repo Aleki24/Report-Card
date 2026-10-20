@@ -69,7 +69,19 @@ function RubricGrid() {
 
     const counts = useMemo(() => cbcCounts(rows), [rows]);
     const subStrands = strands.find(s => s.strand === filter.strand)?.subStrands ?? [];
-    const set = (patch: Partial<typeof filter>) => { setFilter(f => ({ ...f, ...patch })); setRows(null); };
+    // Changing what is shown drops the list, so ask first when ratings are unsaved.
+    const set = (patch: Partial<typeof filter>) => {
+        if (dirty && !window.confirm('Discard the levels you have not saved?')) return;
+        setFilter(f => ({ ...f, ...patch }));
+        setRows(null);
+        setDirty(false);
+    };
+    useEffect(() => {
+        if (!dirty) return;
+        const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [dirty]);
 
     return (
         <div className="flex flex-col gap-5">

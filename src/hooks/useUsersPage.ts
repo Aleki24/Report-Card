@@ -112,6 +112,7 @@ export function useUsersPage() {
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<UserRole>('CLASS_TEACHER');
   const [formJobTitle, setFormJobTitle] = useState('');
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [formSequenceNumber, setFormSequenceNumber] = useState<number>(1);
   const [formAdmissionNumber, setFormAdmissionNumber] = useState('');
   const [formGradeStreamId, setFormGradeStreamId] = useState('');
@@ -125,8 +126,14 @@ export function useUsersPage() {
     try {
       const res = await fetch('/api/school/data?type=users', { cache: 'no-store' });
       const json = await res.json();
+      // A failed load keeps the list already shown; it is not "no users yet".
+      if (!res.ok) throw new Error(json?.error || 'Could not load users.');
       setUsers(json.data || []);
-    } catch (err) { console.error('Failed to fetch users data:', err); }
+      setUsersError(null);
+    } catch (err) {
+      console.error('Failed to fetch users data:', err);
+      setUsersError(err instanceof Error ? err.message : 'Could not load users.');
+    }
     setLoading(false);
   }, []);
 
@@ -330,7 +337,7 @@ export function useUsersPage() {
 
   return {
     // Data
-    users, loading, paginatedUsers, totalPages, filteredUsers, roleCounts, inactiveCount,
+    users, loading, usersError, paginatedUsers, totalPages, filteredUsers, roleCounts, inactiveCount,
     // Filter / search / sort / pagination
     roleFilter, setRoleFilter, statusFilter, setStatusFilter, sortBy, setSortBy, classFilter, setClassFilter, gradeGroups,
     searchQuery, setSearchQuery, currentPage, setCurrentPage, usersPerPage,

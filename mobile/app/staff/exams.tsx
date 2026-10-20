@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApi } from '@/lib/api';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useAcademicStructure, useExams } from '@/lib/useSchoolData';
@@ -41,6 +41,7 @@ export default function ExamsScreen() {
 
 function ExamsContent() {
     const params = useLocalSearchParams<{ tab?: string; exam?: string; term?: string }>();
+    const router = useRouter();
     const [tab, setTab] = useState<Tab>(parseTab(params.tab));
     const [exam, setExam] = useState<ExamSlot | null>(null);
     const [pickerKey, setPickerKey] = useState(0);
@@ -62,8 +63,11 @@ function ExamsContent() {
         if (found) {
             setExam(found);
             setTab(params.tab ? parseTab(params.tab) : 'entry');
+            // Spend the link: the same "Continue" tapped again after leaving
+            // the exam sets the params afresh, so this opens it again.
+            router.setParams({ exam: undefined, term: undefined, tab: undefined });
         }
-    }, [params.exam, params.tab, linked.exams]);
+    }, [params.exam, params.tab, linked.exams, router]);
 
     const { role } = useCurrentUser();
     const api = useApi();

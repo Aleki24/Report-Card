@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { fetchExamComponentScheme, papersOverNewMax, recomputeExamComposites } from '@/lib/multi-paper-server';
 import { AGGREGATION_METHODS } from '@/lib/multi-paper';
 
@@ -12,13 +13,9 @@ async function getSessionAndExam(examId: string) {
     if (!userId) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
     const supabase = createSupabaseAdmin();
-    const { data: userProfile } = await supabase
-        .from('users')
-        .select('role, school_id, is_active')
-        .eq('id', userId)
-        .maybeSingle();
+    const userProfile = await getActiveUserProfile(userId);
 
-    if (!userProfile || userProfile.is_active === false) {
+    if (!userProfile) {
         return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
     if (!userProfile.school_id) {

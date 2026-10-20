@@ -11,6 +11,7 @@ import {
     Screen, ScreenHeader, SectionLabel, SegmentedTabs,
 } from '@/components/ui';
 import type { ExamResult, ReportCard } from '@/lib/types';
+import { groupResultsByRound } from '@shared/student/result-groups';
 
 export default function ResultsScreen() {
     const [tab, setTab] = useState<'marks' | 'reports'>('marks');
@@ -51,16 +52,9 @@ function ExamMarksTab() {
     const results = data ?? [];
     const base = all.data ?? [];
 
-    const groups = useMemo(() => {
-        const map = new Map<string, { title: string; items: ExamResult[] }>();
-        for (const r of results) {
-            const key = `${r.exams?.terms?.id ?? 'x'}_${r.exams?.academic_years?.id ?? 'x'}`;
-            const title = `${r.exams?.terms?.name ?? '?'} — ${r.exams?.academic_years?.name ?? ''}`;
-            map.set(key, { title, items: [...(map.get(key)?.items ?? []), r] });
-        }
-        // Best subject first within each term.
-        return [...map.values()].map((g) => ({ ...g, items: g.items.sort((a, b) => Number(b.percentage) - Number(a.percentage)) }));
-    }, [results]);
+    // By term, then by exam round, as on the web: a term's Opener, Mid-term
+    // and End-term each listed every subject again with nothing to tell them apart.
+    const groups = useMemo(() => groupResultsByRound(results), [results]);
 
     const all$ = (opts: { value: string; label: string }[], label: string) => [{ value: '', label }, ...opts];
 
@@ -77,31 +71,33 @@ function ExamMarksTab() {
             ) : results.length === 0 ? (
                 <EmptyState title="No results yet" description="Results appear once your teachers release exam marks." />
             ) : (
-                groups.map((g) => {
-                    const avg = g.items.reduce((s, r) => s + Number(r.percentage), 0) / g.items.length;
-                    return (
-                        <View key={g.title}>
-                            <SectionLabel action={<Text style={[styles.avg, { color: scoreColor(colors, avg) }]}>avg {formatPercent(avg, 1)}</Text>}>
-                                {g.title} · {g.items.length} recorded
-                            </SectionLabel>
-                            <ListCard>
-                                {g.items.map((r) => (
-                                    <ListRow
-                                        key={r.id}
-                                        title={r.exams?.subjects?.name ?? '—'}
-                                        subtitle={`${r.raw_score}/${r.exams?.max_score ?? '—'}${r.remarks ? ` · ${r.remarks}` : ''}`}
-                                        right={
-                                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                                                <Text style={[styles.pct, { color: scoreColor(colors, Number(r.percentage)) }]}>{formatPercent(Number(r.percentage), 1)}</Text>
-                                                <Badge label={r.grade_symbol ?? '—'} variant={Number(r.percentage) >= 50 ? 'success' : 'danger'} />
-                                            </View>
-                                        }
-                                    />
-                                ))}
-                            </ListCard>
-                        </View>
-                    );
-                })
+                groups.map((t) => (
+                    <View key={t.key}>
+                        <Text style={styles.termTitle}>{t.term}{t.year ? ` — ${t.year}` : ''}</Text>
+                        {t.rounds.map((rd) => (
+                            <View key={rd.key}>
+                                <SectionLabel action={<Text style={[styles.avg, { color: scoreColor(colors, rd.average) }]}>avg {formatPercent(rd.average, 1)}</Text>}>
+                                    {rd.label} · {rd.items.length} recorded
+                                </SectionLabel>
+                                <ListCard>
+                                    {rd.items.map((r) => (
+                                        <ListRow
+                                            key={r.id}
+                                            title={r.exams?.subjects?.name ?? '—'}
+                                            subtitle={`${r.raw_score}/${r.exams?.max_score ?? '—'}${r.remarks ? ` · ${r.remarks}` : ''}`}
+                                            right={
+                                                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                                                    <Text style={[styles.pct, { color: scoreColor(colors, Number(r.percentage)) }]}>{formatPercent(Number(r.percentage), 1)}</Text>
+                                                    <Badge label={r.grade_symbol ?? '—'} variant={Number(r.percentage) >= 50 ? 'success' : 'danger'} />
+                                                </View>
+                                            }
+                                        />
+                                    ))}
+                                </ListCard>
+                            </View>
+                        ))}
+                    </View>
+                ))
             )}
         </View>
     );
@@ -136,7 +132,7 @@ function ReportCardsTab() {
     if (loading) return <LoadingView />;
     if (error) return <ErrorBanner message={error} onRetry={reload} />;
     const reports = data ?? [];
-    if (reports.length === 0) return <EmptyState title="No report cards" description="Report cards appear once your teachers generate them." />;
+    if (reports.length === 0) return <EmptyState title="No report cards yet" description="A term’s report card appears here once your school releases its results." />;
 
     return (
         <View>
@@ -154,7 +150,7 @@ function ReportCardsTab() {
                         <Text style={styles.sub}>{rc.grade_streams?.full_name ?? rc.grade_streams?.name ?? ''}</Text>
                         <View style={styles.stats}>
                             <Stat label="Average" value={formatPercent(rc.overall_average, 1)} color={scoreColor(colors, rc.overall_average)} />
-                            <Stat label="Position" value={rc.overall_position != null ? String(rc.overall_position) : '—'} />
+                            {rc.overall_position != null ? <Stat label="Position" value={String(rc.overall_position)} /> : null}
                             {attend != null ? <Stat label="Attendance" value={`${attend}%`} /> : null}
                         </View>
                         <ButtonRow>
@@ -169,8 +165,8 @@ function ReportCardsTab() {
                                 {subjects.map((s) => (
                                     <View key={s.id} style={styles.subjectRow}>
                                         <Text style={styles.subjectName} numberOfLines={1}>{s.subjects?.name ?? '—'}</Text>
-                                        <Text style={styles.subjectScore}>{s.total_score ?? '—'}/{s.total_max_score ?? '—'}</Text>
-                                        <Badge label={s.grade_symbol ?? '—'} variant={(s.percentage ?? 0) >= 50 ? 'success' : 'danger'} />
+                                        {/* The term's average; the PDF prints each paper's score and grade. */}
+                                        <Text style={[styles.subjectScore, { color: scoreColor(colors, s.percentage) }]}>{formatPercent(s.percentage, 1)}</Text>
                                     </View>
                                 ))}
                             </View>
@@ -206,6 +202,7 @@ const useStyles = makeStyles((colors) => ({
     avg: { fontSize: 12, fontFamily: fonts.display },
     pct: { fontSize: 14, fontFamily: fonts.display },
     title: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground },
+    termTitle: { fontSize: 16, fontFamily: fonts.display, color: colors.foreground, marginTop: spacing.lg },
     sub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     stats: { flexDirection: 'row', gap: spacing.xl, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
     statLabel: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, marginBottom: 2 },

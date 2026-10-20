@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { DateField } from '@/components/DateField';
 import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
@@ -82,17 +82,29 @@ function SchoolTab() {
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState<Msg>(null);
 
+    // The fields edited and not yet saved. The server's answer fills every
+    // other field: the screen opens on the profile cached on the phone (up to
+    // a week old), and the fresh one arriving after the first keystroke must
+    // still replace it, or Save would write the old logo, motto and principal back.
+    const edits = useRef<Partial<SchoolProfile>>({});
+    /** The latest server profile, for saves that start before a render catches up. */
+    const latest = useRef<SchoolProfile | null>(null);
     useEffect(() => {
-        if (data) setForm(data);
+        latest.current = data ?? latest.current;
+        if (data) setForm({ ...data, ...edits.current });
     }, [data]);
 
     if (loading || !form) return error ? <ErrorBanner message={error} onRetry={reload} /> : <LoadingView />;
-    const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => setForm({ ...form, [k]: v });
+    const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => {
+        edits.current = { ...edits.current, [k]: v };
+        setForm((prev) => (prev ? { ...prev, [k]: v } : prev));
+    };
 
     const save = async (next: SchoolProfile = form) => {
         if (!next.name.trim()) return setMessage({ tone: 'danger', text: 'School name is required.' });
         setSaving(true);
         setMessage(null);
+        const sent = edits.current;
         try {
             await api.post('/api/admin/school', {
                 school_id: next.id,
@@ -107,6 +119,10 @@ function SchoolTab() {
                 overall_grading_system_id: next.overall_grading_system_id ?? null,
             });
             setMessage({ tone: 'success', text: 'School profile saved.' });
+            // Saved edits now come from the server; anything typed meanwhile stays.
+            const left: Partial<SchoolProfile> = { ...edits.current };
+            for (const k of Object.keys(sent) as (keyof SchoolProfile)[]) if (left[k] === sent[k]) delete left[k];
+            edits.current = left;
             reload();
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save') });
@@ -120,9 +136,10 @@ function SchoolTab() {
         try {
             const url = await api.pickAndUploadImage();
             if (url) {
-                const next = { ...form, logo_url: url };
-                setForm(next);
-                await save(next);
+                set('logo_url', url);
+                // The picker and upload take a while: save on the profile as it
+                // is now, not as it was when "Change logo" was tapped.
+                await save({ ...(latest.current ?? form), ...edits.current });
             }
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Upload failed') });

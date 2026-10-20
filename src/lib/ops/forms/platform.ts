@@ -28,14 +28,25 @@ export interface ChildResult { id: string; percentage: number | null; grade_symb
 export interface ChildOverview {
     child: { id: string; name: string; admissionNumber: string };
     summary: {
-        stats: { averageScore: number; attendanceRate: number; examsTaken: number; attendanceRecords: number };
+        stats: { averageScore: number; averageTerm?: string | null; attendanceRate: number; examsTaken: number; attendanceRecords: number };
         latestResults: ChildResult[];
         announcements: { id: string; title: string; content: string; createdAt: string; isImportant: boolean }[];
         currentTerm?: { name: string };
     } | null;
-    reports: { id: string; overall_average: number | null; overall_position: number | null; comments_class_teacher: string | null; comments_principal: string | null }[];
+    reports: {
+        id: string;
+        overall_average: number | null;
+        overall_position: number | null;
+        comments_class_teacher: string | null;
+        comments_principal: string | null;
+        terms: { id: string; name: string } | null;
+        academic_years: { id: string; name: string } | null;
+    }[];
     attendance: { id: string; date: string; status: string }[];
+    /** The latest terms' fees, for the list. */
     fees: { id: string; total_fee: number; paid_amount: number; status: string; due_date: string | null; term: { name: string } | null }[];
+    /** Owed across every term (older servers sent only `fees`). */
+    feeOwed?: number;
     events: { id: string; title: string; event_type: string; starts_on: string; ends_on: string | null }[];
     ride: { route: { name: string } | null; stop: { name: string; pickup_time: string | null; dropoff_time: string | null } | null } | null;
     bus: { status: string; last_seen_at: string | null; vehicle: { registration: string } | null; boarded: string | null } | null;
@@ -44,7 +55,12 @@ export interface ChildOverview {
 export const FEE_STATUS_TONES: Record<string, PillTone> = { PENDING: 'warn', PARTIAL: 'info', PAID: 'good', OVERPAID: 'violet' };
 export const ATTENDANCE_TONES: Record<string, PillTone> = { present: 'good', absent: 'bad', late: 'warn', excused: 'info' };
 
-export const feeBalance = (o: ChildOverview) => o.fees.reduce((n, f) => n + Number(f.total_fee) - Number(f.paid_amount), 0);
+/** What the parent owes for the child: every term, owed only (an overpaid term doesn't hide arrears). */
+export const feeBalance = (o: ChildOverview) =>
+    o.feeOwed ?? o.fees.reduce((n, f) => n + Math.max(0, Number(f.total_fee) - Number(f.paid_amount)), 0);
+/** "Term 2 2026" for a report card. */
+export const reportTermLabel = (r: ChildOverview['reports'][number]) =>
+    [r.terms?.name, r.academic_years?.name].filter(Boolean).join(' ') || 'Report card';
 export const absences = (o: ChildOverview) => o.attendance.filter(a => a.status === 'absent').length;
 export const rideLine = (ride: NonNullable<ChildOverview['ride']>) =>
     `${ride.route?.name ?? ''} · ${ride.stop?.name ?? 'stop not set'}${ride.stop?.pickup_time ? ` · pick-up ${ride.stop.pickup_time.slice(0, 5)}` : ''}${ride.stop?.dropoff_time ? ` · drop-off ${ride.stop.dropoff_time.slice(0, 5)}` : ''}`;

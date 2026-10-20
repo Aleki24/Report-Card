@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import type { StudentProfileResponse } from '@/types/user-profile';
 import { embedOne } from '@/lib/postgrest';
 import { getTeacherPermissions, isStudentVisibleToTeacher } from '@/lib/teacher-utils';
@@ -19,8 +20,8 @@ export async function GET(
 
     const studentId = (await params).studentId;
     const supabase = createSupabaseAdmin();
-    const { data: userData } = await supabase.from('users').select('school_id, role, is_active').eq('id', userId).maybeSingle();
-    if (!userData || userData.is_active === false) {
+    const userData = await getActiveUserProfile(userId);
+    if (!userData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const schoolId = userData?.school_id as string | null;

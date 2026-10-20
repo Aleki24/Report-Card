@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { getActiveUserProfile } from '@/lib/auth-server';
 import { FEE_VIEWER_ROLES } from '@/lib/fees';
 import { submitPesapalOrder, type PesapalEnvironment } from '@/lib/pesapal';
 import { decryptSecret } from '@/lib/crypto';
@@ -15,12 +16,8 @@ export async function POST(request: NextRequest) {
         if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-        const { data: userProfile } = await supabase
-            .from('users')
-            .select('role, school_id, is_active')
-            .eq('id', userId)
-            .maybeSingle();
-        if (!userProfile || userProfile.is_active === false) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userProfile = await getActiveUserProfile(userId);
+        if (!userProfile) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const body = await request.json();
         const { student_fee_id, amount, phone_number, email } = body;
@@ -105,13 +102,15 @@ export async function POST(request: NextRequest) {
                 payerLastName: student?.users?.last_name || undefined,
             });
 
-            await supabase
+            const { error: trackError } = await supabase
                 .from('fee_payments')
                 .update({
                     pesapal_order_tracking_id: order.order_tracking_id,
                     pesapal_merchant_reference: order.merchant_reference,
                 })
                 .eq('id', payment.id);
+            // Not fatal: the IPN also finds the payment by its merchant reference.
+            if (trackError) console.error('[pesapal checkout] could not save the tracking id', payment.id, trackError);
 
             return NextResponse.json({
                 data: {
