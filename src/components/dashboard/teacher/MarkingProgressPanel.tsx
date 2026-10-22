@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, ClipboardList } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ClipboardList, RotateCcw } from 'lucide-react';
 import { ALL_EXAM_TYPES } from '@/lib/exam-types';
 import { markEntryHref, markingState, type MarkingProgressItem, type MarkingState } from '@/lib/marking-progress';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,9 @@ interface MarkingProgressPanelProps {
     items: MarkingProgressItem[];
     termName: string | null;
     loading: boolean;
+    /** Set when the progress failed to load: shown with a retry, not as "No exams to mark yet". */
+    error?: boolean;
+    onRetry?: () => void;
     /** Rows before "Show all". */
     limit?: number;
 }
@@ -31,7 +34,7 @@ const typeOrder = (code: string) => ALL_EXAM_TYPES.find(t => t.code === code)?.o
  * Every exam this teacher marks this term, with how far each has got —
  * unfinished work first — and a one-tap link straight to its mark sheet.
  */
-export default function MarkingProgressPanel({ items, termName, loading, limit = 6 }: MarkingProgressPanelProps) {
+export default function MarkingProgressPanel({ items, termName, loading, error, onRetry, limit = 6 }: MarkingProgressPanelProps) {
     const types = useMemo(() => [...new Set(items.map(i => i.examType))].sort((a, b) => typeOrder(a) - typeOrder(b)), [items]);
     // Open on the round that has work in it: the first one with marks begun but
     // not finished, else the first with anything left, else the first.
@@ -84,6 +87,16 @@ export default function MarkingProgressPanel({ items, termName, loading, limit =
             {loading ? (
                 <div className="space-y-2" aria-busy>
                     {[0, 1, 2].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/60" />)}
+                </div>
+            ) : error ? (
+                <div role="alert" className="flex flex-col items-center gap-3 py-10 text-center">
+                    <p className="text-sm font-semibold">Your marking progress did not load</p>
+                    <p className="max-w-xs text-xs text-muted-foreground">Check your connection and try again.</p>
+                    {onRetry && (
+                        <button type="button" className="btn-secondary" onClick={onRetry}>
+                            <RotateCcw size={16} aria-hidden />Try again
+                        </button>
+                    )}
                 </div>
             ) : items.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-10 text-center">

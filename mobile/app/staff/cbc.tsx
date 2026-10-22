@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CBC_LEVELS, CBC_LEVEL_LABELS } from '@shared/ops/resources/academics';
 import {
@@ -29,6 +29,10 @@ function RubricGrid() {
     const [rows, setRows] = useState<CbcRow[] | null>(null);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [opening, setOpening] = useState(false);
+    // Only the latest Open may fill the list: a slow earlier answer would show
+    // (and save) another class's or strand's levels.
+    const openRequest = useRef(0);
 
     useEffect(() => {
         if (!filter.subject_id) return;
@@ -39,7 +43,7 @@ function RubricGrid() {
         return () => { live = false; };
     }, [api, filter.subject_id]);
 
-    const apply = (patch: Partial<CbcFilter>) => { setFilter((f) => ({ ...f, ...patch })); setRows(null); setDirty(false); };
+    const apply = (patch: Partial<CbcFilter>) => { openRequest.current++; setOpening(false); setFilter((f) => ({ ...f, ...patch })); setRows(null); setDirty(false); };
     // A filter change closes the list, so ask first when levels are unsaved.
     const set = (patch: Partial<CbcFilter>) => {
         if (!dirty) { apply(patch); return; }
@@ -49,12 +53,28 @@ function RubricGrid() {
         ]);
     };
 
-    const load = async () => {
-        if (!cbcFilterReady(filter)) { toast.error('Choose a class, subject, term and strand.'); return; }
+    const open = async () => {
+        const id = ++openRequest.current;
+        setOpening(true);
         try {
-            setRows(await opsGet<CbcRow[]>(api, withQuery('/api/academics/cbc', filter)));
+            const next = await opsGet<CbcRow[]>(api, withQuery('/api/academics/cbc', filter));
+            if (id !== openRequest.current) return;
+            setRows(next);
             setDirty(false);
-        } catch (err) { toast.error(errorMessage(err, 'Could not open the class list')); }
+        } catch (err) {
+            if (id === openRequest.current) toast.error(errorMessage(err, 'Could not open the class list'));
+        } finally {
+            if (id === openRequest.current) setOpening(false);
+        }
+    };
+    // Re-opening reloads the saved levels, so unsaved taps are asked about first.
+    const load = () => {
+        if (!cbcFilterReady(filter)) { toast.error('Choose a class, subject, term and strand.'); return; }
+        if (!dirty) { void open(); return; }
+        confirmAlert('Discard unsaved levels?', 'Opening the class list again reloads the saved levels.', [
+            { text: 'Keep editing', style: 'cancel' },
+            { text: 'Discard', style: 'destructive', onPress: () => void open() },
+        ]);
     };
 
     const save = async () => {
@@ -86,7 +106,7 @@ function RubricGrid() {
                 {strands.length > 0 ? <ChipSelect options={strands.map((s) => ({ value: s.strand, label: s.strand }))} value={filter.strand || null} onChange={(v) => set({ strand: v, sub_strand: '' })} /> : null}
                 <TextField label="Sub-strand" value={filter.sub_strand} onChangeText={(v) => set({ sub_strand: v })} placeholder="e.g. Fractions" />
                 {subStrands.length > 0 ? <ChipSelect options={subStrands.map((s) => ({ value: s, label: s }))} value={filter.sub_strand || null} onChange={(v) => set({ sub_strand: v })} /> : null}
-                <Button label="Open class list" onPress={() => void load()} block />
+                <Button label={opening ? 'Opening…' : 'Open class list'} onPress={load} loading={opening} disabled={opening} block />
             </Card>
 
             {rows ? (
@@ -104,10 +124,11 @@ function RubricGrid() {
                                     return (
                                         <Pressable
                                             key={l}
-                                            disabled={!canAssess}
+                                            // A tap during a save would be marked saved without being sent.
+                                            disabled={!canAssess || saving}
                                             onPress={() => setLevel(r.studentId, l)}
                                             accessibilityRole="radio"
-                                            accessibilityState={{ checked: on, disabled: !canAssess }}
+                                            accessibilityState={{ checked: on, disabled: !canAssess || saving }}
                                             accessibilityLabel={CBC_LEVEL_LABELS[l]}
                                             style={[styles.level, on && { backgroundColor: toneColor(colors, CBC_LEVEL_TONES[l]) }]}
                                         >

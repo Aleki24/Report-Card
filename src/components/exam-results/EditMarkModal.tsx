@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useId } from 'react';
+import React, { useState, useEffect, useCallback, useId, useRef } from 'react';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { toast } from 'sonner';
 import type { ExamSubjectComponentScheme } from '@/types';
@@ -54,6 +54,10 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
     const schemeComponents = multiPaper ? (scheme?.components || []) : [];
 
     const [score, setScore] = useState(String(mark.raw_score));
+    // The score as typed now: the grade scale arrives after two requests, and
+    // grading the old score then overwrote the grade of the newly typed one.
+    const scoreRef = useRef(score);
+    scoreRef.current = score;
     const [componentScores, setComponentScores] = useState<Record<string, string>>(() => {
         const initial: Record<string, string> = {};
         for (const c of schemeComponents) {
@@ -159,8 +163,9 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 // the grade shown here updates to match, and saving persists it.
                 // Skipped for multi-paper (recomputed from components) and when the
                 // teacher has manually chosen a grade in this session.
-                if (!multiPaper && !gradeManuallySet && options.length > 0 && maxScore > 0) {
-                    const pct = Math.round((mark.raw_score / maxScore) * 100);
+                const current = Number(scoreRef.current);
+                if (!multiPaper && !gradeManuallySet && options.length > 0 && maxScore > 0 && scoreRef.current.trim() !== '' && Number.isFinite(current)) {
+                    const pct = Math.round((current / maxScore) * 100);
                     const matching = options.find(o => pct >= o.min_percentage && pct <= o.max_percentage);
                     if (matching && matching.symbol !== grade) setGrade(matching.symbol);
                 }
@@ -351,7 +356,7 @@ export function EditMarkModal({ mark, maxScore, examId, scheme, onClose, onSaved
                 aria-modal="true"
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className="card w-full max-w-md p-5 outline-none sm:p-6"
+                className="card max-h-[90dvh] w-full max-w-md overflow-y-auto p-5 outline-none sm:p-6"
                 style={{ animation: 'fadeIn .2s ease' }}
             >
                 {/* Header */}

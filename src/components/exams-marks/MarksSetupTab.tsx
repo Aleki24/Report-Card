@@ -152,6 +152,8 @@ export function MarksSetupTab() {
   const [loadingTerms, setLoadingTerms] = useState(true);
   const [loadingExams, setLoadingExams] = useState(false);
   const [termsError, setTermsError] = useState('');
+  const [structureError, setStructureError] = useState('');
+  const [structureAttempt, setStructureAttempt] = useState(0);
   const [examsError, setExamsError] = useState('');
   const [examsReloadToken, setExamsReloadToken] = useState(0);
   const [seeding, setSeeding] = useState(false);
@@ -188,12 +190,18 @@ export function MarksSetupTab() {
       try {
         // Only the curricula and grades this school has classes in.
         const res = await fetch('/api/admin/academic-structure?scope=school', { cache: 'no-store' });
+        // A failed request is not a school with no classes.
+        if (!res.ok) throw new Error(`academic-structure ${res.status}`);
         const data = (await res.json()) as { academic_levels?: AcademicLevel[]; grades?: GradeItem[] };
         setAcademicLevels(data.academic_levels ?? []);
         setAllGrades(data.grades ?? []);
-      } catch (err) { console.error('Failed to fetch academic structure:', err); }
+        setStructureError('');
+      } catch (err) {
+        console.error('Failed to fetch academic structure:', err);
+        setStructureError('Your classes could not be loaded. Check your connection and try again.');
+      }
     })();
-  }, []);
+  }, [structureAttempt]);
 
   // ── Subjects to offer beyond those with exams: a teacher's assigned ones;
   // for an admin every subject the school offers, so a class with no exams
@@ -602,6 +610,8 @@ export function MarksSetupTab() {
           <p className="text-xs text-muted-foreground">Loading terms…</p>
         ) : termsError ? (
           <LoadError message={termsError} onRetry={() => void loadTerms()} />
+        ) : structureError ? (
+          <LoadError message={structureError} onRetry={() => { setStructureError(''); setStructureAttempt(n => n + 1); }} />
         ) : terms.length === 0 ? (
           <p className="text-sm text-amber-700 dark:text-amber-400">No terms found. Ask your admin to set up the academic calendar.</p>
         ) : (

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Save, Search, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, RotateCcw, Save, Search, X } from 'lucide-react';
 import type { ExamSubjectComponent, ExamSubjectComponentScheme } from '@/types';
 import type { RosterMode } from '@/lib/subject-roster';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -127,6 +127,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     const [scheme, setScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     /* ── Working state ── */
     const [edits, setEdits] = useState<Record<string, EntryValues>>({});
@@ -193,6 +194,9 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     fetch(examRosterUrl({ subjectId, gradeStreamId, gradeId }), { cache: 'no-store' }),
                     fetchSaved(),
                 ]);
+                // Without the grading set-up every mark would show "No grading system"
+                // and Save would be blocked; say what failed instead.
+                if (!structureRes.ok) throw new Error('Could not load the classes and grading scales. Check your connection.');
                 const structure = (await structureRes.json()) as StructureResponse;
                 const students = (await studentsRes.json()) as { data?: ApiStudent[]; roster?: RosterMode; error?: string };
                 if (!studentsRes.ok) throw new Error(students.error || 'Could not load learners');
@@ -233,7 +237,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         })();
 
         return () => { cancelled = true; };
-    }, [examId, subjectId, fetchSaved]);
+    }, [examId, subjectId, fetchSaved, loadAttempt]);
 
     /* ── Autosave edits on this device as they are typed ── */
     useEffect(() => {
@@ -261,6 +265,14 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             flash({ tone: 'success', text: `Synced ${result.sent} batch${result.sent !== 1 ? 'es' : ''} of marks that were saved offline.` });
         }
     }, [examId, refreshSaved, flash]);
+
+    // Marks kept on this device are retried every 30 seconds while any wait,
+    // not only when the browser reports coming back online (which it often doesn't).
+    useEffect(() => {
+        if (pendingSync === 0) return;
+        const timer = window.setInterval(() => { if (isOnline()) void syncNow(); }, 30_000);
+        return () => window.clearInterval(timer);
+    }, [pendingSync, syncNow]);
 
     useEffect(() => {
         setOffline(!isOnline());
@@ -441,6 +453,9 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         return rows.filter(r => {
             if (streamFilter && r.learner.streamId !== streamFilter) return false;
             if (q && !r.learner.name.toLowerCase().includes(q) && !r.learner.admissionNumber.toLowerCase().includes(q)) return false;
+            // A row being edited stays where it is: under "Not entered" it vanished
+            // after the first digit, closing the keyboard mid-mark.
+            if ((filter === 'todo' || filter === 'entered') && edits[r.learner.id]) return true;
             switch (filter) {
                 case 'todo': return r.status === 'empty' || r.status === 'removing';
                 case 'entered': return r.status === 'saved' || r.status === 'changed' || r.status === 'new';
@@ -448,7 +463,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 default: return true;
             }
         });
-    }, [rows, query, filter, streamFilter]);
+    }, [rows, query, filter, streamFilter, edits]);
 
     /* ── Keyboard: Enter / arrows move down the same score column ── */
     const handleScoreKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, column: string) => {
@@ -641,6 +656,9 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-sm text-red-600 dark:text-red-400">
                 <p className="font-semibold">The mark sheet could not be loaded.</p>
                 <p className="mt-1">{loadError}</p>
+                <button type="button" className="btn-secondary mt-3" onClick={() => { setLoadError(null); setLoading(true); setLoadAttempt(n => n + 1); }}>
+                    <RotateCcw size={16} aria-hidden />Try again
+                </button>
             </div>
         );
     }
@@ -676,7 +694,10 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                         {offline ? 'Offline — keeping marks on this device' : 'Online'}
                     </span>
                     {pendingSync > 0 && (
-                        <span className="text-[11px] text-amber-600">{pendingSync} batch{pendingSync !== 1 ? 'es' : ''} waiting to sync</span>
+                        <span className="inline-flex items-center gap-2 text-[11px] text-amber-600">
+                            {pendingSync} batch{pendingSync !== 1 ? 'es' : ''} waiting to sync
+                            <button type="button" className="btn-secondary h-8 px-2.5 text-[11px]" onClick={() => void syncNow()}>Sync now</button>
+                        </span>
                     )}
                     {lastDraftAt && counts.unsaved > 0 && (
                         <span className="text-[11px] text-muted-foreground">

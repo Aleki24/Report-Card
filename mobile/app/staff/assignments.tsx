@@ -209,7 +209,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
                 onChange={setView}
             />
 
-            {loading && !data ? <LoadingView /> : shown.length === 0 ? (
+            {loading && !data ? <LoadingView /> : error && !data ? null : shown.length === 0 ? (
                 <EmptyState
                     icon={ClipboardList}
                     title={view === 'past' ? 'Nothing past due' : view === 'mine' ? 'You have not set any assignments' : 'No upcoming assignments'}
@@ -323,15 +323,25 @@ function Submissions() {
     const [message, setMessage] = useState<string | null>(null);
 
     const save = async () => {
-        if (!grading) return;
+        if (!grading || saving) return;
+        // parseFloat read "12abc" as 12 and "abc" as no grade, clearing a saved one.
+        const typed = grading.grade.trim();
+        const grade = typed === '' ? null : Number(typed);
+        if (grade !== null && !Number.isFinite(grade)) {
+            toast.error('Enter the grade as a number, or leave it blank.');
+            return;
+        }
         setSaving(true);
         try {
-            const grade = parseFloat(grading.grade);
-            await api.patch(`/api/school/submissions/${grading.id}`, { grade: Number.isNaN(grade) ? null : grade, feedback: grading.feedback.trim() || null });
+            await api.patch(`/api/school/submissions/${grading.id}`, { grade, feedback: grading.feedback.trim() || null });
             setGrading(null);
-            refresh();
+            toast.success('Grade saved.');
+            void refresh();
         } catch (err) {
-            setMessage(errorMessage(err, 'Failed to save the grade'));
+            // The banner sits above a long list; the toast is seen where the teacher is.
+            const text = errorMessage(err, 'Failed to save the grade');
+            toast.error(text);
+            setMessage(text);
         } finally {
             setSaving(false);
         }
@@ -346,7 +356,7 @@ function Submissions() {
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             {message ? <Notice tone="danger" message={message} onDismiss={() => setMessage(null)} /> : null}
             {subs.length === 0 ? (
-                <EmptyState title="No submissions yet" description="Work students hand in appears here for grading." />
+                error ? null : <EmptyState title="No submissions yet" description="Work students hand in appears here for grading." />
             ) : (
                 <>
                     <Text style={[styles.sub, { marginBottom: spacing.sm }]}>

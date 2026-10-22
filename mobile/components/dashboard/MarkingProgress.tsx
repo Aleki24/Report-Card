@@ -7,6 +7,7 @@ import { examTypeLabel } from '@/lib/academics';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { pluralize } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
+import { ErrorBanner } from '@/components/ui';
 import { InsightCard, Meter } from './kit';
 
 const ORDER = { 'in-progress': 0, 'not-started': 1, complete: 2, 'no-learners': 3 } as const;
@@ -14,6 +15,10 @@ const SHOWN = 6;
 
 export interface MarkingSummary {
     loading: boolean;
+    /** Set when the marking list did not load: its counts are then unknown, not zero. */
+    error: string | null;
+    refresh: () => Promise<boolean>;
+    reload: () => Promise<boolean>;
     items: MarkingProgressItem[];
     termName: string | null;
     /** Marks still to enter across every exam. */
@@ -26,7 +31,7 @@ export interface MarkingSummary {
 /** This term's marking for the signed-in teacher (/api/school/teacher/marking). */
 export function useMarking(): MarkingSummary {
     const query = useApiQuery<MarkingProgressResponse>('/api/school/teacher/marking', { raw: true });
-    return useMemo(() => {
+    const summary = useMemo(() => {
         const items = query.data?.items ?? [];
         let left = 0;
         let complete = 0;
@@ -35,8 +40,9 @@ export function useMarking(): MarkingSummary {
             if (markingState(i) === 'complete') complete++;
         }
         const next = items.find((i) => markingState(i) === 'in-progress') ?? items.find((i) => markingState(i) === 'not-started') ?? null;
-        return { loading: query.loading, items, termName: query.data?.term?.name ?? null, left, complete, next };
-    }, [query.data, query.loading]);
+        return { items, termName: query.data?.term?.name ?? null, left, complete, next };
+    }, [query.data]);
+    return { ...summary, loading: query.loading, error: query.data ? null : query.error, refresh: query.refresh, reload: query.reload };
 }
 
 /** Opens one exam's mark sheet on the Mark Entry tab. */
@@ -60,6 +66,8 @@ export function MarkingPanel({ marking }: { marking: MarkingSummary }) {
         <InsightCard title="My marking" meta={marking.termName ?? 'This term'} action={{ label: 'All exams', href: '/staff/exams' }}>
             {marking.loading ? (
                 <Text style={styles.empty}>Loading your exams…</Text>
+            ) : marking.error ? (
+                <ErrorBanner message="Your marking progress did not load." onRetry={() => void marking.reload()} />
             ) : queue.length === 0 ? (
                 <Text style={styles.empty}>No exams to mark yet this term. When your exams are set up, each appears here with how many marks are in.</Text>
             ) : (

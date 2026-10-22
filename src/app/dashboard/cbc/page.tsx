@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Save, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +30,10 @@ function RubricGrid() {
     const [rows, setRows] = useState<Row[] | null>(null);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [opening, setOpening] = useState(false);
+    // Only the latest "Open class list" may fill the list: a slow answer for the
+    // previous strand or term used to land under the new one and be saved there.
+    const openRequest = useRef(0);
 
     const ready = cbcFilterReady(filter);
 
@@ -42,10 +46,19 @@ function RubricGrid() {
 
     const load = async () => {
         if (!ready) { toast.error('Choose a class, subject, term and strand.'); return; }
+        if (dirty && !window.confirm('Discard the levels you have not saved?')) return;
+        const request = ++openRequest.current;
+        setOpening(true);
         try {
-            setRows(await opsFetch<Row[]>(`/api/academics/cbc?${new URLSearchParams(filter)}`));
+            const next = await opsFetch<Row[]>(`/api/academics/cbc?${new URLSearchParams(filter)}`);
+            if (request !== openRequest.current) return;
+            setRows(next);
             setDirty(false);
-        } catch (err) { toast.error(errorText(err)); }
+        } catch (err) {
+            if (request === openRequest.current) toast.error(errorText(err));
+        } finally {
+            if (request === openRequest.current) setOpening(false);
+        }
     };
 
     const save = async () => {
@@ -75,6 +88,8 @@ function RubricGrid() {
         setFilter(f => ({ ...f, ...patch }));
         setRows(null);
         setDirty(false);
+        openRequest.current++;
+        setOpening(false);
     };
     useEffect(() => {
         if (!dirty) return;
@@ -97,12 +112,12 @@ function RubricGrid() {
                     <InputField id="cbc-sub" list={subListId} value={filter.sub_strand} onChange={e => set({ sub_strand: e.target.value })} placeholder="e.g. Fractions" />
                     <datalist id={subListId}>{subStrands.map(s => <option key={s} value={s} />)}</datalist>
                 </FormField>
-                <div className="flex items-end"><Button onClick={load} className="w-full sm:w-auto">Open class list</Button></div>
+                <div className="flex items-end"><Button onClick={load} disabled={opening} className="w-full sm:w-auto">{opening ? 'Opening…' : 'Open class list'}</Button></div>
             </section>
 
             {rows && (
                 <>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-xl bg-background/95 px-1 py-2 backdrop-blur">
                         {CBC_LEVELS.map(l => (
                             <span key={l} className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
                                 <span className={cn('rounded px-1.5 font-bold', LEVEL_STYLE[l])}>{l}</span>{CBC_LEVEL_LABELS[l]} · <strong className="tabular-nums">{counts[l]}</strong>
@@ -116,7 +131,7 @@ function RubricGrid() {
                                 <span className="min-w-0 flex-1 truncate text-sm"><span className="font-medium">{r.name}</span> <span className="text-muted-foreground">{r.admissionNumber}</span></span>
                                 <div role="radiogroup" aria-label={`Level for ${r.name}`} className="flex gap-1.5">
                                     {CBC_LEVELS.map(l => (
-                                        <button key={l} type="button" role="radio" aria-checked={r.level === l} title={CBC_LEVEL_LABELS[l]} disabled={!canAssess}
+                                        <button key={l} type="button" role="radio" aria-checked={r.level === l} title={CBC_LEVEL_LABELS[l]} disabled={!canAssess || saving}
                                             onClick={() => setLevel(r.studentId, l)}
                                             className={cn('size-10 rounded-lg text-xs font-bold transition-colors', r.level === l ? LEVEL_STYLE[l] : 'bg-muted text-muted-foreground hover:bg-muted/70')}>
                                             {l}
